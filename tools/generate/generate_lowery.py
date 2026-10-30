@@ -119,7 +119,7 @@ def render() -> str:
         "",
         "### Event producer contract",
         "",
-        "`EventKindSpec` владеет producer calls, producer binding inputs и exact producer params; `EntityKindSpec.base_events` владеет producer-free availability для конкретного kind. "
+        "`EventKindSpec` владеет producer calls, producer binding inputs, exact producer params и playerEffect predicate; `EntityKindSpec.base_events` владеет producer-free availability для конкретного kind. "
         "Validator и Repair вызывают одну generic registry projection. Event-name `if/elif` вне registry запрещён.",
         "",
     ]
@@ -130,14 +130,16 @@ def render() -> str:
             f"{capability}({','.join(f'{name}={value!r}' for name, value in params.items())})"
             for capability, params in event.producer_exact_params.items()
         ) or "—"
+        player_effect_member = getattr(event, "producer_player_effect_member", "")
         event_rows.append((
             event.name,
             ", ".join(event.producer_capabilities) or "—",
             ", ".join(event.producer_binding_inputs) or "—",
             ", ".join(base_kinds) or "—",
             exact,
+            f"playerEffect.{player_effect_member} present" if player_effect_member else "—",
         ))
-    lines += table(("event", "producer calls", "producer binding inputs", "producer-free kinds", "exact params"), event_rows)
+    lines += table(("event", "producer calls", "producer binding inputs", "producer-free kinds", "exact params", "playerEffect predicate"), event_rows)
     lines += [
         "",
         '<a id="lowering"></a>',
@@ -165,18 +167,20 @@ def render() -> str:
         "Каждый fn-selected выход требует ровно один technical_projection receipt с exact source .fn, callId, finalPath и типизированным значением. "
         "Source-aware audit связывает его с реально выбранным executor и authored target; согласованно изменить wire и receipt недостаточно. "
         "Без Author `authoredSourceChecked=false`: это только проверка согласованности сохранённых утверждений, не восстановление неизвестного намерения. "
-        "Старые wire/opcodes/отсутствия не переписываются на чтении.",
+        "Старые wire/opcodes/отсутствия не переписываются на чтении. "
+        "`fresh Author` означает доступный модели самостоятельный fn; `retained runtime` сохраняется для принятого runtime wire, но не предлагается как самостоятельный fn в новом Author.",
         "",
     ]
-    lines += table(("capability", "fn-selected wire output", "exact value"), [
-        (fn, path, repr(value)) for fn in CAPABILITY_REGISTRY
+    lines += table(("capability", "availability", "fn-selected wire output", "exact value"), [
+        (fn, "fresh Author" if cap.author_visible else "retained runtime", path, repr(value))
+        for fn, cap in CAPABILITY_REGISTRY.items()
         for path, value in capability_fixed_outputs(fn).items()
     ])
     lines += ["", "### Явные event-проекции", "",
               "Разное authored имя может выбирать точную зарегистрированную проекцию существующего event executor. "
               "Это полезный отдельный выбор, не разрешение угадывать действие из prose и не whole-weapon macro.", ""]
-    lines += table(("authored capability", "wire action", "fixed outputs"), [
-        (fn, cap.wire_action, repr(dict(cap.fixed_wire_literals)))
+    lines += table(("capability", "availability", "wire action", "fixed outputs"), [
+        (fn, "fresh Author" if cap.author_visible else "retained runtime", cap.wire_action, repr(dict(cap.fixed_wire_literals)))
         for fn, cap in CAPABILITY_REGISTRY.items() if cap.wire_action
     ])
     lines += ["", "### Structured и enum projections", "",
@@ -236,7 +240,8 @@ def render() -> str:
         "",
         "- `valueCopper` напрямую пишет `Item.value`; это base/shop value в copper, а не обещание конкретной суммы resale игроком.",
         "- Author `configure_tool.axePowerTooltipPercent` задаёт целое 0..500 с шагом 5 в видимых процентах tooltip; compiler точно пишет старое целое `gameplay.axePower = value / 5` в `Item.axe` 0..100. Старое имя `axePower` не принимается как Author alias.",
-        "- Author `apply_generated_buff_on_use.lifeRegenHpPerSecond` задаёт вклад в HP/с (0..60, шаг 0.5); compiler точно пишет старое целое `gameplay.generatedBuff.lifeRegen = value × 2`. Это вклад в engine stat до остальных эффектов, не обещание итогового лечения.",
+        "- Author `apply_generated_buff_on_use.lifeRegen` задаёт вклад в HP/с (-50..60, шаг 0.5); compiler точно пишет старое целое `gameplay.generatedBuff.lifeRegen = value × 2`. Это вклад в engine stat до остальных эффектов, не обещание итогового лечения.",
+        "- `lifeRegen`/`regenWhen` и `treasureSense`/`treasureWhen` — единственные Author-входы для этих эффектов. Условия переводятся в typed native condition fields, не создают вторую stat-величину и сами по себе не являются эффектом. Nested `playerEffect.lifeRegen…`/`highlightTreasure` отвергаются.",
         "",
         '<a id="player-text"></a>',
         "",

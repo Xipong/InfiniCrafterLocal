@@ -509,7 +509,7 @@ public sealed partial class InfiniCraftPlayer
     private void WriteGeneratedBuffState(System.IO.BinaryWriter writer)
     {
         writer.Write((byte)Player.whoAmI);
-        writer.Write((byte)9); // typed player effects and exact jump-source lifetime
+        writer.Write((byte)10); // canonical stat conditions and exact air-jump source lifetime
         writer.Write(_generatedBuffTicks);
         writer.Write(_generatedMiningSpeedMultiplier);
         writer.Write(_generatedLightStrength);
@@ -533,7 +533,7 @@ public sealed partial class InfiniCraftPlayer
     private void ReadGeneratedBuffState(System.IO.BinaryReader reader)
     {
         byte version = reader.ReadByte();
-        if (version != 9)
+        if (version != 10)
             throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
         // Decode before replacing owner prediction; malformed packets do not
         // erase a valid timer table or leave half-read buff state behind.
@@ -565,7 +565,7 @@ public sealed partial class InfiniCraftPlayer
     private static void DiscardGeneratedBuffState(System.IO.BinaryReader reader)
     {
         byte version = reader.ReadByte();
-        if (version != 9)
+        if (version != 10)
             throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
         _ = reader.ReadInt32();
         _ = reader.ReadSingle();
@@ -595,6 +595,8 @@ public sealed partial class InfiniCraftPlayer
         writer.Write(buff.JumpBoost);
         writer.Write(buff.ManaRegen);
         writer.Write(buff.LifeRegen);
+        writer.Write(buff.LifeRegenCondition);
+        writer.Write(buff.TreasureSenseCondition);
         writer.Write(buff.Combat is not null);
         buff.Combat?.Write(writer);
         writer.Write(buff.PlayerEffect is not null);
@@ -628,6 +630,8 @@ public sealed partial class InfiniCraftPlayer
             JumpBoost = Math.Clamp(reader.ReadSingle(), -8f, 8f),
             ManaRegen = Math.Clamp(reader.ReadInt32(), -100, 120),
             LifeRegen = Math.Clamp(reader.ReadInt32(), -100, 120),
+            LifeRegenCondition = PlayerEffectSpec.ValidateCondition(ReadGeneratedBuffText(reader, 16)),
+            TreasureSenseCondition = PlayerEffectSpec.ValidateCondition(ReadGeneratedBuffText(reader, 16)),
             Combat = reader.ReadBoolean() ? GeneratedCombatBuffSpec.Read(reader) : null,
             PlayerEffect = reader.ReadBoolean() ? PlayerEffectSpec.Read(reader) : null,
         };

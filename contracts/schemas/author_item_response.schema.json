@@ -335,11 +335,6 @@
             "nonzeroMustRemainNonzero": true
           }
         },
-        "highlightTreasure": {
-          "type": "boolean",
-          "description": "Enable native treasure highlighting.",
-          "x-infini-neutral": false
-        },
         "highlightDanger": {
           "type": "boolean",
           "description": "Enable native hazardous-tile highlighting.",
@@ -355,14 +350,14 @@
           "description": "Improve dark visibility without emitting world light.",
           "x-infini-neutral": false
         },
-        "healingPotionCooldownReductionPercent": {
+        "healCooldownReductionPercent": {
           "type": "integer",
           "minimum": 0,
           "maximum": 90,
           "description": "Reduce the next healing potion base cooldown by this percent, before native duration multipliers; does not change a running timer.",
           "x-infini-neutral": 0
         },
-        "healingPotionCooldownReductionSeconds": {
+        "healCooldownReduction": {
           "type": "number",
           "minimum": 0,
           "maximum": 60.0,
@@ -375,27 +370,14 @@
             "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
           }
         },
-        "autoManaPotionBelowPercent": {
+        "manaPotionBelowPercent": {
           "type": "integer",
           "minimum": 0,
           "maximum": 100,
           "description": "Use an available native mana potion when mana falls below this percentage of maximum; zero disables automation.",
           "x-infini-neutral": 0
         },
-        "lifeRegenHpPerSecond": {
-          "type": "number",
-          "minimum": -50.0,
-          "maximum": 100.0,
-          "multipleOf": 0.5,
-          "description": "Author units: HP/s. Native consumer: Signed life-regeneration contribution; condition controls when this component is active.",
-          "x-infini-units": "HP/s",
-          "x-infini-semanticType": "HP/s",
-          "x-infini-neutral": 0.0,
-          "x-infini-authorProjection": {
-            "nonzeroMustRemainNonzero": true
-          }
-        },
-        "healingPotionCooldownOnHitReductionSeconds": {
+        "healCooldownOnHit": {
           "type": "number",
           "minimum": 0,
           "maximum": 60.0,
@@ -408,7 +390,7 @@
             "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
           }
         },
-        "hurtInvulnerabilityBonusSeconds": {
+        "hurtImmunityBonus": {
           "type": "number",
           "minimum": 0,
           "maximum": 5.0,
@@ -4846,6 +4828,28 @@
                       "playerEffect": {
                         "$ref": "#/$defs/player_effect"
                       },
+                      "regenWhen": {
+                        "type": "string",
+                        "enum": [
+                          "always",
+                          "stationary"
+                        ],
+                        "description": "When lifeRegen applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": "always",
+                        "x-infini-neutral": "always"
+                      },
+                      "treasureWhen": {
+                        "type": "string",
+                        "enum": [
+                          "always",
+                          "stationary"
+                        ],
+                        "description": "When treasureSense applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": "always",
+                        "x-infini-neutral": "always"
+                      },
                       "combat": {
                         "type": "object",
                         "properties": {
@@ -4992,7 +4996,7 @@
                         "description": "Canonical light color",
                         "x-infini-semanticType": "runtime_color"
                       },
-                      "oreSenseEnabled": {
+                      "treasureSense": {
                         "type": "boolean",
                         "description": "Enable native Spelunker treasure highlighting, including eligible ores, chests and life crystals; not a radius or ore-only filter",
                         "x-infini-semanticType": "boolean_capability",
@@ -5048,14 +5052,14 @@
                         "default": 0,
                         "x-infini-neutral": 0
                       },
-                      "lifeRegenHpPerSecond": {
+                      "lifeRegen": {
                         "type": "number",
                         "minimum": -50,
                         "maximum": 60,
                         "multipleOf": 0.5,
                         "description": "Signed HP/s regeneration contribution before other effects; negative causes regeneration loss. Exact half-HP/s steps map to Player.lifeRegen units (2 units = 1 HP/s)",
                         "x-infini-units": "HP/s",
-                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-semanticType": "terraria_life_regen",
                         "default": 0,
                         "x-infini-neutral": 0
                       },
@@ -5990,6 +5994,34 @@
                       "playerEffect": {
                         "$ref": "#/$defs/player_effect"
                       },
+                      "regenWhen": {
+                        "type": "string",
+                        "enum": [
+                          "always",
+                          "stationary"
+                        ],
+                        "description": "When lifeRegen applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": "always",
+                        "x-infini-neutral": "always"
+                      },
+                      "treasureSense": {
+                        "type": "boolean",
+                        "description": "Highlight eligible native treasures, including ores, chests and life crystals; not a radius or ore-only scan",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "treasureWhen": {
+                        "type": "string",
+                        "enum": [
+                          "always",
+                          "stationary"
+                        ],
+                        "description": "When treasureSense applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": "always",
+                        "x-infini-neutral": "always"
+                      },
                       "defensePoints": {
                         "type": "integer",
                         "minimum": -50,
@@ -6017,7 +6049,7 @@
                         "x-infini-semanticType": "mana_points",
                         "x-infini-neutral": 0
                       },
-                      "lifeRegenHpPerSecond": {
+                      "lifeRegen": {
                         "type": "number",
                         "minimum": -50,
                         "maximum": 100,
@@ -6425,6 +6457,34 @@
                       "playerEffect": {
                         "$ref": "#/$defs/player_effect"
                       },
+                      "regenWhen": {
+                        "type": "string",
+                        "enum": [
+                          "always",
+                          "stationary"
+                        ],
+                        "description": "When lifeRegen applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": "always",
+                        "x-infini-neutral": "always"
+                      },
+                      "treasureSense": {
+                        "type": "boolean",
+                        "description": "Highlight eligible native treasures, including ores, chests and life crystals; not a radius or ore-only scan",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "treasureWhen": {
+                        "type": "string",
+                        "enum": [
+                          "always",
+                          "stationary"
+                        ],
+                        "description": "When treasureSense applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": "always",
+                        "x-infini-neutral": "always"
+                      },
                       "defensePoints": {
                         "type": "integer",
                         "minimum": 0,
@@ -6452,7 +6512,7 @@
                         "x-infini-semanticType": "mana_points",
                         "x-infini-neutral": 0
                       },
-                      "lifeRegenHpPerSecond": {
+                      "lifeRegen": {
                         "type": "number",
                         "minimum": -50,
                         "maximum": 100,
@@ -6781,7 +6841,7 @@
                               }
                             }
                           },
-                          "lifeRegenHpPerSecond": {
+                          "lifeRegen": {
                             "type": "number",
                             "minimum": -50,
                             "maximum": 100,
@@ -10897,7 +10957,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "reduce_healing_potion_cooldown_on_event"
+                    "const": "reduce_heal_cooldown_on_event"
                   },
                   "target": {
                     "type": "string",

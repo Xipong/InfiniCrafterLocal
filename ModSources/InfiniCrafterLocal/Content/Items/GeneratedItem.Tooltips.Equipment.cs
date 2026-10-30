@@ -20,10 +20,12 @@ public partial class GeneratedItem
         ArmorSpec? armor = data.Armor.Enabled ? data.Armor : null;
         if (a is null && armor is null) return;
         string input = RuntimeTooltipText("InputEquipped");
-        void Stat(string name, string key, float value)
+        void Stat(string name, string key, float value, string? condition = "always")
         {
             if (!float.IsFinite(value) || value == 0f) return;
-            add("Equipment" + name, key, new object[] { input, (value > 0 ? "+" : "") + RuntimeTooltipNumber(value) });
+            add("Equipment" + name, key, new object[] {
+                PlayerEffectDescription.WithCondition(input, condition, RuntimeTooltipCulture),
+                (value > 0 ? "+" : "") + RuntimeTooltipNumber(value) });
         }
         void Percent(string name, string key, float value)
         {
@@ -40,7 +42,13 @@ public partial class GeneratedItem
         Stat("MaxLife", "EquipmentMaxLife", a?.MaxLife ?? armor!.MaxLife);
         Stat("MaxMana", "EquipmentMaxMana", a?.MaxMana ?? armor!.MaxMana);
         // Native lifeRegen is half-HP/s points; manaRegenBonus is NOT mana/s.
-        Stat("LifeRegen", "EquipmentLifeRegen", a is not null ? a.LifeRegen / 2f : armor!.LifeRegen / 2f);
+        Stat("LifeRegen", "EquipmentLifeRegen", a is not null ? a.LifeRegen / 2f : armor!.LifeRegen / 2f,
+            a is not null ? a.LifeRegenCondition : armor!.LifeRegenCondition);
+        if ((a is not null ? a.TreasureSense : armor!.TreasureSense) == true)
+            detail("EquipmentTreasureSense", "PlayerEffectEquipment", new object[] { input,
+                PlayerEffectDescription.WithCondition(RuntimeTooltipCulture.TwoLetterISOLanguageName == "ru"
+                    ? "Подсветка сокровищ" : "Treasure highlighting",
+                    a is not null ? a.TreasureSenseCondition : armor!.TreasureSenseCondition, RuntimeTooltipCulture) });
         Stat("ManaRegen", "EquipmentManaRegen", a?.ManaRegen ?? armor!.ManaRegen);
         Percent("Movement", "EquipmentMovement", a?.MovementSpeed ?? armor!.MovementSpeed);
         Stat("MaxRunSpeed", "EquipmentMaxRunSpeed", PlayerDisplayUnits.BlocksPerSecond(a?.MaxRunSpeed ?? armor!.MaxRunSpeed));

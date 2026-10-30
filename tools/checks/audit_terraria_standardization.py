@@ -130,9 +130,9 @@ def report() -> dict[str, Any]:
         and "Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 100);" in normalize
     ), "Author axe tooltip percent must map exactly in steps of five to bounded Item.axe units")
     buff = CAPABILITY_REGISTRY.get("apply_generated_buff_on_use")
-    regen = buff.params.get("lifeRegenHpPerSecond") if buff else None
+    regen = buff.params.get("lifeRegen") if buff else None
     check("generated_buff_regen_half_hp_parity", bool(
-        buff and regen and "lifeRegen" not in buff.params
+        buff and regen and "lifeRegenHpPerSecond" not in buff.params
         and regen.minimum == -50 and regen.maximum == 60 and regen.multiple_of == 0.5
         and regen.wire_name == "lifeRegen" and regen.wire_multiplier == 2
         and regen.to_wire(-50) == -100 and regen.to_wire(-0.5) == -1

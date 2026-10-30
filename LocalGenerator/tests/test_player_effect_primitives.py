@@ -8,7 +8,7 @@ from infini_local.core.runtime_authoring.wire_validator import validate_runtime_
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 
 CASES = [
-    ('healingPotionCooldownOnHitReductionSeconds', .5, 'healingPotionCooldownOnHitReductionTicks', 30),
+    ('healCooldownOnHit', .5, 'healingPotionCooldownOnHitReductionTicks', 30),
     ('fishingPowerPoints', 17, 'fishingPowerPoints', 17),
     ('preventLineBreak', True, 'preventLineBreak', True),
     ('allowLavaFishing', True, 'allowLavaFishing', True),
@@ -18,15 +18,13 @@ CASES = [
     ('heartPickupRangeBlocks', 4, 'heartPickupRangePx', 64),
     ('manaPickupRangeBlocks', 5, 'manaPickupRangePx', 80),
     ('coinPickupRangeBlocks', 6, 'coinPickupRangePx', 96),
-    ('highlightTreasure', True, 'highlightTreasure', True),
     ('highlightDanger', True, 'highlightDanger', True),
     ('highlightCreatures', True, 'highlightCreatures', True),
     ('nightVision', True, 'nightVision', True),
-    ('healingPotionCooldownReductionPercent', 17, 'healingPotionCooldownReductionPercent', 17),
-    ('healingPotionCooldownReductionSeconds', .5, 'healingPotionCooldownReductionTicks', 30),
-    ('autoManaPotionBelowPercent', 30, 'autoManaPotionBelowPercent', 30),
-    ('lifeRegenHpPerSecond', 2.5, 'lifeRegenUnits', 5),
-    ('hurtInvulnerabilityBonusSeconds', .5, 'hurtInvulnerabilityBonusTicks', 30),
+    ('healCooldownReductionPercent', 17, 'healingPotionCooldownReductionPercent', 17),
+    ('healCooldownReduction', .5, 'healingPotionCooldownReductionTicks', 30),
+    ('manaPotionBelowPercent', 30, 'autoManaPotionBelowPercent', 30),
+    ('hurtImmunityBonus', .5, 'hurtInvulnerabilityBonusTicks', 30),
 ]
 
 def source(fn, effect):
@@ -61,7 +59,7 @@ def test_shared_mechanic_exact_delivery_and_presence(fn, name, value, wire_name,
 def test_half_second_cooldown_reduction_is_an_explicit_hit_action(event):
     doc=build_capability_witness('heal_owner_on_event')
     call=next(c for c in doc['runtimeProgram']['calls'] if c['fn']=='heal_owner_on_event')
-    call.update(fn='reduce_healing_potion_cooldown_on_event', params={'when':event,'seconds':.5})
+    call.update(fn='reduce_heal_cooldown_on_event', params={'when':event,'seconds':.5})
     assert validate_runtime_program(doc)['ok']
     wire=compile_runtime_program(doc)
     report=validate_runtime_wire(wire)
@@ -116,7 +114,7 @@ def test_actual_author_and_repair_packets_keep_numeric_mechanics_and_frozen_sibl
     from infini_local.core import llm_config
     getattr(_offline, '__wrapped__')(monkeypatch)
     monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
-    doc, call = source(fn, {'condition':'stationary','healingPotionCooldownOnHitReductionSeconds':.5,'heartPickupRangeBlocks':3})
+    doc, call = source(fn, {'condition':'stationary','healCooldownOnHit':.5,'heartPickupRangeBlocks':3})
     request, _, _ = author.build_initial_author_request({}, {}, 'player-effect-packet', model_name='offline')
     sent = _serialized_chat_request(monkeypatch, request)
     card = next(c for c in request_dossier(sent, declaration=request)['runtimeCapabilityContract']['catalog']['capabilities'] if c['fn']==fn)
@@ -124,12 +122,12 @@ def test_actual_author_and_repair_packets_keep_numeric_mechanics_and_frozen_sibl
     public = {k:doc[k] for k in ('name','category','runtimeProgram')}
     assert provider_roundtrip(public, sent['response_format']) == public
     expected = deepcopy(doc)
-    call['params']['playerEffect']['healingPotionCooldownOnHitReductionSeconds'] = None
+    call['params']['playerEffect']['healCooldownOnHit'] = None
     hostile = deepcopy(call)
-    hostile['params']['playerEffect'].update(condition='always', healingPotionCooldownOnHitReductionSeconds=.5, heartPickupRangeBlocks=40)
+    hostile['params']['playerEffect'].update(condition='always', healCooldownOnHit=.5, heartPickupRangeBlocks=40)
     repaired, repair_request = repair_with_response(monkeypatch, doc, {'note':'repair one numeric mechanic', 'callsUpsert':[hostile]}, mode)
     permissions=request_dossier(repair_request)['repairScope']['fieldPermissions']['calls']
-    assert permissions==[{'id':call['id'],'paths':['params.playerEffect.healingPotionCooldownOnHitReductionSeconds']}]
+    assert permissions==[{'id':call['id'],'paths':['params.playerEffect.healCooldownOnHit']}]
     actual=next(c for c in repaired['runtimeProgram']['calls'] if c['id']==call['id'])
     wanted=next(c for c in expected['runtimeProgram']['calls'] if c['id']==call['id'])
     assert actual['params']==wanted['params']

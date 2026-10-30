@@ -1562,17 +1562,21 @@ def _player_effect_param() -> ParamSpec:
         "heartPickupRangeBlocks": _world_units(_p("integer", 'Additional pickup range for heart pickups.', required=False, minimum=0, maximum=640, neutral=0, wire_name="playerEffect.heartPickupRangePx", wire_presence_requires_receipt=True), "heartPickupRangePx", multiplier=16, units='blocks'),
         "manaPickupRangeBlocks": _world_units(_p("integer", 'Additional pickup range for mana-star pickups.', required=False, minimum=0, maximum=640, neutral=0, wire_name="playerEffect.manaPickupRangePx", wire_presence_requires_receipt=True), "manaPickupRangePx", multiplier=16, units='blocks'),
         "coinPickupRangeBlocks": _world_units(_p("integer", 'Additional pickup range for coins.', required=False, minimum=0, maximum=640, neutral=0, wire_name="playerEffect.coinPickupRangePx", wire_presence_requires_receipt=True), "coinPickupRangePx", multiplier=16, units='blocks'),
-        "highlightTreasure": _p("boolean", 'Enable native treasure highlighting.', required=False, neutral=False, wire_name="playerEffect.highlightTreasure", wire_presence_requires_receipt=True),
         "highlightDanger": _p("boolean", 'Enable native hazardous-tile highlighting.', required=False, neutral=False, wire_name="playerEffect.highlightDanger", wire_presence_requires_receipt=True),
         "highlightCreatures": _p("boolean", 'Enable native creature highlighting.', required=False, neutral=False, wire_name="playerEffect.highlightCreatures", wire_presence_requires_receipt=True),
         "nightVision": _p("boolean", 'Improve dark visibility without emitting world light.', required=False, neutral=False, wire_name="playerEffect.nightVision", wire_presence_requires_receipt=True),
-        "healingPotionCooldownReductionPercent": _p("integer", 'Reduce the next healing potion base cooldown by this percent, before native duration multipliers; does not change a running timer.', required=False, minimum=0, maximum=90, neutral=0, wire_name="playerEffect.healingPotionCooldownReductionPercent", wire_presence_requires_receipt=True),
-        "healingPotionCooldownReductionSeconds": _seconds(_p("integer", 'Subtract seconds from the next healing potion base cooldown after the selected percentage reduction and before native duration multipliers; floor zero.', required=False, minimum=0, maximum=3600, neutral=0, wire_name="playerEffect.healingPotionCooldownReductionTicks", wire_presence_requires_receipt=True), "healingPotionCooldownReductionTicks"),
-        "autoManaPotionBelowPercent": _p("integer", 'Use an available native mana potion when mana falls below this percentage of maximum; zero disables automation.', required=False, minimum=0, maximum=100, neutral=0, wire_name="playerEffect.autoManaPotionBelowPercent", wire_presence_requires_receipt=True),
-        "lifeRegenHpPerSecond": _world_units(_p("integer", 'Signed life-regeneration contribution; condition controls when this component is active.', required=False, minimum=-100, maximum=200, neutral=0, wire_name="playerEffect.lifeRegenUnits", wire_presence_requires_receipt=True), "lifeRegenUnits", multiplier=2, units='HP/s'),
-        "healingPotionCooldownOnHitReductionSeconds": _seconds(_p("integer", "Remove this duration from an already running healing-potion cooldown on each actual owner item/projectile hit while this modifier is active; zero grants no proc.", required=False, minimum=0, maximum=3600, neutral=0, wire_name="playerEffect.healingPotionCooldownOnHitReductionTicks", wire_presence_requires_receipt=True), "healingPotionCooldownOnHitReductionTicks"),
-        "hurtInvulnerabilityBonusSeconds": _seconds(_p("integer", "Add immunity time after a surviving hurt to that hit's actual immunity slot.", required=False, minimum=0, maximum=300, neutral=0, wire_name="playerEffect.hurtInvulnerabilityBonusTicks", wire_presence_requires_receipt=True), "hurtInvulnerabilityBonusTicks"),
+        "healCooldownReductionPercent": replace(_p("integer", 'Reduce the next healing potion base cooldown by this percent, before native duration multipliers; does not change a running timer.', required=False, minimum=0, maximum=90, neutral=0, wire_name="playerEffect.healingPotionCooldownReductionPercent", wire_presence_requires_receipt=True), predecessor_names=("healingPotionCooldownReductionPercent",)),
+        "healCooldownReduction": replace(_seconds(_p("integer", 'Subtract seconds from the next healing potion base cooldown after the selected percentage reduction and before native duration multipliers; floor zero.', required=False, minimum=0, maximum=3600, neutral=0, wire_name="playerEffect.healingPotionCooldownReductionTicks", wire_presence_requires_receipt=True), "healingPotionCooldownReductionTicks"), predecessor_names=("healingPotionCooldownReductionSeconds", "healingPotionCooldownReductionTicks")),
+        "manaPotionBelowPercent": replace(_p("integer", 'Use an available native mana potion when mana falls below this percentage of maximum; zero disables automation.', required=False, minimum=0, maximum=100, neutral=0, wire_name="playerEffect.autoManaPotionBelowPercent", wire_presence_requires_receipt=True), predecessor_names=("autoManaPotionBelowPercent",)),
+        "healCooldownOnHit": replace(_seconds(_p("integer", "Remove this duration from an already running healing-potion cooldown on each actual owner item/projectile hit while this modifier is active; zero grants no proc.", required=False, minimum=0, maximum=3600, neutral=0, wire_name="playerEffect.healingPotionCooldownOnHitReductionTicks", wire_presence_requires_receipt=True), "healingPotionCooldownOnHitReductionTicks"), predecessor_names=("healingPotionCooldownOnHitReductionSeconds", "healingPotionCooldownOnHitReductionTicks")),
+        "hurtImmunityBonus": replace(_seconds(_p("integer", "Add immunity time after a surviving hurt to that hit's actual immunity slot.", required=False, minimum=0, maximum=300, neutral=0, wire_name="playerEffect.hurtInvulnerabilityBonusTicks", wire_presence_requires_receipt=True), "hurtInvulnerabilityBonusTicks"), predecessor_names=("hurtInvulnerabilityBonusSeconds", "hurtInvulnerabilityBonusTicks")),
     })
+
+def _stat_condition_param(wire_name: str, effect: str) -> ParamSpec:
+    return _p("string", f"When {effect} applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+              required=False, enum=("always", "stationary"), default="always", neutral="always",
+              wire_name=wire_name, wire_presence_requires_receipt=True)
+
 
 def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
     """One Author vocabulary for equipped effects and their exact DTO projection."""
@@ -1609,10 +1613,13 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
 
     p: dict[str, ParamSpec] = {
         "playerEffect": _player_effect_param(),
+        "regenWhen": _stat_condition_param("lifeRegenCondition", "lifeRegen"),
+        "treasureSense": _p("boolean", "Highlight eligible native treasures, including ores, chests and life crystals; not a radius or ore-only scan", required=False, neutral=False, wire_name="treasureSense", wire_presence_requires_receipt=True),
+        "treasureWhen": _stat_condition_param("treasureSenseCondition", "treasureSense"),
         "defensePoints": stat("defense", "Add native item defense", 0 if armor else -50, 200, "defense_points", integer=True),
         "maxLifePoints": stat("maxLife", "Add maximum life", -200, 1000, "life_points", integer=True),
         "maxManaPoints": stat("maxMana", "Add maximum mana", -200, 1000, "mana_points", integer=True),
-        "lifeRegenHpPerSecond": stat("lifeRegen", "Add signed HP/s regeneration contribution before other Terraria effects; negative values reduce regeneration", -50, 100, "HP/s", wire_multiplier=2, multiple_of=0.5),
+        "lifeRegen": replace(stat("lifeRegen", "Add signed HP/s regeneration contribution before other Terraria effects; negative values reduce regeneration", -50, 100, "HP/s", wire_multiplier=2, multiple_of=0.5), predecessor_names=("lifeRegenHpPerSecond",)),
         "manaRegenBonusPoints": stat("manaRegen", "Add Player.manaRegenBonus points.", -100, 200, "engine units: manaRegenBonus points", integer=True),
         "moveSpeedBonusPercent": stat("movementSpeed", "Add a movement-speed percentage bonus", -90, 300, "additive_percent", percent=True),
         "maxRunSpeedBonusBlocksPerSecond": _world_units(stat("maxRunSpeed", "Add to Player.maxRunSpeed, subject to other Terraria movement limits", -5, 20, "pixels_per_tick"), "maxRunSpeedBonusPxPerTick", multiplier=16, divisor=60, updates_power=0, units='blocks/s'),
@@ -1655,7 +1662,7 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
         set_phase = "ModItem.UpdateArmorSet; exact setKey on head, body and legs"
         set_effects = (
             "genericCritChancePercentagePoints",
-            "moveSpeedBonusPercent", "lifeRegenHpPerSecond", "manaRegenBonusPoints",
+            "moveSpeedBonusPercent", "lifeRegen", "manaRegenBonusPoints",
             "minionSlotsBonus", "sentrySlotsBonus", "manaCostReductionPercentagePoints",
             "ammoSaveChancePercent", "aggroPoints", "damageReductionPercentagePoints",
             "genericArmorPenetrationPoints",
@@ -2193,6 +2200,8 @@ _CAPS: list[CapabilitySpec] = [
         ("item_body",),
         {
             "playerEffect": _player_effect_param(),
+            "regenWhen": _stat_condition_param("lifeRegenCondition", "lifeRegen"),
+            "treasureWhen": _stat_condition_param("treasureSenseCondition", "treasureSense"),
             "combat": _p("object", "Optional signed temporary combat modifiers; all fields explicit when selected. Negative values penalize their selected stat; zero has no effect. Same-effect refresh does not stack. No automatic active binding.", required=False, properties={
                 "defensePoints": _p("integer", "Signed Player.statDefense points; negative weakens defense; aggregate generated-buff range -100..100", minimum=-100, maximum=100, neutral=0, wire_name="combat.defensePoints"),
                 "attackSpeedPercent": _p("number", "Signed additive generic attack speed percent; negative slows attacks; aggregate range -80..100", minimum=-80, maximum=100, neutral=0, wire_name="combat.attackSpeedPercent", consumer_storage="float32"),
@@ -2205,11 +2214,11 @@ _CAPS: list[CapabilitySpec] = [
             "miningSpeedMultiplier": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster, <1 is a real mining-speed penalty, 1 is neutral", minimum=0.25, maximum=4, units="engine units: pickSpeed divisor", required=False, default=1, neutral=1, consumer_storage="float32"),
             "lightStrength": _p("number", "Client light RGB coefficient multiplying selected light color; not tile radius", minimum=0, maximum=1.5, wire_name="emitLightStrength", units="engine units: RGB coefficient", neutral=0, consumer_storage="float32"),
             "lightColor": _p("string", "Canonical light color", enum=_COLOR, wire_name="lightColorName"),
-            "oreSenseEnabled": _p("boolean", "Enable native Spelunker treasure highlighting, including eligible ores, chests and life crystals; not a radius or ore-only filter", semantic_type="boolean_capability", wire_name="oreSenseRadiusTiles", wire_boolean_true_value=1, neutral=False, required=False, default=False),
+            "treasureSense": replace(_p("boolean", "Enable native Spelunker treasure highlighting, including eligible ores, chests and life crystals; not a radius or ore-only filter", semantic_type="boolean_capability", wire_name="oreSenseRadiusTiles", wire_boolean_true_value=1, neutral=False, required=False, default=False), predecessor_names=("oreSenseEnabled",)),
             "moveSpeedBonusPercent": _p("number", "Signed additive Player.moveSpeed percent; 20 adds 20%, -20 subtracts 20% before other modifiers", minimum=-80, maximum=200, wire_name="movementSpeed", wire_divisor=100, units="additive_percent", semantic_type="additive_percent", required=False, default=0, neutral=0, consumer_storage="float32"),
             "jumpSpeedBonusBlocksPerSecond": _world_units(_p("number", "Signed Player.jumpSpeedBoost contribution; negative reduces jump launch speed, not an exact height", minimum=-8, maximum=8, wire_name="jumpBoost", units="pixels/world tick", required=False, default=0, neutral=0, consumer_storage="float32"), "jumpSpeedBonusPxPerTick", multiplier=16, divisor=60, updates_power=0, units='blocks/s'),
             "manaRegenBonusPoints": _p("integer", "Signed Player.manaRegenBonus contribution; negative penalizes regeneration; not directly mana/second", minimum=-100, maximum=120, wire_name="manaRegen", units="engine units: manaRegenBonus points", required=False, default=0, neutral=0),
-            "lifeRegenHpPerSecond": _p("number", "Signed HP/s regeneration contribution before other effects; negative causes regeneration loss. Exact half-HP/s steps map to Player.lifeRegen units (2 units = 1 HP/s)", minimum=-50, maximum=60, multiple_of=0.5, units="HP/s", wire_name="lifeRegen", wire_multiplier=2, required=False, default=0, neutral=0),
+            "lifeRegen": replace(_p("number", "Signed HP/s regeneration contribution before other effects; negative causes regeneration loss. Exact half-HP/s steps map to Player.lifeRegen units (2 units = 1 HP/s)", minimum=-50, maximum=60, multiple_of=0.5, units="HP/s", wire_name="lifeRegen", wire_multiplier=2, required=False, default=0, neutral=0), predecessor_names=("lifeRegenHpPerSecond",)),
         },
         component_slot="generated_use_buff",
         py=_COMPILER_OWNER,
@@ -2226,6 +2235,8 @@ _CAPS: list[CapabilitySpec] = [
             "gameplay.generatedBuff.jumpBoost",
             "gameplay.generatedBuff.manaRegen",
             "gameplay.generatedBuff.lifeRegen",
+            "gameplay.generatedBuff.lifeRegenCondition",
+            "gameplay.generatedBuff.treasureSenseCondition",
             "gameplay.generatedBuff.combat.defensePoints",
             "gameplay.generatedBuff.combat.attackSpeedPercent",
             "gameplay.generatedBuff.combat.critChancePoints",
@@ -3198,7 +3209,7 @@ _CAPS.extend([
         fixed_wire_literals={"mode": "owner_to_target", "radiusTiles": 1},
     ),
     _cap(
-        "reduce_healing_potion_cooldown_on_event",
+        "reduce_heal_cooldown_on_event",
         "Subtract authored seconds from the owner's already running healing-potion cooldown. Both native potionDelay and Potion Sickness remaining time decrease, floored at zero.",
         "event", ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
         {"when": _event_when_param(("on_hit", "on_crit")),
@@ -3207,6 +3218,7 @@ _CAPS.extend([
         multiplicity="many_per_target", py=_COMPILER_OWNER,
         cs="Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
         events=("on_hit", "on_crit"),
+        wire_action="reduce_healing_potion_cooldown_on_event",
     ),
     _cap(
         "heal_owner_on_event",
@@ -3698,7 +3710,10 @@ def _derived_requirements(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
             ))
         if cap.name == "apply_generated_buff_on_use":
             requirements.append(RequirementSpec(
-                "non_neutral_param", message="at least one generated-buff effect must be non-neutral",
+                "non_neutral_param",
+                nonzero_params=tuple(name for name, spec in cap.params.items()
+                                     if spec.kind == "object" or (spec.neutral is not None and spec.kind in {"number", "integer", "boolean"})),
+                message="at least one generated-buff effect must be non-neutral",
             ))
         return tuple(requirements)
     if cap.name == "configure_accessory":

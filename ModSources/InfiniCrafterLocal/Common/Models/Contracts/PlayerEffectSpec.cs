@@ -92,8 +92,19 @@ public sealed record PlayerEffectSpec
         get => _airJump;
         set { if (value is null) throw new InvalidDataException("airJump must be an object when present"); value.Validate(); _airJump = value; }
     }
-    public string Condition { get; set; } = "always";
-    public bool IsActive(Player player) => Condition == "always" || player.velocity == Microsoft.Xna.Framework.Vector2.Zero && player.itemAnimation == 0;
+    private string _condition = "always";
+    public string Condition
+    {
+        get => _condition;
+        set => _condition = ValidateCondition(value);
+    }
+    internal static string ValidateCondition(string? condition)
+        => condition is "always" or "stationary" ? condition
+            : throw new InvalidDataException("Unknown player-effect condition");
+    internal static bool IsConditionActive(string condition, Player player)
+        => ValidateCondition(condition) == "always"
+            || player.velocity == Microsoft.Xna.Framework.Vector2.Zero && player.itemAnimation == 0;
+    public bool IsActive(Player player) => IsConditionActive(Condition, player);
     private int? _fishingPowerPoints;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? FishingPowerPoints
@@ -193,17 +204,6 @@ public sealed record PlayerEffectSpec
             _coinPickupRangePx = scalar;
         }
     }
-    private bool? _highlightTreasure;
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public bool? HighlightTreasure
-    {
-        get => _highlightTreasure;
-        set {
-            if (value is not bool scalar)
-                throw new InvalidDataException("highlightTreasure must match its declared bool domain when present");
-            _highlightTreasure = scalar;
-        }
-    }
     private bool? _highlightDanger;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? HighlightDanger
@@ -270,17 +270,6 @@ public sealed record PlayerEffectSpec
             _autoManaPotionBelowPercent = scalar;
         }
     }
-    private int? _lifeRegenUnits;
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public int? LifeRegenUnits
-    {
-        get => _lifeRegenUnits;
-        set {
-            if (value is not int scalar || scalar < -100 || scalar > 200)
-                throw new InvalidDataException("lifeRegenUnits must match its declared int domain when present");
-            _lifeRegenUnits = scalar;
-        }
-    }
     private int? _hurtInvulnerabilityBonusTicks;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? HurtInvulnerabilityBonusTicks
@@ -299,8 +288,8 @@ public sealed record PlayerEffectSpec
         get => _healingPotionCooldownOnHitReductionTicks;
         set { if (value is not int ticks || ticks < 0 || ticks > 3600) throw new InvalidDataException("healingPotionCooldownOnHitReductionTicks must be 0..3600"); _healingPotionCooldownOnHitReductionTicks = ticks; }
     }
-    [JsonIgnore] public bool HasEffect => (AutoJump ?? false) != false || (GravityControl ?? false) != false || (GravityMultiplier ?? 1f) != 1f || (MaxFallSpeedPxPerTick ?? 0f) != 0f || (SafeFallDistanceBlocks ?? 0) != 0 || (WaterBreathing ?? false) != false || (SwimJump ?? false) != false || (WaterBuoyancy ?? false) != false || (WallSlideAndJump ?? false) != false || (WallCling ?? false) != false || (BreathCapacityBonus ?? 0) != 0 || AirJump is not null || (HealingPotionCooldownOnHitReductionTicks ?? 0) != 0 || (FishingPowerPoints ?? 0) != 0 || PreventLineBreak == true || AllowLavaFishing == true || RevealHookedCatch == true || (ExtraCrateChancePercent ?? 0) != 0 || (ItemPickupRangePx ?? 0) != 0 || (HeartPickupRangePx ?? 0) != 0 || (ManaPickupRangePx ?? 0) != 0 || (CoinPickupRangePx ?? 0) != 0 || HighlightTreasure == true || HighlightDanger == true || HighlightCreatures == true || NightVision == true || (HealingPotionCooldownReductionPercent ?? 0) != 0 || (HealingPotionCooldownReductionTicks ?? 0) != 0 || (AutoManaPotionBelowPercent ?? 0) != 0 || (LifeRegenUnits ?? 0) != 0 || (HurtInvulnerabilityBonusTicks ?? 0) != 0;
-    public void Validate() { if (Condition is not ("always" or "stationary")) throw new InvalidDataException("Unknown player-effect condition"); AirJump?.Validate(); }
+    [JsonIgnore] public bool HasEffect => (AutoJump ?? false) != false || (GravityControl ?? false) != false || (GravityMultiplier ?? 1f) != 1f || (MaxFallSpeedPxPerTick ?? 0f) != 0f || (SafeFallDistanceBlocks ?? 0) != 0 || (WaterBreathing ?? false) != false || (SwimJump ?? false) != false || (WaterBuoyancy ?? false) != false || (WallSlideAndJump ?? false) != false || (WallCling ?? false) != false || (BreathCapacityBonus ?? 0) != 0 || AirJump is not null || (HealingPotionCooldownOnHitReductionTicks ?? 0) != 0 || (FishingPowerPoints ?? 0) != 0 || PreventLineBreak == true || AllowLavaFishing == true || RevealHookedCatch == true || (ExtraCrateChancePercent ?? 0) != 0 || (ItemPickupRangePx ?? 0) != 0 || (HeartPickupRangePx ?? 0) != 0 || (ManaPickupRangePx ?? 0) != 0 || (CoinPickupRangePx ?? 0) != 0 || HighlightDanger == true || HighlightCreatures == true || NightVision == true || (HealingPotionCooldownReductionPercent ?? 0) != 0 || (HealingPotionCooldownReductionTicks ?? 0) != 0 || (AutoManaPotionBelowPercent ?? 0) != 0 || (HurtInvulnerabilityBonusTicks ?? 0) != 0;
+    public void Validate() { ValidateCondition(Condition); AirJump?.Validate(); }
     internal static bool SameEffect(PlayerEffectSpec? a, PlayerEffectSpec? b)
     {
         if (a?.HasEffect != true) a = null;
@@ -328,14 +317,12 @@ public sealed record PlayerEffectSpec
         && (a?.HeartPickupRangePx ?? 0) == (b?.HeartPickupRangePx ?? 0)
         && (a?.ManaPickupRangePx ?? 0) == (b?.ManaPickupRangePx ?? 0)
         && (a?.CoinPickupRangePx ?? 0) == (b?.CoinPickupRangePx ?? 0)
-        && (a?.HighlightTreasure ?? false) == (b?.HighlightTreasure ?? false)
         && (a?.HighlightDanger ?? false) == (b?.HighlightDanger ?? false)
         && (a?.HighlightCreatures ?? false) == (b?.HighlightCreatures ?? false)
         && (a?.NightVision ?? false) == (b?.NightVision ?? false)
         && (a?.HealingPotionCooldownReductionPercent ?? 0) == (b?.HealingPotionCooldownReductionPercent ?? 0)
         && (a?.HealingPotionCooldownReductionTicks ?? 0) == (b?.HealingPotionCooldownReductionTicks ?? 0)
         && (a?.AutoManaPotionBelowPercent ?? 0) == (b?.AutoManaPotionBelowPercent ?? 0)
-        && (a?.LifeRegenUnits ?? 0) == (b?.LifeRegenUnits ?? 0)
         && (a?.HurtInvulnerabilityBonusTicks ?? 0) == (b?.HurtInvulnerabilityBonusTicks ?? 0);
     }
     internal void Write(BinaryWriter writer) {
@@ -363,14 +350,12 @@ public sealed record PlayerEffectSpec
         writer.Write(HeartPickupRangePx ?? 0);
         writer.Write(ManaPickupRangePx ?? 0);
         writer.Write(CoinPickupRangePx ?? 0);
-        writer.Write(HighlightTreasure ?? false);
         writer.Write(HighlightDanger ?? false);
         writer.Write(HighlightCreatures ?? false);
         writer.Write(NightVision ?? false);
         writer.Write(HealingPotionCooldownReductionPercent ?? 0);
         writer.Write(HealingPotionCooldownReductionTicks ?? 0);
         writer.Write(AutoManaPotionBelowPercent ?? 0);
-        writer.Write(LifeRegenUnits ?? 0);
         writer.Write(HurtInvulnerabilityBonusTicks ?? 0);
     }
     internal static PlayerEffectSpec Read(BinaryReader reader) {
@@ -400,14 +385,12 @@ public sealed record PlayerEffectSpec
             HeartPickupRangePx = reader.ReadInt32(),
             ManaPickupRangePx = reader.ReadInt32(),
             CoinPickupRangePx = reader.ReadInt32(),
-            HighlightTreasure = reader.ReadBoolean(),
             HighlightDanger = reader.ReadBoolean(),
             HighlightCreatures = reader.ReadBoolean(),
             NightVision = reader.ReadBoolean(),
             HealingPotionCooldownReductionPercent = reader.ReadInt32(),
             HealingPotionCooldownReductionTicks = reader.ReadInt32(),
             AutoManaPotionBelowPercent = reader.ReadInt32(),
-            LifeRegenUnits = reader.ReadInt32(),
             HurtInvulnerabilityBonusTicks = reader.ReadInt32(),
         };
         value.Validate(); return value;

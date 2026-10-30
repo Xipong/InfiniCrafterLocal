@@ -104,11 +104,11 @@ def test_author_explains_scoped_wire_units_without_converting_source(monkeypatch
         assert _mapping(glossary, f"raw.generatedParent.{owner}.movementSpeed", f"configure_{owner}") == [
             "moveSpeedBonusPercent", "source * 100", "additive_percent"]
         assert _mapping(glossary, f"raw.generatedParent.{owner}.lifeRegen", f"configure_{owner}") == [
-            "lifeRegenHpPerSecond", "source / 2", "HP/s"]
+            "lifeRegen", "source / 2", "HP/s"]
     assert _mapping(glossary, "raw.generatedParent.gameplay.generatedBuff.movementSpeed", "apply_generated_buff_on_use") == [
         "moveSpeedBonusPercent", "source * 100", "additive_percent"]
     assert _mapping(glossary, "raw.generatedParent.gameplay.generatedBuff.lifeRegen", "apply_generated_buff_on_use") == [
-        "lifeRegenHpPerSecond", "source / 2", "HP/s"]
+        "lifeRegen", "source / 2", "HP/s"]
     raw = packet["parents"]["A"]["packet"]["raw"]
     assert raw["item"]["axePower"] == 9
     assert raw["item"]["tooltipLines"] == source["tooltipLines"]
@@ -364,9 +364,9 @@ def test_packet_glossary_is_derived_from_registry_metadata_not_capability_name(m
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("fn,values,path", [
     ("configure_tool", {"axePowerTooltipPercent": 45}, "gameplay"),
-    ("configure_accessory", {"moveSpeedBonusPercent": 15, "lifeRegenHpPerSecond": 1}, "accessory"),
-    ("configure_armor", {"moveSpeedBonusPercent": 15, "lifeRegenHpPerSecond": 1}, "armor"),
-    ("apply_generated_buff_on_use", {"moveSpeedBonusPercent": 15, "lifeRegenHpPerSecond": 1}, "gameplay.generatedBuff"),
+    ("configure_accessory", {"moveSpeedBonusPercent": 15, "lifeRegen": 1}, "accessory"),
+    ("configure_armor", {"moveSpeedBonusPercent": 15, "lifeRegen": 1}, "armor"),
+    ("apply_generated_buff_on_use", {"moveSpeedBonusPercent": 15, "lifeRegen": 1}, "gameplay.generatedBuff"),
 ])
 def test_compiler_produced_parent_is_explained_not_reauthored(monkeypatch, mode, fn, values, path):
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program

@@ -59,6 +59,8 @@ internal static partial class EngineRuntimeChecks
             ("authored air jump VFX source lifetime", AuthoredAirJumpSourceLifetimeRetiresVfx),
             ("authored air jump duration retains native mod hooks", AuthoredAirJumpDurationPreservesNativeHooks),
             ("authored air jump independent same-item components", AuthoredAirJumpComponentsKeepIndependentCharges),
+            ("existing player stats shared equipment consumers", ExistingPlayerStatsShareEquipmentConsumer),
+            ("existing buff stats condition before aggregate cap", ExistingBuffStatsFilterBeforeTheirAggregateCap),
             ("parent source graph unresolved identity alternatives", ParentSourceGraphKeepsUnresolvedIdentityAlternatives),
             ("parent source graph native projectile windows", ParentSourceGraphFollowsNativeProjectileWindows),
             ("parent source graph conditional native buff consumers", ParentSourceGraphKeepsConditionalNativeBuffConsumers),
