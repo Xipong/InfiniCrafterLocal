@@ -300,7 +300,9 @@ public partial class GeneratedItem
         {
             string duration = generated.DurationTicks == GeneratedBuffSpec.PermanentDurationTicks
                 ? "∞" : RuntimeTooltipTime(generated.DurationTicks);
-            void Effect(string name, string key, object value) => add(name + suffix, key, new object[] { input, value, duration });
+            void Effect(string name, string key, object value, string? condition = "always")
+                => add(name + suffix, key, new object[] {
+                    PlayerEffectDescription.WithCondition(input, condition, RuntimeTooltipCulture), value, duration });
             if (RuntimeTooltipFinite(generated.MiningSpeedMultiplier, 0.25f, 4f) && generated.MiningSpeedMultiplier != 1f)
                 Effect("Mining", "Mining", RuntimeTooltipNumber(generated.MiningSpeedMultiplier));
             if (RuntimeTooltipFinite(generated.MovementSpeed, -0.8f, 2f) && generated.MovementSpeed != 0f)
@@ -308,11 +310,16 @@ public partial class GeneratedItem
             if (RuntimeTooltipFinite(generated.JumpBoost, -8f, 8f) && generated.JumpBoost != 0f)
                 Effect("Jump", "Jump", RuntimeTooltipNumber(PlayerDisplayUnits.BlocksPerSecond(generated.JumpBoost)));
             if (generated.ManaRegen is >= -100 and <= 120 && generated.ManaRegen != 0) Effect("ManaRegen", "ManaRegen", (generated.ManaRegen >= 0 ? "+" : "") + RuntimeTooltipNumber(generated.ManaRegen));
-            if (generated.LifeRegen is >= -100 and <= 120 && generated.LifeRegen != 0) Effect("LifeRegen", "LifeRegen", (generated.LifeRegen >= 0 ? "+" : "") + RuntimeTooltipNumber(generated.LifeRegen / 2f));
+            if (generated.LifeRegen is >= -100 and <= 120 && generated.LifeRegen != 0)
+                Effect("LifeRegen", "LifeRegen", (generated.LifeRegen >= 0 ? "+" : "") + RuntimeTooltipNumber(generated.LifeRegen / 2f), generated.LifeRegenCondition);
             if (RuntimeTooltipFinite(generated.EmitLightStrength, 0f, 1.5f) && generated.EmitLightStrength > 0f)
                 Effect("Light", "Light", RuntimeTooltipNumber(generated.EmitLightStrength));
             // The executable effect sets findTreasure, not a radius-limited scan.
-            if (generated.OreSenseEnabled) add("OreSense" + suffix, "OreSense", new object[] { input, duration });
+            if (generated.OreSenseEnabled) add("OreSense" + suffix, "OreSense", new object[] {
+                PlayerEffectDescription.WithCondition(input, generated.TreasureSenseCondition, RuntimeTooltipCulture), duration });
+            if (generated.PlayerEffect is { HasEffect: true } effect)
+                add("PlayerEffectBuff" + suffix, "PlayerEffectBuff", new object[] { input,
+                    PlayerEffectDescription.Build(effect, RuntimeTooltipCulture), duration });
             if (generated.Combat is { HasEffect: true } combat)
             {
                 if (combat.DefensePoints != 0) Effect("CombatDefense", "CombatDefense", (combat.DefensePoints >= 0 ? "+" : "") + combat.DefensePoints.ToString(CultureInfo.InvariantCulture));

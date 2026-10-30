@@ -69,8 +69,14 @@ def test_declared_defaults_are_neutral_optional_and_reach_serialized_contract():
     assert set(RETAINED_WIRE_DEFAULTS).isdisjoint(schemas)
     for fn, values in DECLARED.items():
         for name, value in values.items():
-            assert cards[fn]["params"][name]["optional"] is True
-            assert cards[fn]["params"][name]["default"] == value
+            card = cards[fn]["params"][name]
+            if "paramRef" in card:
+                assert set(card) == {"paramRef"}
+                owner, leaf = card["paramRef"].split(".")
+                card = cards[owner]["params"][leaf]
+                assert "paramRef" not in card  # one explicit lookup, never a chain
+            assert card["optional"] is True
+            assert card["default"] == value
             variants = schemas[fn].get("oneOf", [schemas[fn]])
             assert any(name not in variant["required"] for variant in variants)
             projected = [variant["properties"][name] for variant in variants if name in variant["properties"]]
@@ -315,7 +321,8 @@ def test_sparse_author_still_requires_executable_dependencies(fn, mutation, code
     optional_fn = "configure_item_use" if mutation == "channel" else fn
     params = _call(doc, optional_fn)["params"]
     for param in DECLARED[optional_fn]:
-        params.pop(param)
+        params.pop(param, None)
+    assert set(params).isdisjoint(DECLARED[optional_fn])
     assert validate_runtime_program(doc)["ok"]
     if mutation == "channel":
         params["channel"] = False

@@ -78,8 +78,8 @@ def _params(fn: str) -> dict[str, Any]:
         "restore_resources_on_use": {"healLife": 20, "healMana": 0, "usesPotionRules": False},
         "apply_generated_buff_on_use": {
             "durationSeconds": 1, "miningSpeedMultiplier": 1.0, "lightStrength": 0.25,
-            "lightColor": "white", "oreSenseEnabled": False, "moveSpeedBonusPercent": 0.0,
-            "jumpSpeedBonusBlocksPerSecond": 0.0, "manaRegenBonusPoints": 0, "lifeRegenHpPerSecond": 0,
+            "lightColor": "white", "treasureSense": False, "moveSpeedBonusPercent": 0.0,
+            "jumpSpeedBonusBlocksPerSecond": 0.0, "manaRegenBonusPoints": 0, "lifeRegen": 0,
         },
         "configure_tile_placement": {"tileId": 4, "placeStyle": 0},
         "configure_wall_placement": {"wallId": 1, "placeStyle": 0},

@@ -253,6 +253,8 @@ RuntimeTooltip: {
 	ReactionCooldownRemaining: "{0} reaction ready in {1}."
 	MobilityCooldownStatus: "Mobility cooldown"
 	MobilityCooldownRemaining: "Mobility ready in {0}."
+	PlayerEffectEquipment: "{0}: {1}"
+	PlayerEffectBuff: "{0}: {1} ({2})"
 	EquipmentMaxLife: "{0}: maximum life contribution {1}"
 	EquipmentMaxMana: "{0}: maximum mana contribution {1}"
 	CombatDefense: "{0}: {1} defense for {2} s"

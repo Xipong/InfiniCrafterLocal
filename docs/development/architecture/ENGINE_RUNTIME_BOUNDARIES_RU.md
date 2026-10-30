@@ -97,7 +97,7 @@ Charge-release controller — другая операция: один раз м�
 | Author / смысл | Доставка и ограничения |
 |---|---|
 | `configure_tool.axePowerTooltipPercent` | Целое 0…500, шаг 5 → прежний integer `gameplay.axePower = value / 5`. Старое Author-имя не становится alias. |
-| `apply_generated_buff_on_use.lifeRegenHpPerSecond` | 0…60, шаг 0.5 → integer `gameplay.generatedBuff.lifeRegen = value × 2`. Equipment regen имеет собственный signed domain в registry. |
+| `apply_generated_buff_on_use.lifeRegen` | −50…60 ОЗ/с, шаг 0.5 → integer `gameplay.generatedBuff.lifeRegen = value × 2`. Equipment regen имеет собственный signed domain в registry. |
 | Equipment bonus percent | `/100` в fraction там, где это объявлено; crit и damage-reduction percentage points не смешиваются с additive damage multiplier. |
 | `taggedSummonSourceDamageBonusPercent` | Multiplier source damage против same-owner generated whip tag, не vanilla flat tag damage. |
 | `periodTicks`, delays и duration | World ticks; `periodic` требует явный period, runtime minimum не разрешает отсутствующее authored значение. |

@@ -24,12 +24,13 @@ public sealed partial class InfiniCraftPlayer
                 active.MovementSpeed, active.JumpBoost, active.ManaRegen, active.LifeRegen,
                 active.Combat?.DefensePoints ?? 0, active.Combat?.AttackSpeedPercent ?? 0, active.Combat?.CritChancePoints ?? 0,
                 active.Combat is { } combat ? new ReadOnlyDictionary<string, float>(new Dictionary<string, float>
-                    { [combat.DamageClass] = combat.DamagePercent }) : null);
+                    { [combat.DamageClass] = combat.DamagePercent }) : null, active.PlayerEffect is { } effect ? effect with { } : null,
+                active.LifeRegenCondition, active.TreasureSenseCondition);
         }
         var current = new GeneratedUtilityBuffValues(_generatedBuffTicks,
             _generatedMiningSpeedMultiplier, _generatedLightStrength, _generatedLightColorName,
-            _generatedOreSenseRadiusTiles, _generatedMovementSpeed, _generatedJumpBoost,
-            _generatedManaRegen, _generatedLifeRegen, _generatedDefense, _generatedAttackSpeed, _generatedCrit,
+            HasActiveGeneratedTreasureSense ? 1 : 0, _generatedMovementSpeed, _generatedJumpBoost,
+            _generatedManaRegen, CurrentGeneratedLifeRegen, _generatedDefense, _generatedAttackSpeed, _generatedCrit,
             new ReadOnlyDictionary<string, float>(new Dictionary<string, float>(_generatedDamage)));
         return new(current, Array.AsReadOnly(entries));
     }

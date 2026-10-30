@@ -206,11 +206,11 @@ def test_item_and_equipment_projection_has_exact_fields_and_param_receipts(fn, p
             "configure_accessory", "fallDamageImmune", True, True, "accessory.fallDamageImmune", True, id="boolean-only-accessory"
         ),
         pytest.param(
-            "apply_generated_buff_on_use", "oreSenseEnabled", True, True, "gameplay.generatedBuff.oreSenseRadiusTiles", 1, id="spelunker-on"
+            "apply_generated_buff_on_use", "treasureSense", True, True, "gameplay.generatedBuff.oreSenseRadiusTiles", 1, id="spelunker-on"
         ),
         pytest.param(
             "apply_generated_buff_on_use",
-            "oreSenseEnabled",
+            "treasureSense",
             False,
             True,
             "gameplay.generatedBuff.oreSenseRadiusTiles",
@@ -238,7 +238,7 @@ def test_author_selector_and_boolean_projection(fn, param, value, accepted, path
             for part in path.split("."):
                 actual = actual[part]
             assert actual == pytest.approx(expected) if isinstance(expected, float) else actual == expected
-        if param == "oreSenseEnabled":
+        if param == "treasureSense":
             call["params"]["oreSenseRadiusTiles"] = 30
             assert not validate_runtime_program(source)["ok"]
 

@@ -253,6 +253,8 @@ RuntimeTooltip: {
 	ReactionCooldownRemaining: "Реакция «{0}» будет готова через {1}."
 	MobilityCooldownStatus: "Перезарядка перемещения"
 	MobilityCooldownRemaining: "Перемещение будет готово через {0}."
+	PlayerEffectEquipment: "{0}: {1}"
+	PlayerEffectBuff: "{0}: {1} ({2})"
 	EquipmentMaxLife: "{0}: вклад в максимум здоровья: {1}"
 	EquipmentMaxMana: "{0}: вклад в максимум маны: {1}"
 	CombatDefense: "{0}: {1} защиты на {2} с"

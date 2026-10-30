@@ -128,6 +128,14 @@ public sealed class GeneratedParentSummarySpec
 
 public sealed class GeneratedBuffSpec
 {
+    private PlayerEffectSpec? _playerEffect;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PlayerEffectSpec? PlayerEffect
+    {
+        get => _playerEffect;
+        set { if (value is null) throw new InvalidDataException("present playerEffect cannot be null"); value.Validate(); _playerEffect = value; }
+    }
+
     public const int PermanentDurationTicks = 0;
     public const int MaxFiniteDurationTicks = int.MaxValue - 1;
     public const int PersistentAfterDeathMaxTicks = 20 * 60 * 60;
@@ -163,19 +171,33 @@ public sealed class GeneratedBuffSpec
     public float MiningSpeedMultiplier { get; set; } = 1f;
     public float EmitLightStrength { get; set; } = 0f;
     public string LightColorName { get; set; } = "";
-    // Current tMod runtime is bool-backed via Player.findTreasure.  The radius is
-    // preserved for authoring/debug/future implementation, but gameplay treats any
-    // value > 0 as spelunker-like ore sense.
+    // Existing wire count is boolean-backed: every positive value enables
+    // native Spelunker treasure highlighting; it is not a radius-limited scan.
     public int OreSenseRadiusTiles { get; set; } = 0;
     public bool OreSenseEnabled => OreSenseRadiusTiles > 0;
     public float MovementSpeed { get; set; } = 0f;
     public float JumpBoost { get; set; } = 0f;
     public int ManaRegen { get; set; } = 0;
     public int LifeRegen { get; set; } = 0;
+    private string? _lifeRegenCondition;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LifeRegenCondition
+    {
+        get => _lifeRegenCondition;
+        set => _lifeRegenCondition = PlayerEffectSpec.ValidateCondition(value);
+    }
+    private string? _treasureSenseCondition;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TreasureSenseCondition
+    {
+        get => _treasureSenseCondition;
+        set => _treasureSenseCondition = PlayerEffectSpec.ValidateCondition(value);
+    }
+
 
     private bool HasEffectStats =>
         MiningSpeedMultiplier != 1f || EmitLightStrength > 0f || OreSenseEnabled ||
-        MovementSpeed != 0f || JumpBoost != 0f || ManaRegen != 0 || LifeRegen != 0 || Combat?.HasEffect == true;
+        MovementSpeed != 0f || JumpBoost != 0f || ManaRegen != 0 || LifeRegen != 0 || Combat?.HasEffect == true || PlayerEffect?.HasEffect == true;
 
     public bool HasAnyEffect => _durationTicks.HasValue && HasEffectStats;
 
@@ -301,6 +323,22 @@ public sealed class BuffEntrySpec
 
 public sealed class AccessorySpec
 {
+    private PlayerEffectSpec? _playerEffect;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PlayerEffectSpec? PlayerEffect
+    {
+        get => _playerEffect;
+        set { if (value is null) throw new InvalidDataException("present playerEffect cannot be null"); value.Validate(); _playerEffect = value; }
+    }
+
+    private bool? _treasureSense;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? TreasureSense
+    {
+        get => _treasureSense;
+        set => _treasureSense = value is bool enabled ? enabled
+            : throw new InvalidDataException("present treasureSense must be a boolean");
+    }
     public bool Enabled { get; set; } = false;
     public bool WireVision { get; set; } = false;
     public bool IceSkate { get; set; } = false;
@@ -329,6 +367,21 @@ public sealed class AccessorySpec
     public int MaxLife { get; set; } = 0;
     public int MaxMana { get; set; } = 0;
     public int LifeRegen { get; set; } = 0;
+    private string? _lifeRegenCondition;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LifeRegenCondition
+    {
+        get => _lifeRegenCondition;
+        set => _lifeRegenCondition = PlayerEffectSpec.ValidateCondition(value);
+    }
+    private string? _treasureSenseCondition;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TreasureSenseCondition
+    {
+        get => _treasureSenseCondition;
+        set => _treasureSenseCondition = PlayerEffectSpec.ValidateCondition(value);
+    }
+
     public int ManaRegen { get; set; } = 0;
     public float MovementSpeed { get; set; } = 0f;
     public float MaxRunSpeed { get; set; } = 0f;
@@ -355,7 +408,7 @@ public sealed class AccessorySpec
     public float SummonTagDamage { get; set; } = 0f;
     public float LightStrength { get; set; } = 0f;
     public string LightColorName { get; set; } = "";
-    public bool HasAnyEffect => WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
+    public bool HasAnyEffect => TreasureSense == true || PlayerEffect?.HasEffect == true || WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
         || MovementSpeed != 0f || MaxRunSpeed != 0f || JumpSpeed != 0f
         || GenericDamage != 0f || MeleeDamage != 0f || RangedDamage != 0f || MagicDamage != 0f || SummonDamage != 0f
         || GenericCrit != 0f || AttackSpeed != 0f || Knockback != 0f
@@ -366,6 +419,22 @@ public sealed class AccessorySpec
 
 public sealed class ArmorSpec
 {
+    private PlayerEffectSpec? _playerEffect;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PlayerEffectSpec? PlayerEffect
+    {
+        get => _playerEffect;
+        set { if (value is null) throw new InvalidDataException("present playerEffect cannot be null"); value.Validate(); _playerEffect = value; }
+    }
+
+    private bool? _treasureSense;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? TreasureSense
+    {
+        get => _treasureSense;
+        set => _treasureSense = value is bool enabled ? enabled
+            : throw new InvalidDataException("present treasureSense must be a boolean");
+    }
     public bool Enabled { get; set; } = false;
     public string Slot { get; set; } = ""; // head, body, legs; required when enabled
     public string SetKey { get; set; } = "";
@@ -373,6 +442,21 @@ public sealed class ArmorSpec
     public int MaxLife { get; set; } = 0;
     public int MaxMana { get; set; } = 0;
     public int LifeRegen { get; set; } = 0;
+    private string? _lifeRegenCondition;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LifeRegenCondition
+    {
+        get => _lifeRegenCondition;
+        set => _lifeRegenCondition = PlayerEffectSpec.ValidateCondition(value);
+    }
+    private string? _treasureSenseCondition;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TreasureSenseCondition
+    {
+        get => _treasureSenseCondition;
+        set => _treasureSenseCondition = PlayerEffectSpec.ValidateCondition(value);
+    }
+
     public int ManaRegen { get; set; } = 0;
     public float MovementSpeed { get; set; } = 0f;
     public float MaxRunSpeed { get; set; } = 0f;
@@ -417,7 +501,7 @@ public sealed class ArmorSpec
     public float SetBonusEndurance { get; set; } = 0f;
     public float SetBonusArmorPenetration { get; set; } = 0f;
 
-    public bool HasAnyEffect => Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
+    public bool HasAnyEffect => TreasureSense == true || PlayerEffect?.HasEffect == true || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
         || MovementSpeed != 0f || MaxRunSpeed != 0f || JumpSpeed != 0f
         || GenericDamage != 0f || MeleeDamage != 0f || RangedDamage != 0f || MagicDamage != 0f || SummonDamage != 0f
         || GenericCrit != 0f || AttackSpeed != 0f || Knockback != 0f

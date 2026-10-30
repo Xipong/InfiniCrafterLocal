@@ -20,8 +20,8 @@ FN = "apply_generated_buff_on_use"
 def document(activation=FN):
     doc = build_capability_witness(activation)
     call = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == FN)
-    call["params"].update(lightStrength=0, miningSpeedMultiplier=1, oreSenseEnabled=False,
-        moveSpeedBonusPercent=0, jumpSpeedBonusBlocksPerSecond=0, manaRegenBonusPoints=0, lifeRegenHpPerSecond=0)
+    call["params"].update(lightStrength=0, miningSpeedMultiplier=1, treasureSense=False,
+        moveSpeedBonusPercent=0, jumpSpeedBonusBlocksPerSecond=0, manaRegenBonusPoints=0, lifeRegen=0)
     return doc, call
 
 
@@ -33,7 +33,7 @@ def document(activation=FN):
     ("moveSpeedBonusPercent", -80, "movementSpeed", -0.8),
     ("jumpSpeedBonusBlocksPerSecond", -30, "jumpBoost", -8),
     ("manaRegenBonusPoints", -100, "manaRegen", -100),
-    ("lifeRegenHpPerSecond", -50, "lifeRegen", -100),
+    ("lifeRegen", -50, "lifeRegen", -100),
     ("miningSpeedMultiplier", 0.25, "miningSpeedMultiplier", 0.25),
 ])
 @pytest.mark.parametrize("activation", [FN, "refresh_generated_effect_group_while_held", "apply_generated_buff_on_event"])
@@ -67,7 +67,7 @@ def test_each_penalty_alone_is_an_effect_in_author_and_saved_wire(leaf, value, w
     ("combat.defensePoints", -101, -100), ("combat.attackSpeedPercent", -81, -80),
     ("combat.critChancePoints", -101, -100), ("combat.damagePercent", -91, -90),
     ("moveSpeedBonusPercent", -81, -80), ("jumpSpeedBonusBlocksPerSecond", -31, -30),
-    ("manaRegenBonusPoints", -101, -100), ("lifeRegenHpPerSecond", -50.5, -49.5),
+    ("manaRegenBonusPoints", -101, -100), ("lifeRegen", -50.5, -49.5),
 ])
 def test_signed_leaf_repair_freezes_valid_combat_and_utility_neighbors(leaf, bad, good):
     doc, call = document()
@@ -138,5 +138,5 @@ def test_existing_positive_upper_bounds_and_exact_steps_are_unchanged():
     assert cap.params["moveSpeedBonusPercent"].maximum == 200
     assert cap.params["jumpSpeedBonusBlocksPerSecond"].maximum == 30
     assert cap.params["manaRegenBonusPoints"].maximum == 120
-    assert cap.params["lifeRegenHpPerSecond"].maximum == 60
-    assert cap.params["lifeRegenHpPerSecond"].multiple_of == 0.5
+    assert cap.params["lifeRegen"].maximum == 60
+    assert cap.params["lifeRegen"].multiple_of == 0.5

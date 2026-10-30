@@ -40,7 +40,7 @@ Proxy starts: ignoreWater=false, netImportant=false. Liquid/tile collision, pene
 
 [Model-facing units](../authoring/MODEL_FACING_UNITS_RU.md#gameplay) владеет current units/consumer traps; [conversion/null proof](../authoring/MODEL_FACING_UNITS_RU.md#conversions) — percent/regen/zero/sentinel/float границей; [generated parity](../generated/PRIMITIVE_PARITY_RU.md) — full roster. Не копировать все ranges/cards сюда.
 
-Terraria-specific display adapter: `axePowerTooltipPercent` — integer 0..500, шаг 5 → прежний integer `gameplay.axePower`/Item.axe 0..100 через /5. Старый DTO остаётся; Author `axePower` не alias. Generated buff `lifeRegenHpPerSecond` — 0..60, шаг .5 → прежний integer lifeRegen 0..120 через ×2; Author `lifeRegen` не alias. `valueCopper` остаётся exact Item.value в copper, не resale guarantee/Author value alias.
+Terraria-specific display adapter: `axePowerTooltipPercent` — integer 0..500, шаг 5 → прежний integer `gameplay.axePower`/Item.axe 0..100 через /5. Старый DTO остаётся; Author `axePower` не alias. Generated buff `lifeRegen` — −50..60 ОЗ/с, шаг .5 → прежний integer lifeRegen −100..120 через ×2. Совпадение spelling с wire не меняет единиц: Author задаёт ОЗ/с, а не native counts. `valueCopper` остаётся exact Item.value в copper, не resale guarantee/Author value alias.
 
 Проценты `15` и `0.15` — разные authored значения, не interchangeable spelling; движение/скорость — projectile updates, длительности — world ticks, raw local-immunity cooldown — engine units (`-1` one hit per NPC). Если биекция не доказана, units не переводятся в удобную prose единицу. Полное объяснение — canonical units owner выше.
 

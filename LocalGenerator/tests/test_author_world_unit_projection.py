@@ -291,7 +291,7 @@ def test_predecessor_leaf_names_are_not_fresh_author_aliases(old, new):
 def test_non_time_integer_lattices_and_float32_signed_neutrals_remain_exact():
     import math
     offset = CAPABILITY_REGISTRY["configure_spawn"].params["offsetBlocks"]
-    regen = CAPABILITY_REGISTRY["configure_accessory"].params["lifeRegenHpPerSecond"]
+    regen = CAPABILITY_REGISTRY["configure_accessory"].params["lifeRegen"]
     gravity = CAPABILITY_REGISTRY["accelerate_projectile_vertical"].params["accelerationYBlocksPerSecondSquared"]
     with pytest.raises(ValueError, match="non-integral"):
         offset.to_wire(0.01)

@@ -44,6 +44,12 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("player effect timed buff actual cooldown hit", PlayerEffectBuffReducesActualCooldownOnHit),
+            ("player effect weapon event actual cooldown", PlayerEffectWeaponActionMutatesNativeTimer),
+            ("player effect equipment pickup and potion hooks", PlayerEffectNativeEquipmentAndPickup),
+            ("player effect typed snapshot roundtrip", PlayerEffectSnapshotRetainsNumericMechanics),
+            ("existing player stats shared equipment consumers", ExistingPlayerStatsShareEquipmentConsumer),
+            ("existing buff stats condition before aggregate cap", ExistingBuffStatsFilterBeforeTheirAggregateCap),
             ("parent source graph unresolved identity alternatives", ParentSourceGraphKeepsUnresolvedIdentityAlternatives),
             ("parent source graph native projectile windows", ParentSourceGraphFollowsNativeProjectileWindows),
             ("parent source graph conditional native buff consumers", ParentSourceGraphKeepsConditionalNativeBuffConsumers),

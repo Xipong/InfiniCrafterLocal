@@ -3016,6 +3016,24 @@
       "events": [],
       "exclusiveGroup": "",
       "finalWirePaths": [
+        "gameplay.generatedBuff.playerEffect.condition",
+        "gameplay.generatedBuff.playerEffect.fishingPowerPoints",
+        "gameplay.generatedBuff.playerEffect.preventLineBreak",
+        "gameplay.generatedBuff.playerEffect.allowLavaFishing",
+        "gameplay.generatedBuff.playerEffect.revealHookedCatch",
+        "gameplay.generatedBuff.playerEffect.extraCrateChancePercent",
+        "gameplay.generatedBuff.playerEffect.itemPickupRangePx",
+        "gameplay.generatedBuff.playerEffect.heartPickupRangePx",
+        "gameplay.generatedBuff.playerEffect.manaPickupRangePx",
+        "gameplay.generatedBuff.playerEffect.coinPickupRangePx",
+        "gameplay.generatedBuff.playerEffect.highlightDanger",
+        "gameplay.generatedBuff.playerEffect.highlightCreatures",
+        "gameplay.generatedBuff.playerEffect.nightVision",
+        "gameplay.generatedBuff.playerEffect.healingPotionCooldownReductionPercent",
+        "gameplay.generatedBuff.playerEffect.healingPotionCooldownReductionTicks",
+        "gameplay.generatedBuff.playerEffect.autoManaPotionBelowPercent",
+        "gameplay.generatedBuff.playerEffect.healingPotionCooldownOnHitReductionTicks",
+        "gameplay.generatedBuff.playerEffect.hurtInvulnerabilityBonusTicks",
         "gameplay.generatedBuff.durationTicks",
         "gameplay.generatedBuff.exhaustionTicks",
         "gameplay.generatedBuff.miningSpeedMultiplier",
@@ -3026,12 +3044,32 @@
         "gameplay.generatedBuff.jumpBoost",
         "gameplay.generatedBuff.manaRegen",
         "gameplay.generatedBuff.lifeRegen",
+        "gameplay.generatedBuff.lifeRegenCondition",
+        "gameplay.generatedBuff.treasureSenseCondition",
         "gameplay.generatedBuff.combat.defensePoints",
         "gameplay.generatedBuff.combat.attackSpeedPercent",
         "gameplay.generatedBuff.combat.critChancePoints",
         "gameplay.generatedBuff.combat.damagePercent",
         "gameplay.generatedBuff.combat.damageClass",
         "runtimeProgram.effectGroups[].id",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.condition",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.fishingPowerPoints",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.preventLineBreak",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.allowLavaFishing",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.revealHookedCatch",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.extraCrateChancePercent",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.itemPickupRangePx",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.heartPickupRangePx",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.manaPickupRangePx",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.coinPickupRangePx",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.highlightDanger",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.highlightCreatures",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.nightVision",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.healingPotionCooldownReductionPercent",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.healingPotionCooldownReductionTicks",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.autoManaPotionBelowPercent",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.healingPotionCooldownOnHitReductionTicks",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.hurtInvulnerabilityBonusTicks",
         "runtimeProgram.effectGroups[].generatedBuff.durationTicks",
         "runtimeProgram.effectGroups[].generatedBuff.exhaustionTicks",
         "runtimeProgram.effectGroups[].generatedBuff.miningSpeedMultiplier",
@@ -3042,6 +3080,8 @@
         "runtimeProgram.effectGroups[].generatedBuff.jumpBoost",
         "runtimeProgram.effectGroups[].generatedBuff.manaRegen",
         "runtimeProgram.effectGroups[].generatedBuff.lifeRegen",
+        "runtimeProgram.effectGroups[].generatedBuff.lifeRegenCondition",
+        "runtimeProgram.effectGroups[].generatedBuff.treasureSenseCondition",
         "runtimeProgram.effectGroups[].generatedBuff.combat.defensePoints",
         "runtimeProgram.effectGroups[].generatedBuff.combat.attackSpeedPercent",
         "runtimeProgram.effectGroups[].generatedBuff.combat.critChancePoints",
@@ -3101,14 +3141,14 @@
           "semanticType": "blocks/s",
           "units": "blocks/s"
         },
-        "lifeRegenHpPerSecond": {
+        "lifeRegen": {
           "enum": [],
           "kind": "number",
           "maximum": 60,
           "minimum": -50,
           "reference": null,
           "required": false,
-          "semanticType": "unitless_scalar",
+          "semanticType": "terraria_life_regen",
           "units": "HP/s"
         },
         "lightColor": {
@@ -3173,7 +3213,30 @@
           "semanticType": "additive_percent",
           "units": "additive_percent"
         },
-        "oreSenseEnabled": {
+        "playerEffect": {
+          "enum": [],
+          "kind": "object",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "regenWhen": {
+          "enum": [
+            "always",
+            "stationary"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "treasureSense": {
           "enum": [],
           "kind": "boolean",
           "maximum": null,
@@ -3181,6 +3244,19 @@
           "reference": null,
           "required": false,
           "semanticType": "boolean_capability",
+          "units": ""
+        },
+        "treasureWhen": {
+          "enum": [
+            "always",
+            "stationary"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
           "units": ""
         }
       },
@@ -3199,6 +3275,17 @@
         {
           "kind": "non_neutral_param",
           "message": "at least one generated-buff effect must be non-neutral",
+          "nonzeroParams": [
+            "playerEffect",
+            "combat",
+            "miningSpeedMultiplier",
+            "lightStrength",
+            "treasureSense",
+            "moveSpeedBonusPercent",
+            "jumpSpeedBonusBlocksPerSecond",
+            "manaRegenBonusPoints",
+            "lifeRegen"
+          ],
           "target": "same_target"
         }
       ],
@@ -4137,6 +4224,27 @@
       "exclusiveGroup": "",
       "finalWirePaths": [
         "accessory.enabled",
+        "accessory.playerEffect.condition",
+        "accessory.playerEffect.fishingPowerPoints",
+        "accessory.playerEffect.preventLineBreak",
+        "accessory.playerEffect.allowLavaFishing",
+        "accessory.playerEffect.revealHookedCatch",
+        "accessory.playerEffect.extraCrateChancePercent",
+        "accessory.playerEffect.itemPickupRangePx",
+        "accessory.playerEffect.heartPickupRangePx",
+        "accessory.playerEffect.manaPickupRangePx",
+        "accessory.playerEffect.coinPickupRangePx",
+        "accessory.playerEffect.highlightDanger",
+        "accessory.playerEffect.highlightCreatures",
+        "accessory.playerEffect.nightVision",
+        "accessory.playerEffect.healingPotionCooldownReductionPercent",
+        "accessory.playerEffect.healingPotionCooldownReductionTicks",
+        "accessory.playerEffect.autoManaPotionBelowPercent",
+        "accessory.playerEffect.healingPotionCooldownOnHitReductionTicks",
+        "accessory.playerEffect.hurtInvulnerabilityBonusTicks",
+        "accessory.lifeRegenCondition",
+        "accessory.treasureSense",
+        "accessory.treasureSenseCondition",
         "accessory.defense",
         "accessory.maxLife",
         "accessory.maxMana",
@@ -4312,7 +4420,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "lifeRegenHpPerSecond": {
+        "lifeRegen": {
           "enum": [],
           "kind": "number",
           "maximum": 100,
@@ -4434,6 +4542,29 @@
           "semanticType": "bounded_text",
           "units": ""
         },
+        "playerEffect": {
+          "enum": [],
+          "kind": "object",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "regenWhen": {
+          "enum": [
+            "always",
+            "stationary"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "rocketBoots": {
           "enum": [],
           "kind": "integer",
@@ -4463,6 +4594,29 @@
           "required": false,
           "semanticType": "source_damage_percent",
           "units": "source_damage_percent"
+        },
+        "treasureSense": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "treasureWhen": {
+          "enum": [
+            "always",
+            "stationary"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "waterWalk": {
           "enum": [],
@@ -4506,10 +4660,14 @@
           "kind": "at_least_one_param_nonzero",
           "message": "An accessory call must author at least one non-zero executable effect or be removed.",
           "nonzeroParams": [
+            "playerEffect",
+            "regenWhen",
+            "treasureSense",
+            "treasureWhen",
             "defensePoints",
             "maxLifePoints",
             "maxManaPoints",
-            "lifeRegenHpPerSecond",
+            "lifeRegen",
             "manaRegenBonusPoints",
             "moveSpeedBonusPercent",
             "maxRunSpeedBonusBlocksPerSecond",
@@ -4572,6 +4730,27 @@
         "armor.enabled",
         "armor.slot",
         "armor.setKey",
+        "armor.playerEffect.condition",
+        "armor.playerEffect.fishingPowerPoints",
+        "armor.playerEffect.preventLineBreak",
+        "armor.playerEffect.allowLavaFishing",
+        "armor.playerEffect.revealHookedCatch",
+        "armor.playerEffect.extraCrateChancePercent",
+        "armor.playerEffect.itemPickupRangePx",
+        "armor.playerEffect.heartPickupRangePx",
+        "armor.playerEffect.manaPickupRangePx",
+        "armor.playerEffect.coinPickupRangePx",
+        "armor.playerEffect.highlightDanger",
+        "armor.playerEffect.highlightCreatures",
+        "armor.playerEffect.nightVision",
+        "armor.playerEffect.healingPotionCooldownReductionPercent",
+        "armor.playerEffect.healingPotionCooldownReductionTicks",
+        "armor.playerEffect.autoManaPotionBelowPercent",
+        "armor.playerEffect.healingPotionCooldownOnHitReductionTicks",
+        "armor.playerEffect.hurtInvulnerabilityBonusTicks",
+        "armor.lifeRegenCondition",
+        "armor.treasureSense",
+        "armor.treasureSenseCondition",
         "armor.defense",
         "armor.maxLife",
         "armor.maxMana",
@@ -4722,7 +4901,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "lifeRegenHpPerSecond": {
+        "lifeRegen": {
           "enum": [],
           "kind": "number",
           "maximum": 100,
@@ -4834,6 +5013,29 @@
           "semanticType": "additive_percent",
           "units": "additive_percent"
         },
+        "playerEffect": {
+          "enum": [],
+          "kind": "object",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "regenWhen": {
+          "enum": [
+            "always",
+            "stationary"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "sentrySlotsBonus": {
           "enum": [],
           "kind": "integer",
@@ -4887,6 +5089,29 @@
           "required": false,
           "semanticType": "source_damage_percent",
           "units": "source_damage_percent"
+        },
+        "treasureSense": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "treasureWhen": {
+          "enum": [
+            "always",
+            "stationary"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "waterWalk": {
           "enum": [],
@@ -9827,6 +10052,87 @@
       ],
       "safetyLimits": "bounded by runtime program limits",
       "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "reduce_heal_cooldown_on_event",
+      "componentSlot": "event_action",
+      "conflicts": [],
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [
+        "on_hit",
+        "on_crit"
+      ],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].cooldownReductionTicks",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "delaySeconds": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 10.0,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "seconds": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 60.0,
+          "minimum": 0.008333333333333333,
+          "reference": null,
+          "required": true,
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "when": {
+          "enum": [
+            "on_hit",
+            "on_crit"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_trigger",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "purpose": "Subtract authored seconds from the owner's already running healing-potion cooldown. Both native potionDelay and Potion Sickness remaining time decrease, floored at zero.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "event_available",
+          "message": "target entity must actually emit the selected event",
+          "param": "when",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "targetKinds": [
+        "item_body",
         "owner_attached_projectile",
         "free_projectile",
         "stationary_projectile",
