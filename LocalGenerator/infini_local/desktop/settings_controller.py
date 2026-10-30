@@ -114,6 +114,10 @@ class SettingsController(StudioOperations):
         # Unknown/manual extension settings are opaque wire values, not widgets.
         data.update({key: value.strip() if key in editable_keys else value
                      for key, value in self.values.items()})
+        language = data.get("INFINI_LANGUAGE", DEFAULTS["INFINI_LANGUAGE"]).strip().lower()
+        if language not in {"ru", "en"}:
+            raise ValueError("INFINI_LANGUAGE must be ru or en")
+        data["INFINI_LANGUAGE"] = language
         data["INFINI_GUI_PIPELINE_PRESET"] = self.preset.strip()
         data["INFINI_SDCPP_SERVER_EXTRA_ARGS"] = " ".join(data.get("INFINI_SDCPP_SERVER_EXTRA_ARGS", "").split())
         template, repaired, reason = repair_sdcpp_command_template(data.get("INFINI_SDCPP_SERVER_COMMAND_TEMPLATE", ""))
@@ -141,7 +145,7 @@ class SettingsController(StudioOperations):
             data["INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK"] = "0"
         # Only canonicalized launch fields change draft state, never unrelated
         # disk values that were read to preserve extension keys.
-        for key in ("INFINI_SDCPP_SERVER_COMMAND_TEMPLATE", "INFINI_SDCPP_SERVER_COMMAND_MODE",
+        for key in ("INFINI_LANGUAGE", "INFINI_SDCPP_SERVER_COMMAND_TEMPLATE", "INFINI_SDCPP_SERVER_COMMAND_MODE",
                     "INFINI_MP_ASSET_TRANSPORT", "INFINI_HOST", "INFINI_ASSET_PUBLIC_BASE_URL",
                     "INFINI_SDCPP_LORA_DIR", "INFINI_SDCPP_LORA_PROMPT_TAGS", "INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK"):
             if key in data:

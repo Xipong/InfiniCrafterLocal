@@ -5,14 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <meta name="theme-color" content="#f5f4ed">
-  <title>Infinicraft — генератор Terraria</title>
+  <title data-i18n="Infinicraft — генератор Terraria">Infinicraft — генератор Terraria</title>
   <link rel="icon" type="image/svg+xml" href="assets/mark.svg">
   <link rel="stylesheet" href="studio.css">
+  <script defer src="studio-i18n.js"></script>
   <script defer src="studio.js"></script>
   <script defer src="studio-motion.js"></script>
 </head>
 <body>
-<a class="skip" href="#workspace">К рабочему столу</a>
+<a class="skip" href="#workspace"><span data-i18n="К рабочему столу">К рабочему столу</span></a>
 <svg class="svg-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
   <symbol id="i-mark" viewBox="0 0 32 32"><path d="M16 9 23 5l7 4v8l-7 4-7-4-7 4-7-4V9l7-4 7 4Zm0 0v8M2 9l7 4 7-4 7 4 7-4M9 13v8m14-8v8"/></symbol>
   <symbol id="i-work" viewBox="0 0 24 24"><path d="M3 6h18v13H3zM3 10h18M7 14h4m4 0h2m-10 3h7"/></symbol>
@@ -42,45 +43,45 @@
   <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
 </defs></svg>
 <div class="app-shell">
-  <aside class="rail" id="navigation-panel" aria-label="Навигация">
-    <button class="icon-button drawer-close" data-ui="close-menu" aria-label="Закрыть навигацию"><svg><use href="#i-close"/></svg></button>
-    <a href="#operate" class="brand" aria-label="Infinicraft — рабочий стол"><span class="brand-symbol"><svg class="brand-mark"><use href="#i-mark"/></svg></span><span>Infinicraft<span class="brand-caption">Studio для Terraria</span></span></a>
-    <div class="rail-location"><svg aria-hidden="true"><use href="#i-work"/></svg><span>Генератор Terraria</span></div>
+  <aside class="rail" id="navigation-panel" aria-label="Навигация" data-i18n-aria-label="Навигация">
+    <button class="icon-button drawer-close" data-ui="close-menu" aria-label="Закрыть навигацию" data-i18n-aria-label="Закрыть навигацию"><svg><use href="#i-close"/></svg></button>
+    <a href="#operate" class="brand" aria-label="Infinicraft — рабочий стол" data-i18n-aria-label="Infinicraft — рабочий стол"><span class="brand-symbol"><svg class="brand-mark"><use href="#i-mark"/></svg></span><span>Infinicraft<span class="brand-caption"><span data-i18n="Studio для Terraria">Studio для Terraria</span></span></span></a>
+    <div class="rail-location"><svg aria-hidden="true"><use href="#i-work"/></svg><span><span data-i18n="Генератор Terraria">Генератор Terraria</span></span></div>
     <nav id="navigation">
-      <a class="nav-link main-nav" data-route="operate" href="#operate"><svg><use href="#i-work"/></svg><span>Рабочий стол</span></a>
-      <div class="nav-label">Создание предметов</div>
-      <a class="nav-link" data-route="configure" href="#configure"><svg><use href="#i-sliders"/></svg>Конфигурация</a>
-      <a class="nav-link" data-route="providers" href="#providers"><svg><use href="#i-text"/></svg>Текст и механика</a>
-      <a class="nav-link" data-route="images" href="#images"><svg><use href="#i-image"/></svg>Изображения</a>
-      <a class="nav-link" data-route="sprites" href="#sprites"><svg><use href="#i-pixel"/></svg>Спрайты и цвет</a>
-      <a class="nav-link" data-route="models" href="#models"><svg><use href="#i-stack"/></svg>Модели и LoRA</a>
-      <a class="nav-link" data-route="multiplayer" href="#multiplayer"><svg><use href="#i-network"/></svg>Совместная игра</a>
-      <div class="nav-label system-label">Инструменты</div>
-      <a class="nav-link" data-route="diagnostics" href="#diagnostics"><svg><use href="#i-pulse"/></svg>Диагностика</a>
+      <a class="nav-link main-nav" data-route="operate" href="#operate"><svg><use href="#i-work"/></svg><span><span data-i18n="Рабочий стол">Рабочий стол</span></span></a>
+      <div class="nav-label"><span data-i18n="Создание предметов">Создание предметов</span></div>
+      <a class="nav-link" data-route="configure" href="#configure"><svg><use href="#i-sliders"/></svg><span data-i18n="Конфигурация">Конфигурация</span></a>
+      <a class="nav-link" data-route="providers" href="#providers"><svg><use href="#i-text"/></svg><span data-i18n="Текст и механика">Текст и механика</span></a>
+      <a class="nav-link" data-route="images" href="#images"><svg><use href="#i-image"/></svg><span data-i18n="Изображения">Изображения</span></a>
+      <a class="nav-link" data-route="sprites" href="#sprites"><svg><use href="#i-pixel"/></svg><span data-i18n="Спрайты и цвет">Спрайты и цвет</span></a>
+      <a class="nav-link" data-route="models" href="#models"><svg><use href="#i-stack"/></svg><span data-i18n="Модели и LoRA">Модели и LoRA</span></a>
+      <a class="nav-link" data-route="multiplayer" href="#multiplayer"><svg><use href="#i-network"/></svg><span data-i18n="Совместная игра">Совместная игра</span></a>
+      <div class="nav-label system-label"><span data-i18n="Инструменты">Инструменты</span></div>
+      <a class="nav-link" data-route="diagnostics" href="#diagnostics"><svg><use href="#i-pulse"/></svg><span data-i18n="Диагностика">Диагностика</span></a>
     </nav>
     <div class="rail-bottom">
-      <button class="rail-help" data-ui="help"><svg><use href="#i-help"/></svg>Как устроен крафт<svg class="small"><use href="#i-arrow"/></svg></button>
-      <button class="rail-help mobile-exit" data-ui="exit"><svg><use href="#i-exit"/></svg>Закрыть студию</button>
-      <div class="rail-colophon"><span class="colophon-mark">IFC</span><span id="version">Локальный генератор</span></div>
+      <button class="rail-help" data-ui="help"><svg><use href="#i-help"/></svg><span data-i18n="Как устроен крафт">Как устроен крафт</span><svg class="small"><use href="#i-arrow"/></svg></button>
+      <button class="rail-help mobile-exit" data-ui="exit"><svg><use href="#i-exit"/></svg><span data-i18n="Закрыть студию">Закрыть студию</span></button>
+      <div class="rail-colophon"><span class="colophon-mark">IFC</span><span id="version"><span data-i18n="Локальный генератор">Локальный генератор</span></span></div>
     </div>
   </aside>
   <div class="main-shell">
     <header class="topbar">
-      <button class="mobile-menu icon-button" data-ui="menu" aria-label="Открыть навигацию" aria-controls="navigation-panel" aria-expanded="false"><svg><use href="#i-menu"/></svg></button>
-      <div class="breadcrumb"><span>Студия</span><span class="slash">/</span><span id="crumb">Рабочий стол</span></div>
-      <div class="top-actions"><button class="search-trigger" data-ui="search" aria-label="Найти настройку"><svg><use href="#i-search"/></svg><span>Найти настройку</span><kbd>Ctrl K</kbd></button><span class="connection" id="connection"><span class="status-dot"></span><span>Подключение…</span></span><button class="notification-trigger icon-button" data-ui="notifications" aria-label="История уведомлений" title="История уведомлений"><svg><use href="#i-bell"/></svg><span id="notice-count">0</span></button><button class="icon-button exit-button" data-ui="exit" aria-label="Закрыть студию" title="Закрыть только студию, не генератор"><svg><use href="#i-exit"/></svg></button></div>
+      <button class="mobile-menu icon-button" data-ui="menu" aria-label="Открыть навигацию" aria-controls="navigation-panel" aria-expanded="false" data-i18n-aria-label="Открыть навигацию"><svg><use href="#i-menu"/></svg></button>
+      <div class="breadcrumb"><span><span data-i18n="Студия">Студия</span></span><span class="slash">/</span><span id="crumb"><span data-i18n="Рабочий стол">Рабочий стол</span></span></div>
+      <div class="top-actions"><label class="language-switch"><span class="sr-only" data-i18n="Язык">Язык</span><select id="language-select" disabled data-field="INFINI_LANGUAGE" aria-label="Язык" data-i18n-aria-label="Язык"><option value="ru">RU</option><option value="en">EN</option></select></label><button class="search-trigger" data-ui="search" aria-label="Найти настройку" data-i18n-aria-label="Найти настройку"><svg><use href="#i-search"/></svg><span><span data-i18n="Найти настройку">Найти настройку</span></span><kbd>Ctrl K</kbd></button><span class="connection" id="connection"><span class="status-dot"></span><span><span data-i18n="Подключение…">Подключение…</span></span></span><button class="notification-trigger icon-button" data-ui="notifications" aria-label="История уведомлений" title="История уведомлений" data-i18n-aria-label="История уведомлений" data-i18n-title="История уведомлений"><svg><use href="#i-bell"/></svg><span id="notice-count">0</span></button><button class="icon-button exit-button" data-ui="exit" aria-label="Закрыть студию" title="Закрыть только студию, не генератор" data-i18n-aria-label="Закрыть студию" data-i18n-title="Закрыть только студию, не генератор"><svg><use href="#i-exit"/></svg></button></div>
     </header>
     <div id="connection-banner" class="connection-banner" role="status" hidden></div>
-    <div id="draft-conflict" class="connection-banner" role="status" hidden><span>Конфигурация на диске изменилась. Твой черновик сохранён в этой вкладке.</span><button data-ui="review-conflict">Проверить изменения</button></div>
-    <main id="workspace" tabindex="-1"><div class="initial-loading"><h1>Подключение к студии</h1><div class="loading-line"></div><p>Получаем настройки локального генератора.</p><button class="button" data-ui="retry" hidden>Повторить подключение</button></div></main>
-    <footer class="workspace-footer"><span>Infinicraft Studio</span><span>Предметы создаются в Terraria<svg aria-hidden="true"><use href="#i-mark"/></svg></span></footer>
+    <div id="draft-conflict" class="connection-banner" role="status" hidden><span><span data-i18n="Конфигурация на диске изменилась. Твой черновик сохранён в этой вкладке.">Конфигурация на диске изменилась. Твой черновик сохранён в этой вкладке.</span></span><button data-ui="review-conflict"><span data-i18n="Проверить изменения">Проверить изменения</span></button></div>
+    <main id="workspace" tabindex="-1"><div class="initial-loading"><h1><span data-i18n="Подключение к студии">Подключение к студии</span></h1><div class="loading-line"></div><p><span data-i18n="Получаем настройки локального генератора.">Получаем настройки локального генератора.</span></p><button class="button" data-ui="retry" hidden><span data-i18n="Повторить подключение">Повторить подключение</span></button></div></main>
+    <footer class="workspace-footer"><span>Infinicraft Studio</span><span><span data-i18n="Предметы создаются в Terraria">Предметы создаются в Terraria</span><svg aria-hidden="true"><use href="#i-mark"/></svg></span></footer>
   </div>
 </div>
-<button id="navigation-backdrop" class="navigation-backdrop" data-ui="close-menu" tabindex="-1" aria-label="Закрыть навигацию" hidden></button>
-<div class="save-tray" id="save-tray" hidden><span class="tray-dot"></span><div><strong id="dirty-label">Есть изменения</strong><small>Сначала сохранить. Затем безопасно перезапустить.</small></div><button class="text-button" data-ui="discard">Отменить</button><button class="button button-primary" data-action="save"><svg><use href="#i-save"/></svg>Сохранить</button></div>
-<dialog id="search-dialog" class="search-dialog" aria-labelledby="search-title"><div class="dialog-top"><h2 id="search-title">Найти настройку</h2><button class="icon-button" data-ui="close-dialog" aria-label="Закрыть поиск"><svg><use href="#i-close"/></svg></button></div><div class="command-input"><svg><use href="#i-search"/></svg><input id="global-search" placeholder="Модель, прозрачность, порт…" autocomplete="off" aria-label="Поиск настроек"><kbd>Esc</kbd></div><div id="search-results" class="search-results"></div><div class="search-footer">Поиск по всем параметрам, включая неактивные<span>↑ ↓ выбрать · Enter открыть</span></div></dialog>
-<dialog id="utility-dialog" class="utility-dialog" aria-labelledby="utility-title"><div class="dialog-top"><h2 id="utility-title"></h2><button class="icon-button" data-ui="close-dialog" aria-label="Закрыть"><svg><use href="#i-close"/></svg></button></div><div id="utility-body"></div></dialog>
+<button id="navigation-backdrop" class="navigation-backdrop" data-ui="close-menu" tabindex="-1" aria-label="Закрыть навигацию" hidden data-i18n-aria-label="Закрыть навигацию"></button>
+<div class="save-tray" id="save-tray" hidden><span class="tray-dot"></span><div><strong id="dirty-label"><span data-i18n="Есть изменения">Есть изменения</span></strong><small><span data-i18n="Сначала сохранить. Затем безопасно перезапустить.">Сначала сохранить. Затем безопасно перезапустить.</span></small></div><button class="text-button" data-ui="discard"><span data-i18n="Отменить">Отменить</span></button><button class="button button-primary" data-action="save"><svg><use href="#i-save"/></svg><span data-i18n="Сохранить">Сохранить</span></button></div>
+<dialog id="search-dialog" class="search-dialog" aria-labelledby="search-title"><div class="dialog-top"><h2 id="search-title"><span data-i18n="Найти настройку">Найти настройку</span></h2><button class="icon-button" data-ui="close-dialog" aria-label="Закрыть поиск" data-i18n-aria-label="Закрыть поиск"><svg><use href="#i-close"/></svg></button></div><div class="command-input"><svg><use href="#i-search"/></svg><input id="global-search" placeholder="Модель, прозрачность, порт…" autocomplete="off" aria-label="Поиск настроек" data-i18n-placeholder="Модель, прозрачность, порт…" data-i18n-aria-label="Поиск настроек"><kbd>Esc</kbd></div><div id="search-results" class="search-results"></div><div class="search-footer"><span data-i18n="Поиск по всем параметрам, включая неактивные">Поиск по всем параметрам, включая неактивные</span><span><span data-i18n="↑ ↓ выбрать · Enter открыть">↑ ↓ выбрать · Enter открыть</span></span></div></dialog>
+<dialog id="utility-dialog" class="utility-dialog" aria-labelledby="utility-title"><div class="dialog-top"><h2 id="utility-title"></h2><button class="icon-button" data-ui="close-dialog" aria-label="Закрыть" data-i18n-aria-label="Закрыть"><svg><use href="#i-close"/></svg></button></div><div id="utility-body"></div></dialog>
 <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
-<noscript><div class="no-script">Для настроек нужен JavaScript. Включи его и обнови страницу.</div></noscript>
+<noscript><div class="no-script"><span data-i18n="Для настроек нужен JavaScript. Включи его и обнови страницу.">Для настроек нужен JavaScript. Включи его и обнови страницу.</span></div></noscript>
 </body>
 </html>
