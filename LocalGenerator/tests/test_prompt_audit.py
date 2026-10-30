@@ -156,11 +156,11 @@ def test_unique_definition_links_without_inlining_or_guessing():
 
 
 def test_documentation_is_borrowed_only_by_explicit_packet_rules():
-    rule = 'configure_armor params without meaning inherit exact meaning from configure_accessory params of the same name; all own bounds and units still apply.'
+    rule = 'armor params without meaning inherit exact meaning from accessory params of the same name; all own bounds and units still apply.'
     catalog = {'fieldGuide': {'armorParamInheritance': rule, 'types': {'window': {'description': 'Phase conditions.'}}},
                'capabilities': [
-                   {'fn': 'configure_accessory', 'params': {'power': {'meaning': 'Exact accessory meaning.', 'max': 99}}},
-                   {'fn': 'configure_armor', 'params': {'power': {'max': 3, 'optional': True}}},
+                   {'fn': 'accessory', 'params': {'power': {'meaning': 'Exact accessory meaning.', 'max': 99}}},
+                   {'fn': 'armor', 'params': {'power': {'max': 3, 'optional': True}}},
                    {'fn': 'move', 'params': {'window': {'typeRef': 'window'}}}]}
     doc = audit.capability_cards(catalog, '/catalog')
     text = visible(doc)
@@ -427,11 +427,11 @@ def test_unrecognised_or_empty_request_payload_is_auditable(payload):
 
 
 def test_complete_reader_resolves_only_explicit_parameter_documentation():
-    rule = 'configure_armor params without meaning inherit exact meaning from configure_accessory params of the same name; all own bounds and units still apply.'
+    rule = 'armor params without meaning inherit exact meaning from accessory params of the same name; all own bounds and units still apply.'
     catalog = {'authoringSchema': 'test', 'fieldGuide': {'armorParamInheritance': rule,
                 'types': {'window': {'description': 'Phase conditions.'}}}, 'capabilities': [
-        {'fn': 'configure_accessory', 'params': {'power': {'meaning': 'Exact accessory meaning.', 'max': 99}}},
-        {'fn': 'configure_armor', 'params': {'power': {'max': 3, 'optional': True}}},
+        {'fn': 'accessory', 'params': {'power': {'meaning': 'Exact accessory meaning.', 'max': 99}}},
+        {'fn': 'armor', 'params': {'power': {'max': 3, 'optional': True}}},
         {'fn': 'move', 'params': {'window': {'typeRef': 'window'}}}]}
     text = audit.reading_text(audit.reading_layer({'catalog': catalog}))
     assert text.count('Exact accessory meaning.') == 2
@@ -472,7 +472,7 @@ def test_provenance_manifest_is_not_a_binding_input_or_model_message():
 
 
 def test_catalog_annotations_are_path_scoped_and_not_authored_missing_fields():
-    row = {'event': 'on_expire', 'producedBy': ['set_projectile_lifetime'],
+    row = {'event': 'on_expire', 'producedBy': ['projectile_lifetime'],
            'producedByBindingInputs': [], 'producerBindingContactDamage': None}
     source = {'catalog': {'authoringSchema': 'test', 'capabilities': [], 'events': [row]},
               'unrelated': {'events': [row]}}

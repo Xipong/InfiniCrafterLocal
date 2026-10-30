@@ -16,6 +16,7 @@ from infini_local.core.runtime_authoring.wire_validator import validate_runtime_
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.pipelines.visual_generation_pipeline import _validate_kit, _apply_kit
 from infini_local.pipelines.visual_sprite_generation import _runtime_publication_identity
+from infini_local.core.vfx_material_contract import vfx_model_payload
 from infini_local.core.vfx_manifest import validate_vfx_director_output, _compile_manifest, validate_vfx_manifest_wire
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 
@@ -58,7 +59,7 @@ def main():
     data["visual"].update(spritePath=str(asset), spriteUrl="", spriteStatus="generated", spriteTechnicalScore=0)
     for entity in data["runtimeProgram"]["entities"]:
         entity["visual"].update(spritePath=str(asset), spriteUrl="", spriteStatus="generated", spriteTechnicalScore=0)
-    vfx = read(HERE / "vfx-author-source.json")
+    vfx = vfx_model_payload(read(HERE / "vfx-author-source.json"), to_wire=True)
     write(args.out / "vfx-author-validation.json", require(validate_vfx_director_output(vfx, data)))
     data["vfxManifest"] = _compile_manifest(data, vfx, data["id"])
     require(validate_vfx_manifest_wire(data))

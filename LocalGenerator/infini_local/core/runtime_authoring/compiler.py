@@ -143,18 +143,17 @@ def _compile_item_call(
                 spec = CAPABILITY_REGISTRY[fn].params[source]
                 ctx.write(call=call, path=f"{path_prefix}.{destination}", value=spec.to_wire(p[source]), target=target, key=destination, authored_param=source)
 
-    def project_equipment(target: dict[str, Any], prefix: str) -> None:
-        for source in CAPABILITY_REGISTRY[fn].params:
-            if source in p:
+    def project_declared(target: dict[str, Any], prefix: str) -> None:
+        # Container ownership stays explicit here. Names, numeric conversion and
+        # nested fan-out come from the canonical typed parameter declarations.
+        for source in cap.params:
+            if source in p and source != "effectGroupId":
                 ctx.project_parameter(call=call, param=source, value=p[source], target=target, prefix=prefix)
 
-    if fn == "configure_item_stats":
-        project(gameplay, "gameplay", {
-            name: spec.wire_name or name
-            for name, spec in CAPABILITY_REGISTRY[fn].params.items()
-        })
+    if fn == "item_stats":
+        project_declared(gameplay, "gameplay")
         return
-    if fn == "configure_item_use":
+    if fn == "item_use":
         item_use = runtime.setdefault("itemUse", {})
         ctx.write_derived(
             call=call,
@@ -184,33 +183,28 @@ def _compile_item_call(
             "holdoutOffsetY": "holdoutOffsetY",
         })
         return
-    if fn == "configure_item_contact_hitbox":
+    if fn == "item_hitbox":
         contact = runtime.setdefault("itemContact", {})
         project(contact, "runtimeProgram.itemContact", {
             "hitboxScale": "hitboxScale",
             "contactForgivenessPx": "contactForgivenessPx",
         })
         return
-    if fn == "configure_weapon_ammo":
+    if fn == "weapon_ammo":
         ammo: dict[str, Any] = {}
-        project(ammo, "runtimeProgram.weaponAmmo", {name: name for name in CAPABILITY_REGISTRY[fn].params})
+        project_declared(ammo, "runtimeProgram.weaponAmmo")
         ctx.write_derived(call=call, path="runtimeProgram.weaponAmmo", value=ammo, target=runtime, key="weaponAmmo",
                           source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
         return
-    if fn == "configure_vanilla_ammo_item":
-        project(gameplay, "gameplay", {
-            "ammoCategory": "ammoCategory",
-            "projectileId": "ammoProjectileId",
-            "shootSpeedPxPerTick": "ammoShootSpeedPxPerTick",
-            "notAmmo": "notAmmo",
-        })
+    if fn == "ammo_item":
+        project_declared(gameplay, "gameplay")
         return
     if fn == "restore_resources_on_use":
-        project(gameplay, effect_prefix, {"healLife": "healLife", "healMana": "healMana", "potionSickness": "potion"})
+        project_declared(gameplay, effect_prefix)
         return
-    if fn == "apply_vanilla_buff_on_use":
+    if fn == "native_buff_on_use":
         buffs = gameplay.setdefault("extraBuffs", [])
-        entry = {"buffCode": p["buffId"], "buffTime": cap.params["durationSeconds"].to_wire(p["durationSeconds"])}
+        entry = {"buffCode": p["buffId"], "buffTime": cap.params["duration"].to_wire(p["duration"])}
         buffs.append(entry)
         base = len(buffs) - 1
         ctx.receipts.extend([
@@ -221,38 +215,20 @@ def _compile_item_call(
             },
             {
                 "callId": str(call.get("id") or ""), "fn": fn,
-                "authoredPath": f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params.durationSeconds",
+                "authoredPath": f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params.duration",
                 "finalPath": f"{effect_prefix}.extraBuffs[{base}].buffTime", "value": entry["buffTime"], "status": "technical_projection",
             },
         ])
         return
-    if fn == "apply_generated_buff_on_use":
+    if fn == "generated_buff_on_use":
         generated = gameplay.setdefault("generatedBuff", {})
-        project(generated, effect_prefix + ".generatedBuff", {
-            "durationTicks": "durationTicks",
-            "exhaustionTicks": "exhaustionTicks",
-            "miningSpeedMultiplier": "miningSpeedMultiplier",
-            "lightStrength": "emitLightStrength",
-            "lightColor": "lightColorName",
-            "oreSenseEnabled": "oreSenseRadiusTiles",
-            "movementSpeed": "movementSpeed",
-            "jumpBoost": "jumpBoost",
-            "manaRegen": "manaRegen",
-            "lifeRegenHpPerSecond": "lifeRegen",
-        })
-        if "combat" in p:
-            ctx.project_parameter(call=call, param="combat", value=p["combat"], target=generated, prefix=effect_prefix + ".generatedBuff")
+        project_declared(generated, effect_prefix + ".generatedBuff")
         return
-    if fn == "configure_tool":
-        project(gameplay, "gameplay", {
-            "pickPower": "pickPower",
-            "axePowerTooltipPercent": "axePower",
-            "hammerPower": "hammerPower",
-            "miningSpeedScale": "miningSpeedScale",
-        })
+    if fn == "tool_stats":
+        project_declared(gameplay, "gameplay")
         return
 
-    if fn == "require_use_condition":
+    if fn == "use_condition":
         conditions = gameplay.setdefault("useConditions", [])
         condition: dict[str, Any] = {}
         prefix = f"gameplay.useConditions[{len(conditions)}]"
@@ -260,39 +236,34 @@ def _compile_item_call(
         for param in ("input", "condition"):
             ctx.project_parameter(call=call, param=param, value=p[param], target=condition, prefix=prefix)
         return
-    if fn == "add_hold_light":
-        project(gameplay, "gameplay", {"strength": "holdLightStrength", "color": "holdLightColorName"})
+    if fn == "held_light":
+        project_declared(gameplay, "gameplay")
         return
-    if fn in {"recall_home_on_use", "collect_seeds_from_grass"}:
+    if fn in {"recall_home_on_use", "collect_seeds"}:
         if fn == "recall_home_on_use":
-            ctx.project_parameter(call=call, param="cooldownSeconds", value=p["cooldownSeconds"], target=gameplay, prefix=effect_prefix)
+            ctx.project_parameter(call=call, param="cooldown", value=p["cooldown"], target=gameplay, prefix=effect_prefix)
         for key, value in CAPABILITY_REGISTRY[fn].fixed_wire_literals.items():
             ctx.write_derived(call=call, path=f"{effect_prefix}.{key}", value=value, target=gameplay, key=key,
                               source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
         return
-    if fn == "move_player_on_use":
-        project(gameplay, effect_prefix, {
-            "mode": "mobilityMode",
-            "rangeTiles": "mobilityRangeTiles",
-            "cooldownTicks": "mobilityCooldownTicks",
-            "safeTileOnly": "mobilitySafeTileOnly",
-        })
+    if fn == "blink_on_use":
+        project_declared(gameplay, effect_prefix)
         return
-    if fn == "refresh_generated_effect_group_while_held":
+    if fn == "refresh_held_effect":
         ctx.write(call=call, path="runtimeProgram.heldEffectGroupId", value=p["effectGroupId"],
                   target=runtime, key="heldEffectGroupId", authored_param="effectGroupId")
         return
-    if fn == "configure_accessory":
+    if fn == "accessory":
         accessory["enabled"] = True
         ctx.write_derived(call=call, path="accessory.enabled", value=True, target=accessory, key="enabled", source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
-        project_equipment(accessory, "accessory")
+        project_declared(accessory, "accessory")
         return
-    if fn == "configure_armor":
+    if fn == "armor":
         armor["enabled"] = True
         ctx.write_derived(call=call, path="armor.enabled", value=True, target=armor, key="enabled", source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
-        project_equipment(armor, "armor")
+        project_declared(armor, "armor")
         return
-    if fn == "add_equipment_damage_bonus":
+    if fn == "equipment_damage_bonus":
         if equipment_config not in {"armor", "accessory"}:
             raise RuntimeError("validated equipment class modifier has no unique equipment configuration")
         path = equipment_damage_wire_path(
@@ -331,31 +302,31 @@ def _compile_entity_call(
         for source, value in values.items():
             ctx.project_parameter(call=call, param=source, value=value, target=target, prefix=prefix)
 
-    if fn == "configure_spawn":
+    if fn == "spawn":
         spawn = component("spawn")
         project(spawn, f"{base}.spawn", p)
         spawn["enabled"] = True
         ctx.write_derived(call=call, path=f"{base}.spawn.enabled", value=True, target=spawn, key="enabled", source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
         return
-    if fn in {"set_projectile_concurrency", "set_descendant_concurrency"}:
+    if fn in {"projectile_limit", "descendant_limit"}:
         project(component("spawn"), f"{base}.spawn", p)
         return
-    if fn == "set_projectile_sentry":
+    if fn == "sentry":
         project(entity, base, p)
         return
-    if fn == "set_projectile_damage":
+    if fn == "projectile_damage":
         damage = component("damage")
         project(damage, f"{base}.damage", p)
         damage["enabled"] = True
         ctx.write_derived(call=call, path=f"{base}.damage.enabled", value=True, target=damage, key="enabled", source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
         return
-    if fn == "set_projectile_lifetime":
+    if fn == "projectile_lifetime":
         ctx.project_parameter(call=call, param="lifetimeSeconds", value=p["lifetimeSeconds"], target=entity, prefix=base)
         return
-    if fn == "set_projectile_hitbox":
+    if fn == "projectile_hitbox":
         project(component("hitbox"), f"{base}.hitbox", p)
         return
-    if fn == "set_projectile_hitbox_curve":
+    if fn == "hitbox_curve":
         project(component("hitboxCurve"), f"{base}.hitboxCurve", p)
         return
     if fn in PROJECTILE_MODIFIER_COMPONENTS:
@@ -381,7 +352,7 @@ def _compile_entity_call(
         ctx.write_derived(call=call, path=f"{base}.whipUsesOwnerGravity", value=True, target=entity,
                           key="whipUsesOwnerGravity", source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
         return
-    if fn == "set_projectile_collision":
+    if fn == "projectile_collision":
         project(component("collision"), f"{base}.collision", p)
         return
     if fn in MOVEMENT_OPCODE:
@@ -403,7 +374,7 @@ def _compile_entity_call(
             controller_params = controller.setdefault("params", {})
             project(controller_params, f"{base}.controller.params", p)
         return
-    if fn == "emit_light_while_active":
+    if fn == "projectile_light":
         project(component("light"), f"{base}.light", p)
         return
     cap = CAPABILITY_REGISTRY.get(fn)
@@ -471,7 +442,7 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     placement_calls_by_id = {
         str(call["id"]): call
         for call in calls
-        if str(call.get("fn") or "") in {"configure_tile_placement", "configure_wall_placement"}
+        if str(call.get("fn") or "") in {"place_tile", "place_wall"}
     }
     placed_components = [call for call in calls
                          if (cap := CAPABILITY_REGISTRY.get(str(call["fn"]))) is not None
@@ -583,10 +554,10 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     accessory: dict[str, Any] = {"enabled": False}
     armor: dict[str, Any] = {"enabled": False}
     equipment_configs = {str(call.get("fn")) for call in calls
-                         if call.get("fn") in {"configure_accessory", "configure_armor"}}
+                         if call.get("fn") in {"accessory", "armor"}}
     equipment_config = (
-        "armor" if equipment_configs == {"configure_armor"} else
-        "accessory" if equipment_configs == {"configure_accessory"} else ""
+        "armor" if equipment_configs == {"armor"} else
+        "accessory" if equipment_configs == {"accessory"} else ""
     )
     for call in calls:
         target = str(call.get("target") or "")
@@ -594,7 +565,7 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         compiled_entity = entities[entity_index]
         fn = str(call.get("fn") or "")
         cap = CAPABILITY_REGISTRY.get(fn)
-        if fn in {"configure_tile_placement", "configure_wall_placement"} or cap is not None and cap.category == "item_placed_body":
+        if fn in {"place_tile", "place_wall"} or cap is not None and cap.category == "item_placed_body":
             continue
         if target == item_entity_id and (cap is None or cap.category != "event"):
             _compile_item_call(

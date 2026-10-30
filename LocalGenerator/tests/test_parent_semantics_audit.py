@@ -33,11 +33,11 @@ def test_value_audit_checks_projection_not_negative_prose(monkeypatch):
     audit = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(audit)
     registry = dict(audit.CAPABILITY_REGISTRY)
-    stats = registry["configure_item_stats"]
+    stats = registry["item_stats"]
     params = dict(stats.params)
     value = replace(params["valueCopper"], description="NPC shop base price (Item.value).")
     params["valueCopper"] = value
-    registry["configure_item_stats"] = replace(stats, params=params)
+    registry["item_stats"] = replace(stats, params=params)
     monkeypatch.setattr(audit, "CAPABILITY_REGISTRY", registry)
 
     def accepted():

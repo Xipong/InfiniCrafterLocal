@@ -22,13 +22,13 @@ from repair_test_helpers import (
 @pytest.mark.parametrize("root", ["body", "spawn"])
 @pytest.mark.parametrize("contact_damage", [False, True])
 def test_native_tool_stats_are_identical_across_independent_primary_contact(root, contact_damage):
-    doc = build_capability_witness("configure_tool") if root == "body" else build_runtime_fixture("workbench_blade")
+    doc = build_capability_witness("tool_stats") if root == "body" else build_runtime_fixture("workbench_blade")
     if root == "spawn":
-        doc["runtimeProgram"]["calls"].append({"id": "native_tool", "fn": "configure_tool", "params": {
-            "pickPower": 190, "axePowerTooltipPercent": 45, "hammerPower": 20, "miningSpeedMultiplier": 0.75}})
+        doc["runtimeProgram"]["calls"].append({"id": "native_tool", "fn": "tool_stats", "params": {
+            "pickPower": 190, "axePower": 45, "hammerPower": 20, "miningSpeedMultiplier": 0.75}})
     else:
-        next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_tool")["params"] = {
-            "pickPower": 190, "axePowerTooltipPercent": 45, "hammerPower": 20, "miningSpeedMultiplier": 0.75}
+        next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "tool_stats")["params"] = {
+            "pickPower": 190, "axePower": 45, "hammerPower": 20, "miningSpeedMultiplier": 0.75}
     doc["runtimeProgram"]["bindings"][0]["contactDamage"] = contact_damage
     final = _assert_delivery(doc)
     assert {key: final["gameplay"][key] for key in ("pickPower", "axePower", "hammerPower", "miningSpeedScale")} == {
@@ -38,7 +38,7 @@ def test_native_tool_stats_are_identical_across_independent_primary_contact(root
 
 @pytest.mark.parametrize("case", ["alternate-only", "equipped-only", "effects-primary", "placement-primary", "missing-item-use"])
 def test_native_tool_requires_legitimate_primary_root_not_arbitrary_binding(case):
-    doc = build_capability_witness("configure_tool")
+    doc = build_capability_witness("tool_stats")
     row = doc["runtimeProgram"]["bindings"][0]
     if case == "alternate-only":
         row["input"] = "alternate_use"
@@ -46,19 +46,19 @@ def test_native_tool_requires_legitimate_primary_root_not_arbitrary_binding(case
         row.update(input="equipped", action={"kind": "equip_passive"})
         row.pop("stackCost")
         row.pop("contactDamage")
-        doc["runtimeProgram"]["calls"].append({"id": "equipped", "fn": "configure_accessory", "params": {"defensePoints": 1}})
+        doc["runtimeProgram"]["calls"].append({"id": "equipped", "fn": "accessory", "params": {"defensePoints": 1}})
     elif case == "effects-primary":
         row["action"] = {"kind": "apply_item_effects"}
         doc["runtimeProgram"]["calls"].append({"id": "utility", "fn": "restore_resources_on_use", "params": {
             "healLife": 1, "healMana": 0, "usesPotionRules": False}})
     elif case == "placement-primary":
         row.update(action={"kind": "place_item", "placementCallId": "placement"}, stackCost=1, contactDamage=False)
-        doc["runtimeProgram"]["calls"].append({"id": "placement", "fn": "configure_tile_placement", "params": {"tileId": 1, "placeStyle": 0}})
+        doc["runtimeProgram"]["calls"].append({"id": "placement", "fn": "place_tile", "params": {"tileId": 1, "placeStyle": 0}})
     else:
-        doc["runtimeProgram"]["calls"] = [c for c in doc["runtimeProgram"]["calls"] if c["fn"] != "configure_item_use"]
+        doc["runtimeProgram"]["calls"] = [c for c in doc["runtimeProgram"]["calls"] if c["fn"] != "item_use"]
     before = json.dumps(doc, sort_keys=True)
     report = validate_runtime_program(doc)
-    tool_index = next(i for i, c in enumerate(doc["runtimeProgram"]["calls"]) if c["fn"] == "configure_tool")
+    tool_index = next(i for i, c in enumerate(doc["runtimeProgram"]["calls"]) if c["fn"] == "tool_stats")
     code = "missing_capability_dependency" if case == "missing-item-use" else "missing_binding_dependency"
     assert [e["code"] for e in report["errors"]] == ([code, "binding_dependency"] if case == "missing-item-use" else [code])
     assert any(e["code"] == code and e["path"] == f"$.runtimeProgram.calls[{tool_index}]" for e in report["errors"])
@@ -185,7 +185,7 @@ def test_unrelated_repair_freezes_fixed_literal_presence_and_choices(monkeypatch
     if case in {"body", "effects"}:
         hostile.update(stackCost=1, contactDamage=not transaction.row["contactDamage"])
         hostile["action"]["kind"] = "apply_item_effects" if case == "body" else "use_item_body"
-    stats = next(c for c in transaction.doc["runtimeProgram"]["calls"] if c["fn"] == "configure_item_stats")
+    stats = next(c for c in transaction.doc["runtimeProgram"]["calls"] if c["fn"] == "item_stats")
     correction = deepcopy(stats)
     stats["params"]["damage"] = True
     before = json.dumps(transaction.doc, sort_keys=True)
@@ -360,7 +360,7 @@ def test_effect_dependency_does_not_retarget_frozen_or_unrelated_consumer(consum
     elif consumer == "different_action":
         row["action"]["kind"] = "use_item_body"
     else:
-        next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "move_player_on_use")["params"]["effectGroupId"] = "unconsumed_group"
+        next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "blink_on_use")["params"]["effectGroupId"] = "unconsumed_group"
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
     assert scope["create"]["bindings"]["allowed"] is True
     assert row["id"] not in scope["identityChanges"]["bindingTargetIds"]
@@ -388,7 +388,7 @@ def test_effect_target_repair_keeps_both_authored_consumers(monkeypatch):
 def test_effect_binding_wrong_target_kind_freezes_action_siblings(monkeypatch, binding_transaction):
     format_mode = "json_schema"
     transaction = binding_transaction("effects", explicit=True)
-    effect_call = deepcopy(next(c for c in transaction.doc["runtimeProgram"]["calls"] if c["fn"] == "move_player_on_use"))
+    effect_call = deepcopy(next(c for c in transaction.doc["runtimeProgram"]["calls"] if c["fn"] == "blink_on_use"))
     doc = build_capability_witness("move_straight")
     effect_call["id"] = "extra_effect"
     doc["runtimeProgram"]["calls"].append(effect_call)
@@ -445,7 +445,7 @@ def test_consumer_repair_does_not_choose_other_unresolved_actions(monkeypatch, a
 
     doc, primary = _binding_case("body")
     effects, alternate = _binding_case("effects")
-    effect_call = deepcopy(next(c for c in effects["runtimeProgram"]["calls"] if c["fn"] == "move_player_on_use"))
+    effect_call = deepcopy(next(c for c in effects["runtimeProgram"]["calls"] if c["fn"] == "blink_on_use"))
     effect_call["id"] = "effect"
     doc["runtimeProgram"]["calls"].append(effect_call)
     alternate.update(id="effect_binding", input="alternate_use")
@@ -472,7 +472,7 @@ def test_sparse_input_alternatives_project_only_exact_diagnosed_siblings(leaf):
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
     from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
 
-    doc = build_capability_witness("configure_accessory")
+    doc = build_capability_witness("accessory")
     binding = doc["runtimeProgram"]["bindings"][0]
     if leaf == "action.foreign":
         binding["action"] = {}
@@ -559,7 +559,7 @@ def test_missing_kind_present_invalid_placement_reference_repair(monkeypatch, bi
     format_mode = "json_schema"
     transaction = binding_transaction("placement")
     if invalid_reference == "witness_call":
-        invalid_reference = next(c["id"] for c in transaction.doc["runtimeProgram"]["calls"] if c["fn"] == "configure_item_stats")
+        invalid_reference = next(c["id"] for c in transaction.doc["runtimeProgram"]["calls"] if c["fn"] == "item_stats")
     transaction.row["action"] = {"placementCallId": deepcopy(invalid_reference)}
     transaction.candidate["input"] = "primary_use"
     transaction.candidate["action"]["targetId"] = "foreign_body"

@@ -153,7 +153,7 @@ def test_nested_closed_keys_require_every_ancestor_and_keep_json_boolean_numeric
 def test_typed_registry_schema_reaches_actual_author_request_and_repair_inverse(monkeypatch, value):
     item = build_runtime_fixture("workbench_blade")
     item = {key: item[key] for key in ("name", "category", "runtimeProgram")}
-    original = registry.CAPABILITY_REGISTRY["configure_item_stats"]
+    original = registry.CAPABILITY_REGISTRY["item_stats"]
     changed = replace(original, params={**original.params, "proofChoice": CONDITIONS})
     monkeypatch.setattr(registry, "CAPABILITY_REGISTRY", {**registry.CAPABILITY_REGISTRY, original.name: changed})
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_schema")

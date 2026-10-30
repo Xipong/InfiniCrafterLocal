@@ -17,6 +17,8 @@ import struct
 from typing import Any, Callable, Mapping
 
 from infini_local.core.errors import PlannerUnavailable
+from infini_local.pipelines.parent_context_cards import parent_context_for_stage
+from infini_local.pipelines.parent_presentation_context import presentation_parent_card_for_llm
 from infini_local.core.llm_stage_messages import generation_system_suffix, stage_chat_message
 from infini_local.core.repair_merge import json_path_child, json_path_relative, json_values_equal, merge_frozen_subtree
 from infini_local.core.runtime_authoring.capability_registry import ENTITY_KIND_REGISTRY
@@ -133,18 +135,18 @@ _READABILITY_RULE = (
 
 _RENDERER_SEMANTICS = {
     "libraryParticle": "Real ParticleLibrary V3 instanced Star particles, separate from Terraria Dust. Explicit particle controls choose count, motion, dimensions, spin, color and lifetime fade; world-only attachment captures event-time pose. duration is individual lifetime; event startTick is delay/repeatEvery=0, periodic repeatEvery>=1 and item startTick=0. Velocity updates once per world tick as velocity*drag+world acceleration, then position+=velocity. Common alpha multiplies linear endOpacity once; dimensions multiply linear endScaleMultiplier. Explicit alpha/additive blend and exact before/after projectile layer remain choices. Uses existing cadence/occurrence/source budgets; disabled library suppresses this lane with no Dust fallback. No damage, gameplay child, generated PNG or inferred direction.",
-    "screenShakeCue": "Explicit nonperiodic local camera cue through Luminance ScreenShakeSystem.StartShakeAtPoint, attenuated from the exact event anchor to the viewer. Six controls are mandatory in screenShake; no implicit damage/weapon-triggered shake. startTick is event-relative delay in world ticks; the captured anchor/forward survive source retirement. strengthPx=0 is silence. Dissipation follows native camera visits, not simulation ticks. Each handle shares the existing instance budgets. Native Luminance/user screenshake settings remain authoritative; a disabled backend suppresses this lane without substitution. No PNG, light, sound or particles are added.",
+    "screenShakeCue": "Controls: startTick is event delay, NOT shake lifetime. dissipationPxPerFrame subtracts strength per native camera visit, NOT per world tick or assumed 60 Hz frame. Explicit nonperiodic local camera cue through Luminance ScreenShakeSystem.StartShakeAtPoint, attenuated from the exact event anchor to the viewer. Six controls are mandatory in screenShake; no implicit damage/weapon-triggered shake. startTick is event-relative delay in world ticks; the captured anchor/forward survive source retirement. strengthPx=0 is silence. Dissipation follows native camera visits, not simulation ticks. Each handle shares the existing instance budgets. Native Luminance/user screenshake settings remain authoritative; a disabled backend suppresses this lane without substitution. No PNG, light, sound or particles are added.",
     "spriteStampTrail": "Periodic projectile: textured history stamps at samples 2,5,... in a 20-world-tick history, using body rotation/flip. Projectile event: one fading snapshot of captured body rotation/scale/flip/gfx offset at the resolved event-time anchor; item emission is a directional texture stamp, not a player/held-pose snapshot. No fabricated history.",
-    "historyRibbon": "Connected center-history segments (20 world samples), fading toward the oldest point. Uses actual center history, not a relocated owner trajectory; on_spawn can start a live trail.",
-    "tipTrail": "Connected captured geometric tip history: center + forward * projectile.width * projectile.scale/2. Not an image-nose/PCA guess; on_spawn can start a live trail.",
+    "historyRibbon": "Controls: duration is NOT history length; active history drawing does not consume duration/startTick. Alpha is a draw multiplier (RGB and alpha together), not native reverse-byte alpha. Connected center-history segments (20 world samples), fading toward the oldest point. Uses actual center history, not a relocated owner trajectory; on_spawn can start a live trail.",
+    "tipTrail": "Controls: duration is NOT history length; active history drawing does not consume duration/startTick. Connected captured geometric tip history: center + forward * projectile.width * projectile.scale/2. Not an image-nose/PCA guess; on_spawn can start a live trail.",
     "wavyStrip": "One animated sine wave: length 48*scale world px, amplitude 6*scale px, thickness max(1,2*scale); 8+round(16*density) segments.",
-    "beamLine": "Straight decorative segment, length max(20,48*scale) world px and thickness max(1,2*scale). It does not change beam collision range; runtime_geometry ChannelBeam body separately follows its exact collision segment.",
+    "beamLine": "Controls: live straight-beam drawing ignores duration/startTick; neither is a beam range or gameplay delay. Straight decorative segment, length max(20,48*scale) world px and thickness max(1,2*scale). It does not change beam collision range; runtime_geometry ChannelBeam body separately follows its exact collision segment.",
     "fieldPulse": "Expanding fading ring: radius scale*(6+18*phase) world px, 12+round(20*density) segments, opacity multiplied by 1-phase.",
     "orbitingMotes": "2+round(6*density) square motes, each 3*scale world px, orbiting radius 18*scale px. One revolution per procedural period.",
     "ghostArc": "Rotating open 120-degree arc, radius 24*scale world px; 8+round(12*density) segments, fading from head to tail.",
     "impactRing": "Expanding fading ring: radius scale*(4+28*phase) world px, 12+round(20*density) segments. Selected Terraria particles are independent and can accompany it.",
     "impactSprite": "One dedicated generated impact PNG, lasting duration world ticks with linear fade. Requires its own spritePrompt/spriteNegativePrompt/spriteCanvasSize and impact texture; no inventory/dust substitute, particleSystemId or spread. Nonperiodic events omit startTick/repeatEvery/density. Item periodic requires only repeatEvery; projectile periodic requires startTick/repeatEvery and density only when repeatEvery=0. No Dust accompaniment is emitted by this renderer.",
-    "childMotes": "Bounded particles using the selected Terraria dust ID and existing density/spread/cadence rules. No alpha/blend/layer/duration: native Dust owns its lifetime and drawing. Does not spawn gameplay child entities.",
+    "childMotes": "Controls: spread is Dust velocity spread, NOT a cone angle; native Dust owns lifetime/opacity, so duration/alpha are forbidden. Periodic repeatEvery=0 selects automatic cadence, not no-repeat. Bounded particles using the selected Terraria dust ID and existing density/spread/cadence rules. No alpha/blend/layer/duration: native Dust owns its lifetime and drawing. Does not spawn gameplay child entities.",
     "lightCue": "World lighting from local color/scale at the resolved anchor, not a drawn sprite; no alpha/blend/layer/duration/spread/particleSystemId/textureRole. Nonperiodic events omit startTick/repeatEvery/density. Item periodic requires only repeatEvery; projectile periodic requires startTick/repeatEvery and density only when repeatEvery=0. Existing world-clock cadence is unchanged; no particle budget is spent.",
     "soundCue": "Explicit finite Terraria.ID.SoundID sample at the resolved anchor: soundCue requires an explicit soundId from the general palette in both Director output and persisted wire. Item1 is valid only as an explicit selection. Only soundCue may carry soundId or sound; present null, unknown names, aliases and free paths are invalid. Nonperiodic sound omits all scheduling/draw/Dust fields. Item periodic adds repeatEvery (0 means 10 world ticks). Projectile periodic adds startTick and repeatEvery; only repeatEvery=0 requires density for automatic cadence, otherwise omit density. Every soundCue also requires sound={volume,pitch,pitchVariance}: exact final playback controls, independent of common alpha and phaseOffset. Volume zero is deliberate silence. Pitch is absolute relative to the unpitched sample, not added to native SoundID pitch or Main.musicPitch. Variance is the full random pitch width, not a statistical variance; pitch +/- pitchVariance/2 must remain within [-1,1]. Preserve native asset/variants/weights and instance/pause policies. Missing soundId or sound is invalid and never selects a sample or derives playback controls from alpha/phaseOffset. No sound-library/name classifier. Generated items have native Item.UseSound=null: without a soundCue slot there is no generated use sound; useStyle, parent names and damage class do not supply a fallback. Audio is a separate presentation choice, never selected or muted by visual metadata. A soundCue-only slots array is valid without trails, particles, glow or a PNG; bind audio to an exact available runtime pair when intended. Empty slots remains a valid deliberately silent choice; no item is required to have sound. Repair must preserve valid silence and valid sound choices outside its explicit field permissions.",
     "spriteElement": "Owned textured elements, captured immutable dimensions/curves/color/texture identity at emission. World attachment freezes event pose; source attachment uses exact live source generation. Simulation/lifetime use world ticks, never Draw or extraUpdates. duration is individual lifetime; event startTick is delay with repeatEvery=0; periodic repeatEvery>=1, projectile startTick gates age, item startTick=0. Source retirement ends source attachment; delayed world emissions retain event pose. No gameplay or inferred image/PCA axis.",
@@ -194,7 +196,7 @@ _VFX_NUMERIC_DESCRIPTIONS = {
     ),
     "density": "Engine units: Procedural tessellation/mote count as specified in rendererSemantics. Particle count/cadence remains separate: projectile periodic repeatEvery=0 uses clamp(14-round(8*density),4,18) world ticks; projectile impactRing/childMotes count clamp(2+round(8*density),2,10), item dust count clamp(1+round(7*density),1,8), subject to client scaling and budgets. Not particles per world tick.",
     "duration": "World ticks: detached sprite and primitive lifetime with linear lifetime fade; procedural periodic animation period when repeatEvery=0. Active history trails and straight beams do not consume duration. Event rings also have their own phase fade. spriteElement: individual lifetime in world ticks, opacityProfile owns lifetime opacity (no extra linear fade). texturedPath omits duration; history/source owns lifetime.",
-    "alpha": "Engine units: Draw opacity coefficient: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; sound.volume alone owns audio volume and alpha does not multiply it. Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity. spriteElement and texturedPath: multiply alpha by opacityProfile once, apply tint to RGB separately, no extra implicit lifetime fade; explicit zero is silence.",
+    "alpha": "Dimensionless draw multiplier, range 0..1; NOT native Projectile.alpha (reverse byte 0..255) and NOT universal opacity: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; sound.volume alone owns audio volume and alpha does not multiply it. Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity. spriteElement and texturedPath: multiply alpha by opacityProfile once, apply tint to RGB separately, no extra implicit lifetime fade; explicit zero is silence.",
     "spread": "Engine units: Particle-speed coefficient, not angle or radians: projectile dust speed clamp(0.35+1.7*spread, 0.2, 4) plus inherited velocity; item dust velocity sampled from circular radii 1+spread. Angle is selected separately; not one common physical speed.",
     "startTick": "Simple renderer projectile periodic: initial particle/cue gate on per-projectile world ticks; also delays periodic procedural wave/ring/arc/orbit visibility. Active history/sprite trails and straight beams retain their existing draw timing. Simple renderer item periodic and detached/event lifetimes ignore startTick. spriteElement/libraryParticle: nonperiodic event-relative emission delay; periodic projectile age gate, item periodic requires 0. screenShakeCue: nonperiodic event-relative delay in world ticks, not camera lifetime. texturedPath: projectile age gate for live sampling.",
     "repeatEvery": "World ticks: positive value sets periodic particle/cue cadence and procedural animation period. 0 selects automatic particle cadence (projectile clamp(14-round(8*density),4,18), item 10) and uses duration for procedural period. Item periodic uses global ticks plus seed phase; projectile uses its state world ticks. Event particles do not repeat, but detached procedural shapes may animate within their duration. spriteElement: periodic cadence >=1 world tick, nonperiodic requires 0; overlap is literal and bounded. texturedPath omits repeatEvery; no repeated detached path emission.",
@@ -308,7 +310,7 @@ def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
         "soundId": list(_SOUND_IDS),
         "sound": _sound_schema(),
         "heldRootVisibility": {
-            field: CAPABILITY_REGISTRY["configure_item_use"].params[field].description
+            field: CAPABILITY_REGISTRY["item_use"].params[field].description
             for field in ("hideUseGraphic", "customHeldSprite")
         },
         "colorPolicy": "Every simple visible renderer requires local color={r,g,b}, integer bytes 0..255; opacity stays separate. spriteElement/texturedPath own RGB colorProfile knots, libraryParticle owns RGB colorStart/colorEnd. soundCue, screenShakeCue and nested color owners forbid common color. No effect reference, named-color enum or prose-based selection.",
@@ -910,8 +912,10 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             "internalName": str(source.get("internalName") or ""),
             "sourceMod": str(source.get("sourceMod") or ""),
             "generatedParentSummary": copy.deepcopy(dict(summary_raw)) if isinstance(summary_raw, Mapping) else {},
+            "packet": presentation_parent_card_for_llm(dict(source), stage="vfx"),
         }
 
+    parent_context = parent_context_for_stage([parent_packet(parent_a), parent_packet(parent_b)], stage="vfx")
     runtime = data.get("runtimeProgram")
     mechanics = copy.deepcopy(dict(runtime)) if isinstance(runtime, Mapping) else {}
     for entity in mechanics.get("entities") or []:
@@ -925,7 +929,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             "description": str(realization.get("description") or ""),
             "playerExperience": str(realization.get("playerExperience") or ""),
         },
-        "parents": [parent_packet(parent_a), parent_packet(parent_b)],
+        **parent_context,
         "acceptedVisualKit": copy.deepcopy(data.get("visualKit") or {}),
         **({"acceptedGameplayReadOnly": copy.deepcopy(data["gameplay"])} if "gameplay" in data else {}),
         "acceptedRuntimeProgramReadOnly": mechanics,
@@ -1367,6 +1371,7 @@ def _director_system(*, repair: bool = False) -> str:
         ) + generation_system_suffix()
     return (
         "You are the VFX Director. Author finite Terraria presentation only for accepted low-level runtime entity/event pairs. "
+        "Make the accepted item’s motion, timing and impacts legible in a coherent visual style informed by its authored concept. "
         "Gameplay is immutable. Do not infer or create weapon families. Return strict JSON only."
     ) + generation_system_suffix()
 
@@ -1408,6 +1413,22 @@ def _request(
                 _READABILITY_RULE,
             ],
         }
+        # Parent ancestry informs new artwork, not corrections to an accepted
+        # effect's numeric limits or exact references. The accepted child visual
+        # and runtime stay available for every repair; ancestry never widens scope.
+        permissions = (repair_scope or {}).get("fieldPermissions") or {}
+        design_paths = {"slots": {"", "rendererKind", "spritePrompt", "spriteNegativePrompt"},
+                        "assets": {"", "prompt", "negativePrompt"}}
+        design = any((repair_scope or {}).get(key) for key in ("allowCreateSlots", "allowCreateAssets")) or any(
+            path.split(".", 1)[0].split("[", 1)[0] in design_paths[kind]
+            for kind in design_paths for row in permissions.get(kind) or []
+            for path in row.get("paths") or [] if path not in (row.get("deletePaths") or [])
+        )
+        if design:
+            user["parentFactsReadOnly"] = copy.deepcopy(packet.get("parents") or [])
+            for key in ("parentBriefs", "parentBriefRule"):
+                if key in packet:
+                    user[key] = copy.deepcopy(packet[key])
         user["runtimeVocabularyReadOnly"] = _vfx_scoped_repair_vocabulary(
             user["runtimeVocabularyReadOnly"], previous, repair_scope or {},
         )

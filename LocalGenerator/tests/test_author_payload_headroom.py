@@ -87,7 +87,7 @@ def test_fresh_cards_share_only_exact_parameter_metadata_and_dead_negative_claus
     assert guide["requirementNotation"]["omittedMetadata"] == {"target": "same_target", "equals": None}
     # A reference to an unknown/unregistered function is not proved unreachable.
     unknown = RequirementSpec("present_param_forbids_capability", capability="future_function", param="count")
-    changed = replace(CAPABILITY_REGISTRY["configure_spawn"], requirements=(unknown,))
+    changed = replace(CAPABILITY_REGISTRY["spawn"], requirements=(unknown,))
     assert changed.author_prompt_card()["requires"][0]["capability"] == "future_function"
     assert before == {name: cap.audit_card() for name, cap in CAPABILITY_REGISTRY.items()}
 
@@ -99,10 +99,10 @@ def test_shared_parameter_reference_never_hides_a_different_fact(field, value):
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 
     cap = CAPABILITY_REGISTRY["apply_status_on_event"]
-    assert cap.author_prompt_card()["params"]["delaySeconds"] == {
-        "paramRef": "apply_generated_buff_on_event.delaySeconds"}
-    changed = replace(cap, params={**cap.params, "delaySeconds": replace(cap.params["delaySeconds"], **{field: value})})
-    row = changed.author_prompt_card()["params"]["delaySeconds"]
+    assert cap.author_prompt_card()["params"]["delay"] == {
+        "paramRef": "generated_buff_on_event.delay"}
+    changed = replace(cap, params={**cap.params, "delay": replace(cap.params["delay"], **{field: value})})
+    row = changed.author_prompt_card()["params"]["delay"]
     assert "paramRef" not in row
     key = {"maximum": "max", "description": "meaning", "units": "units"}[field]
     assert row[key] == value
@@ -164,9 +164,23 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
             assert "paramRef" not in cards[owner]["params"][leaf]
             row = copy.deepcopy(cards[owner]["params"][leaf])
             fn = owner
-        if fn == "configure_armor" and "meaning" not in row:
-            row["meaning"] = resolve_param("configure_accessory", param)["meaning"]
+        if fn == "armor" and "meaning" not in row:
+            row["meaning"] = resolve_param("accessory", param)["meaning"]
         return row
+
+    def expected_shape(schema):
+        names = {"description": "meaning", "minimum": "min", "maximum": "max",
+                 "x-infini-units": "units", "x-infini-reference": "reference",
+                 "x-infini-neutral": "neutral", "x-infini-consumerConstraint": "consumerConstraint",
+                 "x-infini-authorProjection": "projectionConstraints"}
+        result = {names.get(k, k): copy.deepcopy(v) for k, v in schema.items()
+                  if k not in {"x-infini-semanticType", "required", "properties", "oneOf"}}
+        if "properties" in schema:
+            result["properties"] = {k: {**expected_shape(v), **({"optional": True} if k not in schema.get("required", []) else {})}
+                                    for k, v in schema["properties"].items()}
+        if "oneOf" in schema:
+            result["oneOf"] = [expected_shape(v) for v in schema["oneOf"]]
+        return result
 
     for fn, delivered_card in cards.items():
         card = expand_catalog_targets([delivered_card], guide["targetKindSets"])[0]
@@ -189,9 +203,9 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
                 if "default" in row:
                     expanded_shape["default"] = row["default"]
                 if "neutral" in row:
-                    expanded_shape["x-infini-neutral"] = row["neutral"]
-                assert expanded_shape == original["shape"] == spec.schema()
-                assert original["meaning"] == guide["types"][spec.shared_type]["description"]
+                    expanded_shape["neutral"] = row["neutral"]
+                assert expanded_shape == expected_shape(original["shape"]) == expected_shape(spec.schema())
+                assert original["meaning"] == guide["types"][spec.shared_type]["meaning"]
                 shared += 1
                 continue
             expected = normalize_meanings(copy.deepcopy(original))
@@ -199,18 +213,18 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
             expected.pop("semanticType", None)  # Existing documented presentation-only omission.
             if not spec.required:
                 expected["optional"] = True
-                if spec.neutral == 0:
-                    expected.pop("neutral", None)
             for suffix, units in (("Seconds", "seconds"), ("Tiles", "blocks (tiles)"),
                                   ("Px", "pixels"), ("Radians", "radians")):
                 if param.endswith(suffix) and spec.units == units:
                     expected.pop("units", None)
                     break
-            if fn == "configure_armor" and param.startswith("setBonus"):
+            if fn == "armor" and param.startswith("setBonus"):
                 expected["meaning"] = expected["meaning"].removeprefix(guide["setBonusParamPrefix"])
             shape = expected.get("shape")
             if isinstance(shape, dict) and shape.get("description") == expected["meaning"]:
                 shape.pop("description")
+            if "shape" in expected:
+                expected.update(expected_shape(expected.pop("shape")))
             # Exact deep equality includes every nested bound, enum, unit,
             # reference, ordering relation, omission rule, neutral and projection.
             assert row == expected, (fn, param)
@@ -244,8 +258,8 @@ def test_retired_loaded_status_vocabulary_never_reaches_author_or_changes_litera
     assert source == before
 
 
-def test_author_budget_remains_the_authorized_225k_characters():
-    assert PLANNER_PROMPT_LIMIT_CHARS == 225_000
+def test_author_budget_is_the_authorized_300k_for_complete_attack_source_context():
+    assert PLANNER_PROMPT_LIMIT_CHARS == 300_000
 
 
 def test_shared_target_kind_sets_preserve_every_exact_capability_domain():

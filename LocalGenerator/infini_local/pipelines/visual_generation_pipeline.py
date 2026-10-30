@@ -45,7 +45,8 @@ from infini_local.pipelines.author_item_contract import (
     provider_nullable_transport_rule,
 )
 from infini_local.pipelines.pipeline_visual_config import VISUAL_DIRECTOR_LLM
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+from infini_local.pipelines.parent_context_cards import parent_context_for_stage
+from infini_local.pipelines.parent_presentation_context import presentation_parent_card_for_llm
 from infini_local.pipelines.visual_asset_plan import equipment_overlay_requirement
 from infini_local.pipelines.visual_prompt_contracts import visual_background_transport_rule
 from infini_local.pipelines.visual_asset_modes import (
@@ -405,7 +406,7 @@ def _runtime_card(data: Mapping[str, Any]) -> list[dict[str, Any]]:
             } | ({"whipUsesOwnerGravity": CAPABILITY_REGISTRY["orient_whip_to_owner_gravity"].summary} if entity.get("whipUsesOwnerGravity") is True else {}),
             "events": sorted(set(events_by_entity.get(str(entity.get("id") or ""), []))),
             "hitbox": copy.deepcopy(entity.get("hitbox") or {}),
-            **{field: copy.deepcopy(entity[field]) for field in ("spawn", "lifetimeTicks", "collision", "hitboxCurve", *PROJECTILE_MODIFIER_COMPONENTS.values(), "whipUsesOwnerGravity") if field in entity},
+            **{field: copy.deepcopy(entity[field]) for field in ("spawn", "lifetimeTicks", "collision", "hitboxCurve", "light", *PROJECTILE_MODIFIER_COMPONENTS.values(), "whipUsesOwnerGravity") if field in entity},
         })
     return rows
 
@@ -433,16 +434,16 @@ def _presentation_packet_context(data: Mapping[str, Any], runtime_rows: list[dic
         "spritePresentationReadOnly": {
             "placedVfx": "Accepted placement.placedVfx opt-in bounds are read-only actual top-left native TileFrameY, not an animation schedule. Root PNG is stable physical furniture/art; separate live flames, sparks or glow can be independently generated existing VFX assets later. Later VFX slots are not yet authored: describe intended independent live effects without claiming they exist, inserting slots, changing accepted mechanics or animating/pulsing/rotating the whole root PNG. Existing optional placedBody remains a static root picture; baked flames in it stay static even when off. Do not automatically strip accepted or authored decorative art; compose deliberate stable physical root vs intended independent live effects. VFX Director owns exact slots/assets after Visual.",
             "placedBody": {
-                "operation": "present_placed_item_sprite",
-                **{key: copy.deepcopy(value) for key, value in CAPABILITY_REGISTRY["present_placed_item_sprite"].prompt_card().items() if key == "params"},
-                "meaning": CAPABILITY_REGISTRY["present_placed_item_sprite"].summary,
+                "operation": "placed_sprite",
+                **{key: copy.deepcopy(value) for key, value in CAPABILITY_REGISTRY["placed_sprite"].prompt_card().items() if key == "params"},
+                "meaning": CAPABILITY_REGISTRY["placed_sprite"].summary,
                 "ownership": "Accepted bindings[].usePolicy.action.placement.placedBody transforms are immutable gameplay-owned facts. Visual designs the existing root item PNG only: no additional placed PNG/project, source flag, placement entity, or redesign of these transforms. Its pivotSpace selects frame (also omission) or alpha_bounds of the final selected PNG; alpha_bounds uses nonzero-alpha pixel edges, while frame preserves intentional padding. The whole PNG remains uncropped, its size still counts the full frame, and imagePivot/rotation/flips/offsets remain read-only. A visible base intended to touch ground can use alpha_bounds and imagePivotY=1; this does not promise collision/footprint matching for arbitrary art. The placed pivot is independent of held grip, forwardAngleDegrees and dropped-item worldScale. An absent placedBody is native presentation, never infer this operation from parents or furniture appearance.",
             },
             "units": "R=renderSizePx is the larger complete final frame side in base world pixels, not alpha-bbox, hitbox, requested canvas or physical shaft/tip length. C is the actual loaded final frame max-side. G=gameplay.itemScale, W=item.worldScale, I=item.inventoryScale, D=hitbox.drawScale, E=entity.scale and current P=Projectile.scale are independent dimensionless multipliers; Visual cannot edit G or D.",
             "axis": "forwardAngleDegrees is the final PNG local forward-axis in degrees: 0=+X, positive clockwise in y-down coordinates, before facing/gravity flips. It describes pixels, not AI movement. Describe this pose in the same authored prompt; reuse inherits root pixels and axis, never a second inferred axis.",
             "heldRootVisibility": {
-                "hideUseGraphic": CAPABILITY_REGISTRY["configure_item_use"].params["hideUseGraphic"].description,
-                "customHeldSprite": CAPABILITY_REGISTRY["configure_item_use"].params["customHeldSprite"].description,
+                "hideUseGraphic": CAPABILITY_REGISTRY["item_use"].params["hideUseGraphic"].description,
+                "customHeldSprite": CAPABILITY_REGISTRY["item_use"].params["customHeldSprite"].description,
                 "wireHint": "runtimeProgram.itemUse.releaseTiming",
             },
             "formulas": {
@@ -1111,8 +1112,8 @@ def _request_visual_kit(
             "brokenFragments": context["broken"],
             "validGeneratedContext": context["validReadOnly"],
             "parentFactsReadOnly": {
-                "parentA": {"packet": raw_parent_card_for_llm(a, include_visual_reference=True)},
-                "parentB": {"packet": raw_parent_card_for_llm(b, include_visual_reference=True)},
+                "parentA": {"packet": presentation_parent_card_for_llm(a, stage="visual")},
+                "parentB": {"packet": presentation_parent_card_for_llm(b, stage="visual")},
             },
             "runtimeEntitiesReadOnly": runtime_rows,
             "itemReadOnly": item_context,
@@ -1122,7 +1123,7 @@ def _request_visual_kit(
                 "fill only fields listed in repairScope.fieldPermissions; optional unreported fields stay absent",
                 visual_background_transport_rule(),
                 "already-valid fields and independent rows are frozen; extra rewrites are ignored",
-                "preserve valid literal parent composition and accepted runtime entity set",
+                "preserve already-valid child appearance and the accepted runtime entity set",
                 "the runtime entity with kind=item_body must use baked_sprite regardless of its entityId; set visualProjectRef=item and omit prompt/silhouette/visualIdentity; root item owns that design",
                 "only another non-item_body entity that is the same physical object as item_body may use reuse_item_icon with visualProjectRef=item and must not author a second visual project",
                 "when equipmentOverlayReadOnly.required is true, repair equipOverlayPatch as a separate wearable presentation asset",
@@ -1133,7 +1134,7 @@ def _request_visual_kit(
         system = (
             "You are Visual Director for InfiniCrafterLocal. Design appearance only for the accepted runtime entities. "
             "Do not add, remove, merge, rename or reinterpret gameplay entities/events. Do not classify the item as a weapon family. "
-            "Preserve literal parent objects and their physical relationships. For each exact entityId choose one finite assetMode: "
+            "Realize the authored concept as a coherent new appearance grounded in accepted mechanics and useful parent visual characteristics. For each exact entityId choose one finite assetMode: "
             "baked_sprite, reuse_item_icon, runtime_geometry, or no_asset. The entity with kind=item_body, regardless of its entityId, uses baked_sprite with visualProjectRef=item and only entityId/assetMode/visualProjectRef/scale; root item owns its prompt/silhouette/visualIdentity. "
             "A distinct baked entity uses visualProjectRef=entity and authors prompt/silhouette/visualIdentity. reuse_item_icon uses visualProjectRef=item and omits those fields; runtime_geometry/no_asset use visualProjectRef=none and omit them. "
             "Only another non-item_body entity that is the same physical object as item_body may use reuse_item_icon with visualProjectRef=item; never create a second visual project for it. "
@@ -1144,8 +1145,8 @@ def _request_visual_kit(
             "task": "Author one visualKit for the accepted runtime program.",
             "item": item_context,
             "parents": {
-                "parentA": {"packet": raw_parent_card_for_llm(a, include_visual_reference=True)},
-                "parentB": {"packet": raw_parent_card_for_llm(b, include_visual_reference=True)},
+                "parentA": {"packet": presentation_parent_card_for_llm(a, stage="visual")},
+                "parentB": {"packet": presentation_parent_card_for_llm(b, stage="visual")},
             },
             "runtimeEntities": runtime_rows,
             "requiredEntityIds": entity_ids,
@@ -1153,7 +1154,7 @@ def _request_visual_kit(
             "assetModeCatalog": visual_asset_mode_catalog(),
             "rules": [
                 "appearance only; runtime program is immutable",
-                "item.literalSynthesis, when present, is advisory appearance intent from Gameplay Author. Carry that physical composition into the visual design where compatible with the accepted runtime; it does not establish mechanics or require new entities. Visual Director owns the detailed appearance and asset choices; accepted runtime remains authoritative.",
+                "item.literalSynthesis, when present, is advisory authored appearance intent. Develop it into a coherent visual identity compatible with the accepted runtime. Parent visual references inform the design; they do not require copying whole objects. Visual Director owns appearance and asset choices; accepted mechanics remain authoritative.",
                 "For a newly designed held item choose item.grip explicitly at its actual handle/contact point on the final item PNG canvas after crop/fit/padding, before facing/gravity flips. Both normalized coordinates are required together. Describe that same contact point in item.prompt; do not infer coordinates from an entityId or request image analysis.",
                 "For a newly designed accessory choose equipOverlay.accessoryMount explicitly from chest/back/waist/shoulder/orbit to suit its authored appearance. It attaches the existing single PNG badge to the body pivot; it is not a full armor sheet or a behind-body occlusion guarantee. Optional omission selects the existing orbit presentation; never fill optional metadata during Repair unless its exact path is permitted.",
                 "literal furniture, tools and materials may remain literal",
@@ -1230,6 +1231,11 @@ def _request_visual_kit(
     payload.update(presentation)
     if not scoped_repair:
         payload["rules"].append("Explicitly choose required renderSizePx and forwardAngleDegrees for item and those plus preferredCanvasSize for each distinct baked project; item_body/reuse inherit root and must not duplicate them. Canvas is resolution, not world size; do not use gameplay hitbox dimensions as a bake canvas chooser.")
+    parent_key = "parentFactsReadOnly" if repair else "parents"
+    if parent_key in payload:
+        context = parent_context_for_stage(payload.pop(parent_key), stage="visual")
+        payload[parent_key] = context.pop("parents")
+        payload.update(context)
     payload["responseSchema"] = response_schema
     # Ordering only: keep every field/value in the same complete JSON object.
     # Entity-specific responseSchema (including its exact ID enums) remains after

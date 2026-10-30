@@ -117,32 +117,37 @@ _FIXTURE = Path(__file__).with_name("fixtures") / "live20_repair_boundary_replay
 _REPLAY = json.loads(_FIXTURE.read_text(encoding="utf-8"))
 
 
-def _historical_names(document):
-    # Narrow test-only projection; archive and all unrelated values stay intact.
-    projected = copy.deepcopy(document)
-    renames = {"configure_item_use": ("releaseTiming", "customHeldSprite"),
-               "configure_spawn": ("speedPxPerTick", "speedPxPerUpdate"),
-               "set_projectile_collision": ("localNpcHitCooldownTicks", "localNpcHitCooldownEngineUnits")}
+def _current_grammar_scenario(document):
+    # Explicit test-only current-grammar counterpart, NOT raw historical replay
+    # or production migration. Preserve the original artifact for refusal checks.
+    from infini_local.core.runtime_authoring.capability_registry import capability_for_saved_receipt
+    projected = captured_parent_combat_author(copy.deepcopy(document))
+    renames = {"item_use": ("releaseTiming", "customHeldSprite"),
+               "spawn": ("speedPxPerTick", "speedPxPerUpdate"),
+               "projectile_collision": ("localNpcHitCooldownTicks", "localNpcHitCooldownEngineUnits")}
     for row in projected.get("runtimeProgram", {}).get("calls", []) + projected.get("callsUpsert", []):
+        cap = capability_for_saved_receipt(row.get("fn"))
+        if cap is not None:
+            row["fn"] = cap.name
         pair = renames.get(row.get("fn"))
         if pair and pair[0] in row.get("params", {}):
             assert pair[1] not in row["params"]
             row["params"][pair[1]] = row["params"].pop(pair[0])
         params = row.get("params", {})
-        if row.get("fn") == "configure_item_use" and "customHeldSprite" in params:
+        if row.get("fn") == "item_use" and "customHeldSprite" in params:
             value = params["customHeldSprite"]
             mapping = {"": "inherit", "immediate": "hidden", "on_release": "visible", "after_charge": "visible"}
             if isinstance(value, str) and value in mapping:
                 params["customHeldSprite"] = mapping[value]
         if row.get("fn") == "configure_placeable" and params.get("wallId") == -1:
-            row["fn"] = "configure_tile_placement"
+            row["fn"] = "place_tile"
             del params["wallId"]
         elif row.get("fn") == "configure_placeable" and params.get("tileId") == -1:
-            row["fn"] = "configure_wall_placement"
+            row["fn"] = "place_wall"
             del params["tileId"]
         project_captured_projectile_call(row)
     from tests.captured_projectile_author import project_captured_author_notation
-    return project_captured_author_notation(captured_spawn_velocity_author(captured_parent_combat_author(projected)))
+    return project_captured_author_notation(captured_spawn_velocity_author(projected))
 
 
 def test_replay_frozen_provenance():
@@ -162,24 +167,35 @@ def test_replay_frozen_provenance():
     pytest.param(section, case, False, id=case)
     for section in ("gameplayApplyCases", "gameplayDiagnosticCases") for case in _REPLAY[section]
 ] + [pytest.param("gameplayApplyCases", "ropebound_spear", True, id="ropebound_spear-independent-composition")])
-def test_captured_gameplay_repair_replay(section, case, fresh_motion):
+def test_current_grammar_gameplay_repair_scenario_from_capture(section, case, fresh_motion):
     archive_before = copy.deepcopy(_REPLAY[section][case])
+    # Archived answers are evidence, not fresh v7 Author/Repair input. The
+    # following executable scenario is independently named and projected.
+    assert not validate_runtime_program(archive_before["initialAuthor"])["ok"]
+    with pytest.raises(ValueError):
+        compile_runtime_program(archive_before["initialAuthor"])
+    if section == "gameplayApplyCases":
+        from infini_local.core.runtime_authoring.program_schema import strict_repair_shape_report
+        # The archived mandatory report tree also exceeds today's finite
+        # patch envelope; that explicit refusal is not replay acceptance.
+        with pytest.raises(RuntimeError, match="Author input exceeds schema-derived work bounds"):
+            strict_repair_shape_report(archive_before["repairPatch"])
     replay = copy.deepcopy(archive_before)
-    initial = _historical_names(replay["initialAuthor"])
+    initial = _current_grammar_scenario(replay["initialAuthor"])
     if fresh_motion:
         # A separate future Author control, NOT a migration or recompile of the
         # retired code19 capture. All choices are explicit and the RAW is frozen.
         old = next(row for row in initial["runtimeProgram"]["calls"] if row["fn"] == "move_forward_then_retract")
         initial["runtimeProgram"]["calls"].remove(old)
         initial["runtimeProgram"]["calls"].extend([
-            {"id": "explicit_axis", "fn": "set_projectile_aim", "target": old["target"],
+            {"id": "explicit_axis", "fn": "set_aim", "target": old["target"],
              "params": {"source": "cursor", "turnOwner": False}},
-            {"id": "explicit_anchor", "fn": "attach_projectile", "target": old["target"],
+            {"id": "explicit_anchor", "fn": "attach", "target": old["target"],
              "params": {"anchor": "owner_center", "axisOffsetBlocks": 0, "normalOffsetBlocks": 0,
-                        "reachCurve": {"durationSeconds": 31 / 60, "startOffsetBlocks": 1.125,
+                        "reachCurve": {"duration": 31 / 60, "startOffsetBlocks": 1.125,
                         "peakOffsetBlocks": 6.125, "endOffsetBlocks": 1.125, "peakProgress": 0.5}}},
         ])
-    historical_patch = _historical_names(replay["repairPatch"]) if section == "gameplayApplyCases" else None
+    historical_patch = _current_grammar_scenario(replay["repairPatch"]) if section == "gameplayApplyCases" else None
     if historical_patch is not None:
         # The old sparse-notation projector dropped valid fixed placement lanes.
         # They are legal again: retain the captured model's explicit correction,
@@ -193,14 +209,14 @@ def test_captured_gameplay_repair_replay(section, case, fresh_motion):
                         row[key] = copy.deepcopy(captured_policy[key])
     old_axe = None
     if case == "obsidian_pickaxe":
-        tool = next(row for row in initial["runtimeProgram"]["calls"] if row["fn"] == "configure_tool")
+        tool = next(row for row in initial["runtimeProgram"]["calls"] if row["fn"] == "tool_stats")
         old_axe = tool["params"].pop("axePower")
         assert type(old_axe) is int and 0 <= old_axe <= 100
-        tool["params"]["axePowerTooltipPercent"] = old_axe * 5
+        tool["params"]["axePower"] = old_axe * 5
         for row in historical_patch["callsUpsert"]:
-            if row["fn"] == "configure_tool":
+            if row["fn"] == "tool_stats":
                 assert row["params"].pop("axePower") == old_axe
-                row["params"]["axePowerTooltipPercent"] = old_axe * 5
+                row["params"]["axePower"] = old_axe * 5
     initial_before = copy.deepcopy(initial)
     report = validate_runtime_program(initial)
     expected_codes = set(replay["expectedInitialCodes"])
@@ -228,7 +244,7 @@ def test_captured_gameplay_repair_replay(section, case, fresh_motion):
     assert {str(row.get("code") or "") for row in report.get("errors") or []} == expected_codes
     scope = build_runtime_repair_scope(initial, report["errors"])
     if historical_patch is not None:
-        # Captured report ceremony is retired. Replay its exact executable
+        # Captured report ceremony is retired. Apply the projected executable
         # correction without making the historical advisory tree a current
         # provider requirement; fixture/archive bytes remain untouched.
         assert historical_patch.pop("realizationReplacement") is not None

@@ -35,17 +35,17 @@ def _add(doc, fn, params):
 def _fixture(**options):
     values = {**NEUTRALS, **options}
     doc = build_capability_witness("move_straight")
-    _add(doc, "set_projectile_aim", {"source": "velocity", "turnOwner": False})
-    beam = _add(doc, "set_projectile_beam_geometry", {"lengthBlocks": 20, "widthBlocks": 0.5,
+    _add(doc, "set_aim", {"source": "velocity", "turnOwner": False})
+    beam = _add(doc, "beam_geometry", {"length": 20, "widthBlocks": 0.5,
                                               "raycastTiles": values["raycastTiles"]})
     beam["params"]["ramp"] = {"warmupSeconds": 0.5,
         **{k: values[k] for k in ("initialDamageMultiplier", "initialWidthMultiplier", "damageStartProgress")}}
     if values["manaPayment"] == "each_use_time":
         # Explicit test composition, never a gameplay default inferred from beam.
-        _call(doc, "configure_item_use")["params"]["channel"] = True
-        _add(doc, "set_projectile_owner_control", {"requireHeldItem": True, "requireChannel": True,
+        _call(doc, "item_use")["params"]["channel"] = True
+        _add(doc, "set_owner_control", {"requireHeldItem": True, "requireChannel": True,
             "requireItemAnimation": False, "claimHeldProjectile": False, "animation": "none", "lifetime": "authored"})
-        _add(doc, "sustain_projectile_mana", {})
+        _add(doc, "sustain_mana", {})
     return doc, beam
 
 
@@ -56,7 +56,7 @@ def _beam(wire):
 def _retained_wire(**options):
     """Valid program control with the exact old controller shape, not old Author."""
     doc = build_capability_witness("move_straight")
-    _call(doc, "configure_item_use")["params"]["channel"] = True
+    _call(doc, "item_use")["params"]["channel"] = True
     wire = compile_runtime_program(doc)
     wire.pop("runtimeContract")
     entity = _beam(wire)
@@ -84,14 +84,14 @@ def test_representative_joint_beam_choices_project_exactly_with_independent_coll
     assert ("ownerControl" in entity) is choices[0]
     assert wire["runtimeProgram"]["itemUse"]["channel"] is choices[0]
     assert "controller" not in entity and "attachment" not in entity
-    for fn, component in (("set_projectile_collision", "collision"), ("set_projectile_damage", "damage")):
+    for fn, component in (("projectile_collision", "collision"), ("projectile_damage", "damage")):
         source = _call(doc, fn)["params"]
         key = "tileCollide" if component == "collision" else "ownerHitCheck"
         assert entity[component][key] == source[key]
     receipts = wire["runtimeContract"]["finalWireReceipts"]
     for source in (doc, None):
         assert audit_compiler_receipts(receipts, authored_document=source, final_document=wire)["ok"]
-    call = _call(doc, "set_projectile_beam_geometry")
+    call = _call(doc, "beam_geometry")
     for parameter, spec in CAPABILITY_REGISTRY[call["fn"]].params.items():
         if parameter not in call["params"]:
             continue
@@ -103,7 +103,7 @@ def test_representative_joint_beam_choices_project_exactly_with_independent_coll
             assert rows[0]["value"] == projection.value
             assert rows[0]["finalPath"].endswith("." + member + "." + projection.wire_path)
     if choices[0]:
-        cadence = [r for r in receipts if r.get("callId") == "sustain_projectile_mana"]
+        cadence = [r for r in receipts if r.get("callId") == "sustain_mana"]
         assert len(cadence) == 1
         assert cadence[0]["value"] == "held_item_use_time" and cadence[0]["finalPath"].endswith(".manaSustain.cadence")
 
@@ -148,7 +148,7 @@ def test_bad_present_independent_values_stay_red_in_author_and_stripped_wire(key
     doc, ramp = _fixture(**OPTIONS)
     wire = compile_runtime_program(doc)
     wire.pop("runtimeContract")
-    call = _call(doc, "set_projectile_beam_geometry") if key == "raycastTiles" else ramp
+    call = _call(doc, "beam_geometry") if key == "raycastTiles" else ramp
     params = call["params"] if key == "raycastTiles" else call["params"]["ramp"]
     params[key] = value
     member = "beamGeometry" if key == "raycastTiles" else "beamRamp"
@@ -180,19 +180,19 @@ def test_real_production_packet_and_nullable_inverse_expose_independent_choices(
     doc, _ = _fixture(**OPTIONS)
     assert project_provider_author_item_to_local(doc, response_format=request["response_format"]) == doc
     # New raycast is required, not the old controller's optional neutral leaf.
-    _call(doc, "set_projectile_beam_geometry")["params"]["raycastTiles"] = None
+    _call(doc, "beam_geometry")["params"]["raycastTiles"] = None
     local = project_provider_author_item_to_local(doc, response_format=request["response_format"])
     assert not validate_runtime_program(local)["ok"]
     import json
     offered = {row["fn"] for row in json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"]}
-    assert {"set_projectile_beam_geometry", "sustain_projectile_mana", "set_projectile_owner_control"} <= offered
+    assert {"beam_geometry", "sustain_mana", "set_owner_control"} <= offered
     assert "channel_beam" not in offered
 
 
 def test_frozen_repair_fixes_only_invalid_width_and_keeps_absent_independent_components():
     good, good_call = _fixture(initialWidthMultiplier=0.22)
     broken = deepcopy(good)
-    bad_call = _call(broken, "set_projectile_beam_geometry")
+    bad_call = _call(broken, "beam_geometry")
     bad_call["params"]["ramp"]["initialWidthMultiplier"] = 0
     before = deepcopy(broken)
     scope = build_runtime_repair_scope(broken, validate_runtime_program(broken)["errors"])

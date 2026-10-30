@@ -28,7 +28,7 @@ from infini_local.pipelines import llm_authoring_pipeline as gameplay
 from test_low_level_three_stage_pipeline import wire_transport
 
 
-CAPABILITY = "set_projectile_concurrency"
+CAPABILITY = "projectile_limit"
 
 
 def _with_concurrency(value=1):
@@ -111,7 +111,7 @@ def test_independent_return_motion_keeps_explicit_values_and_concurrency_absence
     assert validate_runtime_wire(compiled)["ok"]
     assert compiled == saved_before
     assert all(CAPABILITY not in kind.required_components for kind in ENTITY_KIND_REGISTRY.values())
-    assert "maxActive" not in CAPABILITY_REGISTRY["configure_spawn"].params
+    assert "maxActive" not in CAPABILITY_REGISTRY["spawn"].params
 
 
 @pytest.mark.parametrize("fn,accepted", [("set_projectile_collision", True), ("move_bounce", False)])
@@ -166,7 +166,7 @@ def test_schema_registry_has_required_positive_param_but_optional_capability():
 ])
 def test_positive_concurrency_projection_is_exact_and_count_is_independent(value):
     document = _with_concurrency(value)
-    spawn = next(row for row in document["runtimeProgram"]["calls"] if row["fn"] == "configure_spawn")
+    spawn = next(row for row in document["runtimeProgram"]["calls"] if row["fn"] == "spawn")
     spawn["params"]["count"] = 3  # Even count > cap is an explicit, potentially refused batch, not a rewrite.
     document["runtimeProgram"]["calls"].insert(0, document["runtimeProgram"]["calls"].pop())
     compiled = compile_runtime_program(document)
@@ -261,7 +261,7 @@ def test_frozen_repair_can_change_only_invalid_concurrency_leaf():
     assert scope["capabilitySubset"] == [CAPABILITY]
     assert not scope["create"]["calls"]["allowed"]
     fixed_call = copy.deepcopy(good["runtimeProgram"]["calls"][-1])
-    hostile_spawn = copy.deepcopy(next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == "configure_spawn"))
+    hostile_spawn = copy.deepcopy(next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == "spawn"))
     hostile_spawn["params"]["count"] = 12
     patch = {"callsUpsert": [fixed_call, hostile_spawn], "note": "Fix only invalid maxActive"}
     filtered, audit = filter_repair_patch_scope(broken, patch, scope)
@@ -275,9 +275,9 @@ def test_frozen_repair_can_change_only_invalid_concurrency_leaf():
 def test_unrequested_repair_cannot_add_concurrency_to_old_absent_wire():
     good = build_runtime_fixture("returning_potion")
     broken = copy.deepcopy(good)
-    next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "configure_spawn")["params"]["count"] = 0
+    next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "spawn")["params"]["count"] = 0
     scope = build_runtime_repair_scope(broken, validate_runtime_program(broken)["errors"])
-    fixed_spawn = copy.deepcopy(next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == "configure_spawn"))
+    fixed_spawn = copy.deepcopy(next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == "spawn"))
     unsolicited_cap = _with_concurrency()["runtimeProgram"]["calls"][-1]
     filtered, audit = filter_repair_patch_scope(broken, {"callsUpsert": [fixed_spawn, unsolicited_cap], "note": "Count only"}, scope)
     assert audit["ok"], audit
@@ -301,22 +301,22 @@ def test_qa_tracks_nullable_reject_bounds_instead_of_omitting_new_cap():
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("fn,leaf,bad", [
-    pytest.param("accelerate_projectile_vertical", "accelerationYBlocksPerSecondSquared", -16201, id="signed-gravity"),
-    pytest.param("seek_projectile", "maxSpeedBlocksPerSecond", -3.75, id="return-motion"),
-    pytest.param("set_projectile_collision", "pierce", -2, id="pierce"),
+    pytest.param("accelerate_y", "accelY", -16201, id="signed-gravity"),
+    pytest.param("seek", "maxSpeed", -3.75, id="return-motion"),
+    pytest.param("projectile_collision", "pierce", -2, id="pierce"),
     pytest.param(CAPABILITY, "maxActive", 0, id="concurrency"),
 ])
 def test_contact_and_return_repairs_preserve_independent_collision_and_concurrency(wire_transport, monkeypatch, mode, fn, leaf, bad):
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     parent = {"id": "literal", "name": "Literal object", "damage": 7, "useTime": 20}
-    if fn == "seek_projectile":
+    if fn == "seek":
         good = _with_concurrency(6)
         # Wall return and collision disabling are separate authored choices;
         # steering and arrival must survive leaf-local speed Repair unchanged.
-        trigger = next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == "set_projectile_return_trigger")
+        trigger = next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == "return_when")
         trigger["params"]["onTileCollision"] = True
     else:
-        good = build_capability_witness(fn) if fn == "accelerate_projectile_vertical" else _with_concurrency(6)
+        good = build_capability_witness(fn) if fn == "accelerate_y" else _with_concurrency(6)
     broken = copy.deepcopy(good)
     call = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == fn)
     call["params"][leaf] = bad
@@ -333,7 +333,7 @@ def test_contact_and_return_repairs_preserve_independent_collision_and_concurren
     compiled = compile_runtime_program(fixed)
     assert compiled["runtimeProgram"] == compile_runtime_program(good)["runtimeProgram"]
     assert validate_runtime_wire(compiled)["ok"]
-    if fn == "seek_projectile":
+    if fn == "seek":
         projectile = next(row for row in compiled["runtimeProgram"]["entities"] if row["id"] == "tonic_flask")
         assert projectile["returnTrigger"]["onTileCollision"] is True
         assert projectile["returnTrigger"]["disableTileCollisionOnReturn"] is True

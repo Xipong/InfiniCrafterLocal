@@ -29,7 +29,7 @@ def test_author_builds_complete_instruction_and_user_segments(monkeypatch):
     data = json.loads(first["messages"][2]["content"])
     assert set(instructions) == set(author._AUTHOR_CACHE_PREFIX_KEYS)
     assert {**instructions, **data} == json.loads(dossier)
-    assert set(data) == {"recipeKey", "parents", "balanceCorridor", "sourceWireUnits"}
+    assert set(data) == {"recipeKey", "parentBriefRule", "parentBriefs", "parents", "balanceCorridor", "sourceWireUnits"}
     assert first["messages"][:2] == second["messages"][:2]
     assert first["messages"][2] != second["messages"][2]
     assert source == before
@@ -77,7 +77,7 @@ def stage_packets(monkeypatch, stage, format_mode="json_object", *, labels=("nov
                     parse_error=ValueError(label), original_recipe_context=json.dumps({"recipeKey": label}), model_name="test-model")
             elif stage == "repair":
                 item = build_runtime_fixture("workbench_blade")
-                use = next(c for c in item["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")
+                use = next(c for c in item["runtimeProgram"]["calls"] if c["fn"] == "item_use")
                 del use["params"]["useStyle"]
                 author.repair_author_item_after_failure(item, a, {}, label, failure_report=validate_runtime_program(item))
             elif stage.startswith("visual"):
@@ -118,7 +118,7 @@ def test_every_production_stage_owns_only_complete_static_instructions(monkeypat
     data = json.loads(first["messages"][endpoint + 1]["content"])
     assert not static.keys() & data.keys()
     assert first["messages"][endpoint + 1] != second["messages"][endpoint + 1]
-    assert not static.keys() & {"parents", "parentFactsReadOnly", "repairScope", "brokenFragments", "acceptedItemContext", "outputSchema", "responseSchema", "sourceWireUnits", "runtimePairs", "item"}
+    assert not static.keys() & {"parents", "parentBriefs", "parentFactsReadOnly", "repairScope", "brokenFragments", "acceptedItemContext", "outputSchema", "responseSchema", "sourceWireUnits", "runtimePairs", "item"}
     if stage == "repair":
         assert "fieldPermissions" in data["repairScope"]
         assert "runtimeProgram" in data["acceptedItemContext"]

@@ -16,6 +16,7 @@ from infini_local.core import llm_config
 from infini_local.core import vfx_manifest as vfx
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.schema_validation import strict_schema_errors
+from infini_local.core.vfx_material_contract import vfx_model_payload
 from infini_local.pipelines import vfx_generation_pipeline as stage
 from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
 from tests.vfx_material_fixtures import _asset, _data, _legacy, _path, _sprite, _with_asset
@@ -26,7 +27,8 @@ def _patch(**edits):
 
 
 def _offline_transport(monkeypatch, case, replies):
-    pending, captured = iter(replies), []
+    model_replies = [vfx_model_payload(reply) for reply in replies]
+    pending, captured = iter(model_replies), []
     monkeypatch.setattr(stage, "USE_LLM", True)
     monkeypatch.setattr(stage, "resolve_llm_model", lambda: "explicit-offline-fixture-model")
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
@@ -36,7 +38,7 @@ def _offline_transport(monkeypatch, case, replies):
         if directory := os.environ.get("INFINI_VFX_REPAIR_EVIDENCE_DIR"):
             out = Path(directory)
             out.mkdir(parents=True, exist_ok=True)
-            (out / (case + "_requests.json")).write_text(json.dumps({"kind": "hand-authored offline responses, no provider call", "requests": captured, "responses": replies}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            (out / (case + "_requests.json")).write_text(json.dumps({"kind": "hand-authored offline responses, no provider call", "requests": captured, "responses": model_replies}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return {"choices": [{"message": {"content": json.dumps(next(pending))}}]}
 
     monkeypatch.setattr(stage, "llm_chat_json", send)
@@ -139,7 +141,7 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
         assert scope["fieldPermissions"] == {"globals": {}, "slots": [{"slotId": raw["slots"][0]["id"], "paths": paths}], "assets": []}
         assert not scope["allowCreateAssets"] and not scope["allowCreateSlots"]
         assert scope["deletableSlotIds"] == scope["deletableSlotIndices"] == scope["deletableAssetIds"] == scope["deletableAssetIndices"] == []
-        assert repair["brokenFragments"]["slots"] == raw["slots"]
+        assert repair["brokenFragments"]["slots"] == vfx_model_payload(raw)["slots"]
         assert repair["validGeneratedContext"]["assets"] == raw.get("assets", [])
         schema = repair["outputSchema"]
         assert set(schema["properties"]) == {"schema", "note", "slotsUpsert"}
@@ -156,7 +158,7 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
             # salvage its useful exact leaves and audit every frozen rewrite.
             assert strict_schema_errors(correction, schema)
             within_scope = _patch(slotsUpsert=copy.deepcopy(final["debug"]["vfxDirectorRaw"]["slots"]))
-            assert not strict_schema_errors(within_scope, schema)
+            assert not strict_schema_errors(vfx_model_payload(within_scope), schema)
             scoped_result, scoped_audit = vfx._apply_vfx_repair_patch(data, raw, within_scope, scope, return_audit=True)
             assert scoped_result == final["debug"]["vfxDirectorRaw"]
             assert scoped_audit["acceptedPaths"] == final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"]
@@ -253,8 +255,8 @@ def test_vfx_exact_leaf_stage_contract(monkeypatch, case):
                 assert offered["properties"][field] == {"const": before["assets"][0][field], "type": "string"}
         within_scope = _patch(**{"assetsUpsert" if domain == "assets" else "slotsUpsert": copy.deepcopy(expected[domain])})
         schema = request["outputSchema"]
-        assert not strict_schema_errors(within_scope, schema)
-        assert strict_schema_errors(patch, schema), "hostile/full-shape answer is outside the sent provider grammar"
+        assert not strict_schema_errors(vfx_model_payload(within_scope), schema)
+        assert strict_schema_errors(vfx_model_payload(patch), schema), "hostile/full-shape answer is outside the sent provider grammar"
         scoped_result, scoped_audit = vfx._apply_vfx_repair_patch(data, raw, within_scope, scope, return_audit=True)
         assert scoped_result == expected
         assert scoped_audit["acceptedPaths"] == audit["acceptedPaths"]
@@ -288,7 +290,7 @@ def test_vfx_repair_optional_edit_absence_is_not_null(monkeypatch, field):
     assert len(sent) == 2 and final["debug"]["vfxDirectorRaw"] == accepted
     schema = request_dossier(sent[1])["outputSchema"]
     assert set(schema["properties"]) == {"schema", "note", "slotsUpsert"}
-    assert not strict_schema_errors(patch, schema)
+    assert not strict_schema_errors(vfx_model_payload(patch), schema)
     assert not strict_schema_errors(_patch(), schema)
     assert strict_schema_errors(_patch(**{field: None}), schema)
     assert bool(strict_schema_errors(_patch(**{field: []}), schema)) is (field != "slotsUpsert")

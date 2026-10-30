@@ -18,23 +18,23 @@ def call(fn, params, target="body", ident=None):
 
 def item_document():
     return {"name": "Clock", "category": "consumable", "runtimeProgram": {
-        "apiVersion": "infini.runtime-program.v5", "schema": "infini.runtime-program.authoring.v6",
+        "apiVersion": "infini.runtime-program.v5", "schema": "infini.runtime-program.authoring.v7",
         "primaryEntityId": "body", "entities": [{"id": "body", "kind": "item_body"}],
         "bindings": [{"id": "use", "input": "primary_use", "action": {
             "kind": "apply_item_effects"}, "stackCost": 0, "contactDamage": False}],
-        "calls": [call("configure_item_stats", {"damage": 0, "damageClass": "generic",
+        "calls": [call("item_stats", {"damage": 0, "damageClass": "generic",
             "knockback": 0, "useTimeSeconds": 0.025,
             "useAnimationSeconds": 0.025, "manaCost": 0, "rarity": 0,
             "valueCopper": 0, "maxStack": 1, "craftYield": 1, "widthPx": 16,
             "heightPx": 16, "scale": 1}),
-            call("configure_item_use", {"useStyle": "hold_up", "autoReuse": False,
+            call("item_use", {"useStyle": "hold_up", "autoReuse": False,
                 "useTurn": False, "hideUseGraphic": False, "disableMeleeHitbox": True, "channel": False}),
-            call("apply_vanilla_buff_on_use", {"buffId": 1, "durationSeconds": 1.5})],
+            call("native_buff_on_use", {"buffId": 1, "duration": 1.5})],
     }}
 
 
 def test_seconds_lower_to_world_ticks_without_mutating_author():
-    assert RUNTIME_PROGRAM_SCHEMA == "infini.runtime-program.authoring.v6"
+    assert RUNTIME_PROGRAM_SCHEMA == "infini.runtime-program.authoring.v7"
     source = item_document()
     before = deepcopy(source)
     report = validate_runtime_program(source)
@@ -49,7 +49,7 @@ def test_seconds_lower_to_world_ticks_without_mutating_author():
 
 
 def test_projection_metadata_and_target_update_context():
-    spec = CAPABILITY_REGISTRY["accelerate_projectile_vertical"].params["accelerationYBlocksPerSecondSquared"]
+    spec = CAPABILITY_REGISTRY["accelerate_y"].params["accelY"]
     assert spec.to_wire(900, updates_per_tick=2) == 1
     card = spec.wire_projection_card()
     assert card["wireName"] == "accelerationYPerUpdate"
@@ -66,16 +66,16 @@ def projectile_document(updates=2):
     program["entities"].append({"id": "shot", "kind": "free_projectile"})
     program["bindings"][0]["action"] = {"kind": "spawn_entity", "targetId": "shot"}
     program["calls"] = program["calls"][:2] + [
-        call("configure_spawn", {"velocity": {"constantSpeedBlocksPerSecond": 120},
+        call("spawn", {"velocity": {"speed": 120},
             "count": 1, "spreadRadians": 0, "offsetBlocks": 0.5,
             "aim": "cursor", "position": {"above": "activation_origin", "heightTiles": 2,
-                "activationDelaySeconds": 0.025}}, "shot"),
-        call("set_projectile_lifetime", {"lifetimeSeconds": 2.5}, "shot"),
-        call("set_projectile_hitbox", {"widthPx": 16, "heightPx": 16, "drawScale": 1, "hitboxScale": 1}, "shot"),
-        call("set_projectile_collision", {"tileCollide": False, "ignoreWater": False,
+                "activationDelay": 0.025}}, "shot"),
+        call("projectile_lifetime", {"lifetimeSeconds": 2.5}, "shot"),
+        call("projectile_hitbox", {"widthPx": 16, "heightPx": 16, "drawScale": 1, "hitboxScale": 1}, "shot"),
+        call("projectile_collision", {"tileCollide": False, "ignoreWater": False,
             "pierce": 1, "updatesPerTick": updates, "immunity": {"localCooldown": 10}}, "shot"),
-        call("set_projectile_damage", {"damageClass": "generic", "damage": 10, "knockback": 1, "ownerHitCheck": False}, "shot"),
-        call("accelerate_projectile_vertical", {"accelerationYBlocksPerSecondSquared": 900}, "shot"),
+        call("projectile_damage", {"damageClass": "generic", "damage": 10, "knockback": 1, "ownerHitCheck": False}, "shot"),
+        call("accelerate_y", {"accelY": 900}, "shot"),
     ]
     return source
 
@@ -102,9 +102,9 @@ def test_contextual_projectile_projection_and_strict_source_audit():
         if "authoredPath" not in row:
             continue
         row["authoredPath"] = (row["authoredPath"]
-            .replace("constantSpeedBlocksPerSecond", "constantSpeedPxPerUpdate")
+            .replace("speed", "constantSpeedPxPerUpdate")
             .replace("lifetimeSeconds", "lifetimeTicks")
-            .replace("activationDelaySeconds", "activationDelayTicks")
+            .replace("activationDelay", "activationDelayTicks")
             .replace("offsetBlocks", "offsetPx")
             .replace("useTimeSeconds", "useTimeTicks")
             .replace("useAnimationSeconds", "useAnimationTicks"))
@@ -125,9 +125,9 @@ def test_seconds_engine_bounds_and_nonzero_collapse_are_refused(seconds):
 
 @pytest.mark.parametrize("updates", range(1, 7))
 def test_full_predecessor_speed_and_acceleration_range_remains_reachable(updates):
-    cap = CAPABILITY_REGISTRY["configure_spawn"].params["velocity"]
-    speed = cap.alternatives[0].properties["constantSpeedBlocksPerSecond"]
-    gravity = CAPABILITY_REGISTRY["accelerate_projectile_vertical"].params["accelerationYBlocksPerSecondSquared"]
+    cap = CAPABILITY_REGISTRY["spawn"].params["velocity"]
+    speed = cap.alternatives[0].properties["speed"]
+    gravity = CAPABILITY_REGISTRY["accelerate_y"].params["accelY"]
     for spec, engines in ((speed, (0, 80)), (gravity, (-2, 0, 2))):
         for engine in engines:
             author = spec.from_wire(engine, updates_per_tick=updates)
@@ -138,12 +138,12 @@ def test_full_predecessor_speed_and_acceleration_range_remains_reachable(updates
 
 
 @pytest.mark.parametrize("fn,params,member,expected", [
-    ("set_projectile_turn_modifier", {"turnRadiansPerSecond": 12, "startDelaySeconds": 0.025, "durationSeconds": 0.5},
+    ("turn_velocity", {"turnRadiansPerSecond": 12, "startDelay": 0.025, "duration": 0.5},
         "turnModifier", {"turnRadiansPerUpdate": 0.1, "startDelayTicks": 2, "durationTicks": 30}),
-    ("scale_projectile_velocity", {"multiplierPerUpdate": 1.1, "maxSpeedBlocksPerSecond": 120},
+    ("scale_velocity", {"scalePerUpdate": 1.1, "maxSpeed": 120},
         "velocityScale", {"maxSpeed": 16}),
-    ("set_projectile_hitbox_curve", {"startScale": 1, "endScale": 2, "startDelaySeconds": 0.025,
-        "durationSeconds": 0.5, "mirrorToSprite": False, "curve": "linear"}, "hitboxCurve", {"startDelayTicks": 2, "durationTicks": 30}),
+    ("hitbox_curve", {"startScale": 1, "endScale": 2, "startDelay": 0.025,
+        "duration": 0.5, "mirrorToSprite": False, "curve": "linear"}, "hitboxCurve", {"startDelayTicks": 2, "durationTicks": 30}),
 ])
 def test_modifier_wire_stays_in_engine_domains(fn, params, member, expected):
     source = projectile_document()
@@ -188,19 +188,19 @@ def test_all_declared_engine_endpoints_remain_reachable_for_every_target_clock()
 
 def test_author_cards_explain_human_constraints_without_saved_receipt_or_engine_tables():
     import json
-    card = CAPABILITY_REGISTRY["configure_spawn"].author_prompt_card()
+    card = CAPABILITY_REGISTRY["spawn"].author_prompt_card()
     text = json.dumps(card)
     assert "predecessorNames" not in text
     assert "wireMinimum" not in text
     assert "constantSpeedPxPerUpdate" not in text
-    speed = CAPABILITY_REGISTRY["configure_spawn"].params["velocity"].alternatives[0].properties["constantSpeedBlocksPerSecond"]
+    speed = CAPABILITY_REGISTRY["spawn"].params["velocity"].alternatives[0].properties["speed"]
     assert speed.author_projection_card()["boundsAtUpdatesPerTick1To6"][5][1] == 1800
-    assert CAPABILITY_REGISTRY["set_projectile_collision"].params["updatesPerTick"].wire_projection_card()["offset"] == -1
+    assert CAPABILITY_REGISTRY["projectile_collision"].params["updatesPerTick"].wire_projection_card()["offset"] == -1
 
 
 def test_half_tick_rounding_is_up_only_at_the_actual_tie():
     import math
-    spec = CAPABILITY_REGISTRY["configure_item_stats"].params["useTimeSeconds"]
+    spec = CAPABILITY_REGISTRY["item_stats"].params["useTimeSeconds"]
     tie = 1 / 120
     assert spec.to_wire(tie) == 1
     assert spec.to_wire(math.nextafter(tie, 0)) == 0
@@ -210,12 +210,12 @@ def test_half_tick_rounding_is_up_only_at_the_actual_tie():
 
 
 def test_hit_target_world_geometry_uses_blocks_but_keeps_algorithm_counters():
-    geometry = CAPABILITY_REGISTRY["spawn_entity_from_hit_target"].params["geometry"]
+    geometry = CAPABILITY_REGISTRY["spawn_at_hit"].params["geometry"]
     assert geometry.properties["clearanceBlocks"].to_wire(1.5) == 24
-    assert geometry.properties["beforePositionJitterRadiusBlocks"].to_wire(2) == 32
+    assert geometry.properties["beforeJitterRadius"].to_wire(2) == 32
     assert "clearancePx" not in geometry.properties
     assert "beforePositionJitterRadiusPx" not in geometry.properties
-    counter = geometry.properties["initialIgnoreCountdownUpdates"]
+    counter = geometry.properties["ignoreTargetUpdates"]
     assert not counter.wire_kind and counter.kind == "integer"
 
 
@@ -230,15 +230,15 @@ def test_child_velocity_uses_the_child_clock_including_nested_distributions():
         child = deepcopy(original)
         child["id"] += "_child"
         child["target"] = "child"
-        if child["fn"] == "set_projectile_collision":
+        if child["fn"] == "projectile_collision":
             child["params"]["updatesPerTick"] = 4
-        elif child["fn"] == "configure_spawn":
-            child["params"]["velocity"] = {"disk": {"maxSpeedBlocksPerSecond": 120}}
+        elif child["fn"] == "spawn":
+            child["params"]["velocity"] = {"disk": {"maxSpeed": 120}}
         child_calls.append(child)
     program["calls"].extend(child_calls)
-    program["calls"].append(call("spawn_entity_on_event", {"when": {"everySeconds": 0.1},
+    program["calls"].append(call("spawn_on_event", {"when": {"everySeconds": 0.1},
         "entity": "child", "count": 1, "spreadRadians": 0, "damageBasis": "authored_child",
-        "knockbackBasis": "authored_child", "damageMultiplier": 1, "delaySeconds": 0.025}, "shot"))
+        "knockbackBasis": "authored_child", "damageMultiplier": 1, "delay": 0.025}, "shot"))
     report = validate_runtime_program(source)
     assert report["ok"], report
     wire = compile_runtime_program(source)
@@ -256,7 +256,7 @@ def test_child_velocity_uses_the_child_clock_including_nested_distributions():
 def test_context_never_defaults_missing_or_ambiguous_target_clocks(mutation):
     source = projectile_document()
     calls = source["runtimeProgram"]["calls"]
-    collision = next(c for c in calls if c["fn"] == "set_projectile_collision")
+    collision = next(c for c in calls if c["fn"] == "projectile_collision")
     if mutation == "missing":
         calls.remove(collision)
     elif mutation == "duplicate":
@@ -275,8 +275,8 @@ def test_context_never_defaults_missing_or_ambiguous_target_clocks(mutation):
 @pytest.mark.parametrize("updates,accepted", [(1, False), (6, True)])
 def test_full_human_speed_range_is_contextually_bounded_not_globally_shrunk(updates, accepted):
     source = projectile_document(updates)
-    spawn = next(c for c in source["runtimeProgram"]["calls"] if c["fn"] == "configure_spawn")
-    spawn["params"]["velocity"] = {"constantSpeedBlocksPerSecond": 1800}
+    spawn = next(c for c in source["runtimeProgram"]["calls"] if c["fn"] == "spawn")
+    spawn["params"]["velocity"] = {"speed": 1800}
     assert validate_runtime_program(source)["ok"] is accepted
 
 
@@ -290,9 +290,9 @@ def test_predecessor_leaf_names_are_not_fresh_author_aliases(old, new):
 
 def test_non_time_integer_lattices_and_float32_signed_neutrals_remain_exact():
     import math
-    offset = CAPABILITY_REGISTRY["configure_spawn"].params["offsetBlocks"]
-    regen = CAPABILITY_REGISTRY["configure_accessory"].params["lifeRegenHpPerSecond"]
-    gravity = CAPABILITY_REGISTRY["accelerate_projectile_vertical"].params["accelerationYBlocksPerSecondSquared"]
+    offset = CAPABILITY_REGISTRY["spawn"].params["offsetBlocks"]
+    regen = CAPABILITY_REGISTRY["accessory"].params["lifeRegen"]
+    gravity = CAPABILITY_REGISTRY["accelerate_y"].params["accelY"]
     with pytest.raises(ValueError, match="non-integral"):
         offset.to_wire(0.01)
     with pytest.raises(ValueError, match="non-integral"):
@@ -307,7 +307,7 @@ def test_non_time_integer_lattices_and_float32_signed_neutrals_remain_exact():
 def test_unresolved_clock_does_not_make_valid_world_values_repairable(mutation):
     from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
     source = projectile_document()
-    collision = next(c for c in source["runtimeProgram"]["calls"] if c["fn"] == "set_projectile_collision")
+    collision = next(c for c in source["runtimeProgram"]["calls"] if c["fn"] == "projectile_collision")
     if mutation == "missing_value":
         del collision["params"]["updatesPerTick"]
     else:
@@ -360,7 +360,7 @@ def test_saved_predecessor_omission_keeps_its_exact_integer_zero_domain():
     # The legacy token is not granted to a fresh/current source path.
     for row in wire["runtimeContract"]["finalWireReceipts"]:
         row["authoredPath"] = row.get("authoredPath", "").replace(
-            "jumpSpeedBonusPxPerTick", "jumpSpeedBonusBlocksPerSecond")
+            "jumpSpeedBonusPxPerTick", "jumpSpeedBonus")
     assert not validate_runtime_wire(wire)["ok"]
 
 def test_converted_native_float_rates_reject_float32_nonzero_collapse():
@@ -389,8 +389,8 @@ def test_converted_native_float_rates_reject_float32_nonzero_collapse():
 def test_angular_oscillation_underflow_is_refused_at_author_leaf_without_mutation():
     source = projectile_document(2)
     source["runtimeProgram"]["calls"][-1] = call(
-        "oscillate_projectile_velocity", {"law": {"angular_sine": {"amplitudeRadiansPerSecond": 1e-45}},
-            "frequencyRadiansPerSecond": 6, "phaseRadians": 0}, "shot")
+        "oscillate_velocity", {"law": {"angular_sine": {"amplitudeRadiansPerSecond": 1e-45}},
+            "angularFrequency": 6, "anglePhase": 0}, "shot")
     before = deepcopy(source)
     report = validate_runtime_program(source)
     assert not report["ok"]
@@ -401,8 +401,8 @@ def test_angular_oscillation_underflow_is_refused_at_author_leaf_without_mutatio
 
 
 @pytest.mark.parametrize("fn,param,bound_name,bare_outside_accepted", [
-    ("set_projectile_homing_modifier", "maxTurnRadiansPerSecond", "minimum", False),
-    ("set_projectile_homing_modifier", "maxTurnRadiansPerSecond", "maximum", False),
+    ("homing", "maxTurnRadiansPerSecond", "minimum", False),
+    ("homing", "maxTurnRadiansPerSecond", "maximum", False),
     ("pull_on_event", "impulseBlocksPerSecond", "minimum", True),
     ("pull_on_event", "ownerImpulseBlocksPerSecond", "minimum", False),
 ])

@@ -31,11 +31,11 @@ def compile_ok(doc):
 
 
 @pytest.mark.parametrize("fn,params,member,expected", [
-    ("accelerate_projectile_vertical", {"accelerationYBlocksPerSecondSquared": -2}, "verticalAcceleration", {"accelerationYPerUpdate": -2 * 16 / 3600}),
-    ("scale_projectile_velocity", {"multiplierPerUpdate": 0}, "velocityScale", [{"multiplierPerUpdate": 0}]),
-    ("set_projectile_rotation", {"mode": "spin", "offsetRadians": 0, "radiansPerSecond": -6}, "rotation", {"mode": "spin", "offsetRadians": 0, "radiansPerUpdate": -0.1}),
-    ("oscillate_projectile_velocity", {"law": {"angular_sine": {"amplitudeRadiansPerSecond": 6}}, "frequencyRadiansPerSecond": 3, "phaseRadians": 0}, "oscillation", {"law": "angular_sine", "frequencyRadiansPerUpdate": 0.05, "phaseRadians": 0, "amplitude": 0.1}),
-    ("add_projectile_visual_scale", {"deltaPerSecond": -0.6, "maxScale": 5}, "visualScaleRate", {"deltaPerUpdate": -0.01, "maxScale": 5}),
+    ("accelerate_y", {"accelY": -2}, "verticalAcceleration", {"accelerationYPerUpdate": -2 * 16 / 3600}),
+    ("scale_velocity", {"scalePerUpdate": 0}, "velocityScale", [{"multiplierPerUpdate": 0}]),
+    ("rotate_sprite", {"mode": "spin", "offsetRadians": 0, "radiansPerSecond": -6}, "rotation", {"mode": "spin", "offsetRadians": 0, "radiansPerUpdate": -0.1}),
+    ("oscillate_velocity", {"law": {"angular_sine": {"amplitudeRadiansPerSecond": 6}}, "angularFrequency": 3, "anglePhase": 0}, "oscillation", {"law": "angular_sine", "frequencyRadiansPerUpdate": 0.05, "phaseRadians": 0, "amplitude": 0.1}),
+    ("add_sprite_scale", {"deltaPerSecond": -0.6, "maxScale": 5}, "visualScaleRate", {"deltaPerUpdate": -0.01, "maxScale": 5}),
 ])
 def test_independent_per_update_law_has_no_compound_obligations(fn, params, member, expected):
     doc = base_document()
@@ -47,18 +47,18 @@ def test_independent_per_update_law_has_no_compound_obligations(fn, params, memb
 
 
 def window(phase, clock="active"):
-    return {"phase": phase, "clock": clock, "startDelaySeconds": 0, "durationSeconds": 10}
+    return {"phase": phase, "clock": clock, "startDelay": 0, "duration": 10}
 
 
 def test_independent_outbound_return_seek_and_arrival_do_not_force_channel_or_spin():
     doc = base_document()
-    add(doc, "seek_projectile", {"target": "cursor", "maxSpeedBlocksPerSecond": 30,
-        "velocityLerpPerUpdate": 0.28, "limitSpeedToDistance": True, "window": window("outbound")}, "out_seek")
-    add(doc, "seek_projectile", {"target": "owner_center", "maxSpeedBlocksPerSecond": 60,
-        "velocityLerpPerUpdate": 1, "limitSpeedToDistance": False, "window": window("returning", "since_return")}, "back_seek")
-    add(doc, "set_projectile_return_trigger", {"afterSeconds": 1, "ownerDistanceBlocks": 30,
-        "onOwnerRelease": False, "onTileCollision": False, "disableTileCollisionOnReturn": False})
-    add(doc, "set_projectile_arrival", {"target": "owner_center", "radiusBlocks": 1,
+    add(doc, "seek", {"target": "cursor", "maxSpeed": 30,
+        "lerpPerUpdate": 0.28, "limitSpeedToDistance": True, "window": window("outbound")}, "out_seek")
+    add(doc, "seek", {"target": "owner_center", "maxSpeed": 60,
+        "lerpPerUpdate": 1, "limitSpeedToDistance": False, "window": window("returning", "since_return")}, "back_seek")
+    add(doc, "return_when", {"afterSeconds": 1, "ownerDistance": 30,
+        "onOwnerRelease": False, "onTileCollision": False, "passTilesOnReturn": False})
+    add(doc, "kill_on_arrival", {"target": "owner_center", "radius": 1,
         "window": window("returning")})
     wire, entity = compile_ok(doc)
     assert len(entity["seek"]) == 2
@@ -74,7 +74,7 @@ def test_independent_outbound_return_seek_and_arrival_do_not_force_channel_or_sp
 
 def test_proximity_expiry_without_any_steering():
     doc = base_document()
-    add(doc, "set_projectile_proximity_action", {"searchRangeTiles": 20, "triggerRadiusBlocks": 2,
+    add(doc, "proximity_action", {"searchRange": 20, "triggerRadiusBlocks": 2,
         "requireLineOfSight": False, "action": "expire_then_kill"})
     _, entity = compile_ok(doc)
     assert entity["proximity"] == {"searchRangeTiles": 20, "triggerRadiusPx": 32,
@@ -85,13 +85,13 @@ def test_proximity_expiry_without_any_steering():
 @pytest.mark.parametrize("peak,end", [("full", "full"), ("quarter", "none")])
 def test_hand_attachment_pose_and_asymmetric_reach_are_separate(peak, end):
     doc = base_document()
-    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"].pop("handPose", None)
-    add(doc, "set_projectile_aim", {"source": "initial", "turnOwner": False})
-    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "set_projectile_collision")["params"]["tileCollide"] = False
-    add(doc, "attach_projectile", {"anchor": "front_hand", "axisOffsetBlocks": 0, "normalOffsetBlocks": 0})
-    add(doc, "set_front_arm_pose", {"durationSeconds": 0.5, "startStretch": "full", "peakStretch": peak,
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "item_use")["params"].pop("handPose", None)
+    add(doc, "set_aim", {"source": "initial", "turnOwner": False})
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "projectile_collision")["params"]["tileCollide"] = False
+    add(doc, "attach", {"anchor": "front_hand", "axisOffsetBlocks": 0, "normalOffsetBlocks": 0})
+    add(doc, "front_arm_pose", {"duration": 0.5, "startStretch": "full", "peakStretch": peak,
         "endStretch": end, "peakProgress": 0.3})
-    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "attach_projectile")["params"]["reachCurve"] = {"durationSeconds": 1, "startOffsetBlocks": -1,
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "attach")["params"]["reachCurve"] = {"duration": 1, "startOffsetBlocks": -1,
         "peakOffsetBlocks": 4, "endOffsetBlocks": 2, "peakProgress": 0.2}
     _, entity = compile_ok(doc)
     assert entity["attachment"]["anchor"] == "front_hand"
@@ -104,8 +104,8 @@ def test_hand_attachment_pose_and_asymmetric_reach_are_separate(peak, end):
 
 def test_orbit_anchor_phase_and_rate_are_explicit_without_forced_tile_policy():
     doc = base_document()
-    add(doc, "orbit_projectile", {"anchor": "owner_mounted", "radiusBlocks": 4, "radiansPerSecond": -6,
-        "phaseRadians": 0.2, "identityPhaseRadians": 0})
+    add(doc, "orbit", {"anchor": "owner_mounted", "radius": 4, "radiansPerSecond": -6,
+        "anglePhase": 0.2, "identityAnglePhase": 0})
     _, entity = compile_ok(doc)
     assert entity["orbit"] == {"anchor": "owner_mounted", "radiusPx": 64, "radiansPerUpdate": -0.1,
         "phaseRadians": 0.2, "identityPhaseRadians": 0}
@@ -114,12 +114,12 @@ def test_orbit_anchor_phase_and_rate_are_explicit_without_forced_tile_policy():
 
 def test_charge_contact_and_owner_liveness_are_independent_of_position():
     doc = base_document()
-    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["channel"] = True
-    add(doc, "accumulate_projectile_charge", {"durationSeconds": 1, "autoReleaseAfterActiveSeconds": 2})
-    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "accumulate_projectile_charge")["params"]["releaseEffect"] = {"damageMultiplier": 2, "knockbackMultiplier": 0,
-        "speedMultiplier": 0.5, "launchSpeedBlocksPerSecond": 30, "pauseLifetimeWhileCharging": False}
-    add(doc, "gate_projectile_contact", {"window": window("charging"), "enabled": False})
-    add(doc, "set_projectile_owner_control", {"requireHeldItem": True, "requireChannel": False,
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "item_use")["params"]["channel"] = True
+    add(doc, "charge", {"duration": 1, "autoReleaseAge": 2})
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "charge")["params"]["releaseEffect"] = {"damageMultiplier": 2, "knockbackMultiplier": 0,
+        "speedMultiplier": 0.5, "launchSpeed": 30, "pauseLifetimeWhileCharging": False}
+    add(doc, "gate_contact", {"window": window("charging"), "enabled": False})
+    add(doc, "set_owner_control", {"requireHeldItem": True, "requireChannel": False,
         "requireItemAnimation": False, "claimHeldProjectile": False, "animation": "none", "lifetime": "authored"})
     _, entity = compile_ok(doc)
     assert entity["charge"] == {"durationTicks": 60, "autoReleaseAfterActiveTicks": 120}
@@ -132,9 +132,9 @@ def test_charge_contact_and_owner_liveness_are_independent_of_position():
 
 def test_free_beam_geometry_and_ramp_do_not_imply_channel_or_attachment():
     doc = base_document()
-    add(doc, "set_projectile_aim", {"source": "velocity", "turnOwner": False})
-    add(doc, "set_projectile_beam_geometry", {"lengthBlocks": 20, "widthBlocks": 0.5, "raycastTiles": True})
-    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "set_projectile_beam_geometry")["params"]["ramp"] = {"warmupSeconds": 0, "initialWidthMultiplier": 1,
+    add(doc, "set_aim", {"source": "velocity", "turnOwner": False})
+    add(doc, "beam_geometry", {"length": 20, "widthBlocks": 0.5, "raycastTiles": True})
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "beam_geometry")["params"]["ramp"] = {"warmupSeconds": 0, "initialWidthMultiplier": 1,
         "initialDamageMultiplier": 1, "damageStartProgress": 0}
     wire, entity = compile_ok(doc)
     assert entity["beamGeometry"] == {"lengthPx": 320, "widthPx": 8, "raycastTiles": True}
@@ -146,10 +146,10 @@ def test_free_beam_geometry_and_ramp_do_not_imply_channel_or_attachment():
 
 def test_mana_sustain_is_separate_from_beam_geometry():
     doc = base_document()
-    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["channel"] = True
-    add(doc, "set_projectile_owner_control", {"requireHeldItem": True, "requireChannel": True,
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "item_use")["params"]["channel"] = True
+    add(doc, "set_owner_control", {"requireHeldItem": True, "requireChannel": True,
         "requireItemAnimation": False, "claimHeldProjectile": False, "animation": "none", "lifetime": "keep_alive"})
-    add(doc, "sustain_projectile_mana", {})
+    add(doc, "sustain_mana", {})
     _, entity = compile_ok(doc)
     assert entity["manaSustain"] == {"cadence": "held_item_use_time"}
     assert "beamGeometry" not in entity
@@ -157,12 +157,12 @@ def test_mana_sustain_is_separate_from_beam_geometry():
 
 def test_active_lash_has_explicit_geometry_without_animation_bound_lifetime_or_tags():
     doc = base_document()
-    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "set_projectile_collision")["params"]["tileCollide"] = False
-    add(doc, "set_projectile_aim", {"source": "initial", "turnOwner": False})
-    add(doc, "set_projectile_lash_geometry", {"clock": "active", "durationSeconds": 1,
-        "anchor": "owner_center", "reachBlocks": 8, "segments": 12,
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "projectile_collision")["params"]["tileCollide"] = False
+    add(doc, "set_aim", {"source": "initial", "turnOwner": False})
+    add(doc, "lash_geometry", {"clock": "active", "duration": 1,
+        "anchor": "owner_center", "reach": 8, "segments": 12,
         "sweepStartRadians": -1, "sweepEndRadians": 1, "bendRatio": 0.2,
-        "useOwnerGravity": False, "useOwnerWhipRangeMultiplier": False})
+        "useOwnerGravity": False, "useWhipRange": False})
     _, entity = compile_ok(doc)
     assert entity["lashGeometry"]["durationTicks"] == 60
     assert entity["lashGeometry"]["reachPx"] == 128
@@ -185,9 +185,9 @@ def test_fresh_schema_and_catalog_hide_compound_controllers_but_retain_wire_meta
 
 
 @pytest.mark.parametrize("fn,params", [
-    ("seek_projectile", {"target": "cursor", "maxSpeedBlocksPerSecond": 30, "velocityLerpPerUpdate": 0.5, "limitSpeedToDistance": True}),
-    ("orbit_projectile", {"anchor": "owner_center", "radiusBlocks": 4, "radiansPerSecond": 0, "phaseRadians": 0, "identityPhaseRadians": 0}),
-    ("accelerate_projectile_vertical", {"accelerationYBlocksPerSecondSquared": 1}),
+    ("seek", {"target": "cursor", "maxSpeed": 30, "lerpPerUpdate": 0.5, "limitSpeedToDistance": True}),
+    ("orbit", {"anchor": "owner_center", "radius": 4, "radiansPerSecond": 0, "anglePhase": 0, "identityAnglePhase": 0}),
+    ("accelerate_y", {"accelY": 1}),
 ])
 def test_new_trajectory_executes_without_retained_movement_slot(fn, params):
     doc = base_document()
@@ -199,7 +199,7 @@ def test_new_trajectory_executes_without_retained_movement_slot(fn, params):
 
 def test_nonspin_rotation_has_exact_zero_technical_lowering_without_authored_rate():
     doc = base_document()
-    add(doc, "set_projectile_rotation", {"mode": "velocity", "offsetRadians": 0})
+    add(doc, "rotate_sprite", {"mode": "velocity", "offsetRadians": 0})
     wire, entity = compile_ok(doc)
     assert entity["rotation"]["radiansPerUpdate"] == 0
     receipt = next(r for r in wire["runtimeContract"]["finalWireReceipts"] if r["finalPath"].endswith(".rotation.radiansPerUpdate"))
@@ -208,10 +208,10 @@ def test_nonspin_rotation_has_exact_zero_technical_lowering_without_authored_rat
 
 def test_phase_window_on_existing_turn_modifier_keeps_original_delay_duration():
     doc = base_document()
-    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["channel"] = True
-    add(doc, "accumulate_projectile_charge", {"durationSeconds": 1})
-    add(doc, "set_projectile_turn_modifier", {"turnRadiansPerSecond": 3, "startDelaySeconds": 0.2,
-        "durationSeconds": 1, "window": window("released", "since_release")})
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "item_use")["params"]["channel"] = True
+    add(doc, "charge", {"duration": 1})
+    add(doc, "turn_velocity", {"turnRadiansPerSecond": 3, "startDelay": 0.2,
+        "duration": 1, "window": window("released", "since_release")})
     _, entity = compile_ok(doc)
     assert entity["turnModifier"]["startDelayTicks"] == 12
     assert entity["turnModifier"]["durationTicks"] == 60
@@ -231,7 +231,7 @@ def test_all_new_registry_witnesses_reach_real_compiler_and_stripped_wire():
 
 def test_oscillation_selected_law_owns_amplitude_units_and_discriminator():
     doc = base_document()
-    add(doc, "oscillate_projectile_velocity", {"frequencyRadiansPerSecond": 3, "phaseRadians": 0,
+    add(doc, "oscillate_velocity", {"angularFrequency": 3, "anglePhase": 0,
         "law": {"lateral_velocity_sine": {"amplitudeBlocksPerSecond": 30}}})
     _, entity = compile_ok(doc)
     assert entity["oscillation"] == {"law": "lateral_velocity_sine", "frequencyRadiansPerUpdate": 0.05,
@@ -241,10 +241,10 @@ def test_oscillation_selected_law_owns_amplitude_units_and_discriminator():
 
 def test_charge_latch_produces_release_event_without_compound_controller():
     from infini_local.core.runtime_authoring.wire_views import runtime_event_inventory
-    doc = build_capability_witness("spawn_entity_on_event")
-    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["channel"] = True
-    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "spawn_entity_on_event")["params"]["when"] = "on_release"
-    add(doc, "accumulate_projectile_charge", {"durationSeconds": 1})
+    doc = build_capability_witness("spawn_on_event")
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "item_use")["params"]["channel"] = True
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "spawn_on_event")["params"]["when"] = "on_release"
+    add(doc, "charge", {"duration": 1})
     report = validate_runtime_program(doc)
     assert report["ok"], report["errors"]
     # Read-only inventory uses actual persisted components, not a compilation
@@ -258,14 +258,14 @@ def test_charge_latch_produces_release_event_without_compound_controller():
 def test_charging_attachment_released_seek_and_existing_modifiers_compose_without_old_driver():
     doc = base_document()
     doc["runtimeProgram"]["calls"] = [c for c in doc["runtimeProgram"]["calls"] if c["fn"] != "move_straight"]
-    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["channel"] = True
-    add(doc, "accumulate_projectile_charge", {"durationSeconds": 1})
-    add(doc, "set_projectile_aim", {"source": "initial", "turnOwner": False})
-    add(doc, "attach_projectile", {"anchor": "owner_center", "axisOffsetBlocks": 0, "normalOffsetBlocks": 0,
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "item_use")["params"]["channel"] = True
+    add(doc, "charge", {"duration": 1})
+    add(doc, "set_aim", {"source": "initial", "turnOwner": False})
+    add(doc, "attach", {"anchor": "owner_center", "axisOffsetBlocks": 0, "normalOffsetBlocks": 0,
         "window": window("charging")})
-    add(doc, "seek_projectile", {"target": "cursor", "maxSpeedBlocksPerSecond": 30, "velocityLerpPerUpdate": 1,
+    add(doc, "seek", {"target": "cursor", "maxSpeed": 30, "lerpPerUpdate": 1,
         "limitSpeedToDistance": False, "window": window("released", "since_release")})
-    for fn in ("set_projectile_turn_modifier", "scale_projectile_velocity", "set_projectile_homing_modifier"):
+    for fn in ("turn_velocity", "scale_velocity", "homing"):
         witness = build_capability_witness(fn)
         params = next(c["params"] for c in witness["runtimeProgram"]["calls"] if c["fn"] == fn)
         add(doc, fn, dict(params, window=window("released", "since_release")))
@@ -277,12 +277,12 @@ def test_charging_attachment_released_seek_and_existing_modifiers_compose_withou
 
 def test_phase_only_window_has_no_invented_duration_and_partial_timing_is_red():
     doc = base_document()
-    add(doc, "set_projectile_return_trigger", {"afterSeconds": 1})
-    call = add(doc, "set_projectile_opacity", {"alpha": 10, "window": {"phase": "returning"}})
+    add(doc, "return_when", {"afterSeconds": 1})
+    call = add(doc, "set_opacity", {"transparencyByte": 10, "window": {"phase": "returning"}})
     wire, entity = compile_ok(doc)
     assert entity["opacity"]["window"] == {"phase": "returning"}
-    for partial in ({"clock": "active"}, {"startDelaySeconds": 0}, {"durationSeconds": 1},
-                    {"clock": "active", "durationSeconds": 1}, {"clock": None}):
+    for partial in ({"clock": "active"}, {"startDelay": 0}, {"duration": 1},
+                    {"clock": "active", "duration": 1}, {"clock": None}):
         call["params"]["window"] = {"phase": "returning", **partial}
         assert not validate_runtime_program(doc)["ok"]
     wire.pop("runtimeContract")
@@ -305,15 +305,15 @@ def test_provider_and_prompt_share_one_window_definition():
 
 def test_opacity_window_preserves_optional_absence_and_strict_nested_units():
     doc = base_document()
-    add(doc, "set_projectile_return_trigger", {"afterSeconds": 1})
-    add(doc, "set_projectile_opacity", {"alpha": 120, "window": {
-        "phase": "returning", "clock": "since_return", "startDelaySeconds": 0, "durationSeconds": 0.5}})
+    add(doc, "return_when", {"afterSeconds": 1})
+    add(doc, "set_opacity", {"transparencyByte": 120, "window": {
+        "phase": "returning", "clock": "since_return", "startDelay": 0, "duration": 0.5}})
     _, entity = compile_ok(doc)
     assert entity["opacity"]["window"] == {
         "phase": "returning", "clock": "since_return", "startDelayTicks": 0, "durationTicks": 30}
-    for value in (None, {}, {"phase": "returning", "clock": "active", "startDelaySeconds": False, "durationSeconds": 1},
-                  {"phase": "returning", "clock": "active", "startDelaySeconds": 0, "durationSeconds": 0},
-                  {"phase": "returning", "clock": "active", "startDelaySeconds": 0, "durationSeconds": 1, "oops": 0}):
+    for value in (None, {}, {"phase": "returning", "clock": "active", "startDelay": False, "duration": 1},
+                  {"phase": "returning", "clock": "active", "startDelay": 0, "duration": 0},
+                  {"phase": "returning", "clock": "active", "startDelay": 0, "duration": 1, "oops": 0}):
         bad = deepcopy(doc)
         bad["runtimeProgram"]["calls"][-1]["params"]["window"] = value
         assert not validate_runtime_program(bad)["ok"]
@@ -321,22 +321,22 @@ def test_opacity_window_preserves_optional_absence_and_strict_nested_units():
 
 def test_opacity_alone_has_no_wobble_or_movement_obligation():
     doc = base_document()
-    add(doc, "set_projectile_opacity", {"alpha": 0})
+    add(doc, "set_opacity", {"transparencyByte": 0})
     wire, entity = compile_ok(doc)
     assert entity["opacity"] == {"alpha": 0}
     assert "oscillation" not in entity
-    assert any(r.get("fn") == "set_projectile_opacity" and r["finalPath"].endswith(".opacity.alpha")
+    assert any(r.get("fn") == "set_opacity" and r["finalPath"].endswith(".opacity.alpha")
                and r["value"] == 0 for r in wire["runtimeContract"]["finalWireReceipts"])
 
 
 _PACKAGED = [
-    ("set_projectile_beam_geometry", "ramp", "set_projectile_beam_ramp", "beamRamp", {"warmupSeconds": 0}),
-    ("attach_projectile", "reachCurve", "set_projectile_reach_curve", "reach", {
-        "durationSeconds": 1, "startOffsetBlocks": -1, "peakOffsetBlocks": 4,
+    ("beam_geometry", "ramp", "set_projectile_beam_ramp", "beamRamp", {"warmupSeconds": 0}),
+    ("attach", "reachCurve", "set_projectile_reach_curve", "reach", {
+        "duration": 1, "startOffsetBlocks": -1, "peakOffsetBlocks": 4,
         "endOffsetBlocks": 2, "peakProgress": 0.2,
-        "window": {"phase": "always", "clock": "active", "startDelaySeconds": 0.5, "durationSeconds": 1}}),
-    ("accumulate_projectile_charge", "releaseEffect", "apply_projectile_charge_release", "chargeRelease", {
-        "launchSpeedBlocksPerSecond": 30}),
+        "window": {"phase": "always", "clock": "active", "startDelay": 0.5, "duration": 1}}),
+    ("charge", "releaseEffect", "apply_projectile_charge_release", "chargeRelease", {
+        "launchSpeed": 30}),
 ]
 
 
@@ -403,8 +403,8 @@ def test_nested_property_rejects_null_empty_and_unknown(parent, property, retire
 
 
 def test_nested_reach_window_requires_real_release_producer():
-    doc = build_capability_witness("attach_projectile")
-    attach = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "attach_projectile")
+    doc = build_capability_witness("attach")
+    attach = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "attach")
     attach["params"]["reachCurve"] = deepcopy(_PACKAGED[1][4])
     attach["params"]["reachCurve"]["window"] = {"phase": "released"}
     errors = validate_runtime_program(doc)["errors"]

@@ -99,7 +99,7 @@ def report() -> dict[str, Any]:
     check("canonical_parent_use_and_ammo_names", "CanonicalItemUseStyleToken" in vocabulary and "CanonicalAmmoCategoryToken" in vocabulary and all(x in generator_client for x in ('["useStyleName"] = TerrariaRuntimeVocabulary.CanonicalItemUseStyleToken', '["ammoCategoryName"] = TerrariaRuntimeVocabulary.CanonicalAmmoCategoryToken', '["potion"] = item.potion', '["notAmmo"] = item.notAmmo')), "parent facts must carry exact canonical tModLoader names and independent potion/notAmmo flags")
     check("single_equipped_input", "passive" not in INPUT_KINDS and INPUT_KINDS == ("primary_use", "alternate_use", "hold", "equipped"), "Author API must expose one canonical equipped input")
 
-    ammo = CAPABILITY_REGISTRY.get("configure_vanilla_ammo_item")
+    ammo = CAPABILITY_REGISTRY.get("ammo_item")
     check(
         "consumption_is_binding_scoped",
         "configure_consumption" not in CAPABILITY_REGISTRY
@@ -107,10 +107,10 @@ def report() -> dict[str, Any]:
         and "public int StackCost { get; set; }" in dto,
         "stack cost must have one owner in binding.usePolicy and no capability/global shadow owner",
     )
-    check("ammo_item_is_explicit", ammo is not None and tuple(ammo.params) == ("ammoCategory", "projectileId", "shootSpeedContributionBlocksPerSecond", "notAmmo"), "ammo item capability must author Item.ammo, Item.shoot and Item.notAmmo")
+    check("ammo_item_is_explicit", ammo is not None and tuple(ammo.params) == ("ammoCategory", "projectileId", "speedBonus", "notAmmo"), "ammo item capability must author Item.ammo, Item.shoot and Item.notAmmo")
     check("ammo_item_consumption_independent", bool(ammo and not any(r.capability == "configure_consumption" for r in ammo.requirements)), "ammo stack handling must remain independent from direct-use input costs")
     check("ammo_projection_direct", "item.ammo = TerrariaRuntimeVocabulary.ResolveAmmoCategory" in apply and "item.shoot = Gameplay.AmmoProjectileId" in apply and "item.shootSpeed = Gameplay.AmmoShootSpeedPxPerTick" in apply and "item.notAmmo = Gameplay.NotAmmo" in apply, "ammo fields must project directly without category-derived projectile or runtime-entity speed leakage")
-    check("ammo_shoot_speed_range_parity", ammo is not None and ammo.params["shootSpeedContributionBlocksPerSecond"].wire_schema()["minimum"] == -20 and ammo.params["shootSpeedContributionBlocksPerSecond"].wire_schema()["maximum"] == 80 and "Gameplay.AmmoShootSpeedPxPerTick = ClampFloat(Gameplay.AmmoShootSpeedPxPerTick, -20f, 80f);" in normalize, "human-unit ammo contribution must project to the unchanged Item.shootSpeed wire range at the C# boundary")
+    check("ammo_shoot_speed_range_parity", ammo is not None and ammo.params["speedBonus"].wire_schema()["minimum"] == -20 and ammo.params["speedBonus"].wire_schema()["maximum"] == 80 and "Gameplay.AmmoShootSpeedPxPerTick = ClampFloat(Gameplay.AmmoShootSpeedPxPerTick, -20f, 80f);" in normalize, "human-unit ammo contribution must project to the unchanged Item.shootSpeed wire range at the C# boundary")
     check("vanilla_projectile_id_guard", "Gameplay.AmmoProjectileId >= ProjectileID.Count" in normalize and VANILLA_PROJECTILE_TYPE_ID_MAX == 1021, "vanilla ammo projectile must be authored in stable 1..1021 and validated against ProjectileID.Count")
     check("no_plural_gameplay_ammo_alias", '"arrows"' not in apply + vocabulary and '"bullets"' not in apply + vocabulary, "plural ammo aliases are not canonical gameplay tokens")
     restore = CAPABILITY_REGISTRY.get("restore_resources_on_use")
@@ -119,20 +119,20 @@ def report() -> dict[str, Any]:
     check("loaded_rarity_guard", "RarityLoader.RarityCount" in normalize and "ClampInt(Gameplay.Rarity" not in normalize, "rarity must be an actually loaded ID, not silently clamped")
     check("loaded_buff_guards", "BuffLoader.BuffCount" in normalize and "BuffLoader.BuffCount" in dto and "extra buff row cannot be null" in normalize and "requires positive duration" in normalize and "buff.BuffCode > 0" in generated_item, "buff IDs and durations must fail closed against the loaded content registry")
     check("loaded_tile_wall_guards", "TileLoader.TileCount" in dto and "WallLoader.WallCount" in dto and "ClampInt(Gameplay.CreateTile" not in normalize and "ClampInt(Gameplay.CreateWall" not in normalize, "tile/wall IDs must be validated against loaded tModLoader content")
-    tool = CAPABILITY_REGISTRY.get("configure_tool")
-    stats = CAPABILITY_REGISTRY.get("configure_item_stats")
-    axe = tool.params.get("axePowerTooltipPercent") if tool else None
+    tool = CAPABILITY_REGISTRY.get("tool_stats")
+    stats = CAPABILITY_REGISTRY.get("item_stats")
+    axe = tool.params.get("axePower") if tool else None
     check("axe_tooltip_percent_parity", bool(
-        tool and axe and "axePower" not in tool.params
+        tool and axe and "axePowerTooltipPercent" not in tool.params
         and axe.minimum == 0 and axe.maximum == 500 and axe.multiple_of == 5
         and axe.wire_name == "axePower" and axe.wire_divisor == 5
         and axe.to_wire(45) == 9
         and "Gameplay.AxePower = ClampInt(Gameplay.AxePower, 0, 100);" in normalize
     ), "Author axe tooltip percent must map exactly in steps of five to bounded Item.axe units")
-    buff = CAPABILITY_REGISTRY.get("apply_generated_buff_on_use")
-    regen = buff.params.get("lifeRegenHpPerSecond") if buff else None
+    buff = CAPABILITY_REGISTRY.get("generated_buff_on_use")
+    regen = buff.params.get("lifeRegen") if buff else None
     check("generated_buff_regen_half_hp_parity", bool(
-        buff and regen and "lifeRegen" not in buff.params
+        buff and regen and "lifeRegenHpPerSecond" not in buff.params
         and regen.minimum == -50 and regen.maximum == 60 and regen.multiple_of == 0.5
         and regen.wire_name == "lifeRegen" and regen.wire_multiplier == 2
         and regen.to_wire(-50) == -100 and regen.to_wire(-0.5) == -1
@@ -147,7 +147,7 @@ def report() -> dict[str, Any]:
         value and value.wire_name == "value" and value.units == "copper" and value_identity
     ), "valueCopper must preserve copper amounts in gameplay.value")
 
-    collision = CAPABILITY_REGISTRY.get("set_projectile_collision")
+    collision = CAPABILITY_REGISTRY.get("projectile_collision")
     expected_collision = ("tileCollide", "ignoreWater", "bounceCount", "bounceSpeedRetention", "pierce", "updatesPerTick", "immunity")
     check("explicit_projectile_collision", collision is not None and tuple(collision.params) == expected_collision, "projectile liquid and immunity semantics must be explicit")
     check("vanilla_projectile_defaults", "Projectile.ignoreWater = false;" in projectile and "Projectile.netImportant = false;" in projectile, "proxy SetDefaults must retain Terraria defaults until authored entity configuration")

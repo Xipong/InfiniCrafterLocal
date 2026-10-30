@@ -135,7 +135,7 @@ def test_wire_cross_row_identity_constraints(wire, mutation, path, code):
 
 
 def _wire():
-    data = compile_runtime_program(build_capability_witness("apply_generated_buff_on_use"))
+    data = compile_runtime_program(build_capability_witness("generated_buff_on_use"))
     data.pop("runtimeContract")
     data["gameplay"]["generatedBuff"]["emitLightStrength"] = 0.25
     return data
@@ -220,24 +220,24 @@ def test_generated_buff_fields_cannot_hide_or_forge_executable_effect(field, val
             ("miningSpeedMultiplier", 1.5, "miningSpeedMultiplier", 1.5),
             ("lightStrength", 0.25, "emitLightStrength", 0.25),
             ("oreSenseEnabled", True, "oreSenseRadiusTiles", 1),
-            ("moveSpeedBonusPercent", 20, "movementSpeed", 0.2),
-            ("jumpSpeedBonusBlocksPerSecond", 60 / 16, "jumpBoost", 1),
-            ("manaRegenBonusPoints", 1, "manaRegen", 1),
-            ("lifeRegenHpPerSecond", 0.5, "lifeRegen", 1),
-            ("moveSpeedBonusPercent", -25, "movementSpeed", -0.25),
+            ("moveSpeedBonus", 20, "movementSpeed", 0.2),
+            ("jumpSpeedBonus", 60 / 16, "jumpBoost", 1),
+            ("manaRegen", 1, "manaRegen", 1),
+            ("lifeRegen", 0.5, "lifeRegen", 1),
+            ("moveSpeedBonus", -25, "movementSpeed", -0.25),
         )
     ],
 )
 def test_single_buff_effect_is_not_inert_and_sparse_wire_is_exact(effect, value, wire_key, wire_value):
-    source = build_capability_witness("apply_generated_buff_on_use")
-    params = next(c["params"] for c in source["runtimeProgram"]["calls"] if c["fn"] == "apply_generated_buff_on_use")
+    source = build_capability_witness("generated_buff_on_use")
+    params = next(c["params"] for c in source["runtimeProgram"]["calls"] if c["fn"] == "generated_buff_on_use")
     neutrals = {
         "miningSpeedMultiplier": 1,
         "oreSenseEnabled": False,
-        "moveSpeedBonusPercent": 0,
-        "jumpSpeedBonusBlocksPerSecond": 0,
-        "manaRegenBonusPoints": 0,
-        "lifeRegenHpPerSecond": 0,
+        "moveSpeedBonus": 0,
+        "jumpSpeedBonus": 0,
+        "manaRegen": 0,
+        "lifeRegen": 0,
     }
     params.update(neutrals, lightStrength=0, lightColor="white")
     assert any(e["code"] == "inert_component" for e in validate_runtime_program(source)["errors"])
@@ -397,7 +397,7 @@ def test_present_malformed_buff_object_is_not_hidden_by_healing(bad):
     ],
 )
 def test_malformed_rows_have_original_index_in_direct_and_wire_audits(bad):
-    source = build_capability_witness("configure_item_stats")
+    source = build_capability_witness("item_stats")
     wire = compile_runtime_program(source)
     rows = wire["runtimeContract"]["finalWireReceipts"]
     index = len(rows)
@@ -425,11 +425,11 @@ def test_malformed_rows_have_original_index_in_direct_and_wire_audits(bad):
     pytest.param("authoredPaths", "not_an_index", True, id="sources-text"),
 ])
 def test_malformed_path_indices_are_indexed_violations(field, bad_index, with_source):
-    source = build_capability_witness("configure_item_stats")
+    source = build_capability_witness("item_stats")
     wire = compile_runtime_program(source)
     rows = wire["runtimeContract"]["finalWireReceipts"]
     if field == "authoredPath":
-        bad = deepcopy(next(row for row in rows if row.get("fn") == "configure_item_stats"))
+        bad = deepcopy(next(row for row in rows if row.get("fn") == "item_stats"))
         bad[field] = re.sub(r"\[\d+\]", f"[{bad_index}]", bad[field], count=1)
     else:
         bad = deepcopy(rows[0])

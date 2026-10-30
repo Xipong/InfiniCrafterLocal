@@ -14,6 +14,8 @@ from infini_local.core.item_identity_tools import (
     generated_data_of,
     item_field,
 )
+from infini_local.pipelines.native_attack_behavior_view import project_attack_behavior
+from infini_local.pipelines.native_attack_tables import pack_attack_tables
 from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_AMMO_ITEM_KEYS,
     LLM_INCLUDE_AISTYLE_RAW,
@@ -185,8 +187,13 @@ def compact_projectile_profile(proj: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(proj, dict) or not proj:
         return {}
     out = _select_raw_keys(proj, LLM_PROJECTILE_RAW_KEYS)
+    # Behavior is model context; certificates/instruction offsets remain in the
+    # authoritative raw dump. No connected mechanic or branch is truncated.
+    if isinstance(proj.get("attackReference"), dict):
+        source = project_attack_behavior(proj["attackReference"])
+        out["attackReference"] = pack_attack_tables(source)
     # The native producer owns verification and scope. Never infer a trajectory
-    # from names/aiStyle or compact/clip this optional read-only observation.
+    # from names/aiStyle or clip this optional read-only observation.
     if isinstance(proj.get("motionReference"), dict):
         out["motionReference"] = copy.deepcopy(proj["motionReference"])
     # Exact native producer certificate and its limitations travel together.

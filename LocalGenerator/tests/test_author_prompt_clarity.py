@@ -8,8 +8,8 @@ from infini_local.pipelines import llm_authoring_pipeline as author
 
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
 @pytest.mark.parametrize('fn,leaf,bad_value', [
-    ('configure_item_stats', 'damage', True),
-    ('set_projectile_lifetime', 'lifetimeSeconds', 0),
+    ('item_stats', 'damage', True),
+    ('projectile_lifetime', 'lifetimeSeconds', 0),
     ('move_straight', None, 'missing_entity'),
 ])
 def test_actual_repair_call_guide_has_only_the_scoped_canonical_forms(monkeypatch, mode, fn, leaf, bad_value):
@@ -83,17 +83,17 @@ def test_future_economy_guidance_does_not_thaw_valid_existing_effects_in_repair(
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.capability_witnesses import build_capability_witness
 
-    source = build_capability_witness('apply_generated_buff_on_use')
+    source = build_capability_witness('generated_buff_on_use')
     original = deepcopy(source)
-    stats = next(c for c in source['runtimeProgram']['calls'] if c['fn'] == 'configure_item_stats')
+    stats = next(c for c in source['runtimeProgram']['calls'] if c['fn'] == 'item_stats')
     stats['params']['damage'] = True
     dossier = author.build_gameplay_repair_dossier(source, {}, {}, failure_report=validate_runtime_program(source))
     scope = dossier['repairScope']
     assert scope['fieldPermissions']['calls'] == [{'id': stats['id'], 'paths': ['params.damage']}]
     repaired_stats = deepcopy(stats)
-    repaired_stats['params']['damage'] = next(c for c in original['runtimeProgram']['calls'] if c['fn'] == 'configure_item_stats')['params']['damage']
-    effects = deepcopy(next(c for c in source['runtimeProgram']['calls'] if c['fn'] == 'apply_generated_buff_on_use'))
-    effects['params']['durationSeconds'] = (1) / 60
+    repaired_stats['params']['damage'] = next(c for c in original['runtimeProgram']['calls'] if c['fn'] == 'item_stats')['params']['damage']
+    effects = deepcopy(next(c for c in source['runtimeProgram']['calls'] if c['fn'] == 'generated_buff_on_use'))
+    effects['params']['duration'] = (1) / 60
     filtered, audit = filter_repair_patch_scope(source, {'callsUpsert': [repaired_stats, effects], 'note': 'Only actual invalid leaf'}, scope)
     assert audit['ok'] and audit['ignoredChanges']
     result = apply_repair_patch(source, filtered)

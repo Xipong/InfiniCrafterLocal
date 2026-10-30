@@ -10,15 +10,15 @@ from infini_local.core.runtime_authoring.wire_validator import validate_runtime_
 
 def absolute_body(lash=False, window=None):
     doc = base_document()
-    add(doc, "set_projectile_aim", {"source": "initial"})
+    add(doc, "set_aim", {"source": "initial"})
     if lash:
-        add(doc, "set_projectile_lash_geometry", {"clock": "active", "durationSeconds": 1,
-            "anchor": "owner_center", "reachBlocks": 8, "segments": 12,
+        add(doc, "lash_geometry", {"clock": "active", "duration": 1,
+            "anchor": "owner_center", "reach": 8, "segments": 12,
             "sweepStartRadians": -1, "sweepEndRadians": 1, "bendRatio": 0.2,
-            "useOwnerGravity": False, "useOwnerWhipRangeMultiplier": False})
+            "useOwnerGravity": False, "useWhipRange": False})
     else:
-        add(doc, "attach_projectile", {"anchor": "owner_center", **({"window": window} if window is not None else {})})
-    collision = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "set_projectile_collision")
+        add(doc, "attach", {"anchor": "owner_center", **({"window": window} if window is not None else {})})
+    collision = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "projectile_collision")
     collision["params"]["tileCollide"] = True
     return doc, collision
 
@@ -37,7 +37,7 @@ def test_always_absolute_position_refuses_unexecuted_tile_policy(lash, window):
 
 
 def test_finite_attachment_keeps_explicit_tile_policy_for_free_flight():
-    doc, _ = absolute_body(window={"phase": "always", "clock": "active", "startDelaySeconds": 0, "durationSeconds": 1})
+    doc, _ = absolute_body(window={"phase": "always", "clock": "active", "startDelay": 0, "duration": 1})
     assert validate_runtime_program(doc)["ok"]
 
 

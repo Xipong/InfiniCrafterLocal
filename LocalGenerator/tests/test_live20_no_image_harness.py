@@ -26,7 +26,7 @@ from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 def test_campaign_placed_body_uses_authenticated_qa_root_png(tmp_path):
     authored = build_runtime_fixture("fishing_platform_tool")
     authored["runtimeProgram"]["calls"].append({
-        "id": "placed_body", "fn": "present_placed_item_sprite", "target": "item",
+        "id": "placed_body", "fn": "placed_sprite", "target": "item",
         "params": {"placementCallId": "platform_result", "renderSizePx": 32,
                    "footprintAnchorX": 0.5, "footprintAnchorY": 1,
                    "pivotSpace": "alpha_bounds", "imagePivotX": 0.5, "imagePivotY": 1,

@@ -55,7 +55,7 @@ def test_native_crit_reaches_actual_author_message_unchanged(monkeypatch, mode, 
 @pytest.mark.parametrize("mode", ["json_schema", "json_object", "off"])
 def test_source_crit_is_not_confused_with_generated_equipment_bonus(monkeypatch, mode):
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
-    data = compile_runtime_program(build_capability_witness("configure_accessory"))
+    data = compile_runtime_program(build_capability_witness("accessory"))
     data["accessory"]["genericCrit"] = 17.0
     parent = {"name": "generated equipped bonus source", "crit": 0, "generatedData": data}
     before = copy.deepcopy(parent)

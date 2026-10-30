@@ -8,11 +8,11 @@ from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_R
 
 
 def test_targeting_spawn_example_matches_schema_without_admitting_retired_spelling():
-    schema = CAPABILITY_REGISTRY["configure_spawn"].provider_variant_schema()
+    schema = CAPABILITY_REGISTRY["spawn"].provider_variant_schema()
     call = {
-        "id": "child_spawn", "fn": "configure_spawn", "target": "child",
+        "id": "child_spawn", "fn": "spawn", "target": "child",
         "params": {
-            "velocity": {'constantSpeedBlocksPerSecond': (8) * 60 / 16}, "count": 1,
+            "velocity": {'speed': (8) * 60 / 16}, "count": 1,
             "spreadRadians": 0, 'offsetBlocks': (0) / 16, "aim": "velocity",
             "position": {"at": "activation_origin"},
         },

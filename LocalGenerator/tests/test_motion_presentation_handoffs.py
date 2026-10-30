@@ -67,9 +67,9 @@ def test_visual_and_frozen_repair_expose_components_and_true_hand_semantics(wire
     body["reach"] = {"durationTicks": 12, "startOffsetPx": -2.0, "peakOffsetPx": 35.5,
                      "endOffsetPx": 6.0, "peakProgress": 0.7, "window": {"phase": "charging"}}
     body["seek"] = [
-        {"target": "cursor", "maxSpeed": 7.0, "velocityLerpPerUpdate": 0.2, "limitSpeedToDistance": False,
+        {"target": "cursor", "maxSpeed": 7.0, "lerpPerUpdate": 0.2, "limitSpeedToDistance": False,
          "window": {"phase": "outbound", "clock": "since_release", "startDelayTicks": 2, "durationTicks": 40}},
-        {"target": "owner_center", "maxSpeed": 13.0, "velocityLerpPerUpdate": 1.0, "limitSpeedToDistance": True,
+        {"target": "owner_center", "maxSpeed": 13.0, "lerpPerUpdate": 1.0, "limitSpeedToDistance": True,
          "window": {"phase": "returning"}},
     ]
     raw["item"].pop("grip")
@@ -113,7 +113,7 @@ def test_visual_and_frozen_repair_expose_components_and_true_hand_semantics(wire
     ("beam", "beamGeometry", {"lengthPx": 127.5, "widthPx": 6.25, "raycastTiles": False}),
     ("whip", "lashGeometry", {"clock": "active", "durationTicks": 35, "anchor": "owner_mounted",
                               "reachPx": 96.5, "segments": 9, "sweepStartRadians": -0.5, "sweepEndRadians": 0.7,
-                              "bendRatio": 0.25, "useOwnerGravity": False, "useOwnerWhipRangeMultiplier": False}),
+                              "bendRatio": 0.25, "useOwnerGravity": False, "useWhipRange": False}),
 ])
 def test_vfx_and_frozen_repair_use_independent_collision_geometry(wire_transport, monkeypatch, format_name, geometry, component, expected):
     from infini_local.core import vfx_manifest as vfx
@@ -222,7 +222,7 @@ def test_source_units_preserve_explicit_sine_law_without_inferring_it(law, expec
     oscillator = {"amplitude": 0.125, **({"law": law} if law is not None else {})}
     source = {"raw": {"generatedParent": {"runtimeProgram": {"entities": [{"oscillation": oscillator}]}}}}
     before = copy.deepcopy(source)
-    rows = [row for row in source_wire_units_for_llm([source])["scopes"] if row["fn"] == "oscillate_projectile_velocity"]
+    rows = [row for row in source_wire_units_for_llm([source])["scopes"] if row["fn"] == "oscillate_velocity"]
     if expected is not None:
         assert len(rows) == 1
         assert rows[0]["when"] == {"law": law}
@@ -243,8 +243,8 @@ def test_author_usability_reports_only_current_catalog_choices():
     # a read-only presentation replay, not fresh admission of retired calls.
     ({"movement": {"name": "move_front_hand", "code": 20, "params": {"aimMode": "initial", "durationTicks": 2,
         "startStretch": "none", "peakStretch": "none", "hitboxOffsetPx": 0.1}}}, None, True),
-    ({"movement": {"name": "move_whip_lash", "code": 18, "params": {"rangeTiles": 2.0, "segments": 3}}}, "whip", False),
-    ({"controller": {"name": "channel_beam", "code": 1, "params": {"rangeTiles": 1.0, "widthPx": 2.0,
+    ({"movement": {"name": "move_whip_lash", "code": 18, "params": {"range": 2.0, "segments": 3}}}, "whip", False),
+    ({"controller": {"name": "channel_beam", "code": 1, "params": {"range": 1.0, "widthPx": 2.0,
         "warmupTicks": 1, "manaPayment": "initial_use_only", "initialDamageMultiplier": 1.0,
         "initialWidthMultiplier": 1.0, "damageStartProgress": 1.0, "raycastTiles": False}}}, "beam", False),
 ])

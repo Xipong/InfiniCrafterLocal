@@ -20,13 +20,13 @@ from repair_test_helpers import gameplay_repair as _offline_gameplay_repair, ass
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("fn,leaf,old,new,hostile,frozen_leaf,frozen_value", [
-    pytest.param("configure_item_stats", "damage", True, 1, {"manaCost": 10}, "useStyle", "swing", id="true-to-integer-one"),
-    pytest.param("configure_item_stats", "damage", False, 0, {"manaCost": 10}, "useStyle", "swing", id="false-to-integer-zero"),
-    pytest.param("configure_item_stats", "damage", 1.0, 1, {"manaCost": 10}, "useStyle", "swing", id="float-to-integer"),
-    pytest.param("configure_item_use", "autoReuse", 1, True, {"useTurn": False}, "knockback", 3, id="integer-to-boolean"),
+    pytest.param("item_stats", "damage", True, 1, {"manaCost": 10}, "useStyle", "swing", id="true-to-integer-one"),
+    pytest.param("item_stats", "damage", False, 0, {"manaCost": 10}, "useStyle", "swing", id="false-to-integer-zero"),
+    pytest.param("item_stats", "damage", 1.0, 1, {"manaCost": 10}, "useStyle", "swing", id="float-to-integer"),
+    pytest.param("item_use", "autoReuse", 1, True, {"useTurn": False}, "knockback", 3, id="integer-to-boolean"),
 ])
 def test_gameplay_type_only_repair_survives_real_caller(monkeypatch, format_mode, fn, leaf, old, new, hostile, frozen_leaf, frozen_value):
-    doc = build_capability_witness("configure_item_use")
+    doc = build_capability_witness("item_use")
     call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
     call["params"][leaf] = old
     before = json.dumps(doc, sort_keys=True)
@@ -51,8 +51,8 @@ def test_gameplay_type_only_repair_survives_real_caller(monkeypatch, format_mode
 
 @pytest.mark.parametrize("fn,selector,value", [
     pytest.param("pull_on_event", "when", {"everySeconds": 0.2}, id="periodic"),
-    pytest.param("require_use_condition", "condition", {"lifeAtLeast": 100}, id="life-threshold"),
-    pytest.param("require_use_condition", "condition", {"manaAtLeast": 100}, id="mana-threshold"),
+    pytest.param("use_condition", "condition", {"lifeAtLeast": 100}, id="life-threshold"),
+    pytest.param("use_condition", "condition", {"manaAtLeast": 100}, id="mana-threshold"),
 ])
 def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monkeypatch, fn, selector, value):
     doc = build_capability_witness(fn)
@@ -68,8 +68,8 @@ def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monke
     next(row for row in expected["runtimeProgram"]["calls"] if row["id"] == call["id"])["params"][selector] = copy.deepcopy(value)
     assert_delivery(expected)
     if selector == "when":
-        candidate["params"].update(impulseBlocksPerSecond=15, radiusTiles=60)
-    stats = copy.deepcopy(next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats"))
+        candidate["params"].update(impulseBlocksPerSecond=15, radius=60)
+    stats = copy.deepcopy(next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "item_stats"))
     stats["params"]["damage"] = 1999
     repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
         "note": "model-selected complete conditional alternative", "realizationReplacement": doc["realization"],
@@ -85,15 +85,15 @@ def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monke
 @pytest.mark.parametrize("fn,initial,chosen,hostile,fix_stats,paths,refuse", [
     pytest.param("pull_on_event", {"when": {}}, {"when": {"everySeconds": 0.2}}, {"impulseBlocksPerSecond": 15}, False,
                  ['params.when.everySeconds'], False, id="periodic-already-selected"),
-    pytest.param("pull_on_event", {"when": "on_use"}, {"when": "on_expire"}, {"impulseBlocksPerSecond": 15, "delaySeconds": 0.2},
+    pytest.param("pull_on_event", {"when": "on_use"}, {"when": "on_expire"}, {"impulseBlocksPerSecond": 15, "delay": 0.2},
                  False, ["params.when"], False, id="nonconditional-event"),
-    pytest.param("require_use_condition", {"condition": "invalid"}, {"condition": "grounded"}, {}, False,
+    pytest.param("use_condition", {"condition": "invalid"}, {"condition": "grounded"}, {}, False,
                  ["params.condition"], False, id="nonconditional-mode"),
-    pytest.param("require_use_condition", {"condition": {"lifeAtLeast": 50}}, {"condition": {"manaAtLeast": 100}}, {},
+    pytest.param("use_condition", {"condition": {"lifeAtLeast": 50}}, {"condition": {"manaAtLeast": 100}}, {},
                  True, ["params.damage"], False, id="existing-threshold-frozen"),
-    pytest.param("require_use_condition", {"condition": "grounded"}, {"condition": {"manaAtLeast": 100}}, {},
+    pytest.param("use_condition", {"condition": "grounded"}, {"condition": {"manaAtLeast": 100}}, {},
                  True, ["params.damage"], False, id="unrelated-selector-frozen"),
-    pytest.param("require_use_condition", {"condition": "invalid"}, {"condition": {}}, {}, False,
+    pytest.param("use_condition", {"condition": "invalid"}, {"condition": {}}, {}, False,
                  ["params.condition"], True, id="missing-explicit-dependency"),
 ])
 def test_gameplay_conditional_dependency_keeps_frozen_controls(
@@ -107,7 +107,7 @@ def test_gameplay_conditional_dependency_keeps_frozen_controls(
         call["params"].update(initial)
     else:
         call["params"] = {"input": "primary_use", **copy.deepcopy(initial)}
-    stats = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
+    stats = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "item_stats")
     if fix_stats:
         stats["params"]["damage"] = True
     before = json.dumps(doc, sort_keys=True)
@@ -139,7 +139,7 @@ def test_gameplay_conditional_missing_permissions_follow_registry_owner(monkeypa
     import infini_local.core.runtime_authoring.technical_lowering as technical_lowering
     from infini_local.core.runtime_authoring.capability_registry import ParamSpec
 
-    fn = "require_use_condition" if owner == "item-condition" else "pull_on_event"
+    fn = "use_condition" if owner == "item-condition" else "pull_on_event"
     root, old_leaf, new_leaf, literal = (("condition", "lifeAtLeast", "customLife", {"useConditionMode": "life_above"})
                                        if owner == "item-condition" else
                                        ("when", "everySeconds", "customInterval", {"event": "periodic"}))
@@ -211,7 +211,7 @@ def test_malformed_row_owns_only_its_original_index(namespace, position):
 
 @pytest.mark.parametrize("malformed", [None, False, "broken", {}, {"params": {"damage": 999}}])
 def test_sparse_patch_preserves_every_original_occurrence(malformed):
-    doc = build_capability_witness("configure_item_stats")
+    doc = build_capability_witness("item_stats")
     rows = doc["runtimeProgram"]["calls"]
     rows.insert(0, copy.deepcopy(malformed))
     rows.append(copy.deepcopy(malformed))
@@ -254,15 +254,15 @@ def test_duplicate_occurrences_require_exact_index_deletion(namespace):
 
 
 @pytest.mark.parametrize("fn,param", [
-    ("apply_generated_buff_on_use", "miningSpeedMultiplier"),
-    ("apply_generated_buff_on_use", "manaRegenBonusPoints"),
-    ("configure_tile_placement", "tileId"),
-    ("configure_accessory", "lightStrength"),
+    ("generated_buff_on_use", "miningSpeedMultiplier"),
+    ("generated_buff_on_use", "manaRegen"),
+    ("place_tile", "tileId"),
+    ("accessory", "lightStrength"),
 ])
 @pytest.mark.parametrize("value", [10**400, 65536], ids=["huge-json-integer", "bounded-range-error"])
 def test_large_json_numbers_keep_exact_shape_repair(fn, param, value):
     good = build_capability_witness(fn)
-    if fn == "configure_accessory":
+    if fn == "accessory":
         next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == fn)["params"].update(lightStrength=0, lightColor="white")
     doc = copy.deepcopy(good)
     node = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
@@ -289,9 +289,9 @@ def test_large_json_numbers_keep_exact_shape_repair(fn, param, value):
 @pytest.mark.parametrize("companion_fn,chosen_heal", [
     pytest.param(None, "healLife", id="empty-life-correction"),
     pytest.param(None, "healMana", id="empty-mana-correction"),
-    pytest.param("apply_vanilla_buff_on_use", "healLife", id="neutral-with-vanilla-buff"),
-    pytest.param("apply_generated_buff_on_use", "healLife", id="neutral-with-generated-buff"),
-    pytest.param("move_player_on_use", "healLife", id="neutral-with-mobility"),
+    pytest.param("native_buff_on_use", "healLife", id="neutral-with-vanilla-buff"),
+    pytest.param("generated_buff_on_use", "healLife", id="neutral-with-generated-buff"),
+    pytest.param("blink_on_use", "healLife", id="neutral-with-mobility"),
 ])
 def test_empty_healing_lane_exposes_only_causal_effect_leaves(companion_fn, chosen_heal):
     doc = build_capability_witness("restore_resources_on_use")
@@ -320,7 +320,7 @@ def test_empty_healing_lane_exposes_only_causal_effect_leaves(companion_fn, chos
     assert not scope["fieldPermissions"]["bindings"]
     candidate = copy.deepcopy(healing)
     candidate["params"].update({chosen_heal: 20, "usesPotionRules": True})
-    stats = copy.deepcopy(next(row for row in calls if row["fn"] == "configure_item_stats"))
+    stats = copy.deepcopy(next(row for row in calls if row["fn"] == "item_stats"))
     stats["params"]["damage"] = 100
     filtered, audit = filter_repair_patch_scope(doc, {"note": "choose one explicit healing effect", "realizationReplacement": doc["realization"], "callsUpsert": [candidate, stats]}, scope)
     assert audit["ok"] and audit["ignoredChanges"], audit
@@ -338,9 +338,9 @@ def test_empty_healing_lane_exposes_only_causal_effect_leaves(companion_fn, chos
     "action-missing", "action-unknown", "input-missing",
 ])
 def test_gameplay_exact_leaf_repair(case):
-    fn = ("configure_tile_placement" if case.startswith("placement") else
-          "apply_generated_buff_on_use" if case.startswith("buff") else
-          "configure_accessory" if case.startswith("accessory") else "configure_item_stats")
+    fn = ("place_tile" if case.startswith("placement") else
+          "generated_buff_on_use" if case.startswith("buff") else
+          "accessory" if case.startswith("accessory") else "item_stats")
     doc = build_runtime_fixture("workbench_blade") if case.startswith(("action", "input")) else build_capability_witness(fn)
     section = "bindings" if case.startswith(("placement", "action", "input")) else "calls"
     rows = doc["runtimeProgram"][section]
@@ -378,11 +378,11 @@ def test_gameplay_exact_leaf_repair(case):
                     node["params"].pop(name, None)
                 else:
                     node["params"][name] = spec.neutral
-        node["params"].update(durationSeconds=(60) / 60, lightColor="blue")
+        node["params"].update(duration=(60) / 60, lightColor="blue")
         good = copy.deepcopy(node)
         good["params"]["oreSenseEnabled"] = True
         candidate = copy.deepcopy(node)
-        candidate["params"].update(oreSenseEnabled=True, durationSeconds=(21600) / 60, lightColor="red")
+        candidate["params"].update(oreSenseEnabled=True, duration=(21600) / 60, lightColor="red")
         paths = None
     else:
         node["params"] = {}
@@ -400,7 +400,7 @@ def test_gameplay_exact_leaf_repair(case):
     if paths is not None:
         assert scope["fieldPermissions"][section] == [{"id": node["id"], "paths": paths}]
     if case.startswith("buff"):
-        assert not {'params.durationSeconds', "params.lightColor"}.intersection(permissions)
+        assert not {'params.duration', "params.lightColor"}.intersection(permissions)
     patch = {"note": "repair diagnosed leaves", "realizationReplacement": copy.deepcopy(doc["realization"]), section + "Upsert": [candidate]}
     patch_before = json.dumps(patch)
     filtered, audit = filter_repair_patch_scope(doc, patch, scope)
@@ -436,8 +436,8 @@ def test_gameplay_exact_leaf_repair(case):
 def test_gameplay_patch_admission(edits, damage, structure_ok, accepted):
     from repair_test_helpers import edit_fields
 
-    doc = build_capability_witness("configure_item_stats")
-    node = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
+    doc = build_capability_witness("item_stats")
+    node = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "item_stats")
     node["params"]["damage"] = -1
     candidate = copy.deepcopy(node) if edits is not None else None
     if candidate is not None:
@@ -454,11 +454,11 @@ def test_gameplay_patch_admission(edits, damage, structure_ok, accepted):
 
 
 def test_gameplay_inert_call_deletion():
-    doc = build_capability_witness("configure_accessory")
-    armor = copy.deepcopy(next(row for row in build_capability_witness("configure_armor")["runtimeProgram"]["calls"] if row["fn"] == "configure_armor"))
+    doc = build_capability_witness("accessory")
+    armor = copy.deepcopy(next(row for row in build_capability_witness("armor")["runtimeProgram"]["calls"] if row["fn"] == "armor"))
     armor["id"] = "remaining_armor"
     doc["runtimeProgram"]["calls"].append(armor)
-    node = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_accessory")
+    node = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "accessory")
     node["params"] = {}
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
     assert node["id"] in scope["deletable"]["callIds"]
@@ -494,7 +494,7 @@ def test_collision_missing_parameters_keep_authored_branch(foreign_fn):
     candidate["params"].update(node["params"], pierce=4)
     upserts = [candidate]
     if foreign_fn:
-        foreign = next(row for row in build_runtime_fixture("equipment_tool_combat")["runtimeProgram"]["calls"] if row["fn"] == "configure_accessory")
+        foreign = next(row for row in build_runtime_fixture("equipment_tool_combat")["runtimeProgram"]["calls"] if row["fn"] == "accessory")
         foreign.update(id=node["id"])
         upserts.append(foreign)
     patch = {"note": "complete collision", "callsUpsert": upserts,
@@ -591,7 +591,7 @@ def test_oneof_exact_diagnostic_selection(branches, value, diagnostics):
     assert strict_schema_errors(value, {"oneOf": branches}) == expected
 
 
-@pytest.mark.parametrize("fn", ["configure_item_stats", "configure_item_use"])
+@pytest.mark.parametrize("fn", ["item_stats", "item_use"])
 def test_explicit_item_target_is_accepted_and_preserved_by_real_repair(monkeypatch, fn):
     doc = build_capability_witness(fn)
     node = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
@@ -599,7 +599,7 @@ def test_explicit_item_target_is_accepted_and_preserved_by_real_repair(monkeypat
     assert validate_runtime_program(doc)["ok"], "A correct redundant target must not require Format Repair"
     expected = copy.deepcopy(doc)
     candidate = copy.deepcopy(node)
-    leaf = "damage" if fn == "configure_item_stats" else "useStyle"
+    leaf = "damage" if fn == "item_stats" else "useStyle"
     node["params"][leaf] = -1 if leaf == "damage" else "not_a_style"
     before = copy.deepcopy(doc)
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
@@ -616,8 +616,8 @@ def test_explicit_item_target_is_accepted_and_preserved_by_real_repair(monkeypat
 
 @pytest.mark.parametrize("nested", [False, True], ids=["call-literal-key", "param-literal-key"])
 def test_gameplay_literal_member_deletion_is_exact(nested):
-    doc = build_capability_witness("configure_item_stats")
-    node = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
+    doc = build_capability_witness("item_stats")
+    node = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "item_stats")
     candidate = copy.deepcopy(node)
     candidate["params"]["damage"] += 1
     key = "damage.fake" if nested else "params.damage"
@@ -686,7 +686,7 @@ def test_sparse_binding_missing_input_survives_real_repair(
 def test_missing_binding_input_noop_never_infers_equipment_input(monkeypatch):
     from infini_local.core.errors import PlannerUnavailable
 
-    doc = build_capability_witness("configure_accessory")
+    doc = build_capability_witness("accessory")
     doc["runtimeProgram"]["bindings"][0].pop("input")
     before = copy.deepcopy(doc)
     with pytest.raises(PlannerUnavailable):
@@ -700,7 +700,7 @@ def test_missing_binding_input_noop_never_infers_equipment_input(monkeypatch):
 
 
 def test_missing_binding_input_and_unknown_action_have_independent_exact_scope(monkeypatch):
-    doc = build_capability_witness("configure_accessory")
+    doc = build_capability_witness("accessory")
     binding = doc["runtimeProgram"]["bindings"][0]
     binding["action"] = {"kind": "equip_passive", "targetId": "item"}
     expected = copy.deepcopy(doc)

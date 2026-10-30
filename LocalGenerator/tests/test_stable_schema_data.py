@@ -93,8 +93,8 @@ def test_actual_senders_cache_grammar_instructions_and_preserve_author(monkeypat
 @pytest.mark.parametrize("fixture,stage,mode", [
     pytest.param("door_on_chain", "visual", "json_schema", id="visual-door"),
     pytest.param("returning_potion", "visual_repair", "json_object", id="visual-repair-potion"),
-    pytest.param("set_projectile_beam_geometry", "vfx", "json_object", id="vfx-beam"),
-    pytest.param("set_projectile_lash_geometry", "vfx_repair", "json_schema", id="vfx-repair-whip"),
+    pytest.param("beam_geometry", "vfx", "json_object", id="vfx-beam"),
+    pytest.param("lash_geometry", "vfx_repair", "json_schema", id="vfx-repair-whip"),
 ])
 def test_static_definitions_remain_case_independent_across_runtime_domains(monkeypatch, fixture, stage, mode):
     from vfx_material_fixtures import _data
@@ -102,7 +102,7 @@ def test_static_definitions_remain_case_independent_across_runtime_domains(monke
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     ordinary, = stage_packets(monkeypatch, stage, format_mode=mode, labels=("novel-a",))
-    if fixture in {"set_projectile_beam_geometry", "set_projectile_lash_geometry"}:
+    if fixture in {"beam_geometry", "lash_geometry"}:
         data = _data(fixture)
     else:
         data = compile_runtime_program(build_runtime_fixture(fixture))

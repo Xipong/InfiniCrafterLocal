@@ -12,6 +12,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
     compact_capability_catalog,
+    author_parameter_shape,
 )
 from infini_local.core.runtime_authoring.capability_registry import (
     runtime_authoring_prompt_field_guide,
@@ -27,9 +28,10 @@ from infini_local.pipelines.author_item_contract import (
     primary_entity_llm_invariant,
 )
 from infini_local.pipelines.combine_balance import stat_profile_for
+from infini_local.pipelines.parent_stat_view import parent_stat_context
 
 from infini_local.pipelines.parent_context_cards import (
-    NATIVE_SOURCE_REFERENCE_RULE, raw_parent_card_for_llm, share_exact_native_parent_facts,
+    NATIVE_SOURCE_REFERENCE_RULE, raw_parent_card_for_llm, parent_context_for_stage,
 )
 from infini_local.core.item_identity_tools import item_field
 from infini_local.pipelines.pipeline_runtime_constants import LLM_ITEM_RAW_KEYS
@@ -38,7 +40,7 @@ from infini_local.pipelines.pipeline_runtime_constants import LLM_ITEM_RAW_KEYS
 # Engineering character guard, not a model token limit: complete compact JSON
 # dossiers include parent-local source effects and source-derived ammo variants.
 # Preserve literal tooltips, accepted graphs and capabilities; never clip to fit.
-PLANNER_PROMPT_LIMIT_CHARS = 225_000
+PLANNER_PROMPT_LIMIT_CHARS = 300_000
 PLANNER_PROMPT_MIN_HEADROOM_CHARS = 1_000
 COMBAT_EXECUTOR_RESULT_KIND_RULE = (
     "Do not choose a sword/bow/staff/sentry family. Choose explicit entities, input bindings, "
@@ -69,7 +71,7 @@ def source_interpretation_for_llm() -> dict[str, str]:
             "Ammo damage contributes to a compatible launcher, including when its projectile is replaced; "
             "ammo useTime does not set the launcher's cadence. Weapon-ammo configurations describe separate cases."
         ),
-        "inventoryPassives": "dropSeedsIfInInventory is the native inventory passive implemented by collect_seeds_from_grass.",
+        "inventoryPassives": "dropSeedsIfInInventory is the native inventory passive implemented by collect_seeds.",
     }
 
 
@@ -106,6 +108,12 @@ def source_wire_units_for_llm(
     units. Boolean projections are excluded; alternative paths explain units, not original Author choices.
     """
     scopes: dict[tuple[str, str, tuple[tuple[str, Any], ...]], dict[str, list[str]]] = {}
+    if parent_packets is not None:
+        # Match the stage-visible source representation. Native numeric facts
+        # already expressed as explicit value/unit objects need no wire math;
+        # accepted generated-parent wire remains unchanged by this projection.
+        parent_packets = [{**packet, "raw": parent_stat_context(dict(packet.get("raw") or {}))}
+                          for packet in parent_packets]
 
     def leaves(spec: Any, path: str, conditions: tuple[tuple[str, Any], ...] = ()):
         conditions = (*conditions, *spec.wire_literals.items())
@@ -118,10 +126,10 @@ def source_wire_units_for_llm(
         elif spec.kind in {"integer", "number"}:
             yield path, spec, conditions
 
-    def has_field(container: Mapping[str, Any], field_path: str) -> bool:
+    def has_field(container: Mapping[str, Any], field_path: str, *, numeric: bool = False) -> bool:
         parent, _, leaf = field_path.rpartition(".")
         owners = _source_path_objects(container, parent) if parent else [container]
-        return any(leaf in owner for owner in owners)
+        return any(leaf in owner and (not numeric or type(owner[leaf]) in {int, float}) for owner in owners)
 
     for capability in CAPABILITY_REGISTRY.values():
         numeric = [leaf for name, parameter in capability.params.items() for leaf in leaves(parameter, name)]
@@ -175,7 +183,7 @@ def source_wire_units_for_llm(
                     _source_path_objects(row, path.rsplit(".", 1)[0]) if "." in path else [row]))
                 for path, expected in condition)]
             fields = {name: reading for name, reading in fields.items()
-                      if any(has_field(row, name) for row in containers)}
+                      if any(has_field(row, name, numeric=source == "raw.item") for row in containers)}
         if fields:
             scope_rows.append({"source": source, "fn": fn, **({"when": dict(condition)} if condition else {}), "fields": fields})
     return {
@@ -194,7 +202,7 @@ def descendant_spawn_budget_for_llm() -> str:
     """Shared execution meaning, not a required concurrency design."""
     return (
         "Projectile descendants share 32 successful child spawns over an activation's lifetime; child death does not refund them. "
-        "Failed/cancelled reservations are refunded. set_descendant_concurrency instead uses pending/live slots released at retirement; "
+        "Failed/cancelled reservations are refunded. descendant_limit instead uses pending/live slots released at retirement; "
         "nested pools retain ancestor pools and lifetime ledgers. Item-body periodic uses a per-dispatch budget."
     )
 
@@ -247,6 +255,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     # Registry cards retain their canonical fields; only missing execution facts
     # are attached to the relevant presentation card.
     field_guide = runtime_authoring_prompt_field_guide()
+    field_guide["types"] = {name: author_parameter_shape(schema) for name, schema in field_guide["types"].items()}
     field_guide["descendantSpawnBudget"] = descendant_spawn_budget_for_llm()
     field_guide["sourceInterpretation"] = source_interpretation_for_llm()
     field_guide["statusEffects"] = AUTHOR_STATUS_COMPOSITION_RULE
@@ -265,7 +274,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     }
     field_guide["itemUseStyle"] = {
         "builtInTokens": list(ITEM_USE_STYLE_TOKENS), "meaningByToken": dict(ITEM_USE_STYLE_MEANINGS),
-        "scope": "configure_item_use.useStyle selects held-item/player-arm animation during active use. Select input bindings and executable effects separately.",
+        "scope": "item_use.useStyle selects held-item/player-arm animation during active use. Select input bindings and executable effects separately.",
     }
     entities = [row.prompt_card() for row in ENTITY_KIND_REGISTRY.values()]
     for entity in entities:
@@ -295,11 +304,11 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     field_guide["rowShapes"] = RUNTIME_ROW_SHAPE_RULE
     field_guide["consumerConstraints"] = _share_consumer_constraints(capabilities)
     field_guide["consumerConstraintReadingRule"] = (
-        "consumerConstraint/projectionConstraints and nested x-infini-consumerConstraint/x-infini-authorProjection "
-        "refer to fieldGuide.consumerConstraints."
+        "At every parameter depth, consumerConstraint/projectionConstraints string values refer to "
+        "fieldGuide.consumerConstraints; object values are literal rules."
     )
     for card in capabilities:
-        if card["fn"] == "configure_item_stats":
+        if card["fn"] == "item_stats":
             card["constructionMeaning"] = "Combining placement with reusable spawn_entity/use_item_body (stackCost=0) requires maxStack=1."
     return {
         "apiVersion": RUNTIME_PROGRAM_API_VERSION,
@@ -338,7 +347,7 @@ def runtime_program_invariants_for_llm() -> dict[str, Any]:
     return {
         "ids": "Entity, binding and call ids are globally unique and match catalog.fieldGuide.stableIdPattern.",
         "primaryEntityOwnership": primary_entity_llm_invariant(),
-        "graphAndSpawnBudget": "Event references form an acyclic graph. From binding spawn roots, child depth <= 3; each event spawn count <= 12, and the static sum of spawn_entity_on_event counts <= 32. For item-body on_use, count shared/both/other events plus the larger of primary-only and alternate-only subtotals. Runtime lifetime/concurrency accounting is explained in catalog.fieldGuide.descendantSpawnBudget.",
+        "graphAndSpawnBudget": "Event references form an acyclic graph. From binding spawn roots, child depth <= 3; each event spawn count <= 12, and the static sum of spawn_on_event counts <= 32. For item-body on_use, count shared/both/other events plus the larger of primary-only and alternate-only subtotals. Runtime lifetime/concurrency accounting is explained in catalog.fieldGuide.descendantSpawnBudget.",
     }
 
 def realization_execution_truth_for_llm() -> dict[str, str]:
@@ -347,11 +356,11 @@ def realization_execution_truth_for_llm() -> dict[str, str]:
         "statusEffects": AUTHOR_STATUS_COMPOSITION_RULE,
         "authority": "Optional realization.description, realization.playerExperience and realization.selfEvaluation are advisory context, never executable facts or required reports. Account for the chosen inputs, entities, subscribed events and terminal paths; report only behaviors supported by that exact topology, including their conditions and limits. A newly invented mechanic needs executable support, not parent precedent.",
         "placementUse": "The placement binding action performs the authored placement transaction and does not emit item_body.on_use; contactDamage must be false. If the result must both attack/use its body and place, author those as separate supported inputs. Never describe them as simultaneous on one placement binding.",
-        "terminationEvents": "on_expire fires on natural lifetime expiry or explicit set_projectile_proximity_action action=expire_then_kill; an earlier kill does not emit it. on_kill fires on projectile termination, including collision death, penetration exhaustion, natural expiry and explicit kill actions such as arrival. A return trigger alone does not kill or seek. Only attached actions execute; termination does not imply an explosion. on_hit needs actual collision, not proximity alone; on_tile_collision means each collision. Area damage excludes the direct NPC only for on_hit/on_crit; on_kill has no remembered direct target.",
-        "entityTopology": "Stationary kind alone does not fire. Explicit periodic spawn_entity_on_event can shoot a referenced entity; target_and_fire separately provides NPC acquisition and timed shooting. An admitted free_projectile spawn creates independent projectiles; configure_spawn.count is a batch count, not a live-copy cap. A hold binding does not spawn again while a matching entity remains alive. Do not claim a singleton minion/companion, minion-slot behavior or a per-owner cap unless explicitly authored.",
+        "terminationEvents": "on_expire fires on natural lifetime expiry or explicit proximity_action action=expire_then_kill; an earlier kill does not emit it. on_kill fires on projectile termination, including collision death, penetration exhaustion, natural expiry and explicit kill actions such as arrival. A return trigger alone does not kill or seek. Only attached actions execute; termination does not imply an explosion. on_hit needs actual collision, not proximity alone; on_tile_collision means each collision. Area damage excludes the direct NPC only for on_hit/on_crit; on_kill has no remembered direct target.",
+        "entityTopology": "Stationary kind alone does not fire. Explicit periodic spawn_on_event can shoot a referenced entity; target_and_fire separately provides NPC acquisition and timed shooting. An admitted free_projectile spawn creates independent projectiles; spawn.count is a batch count, not a live-copy cap. A hold binding does not spawn again while a matching entity remains alive. Do not claim a singleton minion/companion, minion-slot behavior or a per-owner cap unless explicitly authored.",
         "activeEquipment": "equipped is passive only. Any raised/used/placed/heal action requires a primary_use or alternate_use binding and must be described as requiring the item to be actively used rather than merely worn.",
         "stackCost": "For a non-placement active use, stackCost=1 consumes one whole generated item. There is no hidden charge counter; do not call whole-item consumption a charge unless an explicit supported state mechanic exists.",
-        "durablePlacedForm": "When a hybrid has a reusable spawn_entity/use_item_body active use (stackCost=0), configure_item_stats.maxStack must be 1: one durable unit switches between inventory and escrowed placed form. A one-shot non-placement use (stackCost=1) is not subject to this particular maxStack rule; choose its stack size deliberately.",
+        "durablePlacedForm": "When a hybrid has a reusable spawn_entity/use_item_body active use (stackCost=0), item_stats.maxStack must be 1: one durable unit switches between inventory and escrowed placed form. A one-shot non-placement use (stackCost=1) is not subject to this particular maxStack rule; choose its stack size deliberately.",
         "placementEscrow": "For a successful placement binding, the committed generated item is held by the world-persistent placement ledger and returned as that same generated item when the placed tile is destroyed. Describe it as placed/recoverable, not permanently consumed; it remains unavailable while placed.",
         "selfEvaluation": "Optional advisory self-check for the model's own use. No checklist, verdict, cited-id coverage or report replacement is required. Prose and self-evaluation never establish execution, reject gameplay or trigger Repair.",
     }
@@ -372,11 +381,10 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], key: str) -> 
         # but this preserves a large exact request prefix without hiding or
         # removing any Author capability.
         "recipeKey": key,
-        "parents": parents,
+        **parent_context_for_stage(parents, stage="author"),
         "balanceCorridor": corridor,
         "sourceWireUnits": source_wire_units_for_llm([row["packet"] for row in parents.values()]),
     }
-    payload.update(share_exact_native_parent_facts(parents))
     chars = len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
     if chars > PLANNER_PROMPT_LIMIT_CHARS:
         raise ValueError(

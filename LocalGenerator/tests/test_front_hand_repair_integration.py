@@ -19,14 +19,14 @@ def _call(doc, fn):
 @pytest.mark.parametrize("source", ["initial", "cursor", "facing", "velocity"])
 def test_missing_axis_repair_creates_only_exact_dependency_not_retired_bundle(source):
     doc, pose = fixture()
-    axis = _call(doc, "set_projectile_aim")
+    axis = _call(doc, "set_aim")
     doc["runtimeProgram"]["calls"].remove(axis)
     before = deepcopy(doc)
     report = validate_runtime_program(doc)
     assert {r["code"] for r in report["errors"]} == {"missing_capability_dependency"}
     scope = build_runtime_repair_scope(doc, report["errors"])
     assert scope["fieldPermissions"] == {"entities": [], "bindings": [], "calls": []}
-    assert scope["create"]["calls"]["allowedFns"] == ["set_projectile_aim"]
+    assert scope["create"]["calls"]["allowedFns"] == ["set_aim"]
     assert scope["create"]["calls"]["allowedTargetIds"] == [pose["target"]]
     empty, audit = filter_repair_patch_scope(doc, {"note": "no design selected"}, scope)
     assert not audit["ok"] and apply_repair_patch(doc, empty) == doc
@@ -53,7 +53,7 @@ def test_invalid_axis_serialized_repair_offers_exact_choices_and_freezes_sibling
     from test_low_level_three_stage_pipeline import _empty_gameplay_patch
 
     doc, pose = fixture()
-    axis = _call(doc, "set_projectile_aim")
+    axis = _call(doc, "set_aim")
     axis["params"]["source"] = "none"
     before = deepcopy(doc)
     report = validate_runtime_program(doc)
@@ -70,19 +70,19 @@ def test_invalid_axis_serialized_repair_offers_exact_choices_and_freezes_sibling
     hostile_axis["params"].update(source=selected_axis, turnOwner=True)
     hostile_pose = deepcopy(pose)
     hostile_pose["params"]["peakProgress"] = .8
-    hostile_attachment = deepcopy(_call(doc, "attach_projectile"))
+    hostile_attachment = deepcopy(_call(doc, "attach"))
     hostile_attachment["params"]["axisOffsetBlocks"] = 100
-    hostile_spawn = deepcopy(_call(doc, "configure_spawn"))
-    hostile_spawn["params"].update(aim="facing", count=2, velocity={"constantSpeedBlocksPerSecond": 0})
+    hostile_spawn = deepcopy(_call(doc, "spawn"))
+    hostile_spawn["params"].update(aim="facing", count=2, velocity={"speed": 0})
     patch = {**_empty_gameplay_patch(), "callsUpsert": [hostile_axis, hostile_pose, hostile_attachment, hostile_spawn],
              "realizationReplacement": deepcopy(doc["realization"])}
     repaired, request = repair_with_response(monkeypatch, doc, patch, mode, out_of_scope_response=True)
     packet = request_dossier(request)
     assert packet["repairScope"]["fieldPermissions"] == scope["fieldPermissions"]
-    card = next(c for c in packet["existingBrokenCapabilityCards"] if c["fn"] == "set_projectile_aim")
+    card = next(c for c in packet["existingBrokenCapabilityCards"] if c["fn"] == "set_aim")
     assert card["params"]["source"]["enum"] == ["initial", "cursor", "facing", "velocity"]
     expected = deepcopy(doc)
-    _call(expected, "set_projectile_aim")["params"]["source"] = selected_axis
+    _call(expected, "set_aim")["params"]["source"] = selected_axis
     assert repaired["runtimeProgram"] == expected["runtimeProgram"]
     assert repaired["name"] == expected["name"] and repaired["category"] == expected["category"]
     wire = compile_runtime_program(repaired)
@@ -98,11 +98,11 @@ def test_invalid_axis_serialized_repair_offers_exact_choices_and_freezes_sibling
 def test_reordered_invalid_axis_repair_tracks_exact_call_not_other_entity():
     from test_composable_motion_primitives import add
     doc, _ = fixture()
-    axis = _call(doc, "set_projectile_aim")
+    axis = _call(doc, "set_aim")
     axis["params"]["source"] = "none"
     doc["runtimeProgram"]["calls"].reverse()
     doc["runtimeProgram"]["entities"].append({"id": "other_entity", "kind": "free_projectile"})
-    unrelated = add(doc, "set_projectile_aim", {"source": "cursor"}, "other_axis")
+    unrelated = add(doc, "set_aim", {"source": "cursor"}, "other_axis")
     unrelated["target"] = "other_entity"
     report = validate_runtime_program(doc)
     scope = build_runtime_repair_scope(doc, report["errors"])
@@ -114,7 +114,7 @@ def test_reordered_invalid_axis_repair_tracks_exact_call_not_other_entity():
 @pytest.mark.parametrize("fn", ["move_front_hand", "move_forward_then_retract", "charge_then_release"])
 def test_retired_bundle_is_never_a_repair_creation_choice(fn):
     doc, _ = fixture()
-    axis = _call(doc, "set_projectile_aim")
+    axis = _call(doc, "set_aim")
     doc["runtimeProgram"]["calls"].remove(axis)
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
     assert fn not in scope["create"]["calls"]["allowedFns"]
@@ -128,21 +128,21 @@ def test_retired_bundle_is_never_a_repair_creation_choice(fn):
 def test_candidate_frozen_pose_dependency_uses_typed_hand_pose_semantics(hand_pose, viable):
     from infini_local.core.runtime_authoring.repair_scope import _candidate_capability_viable
     doc, pose = fixture()
-    _call(doc, "configure_item_use")["params"]["handPose"] = hand_pose
+    _call(doc, "item_use")["params"]["handPose"] = hand_pose
     assert validate_runtime_program(doc)["ok"] is viable
     doc["runtimeProgram"]["calls"].remove(pose)
-    assert _candidate_capability_viable("set_front_arm_pose", [pose["target"]], doc["runtimeProgram"]) is viable
+    assert _candidate_capability_viable("front_arm_pose", [pose["target"]], doc["runtimeProgram"]) is viable
 
 
 def test_pose_axis_requirement_cannot_consume_support_from_another_exact_entity():
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
     from infini_local.core.runtime_authoring.validator import _validate_requirement
     doc, pose = fixture()
-    axis = _call(doc, "set_projectile_aim")
+    axis = _call(doc, "set_aim")
     axis["target"] = "other_entity"
     calls = doc["runtimeProgram"]["calls"]
-    cap = CAPABILITY_REGISTRY["set_front_arm_pose"]
-    requirement = next(r for r in cap.requirements if r.capability == "set_projectile_aim")
+    cap = CAPABILITY_REGISTRY["front_arm_pose"]
+    requirement = next(r for r in cap.requirements if r.capability == "set_aim")
     issue = _validate_requirement(requirement, call=pose, call_index=calls.index(pose), cap=cap,
         item_id="item", calls_by_target={pose["target"]: [c for c in calls if c.get("target") == pose["target"]],
                                        "other_entity": [axis]},
@@ -150,7 +150,7 @@ def test_pose_axis_requirement_cannot_consume_support_from_another_exact_entity(
         primary_entity_id=pose["target"], calls=calls)
     assert issue is not None and issue.code == "missing_capability_dependency"
     assert issue.path == f"$.runtimeProgram.calls[{calls.index(pose)}]"
-    assert issue.allowed == ("set_projectile_aim",)
+    assert issue.allowed == ("set_aim",)
 
 
 def test_frozen_wrong_primary_pose_target_does_not_offer_owner_reselection():
@@ -166,7 +166,7 @@ def test_frozen_wrong_primary_pose_target_does_not_offer_owner_reselection():
 def test_bad_attachment_offset_repair_changes_only_exact_leaf_not_other_motion_choices():
     good, _ = fixture(axisOffsetBlocks=0)
     doc = deepcopy(good)
-    attachment = _call(doc, "attach_projectile")
+    attachment = _call(doc, "attach")
     attachment["params"]["axisOffsetBlocks"] = None
     before = deepcopy(doc)
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
@@ -186,9 +186,9 @@ def test_bad_attachment_offset_repair_changes_only_exact_leaf_not_other_motion_c
 
 def test_competing_item_pose_repair_thaws_only_exact_item_leaf():
     good, _ = fixture()
-    _call(good, "configure_item_use")["params"]["handPose"] = ""
+    _call(good, "item_use")["params"]["handPose"] = ""
     doc = deepcopy(good)
-    use = _call(doc, "configure_item_use")
+    use = _call(doc, "item_use")
     use["params"]["handPose"] = "one_handed"
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
     assert scope["fieldPermissions"] == {"entities": [], "bindings": [],
@@ -202,13 +202,13 @@ def test_competing_item_pose_repair_thaws_only_exact_item_leaf():
     assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
 
 
-@pytest.mark.parametrize("expected", [{"constantSpeedBlocksPerSecond": 0}, [0, {"nested": [False, None, "literal"]}]])
+@pytest.mark.parametrize("expected", [{"speed": 0}, [0, {"nested": [False, None, "literal"]}]])
 def test_emitted_json_container_descriptor_keeps_exact_type(expected):
     from infini_local.core.runtime_authoring.repair_scope import _capability_constraints
     encoded = json.dumps(expected, separators=(",", ":"))
-    names, constraints = _capability_constraints(["configure_spawn.velocity=" + encoded])
-    assert names == {"configure_spawn"}
-    assert constraints == [{"capability": "configure_spawn", "param": "velocity", "equals": expected}]
+    names, constraints = _capability_constraints(["spawn.velocity=" + encoded])
+    assert names == {"spawn"}
+    assert constraints == [{"capability": "spawn", "param": "velocity", "equals": expected}]
     assert json.loads(json.dumps(constraints))[0]["equals"] == expected
 
 
@@ -220,7 +220,7 @@ def test_scalar_constraint_legacy_types_are_unchanged(raw, expected):
     assert type(actual) is type(expected) and actual == expected
 
 
-@pytest.mark.parametrize("raw", ['{"constantSpeedBlocksPerSecond":', '[0,]', '{"x":0,"x":1}', '[NaN]', '[1e999]'])
+@pytest.mark.parametrize("raw", ['{"speed":', '[0,]', '{"x":0,"x":1}', '[NaN]', '[1e999]'])
 def test_malformed_container_constraint_stays_literal_not_partial_json(raw):
     from infini_local.core.runtime_authoring.repair_scope import _decode_constraint_value
     assert _decode_constraint_value(raw) == raw
@@ -229,7 +229,7 @@ def test_malformed_container_constraint_stays_literal_not_partial_json(raw):
 @pytest.mark.parametrize("value", [False, None, "11", float("inf")])
 def test_bad_present_attachment_leaf_cannot_be_accepted_as_neutral_during_repair(value):
     doc, _ = fixture()
-    attachment = _call(doc, "attach_projectile")
+    attachment = _call(doc, "attach")
     attachment["params"]["axisOffsetBlocks"] = value
     before = deepcopy(doc)
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])

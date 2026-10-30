@@ -189,14 +189,14 @@ def _member_reads(data: bytes, bounds: tuple[int, int], root_name: bytes = b"a")
 
 
 def _declared(group: str) -> set[str]:
-    capability = CAPABILITY_REGISTRY[f"configure_{group}"]
+    capability = CAPABILITY_REGISTRY[group]
     direct = {wire[0].upper() + wire[1:]
               for name, spec in capability.params.items()
               for wire in spec.wire_field_names(name)}
     # Class selectors are Author params of a separate typed operation, but lower
     # into the current equipment DTO fields consumed by C#.
     prefix = group + "."
-    class_paths = CAPABILITY_REGISTRY["add_equipment_damage_bonus"].final_wire_paths
+    class_paths = CAPABILITY_REGISTRY["equipment_damage_bonus"].final_wire_paths
     return direct | {path[len(prefix):][0].upper() + path[len(prefix):][1:]
                      for path in class_paths if path.startswith(prefix)}
 
@@ -525,15 +525,15 @@ def item_gameplay_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
 
 
 def placed_body_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
-    return _placed_component_surface_audit("present_placed_item_sprite", "RuntimePlacedBodySpec", dto)
+    return _placed_component_surface_audit("placed_sprite", "RuntimePlacedBodySpec", dto)
 
 
 def placed_vfx_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
-    return _placed_component_surface_audit("enable_placed_vfx", "RuntimePlacedVfxSpec", dto)
+    return _placed_component_surface_audit("placed_vfx", "RuntimePlacedVfxSpec", dto)
 
 
 def placed_light_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
-    return _placed_component_surface_audit("add_placed_light", "RuntimePlacedLightSpec", dto)
+    return _placed_component_surface_audit("placed_light", "RuntimePlacedLightSpec", dto)
 
 
 def _placed_component_surface_audit(fn: str, class_name: str, dto: bytes | None) -> dict[str, Any]:
@@ -613,7 +613,7 @@ def item_effect_group_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
 def weapon_ammo_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     """Exact typed native-ammo choices, without an unregistered weapon profile."""
     dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/Contracts/RuntimeWeaponAmmoSpec.cs").read_bytes()
-    expected = {name[0].upper() + name[1:] for name in CAPABILITY_REGISTRY["configure_weapon_ammo"].params}
+    expected = {name[0].upper() + name[1:] for name in CAPABILITY_REGISTRY["weapon_ammo"].params}
     actual = _class_properties(dto, "RuntimeWeaponAmmoSpec")
     return {"ok": actual == expected, "unclassifiedDtoFields": sorted(actual - expected),
             "missingDtoFields": sorted(expected - actual)}
@@ -658,8 +658,8 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         "RuntimeBindingActionSpec": (pascal(actions) - {"PlacementCallId"}) | {"Placement"},
         "RuntimePlacementSpec": pascal(placement_fields),
         "RuntimePlacedBodySpec": pascal(wire._PLACED_BODY_KEYS),
-        "RuntimePlacedLightSpec": pascal(CAPABILITY_REGISTRY["add_placed_light"].params.keys() - {"placementCallId"}),
-        "RuntimePlacedVfxSpec": pascal(CAPABILITY_REGISTRY["enable_placed_vfx"].params.keys() - {"placementCallId"}),
+        "RuntimePlacedLightSpec": pascal(CAPABILITY_REGISTRY["placed_light"].params.keys() - {"placementCallId"}),
+        "RuntimePlacedVfxSpec": pascal(CAPABILITY_REGISTRY["placed_vfx"].params.keys() - {"placementCallId"}),
         "RuntimeEntitySpec": pascal(author.entity_schema()["properties"]) | pascal(entity_components)
                              | {"Visual", "VisualRole"},
         "RuntimeEntityVisualSpec": visual_contract | vfx_director_fields | visual_internal,
@@ -674,8 +674,8 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         "RuntimeBindingActionSpec": wire._BINDING_ACTION_KEYS,
         "RuntimePlacementSpec": wire._PLACEMENT_KEYS,
         "RuntimePlacedBodySpec": wire._PLACED_BODY_KEYS,
-        "RuntimePlacedLightSpec": CAPABILITY_REGISTRY["add_placed_light"].params.keys() - {"placementCallId"},
-        "RuntimePlacedVfxSpec": CAPABILITY_REGISTRY["enable_placed_vfx"].params.keys() - {"placementCallId"},
+        "RuntimePlacedLightSpec": CAPABILITY_REGISTRY["placed_light"].params.keys() - {"placementCallId"},
+        "RuntimePlacedVfxSpec": CAPABILITY_REGISTRY["placed_vfx"].params.keys() - {"placementCallId"},
         "RuntimeEntitySpec": wire._ENTITY_KEYS,
         "RuntimeEntityVisualSpec": wire._VISUAL_KEYS,
         "RuntimeMovementSpec": wire._DRIVER_KEYS,

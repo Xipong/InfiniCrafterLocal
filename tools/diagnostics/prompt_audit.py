@@ -335,9 +335,9 @@ def param_documentation(fn, name, param, guide, by_fn, path):
         shape = types.get(param["typeRef"])
         if isinstance(shape, dict) and isinstance(shape.get("description"), str):
             return shape["description"], pointer(pointer(pointer(path, "fieldGuide"), "types"), param["typeRef"]), "typeRef"
-    inheritance = "configure_armor params without meaning inherit exact meaning from configure_accessory params of the same name; all own bounds and units still apply."
-    if fn == "configure_armor" and guide.get("armorParamInheritance") == inheritance:
-        accessory, ap = by_fn.get("configure_accessory", ({}, ""))
+    inheritance = "armor params without meaning inherit exact meaning from accessory params of the same name; all own bounds and units still apply."
+    if fn == "armor" and guide.get("armorParamInheritance") == inheritance:
+        accessory, ap = by_fn.get("accessory", ({}, ""))
         params = accessory.get("params", {})
         inherited = params.get(name) if isinstance(params, dict) else None
         if isinstance(inherited, dict) and isinstance(inherited.get("meaning"), str):

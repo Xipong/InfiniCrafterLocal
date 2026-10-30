@@ -21,7 +21,7 @@
   },
   "runtimeProgram": {
     "apiVersion": "infini.runtime-program.v5",
-    "schema": "infini.runtime-program.authoring.v6",
+    "schema": "infini.runtime-program.authoring.v7",
     "primaryEntityId": "harpoon",
     "entities": [
       {
@@ -48,7 +48,7 @@
     "calls": [
       {
         "id": "item_stats",
-        "fn": "configure_item_stats",
+        "fn": "item_stats",
         "params": {
           "damageClass": "magic",
           "damage": 24,
@@ -67,7 +67,7 @@
       },
       {
         "id": "item_use",
-        "fn": "configure_item_use",
+        "fn": "item_use",
         "params": {
           "useStyle": "shoot",
           "autoReuse": false,
@@ -83,11 +83,11 @@
       },
       {
         "id": "base_configure_spawn",
-        "fn": "configure_spawn",
+        "fn": "spawn",
         "target": "harpoon",
         "params": {
           "velocity": {
-            "constantSpeedBlocksPerSecond": 0
+            "speed": 0
           },
           "count": 1,
           "spreadRadians": 0.0,
@@ -100,7 +100,7 @@
       },
       {
         "id": "base_set_projectile_damage",
-        "fn": "set_projectile_damage",
+        "fn": "projectile_damage",
         "target": "harpoon",
         "params": {
           "damageClass": "magic",
@@ -111,7 +111,7 @@
       },
       {
         "id": "base_set_projectile_lifetime",
-        "fn": "set_projectile_lifetime",
+        "fn": "projectile_lifetime",
         "target": "harpoon",
         "params": {
           "lifetimeSeconds": 4
@@ -119,7 +119,7 @@
       },
       {
         "id": "base_set_projectile_hitbox",
-        "fn": "set_projectile_hitbox",
+        "fn": "projectile_hitbox",
         "target": "harpoon",
         "params": {
           "widthPx": 16,
@@ -130,7 +130,7 @@
       },
       {
         "id": "base_set_projectile_collision",
-        "fn": "set_projectile_collision",
+        "fn": "projectile_collision",
         "target": "harpoon",
         "params": {
           "tileCollide": true,
@@ -145,7 +145,7 @@
       },
       {
         "id": "set_projectile_aim",
-        "fn": "set_projectile_aim",
+        "fn": "set_aim",
         "target": "harpoon",
         "params": {
           "source": "cursor",
@@ -154,7 +154,7 @@
       },
       {
         "id": "attach_projectile",
-        "fn": "attach_projectile",
+        "fn": "attach",
         "target": "harpoon",
         "params": {
           "anchor": "front_hand",
@@ -163,17 +163,17 @@
           "window": {
             "phase": "charging",
             "clock": "active",
-            "startDelaySeconds": 0,
-            "durationSeconds": 1
+            "startDelay": 0,
+            "duration": 1
           }
         }
       },
       {
         "id": "set_front_arm_pose",
-        "fn": "set_front_arm_pose",
+        "fn": "front_arm_pose",
         "target": "harpoon",
         "params": {
-          "durationSeconds": 0.5,
+          "duration": 0.5,
           "startStretch": "full",
           "peakStretch": "full",
           "endStretch": "full",
@@ -185,7 +185,7 @@
       },
       {
         "id": "set_projectile_owner_control",
-        "fn": "set_projectile_owner_control",
+        "fn": "set_owner_control",
         "target": "harpoon",
         "params": {
           "requireHeldItem": true,
@@ -194,7 +194,7 @@
       },
       {
         "id": "gate_projectile_contact",
-        "fn": "gate_projectile_contact",
+        "fn": "gate_contact",
         "target": "harpoon",
         "params": {
           "enabled": false,
@@ -205,23 +205,23 @@
       },
       {
         "id": "accumulate_projectile_charge",
-        "fn": "accumulate_projectile_charge",
+        "fn": "charge",
         "target": "harpoon",
         "params": {
-          "durationSeconds": 0.5,
-          "autoReleaseAfterActiveSeconds": 1,
+          "duration": 0.5,
+          "autoReleaseAge": 1,
           "releaseEffect": {
             "damageMultiplier": 2,
             "knockbackMultiplier": 1.5,
             "speedMultiplier": 1,
-            "launchSpeedBlocksPerSecond": 30,
+            "launchSpeed": 30,
             "pauseLifetimeWhileCharging": true
           }
         }
       },
       {
         "id": "set_projectile_rotation",
-        "fn": "set_projectile_rotation",
+        "fn": "rotate_sprite",
         "target": "harpoon",
         "params": {
           "mode": "velocity",
@@ -233,38 +233,38 @@
       },
       {
         "id": "set_projectile_return_trigger",
-        "fn": "set_projectile_return_trigger",
+        "fn": "return_when",
         "target": "harpoon",
         "params": {
           "afterSeconds": 1.2,
           "onTileCollision": true,
-          "disableTileCollisionOnReturn": true
+          "passTilesOnReturn": true
         }
       },
       {
         "id": "seek_projectile",
-        "fn": "seek_projectile",
+        "fn": "seek",
         "target": "harpoon",
         "params": {
           "target": "owner_mounted",
-          "maxSpeedBlocksPerSecond": 37.5,
-          "velocityLerpPerUpdate": 0.3,
+          "maxSpeed": 37.5,
+          "lerpPerUpdate": 0.3,
           "limitSpeedToDistance": true,
           "window": {
             "phase": "released",
             "clock": "since_return",
-            "startDelaySeconds": 0,
-            "durationSeconds": 3
+            "startDelay": 0,
+            "duration": 3
           }
         }
       },
       {
         "id": "set_projectile_arrival",
-        "fn": "set_projectile_arrival",
+        "fn": "kill_on_arrival",
         "target": "harpoon",
         "params": {
           "target": "owner_mounted",
-          "radiusBlocks": 1.25,
+          "radius": 1.25,
           "window": {
             "phase": "returning"
           }

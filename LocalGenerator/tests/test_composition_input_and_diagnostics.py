@@ -21,13 +21,13 @@ def test_inherited_damage_warning_does_not_change_or_reject_harmless_child():
     call = next(c for c in doc['runtimeProgram']['calls'] if c['fn'] == 'target_and_fire')
     call['params']['damageBasis'] = 'live_parent'
     child = call['params']['shotEntity']
-    doc['runtimeProgram']['calls'] = [c for c in doc['runtimeProgram']['calls'] if not (c.get('target') == child and c['fn'] == 'set_projectile_damage')]
+    doc['runtimeProgram']['calls'] = [c for c in doc['runtimeProgram']['calls'] if not (c.get('target') == child and c['fn'] == 'projectile_damage')]
     before = deepcopy(doc)
     report = validate_runtime_program(doc)
     assert report['ok'], report
     assert any(w['code'] == 'inherited_damage_disabled' for w in report['warnings'])
     assert doc == before
-    doc['runtimeProgram']['calls'].append({'id': 'enable_child_damage', 'target': child, 'fn': 'set_projectile_damage',
+    doc['runtimeProgram']['calls'].append({'id': 'enable_child_damage', 'target': child, 'fn': 'projectile_damage',
         'params': {'damage': 0, 'damageClass': 'generic', 'knockback': 0, 'ownerHitCheck': False}})
     assert not any(w['code'] == 'inherited_damage_disabled' for w in validate_runtime_program(doc)['warnings'])
 
@@ -40,10 +40,10 @@ def test_author_packet_exposes_input_and_three_buff_activation_alternatives(monk
     monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     _, user, _ = author.build_initial_author_request({}, {}, 'composition', model_name='offline')
     cards = json.loads(user)['runtimeCapabilityContract']['catalog']['capabilities']
-    buff = next(c for c in cards if c['fn'] == 'apply_generated_buff_on_use')
+    buff = next(c for c in cards if c['fn'] == 'generated_buff_on_use')
     text = json.dumps(buff)
-    assert 'refresh_generated_effect_group_while_held' in text and 'apply_generated_buff_on_event' in text
-    event = next(c for c in cards if c['fn'] == 'spawn_entity_on_event')
+    assert 'refresh_held_effect' in text and 'generated_buff_on_event' in text
+    event = next(c for c in cards if c['fn'] == 'spawn_on_event')
     assert 'useInput' in json.dumps(event) and 'both' in json.dumps(event)
 
 
@@ -61,7 +61,7 @@ def test_native_status_interoperability_and_frozen_repair_survive_registry_retir
     packet = request_dossier(sent, declaration=request)
     cards = packet['runtimeCapabilityContract']['catalog']['capabilities']
     assert 'statusIdentityChoices' not in packet['runtimeCapabilityContract']
-    for fn in ('apply_status_on_event', 'apply_vanilla_buff_on_use'):
+    for fn in ('apply_status_on_event', 'native_buff_on_use'):
         meaning = next(row for row in cards if row['fn'] == fn)['params']['buffId']['meaning']
         assert 'statusIdentityChoices' not in meaning
 
@@ -69,10 +69,10 @@ def test_native_status_interoperability_and_frozen_repair_survive_registry_retir
     item.pop('concept', None)
     item.pop('realization', None)
     status = next(c for c in item['runtimeProgram']['calls'] if c['fn'] == 'apply_status_on_event')
-    status['params'].update(buffId=20, durationSeconds=3.5)
+    status['params'].update(buffId=20, duration=3.5)
     item['runtimeProgram']['calls'].append({
         'id': 'explicit_defense_pressure', 'fn': 'apply_status_on_event', 'target': status['target'],
-        'params': {'when': 'on_crit', 'buffId': 69, 'durationSeconds': 1.5},
+        'params': {'when': 'on_crit', 'buffId': 69, 'duration': 1.5},
     })
     requests = []
 
@@ -104,7 +104,7 @@ def test_native_status_interoperability_and_frozen_repair_survive_registry_retir
 
     broken = deepcopy(item)
     broken_status = next(c for c in broken['runtimeProgram']['calls'] if c['id'] == status['id'])
-    broken_status['params']['durationSeconds'] = 0
+    broken_status['params']['duration'] = 0
     assert not validate_runtime_program(broken)['ok']
     with pytest.raises(ValueError):
         compile_runtime_program(broken)
@@ -121,7 +121,7 @@ def test_native_status_interoperability_and_frozen_repair_survive_registry_retir
     assert 'status effects' in dossier['runtimeExecutionTruth'].get('statusEffects', '')
     assert dossier['runtimeExecutionTruth']['statusEffects'] == packet['runtimeCapabilityContract']['catalog']['fieldGuide']['statusEffects']
     assert dossier['repairScope']['fieldPermissions']['calls'] == [
-        {'id': status['id'], 'paths': ['params.durationSeconds']}]
+        {'id': status['id'], 'paths': ['params.duration']}]
     repair_card = next(row for row in dossier['existingBrokenCapabilityCards']
                        if row['fn'] == 'apply_status_on_event')
     assert repair_card['params']['buffId']['meaning'] == next(
@@ -200,8 +200,8 @@ def test_target_and_fire_composes_with_explicit_motion_and_speed_modifier():
     doc = build_capability_witness('target_and_fire')
     doc['runtimeProgram']['entities'][1]['kind'] = 'free_projectile'
     doc['runtimeProgram']['calls'].append({'id': 'firing_motion', 'fn': 'move_straight', 'target': 'witness_entity'})
-    modifier = deepcopy(next(c for c in build_capability_witness('scale_projectile_velocity')['runtimeProgram']['calls']
-                             if c['fn'] == 'scale_projectile_velocity'))
+    modifier = deepcopy(next(c for c in build_capability_witness('scale_velocity')['runtimeProgram']['calls']
+                             if c['fn'] == 'scale_velocity'))
     modifier['id'] = 'firing_speed'
     doc['runtimeProgram']['calls'].append(modifier)
     assert validate_runtime_program(doc)['ok'], validate_runtime_program(doc)
@@ -212,7 +212,7 @@ def test_target_and_fire_composes_with_explicit_motion_and_speed_modifier():
     entity = next(e for e in wire['runtimeProgram']['entities'] if e['id'] == 'witness_entity')
     assert entity['movement']['name'] == 'move_straight'
     assert entity['controller']['name'] == 'target_and_fire'
-    assert entity['velocityScale'][0]['multiplierPerUpdate'] == modifier['params']['multiplierPerUpdate']
+    assert entity['velocityScale'][0]['multiplierPerUpdate'] == modifier['params']['scalePerUpdate']
 
 
 def test_mobile_firing_requires_explicit_motion_without_inventing_stationary_behavior():
@@ -229,7 +229,7 @@ def test_mobile_firing_requires_explicit_motion_without_inventing_stationary_beh
 
 
 def test_independent_beam_geometry_does_not_warn_away_or_rewrite_authored_motion():
-    doc = build_capability_witness('set_projectile_beam_geometry')
+    doc = build_capability_witness('beam_geometry')
     motion = next(c for c in doc['runtimeProgram']['calls'] if c['fn'] == 'move_straight')
     before = deepcopy(doc)
     report = validate_runtime_program(doc)

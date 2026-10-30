@@ -4,6 +4,8 @@ import json
 
 import pytest
 
+from infini_local.core.vfx_material_contract import vfx_model_schema, vfx_model_payload
+
 from infini_local.core.llm_prompt_cache import (
     with_instruction_segments, with_schema_instruction_definitions,
 )
@@ -66,7 +68,7 @@ def _packet(monkeypatch, stage, fixture, mode, *, captured=None, vfx_source=None
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     import vfx_material_fixtures
-    data = (vfx_material_fixtures._data("set_projectile_beam_geometry") if fixture == "set_projectile_beam_geometry"
+    data = (vfx_material_fixtures._data("beam_geometry") if fixture == "beam_geometry"
             else compile_runtime_program(build_runtime_fixture(fixture)))
     with monkeypatch.context() as mp:
         mp.setattr(vfx_material_fixtures, "_data", lambda: copy.deepcopy(data))
@@ -170,7 +172,7 @@ def test_visual_caches_literal_entity_grammar_not_roster(monkeypatch, stage, mod
     from prompt_packet_helpers import request_dossier
     from infini_local.pipelines import visual_generation_pipeline as visual
     packets = []
-    for fixture in ("workbench_blade", "door_on_chain", "set_projectile_beam_geometry"):
+    for fixture in ("workbench_blade", "door_on_chain", "beam_geometry"):
         packet, data = _packet(monkeypatch, stage, fixture, mode)
         if stage.endswith("repair"):
             _assert_visual_size_repair_packet(packet, data, mode)
@@ -216,7 +218,7 @@ def test_visual_item_only_roster_preserves_optional_equipment_contract(monkeypat
     from test_stable_schema_data import capture_wire
     import vfx_material_fixtures
 
-    data = compile_runtime_program(build_runtime_fixture("equipment_tool_combat") if overlay else build_capability_witness("configure_tool"))
+    data = compile_runtime_program(build_runtime_fixture("equipment_tool_combat") if overlay else build_capability_witness("tool_stats"))
     before = copy.deepcopy(data)
     assert len(data["runtimeProgram"]["entities"]) == 1
     monkeypatch.setattr(vfx_material_fixtures, "_data", lambda: copy.deepcopy(data))
@@ -253,7 +255,7 @@ def test_vfx_caches_owned_slot_grammar_not_dynamic_compatibility(monkeypatch, st
     from prompt_packet_helpers import request_dossier
     from infini_local.core import vfx_manifest as vfx
     packets = []
-    for fixture in ("workbench_blade", "door_on_chain", "set_projectile_beam_geometry"):
+    for fixture in ("workbench_blade", "door_on_chain", "beam_geometry"):
         packet, data = _packet(monkeypatch, stage, fixture, mode)
         if stage.endswith("repair"):
             _assert_vfx_alpha_repair_packet(packet, data, mode)
@@ -270,7 +272,7 @@ def test_vfx_caches_owned_slot_grammar_not_dynamic_compatibility(monkeypatch, st
             assert slot["properties"][field] == {"$ref": "#/$defs/" + field}
         for index, renderer in enumerate(vfx._RENDERER_REQUIREMENTS):
             assert slot["allOf"][index] == {"$ref": "#/$defs/rendererRule_" + renderer}
-        canonical = (vfx._vfx_repair_schema if repair else vfx._director_schema)(data)
+        canonical = vfx_model_schema((vfx._vfx_repair_schema if repair else vfx._director_schema)(data))
         assert request_dossier(packet)["outputSchema"] == canonical
         if mode == "json_schema":
             assert packet["response_format"]["json_schema"]["schema"] == canonical
@@ -296,7 +298,7 @@ def test_actual_native_serialization_is_static_across_three_rosters_with_exact_d
     context = {"provider": "openai_codex", "base_url": "https://chatgpt.com/backend-api/codex",
                "api_mode": "responses", "model": "gpt-6.1-sol"}
     wires = []
-    for fixture in ("workbench_blade", "door_on_chain", "set_projectile_beam_geometry"):
+    for fixture in ("workbench_blade", "door_on_chain", "beam_geometry"):
         captured = []
         packet, _ = _packet(monkeypatch, stage, fixture, mode, captured=captured)
         before = copy.deepcopy(packet)
@@ -424,6 +426,7 @@ def test_reference_schema_reconstructs_owner_admission_and_refusal(monkeypatch, 
         if repair:
             from vfx_material_fixtures import _legacy
             valid = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "one leaf", "slotsUpsert": _legacy(data)["slots"]}
+        valid = vfx_model_payload(valid)
         slot_key = "slotsUpsert" if repair else "slots"
         invalid = copy.deepcopy(valid)
         if repair:

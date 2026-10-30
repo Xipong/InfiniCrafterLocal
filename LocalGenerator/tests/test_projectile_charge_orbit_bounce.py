@@ -14,8 +14,8 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 def fixture(fn):
     doc = build_capability_witness(fn)
     call = next(c for c in doc['runtimeProgram']['calls'] if c['id'] == 'witness_call')
-    if fn == 'accumulate_projectile_charge':
-        call['params']['releaseEffect'] = {'launchSpeedBlocksPerSecond': 30}
+    if fn == 'charge':
+        call['params']['releaseEffect'] = {'launchSpeed': 30}
     return doc, call
 
 
@@ -26,14 +26,14 @@ def entity(wire):
 @pytest.mark.parametrize('updates', [1, 2, 6])
 @pytest.mark.parametrize('rate', [-3.3, 0, 3.3])
 def test_orbit_rate_projects_world_time_and_keeps_launch_speed_independent(updates, rate):
-    doc, call = fixture('orbit_projectile')
+    doc, call = fixture('orbit')
     call['params']['radiansPerSecond'] = rate
-    collision = next(c for c in doc['runtimeProgram']['calls'] if c['fn'] == 'set_projectile_collision')
+    collision = next(c for c in doc['runtimeProgram']['calls'] if c['fn'] == 'projectile_collision')
     collision['params']['updatesPerTick'] = updates
     wire = compile_runtime_program(doc)
     projected = entity(wire)['orbit']['radiansPerUpdate']
     assert projected == pytest.approx(rate / (60 * updates))
-    assert entity(wire)['orbit']['radiusPx'] == call['params']['radiusBlocks'] * 16
+    assert entity(wire)['orbit']['radiusPx'] == call['params']['radius'] * 16
     assert entity(wire)['spawn']['speedPxPerTick'] == pytest.approx(8 / updates)
     assert entity(wire)['collision']['tileCollide'] is True
     assert validate_runtime_wire(wire)['ok']
@@ -44,7 +44,7 @@ def test_orbit_rate_projects_world_time_and_keeps_launch_speed_independent(updat
 
 
 def test_charge_three_channels_project_without_coupling():
-    doc, call = fixture('accumulate_projectile_charge')
+    doc, call = fixture('charge')
     call['params']['releaseEffect'].update(damageMultiplier=3, knockbackMultiplier=0.25, speedMultiplier=0.5)
     wire = compile_runtime_program(doc)
     params = entity(wire)['chargeRelease']
@@ -61,7 +61,7 @@ def test_charge_three_channels_project_without_coupling():
 
 @pytest.mark.parametrize('retention', [0, 0.5, 1])
 def test_bounce_retention_and_declared_omission_have_exact_provenance(retention):
-    doc, call = fixture('set_projectile_collision')
+    doc, call = fixture('projectile_collision')
     call['params'].update(bounceCount=3, bounceSpeedRetention=retention)
     wire = compile_runtime_program(doc)
     assert entity(wire)['collision']['bounceSpeedRetention'] == retention
@@ -75,16 +75,16 @@ def test_bounce_retention_and_declared_omission_have_exact_provenance(retention)
 
 
 @pytest.mark.parametrize('fn,key,value', [
-    ('orbit_projectile', 'radiansPerSecond', None), ('orbit_projectile', 'radiansPerSecond', True),
-    ('orbit_projectile', 'radiansPerSecond', float('inf')),
-    ('accumulate_projectile_charge', 'damageMultiplier', 0.5), ('accumulate_projectile_charge', 'speedMultiplier', 0),
-    ('accumulate_projectile_charge', 'knockbackMultiplier', -0.1),
-    ('set_projectile_collision', 'bounceSpeedRetention', 1.01),
-    ('set_projectile_collision', 'bounceSpeedRetention', None),
+    ('orbit', 'radiansPerSecond', None), ('orbit', 'radiansPerSecond', True),
+    ('orbit', 'radiansPerSecond', float('inf')),
+    ('charge', 'damageMultiplier', 0.5), ('charge', 'speedMultiplier', 0),
+    ('charge', 'knockbackMultiplier', -0.1),
+    ('projectile_collision', 'bounceSpeedRetention', 1.01),
+    ('projectile_collision', 'bounceSpeedRetention', None),
 ])
 def test_invalid_present_choice_is_not_replaced(fn, key, value):
     doc, call = fixture(fn)
-    params = call['params']['releaseEffect'] if fn == 'accumulate_projectile_charge' else call['params']
+    params = call['params']['releaseEffect'] if fn == 'charge' else call['params']
     params[key] = value
     assert not validate_runtime_program(doc)['ok']
     with pytest.raises(ValueError): compile_runtime_program(doc)
@@ -133,7 +133,7 @@ def test_retained_wire_absence_is_read_only_and_foreign_or_incomplete_extensions
 
 
 def test_repair_only_changes_invalid_channel_and_keeps_valid_charge_channels_frozen():
-    good, call = fixture('accumulate_projectile_charge')
+    good, call = fixture('charge')
     call['params']['releaseEffect'].update(damageMultiplier=3, knockbackMultiplier=0.25, speedMultiplier=0.5)
     broken = deepcopy(good)
     bad = next(c for c in broken['runtimeProgram']['calls'] if c['id'] == call['id'])
@@ -148,7 +148,7 @@ def test_repair_only_changes_invalid_channel_and_keeps_valid_charge_channels_fro
 @pytest.mark.parametrize('field', ['damageMultiplier', 'knockbackMultiplier', 'speedMultiplier'])
 @pytest.mark.parametrize('value', [1.0000000001, 0.9999999999])
 def test_independent_charge_preserves_native_double_precision_near_neutral(field, value):
-    doc, call = fixture('accumulate_projectile_charge')
+    doc, call = fixture('charge')
     call['params']['releaseEffect'][field] = value
     before = deepcopy(doc)
     if field == 'damageMultiplier' and value < 1:
@@ -184,7 +184,7 @@ def test_charge_wire_rejects_pre_normalization_errors(mutation, lane):
         else:
             params['powerMultiplier'] = 2
     else:
-        doc, _ = fixture('accumulate_projectile_charge')
+        doc, _ = fixture('charge')
         wire = compile_runtime_program(doc)
         wire.pop('runtimeContract')
         if mutation == 'duration':

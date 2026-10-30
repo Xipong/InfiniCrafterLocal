@@ -3,6 +3,7 @@ import copy
 
 import pytest
 from jsonschema import Draft202012Validator
+from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 
 from prompt_packet_helpers import request_dossier
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
@@ -162,7 +163,7 @@ def test_actual_http_sender_preserves_calibration_and_size_dependencies(mode):
         capture.recipes[COHORT[0]] = (parent, parent, "door_on_chain")
         packet, evidence = capture.builder("visual_repair", COHORT[0], mode)
         full = dossier(packet)
-        expected = visual.raw_parent_card_for_llm(parent, include_visual_reference=True)["raw"]["generatedParent"]
+        expected = raw_parent_card_for_llm(parent, include_visual_reference=True)["raw"]["generatedParent"]
         references = full["parentSizeReferencesReadOnly"]["parentA"]
         assert references["visual"] == expected["visual"]
         assert references["entities"] == [{"id": row["id"], "visual": row["visual"]} for row in expected["runtimeProgram"]["entities"]]

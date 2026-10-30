@@ -29,7 +29,7 @@ def _explicit_calls(source):
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("fn", ["configure_accessory", "set_projectile_lifetime", "move_straight", "collect_seeds_from_grass"])
+@pytest.mark.parametrize("fn", ["accessory", "projectile_lifetime", "move_straight", "collect_seeds"])
 def test_provider_roundtrip_preserves_sparse_and_explicit_envelope_branches(monkeypatch, mode, fn):
     import json
     from jsonschema import Draft202012Validator
@@ -39,7 +39,7 @@ def test_provider_roundtrip_preserves_sparse_and_explicit_envelope_branches(monk
     # Heavy serialized observers cover each distinct branch, not the registry x format product.
     shapes = {(cap.target_kinds == ("item_body",), bool(cap.params)) for cap in CAPABILITY_REGISTRY.values()}
     witnesses = [CAPABILITY_REGISTRY[name] for name in (
-        "configure_accessory", "set_projectile_lifetime", "move_straight", "collect_seeds_from_grass")]
+        "accessory", "projectile_lifetime", "move_straight", "collect_seeds")]
     assert shapes == {(cap.target_kinds == ("item_body",), bool(cap.params)) for cap in witnesses}
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     request, user, _ = build_initial_author_request({}, {}, "call-envelope", model_name="offline")
@@ -85,7 +85,7 @@ def test_present_call_fields_are_never_ignored(field, value):
         source["runtimeProgram"]["primaryEntityId"] = body["id"]
     assert validate_runtime_program(source)["ok"], validate_runtime_program(source)
     call = next(row for row in source["runtimeProgram"]["calls"]
-                if row["fn"] == ("configure_item_stats" if field == "target" else "move_straight"))
+                if row["fn"] == ("item_stats" if field == "target" else "move_straight"))
     call[field] = value
     before = deepcopy(source)
     report = validate_runtime_program(source)
@@ -109,14 +109,14 @@ def test_nullable_transport_does_not_erase_invalid_present_call_neighbours(monke
     # Required selectors and unknown null members are authored invalid content, never transport omissions.
     noarg["target"] = None
     noarg["params"] = {"foreign": None}
-    stats = next(row for row in encoded["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
+    stats = next(row for row in encoded["runtimeProgram"]["calls"] if row["fn"] == "item_stats")
     stats["params"] = None  # required object, not a nullable optional
     if mode == "json_object":
         stats["target"] = None  # without schema transport, even optional null remains authored
     before = deepcopy(encoded)
     restored = project_provider_author_item_to_local(encoded, response_format=request["response_format"])
     noarg = next(row for row in restored["runtimeProgram"]["calls"] if row["fn"] == "move_straight")
-    stats = next(row for row in restored["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
+    stats = next(row for row in restored["runtimeProgram"]["calls"] if row["fn"] == "item_stats")
     assert noarg["target"] is None and noarg["params"] == {"foreign": None}
     assert stats["params"] is None
     if mode == "json_object":
@@ -130,8 +130,8 @@ def test_nullable_transport_does_not_erase_invalid_present_call_neighbours(monke
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("fn,explicit,attack", [
     pytest.param(fn, explicit, "presence", id=fn + ("-present" if explicit else "-omitted"))
-    for fn in ("configure_item_stats", "move_straight") for explicit in (False, True)
-] + [pytest.param("configure_item_stats", explicit, "foreign-target", id="foreign-target-" + str(explicit)) for explicit in (False, True)]
+    for fn in ("item_stats", "move_straight") for explicit in (False, True)
+] + [pytest.param("item_stats", explicit, "foreign-target", id="foreign-target-" + str(explicit)) for explicit in (False, True)]
   + [pytest.param("move_straight", True, "invalid-params", id="invalid-noarg-params")])
 def test_real_repair_preserves_valid_envelope_presence_and_frozen_siblings(monkeypatch, format_mode, fn, explicit, attack):
     from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
@@ -142,11 +142,11 @@ def test_real_repair_preserves_valid_envelope_presence_and_frozen_siblings(monke
     broken = deepcopy(expected)
     call = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == fn)
     candidate = deepcopy(call)
-    field = "target" if fn == "configure_item_stats" else "params"
-    path = "params" if attack == "invalid-params" else "params.damage" if fn == "configure_item_stats" else "target"
+    field = "target" if fn == "item_stats" else "params"
+    path = "params" if attack == "invalid-params" else "params.damage" if fn == "item_stats" else "target"
     if attack == "invalid-params":
         call["params"] = None
-    elif fn == "configure_item_stats":
+    elif fn == "item_stats":
         call["params"]["damage"] = -1
     else:
         call["target"] = "missing"
@@ -244,7 +244,7 @@ def test_item_receipt_owner_requires_exact_declared_and_final_identity(owner_fie
                                        authored_document=positive, final_document=wire)["ok"]
     forged = deepcopy(source)
     forged_program = forged["runtimeProgram"]
-    call = next(row for row in forged_program["calls"] if row["fn"] == "configure_item_stats")
+    call = next(row for row in forged_program["calls"] if row["fn"] == "item_stats")
     if owner_field == "target":
         call["target"] = value
     elif owner_field == "bodies":
@@ -296,7 +296,7 @@ def test_source_provenance_rejects_equal_value_call_target_swap(explicit):
     receipts = wire["runtimeContract"]["finalWireReceipts"]
     forged = deepcopy(source)
     for call in forged["runtimeProgram"]["calls"]:
-        if call["fn"] == "set_projectile_lifetime":
+        if call["fn"] == "projectile_lifetime":
             call["target"] = "other_projectile" if call["target"] == "witness_entity" else "witness_entity"
     assert validate_runtime_program(forged)["ok"], "Negative reaches provenance with an otherwise valid source"
     audit = audit_compiler_receipts(receipts, authored_document=forged, final_document=wire)
@@ -306,7 +306,7 @@ def test_source_provenance_rejects_equal_value_call_target_swap(explicit):
 
 def test_noarg_call_accepts_empty_params_and_exact_omission_without_old_author_admission():
     source = build_runtime_fixture("workbench_blade")
-    source["runtimeProgram"]["schema"] = "infini.runtime-program.authoring.v6"
+    source["runtimeProgram"]["schema"] = "infini.runtime-program.authoring.v7"
     noarg = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "move_straight")
     noarg.pop("params", None)
     before = deepcopy(source)
@@ -364,7 +364,7 @@ def test_flat_active_binding_preserves_independent_contact_and_stack_lanes():
 def test_fixed_branches_and_unique_arbitrary_body_references_are_exact():
     from infini_local.qa.capability_witnesses import build_capability_witness
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-    source = build_capability_witness("configure_accessory")
+    source = build_capability_witness("accessory")
     source["runtimeProgram"]["entities"][0]["id"] = "opaque_body"
     source["runtimeProgram"]["primaryEntityId"] = "opaque_body"
     for call in source["runtimeProgram"]["calls"]:
@@ -457,12 +457,12 @@ def test_actual_initial_format_and_scoped_repair_builders_share_current_grammar(
         request, user, _ = pipeline.build_initial_author_request({}, {}, "canonical-offline", model_name="offline")
         card = json.loads(user)["runtimeCapabilityContract"]["shape"] if "shape" in json.loads(user)["runtimeCapabilityContract"] else json.loads(user)["requiredJsonShape"]
         assert "usePolicy" not in json.dumps(card)
-        assert "authoring.v6" in json.dumps(card)
+        assert card["runtimeProgram"]["schema"] == source["runtimeProgram"]["schema"]
         broken = deepcopy(source)
-        stats = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
+        stats = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "item_stats")
         stats["params"]["damage"] = True
         correction = deepcopy(stats)
-        correction["params"]["damage"] = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")["params"]["damage"]
+        correction["params"]["damage"] = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "item_stats")["params"]["damage"]
         patch = {"note": "exact damage correction", "realizationReplacement": broken["realization"], "callsUpsert": [correction]}
         repaired, dossier = _offline_gameplay_repair(monkeypatch, broken, patch, mode)
         assert "usePolicy" not in json.dumps(dossier["requiredJsonShape"])
@@ -485,7 +485,7 @@ def test_unresolved_body_is_declaration_repair_not_synthetic_target_authority():
     from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
     for case in ("missing", "duplicate", "invalid"):
-        source = build_capability_witness("configure_accessory")
+        source = build_capability_witness("accessory")
         body = deepcopy(source["runtimeProgram"]["entities"][0])
         if case == "missing":
             source["runtimeProgram"]["entities"] = []
@@ -521,7 +521,7 @@ def test_unresolved_body_is_declaration_repair_not_synthetic_target_authority():
 def test_semantic_paths_keep_original_indices_past_malformed_rows():
     source = build_runtime_fixture("workbench_blade")
     source["runtimeProgram"]["calls"].insert(0, None)
-    index = next(i for i, row in enumerate(source["runtimeProgram"]["calls"]) if isinstance(row, dict) and row["fn"] == "set_projectile_damage")
+    index = next(i for i, row in enumerate(source["runtimeProgram"]["calls"]) if isinstance(row, dict) and row["fn"] == "projectile_damage")
     source["runtimeProgram"]["calls"][index]["target"] = "missing"
     report = validate_runtime_program(source)
     assert any(row["code"] == "missing_entity_reference" and row["path"] == f"$.runtimeProgram.calls[{index}].target" for row in report["errors"]), report
@@ -548,7 +548,7 @@ def test_current_placement_association_has_only_literal_source_paths():
     source = placed()
     wire = compile_runtime_program(source)
     association = next(row for row in wire["runtimeContract"]["finalWireReceipts"]
-                       if row.get("fn") == "present_placed_item_sprite" and row.get("status") == "technical_projection")
+                       if row.get("fn") == "placed_sprite" and row.get("status") == "technical_projection")
     def read(path):
         value = source
         for key, index in re.findall(r"([A-Za-z][A-Za-z0-9_]*)|\[(\d+)\]", path):
@@ -572,7 +572,7 @@ def test_source_native_repair_can_create_implied_item_call_without_authored_targ
     from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
     source = build_runtime_fixture("workbench_blade")
-    call = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "configure_item_use")
+    call = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "item_use")
     source["runtimeProgram"]["calls"].remove(call)
     scope = build_runtime_repair_scope(source, validate_runtime_program(source)["errors"])
     filtered, audit = filter_repair_patch_scope(source, {"note": "literal implied call", "callsUpsert": [call]}, scope)
@@ -628,7 +628,7 @@ def test_omission_only_passive_selector_repair_has_only_input_authority(monkeypa
     from infini_local.qa.capability_witnesses import build_capability_witness
     from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
     from test_repair_gameplay_contract import _offline_gameplay_repair
-    source = build_capability_witness("configure_accessory")
+    source = build_capability_witness("accessory")
     from test_item_effect_groups import _groups
     groups = _groups()
     groups["runtimeProgram"]["bindings"][0]["id"] = "group_primary"
@@ -661,7 +661,7 @@ def test_noop_repair_preserves_malformed_whole_binding_container(monkeypatch, fo
     from infini_local.core.errors import PlannerUnavailable
     from infini_local.qa.capability_witnesses import build_capability_witness
     from test_repair_gameplay_contract import _offline_gameplay_repair
-    source = build_capability_witness("configure_accessory")
+    source = build_capability_witness("accessory")
     source["runtimeProgram"]["bindings"] = value
     before = deepcopy(source)
     assert apply_repair_patch(source, {"note": "no-op"}) == source

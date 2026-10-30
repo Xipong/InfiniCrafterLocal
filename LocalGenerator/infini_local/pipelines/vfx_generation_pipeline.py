@@ -12,6 +12,7 @@ from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json
 from infini_local.core.llm_prompt_cache import with_instruction_segments, with_schema_instruction_definitions
 from infini_local.core.llm_stage_messages import stage_chat_message
+from infini_local.core.vfx_material_contract import vfx_model_context, vfx_model_payload
 from infini_local.core.vfx_manifest import (
     MalformedVfxDirectorOutput, VFX_PROMPT_STATIC_KEYS, VFX_REPAIR_PROMPT_STATIC_KEYS,
     vfx_schema_instruction_paths,
@@ -42,6 +43,12 @@ def call_llm_vfx_director(
         return None
     model_name = resolve_llm_model()
     stage_name = "vfx_repair" if messages and any(message.get("name") == "vfx_repair_contract" for message in messages) else "vfx_director"
+    user = vfx_model_context(user)
+    if messages:
+        messages = [dict(message) for message in messages]
+        for message in messages:
+            if message.get("name") == "vfx_repair_context":
+                message["content"] = json.dumps(user, ensure_ascii=False, separators=(",", ":"))
     output_schema = user.get("outputSchema") if isinstance(user.get("outputSchema"), Mapping) else None
     request = {
         "model": model_name,
@@ -77,4 +84,7 @@ def call_llm_vfx_director(
         parsed = parse_first_valid_llm_json(content)
     except (ValueError, TypeError, json.JSONDecodeError) as exc:
         return MalformedVfxDirectorOutput(raw_text=str(content), error=f"{type(exc).__name__}: {exc}")
-    return parsed if isinstance(parsed, dict) else None
+    try:
+        return vfx_model_payload(parsed, to_wire=True) if isinstance(parsed, dict) else None
+    except ValueError as exc:
+        return MalformedVfxDirectorOutput(raw_text=str(content), error=str(exc))

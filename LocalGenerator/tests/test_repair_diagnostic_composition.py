@@ -20,13 +20,13 @@ def test_component_and_event_repairs_keep_independent_frozen_values(contact_supp
     calls = authored["runtimeProgram"]["calls"]
     healing = next(row for row in calls if row["fn"] == "restore_resources_on_use")
     healing["params"].update(healLife=0, healMana=0, usesPotionRules=False)
-    item_use = next(row for row in calls if row["fn"] == "configure_item_use")
+    item_use = next(row for row in calls if row["fn"] == "item_use")
     item_use["params"]["disableMeleeHitbox"] = contact_suppressed
     binding = authored["runtimeProgram"]["bindings"][0]
     binding["contactDamage"] = False
     event = {
         "id": "body_status", "fn": "apply_status_on_event", "target": "item",
-        "params": {"when": "on_hit", "buffId": 20, "durationSeconds": 1.0},
+        "params": {"when": "on_hit", "buffId": 20, "duration": 1.0},
     }
     calls.append(event)
     before = copy.deepcopy(authored)
@@ -63,7 +63,7 @@ def test_component_and_event_repairs_keep_independent_frozen_values(contact_supp
     hostile_gate = copy.deepcopy(item_use)
     hostile_gate["params"]["disableMeleeHitbox"] = not contact_suppressed
     hostile_event = copy.deepcopy(event)
-    hostile_event["params"]["durationSeconds"] = 10.0
+    hostile_event["params"]["duration"] = 10.0
     patch = {
         "note": "fix independent healing and event diagnostics",
         "callsUpsert": [fixed_healing, hostile_gate, hostile_event],

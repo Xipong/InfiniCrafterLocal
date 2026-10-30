@@ -55,7 +55,7 @@ def _dual_use_placeable() -> dict[str, Any]:
     program = authored["runtimeProgram"]
     program["calls"].append({
         "id": "install_tile",
-        "fn": "configure_tile_placement",
+        "fn": "place_tile",
         "params": {"tileId": 19, "placeStyle": 0},
     })
     program["bindings"].append({
@@ -278,7 +278,7 @@ def test_repair_authorizes_one_complete_use_transaction_not_shadow_calls() -> No
     current = _upgrade_fixture("workbench_blade")
     current["runtimeProgram"]["calls"].append({
         "id": "placeable_without_binding",
-        "fn": "configure_tile_placement",
+        "fn": "place_tile",
         "params": {"tileId": 4, "placeStyle": 0},
     })
     report = validate_runtime_program(current)

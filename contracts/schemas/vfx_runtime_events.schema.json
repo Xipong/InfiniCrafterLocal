@@ -1791,7 +1791,7 @@
         ],
         "properties": {
           "alpha": {
-            "description": "Engine units: Draw opacity coefficient: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; sound.volume alone owns audio volume and alpha does not multiply it. Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity. spriteElement and texturedPath: multiply alpha by opacityProfile once, apply tint to RGB separately, no extra implicit lifetime fade; explicit zero is silence.",
+            "description": "Dimensionless draw multiplier, range 0..1; NOT native Projectile.alpha (reverse byte 0..255) and NOT universal opacity: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; sound.volume alone owns audio volume and alpha does not multiply it. Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity. spriteElement and texturedPath: multiply alpha by opacityProfile once, apply tint to RGB separately, no extra implicit lifetime fade; explicit zero is silence.",
             "maximum": 1.0,
             "minimum": 0.0,
             "type": "number"
@@ -2034,7 +2034,7 @@
                 "type": "object"
               },
               "heightPx": {
-                "description": "Pixels along texture Y axis, independent of width; zero stays zero.",
+                "description": "World pixels along texture Y axis, independent of width; zero stays zero.",
                 "maximum": 128,
                 "minimum": 0,
                 "type": "number"
@@ -2046,13 +2046,13 @@
                 "type": "number"
               },
               "offsetForwardPx": {
-                "description": "Pixels along captured source forward at emission.",
+                "description": "World pixels along captured source forward at emission.",
                 "maximum": 128,
                 "minimum": -128,
                 "type": "number"
               },
               "offsetSidePx": {
-                "description": "Pixels along captured source normal at emission.",
+                "description": "World pixels along captured source normal at emission.",
                 "maximum": 128,
                 "minimum": -128,
                 "type": "number"
@@ -2242,7 +2242,7 @@
                 "type": "object"
               },
               "widthPx": {
-                "description": "Pixels along texture X axis, independent of height; zero stays zero.",
+                "description": "World pixels along texture X axis, independent of height; zero stays zero.",
                 "maximum": 128,
                 "minimum": 0,
                 "type": "number"
@@ -2422,7 +2422,7 @@
                 "type": "number"
               },
               "speedMaxPxPerTick": {
-                "description": "Maximum initial speed, must be >= speedMinPxPerTick.",
+                "description": "Maximum initial speed in world pixels per world tick, must be >= speedMinPxPerTick.",
                 "maximum": 24,
                 "minimum": 0,
                 "type": "number"
@@ -2711,13 +2711,13 @@
                 "type": "integer"
               },
               "maxSegmentLengthPx": {
-                "description": "Pixels: skip true gaps, never bridge/smooth into invented paths.",
+                "description": "World pixels: skip true gaps, never bridge/smooth into invented paths.",
                 "maximum": 4096,
                 "minimum": 1,
                 "type": "number"
               },
               "minDistancePx": {
-                "description": "Pixels between accepted history samples; 0 for current geometry.",
+                "description": "World pixels between accepted history samples; 0 for current geometry.",
                 "maximum": 16,
                 "minimum": 0,
                 "type": "number"
@@ -2779,7 +2779,7 @@
                 "type": "string"
               },
               "repeatLengthPx": {
-                "description": "Pixels per texture repeat along cumulative geometric distance. stretch requires 1.",
+                "description": "World pixels per texture repeat along cumulative geometric distance. stretch requires 1.",
                 "maximum": 512,
                 "minimum": 1,
                 "type": "number"
@@ -2922,7 +2922,7 @@
                 "type": "object"
               },
               "widthPx": {
-                "description": "Authored decorative pixels, not collision geometry width; zero stays zero.",
+                "description": "Authored decorative world pixels, not collision geometry width; zero stays zero.",
                 "maximum": 96,
                 "minimum": 0,
                 "type": "number"
@@ -3003,7 +3003,7 @@
                 "type": "number"
               },
               "dissipationPxPerFrame": {
-                "description": "Strength removed on each native ModifyScreenPosition visit, not a world-tick lifetime; passed explicitly to Luminance.",
+                "description": "Screen-pixel strength removed on each native ModifyScreenPosition visit, not a world-tick lifetime; passed explicitly to Luminance.",
                 "maximum": 16,
                 "minimum": 0.01,
                 "type": "number"
@@ -3015,7 +3015,7 @@
                 "type": "number"
               },
               "taperEndDistancePx": {
-                "description": "Distance where attenuation reaches zero; must exceed taperStartDistancePx.",
+                "description": "World-pixel distance from event anchor to viewer where attenuation reaches zero; must exceed taperStartDistancePx.",
                 "maximum": 8192,
                 "minimum": 1,
                 "type": "number"

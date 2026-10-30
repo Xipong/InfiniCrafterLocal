@@ -19,7 +19,7 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 from test_composable_motion_primitives import add
 
 
-PARAMS = {"durationSeconds": 13 / 60, "startStretch": "quarter",
+PARAMS = {"duration": 13 / 60, "startStretch": "quarter",
           "peakStretch": "full", "endStretch": "none", "peakProgress": .3}
 
 
@@ -27,13 +27,13 @@ def fixture(*, source="cursor", axisOffsetBlocks=11 / 16, **pose_params):
     doc = build_capability_witness("move_straight")
     calls = doc["runtimeProgram"]["calls"]
     calls.remove(next(c for c in calls if c["fn"] == "move_straight"))
-    next(c for c in calls if c["fn"] == "configure_item_use")["params"].pop("handPose", None)
+    next(c for c in calls if c["fn"] == "item_use")["params"].pop("handPose", None)
     # Always-absolute motion cannot execute native tile collision; choose explicitly.
-    next(c for c in calls if c["fn"] == "set_projectile_collision")["params"]["tileCollide"] = False
-    add(doc, "set_projectile_aim", {"source": source, "turnOwner": False})
-    add(doc, "attach_projectile", {"anchor": "front_hand", "axisOffsetBlocks": axisOffsetBlocks,
+    next(c for c in calls if c["fn"] == "projectile_collision")["params"]["tileCollide"] = False
+    add(doc, "set_aim", {"source": source, "turnOwner": False})
+    add(doc, "attach", {"anchor": "front_hand", "axisOffsetBlocks": axisOffsetBlocks,
                                    "normalOffsetBlocks": 0})
-    pose = add(doc, "set_front_arm_pose", {**PARAMS, **pose_params}, "hand_pose")
+    pose = add(doc, "front_arm_pose", {**PARAMS, **pose_params}, "hand_pose")
     return doc, pose
 
 
@@ -93,10 +93,10 @@ def test_new_present_leaves_require_unique_exact_receipts(mutation):
     doc, pose = fixture()
     wire = compile_runtime_program(doc)
     receipts = wire["runtimeContract"]["finalWireReceipts"]
-    row = next(r for r in receipts if r.get("callId") == pose["id"] and r["authoredPath"].endswith('.params.durationSeconds'))
+    row = next(r for r in receipts if r.get("callId") == pose["id"] and r["authoredPath"].endswith('.params.duration'))
     if mutation == "missing": receipts.remove(row)
     if mutation == "value": row["value"] += 1
-    if mutation == "source": row["authoredPath"] = row["authoredPath"].replace("durationSeconds", "peakProgress")
+    if mutation == "source": row["authoredPath"] = row["authoredPath"].replace("duration", "peakProgress")
     if mutation == "call": row["callId"] = "forged"
     if mutation == "duplicate": receipts.append(deepcopy(row))
     if mutation == "all": receipts.clear()
@@ -115,16 +115,16 @@ def test_asymmetric_and_constant_pose_are_authored_not_old_monotone_bundle(start
 def test_old_bundle_restrictions_are_independent_explicit_choices(mutation):
     doc, _ = fixture()
     calls = doc["runtimeProgram"]["calls"]
-    spawn = next(c["params"] for c in calls if c["fn"] == "configure_spawn")
+    spawn = next(c["params"] for c in calls if c["fn"] == "spawn")
     if mutation == "count": spawn["count"] = 2
     if mutation == "spread": spawn["spreadRadians"] = .1
-    if mutation == "speed": spawn["velocity"] = {"constantSpeedBlocksPerSecond": 3.75}
-    if mutation == "sampled_speed": spawn["velocity"] = {"disk": {"maxSpeedBlocksPerSecond": 3.75}}
-    if mutation == "over_target": spawn["position"] = {"above": "cursor", "heightTiles": 3, "activationDelaySeconds": 0}
-    if mutation == "cap_two": add(doc, "set_projectile_concurrency", {"maxActive": 2})
+    if mutation == "speed": spawn["velocity"] = {"speed": 3.75}
+    if mutation == "sampled_speed": spawn["velocity"] = {"disk": {"maxSpeed": 3.75}}
+    if mutation == "over_target": spawn["position"] = {"above": "cursor", "heightTiles": 3, "activationDelay": 0}
+    if mutation == "cap_two": add(doc, "projectile_limit", {"maxActive": 2})
     if mutation == "charge":
-        next(c["params"] for c in calls if c["fn"] == "configure_item_use")["channel"] = True
-        add(doc, "accumulate_projectile_charge", {"durationSeconds": .2})
+        next(c["params"] for c in calls if c["fn"] == "item_use")["channel"] = True
+        add(doc, "charge", {"duration": .2})
     before = deepcopy(doc)
     report = validate_runtime_program(doc)
     assert report["ok"], report["errors"]
@@ -138,13 +138,13 @@ def test_old_bundle_restrictions_are_independent_explicit_choices(mutation):
 def test_actual_pose_or_position_ownership_conflicts_are_red(mutation):
     doc, pose = fixture()
     calls = doc["runtimeProgram"]["calls"]
-    if mutation == "handPose": next(c["params"] for c in calls if c["fn"] == "configure_item_use")["handPose"] = "one_handed"
-    if mutation == "tile": next(c["params"] for c in calls if c["fn"] == "set_projectile_collision")["tileCollide"] = True
+    if mutation == "handPose": next(c["params"] for c in calls if c["fn"] == "item_use")["handPose"] = "one_handed"
+    if mutation == "tile": next(c["params"] for c in calls if c["fn"] == "projectile_collision")["tileCollide"] = True
     if mutation == "secondary": doc["runtimeProgram"]["primaryEntityId"] = "item"
     if mutation == "hold": doc["runtimeProgram"]["bindings"][0]["input"] = "hold"
     if mutation == "duplicate_pose": calls.append({**deepcopy(pose), "id": "other_pose"})
-    if mutation == "orbit": add(doc, "orbit_projectile", {"anchor": "owner_center", "radiusBlocks": 4,
-        "radiansPerSecond": 1, "phaseRadians": 0, "identityPhaseRadians": 0})
+    if mutation == "orbit": add(doc, "orbit", {"anchor": "owner_center", "radius": 4,
+        "radiansPerSecond": 1, "anglePhase": 0, "identityAnglePhase": 0})
     assert not validate_runtime_program(doc)["ok"]
     with pytest.raises(ValueError): compile_runtime_program(doc)
 
@@ -153,7 +153,7 @@ def test_actual_pose_or_position_ownership_conflicts_are_red(mutation):
 @pytest.mark.parametrize("spawn_aim", ["none", "cursor", "facing", "velocity"])
 def test_axis_owner_is_explicit_and_independent_of_spawn_launch(source, spawn_aim):
     doc, _ = fixture(source=source)
-    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_spawn")["params"]["aim"] = spawn_aim
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "spawn")["params"]["aim"] = spawn_aim
     report = validate_runtime_program(doc)
     assert report["ok"], report["errors"]
     wire = compile_runtime_program(doc)
@@ -164,31 +164,31 @@ def test_axis_owner_is_explicit_and_independent_of_spawn_launch(source, spawn_ai
 
 
 @pytest.mark.parametrize("fn,key,value,wire_key", [
-    ("set_projectile_aim", "source", "initial ", "source"),
-    ("set_projectile_aim", "source", None, "source"),
-    ("set_projectile_aim", "turnOwner", 1, "turnOwner"),
-    ("set_front_arm_pose", "durationSeconds", 1 / 60, "durationTicks"),
-    ("set_front_arm_pose", "durationSeconds", 241 / 60, "durationTicks"),
-    ("set_front_arm_pose", "durationSeconds", "13", "durationTicks"),
-    ("set_front_arm_pose", "startStretch", "threequarters", "startStretch"),
-    ("set_front_arm_pose", "endStretch", None, "endStretch"),
-    ("set_front_arm_pose", "peakProgress", False, "peakProgress"),
-    ("set_front_arm_pose", "peakProgress", 0, "peakProgress"),
-    ("set_front_arm_pose", "peakProgress", 1, "peakProgress"),
-    ("attach_projectile", "axisOffsetBlocks", False, "axisOffsetPx"),
-    ("attach_projectile", "axisOffsetBlocks", "11", "axisOffsetPx"),
-    ("attach_projectile", "axisOffsetBlocks", None, "axisOffsetPx"),
-    ("attach_projectile", "axisOffsetBlocks", float("nan"), "axisOffsetPx"),
-    ("attach_projectile", "normalOffsetBlocks", float("inf"), "normalOffsetPx"),
+    ("set_aim", "source", "initial ", "source"),
+    ("set_aim", "source", None, "source"),
+    ("set_aim", "turnOwner", 1, "turnOwner"),
+    ("front_arm_pose", "duration", 1 / 60, "durationTicks"),
+    ("front_arm_pose", "duration", 241 / 60, "durationTicks"),
+    ("front_arm_pose", "duration", "13", "durationTicks"),
+    ("front_arm_pose", "startStretch", "threequarters", "startStretch"),
+    ("front_arm_pose", "endStretch", None, "endStretch"),
+    ("front_arm_pose", "peakProgress", False, "peakProgress"),
+    ("front_arm_pose", "peakProgress", 0, "peakProgress"),
+    ("front_arm_pose", "peakProgress", 1, "peakProgress"),
+    ("attach", "axisOffsetBlocks", False, "axisOffsetPx"),
+    ("attach", "axisOffsetBlocks", "11", "axisOffsetPx"),
+    ("attach", "axisOffsetBlocks", None, "axisOffsetPx"),
+    ("attach", "axisOffsetBlocks", float("nan"), "axisOffsetPx"),
+    ("attach", "normalOffsetBlocks", float("inf"), "normalOffsetPx"),
 ])
 def test_bad_present_parameters_are_red_in_author_and_stripped_wire(fn, key, value, wire_key):
     doc, _ = fixture()
     wire = compile_runtime_program(doc)
     wire.pop("runtimeContract")
     next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == fn)["params"][key] = value
-    member = {"set_projectile_aim": "aim", "set_front_arm_pose": "armPose", "attach_projectile": "attachment"}[fn]
+    member = {"set_aim": "aim", "front_arm_pose": "armPose", "attach": "attachment"}[fn]
     # Wire duration uses ticks, not seconds; retain the same intended out-of-range mutation.
-    wire_value = (1 if value == 1 / 60 else 241) if key == "durationSeconds" and isinstance(value, float) else value
+    wire_value = (1 if value == 1 / 60 else 241) if key == "duration" and isinstance(value, float) else value
     entity(wire)[member][wire_key] = wire_value
     assert not validate_runtime_program(doc)["ok"]
     assert not validate_runtime_wire(wire)["ok"]
@@ -215,12 +215,12 @@ def test_retired_bundle_refused_as_new_author_choice_but_opcode_metadata_retaine
 
 @pytest.mark.parametrize("source,offset,duration", [("initial", -12, 2), ("cursor", 12, 240), ("initial", 0, 13)])
 def test_non_damage_hand_animation_does_not_select_style_class_visibility_or_metadata(source, offset, duration):
-    doc, _ = fixture(source=source, axisOffsetBlocks=offset, durationSeconds=duration / 60)
+    doc, _ = fixture(source=source, axisOffsetBlocks=offset, duration=duration / 60)
     doc.update(name="Unrelated equipment-shaped ornament", category="equipment")
     calls = doc["runtimeProgram"]["calls"]
-    calls.remove(next(c for c in calls if c["fn"] == "set_projectile_damage"))
-    next(c for c in calls if c["fn"] == "configure_item_stats")["params"]["damageClass"] = "magic"
-    next(c for c in calls if c["fn"] == "configure_item_use")["params"].update(
+    calls.remove(next(c for c in calls if c["fn"] == "projectile_damage"))
+    next(c for c in calls if c["fn"] == "item_stats")["params"]["damageClass"] = "magic"
+    next(c for c in calls if c["fn"] == "item_use")["params"].update(
         useStyle="hold_up", hideUseGraphic=False, handPose="")
     before = deepcopy(doc)
     wire = compile_runtime_program(doc)
@@ -243,7 +243,7 @@ def test_real_author_packet_offers_separate_hand_choices_not_retired_profiles(mo
     catalog = dossier["runtimeCapabilityContract"]["catalog"]["capabilities"]
     assert {c["fn"] for c in catalog} == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible}
     packet = json.dumps(request, ensure_ascii=False)
-    for fn in ("set_projectile_aim", "attach_projectile", "set_front_arm_pose", "reachCurve"):
+    for fn in ("set_aim", "attach", "front_arm_pose", "reachCurve"):
         assert fn in packet
     offered = {c["fn"] for c in catalog}
     assert not offered.intersection({"move_front_hand", "move_forward_then_retract", "charge_then_release"})
@@ -256,15 +256,15 @@ def test_real_author_packet_offers_separate_hand_choices_not_retired_profiles(mo
 @pytest.mark.parametrize("delay", [0, 2])
 def test_front_hand_directional_event_compositions_remain_explicit_and_admitted(source, lane, delay):
     doc, _ = fixture(source=source)
-    fn = "spawn_entity_from_hit_target" if lane == "hit_geometry" else "spawn_entity_on_event"
+    fn = "spawn_at_hit" if lane == "hit_geometry" else "spawn_on_event"
     event_program = build_capability_witness(fn)["runtimeProgram"]
     doc["runtimeProgram"]["entities"].append(deepcopy(next(
         row for row in event_program["entities"] if row["id"] == "witness_child")))
     child_calls = deepcopy([row for row in event_program["calls"] if row.get("target") == "witness_child"])
-    next(row for row in child_calls if row["fn"] == "configure_spawn")["params"]["aim"] = "velocity"
+    next(row for row in child_calls if row["fn"] == "spawn")["params"]["aim"] = "velocity"
     event = deepcopy(next(row for row in event_program["calls"] if row["fn"] == fn))
     event["id"] = "hand_child_event"
-    event["params"].update(when={"everySeconds": 6 / 60} if lane == "periodic" else "on_hit", delaySeconds=delay / 60)
+    event["params"].update(when={"everySeconds": 6 / 60} if lane == "periodic" else "on_hit", delay=delay / 60)
     doc["runtimeProgram"]["calls"].extend([*child_calls, event])
     before = deepcopy(doc)
     report = validate_runtime_program(doc)

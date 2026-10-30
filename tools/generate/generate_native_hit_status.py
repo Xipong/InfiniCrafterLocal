@@ -22,6 +22,10 @@ OUTPUT = ROOT / "ModSources/InfiniCrafterLocal/Common/Services/Generation/Native
 REPORT = ROOT / "contracts/reports/native_hit_status_sources.generated.json"
 
 
+class DecodedInstructions(list):
+    """List-compatible decoded IL plus lazily read direct-call certificates."""
+
+
 def read_compressed(data, offset):
     lead = data[offset]
     if lead < 0x80:
@@ -31,10 +35,57 @@ def read_compressed(data, offset):
     return ((lead & 0x1F) << 24) | int.from_bytes(data[offset + 1:offset + 4], "big"), offset + 4
 
 
-def decode(path, method_owner="Projectile", method_name="StatusNPC", id_owner="Terraria.ID.ProjectileID", *, allow_opaque=False, overload_index=0):
-    import dnfile
+def read_method_body(pe, rva):
+    """Read declared IL and optional EH data, never a fixed-size prefix.
+
+    Every read must be backed by bytes in the PE. Malformed/truncated headers,
+    code and sections fail before dncil can certify a partial method.
+    """
     from dncil.cil.body import CilMethodBody
     from dncil.cil.body.reader import CilMethodBodyReaderBytes
+
+    def exact(offset, size):
+        data = pe.get_data(rva + offset, size)
+        if len(data) != size:
+            raise ValueError("truncated native method body")
+        return data
+
+    lead = exact(0, 1)[0]
+    more = False
+    if lead & 3 == 2:
+        header_size, code_size = 1, lead >> 2
+    elif lead & 3 == 3:
+        header = exact(0, 12)
+        flags = int.from_bytes(header[:2], "little")
+        header_size = (flags >> 12) * 4
+        if header_size < 12:
+            raise ValueError("invalid native method header size")
+        code_size = int.from_bytes(header[4:8], "little")
+        more = bool(flags & 8)
+    else:
+        raise ValueError("invalid native method header")
+    raw = exact(0, header_size + code_size)
+    if more:
+        section_offset = (len(raw) + 3) & ~3
+        section = exact(section_offset, 4)
+        if section[0] & 0x80:
+            # dncil only parses one EH section; never silently omit another.
+            raise ValueError("chained native method sections are unsupported")
+        if section[0] & 0x3F != 1:
+            raise ValueError("unsupported native method section")
+        size = int.from_bytes(section[1:4], "little") if section[0] & 0x40 else section[1]
+        clause_size = 24 if section[0] & 0x40 else 12
+        if size < 4 or (size - 4) % clause_size:
+            raise ValueError("invalid native method exception section size")
+        raw = exact(0, section_offset + size)
+    body = CilMethodBody(CilMethodBodyReaderBytes(raw))
+    if body.instructions and body.instructions[-1].offset + body.instructions[-1].size != header_size + code_size:
+        raise ValueError("native instruction extends past declared method body")
+    return body
+
+
+def decode(path, method_owner="Projectile", method_name="StatusNPC", id_owner="Terraria.ID.ProjectileID", *, allow_opaque=False, overload_index=0):
+    import dnfile
 
     pe = dnfile.dnPE(str(path))
     owners = {}
@@ -73,10 +124,37 @@ def decode(path, method_owner="Projectile", method_name="StatusNPC", id_owner="T
                if str(t.TypeNamespace) == "Terraria" and str(t.TypeName) == method_owner
                for m in t.MethodList if str(m.row.Name) == method_name]
     method = methods[overload_index]
-    body = CilMethodBody(CilMethodBodyReaderBytes(pe.get_data(method.Rva, 100_000)))
+    body = read_method_body(pe, method.Rva)
     if body.exception_handlers and not allow_opaque:
         raise ValueError("exception handlers are outside supported native subset")
-    instructions = []
+    instructions = DecodedInstructions()
+    called_methods = {}
+    module_id = str(uuid.UUID(bytes_le=pe.net.mdtables.Module.rows[0].Mvid.value))
+
+    class MethodProvenance:
+        def __init__(self):
+            self.cache = {}
+
+        def get(self, name, default=None):
+            if name not in self.cache:
+                rows = list(called_methods.get(name, {}).values())
+                cert = {"status": "unknown", "reason": "external_or_ambiguous_method", "member": name}
+                if len(rows) == 1 and getattr(rows[0], "Rva", 0):
+                    from dncil.cil.error import MethodBodyFormatError
+                    row = rows[0]
+                    try:
+                        helper = read_method_body(pe, row.Rva)
+                        il = helper.raw_bytes[helper.header_size:helper.header_size + helper.code_size]
+                        cert = {"status": "certified_source_only", "member": name,
+                                "signature": row.Signature.value.hex(),
+                                "sourceMethodSha256": hashlib.sha256(il).hexdigest(),
+                                "sourceModuleVersionId": module_id}
+                    except (ValueError, MethodBodyFormatError):
+                        cert = {"status": "unknown", "reason": "unsupported_method_body", "member": name}
+                self.cache[name] = cert
+            return self.cache[name]
+
+    instructions.method_provenance = MethodProvenance()
     for ins in body.instructions:
         op, arg = ins.opcode.name, ins.operand
         if op.startswith("ldc.i4"):
@@ -91,6 +169,14 @@ def decode(path, method_owner="Projectile", method_name="StatusNPC", id_owner="T
             op, arg = base, arg.index if suffix == "s" else int(suffix)
         elif op in ("ldfld", "ldsfld", "ldflda") or (allow_opaque and op in ("stfld", "stsfld")):
             arg = member(arg.value)[0]
+        elif op == "newobj":
+            try:
+                name, row = member(arg.value)
+                arg = (name, row.Signature.value.hex())
+            except ValueError:
+                if not allow_opaque:
+                    raise
+                op, arg = "opaque", "unsupported_constructor"
         elif op in ("call", "callvirt"):
             try:
                 name, row = member(arg.value)
@@ -100,6 +186,7 @@ def decode(path, method_owner="Projectile", method_name="StatusNPC", id_owner="T
                 count, ret_offset = read_compressed(sig, 1)
                 arg = (name, count, bool(sig[0] & 0x20), sig[ret_offset] != 1)
                 op = "call"
+                called_methods.setdefault(name, {})[id(row)] = row
             except ValueError:
                 if not allow_opaque:
                     raise
@@ -115,8 +202,8 @@ def decode(path, method_owner="Projectile", method_name="StatusNPC", id_owner="T
         instructions.append(Instruction(ins.offset, op, arg))
     assembly = pe.net.mdtables.Assembly.rows[0]
     version = ".".join(str(getattr(assembly, key)) for key in ("MajorVersion", "MinorVersion", "BuildNumber", "RevisionNumber"))
-    raw = pe.get_data(method.Rva + body.header_size, body.code_size)
-    return instructions, projectile_ids, buff_ids, version, hashlib.sha256(raw).hexdigest(), hashlib.sha256(path.read_bytes()).hexdigest(), str(uuid.UUID(bytes_le=pe.net.mdtables.Module.rows[0].Mvid.value))
+    raw = body.raw_bytes[body.header_size:body.header_size + body.code_size]
+    return instructions, projectile_ids, buff_ids, version, hashlib.sha256(raw).hexdigest(), hashlib.sha256(path.read_bytes()).hexdigest(), module_id
 
 
 def extract(path, source_kind="projectile"):

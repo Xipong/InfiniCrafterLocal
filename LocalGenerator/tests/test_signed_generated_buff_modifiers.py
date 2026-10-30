@@ -14,34 +14,34 @@ from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_R
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
 
-FN = "apply_generated_buff_on_use"
+FN = "generated_buff_on_use"
 
 
 def document(activation=FN):
     doc = build_capability_witness(activation)
     call = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == FN)
     call["params"].update(lightStrength=0, miningSpeedMultiplier=1, oreSenseEnabled=False,
-        moveSpeedBonusPercent=0, jumpSpeedBonusBlocksPerSecond=0, manaRegenBonusPoints=0, lifeRegenHpPerSecond=0)
+        moveSpeedBonus=0, jumpSpeedBonus=0, manaRegen=0, lifeRegen=0)
     return doc, call
 
 
 @pytest.mark.parametrize("leaf,value,wire_leaf,expected", [
     ("combat.defensePoints", -100, "combat.defensePoints", -100),
-    ("combat.attackSpeedPercent", -80, "combat.attackSpeedPercent", -80),
-    ("combat.critChancePoints", -100, "combat.critChancePoints", -100),
-    ("combat.damagePercent", -90, "combat.damagePercent", -90),
-    ("moveSpeedBonusPercent", -80, "movementSpeed", -0.8),
-    ("jumpSpeedBonusBlocksPerSecond", -30, "jumpBoost", -8),
-    ("manaRegenBonusPoints", -100, "manaRegen", -100),
-    ("lifeRegenHpPerSecond", -50, "lifeRegen", -100),
+    ("combat.attackSpeedBonus", -80, "combat.attackSpeedPercent", -80),
+    ("combat.critChance", -100, "combat.critChancePoints", -100),
+    ("combat.damageBonus", -90, "combat.damagePercent", -90),
+    ("moveSpeedBonus", -80, "movementSpeed", -0.8),
+    ("jumpSpeedBonus", -30, "jumpBoost", -8),
+    ("manaRegen", -100, "manaRegen", -100),
+    ("lifeRegen", -50, "lifeRegen", -100),
     ("miningSpeedMultiplier", 0.25, "miningSpeedMultiplier", 0.25),
 ])
-@pytest.mark.parametrize("activation", [FN, "refresh_generated_effect_group_while_held", "apply_generated_buff_on_event"])
+@pytest.mark.parametrize("activation", [FN, "refresh_held_effect", "generated_buff_on_event"])
 def test_each_penalty_alone_is_an_effect_in_author_and_saved_wire(leaf, value, wire_leaf, expected, activation):
     doc, call = document(activation)
     if leaf.startswith("combat."):
-        call["params"]["combat"] = dict(defensePoints=0, attackSpeedPercent=0,
-            critChancePoints=0, damagePercent=0, damageClass="generic")
+        call["params"]["combat"] = dict(defensePoints=0, attackSpeedBonus=0,
+            critChance=0, damageBonus=0, damageClass="generic")
         call["params"]["combat"][leaf.split(".")[1]] = value
     else:
         call["params"][leaf] = value
@@ -64,16 +64,16 @@ def test_each_penalty_alone_is_an_effect_in_author_and_saved_wire(leaf, value, w
 
 
 @pytest.mark.parametrize("leaf,bad,good", [
-    ("combat.defensePoints", -101, -100), ("combat.attackSpeedPercent", -81, -80),
-    ("combat.critChancePoints", -101, -100), ("combat.damagePercent", -91, -90),
-    ("moveSpeedBonusPercent", -81, -80), ("jumpSpeedBonusBlocksPerSecond", -31, -30),
-    ("manaRegenBonusPoints", -101, -100), ("lifeRegenHpPerSecond", -50.5, -49.5),
+    ("combat.defensePoints", -101, -100), ("combat.attackSpeedBonus", -81, -80),
+    ("combat.critChance", -101, -100), ("combat.damageBonus", -91, -90),
+    ("moveSpeedBonus", -81, -80), ("jumpSpeedBonus", -31, -30),
+    ("manaRegen", -101, -100), ("lifeRegen", -50.5, -49.5),
 ])
 def test_signed_leaf_repair_freezes_valid_combat_and_utility_neighbors(leaf, bad, good):
     doc, call = document()
     call["params"]["lightStrength"] = 0.25
-    call["params"]["combat"] = dict(defensePoints=0, attackSpeedPercent=0,
-        critChancePoints=0, damagePercent=0, damageClass="magic")
+    call["params"]["combat"] = dict(defensePoints=0, attackSpeedBonus=0,
+        critChance=0, damageBonus=0, damageClass="magic")
     parent = call["params"]["combat"] if leaf.startswith("combat.") else call["params"]
     parent[leaf.split(".")[-1]] = bad
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
@@ -97,8 +97,8 @@ def test_signed_leaf_repair_freezes_valid_combat_and_utility_neighbors(leaf, bad
 
 def test_neutral_combat_repair_opens_stat_leaves_not_valid_class_selector():
     doc, call = document()
-    call["params"]["combat"] = dict(defensePoints=0, attackSpeedPercent=0,
-        critChancePoints=0, damagePercent=0, damageClass="magic")
+    call["params"]["combat"] = dict(defensePoints=0, attackSpeedBonus=0,
+        critChance=0, damageBonus=0, damageClass="magic")
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
     paths = next(r["paths"] for r in scope["fieldPermissions"]["calls"] if r["id"] == call["id"])
     assert "params.combat.defensePoints" in paths
@@ -120,23 +120,23 @@ def test_neutral_utility_repair_keeps_accepted_combat_absence_frozen():
     paths = next(r["paths"] for r in scope["fieldPermissions"]["calls"] if r["id"] == call["id"])
     assert not any(path.startswith("params.combat") for path in paths)
     candidate = deepcopy(call)
-    candidate["params"].update(moveSpeedBonusPercent=-10, combat=dict(defensePoints=20,
-        attackSpeedPercent=10, critChancePoints=10, damagePercent=10, damageClass="melee"))
+    candidate["params"].update(moveSpeedBonus=-10, combat=dict(defensePoints=20,
+        attackSpeedBonus=10, critChance=10, damageBonus=10, damageClass="melee"))
     filtered, audit = filter_repair_patch_scope(doc, {"note": "utility penalty", "callsUpsert": [candidate]}, scope)
     assert audit["ok"], audit
     fixed = apply_repair_patch(doc, filtered)
     actual = next(c for c in fixed["runtimeProgram"]["calls"] if c["id"] == call["id"])
     assert "combat" not in actual["params"]
-    assert actual["params"]["moveSpeedBonusPercent"] == -10
+    assert actual["params"]["moveSpeedBonus"] == -10
     assert validate_runtime_wire(compile_runtime_program(fixed))["ok"]
 
 
 def test_existing_positive_upper_bounds_and_exact_steps_are_unchanged():
     cap = CAPABILITY_REGISTRY[FN]
     assert {name: spec.maximum for name, spec in cap.params["combat"].properties.items() if spec.kind != "string"} == {
-        "defensePoints": 100, "attackSpeedPercent": 100, "critChancePoints": 100, "damagePercent": 200}
-    assert cap.params["moveSpeedBonusPercent"].maximum == 200
-    assert cap.params["jumpSpeedBonusBlocksPerSecond"].maximum == 30
-    assert cap.params["manaRegenBonusPoints"].maximum == 120
-    assert cap.params["lifeRegenHpPerSecond"].maximum == 60
-    assert cap.params["lifeRegenHpPerSecond"].multiple_of == 0.5
+        "defensePoints": 100, "attackSpeedBonus": 100, "critChance": 100, "damageBonus": 200}
+    assert cap.params["moveSpeedBonus"].maximum == 200
+    assert cap.params["jumpSpeedBonus"].maximum == 30
+    assert cap.params["manaRegen"].maximum == 120
+    assert cap.params["lifeRegen"].maximum == 60
+    assert cap.params["lifeRegen"].multiple_of == 0.5

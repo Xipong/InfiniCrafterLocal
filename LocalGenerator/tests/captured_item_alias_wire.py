@@ -41,11 +41,11 @@ def historical_item_alias_wire(document):
     contract = projected["runtimeContract"]
     rows = contract["finalWireReceipts"]
     for row in list(rows):
-        if row.get("fn") == "configure_item_use" and row["authoredPath"].endswith(".params.customHeldSprite"):
+        if row.get("fn") == "item_use" and row["authoredPath"].endswith(".params.customHeldSprite"):
             assert row["status"] == "delivered" and row["value"] in ("immediate", "on_release")
             assert row["finalPath"] in ("gameplay.releaseTiming", "runtimeProgram.itemUse.releaseTiming")
             row["authoredPath"] = row["authoredPath"].removesuffix("customHeldSprite") + "heldSpriteVisibilityHint"
-    placement_calls = {row["callId"] for row in rows if row.get("fn") == "configure_tile_placement"}
+    placement_calls = {row["callId"] for row in rows if row.get("fn") == "place_tile"}
     for call_id in placement_calls:
         selected = [row for row in rows if row.get("callId") == call_id]
         assert len(selected) == 3
@@ -55,7 +55,7 @@ def historical_item_alias_wire(document):
         inactive["status"] = "delivered"
         inactive["authoredPath"] = inactive["authoredPath"].removesuffix("fn") + "params.wallId"
         for row in selected:
-            assert row["fn"] == "configure_tile_placement"
+            assert row["fn"] == "place_tile"
             row["fn"] = "configure_placeable"
         positions = [i for i, row in enumerate(rows) if row.get("callId") == call_id]
         ordered = [next(row for row in selected if row["finalPath"].endswith("." + field))
@@ -63,6 +63,6 @@ def historical_item_alias_wire(document):
         for i, row in zip(positions, ordered):
             rows[i] = row
     stats = contract["validation"]["stats"]
-    stats["capabilitiesUsed"] = sorted("configure_placeable" if fn == "configure_tile_placement" else fn
+    stats["capabilitiesUsed"] = sorted("configure_placeable" if fn == "place_tile" else fn
                                        for fn in stats["capabilitiesUsed"])
     return projected

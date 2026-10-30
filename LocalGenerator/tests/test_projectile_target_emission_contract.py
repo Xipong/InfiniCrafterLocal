@@ -23,7 +23,7 @@ from test_codex_subscription_contract import _encode_nullable_fixture
 from test_low_level_three_stage_pipeline import wire_transport
 
 
-FN = "select_targets_and_emit_on_event"
+FN = "emit_to_targets_on_event"
 CAP = CAPABILITY_REGISTRY[FN]
 
 
@@ -39,12 +39,12 @@ def _call(doc):
 
 def _event(wire):
     return next(event for entity in wire["runtimeProgram"]["entities"] for event in entity["events"]
-                if event["action"] == FN)
+                if event["action"] == CAP.persisted_name)
 
 
 def _child_spawn(doc):
     return next(row for row in doc["runtimeProgram"]["calls"]
-                if row.get("target") == _call(doc)["params"]["entity"] and row["fn"] == "configure_spawn")
+                if row.get("target") == _call(doc)["params"]["entity"] and row["fn"] == "spawn")
 
 
 def test_child_reference_requirements_do_not_expand_source_entity_dependency_scope():
@@ -63,12 +63,12 @@ def test_child_reference_requirements_do_not_expand_source_entity_dependency_sco
     ("event_target", "exclude_visited", False, "on_crit", 0),
 ])
 def test_representative_selection_choices_reach_exact_opcode_and_receipts(anchor, repeats, los, event_name, delay):
-    doc = _doc(selectionAnchor=anchor, repeatPolicy=repeats, requireLineOfSight=los, when=event_name, delaySeconds=delay / 60)
+    doc = _doc(selectionAnchor=anchor, repeatPolicy=repeats, requireLineOfSight=los, when=event_name, delay=delay / 60)
     original = deepcopy(doc)
     assert validate_runtime_program(doc)["ok"]
     wire = compile_runtime_program(doc)
     event = _event(wire)
-    assert event == {"id": "witness_call", "action": FN, "actionCode": 8,
+    assert event == {"id": "witness_call", "action": CAP.persisted_name, "actionCode": 8,
                      **{CAP.params[k].wire_name or k: CAP.params[k].to_wire(v) for k, v in _call(doc)["params"].items()}}
     receipts = [row for row in wire["runtimeContract"]["finalWireReceipts"]
                 if row.get("fn") == FN and ".params." in row["authoredPath"]]
@@ -87,7 +87,7 @@ def test_real_author_packet_and_nullable_inverse_preserve_full_emission_choice(w
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     responses, requests = wire_transport
     doc = _doc(selectionAnchor="event_target", repeatPolicy="exclude_visited", requireLineOfSight=True,
-               stepCount=12, stepRangeTiles=59.99999999999999, initialIgnoreCountdownUpdates=0, delaySeconds=1 / 60)
+               stepCount=12, stepRangeTiles=59.99999999999999, ignoreTargetUpdates=0, delay=1 / 60)
     doc = {key: value for key, value in doc.items() if key in {"name", "category", "runtimeProgram"}}
     local_schema = contract.author_item_response_schema()
     payload = _encode_nullable_fixture(doc, local_schema) if mode == "json_schema" else doc
@@ -120,16 +120,16 @@ def test_required_choices_cannot_be_filled_by_provider_or_author_defaults(name):
     ("stepRangeTiles", 60.00000000000001), ("stepRangeTiles", float("nan")), ("stepRangeTiles", float("inf")),
     ("selectionAnchor", None), ("selectionAnchor", "closest"), ("repeatPolicy", "never"),
     ("requireLineOfSight", 0), ("requireLineOfSight", None),
-    ("initialIgnoreCountdownUpdates", None), ("initialIgnoreCountdownUpdates", -1),
-    ("initialIgnoreCountdownUpdates", 601), ("initialIgnoreCountdownUpdates", 10.0),
-    ("delaySeconds", True), ("delaySeconds", -0.5), ("delaySeconds", 601 / 60),
+    ("ignoreTargetUpdates", None), ("ignoreTargetUpdates", -1),
+    ("ignoreTargetUpdates", 601), ("ignoreTargetUpdates", 10.0),
+    ("delay", True), ("delay", -0.5), ("delay", 601 / 60),
 ])
 def test_invalid_present_author_and_saved_wire_choices_remain_red(name, value):
     doc = _doc(**{name: value})
     assert not validate_runtime_program(doc)["ok"]
     wire = compile_runtime_program(_doc())
     wire.pop("runtimeContract")
-    _event(wire)[CAP.params[name].wire_name or name] = (value * 60 if name == "delaySeconds" and type(value) in (int, float) else value)
+    _event(wire)[CAP.params[name].wire_name or name] = (value * 60 if name == "delay" and type(value) in (int, float) else value)
     report = validate_runtime_wire(wire)
     assert not report["ok"], report
     assert any(row["path"].endswith("." + (CAP.params[name].wire_name or name)) for row in report["errors"])
@@ -159,7 +159,7 @@ def test_reference_diagnoses_exact_exclusive_child_dependency_without_rewriting_
     assert doc == before
     wire = compile_runtime_program(_doc()); wire.pop("runtimeContract")
     child = next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == "witness_child")
-    child["spawn"][CAPABILITY_REGISTRY["configure_spawn"].params[name].wire_name or name] = value
+    child["spawn"][CAPABILITY_REGISTRY["spawn"].params[name].wire_name or name] = value
     assert not validate_runtime_wire(wire)["ok"]
 
 
@@ -170,7 +170,7 @@ def _copy_child(doc, name):
     for row in calls:
         row["id"] = name + "_" + row["id"]
         row["target"] = name
-        if row["fn"] == "configure_spawn":
+        if row["fn"] == "spawn":
             row["params"].update(aim="velocity", position={"at": "activation_origin"}, offsetBlocks=(0) / 16)
     return entity, calls
 
@@ -182,16 +182,16 @@ def test_production_repair_can_retarget_or_create_exact_child_and_freezes_existi
     # The independently valid child remains reachable through its existing
     # producer. Repair cannot delete it or invent a new producer to hide an
     # orphan caused by retargeting the only reference (negative case below).
-    doc["runtimeProgram"]["calls"].append({"id": "keep_original", "target": "witness_entity", "fn": "spawn_entity_on_event",
+    doc["runtimeProgram"]["calls"].append({"id": "keep_original", "target": "witness_entity", "fn": "spawn_on_event",
         "params": {"entity": "witness_child", "when": "on_hit", "count": 1, "spreadRadians": 0.0,
-                   "damageMultiplier": 1.0, 'delaySeconds': (0) / 60,
+                   "damageMultiplier": 1.0, 'delay': (0) / 60,
                    "damageBasis": "authored_child", "knockbackBasis": "authored_child"}})
     child, calls = _copy_child(doc, "selected")
     if not create:
         doc["runtimeProgram"]["entities"].append(child); doc["runtimeProgram"]["calls"].extend(calls)
-        doc["runtimeProgram"]["calls"].append({"id": "keep_selected", "target": "witness_entity", "fn": "spawn_entity_on_event",
+        doc["runtimeProgram"]["calls"].append({"id": "keep_selected", "target": "witness_entity", "fn": "spawn_on_event",
             "params": {"entity": "selected", "when": "on_hit", "count": 1, "spreadRadians": 0.0,
-                       "damageMultiplier": 1.0, 'delaySeconds': (0) / 60,
+                       "damageMultiplier": 1.0, 'delay': (0) / 60,
                        "damageBasis": "authored_child", "knockbackBasis": "authored_child"}})
     before = deepcopy(doc)
     candidate = deepcopy(_call(doc)); candidate["params"].update(entity="selected", stepCount=12)
@@ -325,23 +325,23 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     calls = doc["runtimeProgram"]["calls"]
     emission = _call(doc)
     child_spawn = _child_spawn(doc)
-    child_spawn["params"]["velocity"] = {"cone": {'minSpeedBlocksPerSecond': (4) * 60 / 16, 'maxSpeedBlocksPerSecond': (7) * 60 / 16, "halfAngleRadians": 0.2}}
-    calls.append({"id": "combined_hit_target_geometry", "fn": "spawn_entity_from_hit_target",
+    child_spawn["params"]["velocity"] = {"cone": {'minSpeed': (4) * 60 / 16, 'maxSpeed': (7) * 60 / 16, "halfAngleRadians": 0.2}}
+    calls.append({"id": "combined_hit_target_geometry", "fn": "spawn_at_hit",
                   "target": emission["target"],
                   "params": {**deepcopy(next(row["params"] for row in
-                      build_capability_witness("spawn_entity_from_hit_target")["runtimeProgram"]["calls"]
-                      if row["fn"] == "spawn_entity_from_hit_target")), "entity": emission["params"]["entity"]}})
-    calls.append({"id": "combined_parent_combat", "fn": "spawn_entity_on_event", "target": emission["target"],
+                      build_capability_witness("spawn_at_hit")["runtimeProgram"]["calls"]
+                      if row["fn"] == "spawn_at_hit")), "entity": emission["params"]["entity"]}})
+    calls.append({"id": "combined_parent_combat", "fn": "spawn_on_event", "target": emission["target"],
                   "params": {"when": "on_hit", "entity": emission["params"]["entity"], "count": 1,
-                             "spreadRadians": 0.0, "damageMultiplier": 0.5, 'delaySeconds': (0) / 60,
+                             "spreadRadians": 0.0, "damageMultiplier": 0.5, 'delay': (0) / 60,
                              "damageBasis": "live_parent", "knockbackBasis": "authored_child"}})
-    owner = next(row["target"] for row in calls if row["fn"] == "set_projectile_hitbox")
-    for fn in ("set_projectile_hitbox_curve", "configure_weapon_ammo", "refresh_generated_effect_group_while_held"):
+    owner = next(row["target"] for row in calls if row["fn"] == "projectile_hitbox")
+    for fn in ("hitbox_curve", "weapon_ammo", "refresh_held_effect"):
         for row in build_capability_witness(fn)["runtimeProgram"]["calls"]:
-            if row["fn"] not in {fn, "apply_generated_buff_on_use"}:
+            if row["fn"] not in {fn, "generated_buff_on_use"}:
                 continue
             row["id"] = "combined_" + str(len(calls))
-            if fn == "set_projectile_hitbox_curve":
+            if fn == "hitbox_curve":
                 row["target"] = owner
             else:
                 row.pop("target", None)
@@ -366,7 +366,7 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     event = next(event for entity in wire["runtimeProgram"]["entities"] for event in entity["events"]
                  if event["id"] == "combined_parent_combat")
     assert event["damageBasis"] == "live_parent" and event["knockbackBasis"] == "authored_child"
-    assert _event(wire)["action"] == FN
+    assert _event(wire)["action"] == CAP.persisted_name
     sampled_child = next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == emission["params"]["entity"])
     assert sampled_child["spawn"]["velocityDistribution"] == {"kind": "cone", "minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7, "halfAngleRadians": 0.2}
     geometry = next(event for entity in wire["runtimeProgram"]["entities"] for event in entity["events"]
@@ -384,14 +384,14 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     assert next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == owner)["hitboxCurve"]["endScale"] == 0.25
 
     broken = deepcopy(accepted)
-    curve = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "set_projectile_hitbox_curve")
+    curve = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "hitbox_curve")
     curve["params"]["endScale"] = 9
     candidate = deepcopy(curve)
     candidate["params"].update(endScale=0.25, startScale=7)
-    frozen = deepcopy(next(row for row in calls if row["fn"] == "configure_weapon_ammo"))
+    frozen = deepcopy(next(row for row in calls if row["fn"] == "weapon_ammo"))
     frozen["params"]["ammoCategory"] = "bullet"
     hostile_spawn = deepcopy(child_spawn)
-    hostile_spawn["params"]["velocity"]["cone"]['maxSpeedBlocksPerSecond'] = (12) * 60 / 16
+    hostile_spawn["params"]["velocity"]["cone"]['maxSpeed'] = (12) * 60 / 16
     hostile_emission = deepcopy(emission)
     hostile_emission["params"]["selectionAnchor"] = "event_target"
     hostile_geometry = deepcopy(next(row for row in calls if row["id"] == "combined_hit_target_geometry"))
@@ -419,10 +419,10 @@ def test_target_emission_wire_budget_preserves_disjoint_item_use_lanes_and_commo
     alternate.update(id="alternate_use_binding", input="alternate_use")
     program["bindings"].append(alternate)
     for index, use_input in enumerate(("primary_use", "primary_use", "alternate_use", "alternate_use")):
-        program["calls"].append({"id": f"use_spawn_{index}", "fn": "spawn_entity_on_event", "target": item_id,
+        program["calls"].append({"id": f"use_spawn_{index}", "fn": "spawn_on_event", "target": item_id,
             "params": {"when": {"on": "on_use", "useInput": use_input}, "entity": child_id,
                        "count": 10, "spreadRadians": 0, "damageBasis": "authored_child",
-                       "knockbackBasis": "authored_child", "damageMultiplier": 1, "delaySeconds": 0}})
+                       "knockbackBasis": "authored_child", "damageMultiplier": 1, "delay": 0}})
     assert validate_runtime_program(doc)["stats"]["eventSpawnBudget"] == 21
     wire = compile_runtime_program(doc)
     wire.pop("runtimeContract")

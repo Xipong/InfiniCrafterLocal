@@ -176,11 +176,11 @@ def assert_repaired_source(repaired, expected):
 
 def binding_case(case):
     if case == "equipped":
-        doc = build_capability_witness("configure_accessory")
+        doc = build_capability_witness("accessory")
     elif case == "effects":
-        doc = build_capability_witness("move_player_on_use")
+        doc = build_capability_witness("blink_on_use")
     elif case == "body":
-        doc = build_capability_witness("configure_item_use")
+        doc = build_capability_witness("item_use")
     elif case == "hold":
         doc = build_runtime_fixture("held_and_deployed")
         row = doc["runtimeProgram"]["bindings"][0]
@@ -189,7 +189,7 @@ def binding_case(case):
         row.pop("stackCost")
         row.pop("contactDamage")
     elif case == "pure-placement":
-        doc = build_capability_witness("configure_tile_placement")
+        doc = build_capability_witness("place_tile")
     else:
         assert case == "placement"
         doc = build_runtime_fixture("fishing_platform_tool")
@@ -226,7 +226,7 @@ class BindingTransaction:
         if group is not None:
             self.row.setdefault("action", {})["effectGroupId"] = group
             next(c for c in self.doc["runtimeProgram"]["calls"]
-                 if c["fn"] == "move_player_on_use")["params"]["effectGroupId"] = group
+                 if c["fn"] == "blink_on_use")["params"]["effectGroupId"] = group
         edit_fields(self.row, values or {})
         self.expected = deepcopy(self.doc)
         self.candidate = deepcopy(self.row)

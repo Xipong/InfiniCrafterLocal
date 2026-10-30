@@ -19,10 +19,10 @@ def _timing_card(card):
     rule, = [row for row in card["requires"] if row["kind"] == "timing_pair_or_window"]
     assert rule["allowAbsent"] is True
     assert (rule["param"], rule["otherParam"], rule["anyOf"]) == (
-        "startDelaySeconds", "durationSeconds", ["window"])
+        "startDelay", "duration", ["window"])
     window = card["params"]["window"]
     assert window.get("default") == window.get("neutral") == {"phase": "always"}
-    for key in ("startDelaySeconds", "durationSeconds", "window"):
+    for key in ("startDelay", "duration", "window"):
         assert not card["params"][key].get("required", False)
 
 
@@ -75,13 +75,13 @@ def test_numeric_repair_cannot_fill_or_rewrite_accepted_timing_in_actual_packets
     call["params"][author_leaf] = -99999
     frozen = json.dumps(source, sort_keys=True)
     hostile = deepcopy(call)
-    hostile["params"].update({author_leaf: value, "startDelaySeconds": 7,
-                              "durationSeconds": 8, "window": {"phase": "outbound"}})
+    hostile["params"].update({author_leaf: value, "startDelay": 7,
+                              "duration": 8, "window": {"phase": "outbound"}})
     incoming = {
         "note": "Fix only the numeric leaf; hostile timing fill/rewrite/delete must be ignored",
         "callsUpsert": [hostile],
         "callParamKeysDelete": [{"callId": call["id"], "key": key}
-                                for key in ("startDelaySeconds", "durationSeconds", "window")],
+                                for key in ("startDelay", "duration", "window")],
     }
     repaired, request = repair_with_response(monkeypatch, source, incoming, mode)
     sent = _serialized_chat_request(monkeypatch, request)

@@ -24,7 +24,7 @@ def test_format_repair_sends_only_recovered_function_grammar_without_design_cont
     raw = json.dumps(source, ensure_ascii=False)[:-1] + ",}"
     response = copy.deepcopy(source)
     if changed:
-        next(row for row in response["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")["params"]["damage"] += 1
+        next(row for row in response["runtimeProgram"]["calls"] if row["fn"] == "item_stats")["params"]["damage"] += 1
     calls = {row["fn"] for row in source["runtimeProgram"]["calls"]}
     requests = []
 

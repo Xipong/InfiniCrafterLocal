@@ -19,7 +19,7 @@ from infini_local.pipelines import author_item_contract as contract
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
-_PRODUCERS = ("spawn_entity_on_event", "target_and_fire")
+_PRODUCERS = ("spawn_on_event", "target_and_fire")
 _RETAINED = Path(__file__).with_name("fixtures") / "parent_combat_retained_wire.json"
 
 
@@ -30,34 +30,34 @@ def _accepted_main_combat_composition(damage_basis="live_parent", knockback_basi
     calls = document["runtimeProgram"]["calls"]
     # Author a sustained beam explicitly, retaining the fixture's aim/attachment
     # and non-motion combat lanes. A reach curve is not a beam controller.
-    reach = _call(document, "attach_projectile")
+    reach = _call(document, "attach")
     assert reach["target"] == "held_lantern_pike"
     del reach["params"]["reachCurve"]
-    _call(document, "set_projectile_rotation")["params"] = {"mode": "axis", "offsetRadians": 0}
-    _call(document, "set_projectile_owner_control")["params"].update(
+    _call(document, "rotate_sprite")["params"] = {"mode": "axis", "offsetRadians": 0}
+    _call(document, "set_owner_control")["params"].update(
         requireHeldItem=True, requireChannel=True, animation="keep_alive", lifetime="keep_alive",
     )
     calls.extend([
-        {"id": "held_beam_geometry", "fn": "set_projectile_beam_geometry", "target": "held_lantern_pike",
-         "params": {"lengthBlocks": 20, "widthBlocks": 0.75, "raycastTiles": True,
+        {"id": "held_beam_geometry", "fn": "beam_geometry", "target": "held_lantern_pike",
+         "params": {"length": 20, "widthBlocks": 0.75, "raycastTiles": True,
                     "ramp": {"warmupSeconds": 0.2, "initialDamageMultiplier": 0.35,
                     "initialWidthMultiplier": 0.22, "damageStartProgress": 0.08}}},
-        {"id": "held_beam_mana", "fn": "sustain_projectile_mana", "target": "held_lantern_pike"},
+        {"id": "held_beam_mana", "fn": "sustain_mana", "target": "held_lantern_pike"},
     ])
-    _call(document, "configure_item_use")["params"]["channel"] = True
+    _call(document, "item_use")["params"]["channel"] = True
     _call(document, "target_and_fire")["params"].update(
         damageBasis=damage_basis, knockbackBasis=knockback_basis, damageMultiplier=multiplier,
         count=4, spreadRadians=0.6, targetPolicy="player_assigned_first", requireLineOfSight=True, hardRange=True,
     )
     calls.extend([
-        {"id": "ammo", "fn": "configure_weapon_ammo",
+        {"id": "ammo", "fn": "weapon_ammo",
          "params": {"ammoCategory": "arrow", "speedBasis": "native_shot"}},
-        {"id": "native", "fn": "set_projectile_sentry", "target": "deployed_lantern", "params": {"enabled": True}},
-        {"id": "pool", "fn": "set_descendant_concurrency", "target": "deployed_lantern", "params": {"maxActive": 12}},
-        {"id": "shot_event", "fn": "spawn_entity_on_event", "target": "deployed_lantern", "params": {
+        {"id": "native", "fn": "sentry", "target": "deployed_lantern", "params": {"enabled": True}},
+        {"id": "pool", "fn": "descendant_limit", "target": "deployed_lantern", "params": {"maxActive": 12}},
+        {"id": "shot_event", "fn": "spawn_on_event", "target": "deployed_lantern", "params": {
             "when": {'everySeconds': (90) / 60}, "entity": "lantern_bolt", "count": 2, "spreadRadians": 0.5,
             "damageBasis": damage_basis, "knockbackBasis": knockback_basis,
-            "damageMultiplier": multiplier, 'delaySeconds': (3) / 60,
+            "damageMultiplier": multiplier, 'delay': (3) / 60,
         }},
     ])
     return document
@@ -79,8 +79,8 @@ def test_parent_combat_composes_with_accepted_volley_ammo_lifecycle_beam_through
     names = {card["fn"] for card in packet["runtimeCapabilityContract"]["catalog"]["capabilities"]}
     source = _accepted_main_combat_composition(damage_basis, knockback_basis, multiplier)
     source = {key: source[key] for key in ("name", "category", "runtimeProgram")}
-    assert {"target_and_fire", "configure_weapon_ammo", "set_projectile_sentry", "set_descendant_concurrency",
-            "set_projectile_beam_geometry", "sustain_projectile_mana"} <= names
+    assert {"target_and_fire", "weapon_ammo", "sentry", "descendant_limit",
+            "beam_geometry", "sustain_mana"} <= names
     assert "channel_beam" not in names
     before = deepcopy(source)
     restored = provider_roundtrip(source, request["response_format"])
@@ -118,13 +118,13 @@ def test_combined_combat_keeps_source_identity_and_exact_present_wire_receipt_gu
     wire = compile_runtime_program(source)
     rows = wire["runtimeContract"]["finalWireReceipts"]
     if mutation == "source_pool_target":
-        _call(source, "set_descendant_concurrency")["target"] = "lantern_bolt"
+        _call(source, "descendant_limit")["target"] = "lantern_bolt"
         assert validate_runtime_program(source)["ok"]
     elif mutation == "source_event_target":
-        _call(source, "spawn_entity_on_event")["target"] = "held_lantern_pike"
+        _call(source, "spawn_on_event")["target"] = "held_lantern_pike"
         assert validate_runtime_program(source)["ok"]
     elif mutation == "final_event_id":
-        _wire_component(wire, _call(source, "spawn_entity_on_event"))["id"] = "different_valid_event_id"
+        _wire_component(wire, _call(source, "spawn_on_event"))["id"] = "different_valid_event_id"
     elif mutation == "drop_combat_receipt":
         rows[:] = [row for row in rows if not (row.get("fn") == "target_and_fire"
                    and row.get("authoredPath", "").endswith(".params.damageBasis"))]
@@ -143,7 +143,7 @@ def _call(document, fn):
 def _wire_component(wire, call):
     entity = next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == call["target"])
     return (next(row for row in entity["events"] if row["id"] == call["id"])
-            if call["fn"] == "spawn_entity_on_event" else entity["targeting"])
+            if call["fn"] == "spawn_on_event" else entity["targeting"])
 
 
 # Both producers share the scalar owner. RuntimeChildCombat.TryResolve selects
@@ -183,8 +183,8 @@ def test_combat_choices_reach_exact_component_provider_inverse_and_receipts(fn, 
 # Both independent producer consumers and both scalar destinations, without a
 # producer x field x JSON-type product owned by the shared enum validator.
 @pytest.mark.parametrize("fn,name,invalid", [
-    ("spawn_entity_on_event", "damageBasis", None),
-    ("spawn_entity_on_event", "knockbackBasis", True),
+    ("spawn_on_event", "damageBasis", None),
+    ("spawn_on_event", "knockbackBasis", True),
     ("target_and_fire", "damageBasis", "Live_Parent"),
     ("target_and_fire", "knockbackBasis", " live_parent"),
     ("target_and_fire", "damageBasis", {}),
@@ -272,8 +272,8 @@ def test_targeting_neutral_omissions_and_inactive_components_remain_valid():
 
 @pytest.mark.parametrize("name", ["damageBasis", "knockbackBasis"])
 def test_item_body_live_parent_reports_and_repairs_only_the_selected_basis(name):
-    document = build_capability_witness("spawn_entity_on_event")
-    call = _call(document, "spawn_entity_on_event")
+    document = build_capability_witness("spawn_on_event")
+    call = _call(document, "spawn_on_event")
     call["target"] = "item"
     call["params"].update(when="on_use", **{name: "live_parent"})
     report = validate_runtime_program(document)
@@ -288,7 +288,7 @@ def test_item_body_live_parent_reports_and_repairs_only_the_selected_basis(name)
     patch, audit = filter_repair_patch_scope(document, {"note": "explicit item source", "callsUpsert": [candidate]}, scope)
     assert audit["ok"] and audit["ignoredChanges"]
     repaired = apply_repair_patch(document, patch)
-    assert _call(repaired, "spawn_entity_on_event")["params"]["count"] == call["params"]["count"]
+    assert _call(repaired, "spawn_on_event")["params"]["count"] == call["params"]["count"]
     assert validate_runtime_program(repaired)["ok"]
     wire = compile_runtime_program(repaired)
     assert validate_runtime_wire(wire)["ok"]
@@ -297,8 +297,8 @@ def test_item_body_live_parent_reports_and_repairs_only_the_selected_basis(name)
 
 
 @pytest.mark.parametrize("fn,name,mutation", [
-    ("spawn_entity_on_event", "damageBasis", "drop"),
-    ("spawn_entity_on_event", "knockbackBasis", "duplicate"),
+    ("spawn_on_event", "damageBasis", "drop"),
+    ("spawn_on_event", "knockbackBasis", "duplicate"),
     ("target_and_fire", "damageMultiplier", "wrong-call"),
     ("target_and_fire", "damageBasis", "wrong-source"),
     ("target_and_fire", "knockbackBasis", "swap-equal-bases"),
@@ -338,7 +338,7 @@ def test_present_combat_selector_requires_the_exact_runtime_consumer_even_with_a
     call = _call(document, fn)
     wire = compile_runtime_program(document)
     entity = next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == call["target"])
-    if fn == "spawn_entity_on_event":
+    if fn == "spawn_on_event":
         consumer = _wire_component(wire, call)
         name_key, code_key, other_name, other_code = "action", "actionCode", "chain_damage_on_event", 4
     else:
@@ -381,7 +381,7 @@ def test_archived_old_receipts_refuse_without_mutating_frozen_saved_wire():
                 assert "damageBasis" not in event and "knockbackBasis" not in event
         # Current equivalents still compile with accepted provenance; a live-parent
         # selector cannot be injected without its own modern receipt.
-        authored = build_capability_witness(case["capability"])
+        authored = build_capability_witness("spawn_on_event" if case["capability"] == "spawn_entity_on_event" else case["capability"])
         current = compile_runtime_program(authored)
         assert validate_runtime_wire(current)["ok"]
         assert audit_compiler_receipts(current["runtimeContract"]["finalWireReceipts"],
@@ -402,7 +402,7 @@ def test_live_parent_magnitude_does_not_arm_a_decorative_child(enabled):
     controller["params"]["damageBasis"] = "live_parent"
     child_id = controller["params"]["shotEntity"]
     calls = authored["runtimeProgram"]["calls"]
-    damage = next(c for c in calls if c.get("target") == child_id and c["fn"] == "set_projectile_damage")
+    damage = next(c for c in calls if c.get("target") == child_id and c["fn"] == "projectile_damage")
     if enabled:
         damage["params"]["damage"] = 0  # Explicit enable; live parent supplies magnitude at spawn.
     else:

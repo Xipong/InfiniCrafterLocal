@@ -66,7 +66,7 @@ def test_saving_stack_on_reusable_placement_hybrid_keeps_one_physical_unit():
     binding.update(stackCost=1, stackConsumeChancePercent=35)
     assert validate_runtime_program(authored)["ok"]
     final = compile_runtime_program(authored)
-    stats = next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "configure_item_stats")
+    stats = next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "item_stats")
     stats["params"]["maxStack"] = 2
     assert any(e["code"] == "hybrid_placeable_max_stack" for e in validate_runtime_program(authored)["errors"])
     final.pop("runtimeContract")

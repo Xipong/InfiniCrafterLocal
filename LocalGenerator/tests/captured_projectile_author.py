@@ -13,9 +13,9 @@ from typing import Any
 # accepts the canonical parameter exclusively; no saved document is rewritten.
 _SCALAR_RENAMES = {
     "move_gravity_arc": ("gravityVelocityPerUpdate", "accelY", "gravityPerTick"),
-    "move_orbit": ("rangeTiles", "radiusTiles", "rangeTiles"),
+    "move_orbit": ("range", "radius", "range"),
     "move_yoyo_hover": ("returnSpeed", "speed", "returnSpeed"),
-    "configure_tool": ("miningSpeedScale", "miningSpeedMultiplier", "miningSpeedScale"),
+    "tool_stats": ("miningSpeedScale", "miningSpeedMultiplier", "miningSpeedScale"),
 }
 
 
@@ -34,11 +34,11 @@ def without_captured_projectile_alias_delta(compiled: dict[str, Any]) -> dict[st
     checks = result["runtimeContract"]["validation"]["stats"]["registryDrivenChecks"]
     conditional = [(cap.name, name) for cap in CAPABILITY_REGISTRY.values()
                    for name, spec in cap.params.items() if spec.omission_condition is not None]
-    assert set(conditional) == {("configure_spawn", "count"), ("configure_spawn", "spreadRadians"),
-                                ("set_projectile_collision", "bounceCount")}
+    assert set(conditional) == {("spawn", "count"), ("spawn", "spreadRadians"),
+                                ("projectile_collision", "bounceCount")}
     assert len(CAPABILITY_REGISTRY["pull_owner_to_event_target"].requirements) == 1
-    added_modifier_caps = ("set_projectile_hitbox_curve", "set_projectile_turn_modifier", "set_projectile_speed_modifier",
-                           "set_projectile_homing_modifier", "set_projectile_visual_scale_curve", "orient_whip_to_owner_gravity")
+    added_modifier_caps = ("hitbox_curve", "turn_velocity", "set_projectile_speed_modifier",
+                           "homing", "sprite_scale_curve", "orient_whip_to_owner_gravity")
     added_requirements = sum(len(CAPABILITY_REGISTRY[fn].requirements) for fn in added_modifier_caps)
     assert added_requirements == 9
     # B15 retains one independent old opcode-4 receipt owner, never fresh admission.
@@ -62,7 +62,7 @@ def without_captured_projectile_alias_delta(compiled: dict[str, Any]) -> dict[st
     added = [row for row in rows if row["finalPath"] in removed]
     assert len(added) == len(removed) and {row["finalPath"] for row in added} == removed
     for row in added:
-        assert row["fn"] == "configure_spawn" and row["status"] == "alias_lowering"
+        assert row["fn"] == "spawn" and row["status"] == "alias_lowering"
         assert row["authoredPath"].endswith(".params.position")
         assert type(row["value"]) is int and row["value"] == 0
     result["runtimeContract"]["finalWireReceipts"] = [row for row in rows if row["finalPath"] not in removed]
@@ -75,10 +75,10 @@ def without_captured_projectile_alias_delta(compiled: dict[str, Any]) -> dict[st
             old, canonical, wire = scalar
             assert row["status"] == "delivered" and row["finalPath"].endswith("." + wire)
             row["authoredPath"] = path.removesuffix(canonical) + old
-        elif row["fn"] == "configure_spawn" and path.endswith(".params.position.at"):
+        elif row["fn"] == "spawn" and path.endswith(".params.position.at"):
             assert row["status"] == "delivered"
             row["authoredPath"] = path.removesuffix("position.at") + "placement"
-        elif row["fn"] == "set_projectile_collision":
+        elif row["fn"] == "projectile_collision":
             if path.endswith(".params.updatesPerTick"):
                 assert row["status"] == "delivered"
                 row["authoredPath"] = path.removesuffix("updatesPerTick") + "extraUpdates"
@@ -92,9 +92,9 @@ def without_captured_projectile_alias_delta(compiled: dict[str, Any]) -> dict[st
         elif path.endswith(".params.when"):
             assert row["status"] == "delivered" and row["value"] in {"on_hit", "on_expire"}
             row["authoredPath"] = path.removesuffix("when") + "event"
-        elif row["fn"] == "damage_area_on_event" and path.endswith(".params.radiusTiles"):
+        elif row["fn"] == "damage_area_on_event" and path.endswith(".params.radius"):
             assert row["status"] == "delivered" and row["value"] == 112
-            row["authoredPath"] = path.removesuffix("radiusTiles") + "radiusPx"
+            row["authoredPath"] = path.removesuffix("radius") + "radiusPx"
     rows = result["runtimeContract"]["finalWireReceipts"]
     # Current event aliases put fn-selected literals before the trigger leaf.
     # Reverse that exact three-row order, not arbitrary receipt sorting.
@@ -120,12 +120,12 @@ def project_captured_projectile_call(call: dict[str, Any]) -> None:
         old, canonical, _ = scalar
         assert canonical not in params
         params[canonical] = params.pop(old)
-    elif fn == "configure_spawn" and "placement" in params:
+    elif fn == "spawn" and "placement" in params:
         anchor = params.pop("placement")
         assert anchor in {"item_use_origin", "ground_at_cursor", "cursor"}
         assert "position" not in params
         params["position"] = {"at": "activation_origin" if anchor == "item_use_origin" else anchor}
-    elif fn == "set_projectile_collision" and "npcImmunityMode" in params:
+    elif fn == "projectile_collision" and "npcImmunityMode" in params:
         mode = params.pop("npcImmunityMode")
         cooldown = params.pop("localNpcHitCooldownEngineUnits")
         assert mode in {"owner", "local"}
@@ -137,13 +137,13 @@ def project_captured_projectile_call(call: dict[str, Any]) -> None:
             "once_per_npc" if cooldown == -1 else {"localCooldown": cooldown}
         )
         params["updatesPerTick"] = params.pop("extraUpdates") + 1
-    elif fn in {"apply_status_on_event", "heal_owner_on_event", "damage_area_on_event", "spawn_entity_on_event"}:
+    elif fn in {"apply_status_on_event", "heal_owner_on_event", "damage_area_on_event", "spawn_on_event"}:
         assert params.get("event") in {"on_hit", "on_expire"}
         assert "when" not in params
         params["when"] = params.pop("event")
         if fn == "damage_area_on_event":
             assert params["radiusPx"] == 112
-            params["radiusTiles"] = params.pop("radiusPx") / 16
+            params["radius"] = params.pop("radiusPx") / 16
 
 
 def project_captured_world_units(document: dict[str, Any]) -> dict[str, Any]:
@@ -153,22 +153,30 @@ def project_captured_world_units(document: dict[str, Any]) -> dict[str, Any]:
     isolated patch has no collision call; complete sources use their own target.
     This helper is never imported by production or used for Author admission.
     """
-    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, RUNTIME_PROGRAM_SCHEMA
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, RUNTIME_PROGRAM_SCHEMA, capability_for_saved_receipt
 
     projected = deepcopy(document)
     program = projected.get("runtimeProgram", {})
     if "schema" in program:
-        assert program["schema"] in {"infini.runtime-program.authoring.v4", "infini.runtime-program.authoring.v5", RUNTIME_PROGRAM_SCHEMA}
+        assert program["schema"] in {"infini.runtime-program.authoring.v4", "infini.runtime-program.authoring.v5", "infini.runtime-program.authoring.v6", RUNTIME_PROGRAM_SCHEMA}
         program["schema"] = RUNTIME_PROGRAM_SCHEMA
     rows = program.get("calls", []) + projected.get("callsUpsert", [])
+    for row in rows:
+        cap = capability_for_saved_receipt(row.get("fn"))
+        if cap is not None:
+            row["fn"] = cap.name
     updates = {row.get("target"): row["params"]["updatesPerTick"] for row in rows
-               if row.get("fn") == "set_projectile_collision" and "updatesPerTick" in row.get("params", {})}
+               if row.get("fn") == "projectile_collision" and "updatesPerTick" in row.get("params", {})}
 
     def convert(values, specs, n):
         if not isinstance(values, dict):
             return
         for name, spec in specs.items():
-            old = next((key for key in spec.predecessor_names if key in values), None)
+            previous = next((key for key in spec.previous_author_names if key in values and key != name), None)
+            if previous is not None:
+                assert name not in values
+                values[name] = values.pop(previous)
+            old = next((key for key in spec.predecessor_names if key in values and key != name), None)
             if old is not None:
                 assert name not in values
                 value = values.pop(old)
@@ -196,7 +204,7 @@ def project_captured_author_notation(document: dict[str, Any]) -> dict[str, Any]
     projected = deepcopy(document)
     program = projected.get("runtimeProgram", {})
     if "schema" in program:
-        assert program["schema"] in {"infini.runtime-program.authoring.v4", "infini.runtime-program.authoring.v5", "infini.runtime-program.authoring.v6"}
+        assert program["schema"] in {"infini.runtime-program.authoring.v4", "infini.runtime-program.authoring.v5", "infini.runtime-program.authoring.v6", "infini.runtime-program.authoring.v7"}
         program["schema"] = "infini.runtime-program.authoring.v5"
     for row in program.get("calls", []) + projected.get("callsUpsert", []):
         if not isinstance(row, dict):

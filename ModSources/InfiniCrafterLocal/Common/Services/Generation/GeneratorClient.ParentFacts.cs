@@ -40,7 +40,7 @@ public sealed partial class GeneratorClient
         catch { return null; }
     });
 
-    private static object ToWireItem(Item item, Player? player = null)
+    internal static JsonObject ToWireItem(Item item, Player? player = null)
     {
         GeneratedItemData? existing = item.ModItem is GeneratedItem generated ? generated.Data : null;
         if (GeneratedItemData.IsPlayerSaveReferenceOnly(existing))
@@ -727,7 +727,7 @@ public sealed partial class GeneratorClient
         };
     }
 
-    private static object? ProjectileRawSnapshot(int projectileType, float itemShootSpeed, string source, Item? sourceItem, int inventorySlot)
+    internal static object? ProjectileRawSnapshot(int projectileType, float itemShootSpeed, string source, Item? sourceItem, int inventorySlot)
     {
         if (projectileType <= ProjectileID.None)
             return null;
@@ -808,6 +808,7 @@ public sealed partial class GeneratorClient
                 damageClass = DamageClassName(p.DamageType),
                 framesRaw = SafeProjFrames(projectileType),
                 setsRaw = ProjectileSetsRaw(projectileType),
+                attackReference = CaptureProjectileAttackReference(p),
                 motionReference = VerifiedSourceMotionReference(p),
                 onHitStatusReference = CaptureNativeHitStatusReference(p)
             };

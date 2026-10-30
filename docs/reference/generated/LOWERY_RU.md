@@ -3,7 +3,7 @@
 > Generated: [`tools/generate/generate_lowery.py`](../../../tools/generate/generate_lowery.py). Не редактировать вручную; менять canonical owner и [обновлять projection](#refresh).
 > Sources: [registry](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py), [Author shape](../../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py), [lowering](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py), [tModLoader vocabulary](../../../LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py), [Author/Repair prose](../../../LocalGenerator/infini_local/pipelines/author_item_contract.py), [unit guide](../../../LocalGenerator/infini_local/pipelines/llm_authoring_prompt.py).
 
-Schemas: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v6` / `infini.runtime-program.wire.v3`.
+Schemas: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v7` / `infini.runtime-program.wire.v3`.
 
 **Навигация:** [граница](#boundary) · [owners](#owners) · [Author → wire](#wire) · [manifest](#lowering) · [технические отображения](#mappings) · [текст и единицы игрока](#player-text) · [config/UI aliases](#config-aliases) · [proxy runtime](#runtime) · [обновление и проверка](#refresh).
 
@@ -54,14 +54,14 @@ Schemas: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v6` / `
 |---|---|---|---|---|
 | on_use | — | primary_use, alternate_use | — | — |
 | on_spawn | — | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |
-| on_hit | set_projectile_damage | primary_use, alternate_use | — | — |
-| on_crit | set_projectile_damage | primary_use, alternate_use | — | — |
-| on_tile_collision | set_projectile_collision | — | — | set_projectile_collision(tileCollide=True) |
-| on_expire | set_projectile_lifetime | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |
+| on_hit | projectile_damage | primary_use, alternate_use | — | — |
+| on_crit | projectile_damage | primary_use, alternate_use | — | — |
+| on_tile_collision | projectile_collision | — | — | projectile_collision(tileCollide=True) |
+| on_expire | projectile_lifetime | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |
 | on_kill | — | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |
 | periodic | — | — | item_body, owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |
-| on_release | charge_then_release, accumulate_projectile_charge | — | — | — |
-| channel_complete | charge_then_release, accumulate_projectile_charge | — | — | — |
+| on_release | charge_then_release, charge | — | — | — |
+| channel_complete | charge_then_release, charge | — | — | — |
 | on_hurt | — | equipped | — | — |
 | on_enemy_kill | — | equipped | — | — |
 
@@ -88,22 +88,22 @@ Exact-repetition policy: `{'kind': 'exact_repetition', 'minimumRepeatedPlacement
 
 | capability | fn-selected wire output | exact value |
 |---|---|---|
-| sustain_projectile_mana | runtimeProgram.entities[].manaSustain.cadence | 'held_item_use_time' |
-| set_projectile_arrival | runtimeProgram.entities[].arrival.action | 'kill' |
-| configure_item_use | runtimeProgram.itemUse.configured | True |
-| collect_seeds_from_grass | gameplay.collectSeedsFromGrass | True |
-| configure_tile_placement | runtimeProgram.bindings[].usePolicy.action.placement.wallId | -1 |
-| configure_wall_placement | runtimeProgram.bindings[].usePolicy.action.placement.tileId | -1 |
+| sustain_mana | runtimeProgram.entities[].manaSustain.cadence | 'held_item_use_time' |
+| kill_on_arrival | runtimeProgram.entities[].arrival.action | 'kill' |
+| item_use | runtimeProgram.itemUse.configured | True |
+| collect_seeds | gameplay.collectSeedsFromGrass | True |
+| place_tile | runtimeProgram.bindings[].usePolicy.action.placement.wallId | -1 |
+| place_wall | runtimeProgram.bindings[].usePolicy.action.placement.tileId | -1 |
 | recall_home_on_use | gameplay.mobilityMode | 'recall_home' |
 | recall_home_on_use | runtimeProgram.effectGroups[].mobilityMode | 'recall_home' |
 | recall_home_on_use | gameplay.mobilityRangeTiles | 0 |
 | recall_home_on_use | runtimeProgram.effectGroups[].mobilityRangeTiles | 0 |
 | recall_home_on_use | gameplay.mobilitySafeTileOnly | False |
 | recall_home_on_use | runtimeProgram.effectGroups[].mobilitySafeTileOnly | False |
-| configure_accessory | accessory.enabled | True |
-| configure_armor | armor.enabled | True |
-| configure_spawn | runtimeProgram.entities[].spawn.enabled | True |
-| set_projectile_damage | runtimeProgram.entities[].damage.enabled | True |
+| accessory | accessory.enabled | True |
+| armor | armor.enabled | True |
+| spawn | runtimeProgram.entities[].spawn.enabled | True |
+| projectile_damage | runtimeProgram.entities[].damage.enabled | True |
 | orient_whip_to_owner_gravity | runtimeProgram.entities[].whipUsesOwnerGravity | True |
 | move_straight | runtimeProgram.entities[].movement.name | 'move_straight' |
 | move_straight | runtimeProgram.entities[].movement.code | 0 |
@@ -151,16 +151,16 @@ Exact-repetition policy: `{'kind': 'exact_repetition', 'minimumRepeatedPlacement
 | charge_then_release | runtimeProgram.entities[].controller.code | 2 |
 | target_and_fire | runtimeProgram.entities[].controller.name | 'target_and_fire' |
 | target_and_fire | runtimeProgram.entities[].controller.code | 3 |
-| spawn_entity_on_event | runtimeProgram.entities[].events[].action | 'spawn_entity_on_event' |
-| spawn_entity_on_event | runtimeProgram.entities[].events[].actionCode | 1 |
-| spawn_entity_from_hit_target | runtimeProgram.entities[].events[].action | 'spawn_entity_on_event' |
-| spawn_entity_from_hit_target | runtimeProgram.entities[].events[].actionCode | 1 |
-| select_targets_and_emit_on_event | runtimeProgram.entities[].events[].action | 'select_targets_and_emit_on_event' |
-| select_targets_and_emit_on_event | runtimeProgram.entities[].events[].actionCode | 8 |
-| apply_generated_buff_on_event | runtimeProgram.entities[].events[].action | 'apply_generated_buff_on_event' |
-| apply_generated_buff_on_event | runtimeProgram.entities[].events[].actionCode | 9 |
-| apply_npc_effect_on_event | runtimeProgram.entities[].events[].action | 'apply_npc_effect_on_event' |
-| apply_npc_effect_on_event | runtimeProgram.entities[].events[].actionCode | 11 |
+| spawn_on_event | runtimeProgram.entities[].events[].action | 'spawn_entity_on_event' |
+| spawn_on_event | runtimeProgram.entities[].events[].actionCode | 1 |
+| spawn_at_hit | runtimeProgram.entities[].events[].action | 'spawn_entity_on_event' |
+| spawn_at_hit | runtimeProgram.entities[].events[].actionCode | 1 |
+| emit_to_targets_on_event | runtimeProgram.entities[].events[].action | 'select_targets_and_emit_on_event' |
+| emit_to_targets_on_event | runtimeProgram.entities[].events[].actionCode | 8 |
+| generated_buff_on_event | runtimeProgram.entities[].events[].action | 'apply_generated_buff_on_event' |
+| generated_buff_on_event | runtimeProgram.entities[].events[].actionCode | 9 |
+| npc_effect_on_event | runtimeProgram.entities[].events[].action | 'apply_npc_effect_on_event' |
+| npc_effect_on_event | runtimeProgram.entities[].events[].actionCode | 11 |
 | apply_status_on_event | runtimeProgram.entities[].events[].action | 'apply_status_on_event' |
 | apply_status_on_event | runtimeProgram.entities[].events[].actionCode | 2 |
 | damage_nearby_on_event | runtimeProgram.entities[].events[].action | 'damage_nearby_on_event' |
@@ -187,7 +187,7 @@ Exact-repetition policy: `{'kind': 'exact_repetition', 'minimumRepeatedPlacement
 
 | authored capability | wire action | fixed outputs |
 |---|---|---|
-| spawn_entity_from_hit_target | spawn_entity_on_event | {'action': 'spawn_entity_on_event', 'actionCode': 1} |
+| spawn_at_hit | spawn_entity_on_event | {'action': 'spawn_entity_on_event', 'actionCode': 1} |
 | damage_nearest_on_event | chain_damage_on_event | {'action': 'chain_damage_on_event', 'actionCode': 4} |
 | pull_owner_to_event_target | pull_on_event | {'mode': 'owner_to_target', 'radiusTiles': 1, 'action': 'pull_on_event', 'actionCode': 5} |
 
@@ -197,42 +197,42 @@ Typed structured choices и конечные enum-отображения так�
 
 | capability.param | declared projection |
 |---|---|
-| accumulate_projectile_charge.releaseEffect | (('releaseEffect.damageMultiplier', 'damageMultiplier', False), ('releaseEffect.knockbackMultiplier', 'knockbackMultiplier', False), ('releaseEffect.speedMultiplier', 'speedMultiplier', False), ('releaseEffect.launchSpeedBlocksPerSecond', 'launchSpeed', False), ('releaseEffect.pauseLifetimeWhileCharging', 'pauseLifetimeWhileCharging', False)) |
-| gate_projectile_contact.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| set_projectile_beam_geometry.ramp | (('ramp.warmupSeconds', 'warmupTicks', False), ('ramp.initialWidthMultiplier', 'initialWidthMultiplier', False), ('ramp.initialDamageMultiplier', 'initialDamageMultiplier', False), ('ramp.damageStartProgress', 'damageStartProgress', False)) |
-| attach_projectile.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| attach_projectile.reachCurve | (('reachCurve.durationSeconds', 'durationTicks', False), ('reachCurve.startOffsetBlocks', 'startOffsetPx', False), ('reachCurve.peakOffsetBlocks', 'peakOffsetPx', False), ('reachCurve.endOffsetBlocks', 'endOffsetPx', False), ('reachCurve.peakProgress', 'peakProgress', False), ('reachCurve.window.phase', 'window.phase', False), ('reachCurve.window.clock', 'window.clock', False), ('reachCurve.window.startDelaySeconds', 'window.startDelayTicks', False), ('reachCurve.window.durationSeconds', 'window.durationTicks', False)) |
-| set_front_arm_pose.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| set_projectile_reach_curve.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| orbit_projectile.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| seek_projectile.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| set_projectile_arrival.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| set_projectile_proximity_action.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| accelerate_projectile_vertical.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| multiply_projectile_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| scale_projectile_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| set_projectile_rotation.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| oscillate_projectile_velocity.law | (('law', 'law', True), ('law.angular_sine.amplitudeRadiansPerSecond', 'amplitude', False), ('law.lateral_velocity_sine.amplitudeBlocksPerSecond', 'amplitude', False)) |
-| oscillate_projectile_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| add_projectile_visual_scale.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| set_projectile_opacity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| configure_item_use.customHeldSprite | {'hidden': 'immediate', 'visible': 'on_release', 'inherit': ''} |
-| apply_generated_buff_on_use.combat | (('combat.defensePoints', 'combat.defensePoints', False), ('combat.attackSpeedPercent', 'combat.attackSpeedPercent', False), ('combat.critChancePoints', 'combat.critChancePoints', False), ('combat.damagePercent', 'combat.damagePercent', False), ('combat.damageClass', 'combat.damageClass', False)) |
-| require_use_condition.condition | (('condition', 'useConditionMode', True), ('condition.lifeAtLeast', 'useConditionMinLife', False), ('condition.manaAtLeast', 'useConditionMinMana', False)) |
-| configure_armor.setBonuses | (('setBonuses.genericCritChancePercentagePoints', 'setBonusGenericCrit', False), ('setBonuses.moveSpeedBonusPercent', 'setBonusMovementSpeed', False), ('setBonuses.lifeRegenHpPerSecond', 'setBonusLifeRegen', False), ('setBonuses.manaRegenBonusPoints', 'setBonusManaRegen', False), ('setBonuses.minionSlotsBonus', 'setBonusMinionSlots', False), ('setBonuses.sentrySlotsBonus', 'setBonusSentrySlots', False), ('setBonuses.manaCostReductionPercentagePoints', 'setBonusManaCostReduction', False), ('setBonuses.ammoSaveChancePercent', 'setBonusAmmoSaveChance', False), ('setBonuses.aggroPoints', 'setBonusAggro', False), ('setBonuses.damageReductionPercentagePoints', 'setBonusEndurance', False), ('setBonuses.genericArmorPenetrationPoints', 'setBonusArmorPenetration', False)) |
-| configure_spawn.velocity | (('velocity.constantSpeedBlocksPerSecond', 'speedPxPerTick', False), ('velocity.fanSpeed', 'velocityDistribution.kind', True), ('velocity.fanSpeed', 'speedPxPerTick', True), ('velocity.fanSpeed.minSpeedBlocksPerSecond', 'velocityDistribution.minSpeedPxPerUpdate', False), ('velocity.fanSpeed.maxSpeedBlocksPerSecond', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.radial', 'velocityDistribution.kind', True), ('velocity.radial', 'speedPxPerTick', True), ('velocity.radial.minSpeedBlocksPerSecond', 'velocityDistribution.minSpeedPxPerUpdate', False), ('velocity.radial.maxSpeedBlocksPerSecond', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.disk', 'velocityDistribution.kind', True), ('velocity.disk', 'speedPxPerTick', True), ('velocity.disk.maxSpeedBlocksPerSecond', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.cone', 'velocityDistribution.kind', True), ('velocity.cone', 'speedPxPerTick', True), ('velocity.cone.minSpeedBlocksPerSecond', 'velocityDistribution.minSpeedPxPerUpdate', False), ('velocity.cone.maxSpeedBlocksPerSecond', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.cone.halfAngleRadians', 'velocityDistribution.halfAngleRadians', False)) |
-| configure_spawn.position | (('position', 'overTarget.heightTiles', True), ('position', 'overTarget.delayTicks', True), ('position.at', 'placement', False), ('position.above', 'placement', False), ('position.heightTiles', 'overTarget.heightTiles', False), ('position.activationDelaySeconds', 'overTarget.delayTicks', False)) |
-| set_projectile_turn_modifier.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| set_projectile_speed_modifier.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| set_projectile_homing_modifier.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| attract_npcs_while_active.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| set_projectile_visual_scale_curve.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
-| set_projectile_collision.immunity | (('immunity', 'npcImmunityMode', True), ('immunity', 'localNpcHitCooldownTicks', True), ('immunity.localCooldown', 'localNpcHitCooldownTicks', False)) |
-| spawn_entity_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.useInput', 'useInput', False), ('when', 'event', True), ('when.everySeconds', 'periodTicks', False), ('when.cooldownSeconds', 'reactionCooldownTicks', False)) |
-| spawn_entity_from_hit_target.geometry | (('geometry', 'spreadRadians', True), ('geometry.beforeProbability', 'hitTargetSpawn.beforeProbability', False), ('geometry.hitboxMaxSideFactor', 'hitTargetSpawn.hitboxMaxSideFactor', False), ('geometry.clearanceBlocks', 'hitTargetSpawn.clearancePx', False), ('geometry.beforePositionJitterRadiusBlocks', 'hitTargetSpawn.beforePositionJitterRadiusPx', False), ('geometry.beforeDirectionJitterRadians', 'hitTargetSpawn.beforeDirectionJitterRadians', False), ('geometry.afterFanSpreadRadians', 'hitTargetSpawn.afterFanSpreadRadians', False), ('geometry.initialIgnoreCountdownUpdates', 'hitTargetSpawn.initialIgnoreCountdownUpdates', False)) |
-| apply_generated_buff_on_event.when | (('when.on', 'event', False), ('when.cooldownSeconds', 'reactionCooldownTicks', False)) |
-| damage_nearby_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.cooldownSeconds', 'reactionCooldownTicks', False)) |
-| damage_area_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.cooldownSeconds', 'reactionCooldownTicks', False)) |
+| charge.releaseEffect | (('releaseEffect.damageMultiplier', 'damageMultiplier', False), ('releaseEffect.knockbackMultiplier', 'knockbackMultiplier', False), ('releaseEffect.speedMultiplier', 'speedMultiplier', False), ('releaseEffect.launchSpeed', 'launchSpeed', False), ('releaseEffect.pauseLifetimeWhileCharging', 'pauseLifetimeWhileCharging', False)) |
+| gate_contact.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| beam_geometry.ramp | (('ramp.warmupSeconds', 'warmupTicks', False), ('ramp.initialWidthMultiplier', 'initialWidthMultiplier', False), ('ramp.initialDamageMultiplier', 'initialDamageMultiplier', False), ('ramp.damageStartProgress', 'damageStartProgress', False)) |
+| attach.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| attach.reachCurve | (('reachCurve.duration', 'durationTicks', False), ('reachCurve.startOffsetBlocks', 'startOffsetPx', False), ('reachCurve.peakOffsetBlocks', 'peakOffsetPx', False), ('reachCurve.endOffsetBlocks', 'endOffsetPx', False), ('reachCurve.peakProgress', 'peakProgress', False), ('reachCurve.window.phase', 'window.phase', False), ('reachCurve.window.clock', 'window.clock', False), ('reachCurve.window.startDelay', 'window.startDelayTicks', False), ('reachCurve.window.duration', 'window.durationTicks', False)) |
+| front_arm_pose.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| set_projectile_reach_curve.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| orbit.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| seek.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| kill_on_arrival.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| proximity_action.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| accelerate_y.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| multiply_projectile_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| scale_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| rotate_sprite.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| oscillate_velocity.law | (('law', 'law', True), ('law.angular_sine.amplitudeRadiansPerSecond', 'amplitude', False), ('law.lateral_velocity_sine.amplitudeBlocksPerSecond', 'amplitude', False)) |
+| oscillate_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| add_sprite_scale.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| set_opacity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| item_use.customHeldSprite | {'hidden': 'immediate', 'visible': 'on_release', 'inherit': ''} |
+| generated_buff_on_use.combat | (('combat.defensePoints', 'combat.defensePoints', False), ('combat.attackSpeedBonus', 'combat.attackSpeedPercent', False), ('combat.critChance', 'combat.critChancePoints', False), ('combat.damageBonus', 'combat.damagePercent', False), ('combat.damageClass', 'combat.damageClass', False)) |
+| use_condition.condition | (('condition', 'useConditionMode', True), ('condition.lifeAtLeast', 'useConditionMinLife', False), ('condition.manaAtLeast', 'useConditionMinMana', False)) |
+| armor.setBonuses | (('setBonuses.critChance', 'setBonusGenericCrit', False), ('setBonuses.moveSpeedBonus', 'setBonusMovementSpeed', False), ('setBonuses.lifeRegen', 'setBonusLifeRegen', False), ('setBonuses.manaRegen', 'setBonusManaRegen', False), ('setBonuses.minionSlotsBonus', 'setBonusMinionSlots', False), ('setBonuses.sentrySlotsBonus', 'setBonusSentrySlots', False), ('setBonuses.manaCostReduction', 'setBonusManaCostReduction', False), ('setBonuses.ammoSaveChancePercent', 'setBonusAmmoSaveChance', False), ('setBonuses.aggroPoints', 'setBonusAggro', False), ('setBonuses.damageReduction', 'setBonusEndurance', False), ('setBonuses.armorPenetration', 'setBonusArmorPenetration', False)) |
+| spawn.velocity | (('velocity.speed', 'speedPxPerTick', False), ('velocity.fanSpeed', 'velocityDistribution.kind', True), ('velocity.fanSpeed', 'speedPxPerTick', True), ('velocity.fanSpeed.minSpeed', 'velocityDistribution.minSpeedPxPerUpdate', False), ('velocity.fanSpeed.maxSpeed', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.radial', 'velocityDistribution.kind', True), ('velocity.radial', 'speedPxPerTick', True), ('velocity.radial.minSpeed', 'velocityDistribution.minSpeedPxPerUpdate', False), ('velocity.radial.maxSpeed', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.disk', 'velocityDistribution.kind', True), ('velocity.disk', 'speedPxPerTick', True), ('velocity.disk.maxSpeed', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.cone', 'velocityDistribution.kind', True), ('velocity.cone', 'speedPxPerTick', True), ('velocity.cone.minSpeed', 'velocityDistribution.minSpeedPxPerUpdate', False), ('velocity.cone.maxSpeed', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.cone.halfAngleRadians', 'velocityDistribution.halfAngleRadians', False)) |
+| spawn.position | (('position', 'overTarget.heightTiles', True), ('position', 'overTarget.delayTicks', True), ('position.at', 'placement', False), ('position.above', 'placement', False), ('position.heightTiles', 'overTarget.heightTiles', False), ('position.activationDelay', 'overTarget.delayTicks', False)) |
+| turn_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| set_projectile_speed_modifier.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| homing.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| attract_npcs.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| sprite_scale_curve.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| projectile_collision.immunity | (('immunity', 'npcImmunityMode', True), ('immunity', 'localNpcHitCooldownTicks', True), ('immunity.localCooldown', 'localNpcHitCooldownTicks', False)) |
+| spawn_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.useInput', 'useInput', False), ('when', 'event', True), ('when.everySeconds', 'periodTicks', False), ('when.cooldown', 'reactionCooldownTicks', False)) |
+| spawn_at_hit.geometry | (('geometry', 'spreadRadians', True), ('geometry.beforeProbability', 'hitTargetSpawn.beforeProbability', False), ('geometry.hitboxMaxSideFactor', 'hitTargetSpawn.hitboxMaxSideFactor', False), ('geometry.clearanceBlocks', 'hitTargetSpawn.clearancePx', False), ('geometry.beforeJitterRadius', 'hitTargetSpawn.beforePositionJitterRadiusPx', False), ('geometry.beforeAngleJitter', 'hitTargetSpawn.beforeDirectionJitterRadians', False), ('geometry.afterFanSpread', 'hitTargetSpawn.afterFanSpreadRadians', False), ('geometry.ignoreTargetUpdates', 'hitTargetSpawn.initialIgnoreCountdownUpdates', False)) |
+| generated_buff_on_event.when | (('when.on', 'event', False), ('when.cooldown', 'reactionCooldownTicks', False)) |
+| damage_nearby_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.cooldown', 'reactionCooldownTicks', False)) |
+| damage_area_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.cooldown', 'reactionCooldownTicks', False)) |
 | pull_on_event.when | (('when', 'event', False), ('when', 'event', True), ('when.everySeconds', 'periodTicks', False)) |
 | pull_owner_to_event_target.when | (('when', 'event', False), ('when', 'event', True), ('when.everySeconds', 'periodTicks', False)) |
 
@@ -242,12 +242,12 @@ Typed structured choices и конечные enum-отображения так�
 
 | capability.param | exact neutral | omission condition |
 |---|---|---|
-| set_projectile_owner_control.requireHeldItem | False | unconditional declared neutral |
-| set_projectile_owner_control.requireChannel | False | unconditional declared neutral |
-| set_projectile_owner_control.requireItemAnimation | False | unconditional declared neutral |
-| set_projectile_owner_control.claimHeldProjectile | False | unconditional declared neutral |
-| set_projectile_owner_control.animation | 'none' | unconditional declared neutral |
-| set_projectile_owner_control.lifetime | 'authored' | unconditional declared neutral |
+| set_owner_control.requireHeldItem | False | unconditional declared neutral |
+| set_owner_control.requireChannel | False | unconditional declared neutral |
+| set_owner_control.requireItemAnimation | False | unconditional declared neutral |
+| set_owner_control.claimHeldProjectile | False | unconditional declared neutral |
+| set_owner_control.animation | 'none' | unconditional declared neutral |
+| set_owner_control.lifetime | 'authored' | unconditional declared neutral |
 | apply_projectile_charge_release.damageMultiplier | 1 | unconditional declared neutral |
 | apply_projectile_charge_release.knockbackMultiplier | 1 | unconditional declared neutral |
 | apply_projectile_charge_release.speedMultiplier | 1 | unconditional declared neutral |
@@ -255,33 +255,33 @@ Typed structured choices и конечные enum-отображения так�
 | set_projectile_beam_ramp.initialWidthMultiplier | 1 | unconditional declared neutral |
 | set_projectile_beam_ramp.initialDamageMultiplier | 1 | unconditional declared neutral |
 | set_projectile_beam_ramp.damageStartProgress | 0 | unconditional declared neutral |
-| set_projectile_aim.turnOwner | False | unconditional declared neutral |
-| attach_projectile.axisOffsetBlocks | 0 | unconditional declared neutral |
-| attach_projectile.normalOffsetBlocks | 0 | unconditional declared neutral |
-| set_projectile_return_trigger.onOwnerRelease | False | unconditional declared neutral |
-| set_projectile_return_trigger.onTileCollision | False | unconditional declared neutral |
-| set_projectile_return_trigger.disableTileCollisionOnReturn | False | unconditional declared neutral |
-| set_projectile_rotation.offsetRadians | 0 | unconditional declared neutral |
-| set_projectile_rotation.radiansPerSecond | 0 | {'targetKinds': (), 'paramEquals': (('mode', 'axis'), ('mode', 'velocity')), 'targetCapabilities': ()} |
-| configure_item_stats.manaCost | 0 | unconditional declared neutral |
-| configure_item_stats.manaCostInput | 'both' | unconditional declared neutral |
-| configure_item_use.holdoutOffsetX | 0 | unconditional declared neutral |
-| configure_item_use.holdoutOffsetY | 0 | unconditional declared neutral |
-| apply_generated_buff_on_use.miningSpeedMultiplier | 1 | unconditional declared neutral |
-| apply_generated_buff_on_use.oreSenseEnabled | False | unconditional declared neutral |
-| apply_generated_buff_on_use.moveSpeedBonusPercent | 0 | unconditional declared neutral |
-| apply_generated_buff_on_use.jumpSpeedBonusBlocksPerSecond | 0.0 | unconditional declared neutral |
-| apply_generated_buff_on_use.manaRegenBonusPoints | 0 | unconditional declared neutral |
-| apply_generated_buff_on_use.lifeRegenHpPerSecond | 0 | unconditional declared neutral |
-| present_placed_item_sprite.pivotSpace | 'frame' | unconditional declared neutral |
-| configure_spawn.count | 1 | {'targetKinds': ('child_projectile',), 'paramEquals': (), 'targetCapabilities': ()} |
-| configure_spawn.spreadRadians | 0 | {'targetKinds': ('child_projectile',), 'paramEquals': (('count', 1),), 'targetCapabilities': ()} |
-| set_projectile_turn_modifier.window.phase | 'always' | all timing absent: startDelaySeconds, durationSeconds, window |
-| set_projectile_speed_modifier.window.phase | 'always' | all timing absent: startDelaySeconds, durationSeconds, window |
-| set_projectile_homing_modifier.window.phase | 'always' | all timing absent: startDelaySeconds, durationSeconds, window |
-| attract_npcs_while_active.window.phase | 'always' | all timing absent: startDelaySeconds, durationSeconds, window |
-| set_projectile_collision.bounceCount | 0 | {'targetKinds': (), 'paramEquals': (('tileCollide', False),), 'targetCapabilities': ('move_boomerang', 'move_returning_glaive', 'move_flail_tether')} |
-| set_projectile_collision.bounceSpeedRetention | 1 | unconditional declared neutral |
+| set_aim.turnOwner | False | unconditional declared neutral |
+| attach.axisOffsetBlocks | 0 | unconditional declared neutral |
+| attach.normalOffsetBlocks | 0 | unconditional declared neutral |
+| return_when.onOwnerRelease | False | unconditional declared neutral |
+| return_when.onTileCollision | False | unconditional declared neutral |
+| return_when.passTilesOnReturn | False | unconditional declared neutral |
+| rotate_sprite.offsetRadians | 0 | unconditional declared neutral |
+| rotate_sprite.radiansPerSecond | 0 | {'targetKinds': (), 'paramEquals': (('mode', 'axis'), ('mode', 'velocity')), 'targetCapabilities': ()} |
+| item_stats.manaCost | 0 | unconditional declared neutral |
+| item_stats.manaCostInput | 'both' | unconditional declared neutral |
+| item_use.holdoutOffsetX | 0 | unconditional declared neutral |
+| item_use.holdoutOffsetY | 0 | unconditional declared neutral |
+| generated_buff_on_use.miningSpeedMultiplier | 1 | unconditional declared neutral |
+| generated_buff_on_use.oreSenseEnabled | False | unconditional declared neutral |
+| generated_buff_on_use.moveSpeedBonus | 0 | unconditional declared neutral |
+| generated_buff_on_use.jumpSpeedBonus | 0.0 | unconditional declared neutral |
+| generated_buff_on_use.manaRegen | 0 | unconditional declared neutral |
+| generated_buff_on_use.lifeRegen | 0 | unconditional declared neutral |
+| placed_sprite.pivotSpace | 'frame' | unconditional declared neutral |
+| spawn.count | 1 | {'targetKinds': ('child_projectile',), 'paramEquals': (), 'targetCapabilities': ()} |
+| spawn.spreadRadians | 0 | {'targetKinds': ('child_projectile',), 'paramEquals': (('count', 1),), 'targetCapabilities': ()} |
+| turn_velocity.window.phase | 'always' | all timing absent: startDelay, duration, window |
+| set_projectile_speed_modifier.window.phase | 'always' | all timing absent: startDelay, duration, window |
+| homing.window.phase | 'always' | all timing absent: startDelay, duration, window |
+| attract_npcs.window.phase | 'always' | all timing absent: startDelay, duration, window |
+| projectile_collision.bounceCount | 0 | {'targetKinds': (), 'paramEquals': (('tileCollide', False),), 'targetCapabilities': ('move_boomerang', 'move_returning_glaive', 'move_flail_tether')} |
+| projectile_collision.bounceSpeedRetention | 1 | unconditional declared neutral |
 | channel_beam.manaPayment | 'initial_use_only' | unconditional declared neutral |
 | channel_beam.initialDamageMultiplier | 1.0 | unconditional declared neutral |
 | channel_beam.initialWidthMultiplier | 1.0 | unconditional declared neutral |
@@ -292,12 +292,12 @@ Typed structured choices и конечные enum-отображения так�
 | target_and_fire.targetPolicy | 'distance_score' | unconditional declared neutral |
 | target_and_fire.requireLineOfSight | False | unconditional declared neutral |
 | target_and_fire.hardRange | False | unconditional declared neutral |
-| spawn_entity_on_event.spreadRadians | 0 | {'targetKinds': (), 'paramEquals': (('count', 1),), 'targetCapabilities': ()} |
-| apply_npc_effect_on_event.damagePerSecond | 0 | unconditional declared neutral |
-| apply_npc_effect_on_event.defenseDelta | 0 | unconditional declared neutral |
-| apply_npc_effect_on_event.contactDamageMultiplier | 1 | unconditional declared neutral |
-| apply_npc_effect_on_event.velocityRetentionPerTick | 1 | unconditional declared neutral |
-| apply_npc_effect_on_event.chancePercent | 100 | unconditional declared neutral |
+| spawn_on_event.spreadRadians | 0 | {'targetKinds': (), 'paramEquals': (('count', 1),), 'targetCapabilities': ()} |
+| npc_effect_on_event.damagePerSecond | 0 | unconditional declared neutral |
+| npc_effect_on_event.defenseDelta | 0 | unconditional declared neutral |
+| npc_effect_on_event.contactDamageMultiplier | 1 | unconditional declared neutral |
+| npc_effect_on_event.retentionPerTick | 1 | unconditional declared neutral |
+| npc_effect_on_event.chancePercent | 100 | unconditional declared neutral |
 | damage_nearby_on_event.maxTargets | 16 | unconditional declared neutral |
 
 ## Каноническая vocabulary
@@ -363,7 +363,7 @@ Typed structured choices и конечные enum-отображения так�
 | stake | AmmoID.Stake |
 | stynger_bolt | AmmoID.StyngerBolt |
 
-`configure_vanilla_ammo_item` отдельно принимает `projectileId` и `shootSpeedContributionBlocksPerSecond`, переводя базовый ammo-вклад в native `Item.shootSpeed`; `projectileId` задаёт `Item.shoot`. Категория не выбирает projectile автоматически. `Item.ammo` означает «этот предмет является боеприпасом». Отдельная capability `configure_weapon_ammo` задаёт `Item.useAmmo` для active spawn_entity shots: native selection/conservation и damage/knockback сохраняются, поведение projectile принадлежит authored entity. Author явно выбирает `speedBasis=authored_spawn|native_shot`. Другие use lanes и passive hold не расходуют ammo. Одновременная роль ammo stack и ammo consumer у одного generated item отклоняется.
+`ammo_item` отдельно принимает `projectileId` и `shootSpeedContributionBlocksPerSecond`, переводя базовый ammo-вклад в native `Item.shootSpeed`; `projectileId` задаёт `Item.shoot`. Категория не выбирает projectile автоматически. `Item.ammo` означает «этот предмет является боеприпасом». Отдельная capability `weapon_ammo` задаёт `Item.useAmmo` для active spawn_entity shots: native selection/conservation и damage/knockback сохраняются, поведение projectile принадлежит authored entity. Author явно выбирает `speedBasis=authored_spawn|native_shot`. Другие use lanes и passive hold не расходуют ammo. Одновременная роль ammo stack и ammo consumer у одного generated item отклоняется.
 
 ### Loaded content IDs
 
@@ -372,8 +372,8 @@ Typed structured choices и конечные enum-отображения так�
 ### Поля с неочевидными Terraria units
 
 - `valueCopper` напрямую пишет `Item.value`; это base/shop value в copper, а не обещание конкретной суммы resale игроком.
-- Author `configure_tool.axePowerTooltipPercent` задаёт целое 0..500 с шагом 5 в видимых процентах tooltip; compiler точно пишет старое целое `gameplay.axePower = value / 5` в `Item.axe` 0..100. Старое имя `axePower` не принимается как Author alias.
-- Author `apply_generated_buff_on_use.lifeRegenHpPerSecond` задаёт вклад в HP/с (0..60, шаг 0.5); compiler точно пишет старое целое `gameplay.generatedBuff.lifeRegen = value × 2`. Это вклад в engine stat до остальных эффектов, не обещание итогового лечения.
+- Author `tool_stats.axePowerTooltipPercent` задаёт целое 0..500 с шагом 5 в видимых процентах tooltip; compiler точно пишет старое целое `gameplay.axePower = value / 5` в `Item.axe` 0..100. Старое имя `axePower` не принимается как Author alias.
+- Author `generated_buff_on_use.lifeRegenHpPerSecond` задаёт вклад в HP/с (0..60, шаг 0.5); compiler точно пишет старое целое `gameplay.generatedBuff.lifeRegen = value × 2`. Это вклад в engine stat до остальных эффектов, не обещание итогового лечения.
 
 <a id="player-text"></a>
 
@@ -438,17 +438,17 @@ Event actions:
 
 | capability | opcode |
 |---|---|
-| spawn_entity_on_event | 1 |
+| spawn_on_event | 1 |
 | apply_status_on_event | 2 |
 | damage_area_on_event | 3 |
 | chain_damage_on_event | 4 |
 | pull_on_event | 5 |
 | heal_owner_on_event | 6 |
 | move_owner_on_event | 7 |
-| select_targets_and_emit_on_event | 8 |
-| apply_generated_buff_on_event | 9 |
+| emit_to_targets_on_event | 8 |
+| generated_buff_on_event | 9 |
 | damage_nearby_on_event | 10 |
-| apply_npc_effect_on_event | 11 |
+| npc_effect_on_event | 11 |
 
 ### Entity kind → visual role
 

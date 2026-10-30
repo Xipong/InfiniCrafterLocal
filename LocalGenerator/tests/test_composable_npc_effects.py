@@ -14,13 +14,13 @@ from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_R
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
 
-FN = "apply_npc_effect_on_event"
+FN = "npc_effect_on_event"
 
 
 def document(**params):
     doc = build_capability_witness("apply_status_on_event")
     call = next(c for c in doc["runtimeProgram"]["calls"] if c["id"] == "witness_call")
-    call.update(fn=FN, params={"when": "on_hit", "durationSeconds": 2, "damagePerSecond": 7.5, **params})
+    call.update(fn=FN, params={"when": "on_hit", "duration": 2, "damagePerSecond": 7.5, **params})
     return doc
 
 
@@ -46,9 +46,9 @@ def check(doc):
 
 def test_composed_effect_reaches_final_wire_with_exact_native_units():
     wire = check(document(defenseDelta=-12, contactDamageMultiplier=0.75,
-                          velocityRetentionPerTick=0.9, delaySeconds=0.5, chancePercent=25))
+                          retentionPerTick=0.9, delay=0.5, chancePercent=25))
     assert event(wire) == {
-        "id": "witness_call", "action": FN, "actionCode": 11, "event": "on_hit",
+        "id": "witness_call", "action": "apply_npc_effect_on_event", "actionCode": 11, "event": "on_hit",
         "durationTicks": 120, "delayTicks": 30,
         "npcEffect": {"lifeRegenPenalty": 15, "defenseDelta": -12,
                       "contactDamageMultiplier": 0.75, "velocityRetentionPerTick": 0.9, "chance": 0.25},
@@ -63,8 +63,8 @@ def test_chance_is_independent_and_preserved_through_stripped_wire(chance):
 
 @pytest.mark.parametrize("leaf,bad,good", [
     ("damagePerSecond", 0.25, 0.5), ("defenseDelta", -101, -100),
-    ("contactDamageMultiplier", 0.09, 0.1), ("velocityRetentionPerTick", 1.01, 0.75),
-    ("durationSeconds", 61, 1 / 60), ("chancePercent", 100.5, 25),
+    ("contactDamageMultiplier", 0.09, 0.1), ("retentionPerTick", 1.01, 0.75),
+    ("duration", 61, 1 / 60), ("chancePercent", 100.5, 25),
 ])
 def test_invalid_leaf_repair_freezes_valid_siblings_and_absence(leaf, bad, good):
     doc = document(**{leaf: bad})
@@ -73,7 +73,7 @@ def test_invalid_leaf_repair_freezes_valid_siblings_and_absence(leaf, bad, good)
     paths = next(r["paths"] for r in scope["fieldPermissions"]["calls"] if r["id"] == call["id"])
     assert paths == ["params." + leaf]
     candidate = deepcopy(call)
-    candidate["params"].update({leaf: good, "when": "on_crit", "delaySeconds": 1})
+    candidate["params"].update({leaf: good, "when": "on_crit", "delay": 1})
     if leaf != "damagePerSecond":
         candidate["params"]["damagePerSecond"] = 100
     filtered, audit = filter_repair_patch_scope(doc, {"note": "correct leaf", "callsUpsert": [candidate]}, scope)
@@ -87,17 +87,17 @@ def test_invalid_leaf_repair_freezes_valid_siblings_and_absence(leaf, bad, good)
 
 @pytest.mark.parametrize("chance", [0, 25, 100])
 def test_neutral_action_repair_opens_only_modifier_leaves(chance):
-    doc = document(damagePerSecond=0, chancePercent=chance, delaySeconds=1)
-    assert not CAPABILITY_REGISTRY[FN].has_non_neutral_effect({"chancePercent": chance, "delaySeconds": 1})
+    doc = document(damagePerSecond=0, chancePercent=chance, delay=1)
+    assert not CAPABILITY_REGISTRY[FN].has_non_neutral_effect({"chancePercent": chance, "delay": 1})
     report = validate_runtime_program(doc)
     assert not report["ok"]
     assert any(r["code"] == "inert_component" for r in report["errors"])
     scope = build_runtime_repair_scope(doc, report["errors"])
     paths = next(r["paths"] for r in scope["fieldPermissions"]["calls"] if r["id"] == "witness_call")
-    assert set(paths) == {"params." + name for name in ("damagePerSecond", "defenseDelta", "contactDamageMultiplier", "velocityRetentionPerTick")}
+    assert set(paths) == {"params." + name for name in ("damagePerSecond", "defenseDelta", "contactDamageMultiplier", "retentionPerTick")}
     call = next(c for c in doc["runtimeProgram"]["calls"] if c["id"] == "witness_call")
     candidate = deepcopy(call)
-    candidate["params"].update(defenseDelta=-10, chancePercent=50, delaySeconds=2, durationSeconds=5, when="on_crit")
+    candidate["params"].update(defenseDelta=-10, chancePercent=50, delay=2, duration=5, when="on_crit")
     filtered, audit = filter_repair_patch_scope(doc, {"note": "add one modifier", "callsUpsert": [candidate]}, scope)
     assert audit["ok"], audit
     repaired = apply_repair_patch(doc, filtered)
@@ -110,8 +110,8 @@ def test_neutral_action_repair_opens_only_modifier_leaves(chance):
     ("when", "periodic"), ("when", "on_expire"), ("chancePercent", True), ("chancePercent", None),
     ("chancePercent", "25"), ("chancePercent", -0.5), ("damagePerSecond", 200.5),
     ("damagePerSecond", True), ("defenseDelta", 1.5), ("defenseDelta", True),
-    ("durationSeconds", 0), ("contactDamageMultiplier", 3.01),
-    ("velocityRetentionPerTick", 0.09), ("buffId", 20),
+    ("duration", 0), ("contactDamageMultiplier", 3.01),
+    ("retentionPerTick", 0.09), ("buffId", 20),
 ])
 def test_fresh_invalid_inputs_fail_without_normalization(leaf, value):
     doc = document(**{leaf: value})
@@ -179,7 +179,7 @@ def test_native_id_wire_without_new_object_remains_readable():
 
 def test_registry_provider_and_witness_cover_new_action():
     cap = CAPABILITY_REGISTRY[FN]
-    assert cap.params["durationSeconds"].maximum == 60
+    assert cap.params["duration"].maximum == 60
     variant = next(r for r in capability_provider_union() if r["properties"]["fn"]["const"] == FN)
     assert variant["properties"]["params"]["properties"]["damagePerSecond"]["multipleOf"] == 0.5
     assert cap.wire_components == {"npcEffect": "RuntimeNpcEffectSpec"}
@@ -191,9 +191,9 @@ def test_real_hit_sources_admit_both_hit_events(when, item):
     doc = document(when=when)
     if item:
         call = deepcopy(next(c for c in doc["runtimeProgram"]["calls"] if c["id"] == "witness_call"))
-        doc = build_capability_witness("configure_item_contact_hitbox")
+        doc = build_capability_witness("item_hitbox")
         next(c for c in doc["runtimeProgram"]["calls"] if c["id"] == "witness_call")["id"] = "base_contact"
-        next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["disableMeleeHitbox"] = False
+        next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "item_use")["params"]["disableMeleeHitbox"] = False
         call["target"] = "item"
         doc["runtimeProgram"]["calls"].append(call)
     wire = check(doc)

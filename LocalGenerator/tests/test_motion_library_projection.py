@@ -29,7 +29,7 @@ def test_hidden_capability_leak_is_still_an_audit_failure(monkeypatch, projectio
 
 def test_exclusive_numeric_endpoints_are_real_bounds_not_unbounded_params():
     assert not issues("unbounded_numeric_param")
-    for fn in ("set_front_arm_pose", "set_projectile_reach_curve"):
+    for fn in ("front_arm_pose", "set_projectile_reach_curve"):
         spec = audit.CAPABILITY_REGISTRY[fn].params["peakProgress"]
         assert not strict_schema_errors(0.5, spec.schema())
         assert strict_schema_errors(0, spec.schema())
@@ -37,7 +37,7 @@ def test_exclusive_numeric_endpoints_are_real_bounds_not_unbounded_params():
 
 
 def test_truly_missing_numeric_endpoint_is_still_rejected(monkeypatch):
-    fn = "configure_item_stats"
+    fn = "item_stats"
     caps = dict(audit.CAPABILITY_REGISTRY)
     cap = caps[fn]
     caps[fn] = replace(cap, params={**cap.params, "damage": replace(cap.params["damage"], minimum=None)})
@@ -50,7 +50,7 @@ def test_enabled_trigger_is_a_known_validated_requirement():
 
 
 def test_enabled_trigger_cannot_reference_an_unknown_parameter(monkeypatch):
-    fn = "set_projectile_return_trigger"
+    fn = "return_when"
     caps = dict(audit.CAPABILITY_REGISTRY)
     cap = caps[fn]
     caps[fn] = replace(cap, requirements=tuple(replace(rule, any_of=("unregistered",))
@@ -73,5 +73,5 @@ def test_inventory_marks_author_choices_and_retained_wire_rows_separately():
     for fn, cap in caps.items():
         row = next(line for line in text.splitlines() if line.startswith(f"| `{fn}` |"))
         assert row.split("|")[2].strip() == ("да" if cap.author_visible else "нет (saved wire)")
-    shape = renderer["param_shape"](caps["set_front_arm_pose"].params["peakProgress"])
+    shape = renderer["param_shape"](caps["front_arm_pose"].params["peakProgress"])
     assert "exclusiveMinimum=0" in shape and "exclusiveMaximum=1" in shape

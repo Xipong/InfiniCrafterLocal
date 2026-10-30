@@ -17,8 +17,8 @@ from infini_local.core.schema_validation import strict_schema_errors
 
 
 AUTHOR_DESIGN_QUALITY_RULE = (
-    "Create a coherent, useful new Terraria item inspired by both parents. "
-    "Choose mechanics and controls that work together, with power and costs informed by the supplied source facts."
+    "Create a coherent, useful new Terraria item whose parent properties interact in a distinctive player experience. "
+    "Choose mechanics and controls that reinforce each other, with readable strengths, limitations and costs grounded in the supplied source facts."
 )
 
 AUTHOR_STATUS_COMPOSITION_RULE = (
@@ -48,7 +48,7 @@ def primary_entity_llm_invariant() -> dict[str, Any]:
         "primaryRule": (
             "Select the entity owning lifecycle/held representation. "
             "Use the item_body for item-graphic/body-contact representation. When all active bindings spawn "
-            "the same entity, all have contactDamage=false and configure_item_use.hideUseGraphic=true, select "
+            "the same entity, all have contactDamage=false and item_use.hideUseGraphic=true, select "
             "that spawn target. "
             "A movement/controller that claims held-projectile representation does so only for this primary entity. "
         ),

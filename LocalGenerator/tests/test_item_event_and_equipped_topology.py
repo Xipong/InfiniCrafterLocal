@@ -25,7 +25,7 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 def _body_event(document: dict, event: str) -> None:
     document["runtimeProgram"]["calls"].append({
         "id": "body_status", "fn": "apply_status_on_event", "target": "item",
-        "params": {"when": event, "buffId": 20, 'durationSeconds': (60) / 60},
+        "params": {"when": event, "buffId": 20, 'duration': (60) / 60},
     })
 
 
@@ -44,9 +44,9 @@ def test_spawn_target_item_contact_event_is_valid_and_compiles() -> None:
 def test_spawn_binding_emits_item_body_on_use_even_with_projectile_target() -> None:
     authored = build_runtime_fixture("workbench_blade")
     authored["runtimeProgram"]["calls"].append({
-        "id": "body_use_child", "fn": "spawn_entity_on_event", "target": "item",
+        "id": "body_use_child", "fn": "spawn_on_event", "target": "item",
         "params": {"when": "on_use", "entity": "nail", "count": 1,
-                   "spreadRadians": 0.0, "damageMultiplier": 1.0, 'delaySeconds': (0) / 60, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
+                   "spreadRadians": 0.0, "damageMultiplier": 1.0, 'delay': (0) / 60, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
     })
     assert strict_author_shape_report(authored)["ok"]
     assert validate_runtime_program(authored)["ok"]
@@ -65,7 +65,7 @@ def test_apply_item_effects_emits_item_use_without_contact() -> None:
 def test_apply_item_effects_contact_has_same_body_event_producer() -> None:
     authored = build_capability_witness("restore_resources_on_use")
     authored["runtimeProgram"]["bindings"][0]["contactDamage"] = True
-    next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["disableMeleeHitbox"] = False
+    next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "item_use")["params"]["disableMeleeHitbox"] = False
     _body_event(authored, "on_crit")
     assert strict_author_shape_report(authored)["ok"]
     report = validate_runtime_program(authored)
@@ -84,7 +84,7 @@ def test_disabled_contact_does_not_claim_body_hit_producer() -> None:
 
 def test_disabled_melee_hitbox_cannot_produce_body_contact_event() -> None:
     authored = build_runtime_fixture("workbench_blade")
-    next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["disableMeleeHitbox"] = True
+    next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "item_use")["params"]["disableMeleeHitbox"] = True
     _body_event(authored, "on_hit")
     assert "event_not_emitted" in {e["code"] for e in validate_runtime_program(authored)["errors"]}
     compiled_without_event = copy.deepcopy(authored)
@@ -107,7 +107,7 @@ def test_contact_producer_alternatives_include_actual_item_effects_root() -> Non
 
 def test_repair_can_offer_contact_on_item_effects_root_without_replacing_it() -> None:
     authored = build_capability_witness("restore_resources_on_use")
-    next(call for call in authored["runtimeProgram"]["calls"] if call["fn"] == "configure_item_use")["params"]["disableMeleeHitbox"] = False
+    next(call for call in authored["runtimeProgram"]["calls"] if call["fn"] == "item_use")["params"]["disableMeleeHitbox"] = False
     _body_event(authored, "on_hit")
     errors = validate_runtime_program(authored)["errors"]
     assert "event_not_emitted" in {row["code"] for row in errors}
@@ -155,11 +155,11 @@ def test_spawn_item_hit_repair_names_projectile_action_target_not_event_source()
 def test_frozen_contact_suppression_repair_never_offers_unexecutable_contact(suppressor: str) -> None:
     authored = build_runtime_fixture("workbench_blade")
     if suppressor == "hitbox":
-        next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["disableMeleeHitbox"] = True
+        next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "item_use")["params"]["disableMeleeHitbox"] = True
     else:
         # Ammo is a distinct, frozen engine suppression of item contact.
-        authored = build_capability_witness("configure_vanilla_ammo_item")
-        next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["disableMeleeHitbox"] = False
+        authored = build_capability_witness("ammo_item")
+        next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "item_use")["params"]["disableMeleeHitbox"] = False
     _body_event(authored, "on_hit")
     report = validate_runtime_program(authored)
     assert "event_not_emitted" in {row["code"] for row in report["errors"]}
@@ -180,11 +180,11 @@ def test_frozen_contact_suppression_repair_never_offers_unexecutable_contact(sup
 
 def test_incompatible_event_projection_respects_frozen_contact_and_action_target() -> None:
     authored = build_runtime_fixture("workbench_blade")
-    next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["disableMeleeHitbox"] = True
+    next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "item_use")["params"]["disableMeleeHitbox"] = True
     authored["runtimeProgram"]["calls"].append({
-        "id": "body_child", "fn": "spawn_entity_on_event", "target": "item",
+        "id": "body_child", "fn": "spawn_on_event", "target": "item",
         "params": {"when": "on_use", "entity": "nail", "count": 1,
-                   "spreadRadians": 0.0, "damageMultiplier": 1.0, 'delaySeconds': (0) / 60, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
+                   "spreadRadians": 0.0, "damageMultiplier": 1.0, 'delay': (0) / 60, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
     })
     index = len(authored["runtimeProgram"]["calls"]) - 1
     scope = build_runtime_repair_scope(authored, [{
@@ -202,7 +202,7 @@ def test_incompatible_event_projection_respects_frozen_contact_and_action_target
 
 def test_incompatible_event_with_no_executable_event_can_remove_only_invalid_call() -> None:
     authored = build_runtime_fixture("workbench_blade")
-    next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["disableMeleeHitbox"] = True
+    next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "item_use")["params"]["disableMeleeHitbox"] = True
     _body_event(authored, "on_hit")
     broken = next(c for c in authored["runtimeProgram"]["calls"] if c["id"] == "body_status")
     broken["params"]["when"] = "on_use"
@@ -226,9 +226,9 @@ def test_incompatible_event_repair_can_update_existing_contact_without_changing_
     binding["action"] = {"kind": "use_item_body"}
     binding["contactDamage"] = False
     authored["runtimeProgram"]["calls"].append({
-        "id": "body_child", "fn": "spawn_entity_on_event", "target": "item",
+        "id": "body_child", "fn": "spawn_on_event", "target": "item",
         "params": {"when": "on_use", "entity": "nail", "count": 1,
-                   "spreadRadians": 0.0, "damageMultiplier": 1.0, 'delaySeconds': (0) / 60, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
+                   "spreadRadians": 0.0, "damageMultiplier": 1.0, 'delay': (0) / 60, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
     })
     index = len(authored["runtimeProgram"]["calls"]) - 1
     scope = build_runtime_repair_scope(authored, [{

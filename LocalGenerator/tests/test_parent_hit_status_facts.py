@@ -73,7 +73,7 @@ def test_parent_ammo_observations_reach_author_with_scope_multiplicity_and_empty
     packet = json.loads(user)
     assert "sourceSameAs" in user
     raw = expand_native_source_references(packet)["parents"]["A"]["packet"]["raw"]
-    assert raw["item"]["lifeRegen"] == 2
+    assert raw["item"]["lifeRegen"] == {"value": 1, "units": "HP/s"}
     assert raw["directProjectile"] == {"type": 10, "armorPenetration": 5}
     assert raw["ammo"] == parent["ammoRaw"]
     assert parent == before
