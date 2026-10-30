@@ -1387,7 +1387,6 @@ def _request(
         user = {
             "task": "Patch only exact invalid VFX fields/slots.",
             "item": copy.deepcopy(packet.get("item") or {}),
-            "parentFactsReadOnly": copy.deepcopy(packet.get("parents") or []),
             "acceptedVisualKitReadOnly": copy.deepcopy(packet.get("acceptedVisualKit") or {}),
             **({"acceptedGameplayReadOnly": copy.deepcopy(packet["acceptedGameplayReadOnly"])} if "acceptedGameplayReadOnly" in packet else {}),
             "acceptedRuntimeProgramReadOnly": copy.deepcopy(packet.get("acceptedRuntimeProgramReadOnly") or {}),
@@ -1411,6 +1410,19 @@ def _request(
                 _READABILITY_RULE,
             ],
         }
+        # Parent ancestry informs new artwork, not corrections to an accepted
+        # effect's numeric limits or exact references. The accepted child visual
+        # and runtime stay available for every repair; ancestry never widens scope.
+        permissions = (repair_scope or {}).get("fieldPermissions") or {}
+        design_paths = {"slots": {"", "rendererKind", "spritePrompt", "spriteNegativePrompt"},
+                        "assets": {"", "prompt", "negativePrompt"}}
+        design = any((repair_scope or {}).get(key) for key in ("allowCreateSlots", "allowCreateAssets")) or any(
+            path.split(".", 1)[0].split("[", 1)[0] in design_paths[kind]
+            for kind in design_paths for row in permissions.get(kind) or []
+            for path in row.get("paths") or [] if path not in (row.get("deletePaths") or [])
+        )
+        if design:
+            user["parentFactsReadOnly"] = copy.deepcopy(packet.get("parents") or [])
         user["runtimeVocabularyReadOnly"] = _vfx_scoped_repair_vocabulary(
             user["runtimeVocabularyReadOnly"], previous, repair_scope or {},
         )

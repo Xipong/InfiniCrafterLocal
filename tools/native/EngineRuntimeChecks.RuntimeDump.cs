@@ -71,6 +71,8 @@ internal static partial class EngineRuntimeChecks
         Terraria.Main.netMode = NetmodeID.SinglePlayer;
         var item = new Item(ItemID.Excalibur);
         using var request = JsonDocument.Parse(new GeneratorClient().Prepare(item, item, new Player()).PayloadJson);
+        if (Environment.GetEnvironmentVariable("INFINI_DUMP_ATTACK_PARENT") is string output)
+            System.IO.File.WriteAllText(output, request.RootElement.GetRawText());
         var projectile = request.RootElement.GetProperty("itemA").GetProperty("directProjectileRaw");
         Equal(true, projectile.TryGetProperty("attackReference", out var attack) && attack.ValueKind == JsonValueKind.Object,
             "native Excalibur needs actual motion/collision/draw source observations, not only 16x16 defaults and an AI number");

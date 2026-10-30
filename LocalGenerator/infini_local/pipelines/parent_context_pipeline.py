@@ -14,7 +14,7 @@ from infini_local.core.item_identity_tools import (
     generated_data_of,
     item_field,
 )
-from infini_local.pipelines.native_attack_expression_view import compact_attack_expressions
+from infini_local.pipelines.native_attack_behavior_view import project_attack_behavior
 from infini_local.pipelines.native_attack_tables import pack_attack_tables
 from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_AMMO_ITEM_KEYS,
@@ -187,15 +187,11 @@ def compact_projectile_profile(proj: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(proj, dict) or not proj:
         return {}
     out = _select_raw_keys(proj, LLM_PROJECTILE_RAW_KEYS)
-    # Source-certified observations stay complete and detached. Only their model
-    # notation changes; the raw dump and unknown schemas remain untouched.
+    # Behavior is model context; certificates/instruction offsets remain in the
+    # authoritative raw dump. No connected mechanic or branch is truncated.
     if isinstance(proj.get("attackReference"), dict):
-        source = proj["attackReference"]
-        view = pack_attack_tables(compact_attack_expressions(source))
-        # The reading legend is part of the price: a small source remains literal
-        # rather than gaining a larger "compact" wrapper. Neither option drops data.
-        size = lambda value: len(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
-        out["attackReference"] = view if size(view) < size(source) else copy.deepcopy(source)
+        source = project_attack_behavior(proj["attackReference"])
+        out["attackReference"] = pack_attack_tables(source)
     # The native producer owns verification and scope. Never infer a trajectory
     # from names/aiStyle or clip this optional read-only observation.
     if isinstance(proj.get("motionReference"), dict):

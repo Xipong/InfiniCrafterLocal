@@ -49,7 +49,7 @@ public sealed partial class GeneratorClient
         {
             if (certified.Add(method)) certificates.Add(MethodSourceIdentity(method));
         }
-        JsonObject Observe(MethodBase method, string role, List<AmmoIl>? slice = null)
+        JsonObject Observe(MethodBase method, string role, List<AmmoIl>? slice = null, bool boundActor = false)
         {
             Certify(method);
             try
@@ -59,6 +59,25 @@ public sealed partial class GeneratorClient
                 var body = new ParentSourceMethod(method, slice ?? AttackCode(method), next);
                 var observation = new AttackSourceObservation(body, role);
                 var program = observation.Finish();
+                if (boundActor && slice is null && role is "motion" or "draw")
+                {
+                    try
+                    {
+                        var selection = new AttackIdentitySelection(body, type, style);
+                        if (selection.Selected.Count > 0)
+                        {
+                            var specialized = new AttackSourceObservation(new ParentSourceMethod(method, AttackCode(method), selectedSuccessors: selection.Selected), role, selection: selection).Finish();
+                            specialized["identitySelection"] = selection.Receipt;
+                            program["identitySelected"] = specialized;
+                        }
+                    }
+                    catch (Exception error) when (error is not OutOfMemoryException)
+                    {
+                        // An optional specialization must never discard the
+                        // already captured full connected source/audit program.
+                        program["identitySelectionUnavailable"] = error is NotSupportedException ? error.Message : error.GetType().Name;
+                    }
+                }
                 // Referenced native helper identities are certified separately;
                 // unselected dust/audio code does not bloat the attack slice.
                 foreach (var call in observation.ReferencedMethods.Where(m => m.Module == typeof(Projectile).Module && m.GetMethodBody() is not null)) Certify(call);
@@ -105,7 +124,8 @@ public sealed partial class GeneratorClient
                     result["motionDispatch"] = dispatch;
                     var helpers = slice.Select(i => i.Arg).OfType<MethodInfo>().Where(m => m.DeclaringType == typeof(Projectile)
                         && m.GetParameters().Length == 0 && m.ReturnType == typeof(void) && m.GetMethodBody() is not null).Distinct().ToArray();
-                    var programs = helpers.Select(m => Observe(m, "motion")).Where(p => p["observations"] is JsonArray a && a.Count > 0).ToArray();
+                    var caller = new ParentSourceMethod(method, slice, AttackCode(method).Zip(AttackCode(method).Skip(1), (a, b) => (a.Offset, b.Offset)).ToDictionary(p => p.Item1, p => p.Item2));
+                    var programs = helpers.Select(m => Observe(m, "motion", boundActor: AttackCallBindsCapturedActor(caller, caller.Statements, m))).Where(p => p["observations"] is JsonArray a && a.Count > 0).ToArray();
                     if (programs.Length > 0) result["motion"] = new JsonObject { ["programs"] = new JsonArray(programs.Select(p => (JsonNode?)p).ToArray()) };
                     else gaps.Add("motion_helper_or_state_sinks_outside_supported_source_shape");
                 }
@@ -129,7 +149,7 @@ public sealed partial class GeneratorClient
                     var dispatch = observation.Finish(); Certify(drawRoot);
                     foreach (var call in observation.ReferencedMethods.Where(m => m.Module == typeof(Projectile).Module && m.GetMethodBody() is not null)) Certify(call);
                     result["draw"] = new JsonObject { ["dispatch"] = dispatch,
-                        ["programs"] = new JsonArray(helpers.Select(m => (JsonNode?)Observe(m, "draw")).ToArray()) };
+                        ["programs"] = new JsonArray(helpers.Select(m => (JsonNode?)Observe(m, "draw", boundActor: AttackCallBindsCapturedActor(body, selected, m))).ToArray()) };
                 }
                 else gaps.Add("draw_type_dispatch_outside_supported_source_shape");
             }
@@ -182,10 +202,20 @@ public sealed partial class GeneratorClient
     internal static JsonObject InspectProjectileAttackSource(MethodInfo method, string role)
         => new AttackSourceObservation(new ParentSourceMethod(method), role).Finish();
 
+    internal static JsonObject InspectProjectileAttackIdentitySource(MethodInfo method, int type, int style)
+    {
+        var body = new ParentSourceMethod(method);
+        var selection = new AttackIdentitySelection(body, type, style);
+        var result = new AttackSourceObservation(new ParentSourceMethod(method, selectedSuccessors: selection.Selected), "motion", selection: selection).Finish();
+        result["identitySelection"] = selection.Receipt;
+        return result;
+    }
+
     private sealed class AttackSourceObservation
     {
         private readonly ParentSourceMethod body;
         private readonly string role;
+        private readonly AttackIdentitySelection? selection;
         private readonly ParentSourceMethod.Value[] roots, branches;
         private readonly JsonObject dependencies = new(), symbols = new();
         internal readonly HashSet<MethodBase> ReferencedMethods = new();
@@ -201,11 +231,11 @@ public sealed partial class GeneratorClient
         private readonly JsonArray predicates = new();
         private readonly HashSet<string> visiting = new(), predicateIds = new();
         private int expressionCount;
-        internal AttackSourceObservation(ParentSourceMethod body, string role, IEnumerable<ParentSourceMethod.Value>? selected = null)
+        internal AttackSourceObservation(ParentSourceMethod body, string role, IEnumerable<ParentSourceMethod.Value>? selected = null, AttackIdentitySelection? selection = null)
         {
-            this.body = body; this.role = role;
-            roots = (selected ?? body.Statements.Where(IsRoot)).OrderBy(v => v.At).ToArray();
-            branches = body.Statements.Where(v => body.Blocks[v.Block].Next.Distinct().Count() > 1
+            this.body = body; this.role = role; this.selection = selection;
+            roots = (selected ?? body.Statements.Where(IsRoot)).Where(v => selection is null || selection.Reachable.Contains(v.Block)).OrderBy(v => v.At).ToArray();
+            branches = body.Statements.Where(v => (selection is null || selection.Reachable.Contains(v.Block) && !selection.Selected.ContainsKey(v.Block)) && body.Blocks[v.Block].Next.Distinct().Count() > 1
                 && (v.Op == "switch" || v.Op.StartsWith("b", StringComparison.Ordinal))).ToArray();
         }
         private bool IsRoot(ParentSourceMethod.Value value)
@@ -253,7 +283,7 @@ public sealed partial class GeneratorClient
             if (dependencies.ContainsKey(name)) return name;
             dependencies[name] = null;
             bool Address(string id) => body.Values.TryGetValue(id, out var v) && v.Op == "ldloca" && Equals(v.Operand, value.Operand);
-            var writes = body.Statements.Where(v => v.Op == "stloc" && Equals(v.Operand, value.Operand)
+            var writes = body.Statements.Where(v => selection is null || selection.Reachable.Contains(v.Block)).Where(v => v.Op == "stloc" && Equals(v.Operand, value.Operand)
                 || v.Inputs.Count > 0 && v.Inputs.Any(Address)).OrderBy(v => v.At).ToArray();
             dependencies[name] = new JsonObject { ["scope"] = "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
                 ["orderedSourceUses"] = new JsonArray(writes.Select(v => (JsonNode?)new JsonObject { ["at"] = v.At, ["block"] = v.Block,
@@ -277,12 +307,18 @@ public sealed partial class GeneratorClient
             if (++expressionCount > 12000 || dependencies.Count > 192) throw new NotSupportedException("connected_source_expression_bound");
             if (!body.Values.TryGetValue(id, out var value)) return "unresolved(" + id + ")";
             if (value.Op is "ldloca" or "address_exposed_local") return AddressLocal(value);
+            // Local() installs its named dependency before walking connected
+            // address uses/predicates. Re-entry references that definition; it
+            // is not evidence of a loop in the native instruction stream.
+            if (value.Op == "stloc") return Local(value);
             if (!visiting.Add(id)) return "loop_or_alias(" + id + ")";
             try
             {
-                if (value.Op == "stloc") return Local(value);
                 if (value.Op is "ldloc" or "predecessor_stack_alternatives")
-                    return value.Inputs.Count == 1 ? Expression(value.Inputs[0]) : "alternatives(" + string.Join(",", value.Inputs.Select(Alternative)) + ")";
+                {
+                    var inputs = value.Inputs.Where(i => selection is null || !body.Values.TryGetValue(i, out var definition) || selection.Reachable.Contains(definition.Block)).ToArray();
+                    return inputs.Length == 1 ? Expression(inputs[0]) : "alternatives(" + string.Join(",", inputs.Select(Alternative)) + ")";
+                }
                 if (value.Op is "ldarg" or "ldarga" or "written_or_address_exposed_argument" && value.Operand is int slot)
                 {
                     string argument = !body.Method.IsStatic && slot == 0 ? "this" : body.Method.GetParameters()[slot - (body.Method.IsStatic ? 0 : 1)].Name ?? "arg" + slot;

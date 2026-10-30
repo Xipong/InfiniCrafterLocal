@@ -14,10 +14,10 @@ from test_low_level_three_stage_pipeline import _accepted_visual_data, wire_tran
 from vfx_material_fixtures import _legacy, _sprite, _with_asset
 
 
-def _send_repair(wire_transport, data, raw, patch):
+def _send_repair(wire_transport, data, raw, patch, parent=None):
     responses, sent = wire_transport
     responses.extend([raw, patch])
-    result = vfx.attach_vfx_manifest(data, "scope-path", llm_director=stage.call_llm_vfx_director)
+    result = vfx.attach_vfx_manifest(data, "scope-path", parent, parent, llm_director=stage.call_llm_vfx_director)
     return result, request_dossier(sent[1])
 
 
@@ -183,7 +183,10 @@ def test_asset_reference_grammar_keeps_exact_source_and_declared_choices(wire_tr
     raw = copy.deepcopy(accepted)
     raw["slots"][0]["element"]["texture"]["assetId"] = "missing"
     patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "reference only", "slotsUpsert": accepted["slots"]}
-    result, packet = _send_repair(wire_transport, data, raw, patch)
+    parent = {"name": "parent identity", "directProjectileRaw": {"attackReference": {"source": "fixture"}}}
+    result, packet = _send_repair(wire_transport, data, raw, patch, parent)
+    assert "parentFactsReadOnly" not in packet
+    assert "attackReference" in json.dumps(request_dossier(wire_transport[1][0])["parents"])
     assert result["debug"]["vfxDirectorRaw"] == accepted
     assert not strict_schema_errors(patch, packet["outputSchema"])
     texture = packet["outputSchema"]["properties"]["slotsUpsert"]["items"]["properties"]["element"]["properties"]["texture"]
@@ -280,9 +283,17 @@ def test_alpha_request_has_only_exact_edit_domain_and_preserves_hostile_siblings
              "slotIdsDelete": ["frozen_sibling"]}
     responses, sent = wire_transport
     responses.extend([raw, patch])
-    final = vfx.attach_vfx_manifest(data, "scope-alpha", llm_director=stage.call_llm_vfx_director)
+    parent = {"directProjectileRaw": {"type": 42, "attackReference": {
+        "source": "source-defined unrelated native observation", "sourceText": "native attack " * 3000}}}
+    parent_before = copy.deepcopy(parent)
+    final = vfx.attach_vfx_manifest(data, "scope-alpha", parent, parent, llm_director=stage.call_llm_vfx_director)
     assert final["debug"]["vfxDirectorRaw"] == accepted
     dossier = request_dossier(sent[1])
+    assert "parentFactsReadOnly" not in dossier
+    assert "attackReference" not in json.dumps(dossier)
+    assert "attackReference" in json.dumps(request_dossier(sent[0])["parents"])
+    assert dossier["acceptedVisualKitReadOnly"] == data["visualKit"]
+    assert parent == parent_before
     schema = dossier["outputSchema"]
     assert set(schema["properties"]) == {"schema", "note", "slotsUpsert"}
     assert "element" not in json.dumps(schema)
@@ -302,3 +313,23 @@ def test_alpha_request_has_only_exact_edit_domain_and_preserves_hostile_siblings
     if response_format == "json_schema":
         assert sent[1]["response_format"]["json_schema"]["schema"] == schema
     assert not responses
+
+
+@pytest.mark.parametrize("leaf,bad,needs_parents", [("prompt", "", True), ("canvasSize", 7, False)])
+def test_asset_repair_keeps_ancestry_only_for_new_artwork(wire_transport, leaf, bad, needs_parents):
+    data = _accepted_visual_data("workbench_blade")
+    accepted = _with_asset(data)
+    raw = copy.deepcopy(accepted)
+    raw["assets"][0][leaf] = bad
+    parent = {"name": "parent identity", "directProjectileRaw": {"attackReference": {"source": "fixture"}}}
+    before = copy.deepcopy(parent)
+    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "one asset leaf", "assetsUpsert": accepted["assets"]}
+    result, packet = _send_repair(wire_transport, data, raw, patch, parent)
+    assert result["debug"]["vfxDirectorRaw"] == accepted
+    assert ("parentFactsReadOnly" in packet) is needs_parents
+    if needs_parents:
+        assert packet["parentFactsReadOnly"] == request_dossier(wire_transport[1][0])["parents"]
+    assert packet["acceptedVisualKitReadOnly"] == data["visualKit"]
+    assert packet["acceptedRuntimeProgramReadOnly"] == request_dossier(wire_transport[1][0])["acceptedRuntimeProgramReadOnly"]
+    assert packet["repairScope"]["fieldPermissions"]["assets"] == [{"assetId": accepted["assets"][0]["id"], "paths": [leaf]}]
+    assert parent == before

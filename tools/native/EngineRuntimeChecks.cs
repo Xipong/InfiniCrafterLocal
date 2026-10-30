@@ -66,6 +66,7 @@ internal static partial class EngineRuntimeChecks
             ("runtime dump preserves capture failures as explicit unavailable rows", RuntimeDumpKeepsCaptureFailuresAsExplicitRows),
             ("parent complete projectile attack source reaches live and dump", ParentProjectileAttackSemanticsReachPrepareAndDump),
             ("projectile attack source symbolic dependencies and predicates", ProjectileAttackSourceObservationsKeepExpressionsAndPredicates),
+            ("projectile attack identity specialization receiver and mutation safety", ProjectileAttackIdentitySelectionKeepsUnknownConditions),
             ("projectile attack native dispatch and source sibling controls", ProjectileAttackNativeDispatchAndSiblingWitnesses),
             ("parent native growing arc motion and cone union oracle", ParentNativeGrowingArcMatchesRealMotionAndConeUnion),
             ("parent random status mutually exclusive native outcomes", ParentRandomStatusFactsMatchExclusiveNativeOutcomes),

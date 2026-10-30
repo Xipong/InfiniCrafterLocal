@@ -92,7 +92,7 @@ public sealed partial class GeneratorClient
             return controlRegions[start] = region;
         }
 
-        internal ParentSourceMethod(MethodBase method, List<AmmoIl>? sourceSlice = null, Dictionary<int, int>? sourceNext = null)
+        internal ParentSourceMethod(MethodBase method, List<AmmoIl>? sourceSlice = null, Dictionary<int, int>? sourceNext = null, Dictionary<int, int>? selectedSuccessors = null)
         {
             Method = method;
             Code = sourceSlice ?? ReadAmmoIl(method, preserveStructure: true, sourceGraph: true);
@@ -142,6 +142,13 @@ public sealed partial class GeneratorClient
                     Blocks[target] = new Block { Start = target };
                 Unknown.Add("source_slice_entry_and_external_CFG_targets_unresolved");
             }
+            if (selectedSuccessors is not null)
+                foreach (var (start, successor) in selectedSuccessors)
+                {
+                    if (!Blocks.TryGetValue(start, out var block) || !block.Next.Contains(successor))
+                        throw new NotSupportedException("identity_selection_invalid_successor");
+                    block.Next = new List<int> { successor };
+                }
             DetermineHeights();
             foreach (Block block in Blocks.Values.Where(b => b.Height >= 0)) DecodeBlock(block);
             LinkLocals();

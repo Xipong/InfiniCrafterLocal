@@ -1,6 +1,7 @@
 """Exact native-source notation projection, not evaluation or gameplay inference."""
 import copy
 import json
+from pathlib import Path
 
 import pytest
 
@@ -18,11 +19,14 @@ def attack_fixture():
         "coverage": {"unresolved": ["native hooks"], "false": False, "zero": 0, "floatZero": 0.0, "empty": None}}
 
 
-def test_actual_parent_projection_never_grows_small_native_references():
+def test_actual_parent_projection_marks_behavior_view_and_keeps_raw_detached():
     source = attack_fixture()
     result = compact_projectile_profile({"type": 982, "attackReference": source})["attackReference"]
-    dump = lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-    assert len(dump(result)) <= len(dump(source))
+    from infini_local.pipelines.native_attack_tables import unpack_attack_tables
+    result = unpack_attack_tables(result)
+    assert result["behaviorView"]["version"] == 1
+    assert result["coverage"] == source["coverage"]
+    assert "behaviorView" not in source
 
 
 def test_readable_math_view_preserves_source_and_grouping():
@@ -102,7 +106,8 @@ def test_unknown_nested_fields_and_literal_tooltips_are_not_interpreted():
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("stage", ["Author", "GameplayRepair", "Visual", "VisualRepair", "VFX", "VFXRepair"])
-def test_native_v1_model_view_roundtrips_at_each_real_serialized_stage(monkeypatch, mode, stage):
+@pytest.mark.parametrize("fixture", ["synthetic", "native_excalibur"])
+def test_native_v1_behavior_view_at_each_real_serialized_stage(monkeypatch, mode, stage, fixture):
     from infini_local.core import llm_config, vfx_manifest as vfx
     from infini_local.pipelines import llm_authoring_pipeline as author
     from infini_local.pipelines import visual_generation_pipeline as visual
@@ -116,10 +121,13 @@ def test_native_v1_model_view_roundtrips_at_each_real_serialized_stage(monkeypat
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     source = attack_fixture()
     # A representative repeated-row program amortizes the self-contained guide.
-    # The separate small-source control requires literal passthrough instead.
+    # Small native sources also carry the explicit behavior-view contract.
     template = source["motion"]["programs"][0]["observations"][0]
     source["motion"]["programs"][0]["observations"] = [copy.deepcopy(template) | {"at": 12 + index} for index in range(24)]
     parent = {"directProjectileRaw": {"type": 982, "attackReference": source}}
+    if fixture == "native_excalibur":
+        parent = json.loads((Path(__file__).parent / "fixtures" / "native_excalibur_parent_capture.json").read_text())
+        source = parent["directProjectileRaw"]["attackReference"]
     before = json.dumps(parent)
     captured = []
     scope = None
@@ -140,8 +148,8 @@ def test_native_v1_model_view_roundtrips_at_each_real_serialized_stage(monkeypat
             _capture_stage(monkeypatch, visual, captured)
             kwargs = {}
             if stage == "VisualRepair":
-                scope = {"fieldPermissions": {"itemPaths": ["inventoryScale"], "entities": [], "equipOverlayPaths": []}}
-                kwargs = {"repair_errors": [{"path": "$.item.inventoryScale"}], "previous": _visual_kit(child), "repair_scope": scope}
+                scope = {"fieldPermissions": {"itemPaths": ["prompt"], "entities": [], "equipOverlayPaths": []}}
+                kwargs = {"repair_errors": [{"path": "$.item.prompt"}], "previous": _visual_kit(child), "repair_scope": scope}
             with pytest.raises(_CapturedRequest):
                 visual._request_visual_kit(child, parent, parent, **kwargs)
         else:
@@ -149,7 +157,7 @@ def test_native_v1_model_view_roundtrips_at_each_real_serialized_stage(monkeypat
             monkeypatch.setattr(transport, "USE_LLM", True)
             kwargs = {}
             if stage == "VFXRepair":
-                scope = {"fieldPermissions": {"globals": {}, "slots": [], "assets": []}}
+                scope = {"allowCreateSlots": True, "fieldPermissions": {"globals": {}, "slots": [], "assets": []}}
                 kwargs = {"repair_errors": [], "previous": {}, "repair_scope": scope}
             with pytest.raises(_CapturedRequest):
                 vfx._request(transport.call_llm_vfx_director, vfx._prompt_packet(child, parent, parent), **kwargs)
@@ -170,9 +178,12 @@ def test_native_v1_model_view_roundtrips_at_each_real_serialized_stage(monkeypat
     visit(packet["parentFactsReadOnly" if stage in ("VisualRepair", "VFXRepair") else "parents"])
     assert len(found) == 2
     for view in found:
-        assert "(1+(l1@130*0.6))" in json.dumps(view)
-        restored = expand_attack_expressions(unpack_attack_tables(view))
-        assert json.dumps(restored, sort_keys=True) == json.dumps(source, sort_keys=True)
+        if fixture == "synthetic":
+            assert "(1+(l1@130*0.6))" in json.dumps(view)
+        from infini_local.pipelines.native_attack_behavior_view import project_attack_behavior
+        projected = unpack_attack_tables(view)
+        assert projected == project_attack_behavior(source)
+        assert projected["behaviorView"]["version"] == 1
     if scope is not None:
         assert packet["repairScope"] == scope
     assert json.dumps(parent) == before

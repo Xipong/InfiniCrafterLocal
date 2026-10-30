@@ -270,25 +270,31 @@ def test_attack_packet_size_is_measured_and_existing_guard_refuses_instead_of_cl
     assert_exact_json(parent, before)
 
 
-# Consumer-specific presentation/Repair projections must not discard observed
-# native attack facts or widen the editable output grammar.
-@pytest.mark.parametrize("leaf", ["inventoryScale", "scale"])
-def test_attack_observation_survives_sizing_only_visual_repair(monkeypatch, packet_mode, leaf):
+# Consumer-specific repair context follows the editable leaf, not ancestry.
+@pytest.mark.parametrize("leaf", ["inventoryScale", "scale", "grip.normalizedX"])
+def test_sizing_only_visual_repair_excludes_native_attack_but_keeps_size_reference(monkeypatch, packet_mode, leaf):
     from infini_local.pipelines import visual_generation_pipeline as visual
     from test_low_level_three_stage_pipeline import _accepted_visual_data, _visual_kit
     parent = {"directProjectileRaw": {"type": 42, "attackReference": source_defined_attack_fixture()}}
+    parent["spriteReferenceRaw"] = {
+        "source": "TextureAssets.Item", "textureWidthPx": 40, "textureHeightPx": 68,
+        "currentFrame": {"source": "draw_animation", "xPx": 0, "yPx": 34, "widthPx": 40, "heightPx": 32}}
+    before = copy.deepcopy(parent)
     child = _accepted_visual_data("workbench_blade")
     captured = []
     _capture_stage(monkeypatch, visual, captured)
-    scope = {"fieldPermissions": {"itemPaths": [leaf] if leaf == "inventoryScale" else [],
-        "entities": [] if leaf == "inventoryScale" else [{"entityId": child["runtimeProgram"]["itemEntityId"], "paths": [leaf]}],
+    scope = {"fieldPermissions": {"itemPaths": [leaf] if leaf != "scale" else [],
+        "entities": [] if leaf != "scale" else [{"entityId": child["runtimeProgram"]["itemEntityId"], "paths": [leaf]}],
         "equipOverlayPaths": []}}
     with pytest.raises(_CapturedRequest):
         visual._request_visual_kit(child, parent, {}, repair_errors=[{"path": "$.item." + leaf}],
             previous=_visual_kit(child), repair_scope=scope)
     packet = request_dossier(captured[0])
-    assert_exact_json(packet["parentFactsReadOnly"]["parentA"]["packet"]["raw"]["directProjectile"]["attackReference"],
-                      parent["directProjectileRaw"]["attackReference"])
+    assert "parentFactsReadOnly" not in packet
+    assert "attackReference" not in json.dumps(packet)
+    assert_exact_json(packet["parentSizeReferencesReadOnly"]["parentA"]["spriteReference"], parent["spriteReferenceRaw"])
+    assert_exact_json(parent, before)
+    assert packet["acceptedPresentationMechanicsReadOnly"]
     assert_exact_json(packet["repairScope"], scope)
 
 
@@ -304,7 +310,7 @@ def test_attack_observation_reaches_actual_vfx_parent_context(monkeypatch, packe
     _capture_stage(monkeypatch, vfx_transport, captured)
     monkeypatch.setattr(vfx_transport, "USE_LLM", True)
     packet = vfx._prompt_packet(child, parent, parent)
-    scope = {"fieldPermissions": {"globals": {}, "slots": [], "assets": []}}
+    scope = {"allowCreateSlots": True, "fieldPermissions": {"globals": {}, "slots": [], "assets": []}}
     with pytest.raises(_CapturedRequest):
         vfx._request(vfx_transport.call_llm_vfx_director, packet,
             **({"repair_errors": [], "previous": {}, "repair_scope": scope} if repair else {}))
