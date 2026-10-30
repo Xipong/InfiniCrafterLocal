@@ -444,7 +444,6 @@ public sealed partial class InfiniCraftPlayer
     {
         get
         {
-            if (!Player.active || Player.dead) return 0;
             int units = 0;
             foreach (var active in _activeGeneratedUtilityBuffs)
                 if (active.Ticks > 0 && PlayerEffectSpec.IsConditionActive(active.LifeRegenCondition, Player))
@@ -455,7 +454,7 @@ public sealed partial class InfiniCraftPlayer
     }
 
     internal bool HasActiveGeneratedTreasureSense
-        => Player.active && !Player.dead && _activeGeneratedUtilityBuffs.Any(active =>
+        => _activeGeneratedUtilityBuffs.Any(active =>
             active.Ticks > 0 && active.OreSenseRadiusTiles > 0
                 && PlayerEffectSpec.IsConditionActive(active.TreasureSenseCondition, Player));
 

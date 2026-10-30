@@ -75,13 +75,13 @@ public sealed partial class InfiniCraftPlayer
     // native contribution applies, never create another regeneration channel.
     internal void ApplyLifeRegen(int units, string? condition = null)
     {
-        if (Player.active && !Player.dead && PlayerEffectSpec.IsConditionActive(condition ?? "always", Player))
+        if (PlayerEffectSpec.IsConditionActive(condition ?? "always", Player))
             Player.lifeRegen += units;
     }
 
     internal void ApplyTreasureSense(bool enabled, string? condition = null)
     {
-        if (enabled && Player.active && !Player.dead && PlayerEffectSpec.IsConditionActive(condition ?? "always", Player))
+        if (enabled && PlayerEffectSpec.IsConditionActive(condition ?? "always", Player))
             Player.findTreasure = true;
     }
 
