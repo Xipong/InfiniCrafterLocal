@@ -19,7 +19,7 @@ public sealed partial class InfiniDetachedVfxSystem
 {
     private const int MaxLibraryRecords=128;
     private const int LibraryReadyWaitTicks=30;
-    private sealed record LibraryParticleDesign(int Count,float SpeedMin,float SpeedMax,float Spread,float Inheritance,float Drag,
+    private sealed record LibraryParticleDesign(string TexturePath,int Count,float SpeedMin,float SpeedMax,float Spread,float Inheritance,float Drag,
         Vector2 Acceleration,float Width,float Height,float Rotation,float Spin,Vector3 ColorStart,Vector3 ColorEnd,float EndScale,float EndOpacity);
     private sealed record LibraryShakeDesign(float Strength,float Variance,float Direction,float Dissipation,float TaperStart,float TaperEnd);
     private sealed record LibraryDesign(string? Layer,string? Blend,float? Alpha,int? Duration,int MaxDraw,int MaxPerTick,int MaxTotal,
@@ -40,16 +40,19 @@ public sealed partial class InfiniDetachedVfxSystem
     // World clear keeps these buffers reusable: the library has no unregister-
     // buffer API, so reallocating at every world would retain unbounded entries.
     private static LibraryBuffer[]? LibraryBuffers;
-    private static Texture2D? LibraryStar;
-    private static bool LibraryInitQueued,LibraryInitAttempted,LibraryUnloaded;
+    private static readonly Dictionary<string,Texture2D> LibraryTextures=new(StringComparer.Ordinal);
+    private static readonly HashSet<string> LibraryTextureAttempts=new(StringComparer.Ordinal);
+    private static bool LibraryInitQueued,LibraryUnloaded;
     private static int LibraryResourceEpoch;
     private static readonly object LibraryResourceGate=new();
 
     internal static bool EnqueueSnapshotVfx(GeneratedItemData data,string entityId,VfxSlotSpec slot,string sourceKey,VfxSourceFrame frame,
         VfxSourceBinding? binding=null,bool itemBudget=false,MaterialEventAllowance? allowance=null)
-        =>VfxLibraryValidation.HasPayload(slot)?EnqueueLibrary(data,slot,sourceKey,frame,itemBudget,allowance)
+        =>slot.Dust is not null||slot.Light is not null?EnqueueNativeCue(data,slot,sourceKey,frame,itemBudget,allowance)
+            :slot.Shape is not null?EnqueueShape(data,slot,sourceKey,frame,binding)
+            :VfxLibraryValidation.HasPayload(slot)?EnqueueLibrary(data,slot,sourceKey,frame,itemBudget,allowance)
             :EnqueueElement(data,entityId,slot,sourceKey,frame,binding,itemBudget,allowance);
-    internal static bool HasSnapshotVfx(VfxSlotSpec slot)=>slot.Element is not null||VfxLibraryValidation.HasPayload(slot);
+    internal static bool HasSnapshotVfx(VfxSlotSpec slot)=>slot.Dust is not null||slot.Light is not null||slot.Shape is not null||slot.Element is not null||VfxLibraryValidation.HasPayload(slot);
     internal static bool HasOwnedVfx(VfxSlotSpec slot)=>HasSnapshotVfx(slot)||slot.Path is not null;
     private static int LibraryRecordCount=>MaterialEmissions.Count(e=>e.Library is not null);
     private static int OwnedParticleCount=>MaterialEmissions.Sum(e=>e.Particles.Length+(e.Library?.Particles.Length??0));
@@ -61,7 +64,7 @@ public sealed partial class InfiniDetachedVfxSystem
         var budget=data.VfxManifest.Budget;
         var p=slot.Particle;var s=slot.ScreenShake;
         return new(slot.Layer,slot.Blend,slot.Alpha,slot.Duration,budget.MaxDrawCalls,budget.MaxParticlesPerTick,budget.MaxParticlesTotal,item,slot.SlotSeed,
-            p is null?null:new(p.Count,p.SpeedMinPxPerTick,p.SpeedMaxPxPerTick,p.SpreadRadians,p.InheritVelocity,p.Drag,
+            p is null?null:new(VfxLibraryTextures.TryGetPath(p.TextureId,out var texturePath)?texturePath:throw new InvalidOperationException("Unvalidated particle texture"),p.Count,p.SpeedMinPxPerTick,p.SpeedMaxPxPerTick,p.SpreadRadians,p.InheritVelocity,p.Drag,
                 new(p.AccelerationXPxPerTickSquared,p.AccelerationYPxPerTickSquared),p.WidthPx,p.HeightPx,p.RotationRadians,p.RotationSpeedRadiansPerTick,
                 p.ColorStart.ToColor().ToVector3(),p.ColorEnd.ToColor().ToVector3(),p.EndScaleMultiplier,p.EndOpacity),
             s is null?null:new(s.StrengthPx,s.AngularVarianceRadians,s.DirectionRadians,s.DissipationPxPerFrame,s.TaperStartDistancePx,s.TaperEndDistancePx));
@@ -97,7 +100,7 @@ public sealed partial class InfiniDetachedVfxSystem
         int sinceDue=unchecked((int)((uint)now-(uint)e.Due));
         if(sinceDue<0)return;
         if(!e.Started) {
-            if(d.Particle is not null&&!EnsureLibraryReady()) {
+            if(d.Particle is not null&&!EnsureLibraryReady(d.Particle.TexturePath)) {
                 if(sinceDue>=LibraryReadyWaitTicks)state.Retired=true;
                 return;
             }
@@ -164,27 +167,27 @@ public sealed partial class InfiniDetachedVfxSystem
         info.Color=info.Time==0?Color.Transparent:new Color(new Vector4(rgb,1))*(d[6]*MathHelper.Lerp(1,d[5],age));
     }
 
-    private static bool EnsureLibraryReady()
+    private static bool EnsureLibraryReady(string texturePath)
     {
         int epoch;
         lock(LibraryResourceGate) {
             if(!LibraryClient||LibraryUnloaded)return false;
-            if(LibraryBuffers is not null&&LibraryStar is not null)return true;
+            if(LibraryBuffers is not null&&LibraryTextures.ContainsKey(texturePath))return true;
             // Headless/loading absence is normal; no half-initialized buffers.
-            if(LibraryInitQueued||LibraryInitAttempted||Main.graphics?.GraphicsDevice is null||ParticleManagerV3.InstancedParticleEffect is null)return false;
-            LibraryInitQueued=true;LibraryInitAttempted=true;epoch=LibraryResourceEpoch;
+            if(LibraryInitQueued||LibraryTextureAttempts.Contains(texturePath)||Main.graphics?.GraphicsDevice is null||ParticleManagerV3.InstancedParticleEffect is null)return false;
+            LibraryInitQueued=true;LibraryTextureAttempts.Add(texturePath);epoch=LibraryResourceEpoch;
         }
         Main.QueueMainThreadAction(()=>{
             var buffers=new List<LibraryBuffer>(4);
             try {
                 lock(LibraryResourceGate)if(epoch!=LibraryResourceEpoch||LibraryUnloaded||!LibraryClient)return;
-                var texture=ModContent.Request<Texture2D>("ParticleLibrary/Assets/Textures/Star",AssetRequestMode.ImmediateLoad).Value;
-                for(int i=0;i<4;i++) {var buffer=new LibraryBuffer();buffers.Add(buffer);buffer.InitializeOwned();}
+                var texture=ModContent.Request<Texture2D>(texturePath,AssetRequestMode.ImmediateLoad).Value;
+                if(LibraryBuffers is null) for(int i=0;i<4;i++) {var buffer=new LibraryBuffer();buffers.Add(buffer);buffer.InitializeOwned();}
                 lock(LibraryResourceGate) {
                     if(epoch!=LibraryResourceEpoch||LibraryUnloaded||buffers.Any(b=>b.Capacity==0))return;
-                    LibraryStar=texture;LibraryBuffers=buffers.ToArray();buffers.Clear();
+                    LibraryTextures[texturePath]=texture;if(LibraryBuffers is null)LibraryBuffers=buffers.ToArray();buffers.Clear();
                 }
-            }catch(Exception error){InfiniCrafterLocalMod.Instance?.Logger.Warn("Explicit library VFX initialization failed; no fallback: "+error.Message);}
+            }catch(Exception error){InfiniCrafterLocalMod.Instance?.Logger.Warn("Explicit library VFX texture "+texturePath+" unavailable; no fallback: "+error.Message);}
             finally{
                 foreach(var buffer in buffers)buffer.DisposeOwned();
                 lock(LibraryResourceGate)LibraryInitQueued=false;
@@ -194,15 +197,15 @@ public sealed partial class InfiniDetachedVfxSystem
     }
     private static void DrawLibraryParticles(string layer,GraphicsDevice device)
     {
-        LibraryBuffer[]? buffers;Texture2D? star;
-        lock(LibraryResourceGate){buffers=LibraryBuffers;star=LibraryStar;}
-        if(!LibraryClient||!InfiniVfxClientOptions.EnableParticleLibraryBackend||buffers is null||star is null)return;
-        for(int blend=0;blend<2;blend++) {
+        LibraryBuffer[]? buffers;KeyValuePair<string,Texture2D>[] textures;
+        lock(LibraryResourceGate){buffers=LibraryBuffers;textures=LibraryTextures.ToArray();}
+        if(!LibraryClient||!InfiniVfxClientOptions.EnableParticleLibraryBackend||buffers is null)return;
+        for(int blend=0;blend<2;blend++) foreach(var texture in textures) {
             var buffer=buffers[(layer=="AfterProjectiles"?2:0)+blend];int count=0;
             string blendName=blend==0?"alpha":"additive";
             foreach(var e in MaterialEmissions) {
                 if(!e.Started||e.Library is not {Retired:false} state||state.Design.Particle is null
-                    ||state.Design.Layer!=layer||state.Design.Blend!=blendName)continue;
+                    ||state.Design.Layer!=layer||state.Design.Blend!=blendName||state.Design.Particle.TexturePath!=texture.Key)continue;
                 foreach(var info in state.Particles) {
                     if(count>=buffer.Capacity)break;
                     if(info.Time<=0||info.Scale.X<=0||info.Scale.Y<=0)continue;
@@ -218,7 +221,7 @@ public sealed partial class InfiniDetachedVfxSystem
                         Rotation_Depth=new Vector2(info.Rotation,info.Depth),Color=color};
                 }
             }
-            if(count>0)buffer.RenderOwned(device,star,count,blend==0?BlendState.AlphaBlend:BlendState.Additive);
+            if(count>0)buffer.RenderOwned(device,texture.Value,count,blend==0?BlendState.AlphaBlend:BlendState.Additive);
         }
     }
     private static void ClearLibrary(bool unload=false)
@@ -226,12 +229,12 @@ public sealed partial class InfiniDetachedVfxSystem
         foreach(var e in MaterialEmissions)if(e.Library?.Shake is {} shake)shake.ShakeStrength=0;
         if(!unload)return; // world clears pending records at the canonical owner, keeps four fixed resources
         LibraryBuffer[]? owned;
-        lock(LibraryResourceGate){LibraryUnloaded=true;LibraryResourceEpoch++;owned=LibraryBuffers;LibraryBuffers=null;LibraryStar=null;}
+        lock(LibraryResourceGate){LibraryUnloaded=true;LibraryResourceEpoch++;owned=LibraryBuffers;LibraryBuffers=null;LibraryTextures.Clear();LibraryTextureAttempts.Clear();}
         if(owned is not null)Main.QueueMainThreadAction(()=>{foreach(var b in owned)b.DisposeOwned();});
     }
     private static void LoadLibrary()
     {
-        lock(LibraryResourceGate){LibraryUnloaded=false;LibraryInitAttempted=false;LibraryResourceEpoch++;}
+        lock(LibraryResourceGate){LibraryUnloaded=false;LibraryTextureAttempts.Clear();LibraryResourceEpoch++;}
     }
 
     private static void ApplyWorldSpaceLibraryEffect(InstancedParticleEffect effect)

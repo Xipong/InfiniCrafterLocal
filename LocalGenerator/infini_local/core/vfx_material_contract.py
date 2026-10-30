@@ -132,9 +132,24 @@ def element_schema() -> dict[str, Any]:
     })
 
 
-def library_particle_schema() -> dict[str, Any]:
+LIBRARY_PARTICLE_TEXTURES = {
+    "star": "ParticleLibrary/Assets/Textures/Star: 128x128 soft radial glow, NOT a star silhouette.",
+    "solidPixel": "ParticleLibrary/Assets/Textures/WhitePixel: solid white 1x1 pixel, stretched to the authored rectangle.",
+    "bloomCircle": "Luminance/Assets/GreyscaleTextures/BloomCircleSmall: 200x200 broad soft circular glow.",
+    "bloomFlare": "Luminance/Assets/GreyscaleTextures/BloomFlare: 972x976 radial many-ray light flare.",
+    "bloomLine": "Luminance/Assets/GreyscaleTextures/BloomLine: 64x1024 narrow vertical soft light streak; texture Y is the long axis.",
+    "chromaticBurst": "Luminance/Assets/GreyscaleTextures/ChromaticBurst: 1024x1024 colored spectral ring, NOT grayscale; authored RGB multiplies existing color.",
+    "shineFlare": "Luminance/Assets/GreyscaleTextures/ShineFlare: 512x512 four-point axial star flare.",
+}
+
+
+def library_particle_schema(*, include_legacy: bool = False) -> dict[str, Any]:
     return _object({
-        "textureId": {"type": "string", "enum": ["star"], "description": "Exact ParticleLibrary built-in Star texture: opaque grayscale including black texels. Alpha blend includes its black rectangular footprint; additive makes black contribute zero. Choose blend explicitly. Not a motion/weapon preset; no PNG generation."},
+        "textureId": {"type": "string", "enum": list(LIBRARY_PARTICLE_TEXTURES),
+                      "description": "Exact existing library texture, no PNG generation or motion preset. "
+                      + " ".join(key + "=" + value for key, value in LIBRARY_PARTICLE_TEXTURES.items())
+                      + " All textures have opaque alpha. Glow/flare black RGB contributes zero in additive, recommended for luminous effects; alpha blend visibly includes the black rectangle. Both blends are literal choices, never auto-converted. Dimensions are authored world pixels, not native texture dimensions."
+                      },
         "count": _number(0, 64, "Integer particles per emission; zero is silence; shares existing instance budgets.", integer=True),
         "speedMinPxPerTick": _number(0, 24, "Minimum initial speed in world pixels/world tick."),
         "speedMaxPxPerTick": _number(0, 24, "Maximum initial speed in world pixels per world tick, must be >= speedMinPxPerTick."),

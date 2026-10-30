@@ -25,6 +25,48 @@ def _legacy(data: dict[str, Any]) -> dict[str, Any]:
         }],
     }
 
+def _shape(data: dict[str, Any]) -> dict[str, Any]:
+    """Explicit expanding arc: authored dimensions, colors and opacity, no preset."""
+    from math import tau
+    return {"schema": vfx.VFX_DIRECTOR_SCHEMA, "slots": [{
+        "id": "explicit_shape", "entityId": data["runtimeProgram"]["itemEntityId"],
+        "event": "on_use", "rendererKind": "shape", "anchor": "self", "blend": "additive",
+        "layer": "AfterProjectiles", "startTick": 0, "repeatEvery": 0, "duration": 20,
+        "shape": {"kind": "arc", "attachment": "world", "offsetForwardPx": 0, "offsetSidePx": 0,
+            "rotationRadians": 0, "rotationSpeedRadiansPerTick": 0,
+            "colorStart": {"r": 17, "g": 93, "b": 241}, "colorEnd": {"r": 0, "g": 30, "b": 255},
+            "opacityStart": .8, "opacityEnd": 0, "radiusStartPx": 4, "radiusEndPx": 32,
+            "sweepRadians": tau, "widthPx": .5, "segments": 20, "tailOpacityStart": 1, "tailOpacityEnd": 1},
+    }]}
+
+
+def _history(data: dict[str, Any], texture: str = "item") -> dict[str, Any]:
+    entity_id = next((row["id"] for row in data["runtimeProgram"].get("entities", []) if row["kind"] != "item_body"), data["runtimeProgram"]["itemEntityId"])
+    return {"schema": vfx.VFX_DIRECTOR_SCHEMA, "slots": [{
+        "id": "explicit_history", "entityId": entity_id,
+        "event": "periodic", "rendererKind": "historyTrail", "anchor": "self", "blend": "alpha",
+        "layer": "AfterProjectiles", "trail": {
+            "draw": "sprites", "source": "center", "historyTicks": 20, "sampleStepTicks": 3,
+            "firstSampleAgeTicks": 2, "color": {"r": 17, "g": 93, "b": 241},
+            "opacityProfile": {"start": .8, "middle": .6, "end": .1, "curve": "linear"},
+            "texture": {"source": texture, "assetId": ""}, "scale": 1.2, "pose": "sampled",
+        },
+    }]}
+
+
+def _native(data: dict[str, Any], renderer: str = "nativeDust") -> dict[str, Any]:
+    slot = {"id": "native_cue", "entityId": data["runtimeProgram"]["itemEntityId"],
+            "event": "on_use", "rendererKind": renderer, "anchor": "self",
+            "color": {"r": 17, "g": 93, "b": 241}, "startTick": 0, "repeatEvery": 0}
+    if renderer == "nativeLight":
+        slot["light"] = {"intensity": .6}
+    else:
+        slot["dust"] = {"type": "Smoke", "count": 3, "size": 1, "speedMinPxPerTick": 1,
+                        "speedMaxPxPerTick": 2, "spreadRadians": .5, "inheritVelocity": .2,
+                        "nativeAlpha": 100, "noGravity": True}
+    return {"schema": vfx.VFX_DIRECTOR_SCHEMA, "slots": [slot]}
+
+
 def _profile(start: Any = 1.0, middle: Any = 1.0, end: Any = 0.0, curve: str = "linear") -> dict[str, Any]:
     return {"start": start, "middle": middle, "end": end, "curve": curve}
 

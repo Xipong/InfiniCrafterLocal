@@ -1,0 +1,86 @@
+{
+  "scope": "Pinned upstream resources verified against referenced dependency versions; not a GPU/game rendering test",
+  "particleLibraryVersion": "3.2.1.0",
+  "particleLibraryDllSha256": "22c5774e90ddde7c2730c7c71c07deea3cb4a43c45f6f9f29091622056773e7f",
+  "luminanceVersion": "1.0.11",
+  "luminanceDllInformationalCommit": "5b4095a5d59e901ac171208f67a1d1e934c69373",
+  "textures": [
+    {
+      "textureId": "star",
+      "source": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Star.png",
+      "sha256": "edd88a02fe82e8dc740248ba45add74ef0b4e9fdcf2e8c3fe12acfdc1d996939",
+      "width": 128,
+      "height": 128,
+      "alphaRange": [
+        255,
+        255
+      ]
+    },
+    {
+      "textureId": "solidPixel",
+      "source": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/WhitePixel.png",
+      "sha256": "794460e227c6cc4a6dea190f9e425a7a0d6328e86325e60a6a6d8a0f73b780a4",
+      "width": 1,
+      "height": 1,
+      "alphaRange": [
+        255,
+        255
+      ]
+    },
+    {
+      "textureId": "bloomCircle",
+      "source": "https://raw.githubusercontent.com/LucilleKarma/Luminance/5b4095a5d59e901ac171208f67a1d1e934c69373/Assets/GreyscaleTextures/BloomCircleSmall.png",
+      "sha256": "207fc44f4c3a077e70b2cc8d559e5f2935fe7c097bf7b5be5affa19aafbc8507",
+      "width": 200,
+      "height": 200,
+      "alphaRange": [
+        255,
+        255
+      ]
+    },
+    {
+      "textureId": "bloomFlare",
+      "source": "https://raw.githubusercontent.com/LucilleKarma/Luminance/5b4095a5d59e901ac171208f67a1d1e934c69373/Assets/GreyscaleTextures/BloomFlare.png",
+      "sha256": "31c1087bbc0e07e4dde4f487f3f191c3f6333dc8c24d50ee01f69a0465e84bc0",
+      "width": 972,
+      "height": 976,
+      "alphaRange": [
+        255,
+        255
+      ]
+    },
+    {
+      "textureId": "bloomLine",
+      "source": "https://raw.githubusercontent.com/LucilleKarma/Luminance/5b4095a5d59e901ac171208f67a1d1e934c69373/Assets/GreyscaleTextures/BloomLine.png",
+      "sha256": "af2a35cc00fb51bd305a6f520ae2f4342e76d161e777156a2552c5c2a0493c23",
+      "width": 64,
+      "height": 1024,
+      "alphaRange": [
+        255,
+        255
+      ]
+    },
+    {
+      "textureId": "chromaticBurst",
+      "source": "https://raw.githubusercontent.com/LucilleKarma/Luminance/5b4095a5d59e901ac171208f67a1d1e934c69373/Assets/GreyscaleTextures/ChromaticBurst.png",
+      "sha256": "19e4d3f045304d642535f8bcb898eab11a4887632d65bc2d9734261f8d0d01d0",
+      "width": 1024,
+      "height": 1024,
+      "alphaRange": [
+        255,
+        255
+      ]
+    },
+    {
+      "textureId": "shineFlare",
+      "source": "https://raw.githubusercontent.com/LucilleKarma/Luminance/5b4095a5d59e901ac171208f67a1d1e934c69373/Assets/GreyscaleTextures/ShineFlare.png",
+      "sha256": "0d0445abd56981effdb50e045694ebd3312959eaa3a21c64618a345d5b9351e6",
+      "width": 512,
+      "height": 512,
+      "alphaRange": [
+        255,
+        255
+      ]
+    }
+  ]
+}

@@ -184,6 +184,8 @@ def test_physical_geometry_is_read_only_guidance_and_can_have_no_vfx_slots(wire_
     raw = _visual_kit(beam)
     body = next(row for row in raw["entities"] if row["entityId"] == "witness_entity")
     body.update(assetMode="runtime_geometry", visualProjectRef="none")
+    from tests.visual_geometry_fixtures import segment_geometry
+    body["geometry"] = segment_geometry()
     authored = _vfx_output(beam)
     authored["slots"] = []
     responses, sent = wire_transport

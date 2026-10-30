@@ -833,6 +833,16 @@ public sealed partial class RuntimeEntitySpec
 
         ValidateMotionComponents();
         Visual.Normalize();
+        if (Visual.Geometry is { } geometry)
+        {
+            if (Kind == RuntimeEntityKind.ItemBody || Visual.AssetMode != "runtime_geometry")
+                throw new InvalidDataException("Body geometry belongs only to non-item runtime_geometry presentation");
+            if (geometry.Axis == "aim" && Aim is null)
+                throw new InvalidDataException("Body geometry aim axis requires entity aim");
+            if (geometry.Source == "collision_path" && BeamGeometry is null && LashGeometry is null
+                && Controller.Code != RuntimeControllerCode.ChannelBeam && !(Movement.IsConfigured && Movement.Code == 18))
+                throw new InvalidDataException("Collision path presentation requires beam or lash geometry");
+        }
         // New metadata has exactly one texture owner. Alias/item-body rows may
         // not create a second authority; absent fields remain saved-v5 compatible.
         if ((Visual.Grip is not null || Visual.RenderSizePx.HasValue || Visual.PreferredCanvasSize.HasValue || Visual.ForwardAngleDegrees.HasValue)
@@ -911,6 +921,12 @@ public sealed partial class RuntimeEntitySpec
 
 public sealed class RuntimeEntityVisualSpec
 {
+    private RuntimeBodyGeometrySpec? geometry;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeBodyGeometrySpec? Geometry {
+        get => geometry;
+        set => geometry = value ?? throw new InvalidDataException("entity.visual.geometry must be an object when present");
+    }
     private ItemGripSpec? _grip;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ItemGripSpec? Grip {
@@ -974,6 +990,7 @@ public sealed class RuntimeEntityVisualSpec
     public void Normalize()
     {
         Grip?.Validate();
+        Geometry?.Validate();
         Role = RuntimeText.Safe(Role, 64);
         AssetMode = RuntimeText.Safe(AssetMode, 32).ToLowerInvariant();
         Prompt = RuntimeText.Prose(Prompt, 1400);

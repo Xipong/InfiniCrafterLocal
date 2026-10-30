@@ -12,7 +12,7 @@ from infini_local.core.vfx_material_contract import vfx_model_payload
 from infini_local.pipelines import vfx_generation_pipeline as stage
 from prompt_packet_helpers import request_dossier
 from test_low_level_three_stage_pipeline import _accepted_visual_data, wire_transport
-from vfx_material_fixtures import _legacy, _sprite, _with_asset
+from vfx_material_fixtures import _shape, _native, _sprite, _with_asset
 
 
 def _send_repair(wire_transport, data, raw, patch, parent=None):
@@ -24,7 +24,7 @@ def _send_repair(wire_transport, data, raw, patch, parent=None):
 
 def test_diagnosed_foreign_payload_is_omittable_in_request_grammar(wire_transport):
     data = _accepted_visual_data("workbench_blade")
-    accepted = _legacy(data)
+    accepted = _shape(data)
     raw = copy.deepcopy(accepted)
     raw["slots"][0]["element"] = _sprite(data)["slots"][0]["element"]
     patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "delete foreign payload", "slotsUpsert": accepted["slots"]}
@@ -40,7 +40,7 @@ def test_nested_literal_foreign_member_is_omittable_without_thawing_color(wire_t
     from infini_local.core.repair_merge import json_path_child
 
     data = _accepted_visual_data("workbench_blade")
-    accepted = _legacy(data)
+    accepted = _native(data)
     assert vfx.validate_vfx_director_output(accepted, data)["ok"]
     raw = copy.deepcopy(accepted)
     raw["slots"][0]["color"][foreign_key] = 1
@@ -71,12 +71,12 @@ def test_nested_literal_foreign_member_is_omittable_without_thawing_color(wire_t
 
 
 @pytest.mark.parametrize("leaf,bad,good", [
-    ("scale", True, 1), ("duration", 121, 20), ("color.r", 256, 17),
+    ("element.count", True, 2), ("duration", 121, 20), ("color.r", 256, 17),
     ("element.widthProfile.middle", True, 1.0),
 ])
 def test_exact_leaf_grammar_uses_canonical_limits_and_exact_frozen_companions(wire_transport, leaf, bad, good):
     data = _accepted_visual_data("workbench_blade")
-    accepted = _sprite(data) if leaf.startswith("element.") else _legacy(data)
+    accepted = _native(data) if leaf.startswith("color.") else _sprite(data)
     raw = copy.deepcopy(accepted)
     node = raw["slots"][0]
     for part in leaf.split(".")[:-1]:
@@ -121,7 +121,7 @@ def test_new_frozen_literals_have_entailed_types_and_closed_nested_shape(wire_tr
         "type": "json_schema", "json_schema": {"name": name, "strict": True, "schema": kw["schema"]},
     })
     data = _accepted_visual_data("workbench_blade")
-    accepted = _legacy(data)
+    accepted = _sprite(data)
     raw = copy.deepcopy(accepted)
     raw["slots"][0]["alpha"] = 2
     patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "typed frozen companions", "slotsUpsert": accepted["slots"]}
@@ -130,15 +130,17 @@ def test_new_frozen_literals_have_entailed_types_and_closed_nested_shape(wire_tr
     schema = packet["outputSchema"]
     assert wire_transport[1][1]["response_format"]["json_schema"]["schema"] == schema
     row = schema["properties"]["slotsUpsert"]["items"]
-    assert row["properties"]["scale"] == {"type": "number", "const": 1.0}
     assert row["properties"]["duration"] == {"type": "integer", "const": 20}
-    assert row["properties"]["rendererKind"] == {"type": "string", "const": "impactRing"}
-    color = row["properties"]["color"]
-    assert color["type"] == "object" and color["const"] == accepted["slots"][0]["color"]
+    assert row["properties"]["rendererKind"] == {"type": "string", "const": "spriteElement"}
+    element = row["properties"]["element"]
+    assert element["type"] == "object" and element["const"] == vfx_model_payload(accepted)["slots"][0]["element"]
+    assert element["additionalProperties"] is False
+    assert element["properties"]["width"] == {"type": "number", "const": 12.0}
+    color = element["properties"]["colorProfile"]["properties"]["middle"]
     assert color["additionalProperties"] is False
     assert set(color["required"]) == set(color["properties"]) == {"r", "g", "b"}
     assert color["properties"] == {name: {"type": "integer", "const": value}
-                                   for name, value in accepted["slots"][0]["color"].items()}
+                                   for name, value in accepted["slots"][0]["element"]["colorProfile"]["middle"].items()}
     assert not strict_schema_errors(vfx_model_payload(patch), schema)
     assert strict_schema_errors(vfx_model_payload(dict(patch, slotsUpsert=raw["slots"])), schema)
 
@@ -239,8 +241,8 @@ def test_duplicate_asset_grammar_freezes_first_occurrence_while_deleting_later_r
 
 def test_multiple_rows_have_separate_exact_id_and_path_branches(wire_transport):
     data = _accepted_visual_data("workbench_blade")
-    accepted = _legacy(data)
-    accepted["slots"].append(dict(accepted["slots"][0], id="second", scale=2))
+    accepted = _sprite(data)
+    accepted["slots"].append(dict(accepted["slots"][0], id="second", alpha=.37))
     raw = copy.deepcopy(accepted)
     raw["slots"][0]["alpha"] = 2
     raw["slots"][1]["duration"] = 121
@@ -274,13 +276,13 @@ def test_alpha_request_has_only_exact_edit_domain_and_preserves_hostile_siblings
         {"type": "json_schema", "json_schema": {"name": name, "strict": True, "schema": kw["schema"]}}
         if response_format == "json_schema" else {"type": "json_object"}))
     data = _accepted_visual_data("workbench_blade")
-    accepted = _legacy(data)
+    accepted = _sprite(data)
     sibling = dict(accepted["slots"][0], id="frozen_sibling", alpha=0.37)
     accepted["slots"].append(sibling)
     raw = copy.deepcopy(accepted)
     raw["slots"][0]["alpha"] = 2
     patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "alpha only",
-             "slotsUpsert": [dict(accepted["slots"][0], scale=4), dict(sibling, alpha=0)],
+             "slotsUpsert": [dict(accepted["slots"][0], duration=4), dict(sibling, alpha=0)],
              "slotIdsDelete": ["frozen_sibling"]}
     responses, sent = wire_transport
     responses.extend([raw, patch])
@@ -297,15 +299,15 @@ def test_alpha_request_has_only_exact_edit_domain_and_preserves_hostile_siblings
     assert parent == parent_before
     schema = dossier["outputSchema"]
     assert set(schema["properties"]) == {"schema", "note", "slotsUpsert"}
-    assert "element" not in json.dumps(schema)
+    assert schema["properties"]["slotsUpsert"]["items"]["properties"]["element"]["const"] == vfx_model_payload(accepted)["slots"][0]["element"]
     assert "soundId" not in json.dumps(schema)
     row = schema["properties"]["slotsUpsert"]["items"]
     assert row["properties"]["id"]["const"] == accepted["slots"][0]["id"]
     assert row["properties"]["alpha"] == vfx.vfx_director_schema(data)["properties"]["slots"]["items"]["properties"]["alpha"]
     good = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "alpha only", "slotsUpsert": [accepted["slots"][0]]}
-    assert not strict_schema_errors(good, schema)
-    assert strict_schema_errors(dict(good, slotsUpsert=[sibling]), schema)
-    assert strict_schema_errors(dict(good, slotsUpsert=[dict(accepted["slots"][0], alpha=2)]), schema)
+    assert not strict_schema_errors(vfx_model_payload(good), schema)
+    assert strict_schema_errors(vfx_model_payload(dict(good, slotsUpsert=[sibling])), schema)
+    assert strict_schema_errors(vfx_model_payload(dict(good, slotsUpsert=[dict(accepted["slots"][0], alpha=2)])), schema)
     assert set(dossier["runtimeVocabularyReadOnly"]) == {"numericRanges", "rendererSemantics"}
     assert dossier["runtimeVocabularyReadOnly"]["numericRanges"] == {"alpha": [0.0, 1.0]}
     assert list(dossier["runtimeVocabularyReadOnly"]["rendererSemantics"]) == [accepted["slots"][0]["rendererKind"]]

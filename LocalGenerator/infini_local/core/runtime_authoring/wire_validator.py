@@ -79,7 +79,7 @@ _VISUAL_KEYS = frozenset({
     "role", "assetMode", "prompt", "silhouette", "visualIdentity", "impactPrompt", "impactNegativePrompt",
     "scale", "spritePath", "spriteUrl", "spriteStatus", "spriteTechnicalScore", "impactSpritePath",
     "impactSpriteUrl", "impactSpriteStatus", "impactSpriteTechnicalScore", "impactCanvasSize",
-    "renderSizePx", "preferredCanvasSize", "forwardAngleDegrees", "grip",
+    "renderSizePx", "preferredCanvasSize", "forwardAngleDegrees", "grip", "geometry",
 })
 _SPAWN_KEYS = frozenset({"enabled", "speedPxPerTick", "count", "spreadRadians", "offsetPx", "aim", "placement", "overTarget", "velocityDistribution"}) | frozenset(
     spec.wire_name or name for fn in ("projectile_limit", "descendant_limit")
@@ -785,6 +785,19 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             component = _validate_component_shape(entity.get(component_name), allowed_keys, f"{entity_path}.{component_name}", errors)
             if component_name == "visual" and component is not None:
                 _validate_sprite_presentation(component, f"{entity_path}.visual", errors, entity_kind=kind)
+                if "geometry" in component:
+                    from infini_local.core.visual_contract_schema import body_geometry_schema, collision_path_source
+                    geometry_path = f"{entity_path}.visual.geometry"
+                    geometry = component["geometry"]
+                    if component.get("assetMode") != "runtime_geometry" or kind == "item_body":
+                        errors.append({"path": geometry_path, "code": "nonowning_body_geometry", "message": "Explicit geometry belongs only to a non-item runtime_geometry body."})
+                    for diagnostic in strict_schema_errors(geometry, body_geometry_schema(), path=geometry_path):
+                        errors.append({"path": diagnostic["path"], "code": "invalid_body_geometry", "message": "Explicit body geometry must satisfy its finite versioned schema."})
+                    if isinstance(geometry, Mapping):
+                        if geometry.get("source") == "collision_path" and collision_path_source(entity) is None:
+                            errors.append({"path": geometry_path + ".source", "code": "missing_body_geometry_source", "message": "collision_path requires accepted beam/lash geometry."})
+                        if geometry.get("source") == "body_segment" and geometry.get("axis") == "aim" and not isinstance(entity.get("aim"), Mapping):
+                            errors.append({"path": geometry_path + ".axis", "code": "missing_body_geometry_aim", "message": "aim axis requires an accepted aim component."})
             if component_name == "spawn" and component is not None:
                 for fn in ("projectile_limit", "descendant_limit"):
                     concurrency = CAPABILITY_REGISTRY[fn]

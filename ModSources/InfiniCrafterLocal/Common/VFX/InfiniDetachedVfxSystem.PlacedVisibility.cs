@@ -46,7 +46,7 @@ public sealed partial class InfiniDetachedVfxSystem
         {
             if (slot.PlacementBindingId != view.BindingId || slot.EntityId != view.EntityId
                 || slot.Event != RuntimeEventKind.Periodic) continue;
-            if (slot.RendererKind == "lightCue") return true;
+            if (slot.RendererKind is "lightCue" or "nativeLight") return true;
             if ((slot.Element is not null || slot.Particle is not null)
                 && PlacedVfxInView(center,PlacedVfxReachRadius(slot))) return true;
         }

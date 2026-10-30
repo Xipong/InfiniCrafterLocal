@@ -123,6 +123,7 @@ def _existing_texture_data(source: str, renderer: str = "spriteElement") -> dict
         orb["visual"].update(assetMode="baked_sprite", preferredCanvasSize=32, prompt="literal amber orb", renderSizePx=24, forwardAngleDegrees=0)
     data["vfxManifest"]["slots"] = [slot]
     if source == "impact":
+        # Historical saved producer: verify delivery compatibility, not fresh Director admission.
         from tests.vfx_material_fixtures import _legacy
         producer = _legacy(data)["slots"][0]
         producer.update(id="impact_source", entityId="orb", event="periodic", repeatEvery=4,

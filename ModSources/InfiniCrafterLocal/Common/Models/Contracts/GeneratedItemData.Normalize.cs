@@ -302,7 +302,12 @@ public sealed partial class GeneratedItemData
                         throw new InvalidDataException("projectile periodic sound/light/impact cue requires startTick and automatic-cadence density");
                 }
             }
-            var texture = slot.Element?.Texture ?? slot.Path?.Texture;
+            if((slot.Dust is not null || slot.Light is not null) && entity.Kind==RuntimeEntityKind.ItemBody && slot.Event==RuntimeEventKind.Periodic && slot.StartTick!=0)
+                throw new InvalidDataException("item native cue periodic requires startTick=0");
+            if(slot.Shape is not null && entity.Kind==RuntimeEntityKind.ItemBody && slot.Event==RuntimeEventKind.Periodic && slot.StartTick!=0)
+                throw new InvalidDataException("item shape periodic requires startTick=0");
+            if(slot.Trail is not null&&!entity.IsProjectileEntity)throw new InvalidDataException("historyTrail is live projectile only");
+            var texture = slot.Element?.Texture ?? slot.Path?.Texture ?? slot.Trail?.Texture;
             if (slot.Element is not null && entity.Kind == RuntimeEntityKind.ItemBody && slot.Event == RuntimeEventKind.Periodic && slot.StartTick != 0)
                 throw new InvalidDataException("item spriteElement periodic requires startTick=0");
             if (slot.Particle is not null && entity.Kind == RuntimeEntityKind.ItemBody && slot.Event == RuntimeEventKind.Periodic && slot.StartTick != 0)

@@ -21,8 +21,8 @@ def authored():
 
 def light_slot():
     return {'id':'placed_glow','entityId':'item','placementBindingId':'alternate_install',
-        'event':'periodic','rendererKind':'lightCue','anchor':'self','repeatEvery':1,
-        'scale':1,'color':{'r':255,'g':90,'b':20}}
+        'event':'periodic','rendererKind':'nativeLight','anchor':'self','repeatEvery':1,
+        'startTick':0,'light':{'intensity':.2},'color':{'r':255,'g':90,'b':20}}
 
 
 def test_author_to_receipts_and_final_wire():
@@ -78,9 +78,11 @@ def test_absent_component_has_no_selectable_binding_and_old_manifest_bytes_uncha
     assert 'placementBindingId' not in json.dumps(old)
     selected={'schema':VFX_DIRECTOR_SCHEMA,'slots':[light_slot()]}
     assert not validate_vfx_director_output(selected,wire)['ok']
-    report=validate_vfx_director_output(raw,wire)
-    assert report['ok'],report
-    assert _compile_manifest(wire,report['normalized'],'old')==old
+    assert not validate_vfx_director_output(raw,wire)['ok']
+    wire['vfxManifest']=old
+    before=copy.deepcopy(wire)
+    assert validate_vfx_manifest_wire(wire)['ok']
+    assert wire==before
 
 
 def test_authored_reference_and_receipts_are_exact_and_repair_leaf_frozen():
@@ -115,7 +117,7 @@ def test_real_director_and_repair_packets_freeze_sibling_selector_absence():
         captures.append(json.loads(kwargs['messages'][1]['content']));return {}
     vfx._request(capture,packet,repair_errors=errors,previous=raw,repair_scope=scope)
     assert captures[0]['runtimeSurfaceReadOnly']['placementBindings']==sent['runtimeSurface']['placementBindings']
-    attack=copy.deepcopy(raw['slots'][0]);attack.update(placementBindingId='alternate_install',scale=5)
+    attack=copy.deepcopy(raw['slots'][0]);attack.update(placementBindingId='alternate_install');attack['light']['intensity']=1
     sibling_attack=copy.deepcopy(sibling);sibling_attack['placementBindingId']='alternate_install'
     fixed=vfx._apply_vfx_repair_patch(wire,raw,{'schema':vfx.VFX_REPAIR_PATCH_SCHEMA,'note':'exact selector','slotsUpsert':[attack,sibling_attack]},scope)
     expected=copy.deepcopy(raw);expected['slots'][0]['placementBindingId']='alternate_install'

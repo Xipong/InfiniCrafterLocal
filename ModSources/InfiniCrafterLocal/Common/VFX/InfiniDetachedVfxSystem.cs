@@ -202,6 +202,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
                 began=true;
             });
             if(began){began=false;batch.End();}
+            DrawShapes(layer,TextureAssets.MagicPixel.Value,EnsureBegin);
             foreach (DetachedEmission emission in Emissions)
             {
                 if (!string.Equals(emission.Layer, layer, StringComparison.Ordinal))
@@ -295,6 +296,8 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
         PeriodicElements.Clear();
         LastMaterialsTick=ulong.MaxValue;
         MaterialEmissions.Clear();
+        ShapeEmissions.Clear();
+        NativeCueEmissions.Clear();
         Emissions.Clear();
         DrawCallsBySource.Clear();
         ParticleBudgetsBySource.Clear();

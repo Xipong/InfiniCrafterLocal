@@ -17,7 +17,7 @@ from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.visual_contract_schema import (
     SPRITE_CANVAS_SIZES, front_hand_sprite_errors, front_hand_sprite_requirement, grip_schema,
-    sprite_presentation_properties,
+    sprite_presentation_properties, body_geometry_schema, collision_path_source,
 )
 from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
@@ -55,8 +55,8 @@ from infini_local.pipelines.visual_asset_modes import (
 )
 
 
-VISUAL_KIT_SCHEMA = "infini.visual-kit.runtime-entities.v2"
-VISUAL_REPAIR_PATCH_SCHEMA = "infini.visual-kit-repair-patch.runtime-entities.v2"
+VISUAL_KIT_SCHEMA = "infini.visual-kit.runtime-entities.v3"
+VISUAL_REPAIR_PATCH_SCHEMA = "infini.visual-kit-repair-patch.runtime-entities.v3"
 _ALLOWED_ASSET_MODES = set(VISUAL_ASSET_MODES)
 _VISUAL_STATIC_PREFIX_KEYS = ("task", "assetModeCatalog", "rules", "spritePresentationReadOnly")
 
@@ -198,7 +198,7 @@ def _visual_entity_schema(entity_ids: list[str], item_body_id: str | None = None
     }
     non_sprite_branches = []
     for mode in ("runtime_geometry", "no_asset"):
-        non_sprite_branches.append({
+        branch = {
             "type": "object",
             "additionalProperties": False,
             "properties": {
@@ -208,7 +208,11 @@ def _visual_entity_schema(entity_ids: list[str], item_body_id: str | None = None
                 "scale": copy.deepcopy(scale),
             },
             "required": ["entityId", "assetMode", "visualProjectRef", "scale"],
-        })
+        }
+        if mode == "runtime_geometry":
+            branch["properties"]["geometry"] = body_geometry_schema()
+            branch["required"].append("geometry")
+        non_sprite_branches.append(branch)
     return {"oneOf": [authored, distinct, reuse, *non_sprite_branches]} if nonitem_id["enum"] else authored
 
 
@@ -247,6 +251,13 @@ def _scoped_visual_patch_node(schema: Mapping[str, Any], paths: list[str]) -> di
     """Project only exact permitted descendants; canonical admission stays full."""
     if "" in paths:
         return copy.deepcopy(dict(schema))
+    if "oneOf" in schema:
+        projected = []
+        for branch in schema["oneOf"]:
+            node = _scoped_visual_patch_node(branch, paths)
+            if node not in projected:
+                projected.append(node)
+        return projected[0] if len(projected) == 1 else {"anyOf": projected}
     properties = {}
     for field, child in (schema.get("properties") or {}).items():
         relative = [value for path in paths
@@ -405,6 +416,7 @@ def _runtime_card(data: Mapping[str, Any]) -> list[dict[str, Any]]:
                 member: CAPABILITY_REGISTRY[fn].summary for fn, member in PROJECTILE_MODIFIER_COMPONENTS.items() if member in entity
             } | ({"whipUsesOwnerGravity": CAPABILITY_REGISTRY["orient_whip_to_owner_gravity"].summary} if entity.get("whipUsesOwnerGravity") is True else {}),
             "events": sorted(set(events_by_entity.get(str(entity.get("id") or ""), []))),
+            "bodyGeometrySourcesReadOnly": {"collision_path": collision_path_source(entity), "aimAxisAvailable": isinstance(entity.get("aim"), Mapping)},
             "hitbox": copy.deepcopy(entity.get("hitbox") or {}),
             **{field: copy.deepcopy(entity[field]) for field in ("spawn", "lifetimeTicks", "collision", "hitboxCurve", "light", *PROJECTILE_MODIFIER_COMPONENTS.values(), "whipUsesOwnerGravity") if field in entity},
         })
@@ -464,7 +476,7 @@ def _presentation_packet_context(data: Mapping[str, Any], runtime_rows: list[dic
             "handContactGeometry": "Native arm stretch changes hand length only from 4 to 10px, not arbitrary reach. Read the accepted attachment/reach displacement and hitbox literally; the grip remains the hand-contact point. Compare projected art contact with collision using formulas.body, never extend mechanics by enlarging the PNG. Parent texture dimensions calibrate art only. Preserve all accepted offsets, pose, motion and unreported art during Repair.",
             "ownership": "Root item owns R/canvas/axis for item_body and reuse_item_icon. A distinct baked entity owns R/canvas/axis. no_asset/runtime_geometry own none. Dedicated impact, overlay, material world widths, textured paths and collision/movement are outside this main-PNG conversion.",
             "fill": "Canonical bake fill/padding below describes artwork span inside the requested frame, not world size. Baked final frame and alpha extent may differ; no post-image axis/bbox inference. Runtime tip anchors remain existing gameplay geometry, not measured PNG tips.",
-            "geometryCoverage": "Choose the visible body deliberately. runtime_geometry draws the implemented collision curve as an untextured solid strip colored by light; it does not create a detailed sword, whip skin, taper or surface texture. A baked_sprite/reuse_item_icon is one rigid PNG at the body position, not a skin stretched along a curved path. For an authored textured curve, independent VFX texturedPath can follow supported beam/whip paths with its own generated strip and width/color/opacity profiles. Keeping runtime_geometry also keeps its solid base underneath; no_asset suppresses that base. If choosing no_asset for a visible path body, state that intended full-body texturedPath clearly in animationPlan for the following VFX stage; this is a request, not proof that a slot already exists. no_asset can also mean deliberate invisibility. ownerLink is a separate cosmetic straight connector to projectile.Center: ownerAnchor=mountedCenter reads owner.MountedCenter, while frontHand requires compositeFrontArm.enabled and otherwise refuses; neither invents a curved collision path. Other path sources forbid ownerAnchor. Choose surfaces and effects that make the accepted movement readable at gameplay scale. No automatic sprite stretching, mode conversion, VFX insertion or changes to accepted mechanics.",
+            "geometryCoverage": "Choose the visible body deliberately. runtime_geometry draws the explicitly authored geometry: a centered body_segment on its selected axis or an existing collision_path, with independent world-pixel dimensions, RGB color and opacity; it does not create a detailed sword, whip skin, taper or surface texture. A baked_sprite/reuse_item_icon is one rigid PNG at the body position, not a skin stretched along a curved path. For an authored textured curve, independent VFX texturedPath can follow supported beam/whip paths with its own generated strip and width/color/opacity profiles. Keeping runtime_geometry also keeps its solid base underneath; no_asset suppresses that base. If choosing no_asset for a visible path body, state that intended full-body texturedPath clearly in animationPlan for the following VFX stage; this is a request, not proof that a slot already exists. no_asset can also mean deliberate invisibility. ownerLink is a separate cosmetic straight connector to projectile.Center: ownerAnchor=mountedCenter reads owner.MountedCenter, while frontHand requires compositeFrontArm.enabled and otherwise refuses; neither invents a curved collision path. Other path sources forbid ownerAnchor. Choose surfaces and effects that make the accepted movement readable at gameplay scale. No automatic sprite stretching, mode conversion, VFX insertion or changes to accepted mechanics.",
             "sourceCalibration": "Use available parent raw.spriteReference loaded texture/currentFrame or generatedParent.visual.renderSizePx as read-only size calibration, not a required copy. Consider chosen renderSizePx together with canonical bake fill/padding and intended visible alpha extent; canvas resolution alone does not set body size. Missing reference or alpha bounds are unknown: never substitute hitbox/collider dimensions, fallback textures or an inferred parent size. Accepted useTime/useAnimation, spawn, lifetimeTicks and collision constrain animation description only; do not change gameplay or frozen Repair fields.",
             "requiredMetadata": "Explicitly choose required presentation fields. No defaults, clamps, inferred axis or rebake.",
         },
@@ -612,6 +624,17 @@ def _validate_kit(
     if len(rows) != len(entity_ids):
         errors.append({"path": "$.entities", "message": f"expected exactly {len(entity_ids)} rows"})
     if accepted_data is not None:
+        accepted_runtime = accepted_data.get("runtimeProgram") or {}
+        accepted_entities = {entity.get("id"): entity for entity in accepted_runtime.get("entities", []) if isinstance(entity, Mapping)}
+        for index, row in enumerate(rows):
+            if not isinstance(row, Mapping) or not isinstance(row.get("geometry"), Mapping):
+                continue
+            entity = accepted_entities.get(row.get("entityId"), {})
+            geometry = row["geometry"]
+            if geometry.get("source") == "collision_path" and collision_path_source(entity) is None:
+                errors.append({"path": f"$.entities[{index}].geometry.source", "message": "collision_path requires accepted beam or lash collision geometry"})
+            if geometry.get("source") == "body_segment" and geometry.get("axis") == "aim" and not isinstance(entity.get("aim"), Mapping):
+                errors.append({"path": f"$.entities[{index}].geometry.axis", "message": "aim axis requires an accepted aim component"})
         dependencies = front_hand_sprite_errors(accepted_data, kit=raw)
         seen_paths = {error["path"] for error in errors}
         errors.extend(error for error in dependencies if error["path"] not in seen_paths)
@@ -656,6 +679,14 @@ def _build_visual_repair_scope(
     for error in errors:
         path = str(error.get("path") or "$")
         message = str(error.get("message") or "")
+        if "schema one_of" in message and any(
+            json_path_relative(str(other.get("path") or ""), path)
+            for other in errors
+        ):
+            # A discriminated nested object (including geometry) may report an
+            # aggregate plus exact invalid leaves. The aggregate grants no
+            # authority to rewrite already-valid siblings.
+            continue
         if path == "$":
             whole_response = True
         relative_item_path = json_path_relative(path, "$.item")
@@ -1166,7 +1197,7 @@ def _request_visual_kit(
                 "the runtime entity with kind=item_body must use baked_sprite regardless of its entityId; set visualProjectRef=item and omit prompt/silhouette/visualIdentity; root item owns that design",
                 "only another non-item_body entity that is the same physical object as item_body may use reuse_item_icon with visualProjectRef=item and must not author a second visual project",
                 "reuse_item_icon carries only entityId, assetMode, visualProjectRef=item and scale; do not duplicate prompt or identity fields",
-                "runtime_geometry/no_asset carry only entityId, assetMode, visualProjectRef=none and scale",
+                "runtime_geometry carries entityId, assetMode, visualProjectRef=none, scale and explicit geometry; no_asset carries the same metadata without geometry. Geometry dimensions/color/opacity/axis are authored presentation, never copied from hitbox/light. collision_path requires an accepted beam/lash path; body_segment aim axis requires accepted aim.",
                 "when equipmentOverlayReadOnly.required is true, author equipOverlay as a separate transparent wearable layer for that exact slot, without drawing a player body",
             ],
             "responseSchema": sent_schema,
@@ -1369,6 +1400,10 @@ def _apply_kit(data: dict[str, Any], kit: Mapping[str, Any]) -> dict[str, Any]:
                 entity_visual[field] = copy.deepcopy(row[field])
             else:
                 entity_visual.pop(field, None)
+        if "geometry" in row:
+            entity_visual["geometry"] = copy.deepcopy(row["geometry"])
+        else:
+            entity_visual.pop("geometry", None)
         entity_visual.update({
             "role": str(entity.get("visualRole") or ""),
             "assetMode": str(row.get("assetMode") or ""),

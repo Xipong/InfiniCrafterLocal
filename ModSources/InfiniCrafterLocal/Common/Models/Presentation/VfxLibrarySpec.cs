@@ -29,7 +29,7 @@ public sealed class VfxLibraryParticleSpec
 
     internal void Validate()
     {
-        VfxMaterialValidation.Choice(TextureId,"particle.textureId","star");
+        if (!VfxLibraryTextures.TryGetPath(TextureId, out _)) throw new InvalidDataException("invalid VFX particle.textureId");
         if(Count is <0 or >64)throw new InvalidDataException("invalid VFX particle.count");
         VfxMaterialValidation.Range(SpeedMinPxPerTick,0,24,"particle.speedMinPxPerTick");
         VfxMaterialValidation.Range(SpeedMaxPxPerTick,0,24,"particle.speedMaxPxPerTick");

@@ -174,8 +174,9 @@ def test_captured_permissions_drive_real_frozen_merge_not_provider_schema_alone(
         slot["duration"] = 100
         patch = {"schema": capture.vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [slot], "note": "one leaf"}
         valid = {"schema": patch["schema"], "slotsUpsert": inputs["vfxOutput"]["slots"], "note": "one leaf"}
-        assert Draft202012Validator(provider_schema).is_valid(valid)
-        assert not Draft202012Validator(provider_schema).is_valid(patch)
+        from infini_local.core.vfx_material_contract import vfx_model_payload
+        assert Draft202012Validator(provider_schema).is_valid(vfx_model_payload(valid))
+        assert not Draft202012Validator(provider_schema).is_valid(vfx_model_payload(patch))
         fixed, audit = capture.vfx._apply_vfx_repair_patch(inputs["visualData"], broken, patch, scope, return_audit=True)
         assert fixed == inputs["vfxOutput"]
         assert audit["ignoredChanges"]
@@ -248,13 +249,14 @@ def test_current_grammar_removes_only_obsolete_controls_not_artist_prose(capture
         assert not props.keys() & RETIRED_GLOBAL_FIELDS
         slot = props["slotsUpsert" if stage.endswith("repair") else "slots"]["items"]
         assert not slot["properties"].keys() & RETIRED_SLOT_FIELDS
-        rgb = slot["properties"]["color"]
         if stage == "vfx":
+            rgb = slot["properties"]["color"]
             assert set(rgb["properties"]) == {"r", "g", "b"}
             for channel in rgb["properties"].values():
                 assert channel["type"] == "integer" and channel["minimum"] == 0 and channel["maximum"] == 255
         else:
-            assert rgb["const"] == evidence["broken"]["slots"][0]["color"]
+            rgb = slot["properties"]["particle"]["properties"]["colorStart"]
+            assert rgb["const"] == evidence["broken"]["slots"][0]["particle"]["colorStart"]
             assert rgb["type"] == "object" and rgb["additionalProperties"] is False
             assert set(rgb["required"]) == {"r", "g", "b"}
             for channel, value in rgb["const"].items():
@@ -290,10 +292,11 @@ def test_provider_schema_and_real_consumer_accept_same_control_refusals(capture,
         retired = copy.deepcopy(valid)
         retired["item"]["effectColor"] = "gold"
     else:
-        encode = lambda value: value
+        from infini_local.core.vfx_material_contract import vfx_model_payload
+        encode = vfx_model_payload
         accepted = lambda value: capture.vfx.validate_vfx_director_output(value, inputs["visualData"])["ok"]
         invalid = copy.deepcopy(valid)
-        invalid["slots"][0]["color"]["r"] = True
+        invalid["slots"][0]["particle"]["colorStart"]["r"] = True
         retired = copy.deepcopy(valid)
         retired["effectMagnitude"] = 0.5
     for value, expected in ((valid, True), (invalid, False), (retired, False)):

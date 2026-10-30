@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 
 import pytest
+from tests.visual_geometry_fixtures import segment_geometry, collision_geometry
 
 from prompt_packet_helpers import request_dossier
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
@@ -28,6 +29,8 @@ def _presentation_input(mode="reuse_item_icon", *, attachment=True, pose=False):
     raw = _visual_kit(data)
     row = raw["entities"][1]
     row.update(assetMode=mode, visualProjectRef="item" if mode == "reuse_item_icon" else "entity" if mode == "baked_sprite" else "none")
+    if mode == "runtime_geometry":
+        row["geometry"] = segment_geometry()
     if mode == "baked_sprite":
         row.update(prompt="Three oak panels, brass rim and hand-contact handle",
                    silhouette="three panels with a handle", visualIdentity="oak and brass", preferredCanvasSize=64,
@@ -313,6 +316,8 @@ def test_selected_curve_body_and_animation_intent_reach_actual_vfx_request(wire_
     data = compile_runtime_program(build_capability_witness("lash_geometry"))
     raw = _visual_kit(data)
     raw["entities"][1].update(assetMode=body_mode, visualProjectRef="none")
+    if body_mode == "runtime_geometry":
+        raw["entities"][1]["geometry"] = collision_geometry()
     raw["animationPlan"] = "A textured copper ribbon follows the existing curved path, with a narrow dark edge."
     responses, requests = wire_transport
     responses.extend([raw, {"schema": vfx.VFX_DIRECTOR_SCHEMA, "slots": []}])

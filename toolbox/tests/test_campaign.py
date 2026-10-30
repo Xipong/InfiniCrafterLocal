@@ -60,7 +60,8 @@ def test_real_campaign_entry_records_synthetic_sender_without_network_or_live_in
                 from test_low_level_three_stage_pipeline import _visual_kit, _vfx_output
                 authored = build_runtime_fixture('workbench_blade')
                 compiled = compile_runtime_program(authored)
-                responses = [authored, _visual_kit(compiled), _vfx_output(compiled)]
+                from infini_local.core.vfx_material_contract import vfx_model_payload
+                responses = [authored, _visual_kit(compiled), vfx_model_payload(_vfx_output(compiled))]
             assert responses, 'unexpected extra stage/Repair'
             return {'choices': [{'message': {'content': json.dumps(responses.pop(0))}}]}
         llm_transport.http_json = synthetic_sender
