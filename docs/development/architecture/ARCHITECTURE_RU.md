@@ -33,7 +33,7 @@ Station A/B inputs
 |---|---|
 | Gameplay, primary и result identity | Gameplay Author; [Author shape](../../reference/authoring/LOW_LEVEL_RUNTIME_AUTHORING_RU.md) |
 | Finite mechanical/event/param facts | `capability_registry.py`; [source map](../CODE_MAP_RU.md#python) |
-| JSON shape / mutable Repair scope | `program_schema.py`, `repair_scope.py`, shared frozen merge |
+| JSON shape / mutable Repair scope | `program_schema.py`, `repair/{schema,scope,filter,validation}.py`, shared frozen merge |
 | Validation / projection / strict wire | `validator.py`, `compiler.py`, `technical_lowering.py`, `wire_validator.py` |
 | Visual/VFX | Своё authored представление поверх read-only accepted gameplay; [handoffs](../pipeline/THREE_STAGE_LLM_PIPELINE_RU.md#flow) |
 | World recipe / health / asset publication | [Recipe owner](../../reference/items/RECIPE_HEALTH_AND_CONTRACTS_RU.md), [image lifecycle](../pipeline/IMAGE_ASSET_LIFECYCLE_RU.md) |

@@ -1,6 +1,7 @@
 """Unrestricted modifier timing is an explicit Author contract, not recovery."""
 from copy import deepcopy
 
+import infini_local.core.runtime_authoring.registry_views as registry_views
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
@@ -55,5 +56,5 @@ def test_shared_window_type_never_inherits_a_use_specific_default(monkeypatch):
     reordered = {key: value for key, value in registry.CAPABILITY_REGISTRY.items() if key != cap.name}
     reordered[cap.name] = cap
     monkeypatch.setattr(registry, "CAPABILITY_REGISTRY", reordered)
-    shared = registry.shared_parameter_schemas()["motionWindow"]
+    shared = registry_views.shared_parameter_schemas()["motionWindow"]
     assert "default" not in shared and "x-infini-neutral" not in shared

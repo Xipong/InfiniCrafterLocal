@@ -4,20 +4,22 @@ from __future__ import annotations
 import base64
 import io
 import json
-from pathlib import Path
 import time
+from pathlib import Path
+
 import pytest
 from infini_local.pipelines.images import backends as backend
-from infini_local.pipelines.images import stage as generation
-from infini_local.services import codex_auth, asset_sync_service, visual_asset_pipeline
-from PIL import Image, ImageDraw
 from infini_local.pipelines.images import backends as image_backend_pipeline
-from infini_local.pipelines.visual import delivery as visual_delivery_gate
+from infini_local.pipelines.images import stage as generation
 from infini_local.pipelines.images import stage as visual_sprite_generation
+from infini_local.pipelines.visual import delivery as visual_delivery_gate
 from infini_local.pipelines.visual.assets import build_visual_asset_plan
+from infini_local.services import asset_sync_service, codex_auth, visual_asset_pipeline
+from PIL import Image, ImageDraw
+from provider_test_support import loopback_server
 from tests.test_image_attempt_contracts import Response, offline, png
 from tests.vfx_image_fixtures import _data, _request, offline_backend
-from provider_test_support import loopback_server
+
 
 @pytest.fixture
 def adapter_transport(offline, monkeypatch, tmp_path):
@@ -198,6 +200,7 @@ def test_image_dripping_body_deadline_releases_gate_without_retry_or_dev_art(
     import threading
     from http.server import BaseHTTPRequestHandler
     from urllib import request as urlrequest
+
     from infini_local.core import http_io
 
     root, _ = offline
@@ -297,6 +300,7 @@ def test_image_dripping_body_deadline_releases_gate_without_retry_or_dev_art(
 def test_lora_catalog_subdeadline_does_not_cancel_remaining_image_budget(offline, monkeypatch, tmp_path, overall_timeout):
     import threading
     from http.server import BaseHTTPRequestHandler
+
     from infini_local.core import http_io
 
     raw = png((210, 100, 20))
@@ -372,8 +376,8 @@ def test_lora_catalog_subdeadline_does_not_cancel_remaining_image_budget(offline
 
 @pytest.mark.parametrize('kind,expected_calls', [('sdcpp', 3), ('image_api', 2)])
 def test_image_negotiation_closes_rejected_http_response_bodies(offline, monkeypatch, kind, expected_calls):
-    from urllib.error import HTTPError
     from email.message import Message
+    from urllib.error import HTTPError
 
     errors = []
 
@@ -412,8 +416,9 @@ def test_private_output_ownership_never_becomes_a_seed_input(adapter_transport, 
 def test_vfx_comfy_placeholder_preserves_the_accepted_nonce_digest_calls(adapter_transport, monkeypatch, layout):
     import hashlib
     from types import SimpleNamespace
-    from tests.vfx_image_fixtures import _data, _request
+
     from infini_local.pipelines.visual.assets import build_visual_asset_plan
+    from tests.vfx_image_fixtures import _data, _request
     root, requests, raw = adapter_transport
     nonce = '0123456789abcdef0123456789abcdef'
     monkeypatch.setattr(generation.uuid, 'uuid4', lambda: SimpleNamespace(hex=nonce))

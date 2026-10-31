@@ -1,33 +1,38 @@
 """Author units -> compiler receipts -> frozen C# wire: no aliases or quantization."""
 
 
-from infini_local.core import llm_config
-from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_SCHEMA, CAPABILITY_REGISTRY, capability_for_saved_receipt
-from copy import deepcopy
 import hashlib
 import json
 import math
 import re
 import runpy
 import struct
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import filter_repair_patch_scope, build_runtime_repair_scope
+from infini_local.core import llm_config
+from infini_local.core.runtime_authoring.capability_registry import (
+    CAPABILITY_REGISTRY,
+    RUNTIME_PROGRAM_SCHEMA,
+    capability_for_saved_receipt,
+)
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.program_schema import (
+    apply_repair_patch,
     strict_author_shape_report,
     strict_repair_shape_report,
     strict_repair_structure_report,
 )
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-from infini_local.qa.capability_witnesses import build_capability_witness
-from test_author_projectile_aliases import selected as _scalar_name_call
-from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.pipelines.author.request import build_initial_author_request
+from infini_local.qa.capability_witnesses import build_capability_witness
+from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from test_author_projectile_aliases import selected as _scalar_name_call
 
 FN = "generated_buff_on_use"
 
@@ -318,8 +323,8 @@ def test_percent_shape_owner_refuses_malformed_present_numbers_without_mutation(
     pytest.param(FN, "miningSpeedMultiplier", 1.000000001, 1.0005, id="identity-consumer-collapse"),
 ])
 def test_numeric_collapse_has_exact_repair_authority_and_frozen_siblings(fn, name, value, replacement):
+    from infini_local.core.runtime_authoring.repair.schema import REPAIR_ERROR_POLICY, REPAIR_VALIDATION_ERROR_CODES
     from infini_local.core.runtime_authoring.validator import VALIDATION_ERROR_CODES
-    from infini_local.core.runtime_authoring.repair_scope import REPAIR_VALIDATION_ERROR_CODES, REPAIR_ERROR_POLICY
     assert "consumer_representability" in VALIDATION_ERROR_CODES & REPAIR_VALIDATION_ERROR_CODES
     assert REPAIR_ERROR_POLICY["consumer_representability"]["llmRepairable"] is True
     doc, index, call = percent_document(fn, name, value)

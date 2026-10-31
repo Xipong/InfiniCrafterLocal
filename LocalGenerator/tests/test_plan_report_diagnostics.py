@@ -5,16 +5,16 @@ import copy
 import json
 import socket
 
+import infini_local.core.runtime_authoring.program_schema as program_schema
 import pytest
-
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-import infini_local.core.runtime_authoring.program_schema as program_schema
-from infini_local.pipelines.author import stage as gameplay_stage
 from infini_local.pipelines.author import request as llm_authoring_pipeline
+from infini_local.pipelines.author import stage as gameplay_stage
 from infini_local.pipelines.context.generated_summary import generated_parent_summary_from_data
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 

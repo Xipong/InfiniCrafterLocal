@@ -1,6 +1,6 @@
 # Типизированные параметры Author: точная проекция
 
-Canonical owner — `core/runtime_authoring/capability_registry.py::ParamSpec`; форма всего документа остаётся в `program_schema.py`. Эта инфраструктура сама не добавляет новых gameplay операций и не принимает прежние Author spelling как aliases.
+Canonical owner типа и точной проекции — [parameter_contract.py::ParamSpec](../../../LocalGenerator/infini_local/core/runtime_authoring/parameter_contract.py); конкретные capability/parameter declarations остаются в [capability_registry.py](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py), форма всего документа — в `program_schema.py`. Эта инфраструктура сама не добавляет новых gameplay операций и не принимает прежние Author spelling как aliases.
 
 `ParamSpec.properties` описывает группу явных полей; `alternatives` — конечный взаимоисключающий выбор. В schema это строгие object/oneOf с `additionalProperties=false`. Отсутствующий либо неоднозначный вариант отвергается. Неизвестные поля, неправильные значения и отсутствующие обязательные листья не заполняются.
 
@@ -39,4 +39,4 @@ Numeric/consumer validation идёт по присутствующим реал�
 
 `CapabilitySpec.fixed_wire_literals` описывает constants, выбранные самим canonical `fn`, например неиспользуемый радиус конкретного owner-only pull. Keys — пути относительно component prefix. Compiler обязан писать их через `write_derived`, source — точный `.fn`, status — `technical_projection`. Audit проверяет значение, конечный declared output, originating call id/fn и уникальную полную coverage. Этот механизм не определяет новые constants автоматически.
 
-`core/schema_validation.py` — единственный нижний owner строгой проверки JSON shape. `program_schema.py` экспортирует этот же валидатор для полного Author и Repair; `ParamSpec.selected_variant` вызывает его напрямую без обратной зависимости registry → program_schema.
+`core/schema_validation.py` — единственный нижний owner строгой проверки JSON shape. `program_schema.py` экспортирует этот же валидатор для полного Author и Repair; `ParamSpec.selected_variant` вызывает его напрямую без обратной зависимости parameter contract → program_schema.

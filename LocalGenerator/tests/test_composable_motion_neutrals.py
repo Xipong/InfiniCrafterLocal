@@ -1,11 +1,10 @@
 """Only parent-approved design-neutral side controls may be omitted."""
 from copy import deepcopy
+
 import pytest
-
-from test_composable_motion_primitives import base_document, add, compile_ok
-from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from test_composable_motion_primitives import add, base_document, compile_ok
 
 CASES = [
     ("set_aim", {"source": "initial"}, {"turnOwner": False}, "aim"),
@@ -99,7 +98,8 @@ def test_owner_control_animation_only_is_an_effect_not_an_empty_capability():
 
 def test_valid_absent_side_control_is_frozen_while_repairing_core_choice():
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     doc = base_document()
     call = add(doc, "set_aim", {"source": "invalid"})
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
@@ -192,7 +192,8 @@ def test_ramp_invalid_present_neutrals_refused_and_valid_changes_preserved(fn, p
 @pytest.mark.parametrize("explicit", [False, True])
 def test_ramp_repair_freezes_neutral_presence_and_values(fn, property, member, core, value, neutrals, explicit):
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     doc, call = ramp_document(fn, property, neutrals)
     if explicit:
         call["params"][property].update(neutrals)

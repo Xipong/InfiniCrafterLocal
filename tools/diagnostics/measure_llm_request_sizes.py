@@ -82,6 +82,7 @@ class OfflineCapture:
         from infini_local.pipelines.author import request as llm_authoring_pipeline
         from infini_local.pipelines.transport import profiles as llm_profiles
         from infini_local.pipelines.transport import client as llm_transport
+        from infini_local.pipelines.transport import http, replay
         from infini_local.pipelines.visual import contract as visual_contract, repair_scope as visual_scope, request as visual_request, stage as visual_stage
         from infini_local.pipelines.vfx import request as vfx_generation_pipeline
         from infini_local.pipelines.context.generated_summary import attach_generated_parent_summary
@@ -93,6 +94,7 @@ class OfflineCapture:
         self.vfx_validation, self.vfx_repair = vfx_validation, vfx_repair
         self.vfx_stage, self.vfx_prompt = vfx_stage, vfx_prompt
         self.author, self.transport = llm_authoring_pipeline, llm_transport
+        self.http, self.replay = http, replay
         self.profiles, self.admission = llm_profiles, llm_admission
         self.visual_contract, self.visual_scope = visual_contract, visual_scope
         self.visual_request, self.visual_stage = visual_request, visual_stage
@@ -117,9 +119,8 @@ class OfflineCapture:
                            "CODEX_VISUAL_REASONING": "inherit"}),
             (self.profiles, {"_primary_llm_context": lambda: self.contexts["chat_completions"]}),
             (self.admission, {"_reserve_remote_rate_slot": lambda *_a, **_kw: None}),
-            (self.transport, {
-                              "_llm_replay_json_response": lambda *_: None,
-                              "urlopen_no_redirect": forbidden, "http_get_json": forbidden}),
+            (self.replay, {"_llm_replay_json_response": lambda *_: None}),
+            (self.http, {"urlopen_no_redirect": forbidden, "http_get_json": forbidden}),
             (self.auth, {"get_credentials": lambda: SimpleNamespace(access_token="offline", account_id="offline"),
                          "_generation_request": forbidden}),
         ]
@@ -263,7 +264,7 @@ class OfflineCapture:
                              "body": req.data.decode("utf-8"), "packet": json.loads(req.data)})
             raise Captured()
 
-        with patch.object(self.transport, "urlopen_no_redirect", stop), patch.object(self.auth, "_generation_request", stop):
+        with patch.object(self.http, "urlopen_no_redirect", stop), patch.object(self.auth, "_generation_request", stop):
             try:
                 self.transport._llm_json_single_context(request, 10, self.contexts[route])
             except Captured:

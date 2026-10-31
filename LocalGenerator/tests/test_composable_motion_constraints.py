@@ -1,10 +1,10 @@
 """Author and stripped delivery reject incomplete/competing independent laws."""
 from copy import deepcopy
-import pytest
 
-from test_composable_motion_primitives import base_document, add, window, compile_ok
+import pytest
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+from test_composable_motion_primitives import add, base_document, compile_ok, window
 
 
 @pytest.mark.parametrize("fn,params", [
@@ -186,7 +186,8 @@ def test_retained_return_driver_is_real_window_producer_without_new_trigger(name
 ])
 def test_missing_latch_repair_can_add_only_exact_producer_and_freezes_other_window_leaves(phase, producer, params):
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     doc = base_document()
     if producer == "charge":
         next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "item_use")["params"]["channel"] = True
@@ -363,9 +364,10 @@ def test_beam_and_lash_cannot_compete_for_collision_geometry():
     ("spawn_on_event", "damageMultiplier", -1, 1),
 ])
 def test_count_one_spread_absence_stays_frozen_during_unrelated_repair(fn, bad_leaf, bad_value, fixed_value):
-    from infini_local.qa.capability_witnesses import build_capability_witness
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+    from infini_local.qa.capability_witnesses import build_capability_witness
     doc = build_capability_witness(fn)
     call = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == fn)
     call["params"].update(count=1)

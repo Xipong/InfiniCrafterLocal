@@ -3,11 +3,10 @@ from __future__ import annotations
 
 import copy
 
+import infini_local.pipelines.transport.http as transport_http
 import pytest
-
-from infini_local.pipelines.transport import provider_wire as llm_provider_wire
 from infini_local.pipelines.transport import client as transport
-
+from infini_local.pipelines.transport import provider_wire as llm_provider_wire
 
 MARKER = {"role": "user", "content": "JSON response."}
 
@@ -31,7 +30,7 @@ def test_nous_mapped_repair_json_mode_has_marker_in_input_not_only_system(monkey
         calls.append((url, copy.deepcopy(body)))
         return {"choices": [{"message": {"content": "{}"}}]}
 
-    monkeypatch.setattr(transport, "http_json", sender)
+    monkeypatch.setattr(transport_http, "http_json", sender)
     transport._llm_chat_json_exact_context(packet, 1, context)
     assert len(calls) == 1
     url, wire = calls[0]
@@ -84,7 +83,7 @@ def test_marker_is_protocol_only_for_ordinary_and_repair_packets(monkeypatch, st
             return {"status": "completed", "output_text": "{}"}
         return {"choices": [{"message": {"content": "{}"}}]}
 
-    monkeypatch.setattr(transport, "http_json", sender)
+    monkeypatch.setattr(transport_http, "http_json", sender)
     transport._llm_json_single_context(packet, 1, context)
     assert len(captured) == 1
     wire = captured[0]
@@ -126,7 +125,7 @@ def test_marker_checks_word_in_projected_input_content_only(monkeypatch, api_mod
         field = "input"
     else:
         captured = []
-        monkeypatch.setattr(transport, "http_json", lambda url, body, **kwargs:
+        monkeypatch.setattr(transport_http, "http_json", lambda url, body, **kwargs:
                             captured.append(copy.deepcopy(body)) or {"choices": [{"message": {"content": "{}"}}]})
         transport._llm_chat_json_exact_context(packet, 1, context)
         wire, baseline, field = captured[0], prepared, "messages"
@@ -156,7 +155,7 @@ def test_other_routes_and_models_retain_exact_wire(monkeypatch, api_mode, provid
         assert llm_provider_wire._responses_payload_from_chat(prepared, context=context) == llm_provider_wire._responses_payload_from_chat(prepared)
     else:
         captured = []
-        monkeypatch.setattr(transport, "http_json", lambda url, body, **kwargs:
+        monkeypatch.setattr(transport_http, "http_json", lambda url, body, **kwargs:
                             captured.append(copy.deepcopy(body)) or {"choices": [{"message": {"content": "{}"}}]})
         transport._llm_chat_json_exact_context(packet, 1, context)
         assert captured == [prepared]
@@ -196,10 +195,9 @@ def test_protocol_marker_keeps_existing_prompt_cache_key_and_prefix(monkeypatch)
     llm_provider_wire._cache_wire_options(expected, packet, context, api_mode="chat")
     cache_key = expected["prompt_cache_key"]
     captured = []
-    monkeypatch.setattr(transport, "http_json", lambda url, body, **kwargs:
+    monkeypatch.setattr(transport_http, "http_json", lambda url, body, **kwargs:
                         captured.append(copy.deepcopy(body)) or {"choices": [{"message": {"content": "{}"}}]})
     transport._llm_chat_json_exact_context(packet, 1, context)
     expected["messages"].append(MARKER)
     assert captured == [expected] and captured[0]["prompt_cache_key"] == cache_key
     assert packet == original
-

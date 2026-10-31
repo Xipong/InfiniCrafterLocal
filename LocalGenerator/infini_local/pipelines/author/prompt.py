@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Mapping, Sequence
 
+from infini_local.core.item_identity_tools import item_field
 from infini_local.core.runtime_authoring.capability_registry import (
     BINDING_ACTION_REGISTRY,
     CAPABILITY_REGISTRY,
@@ -11,25 +12,30 @@ from infini_local.core.runtime_authoring.capability_registry import (
     INPUT_KIND_REGISTRY,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
-    compact_capability_catalog,
-    author_parameter_shape,
 )
-from infini_local.core.runtime_authoring.capability_registry import (
-    runtime_authoring_prompt_field_guide,
-)
+from infini_local.core.runtime_authoring.parameter_contract import author_parameter_shape
+from infini_local.core.runtime_authoring.registry_views import compact_capability_catalog, runtime_authoring_prompt_field_guide
 from infini_local.core.runtime_authoring.terraria_vocabulary import (
-    DAMAGE_CLASS_MEANINGS, DAMAGE_CLASS_TOKENS, ITEM_USE_STYLE_MEANINGS, ITEM_USE_STYLE_TOKENS,
+    DAMAGE_CLASS_MEANINGS,
+    DAMAGE_CLASS_TOKENS,
+    ITEM_USE_STYLE_MEANINGS,
+    ITEM_USE_STYLE_TOKENS,
 )
-from infini_local.pipelines.author.item_contract import AUTHOR_DESIGN_QUALITY_RULE, AUTHOR_STATUS_COMPOSITION_RULE, RUNTIME_ROW_SHAPE_RULE, author_item_prompt_shape_card, primary_entity_llm_invariant
+from infini_local.pipelines.author.item_contract import (
+    AUTHOR_DESIGN_QUALITY_RULE,
+    AUTHOR_STATUS_COMPOSITION_RULE,
+    RUNTIME_ROW_SHAPE_RULE,
+    author_item_prompt_shape_card,
+    primary_entity_llm_invariant,
+)
 from infini_local.pipelines.combine_balance import stat_profile_for
-from infini_local.pipelines.context.stats import parent_stat_context
-
 from infini_local.pipelines.context.cards import (
-    NATIVE_SOURCE_REFERENCE_RULE, raw_parent_card_for_llm, parent_context_for_stage,
+    NATIVE_SOURCE_REFERENCE_RULE,
+    parent_context_for_stage,
+    raw_parent_card_for_llm,
 )
-from infini_local.core.item_identity_tools import item_field
+from infini_local.pipelines.context.stats import parent_stat_context
 from infini_local.pipelines.pipeline_runtime_constants import LLM_ITEM_RAW_KEYS
-
 
 # Engineering character guard, not a model token limit: complete compact JSON
 # dossiers include parent-local source effects and source-derived ammo variants.

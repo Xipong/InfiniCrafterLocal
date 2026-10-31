@@ -13,15 +13,12 @@ from typing import Any, Callable
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "LocalGenerator"))
 
-from infini_local.core.runtime_authoring.repair_scope import (
-    REPAIR_ERROR_POLICY,
-    REPAIR_VALIDATION_ERROR_CODES,
-    build_runtime_repair_scope,
-    filter_repair_patch_scope,
-)
-from infini_local.core.runtime_authoring.validator import VALIDATION_ERROR_CODES, validate_runtime_program
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.schema import REPAIR_ERROR_POLICY, REPAIR_VALIDATION_ERROR_CODES
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.validator import VALIDATION_ERROR_CODES, validate_runtime_program
 from infini_local.pipelines.author.request import (
     build_gameplay_repair_dossier,
     build_initial_author_request,
@@ -190,7 +187,7 @@ def _emitted_validator_codes() -> set[str]:
 
 def _frozen_callsite_audit() -> dict[str, Any]:
     paths = [
-        ROOT / "LocalGenerator/infini_local/core/runtime_authoring/repair_scope.py",
+        ROOT / "LocalGenerator/infini_local/core/runtime_authoring/repair/filter.py",
         ROOT / "LocalGenerator/infini_local/pipelines/visual/repair.py",
         ROOT / "LocalGenerator/infini_local/core/vfx/repair.py",
     ]

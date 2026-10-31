@@ -2,17 +2,16 @@
 from copy import deepcopy
 
 import pytest
-
-from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.qa.capability_witnesses import build_capability_witness
-
 
 CASES = [
     ("turn_velocity", "turnModifier", "turnRadiansPerSecond", "turnRadiansPerUpdate", 1),
@@ -212,8 +211,8 @@ def test_incomplete_pair_repair_opens_only_missing_half(fn, member, author_leaf,
 @pytest.mark.parametrize("fn,member,author_leaf,wire_leaf,value", CASES)
 @pytest.mark.parametrize("form", ["omitted", "pair", "window", "intersection"])
 def test_strict_provider_nullable_transport_preserves_selected_timing_shape(fn, member, author_leaf, wire_leaf, value, form):
-    from jsonschema import Draft202012Validator
     import infini_local.core.provider_schema as contract_provider_schema
+    from jsonschema import Draft202012Validator
     from test_codex_subscription_contract import _encode_nullable_fixture
 
     _, call = document(fn, form)

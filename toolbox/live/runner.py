@@ -1,22 +1,22 @@
 from __future__ import annotations
 
-from contextvars import ContextVar
 import copy
-from datetime import datetime, timezone
 import hashlib
 import json
 import os
-from pathlib import Path
 import sys
-import time
 import threading
+import time
 import traceback
+from contextvars import ContextVar
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, cast
 
 from toolbox.infini_toolbox import discover_project
 from toolbox.live.options import build_parser
-from toolbox.live.preflight import prepare
 from toolbox.live.panels import load_selection
+from toolbox.live.preflight import prepare
 
 parser = build_parser(internal=True)
 args = parser.parse_args()
@@ -62,26 +62,29 @@ if args.transport_retries > 0 or args.require_zero_transport_retries:
 sys.path.insert(0, str(LOCAL))
 
 SUPPORT_PATH = Path(__file__).with_name("support.py")
+from infini_local.pipelines.transport import client as llm_transport  # noqa: E402
+from infini_local.pipelines.transport import http as transport_http  # noqa: E402
+from infini_local.pipelines.transport import rejections as transport_rejections  # noqa: E402
+from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png  # noqa: E402
+
 from toolbox.live.support import (  # noqa: E402
-    NON_AUTHOR,
     FROZEN_LLM_STAGES,
-    expected_stage_max_tokens,
-    expected_stage_temperature,
-    response_format_type,
+    NON_AUTHOR,
     GlobalStageAccounting,
     author_stage,
     case_accounting_scope,
-    current_case_accounting,
-    is_first_author_success,
-    should_retry_case_failure,
     case_transport_retry_report,
+    current_case_accounting,
+    expected_stage_max_tokens,
+    expected_stage_temperature,
+    is_first_author_success,
     pace_case_transport_retry,
+    response_format_type,
+    run_parallel_crafts,
+    should_retry_case_failure,
     transport_retry_summary,
     valid_author_call_budget,
-    run_parallel_crafts,
 )
-from infini_local.qa.live_no_image_fixture import write_no_image_fixture_png, hydrate_no_image_fixture_assets  # noqa: E402
-from infini_local.pipelines.transport import client as llm_transport  # noqa: E402
 
 if (args.transport_retries > 0 or args.require_zero_transport_retries) and int(llm_transport.config.LLM_FALLBACK_NETWORK_FAILS) != 1:
     raise SystemExit(
@@ -98,6 +101,7 @@ for path in (LOGICAL, HTTP, IMAGES, RESULTS, HARNESS_EVENTS):
     path.write_text('', encoding='utf-8')
 # Delivery transfers PNGs by basename from the canonical serving roots, not OUT.
 from infini_local.core.config_bootstrap import SPRITE_DIR  # noqa: E402
+
 NO_IMAGE_FIXTURE = write_no_image_fixture_png(SPRITE_DIR / 'qa-no-image-fixture.png')
 
 trace_write_lock = threading.Lock()
@@ -130,7 +134,7 @@ def case_trace_fields() -> dict[str, Any]:
     return {'case': state.case_id, 'caseIndex': state.case_index}
 
 
-original_http_json = llm_transport.http_json
+original_http_json = transport_http.http_json
 original_llm_chat_json = llm_transport.llm_chat_json
 global_accounting = GlobalStageAccounting()
 ACTIVE_STAGE: ContextVar[str] = ContextVar("toolbox_active_llm_stage", default=NON_AUTHOR)
@@ -198,7 +202,7 @@ def captured_http_json(url: str, payload: dict[str, Any], timeout: int = 10, hea
         })
         raise
 
-llm_transport.http_json = captured_http_json
+transport_http.http_json = captured_http_json
 
 
 def assert_frozen_logical_settings(payload: dict[str, Any], *, stage: str) -> None:
@@ -299,7 +303,7 @@ def captured_llm_chat_json(payload: dict[str, Any], timeout: int = 10):
         return result
     except Exception as exc:
         concurrency_end = global_accounting.snapshot() if ended else global_accounting.end_logical()
-        transport_error = bool(llm_transport._is_transport_error(exc))
+        transport_error = bool(transport_rejections._is_transport_error(exc))
         if case_state is not None:
             case_state.mark_logical_error(case_sequence, transport=transport_error)
         append(LOGICAL, {
@@ -326,8 +330,9 @@ llm_transport.llm_chat_json = captured_llm_chat_json
 # stage receives the same wrapped function object.
 from infini_local.pipelines import combine_pipeline as combine  # noqa: E402
 from infini_local.pipelines.images import stage as sprites  # noqa: E402
-from infini_local.pipelines.visual.assets import build_visual_asset_plan  # noqa: E402
 from infini_local.pipelines.images.prompts import asset_negative_prompt, normalize_asset_prompt  # noqa: E402
+from infini_local.pipelines.visual.assets import build_visual_asset_plan  # noqa: E402
+
 
 # No recipe cache/world mutation during this live diagnostic.
 def no_cache_get(*_args: Any, **_kwargs: Any) -> None:

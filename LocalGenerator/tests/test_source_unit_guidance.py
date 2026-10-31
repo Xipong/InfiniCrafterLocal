@@ -1,18 +1,17 @@
 """Registry-owned unit explanations at real Author/Repair request boundaries."""
 from __future__ import annotations
 
-from prompt_packet_helpers import request_dossier, dossier_text
-
 import copy
 import json
 import socket
 
+import infini_local.pipelines.transport.http as transport_http
 import pytest
-
-from infini_local.pipelines.transport import admission as llm_admission
 from infini_local.core import llm_config
 from infini_local.pipelines.author import request as author
+from infini_local.pipelines.transport import admission as llm_admission
 from infini_local.pipelines.transport import client as transport
+from prompt_packet_helpers import dossier_text, request_dossier
 
 
 @pytest.fixture(autouse=True)
@@ -146,6 +145,7 @@ def test_serialized_author_requests_notes_and_repair_retains_advisory_replacemen
 def test_lowery_renderer_projects_shared_player_description_and_unit_guidance():
     import runpy
     from pathlib import Path
+
     from infini_local.pipelines.author.item_contract import author_item_repair_prompt_shape_card
     from infini_local.pipelines.author.prompt import concise_terraria_tick_guide_for_llm
 
@@ -173,7 +173,7 @@ def _serialized_chat_request(monkeypatch, request):
         raise _Captured()
 
     with monkeypatch.context() as patch:
-        patch.setattr(transport, "urlopen_no_redirect", stop)
+        patch.setattr(transport_http, "urlopen_no_redirect", stop)
         patch.setattr(llm_admission, "_reserve_remote_rate_slot", lambda *args, **kwargs: None)
         with pytest.raises(_Captured):
             transport._llm_chat_json_exact_context(request, 10, {
@@ -225,9 +225,9 @@ def _repair_request(monkeypatch, mode, source, item):
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_scoped_repair_carries_canonical_clock_units_without_expanding_permissions(monkeypatch, mode):
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
+    from infini_local.core.runtime_authoring.registry_views import runtime_authoring_prompt_field_guide
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
-    from infini_local.core.runtime_authoring.capability_registry import runtime_authoring_prompt_field_guide
     from infini_local.pipelines.author.prompt import concise_terraria_tick_guide_for_llm
 
     source, item = _source(), _broken_item()
@@ -328,6 +328,7 @@ def test_static_guidance_never_launders_dynamic_sources_into_instruction_prefix(
 def test_packet_glossary_is_derived_from_registry_metadata_not_capability_name(monkeypatch, mode):
     from dataclasses import replace
     from types import MappingProxyType
+
     import infini_local.core.runtime_authoring.capability_registry as registry
 
     spec = registry.CAPABILITY_REGISTRY["accessory"].params["moveSpeedBonus"]
@@ -409,8 +410,8 @@ def test_compiler_produced_parent_is_explained_not_reauthored(monkeypatch, mode,
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_source_unit_guidance_never_grants_hostile_repair_edits(monkeypatch, mode):
-    from test_gameplay_repair_readonly_context import _hostile_patch, _repair_with_response
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
+    from test_gameplay_repair_readonly_context import _hostile_patch, _repair_with_response
 
     item = _broken_item()
     before = json.dumps(item)

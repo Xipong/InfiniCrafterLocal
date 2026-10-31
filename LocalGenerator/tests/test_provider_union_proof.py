@@ -5,15 +5,14 @@ import copy
 import json
 from dataclasses import replace
 
-import pytest
-from jsonschema import Draft202012Validator
-
-import infini_local.core.runtime_authoring.capability_registry as registry
-from infini_local.core.runtime_authoring.capability_registry import ParamSpec
-from infini_local.pipelines.author import item_contract as contract
 import infini_local.core.provider_schema as contract_provider_schema
+import infini_local.core.runtime_authoring.capability_registry as registry
+import pytest
+from infini_local.core.runtime_authoring.parameter_contract import ParamSpec
+from infini_local.pipelines.author import item_contract as contract
 from infini_local.pipelines.author.request import build_initial_author_request
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from jsonschema import Draft202012Validator
 from test_codex_subscription_contract import _encode_nullable_fixture
 
 

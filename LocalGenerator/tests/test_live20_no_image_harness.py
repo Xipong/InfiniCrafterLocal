@@ -1,4 +1,5 @@
 from __future__ import annotations
+from pipeline_test_support import isolated_serving_roots
 
 import ast
 import copy
@@ -6,9 +7,7 @@ import json
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image
 import pytest
-
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.vfx.projection import _compile_manifest
 from infini_local.core.vfx.validation import validate_vfx_director_output
@@ -19,9 +18,10 @@ from infini_local.qa.live_no_image_fixture import (
     write_no_image_fixture_png,
 )
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-from tests.vfx_material_fixtures import _shape, _sprite, _history, _legacy
-from pipeline_test_support import isolated_serving_roots, install_campaign_fault
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
+from PIL import Image
+from pipeline_test_support import install_campaign_fault
+from tests.vfx_material_fixtures import _history, _legacy, _shape, _sprite
 
 
 def test_campaign_placed_body_uses_authenticated_qa_root_png(tmp_path):
@@ -57,8 +57,9 @@ def test_campaign_placed_body_uses_authenticated_qa_root_png(tmp_path):
 @pytest.mark.parametrize("mode", ["runtime_geometry", "no_asset", "baked_sprite"])
 def test_campaign_normalizes_prompts_only_for_image_jobs(tmp_path, mode):
     from typing import Any, cast
-    from infini_local.pipelines.visual.assets import build_visual_asset_plan
+
     from infini_local.pipelines.images.prompts import asset_negative_prompt, normalize_asset_prompt
+    from infini_local.pipelines.visual.assets import build_visual_asset_plan
 
     data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
     data.update(id="qa-prompt-boundary", visual={
@@ -94,6 +95,7 @@ def test_campaign_normalizes_prompts_only_for_image_jobs(tmp_path, mode):
 def _campaign_observers(fixture):
     """Execute only the campaign's real observer installation, without inference."""
     from types import SimpleNamespace
+
     from infini_local.pipelines import combine_pipeline
     from infini_local.qa import live_no_image_fixture
 
@@ -227,12 +229,12 @@ def test_campaign_fixture_uses_canonical_serving_root(tmp_path, monkeypatch, out
 
 @pytest.mark.parametrize("selection", ["baked_history", "projectile_body", "reuse_item_icon", "item_body"])
 def test_campaign_execution_control_preserves_selected_owner_and_qa_evidence(campaign_case, tmp_path, monkeypatch, selection):
-    from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
+    import hashlib
+
     from infini_local.core.vfx.validation import vfx_png_dependencies
     from infini_local.pipelines import combine_pipeline
     from infini_local.pipelines.images import stage as sprites
     from infini_local.qa.live_no_image_fixture import synthetic_no_image_execution_control
-    import hashlib
 
     fixture, hydrated, entity = campaign_case(selection=selection)
     before = copy.deepcopy(hydrated)
@@ -385,6 +387,7 @@ def test_campaign_consumption_authenticates_bytes_and_serving_selection(
     campaign_case, monkeypatch, owner, boundary, consumer, policy,
 ):
     import hashlib
+
     from tests.vfx_image_fixtures import _request
 
     fixture, data, _ = campaign_case(ingredient=_request() if owner == "ingredient" else None, identity="qa-fixture-byte-identity")
@@ -444,8 +447,9 @@ def test_campaign_consumption_authenticates_bytes_and_serving_selection(
 def test_campaign_declared_vfx_canvas_alpha_and_private_projection(campaign_case, layout, canvas):
     import hashlib
     import json
-    from tests.vfx_image_fixtures import _request
+
     from infini_local.qa.live_no_image_fixture import synthetic_no_image_execution_control
+    from tests.vfx_image_fixtures import _request
 
     fixture, data, _ = campaign_case(ingredient=_request("ingredient", layout=layout, canvas=canvas), fixture_name="qa.png")
     before = copy.deepcopy(data)
@@ -527,6 +531,7 @@ def test_campaign_vfx_ingredient_controls_refuse(campaign_case, mutation):
 @pytest.mark.parametrize("entry", [{}, {"assetId": "grain", "path": None}, {"assetId": "grain", "path": "qa.png", "sha256": []}])
 def test_campaign_malformed_ingredient_provenance_refuses(campaign_case, entry):
     import json
+
     from tests.vfx_image_fixtures import _request
 
     fixture, data, _ = campaign_case(ingredient=_request(), fixture_name="qa.png")

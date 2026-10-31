@@ -6,43 +6,48 @@ import re
 from dataclasses import asdict, dataclass
 from typing import Any, Iterable, Mapping
 
-from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.core.runtime_authoring.binding_use_policy import (
     ACTIVE_USE_INPUTS,
     action_kind,
-    action as binding_action,
     contact_damage,
+    may_retain_stack,
     placeable_input_contract,
     placement_call_id,
     stack_cost,
-    may_retain_stack,
+)
+from infini_local.core.runtime_authoring.binding_use_policy import (
+    action as binding_action,
+)
+from infini_local.core.runtime_authoring.binding_use_policy import (
     target_id as binding_target_id,
 )
 from infini_local.core.runtime_authoring.capability_registry import (
-    PROJECTILE_MODIFIER_COMPONENTS,
-    authored_event,
     BINDING_ACTION_REGISTRY,
     CAPABILITY_REGISTRY,
-    target_updates_per_tick,
     ENTITY_KIND_REGISTRY,
     EVENT_KIND_REGISTRY,
     INPUT_KIND_REGISTRY,
+    PROJECTILE_MODIFIER_COMPONENTS,
     CapabilitySpec,
-    RequirementSpec,
+    authored_event,
     compatible_entity_reference_ids,
     referenced_entity_requirement_satisfied,
+    target_updates_per_tick,
+)
+from infini_local.core.runtime_authoring.event_dependencies import (
     event_alternative_is_present,
     event_dependency_alternatives,
     event_dependency_descriptors,
 )
 from infini_local.core.runtime_authoring.event_producer_validation import item_body_event_produced
+from infini_local.core.runtime_authoring.parameter_contract import RequirementSpec
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_JSON_PATH,
     authored_primary_entity_id,
     is_advisory_path,
     strict_author_shape_report,
 )
-
+from infini_local.core.schema_validation import strict_schema_errors
 
 MAX_RUNTIME_ENTITIES = 12
 MAX_RUNTIME_BINDINGS = 8
@@ -771,7 +776,9 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
     still-readable graph blockers are aggregated without inferring gameplay.
     """
 
-    from infini_local.core.runtime_authoring.technical_lowering import _exact_mechanical_view  # pyright: ignore[reportPrivateUsage] -- canonical private lowering, not public admission
+    from infini_local.core.runtime_authoring.technical_lowering import (
+        _exact_mechanical_view,  # pyright: ignore[reportPrivateUsage] -- canonical private lowering, not public admission
+    )
     literal_program = document.get("runtimeProgram", {})
     document = _exact_mechanical_view(document)
     issues: list[ValidationIssue] = []

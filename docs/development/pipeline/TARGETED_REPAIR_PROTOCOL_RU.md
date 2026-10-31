@@ -2,7 +2,7 @@
 
 [Generated boundary](../../reference/generated/LOWERY_RU.md) · [Author construction](../../reference/authoring/LOW_LEVEL_RUNTIME_AUTHORING_RU.md) · [Stage accounting](THREE_STAGE_LLM_PIPELINE_RU.md#repairs-accounting)
 
-Exact shape — `program_schema.py`; permissions/filter — `repair_scope.py`; requirement closure — `validator.py`; event alternatives — `capability_registry.py`; shared leaf merge — `core/repair_merge.py`. [Owner paths](../CODE_MAP_RU.md#python) не заменяются facade/shadow contracts.
+Exact Author/patch shape — `program_schema.py`; scope grammar/error policy — `repair/schema.py`; permissions — `repair/scope.py`; frozen filtering — `repair/filter.py`; patch validation — `repair/validation.py`; request fragments — `repair/fragments.py`. Read-only graph/reference facts принадлежат `repair/facts.py`, binding/event repair alternatives — `repair/choices.py`; requirement closure — `validator.py`, canonical event alternatives — `event_dependencies.py`, shared leaf merge — `core/repair_merge.py`. [Owner paths](../CODE_MAP_RU.md#python) не заменяются facade/shadow contracts.
 
 <a id="context"></a>
 ## Досье Repair

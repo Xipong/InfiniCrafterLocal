@@ -1,9 +1,8 @@
 """Recursive Author notation preserves validation and execution facts, not wire schema."""
 import copy
 
-from infini_local.core.runtime_authoring.capability_registry import (
-    CAPABILITY_REGISTRY, ParamSpec, author_parameter_shape,
-)
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.parameter_contract import ParamSpec, author_parameter_shape
 
 
 def test_nested_card_has_one_requiredness_notation_without_changing_schema_or_literals():

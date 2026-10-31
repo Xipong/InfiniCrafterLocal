@@ -14,10 +14,9 @@ from infini_local.core.runtime_authoring.capability_registry import (
     RUNTIME_PROGRAM_SCHEMA,
 )
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.parameter_contract import ParamSpec
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.capability_registry import ParamSpec
-
 
 _ITEM_BASE_STATS = {
     "damageClass": "generic", "damage": 20, "knockback": 3.0,
@@ -142,7 +141,7 @@ def _binding(
     action: dict[str, Any] = {"kind": action_kind, "targetId": target}
     if placement_call_id:
         action["placementCallId"] = placement_call_id
-    from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY, BINDING_ACTION_REGISTRY
+    from infini_local.core.runtime_authoring.capability_registry import BINDING_ACTION_REGISTRY, INPUT_KIND_REGISTRY
     if BINDING_ACTION_REGISTRY[action_kind].target_kinds == ("item_body",):
         action.pop("targetId")
     if len(INPUT_KIND_REGISTRY[input_kind].allowed_actions) == 1:

@@ -30,7 +30,7 @@ Schemas: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v7` / `
 | lossless projections, exact outputs, receipts, repetition policy | runtime_authoring/technical_lowering.py | compiler, audits, this document |
 | Author/Repair model-facing prose and unit explanation | pipelines/author/item_contract.py + pipelines/author/prompt.py | serialized Author/Repair messages, this document |
 | validation truth | runtime_authoring/validator.py | Repair requirements and final acceptance |
-| Repair permissions/filter | runtime_authoring/repair_scope.py | conditional Repair dossier and merge report |
+| Repair scope/permissions/filter | runtime_authoring/repair/{schema,scope,filter,validation,fragments}.py | conditional Repair dossier and merge report |
 | wire materialization | runtime_authoring/compiler.py | RuntimeProgram wire + finalWireReceipts |
 | runtime execution | ModSources/.../RuntimeProgramSpec.cs + executors | tModLoader behavior |
 
