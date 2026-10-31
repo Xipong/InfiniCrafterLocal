@@ -19,7 +19,7 @@ public sealed partial class InfiniDetachedVfxSystem
         =>EnqueueCopiedNativeCue(CopyNativeCue(data,slot,item),sourceKey,frame,slot.Event==RuntimeEventKind.Periodic?0:slot.StartTick!.Value,allowance);
     private static bool EnqueueCopiedNativeCue(NativeCueDesign design,string sourceKey,VfxSourceFrame frame,int delay,MaterialEventAllowance? allowance)
     {
-        if(Main.dedServ||design.Effect is not null&&Main.netMode==2||!frame.Valid||string.IsNullOrWhiteSpace(sourceKey)||OwnedRecordCount>=MaxEmissions)return false;
+        if(Main.dedServ||design.Effect is not null&&Main.netMode==Terraria.ID.NetmodeID.Server||!frame.Valid||string.IsNullOrWhiteSpace(sourceKey)||OwnedRecordCount>=MaxEmissions)return false;
         if(design.Dust is { } d&&(d.Count==0||d.Size==0)||design.Light==0)return false;
         var emission=new NativeCueEmission(design,sourceKey,frame,Main.GameUpdateCount+(ulong)delay,allowance);
         if(delay==0)EmitNativeCue(emission);else NativeCueEmissions.Add(emission);
