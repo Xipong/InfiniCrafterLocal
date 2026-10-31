@@ -3216,6 +3216,22 @@
       "visibility": "gui"
     },
     {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_PARTICLE_ASSET_DIR",
+      "owners": [
+        "tools/item-test-workbench/verify_history_ribbon.py"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "internal"
+    },
+    {
       "declarations": [
         {
           "default": "",
@@ -5435,8 +5451,8 @@
     }
   ],
   "errors": [],
-  "fieldCount": 221,
-  "fingerprint": "ba89eaae8ea010419326f98c0fb5c1f24a718c29b7477f72fe3f006f5cbeef30",
+  "fieldCount": 222,
+  "fingerprint": "5a94273a7402ea2f37af9422793c43fd16c750801f23d8e95c59ae27d646f007",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

@@ -39,6 +39,7 @@ def main():
     cases.append(('captured-periodic-and-hit',w.ROOT/'tools/fixtures/video-ui-buffs/g_4efc7c05f7b078e0.json',s,0,{}))
     s=copy.deepcopy(base);s['assertions']=[{'kind':'direct_healing','value':2}];cases.append(('negative-double-healing',original,s,1,{}))
     cases.append(('missing-original-assets',original,base,2,{'INFINI_PARTICLE_ASSET_DIR':str(out/'absent-original-assets')}))
+    cases.append(('missing-native-magicpixel',original,base,2,{'INFINI_PLAYER_ASSET_DIR':str(out/'absent-pixel-assets')}))
     s=copy.deepcopy(base);s['ticks']=601;cases.append(('bounded-render-ticks',original,s,2,{}))
     cases.append(('unsupported-authored-sprite-renderer',w.ROOT/'tools/fixtures/played-silver-delivered.json',base,2,{}))
     s=copy.deepcopy(base);s['nativeRender']['zoom']=0;cases.append(('invalid-native-camera',original,s,2,{}))
@@ -77,10 +78,12 @@ def main():
         if not f:continue
         check(name+'-all-draws-preserve-main-rng',all(a.get('drawChangedMainRng') is False and a['mainRngBeforeDraw']==a['mainRngAfterDraw'] for a in f))
         check(name+'-exact-resources-and-explicit-incomplete-art',r.get('resourceReady') is True and r.get('libraryBuffers')==4 and r.get('originalParticleLibraryEffect') is True and r.get('loadedAssetSha256') and r.get('soundValidated') is False and all(r.get(k) is False for k in ('itemArtworkRendered','projectileArtworkRendered','worldRendered')) and r.get('unrenderedArtwork'))
+        pixel=r.get('magicPixelResource',{})
+        check(name+'-genuine-magicpixel-without-player-art',pixel.get('sha256')=='43e32609f2d123fc51cafbafab11955153ea545760952a578c3f909bbe88651c' and pixel.get('playerArtworkLoaded') is False)
     for name in ('no-use-blank-control','miss-no-hit-vfx'):
         r=traces[name].get('nativeRender',{});check(name+'-no-silent-stale-particles',bool(r.get('frames')) and all(f['nonblackPixels']==0 for f in r['frames']) and all(s['particleCount']==0 and s['materialRecordCount']==0 for s in r.get('snapshots',[])))
     periodic=traces['captured-periodic-and-hit'].get('nativeRender',{});check('second-captured-item-real-periodic-particle-lifecycle',bool(periodic.get('frames')) and sum(f['nonblackPixels']>0 for f in periodic['frames'])>14 and any(s['materialRecordCount']>1 for s in periodic.get('snapshots',[])))
-    for name in ('missing-original-assets','bounded-render-ticks','unsupported-authored-sprite-renderer','invalid-native-camera','invalid-lighting-mode'):
+    for name in ('missing-original-assets','missing-native-magicpixel','bounded-render-ticks','unsupported-authored-sprite-renderer','invalid-native-camera','invalid-lighting-mode'):
         check(name+'-refuses-without-native-frame-fallback',traces[name].get('status')=='error' and not traces[name].get('nativeRender',{}).get('frames') and not traces[name].get('snapshots'))
     summary={'passed':all(r['passed'] for r in rows),'fullGameParity':False,'scope':'Actual original mod libraryParticle update/draw with genuine resources and captured combat; neutral background, item/projectile/world art and sound unrendered','checks':rows}
     (out/'summary.json').write_text(json.dumps(summary,indent=2));return 0 if summary['passed'] else 1

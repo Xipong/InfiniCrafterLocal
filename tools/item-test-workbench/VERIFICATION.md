@@ -73,6 +73,45 @@ Specialized `verify_*.py` scripts provide additional scenario matrices. Inspect
 corpora or explicit local inputs beyond the minimal public example. They are not
 unconditional installation checks or proof of all-item parity.
 
+## Current VFX contract regression controls
+
+`workbench test` includes synthetic detectors in `test_verify_history_ribbon.py`:
+zero submissions, wrong draw source, missing/substituted texture readiness, empty
+particles, leaked dedicated state and a hit on the wrong NPC/entity cannot satisfy
+the new controls. These are offline detector tests, **not native execution**.
+
+After building the current candidate, run:
+
+```sh
+dotnet /path/to/ItemTestWorkbench.dll --check-assertions
+python tools/item-test-workbench/verify_history_ribbon.py --no-build --out /fresh/history-controls
+```
+
+The first command adds stand-only policy checks for historyTrail admission,
+production texture mapping/deduplication, per-texture queue drain/readiness failure
+and dedicated NPC scope restoration after normal/exceptional exits. Its queued
+resource controls are synthetic; the second command exercises actual GPU resources,
+full native PreDraw, invisible hostile updates and client hits. The native matrix
+requires player/dummy assets and ParticleLibrary resources from the documented
+setup. Preserve partial/procedural and missing-selected-texture refusals; do not
+remove VFX from an authored input to pass admission. Existing `verify_vfx.py`
+retains the legacy Star emission, blank/miss, timing and no-capture controls,
+asserts the genuine MagicPixel receipt in VFX-only mode, and refuses a missing
+MagicPixel without substituting texels. The missing-selected-particle control
+copies the complete resource root and removes only WhitePixel, preserving
+ParticleLibrary's EmptyPixel and other required bootstrap resources.
+
+The linked native contour checks use explicit LINQ `Enumerable.Reverse` so newer
+SDK span extensions cannot bind to a void in-place reverse. Existing winding,
+descending trim and reversed-band assertions remain unchanged semantically.
+Compile the candidate and run the registered `contour` native checks to establish
+SDK compatibility; offline Python success does not establish it.
+
+Source-only changes do not refresh any previous native receipts. Native build,
+`--check-assertions`, GPU replay and unchanged authored-item replay must be reported
+separately as passed/failed/notRun for the candidate under review. No private
+generated JSON, captures, dependencies or historical media belong in the PR.
+
 ## Evidence reviewed during development
 
 Native geometry/ribbon extension (2026-10-27): Wooden Sword and a second native

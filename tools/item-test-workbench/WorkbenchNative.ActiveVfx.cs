@@ -18,9 +18,13 @@ internal sealed class WNativeActiveVfx : IDisposable
     const BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
     delegate void TrailOriginal(Texture2D pixel, VfxManifestSpec manifest, ref InfiniVfxState state, Color color, float width);
     delegate void TrailObserver(TrailOriginal orig, Texture2D pixel, VfxManifestSpec manifest, ref InfiniVfxState state, Color color, float width);
+    delegate void ExplicitTrailOriginal(Texture2D pixel,Projectile projectile,GeneratedItemData data,string entityId,VfxSlotSpec slot,VfxManifestSpec manifest,ref InfiniVfxState state);
+    delegate void ExplicitTrailObserver(ExplicitTrailOriginal orig,Texture2D pixel,Projectile projectile,GeneratedItemData data,string entityId,VfxSlotSpec slot,VfxManifestSpec manifest,ref InfiniVfxState state);
     readonly Hook trail;
+    readonly Hook explicitTrail;
     readonly WNativeVisualGeometry? geometry;
     JsonArray draws = new();
+    JsonArray explicitDraws = new();
     public JsonObject Frame { get; private set; } = new();
 
     public WNativeActiveVfx(bool artworkOwnsGeometry)
@@ -38,13 +42,23 @@ internal sealed class WNativeActiveVfx : IDisposable
                     ["nativeMagicPixel"] = ReferenceEquals(pixel, TextureAssets.MagicPixel.Value),
                     ["entrypoint"] = "InfiniVfxRuntime.Draw -> DrawTrail -> DrawHistory -> SpriteBatch.Draw (original)" });
             }));
+        explicitTrail=new Hook(typeof(InfiniVfxRuntime).GetMethod("DrawExplicitTrail",All)!,
+            (ExplicitTrailObserver)((ExplicitTrailOriginal orig,Texture2D pixel,Projectile projectile,GeneratedItemData data,string entityId,VfxSlotSpec slot,VfxManifestSpec manifest,ref InfiniVfxState state)=>{
+                var nativeState=state;
+                var geometryRows=WNativeVisualGeometry.Capture(()=>orig(pixel,projectile,data,entityId,slot,manifest,ref nativeState));
+                state=nativeState;
+                explicitDraws.Add(new JsonObject{["slotId"]=slot.Id,["entityId"]=entityId,["draw"]=slot.Trail!.Draw,["source"]=slot.Trail.Source,
+                    ["submittedSegments"]=geometryRows.Count,["nativeMagicPixel"]=ReferenceEquals(pixel,TextureAssets.MagicPixel.Value),
+                    ["entrypoint"]="InfiniVfxRuntime.Draw -> DrawExplicitTrail -> DrawExplicitTrailSamples -> SpriteBatch.Draw (original)"});
+            }));
         BeginFrame();
     }
 
     public void BeginFrame()
     {
         draws = new JsonArray();
-        Frame = new JsonObject { ["historyRibbonDraws"] = draws, ["activeProjectilePasses"] = 0 };
+        explicitDraws = new JsonArray();
+        Frame = new JsonObject { ["historyRibbonDraws"] = draws, ["historyTrailDraws"]=explicitDraws, ["activeProjectilePasses"] = 0 };
     }
 
     public void Draw()
@@ -69,5 +83,5 @@ internal sealed class WNativeActiveVfx : IDisposable
         } finally { Main.spriteBatch.End(); }
     }
 
-    public void Dispose() { trail.Dispose(); geometry?.Dispose(); }
+    public void Dispose() { explicitTrail.Dispose(); trail.Dispose(); geometry?.Dispose(); }
 }
