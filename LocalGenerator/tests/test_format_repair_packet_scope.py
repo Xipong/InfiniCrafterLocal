@@ -9,8 +9,8 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from infini_local.core.errors import PlannerUnavailable
-from infini_local.pipelines import author_item_contract as contract
-from infini_local.pipelines import llm_authoring_pipeline as author
+from infini_local.pipelines.author import item_contract as contract
+from infini_local.pipelines.author import request as author
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from prompt_packet_helpers import request_dossier
 from test_codex_subscription_contract import _encode_nullable_fixture

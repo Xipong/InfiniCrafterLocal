@@ -9,13 +9,13 @@ from pathlib import Path
 import threading
 import pytest
 from PIL import Image, ImageDraw
-from infini_local.pipelines import image_backend_pipeline as backend
-from infini_local.pipelines import sprite_postprocess as post
-from infini_local.pipelines import visual_sprite_generation as generation
-from infini_local.pipelines import visual_delivery_gate as delivery
-from infini_local.pipelines import visual_asset_manifest as manifest
-from infini_local.pipelines import pipeline_visual_config as config
-from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+from infini_local.pipelines.images import backends as backend
+from infini_local.pipelines.images import postprocess as post
+from infini_local.pipelines.images import stage as generation
+from infini_local.pipelines.visual import delivery
+from infini_local.pipelines.images import manifest
+from infini_local.core.images import config
+from infini_local.pipelines.visual.assets import build_visual_asset_plan
 from infini_local.services import asset_sync_service as sync
 from infini_local.services.sdcpp_service import ImageRequestGate
 from infini_local.web.server_utility_routes import ServerUtilityRoutes

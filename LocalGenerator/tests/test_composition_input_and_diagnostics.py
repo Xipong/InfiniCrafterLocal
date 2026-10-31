@@ -7,8 +7,8 @@ import pytest
 from prompt_packet_helpers import request_dossier
 from repair_test_helpers import offline_builder, provider_roundtrip, repair_with_response
 from test_source_unit_guidance import _serialized_chat_request
-from infini_local.pipelines import llm_authoring_pipeline as author
-from infini_local.pipelines.author_item_contract import AUTHOR_DESIGN_QUALITY_RULE
+from infini_local.pipelines.author import request as author
+from infini_local.pipelines.author.item_contract import AUTHOR_DESIGN_QUALITY_RULE
 
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
@@ -36,7 +36,7 @@ def test_inherited_damage_warning_does_not_change_or_reject_harmless_child():
 def test_author_packet_exposes_input_and_three_buff_activation_alternatives(monkeypatch, mode):
     import json
     from infini_local.core import llm_config
-    from infini_local.pipelines import llm_authoring_pipeline as author
+    from infini_local.pipelines.author import request as author
     monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     _, user, _ = author.build_initial_author_request({}, {}, 'composition', model_name='offline')
     cards = json.loads(user)['runtimeCapabilityContract']['catalog']['capabilities']
@@ -78,7 +78,7 @@ def test_native_status_interoperability_and_frozen_repair_survive_registry_retir
 
     def respond(author_request, **kwargs):
         from jsonschema import Draft202012Validator
-        from infini_local.pipelines.author_item_contract import author_item_response_schema
+        from infini_local.pipelines.author.item_contract import author_item_response_schema
         from test_codex_subscription_contract import _encode_nullable_fixture
 
         requests.append(deepcopy(author_request))
@@ -179,7 +179,7 @@ def test_ammo_balance_guidance_separates_damage_from_projectile_conversion(monke
 
 @pytest.mark.parametrize('mode', ['json_schema', 'json_object'])
 def test_source_reading_guidance_is_delivered_once_outside_optional_concept(monkeypatch, mode):
-    from infini_local.pipelines import llm_authoring_prompt as prompt
+    from infini_local.pipelines.author import prompt
     offline_builder(monkeypatch, mode, lambda *args, **kwargs: pytest.fail('unexpected model call'))
     guide = prompt.source_interpretation_for_llm()
     # A source semantics update must reach the actual static request without

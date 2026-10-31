@@ -38,8 +38,8 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (  # noqa: E
     ITEM_USE_STYLE_TMODLOADER_NAMES,
 )
 
-from infini_local.pipelines.author_item_contract import author_item_repair_prompt_shape_card  # noqa: E402
-from infini_local.pipelines.llm_authoring_prompt import concise_terraria_tick_guide_for_llm  # noqa: E402
+from infini_local.pipelines.author.item_contract import author_item_repair_prompt_shape_card  # noqa: E402
+from infini_local.pipelines.author.prompt import concise_terraria_tick_guide_for_llm  # noqa: E402
 
 OUTPUT = ROOT / "docs/reference/generated/LOWERY_RU.md"
 
@@ -63,8 +63,8 @@ def render() -> str:
         "[Author shape](../../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py), "
         "[lowering](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py), "
         "[tModLoader vocabulary](../../../LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py), "
-        "[Author/Repair prose](../../../LocalGenerator/infini_local/pipelines/author_item_contract.py), "
-        "[unit guide](../../../LocalGenerator/infini_local/pipelines/llm_authoring_prompt.py).",
+        "[Author/Repair prose](../../../LocalGenerator/infini_local/pipelines/author/item_contract.py), "
+        "[unit guide](../../../LocalGenerator/infini_local/pipelines/author/prompt.py).",
         "",
         f"Schemas: `{RUNTIME_PROGRAM_API_VERSION}` / `{RUNTIME_PROGRAM_SCHEMA}` / `{RUNTIME_WIRE_SCHEMA}`.",
         "",
@@ -96,7 +96,7 @@ def render() -> str:
         ("Author JSON shape, primaryEntity fields, repair patch shape", "runtime_authoring/program_schema.py", "prompt schema, validator, Repair filter"),
         ("capabilities, entity/input/action/event facts and event producers", "runtime_authoring/capability_registry.py", "Author catalog, validator, Repair alternatives, docs"),
         ("lossless projections, exact outputs, receipts, repetition policy", "runtime_authoring/technical_lowering.py", "compiler, audits, this document"),
-        ("Author/Repair model-facing prose and unit explanation", "pipelines/author_item_contract.py + pipelines/llm_authoring_prompt.py", "serialized Author/Repair messages, this document"),
+        ("Author/Repair model-facing prose and unit explanation", "pipelines/author/item_contract.py + pipelines/author/prompt.py", "serialized Author/Repair messages, this document"),
         ("validation truth", "runtime_authoring/validator.py", "Repair requirements and final acceptance"),
         ("Repair permissions/filter", "runtime_authoring/repair_scope.py", "conditional Repair dossier and merge report"),
         ("wire materialization", "runtime_authoring/compiler.py", "RuntimeProgram wire + finalWireReceipts"),

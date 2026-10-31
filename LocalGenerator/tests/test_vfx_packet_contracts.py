@@ -6,13 +6,15 @@ import copy
 import pytest
 
 from prompt_packet_helpers import request_dossier
-from infini_local.core import vfx_manifest as vfx
-from infini_local.pipelines import vfx_generation_pipeline as stage
+import infini_local.core.vfx.contract as vfx_contract
+import infini_local.core.vfx.validation as vfx_validation
+import infini_local.pipelines.vfx.stage as vfx_stage
+from infini_local.pipelines.vfx import request as stage
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 from test_low_level_three_stage_pipeline import _accepted_visual_data, _visual_kit, wire_transport
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.qa.capability_witnesses import build_capability_witness
-from infini_local.pipelines import visual_generation_pipeline as visual
+import infini_local.pipelines.visual.stage as visual_stage
 from vfx_material_fixtures import _sprite, _with_asset
 from test_provider_transport_contract import loopback_transport  # noqa: F401
 
@@ -21,7 +23,7 @@ from test_provider_transport_contract import loopback_transport  # noqa: F401
 def test_material_and_body_facts_survive_final_http_serialization(monkeypatch, loopback_transport, format_name):
     import json
     from infini_local.core import llm_config
-    from infini_local.core.vfx_material_contract import vfx_model_payload
+    from infini_local.core.vfx.materials import vfx_model_payload
     from test_vfx_material_admission_contracts import _library_particle
 
     endpoint, _events = loopback_transport
@@ -34,20 +36,20 @@ def test_material_and_body_facts_survive_final_http_serialization(monkeypatch, l
                      "endOffsetPx": 0, "peakProgress": 0.5}
     kit = _visual_kit(data)
     kit["entities"][1].update(assetMode="no_asset", visualProjectRef="none")
-    data = visual._apply_kit(data, kit)
+    data = visual_stage._apply_kit(data, kit)
     before = copy.deepcopy(data)
     accepted = _library_particle(data)
     accepted["slots"][0]["particle"]["count"] = 5
     invalid = copy.deepcopy(accepted)
     invalid["slots"][0]["alpha"] = 2
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": accepted["slots"], "note": "alpha only"}
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": accepted["slots"], "note": "alpha only"}
     replies = [{"body": {"choices": [{"finish_reason": "stop", "message": {
         "content": json.dumps(vfx_model_payload(row))}}]}} for row in (invalid, patch)]
     base, observed = endpoint(replies)
     monkeypatch.setattr(llm_config, "OPENROUTER_BASE_URL", base)
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", format_name)
     monkeypatch.setattr(stage, "USE_LLM", True)
-    final = vfx.attach_vfx_manifest(data, "http_frame_facts", llm_director=stage.call_llm_vfx_director)
+    final = vfx_stage.attach_vfx_manifest(data, "http_frame_facts", llm_director=stage.call_llm_vfx_director)
     assert len(observed) == 2
     for (method, path, request, _authorization), surface_key, vocabulary_key in zip(
         observed, ("runtimeSurface", "runtimeSurfaceReadOnly"), ("runtimeVocabulary", "runtimeVocabularyReadOnly"),
@@ -93,15 +95,15 @@ def test_actual_body_attachment_reach_and_beam_frame_reach_both_requests(wire_tr
                        "endStretch": "quarter", "peakProgress": 0.5}
     kit = _visual_kit(data)
     kit["entities"][1].update(assetMode="no_asset", visualProjectRef="none")
-    data = visual._apply_kit(data, kit)
+    data = visual_stage._apply_kit(data, kit)
     before = copy.deepcopy(data)
     accepted = _sprite(data)
     invalid = copy.deepcopy(accepted)
     invalid["slots"][0]["alpha"] = 2
     responses, sent = wire_transport
-    responses.extend([invalid, {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": accepted["slots"],
+    responses.extend([invalid, {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": accepted["slots"],
                                "note": "only alpha"}])
-    final = vfx.attach_vfx_manifest(data, "body_frame", llm_director=stage.call_llm_vfx_director)
+    final = vfx_stage.attach_vfx_manifest(data, "body_frame", llm_director=stage.call_llm_vfx_director)
     assert len(sent) == 2 and not responses
     for request, key in zip(sent, ("runtimeSurface", "runtimeSurfaceReadOnly")):
         assert request["response_format"]["type"] == format_name
@@ -153,14 +155,14 @@ def test_body_frame_projection_preserves_absence_offsets_and_selected_image(wire
         kit["entities"][1].update(assetMode="runtime_geometry", visualProjectRef="none")
         body["controller"] = {"name": "channel_beam", "code": 1, "params": {"range": 4, "widthPx": 10}}
         body["movement"] = {"name": "move_whip_lash", "code": 18, "params": {"range": 2, "segments": 8}}
-    data = visual._apply_kit(data, kit)
+    data = visual_stage._apply_kit(data, kit)
     before = copy.deepcopy(data)
     accepted = _sprite(data)
     invalid = copy.deepcopy(accepted)
     invalid["slots"][0]["alpha"] = 2
     responses, sent = wire_transport
-    responses.extend([invalid, {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": accepted["slots"], "note": "alpha only"}])
-    final = vfx.attach_vfx_manifest(data, "frame_controls", llm_director=stage.call_llm_vfx_director)
+    responses.extend([invalid, {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": accepted["slots"], "note": "alpha only"}])
+    final = vfx_stage.attach_vfx_manifest(data, "frame_controls", llm_director=stage.call_llm_vfx_director)
     assert len(sent) == 2 and not responses
     for request, key in zip(sent, ("runtimeSurface", "runtimeSurfaceReadOnly")):
         assert request["response_format"]["type"] == format_name
@@ -209,12 +211,12 @@ def test_executable_leaf_repair_does_not_create_delete_or_redesign_audio(wire_tr
     accepted["slots"] = [visual, sound] if audio else [visual]
     raw = copy.deepcopy(accepted)
     raw["slots"][0]["alpha"] = 2
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA,
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA,
              "slotsUpsert": [dict(visual, alpha=visual["alpha"]), dict(sound, soundId="Item14"), dict(sound, id="unrequested_sound")],
              "slotIdsDelete": ["authored_sound"], "note": "alpha only"}
     responses, sent = wire_transport
     responses.extend([raw, patch])
-    final = vfx.attach_vfx_manifest(data, "audio-ownership", llm_director=stage.call_llm_vfx_director)
+    final = vfx_stage.attach_vfx_manifest(data, "audio-ownership", llm_director=stage.call_llm_vfx_director)
     assert final["debug"]["vfxDirectorRaw"] == accepted
     slots = final["vfxManifest"]["slots"]
     assert len(slots) == 1 + int(audio)
@@ -226,7 +228,7 @@ def test_executable_leaf_repair_does_not_create_delete_or_redesign_audio(wire_tr
     packet = request_dossier(sent[1])
     assert packet["repairScope"]["fieldPermissions"] == {"globals": {}, "slots": [{"slotId": "visible", "paths": ["alpha"]}], "assets": []}
     assert final["gameplay"] == before["gameplay"] and final["runtimeProgram"] == before["runtimeProgram"]
-    assert vfx.validate_vfx_manifest_wire(final)["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(final)["ok"]
     assert [request["_infini_stage"] for request in sent] == ["vfx_director", "vfx_repair"] and not responses
 
 
@@ -242,10 +244,10 @@ def test_alpha_repair_preserves_effect_color_profiles_and_dedicated_asset(wire_t
     candidate = copy.deepcopy(accepted["slots"][0])
     candidate["element"]["opacityProfile"]["middle"] = 0
     candidate["element"]["colorProfile"]["middle"] = {"r": 255, "g": 192, "b": 203}
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [candidate], "assetsUpsert": [dict(asset, prompt="unrequested replacement")], "note": "alpha only"}
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [candidate], "assetsUpsert": [dict(asset, prompt="unrequested replacement")], "note": "alpha only"}
     responses, sent = wire_transport
     responses.extend([raw, patch])
-    final = vfx.attach_vfx_manifest(data, "frozen-presentation", llm_director=stage.call_llm_vfx_director)
+    final = vfx_stage.attach_vfx_manifest(data, "frozen-presentation", llm_director=stage.call_llm_vfx_director)
     assert final["debug"]["vfxDirectorRaw"] == accepted
     element = final["vfxManifest"]["slots"][0]["element"]
     assert element["colorProfile"] == {"start": {"r": 255, "g": 255, "b": 255}, "middle": {"r": 17, "g": 93, "b": 241}, "end": {"r": 210, "g": 180, "b": 140}, "curve": "linear"}
@@ -258,4 +260,4 @@ def test_alpha_repair_preserves_effect_color_profiles_and_dedicated_asset(wire_t
     assert packet["validGeneratedContext"]["assets"] == [asset]
     assert packet["acceptedVisualKitReadOnly"] == before["visualKit"]
     assert all("sound" not in slot and "soundId" not in slot for slot in final["vfxManifest"]["slots"])
-    assert vfx.validate_vfx_manifest_wire(sanitize_recipe_for_delivery(final))["ok"] and not responses
+    assert vfx_validation.validate_vfx_manifest_wire(sanitize_recipe_for_delivery(final))["ok"] and not responses

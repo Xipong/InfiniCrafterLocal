@@ -81,7 +81,7 @@ from toolbox.live.support import (  # noqa: E402
     run_parallel_crafts,
 )
 from infini_local.qa.live_no_image_fixture import write_no_image_fixture_png, hydrate_no_image_fixture_assets  # noqa: E402
-from infini_local.pipelines import llm_transport  # noqa: E402
+from infini_local.pipelines.transport import client as llm_transport  # noqa: E402
 
 if (args.transport_retries > 0 or args.require_zero_transport_retries) and int(llm_transport.config.LLM_FALLBACK_NETWORK_FAILS) != 1:
     raise SystemExit(
@@ -325,9 +325,9 @@ llm_transport.llm_chat_json = captured_llm_chat_json
 # Import the pipeline only after installing the logical transport wrapper so every
 # stage receives the same wrapped function object.
 from infini_local.pipelines import combine_pipeline as combine  # noqa: E402
-from infini_local.pipelines import visual_sprite_generation as sprites  # noqa: E402
-from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan  # noqa: E402
-from infini_local.pipelines.visual_prompt_contracts import asset_negative_prompt, normalize_asset_prompt  # noqa: E402
+from infini_local.pipelines.images import stage as sprites  # noqa: E402
+from infini_local.pipelines.visual.assets import build_visual_asset_plan  # noqa: E402
+from infini_local.pipelines.images.prompts import asset_negative_prompt, normalize_asset_prompt  # noqa: E402
 
 # No recipe cache/world mutation during this live diagnostic.
 def no_cache_get(*_args: Any, **_kwargs: Any) -> None:
@@ -436,7 +436,7 @@ original_assert_visual_delivery_ready = combine.assert_visual_delivery_ready
 
 
 def no_image_cached_payload_report(data: Any) -> dict[str, Any]:
-    from infini_local.pipelines.visual_delivery_gate import VisualDeliveryBlocked
+    from infini_local.pipelines.visual.delivery import VisualDeliveryBlocked
 
     try:
         if not isinstance(data, dict):

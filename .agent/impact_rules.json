@@ -15,7 +15,7 @@
         "LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py",
         "docs/reference/generated/LOWERY_RU.md",
         "tools/checks/audit_terraria_standardization.py",
-        "LocalGenerator/infini_local/pipelines/gameplay_stage.py"
+        "LocalGenerator/infini_local/pipelines/author/stage.py"
       ],
       "checks": [
         "schema_check",
@@ -75,11 +75,13 @@
     {
       "id": "visual-vfx-boundary",
       "patterns": [
-        "LocalGenerator/infini_local/pipelines/visual_*.py",
-        "LocalGenerator/infini_local/core/vfx_manifest.py",
+        "LocalGenerator/infini_local/pipelines/visual/**",
+        "LocalGenerator/infini_local/pipelines/images/**",
+        "LocalGenerator/infini_local/core/images/**",
         "ModSources/InfiniCrafterLocal/Common/VFX/**",
         "ModSources/InfiniCrafterLocal/Common/Models/Presentation/VfxManifestSpec.cs",
-        "LocalGenerator/infini_local/pipelines/vfx_generation_pipeline.py"
+        "LocalGenerator/infini_local/core/vfx/**",
+        "LocalGenerator/infini_local/pipelines/vfx/**"
       ],
       "checks": [
         "schema_check"
@@ -97,8 +99,8 @@
       ],
       "entrypoints": [
         "LocalGenerator/infini_local/AGENTS.md",
-        "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
-        "LocalGenerator/infini_local/core/vfx_manifest.py"
+        "LocalGenerator/infini_local/pipelines/visual/stage.py",
+        "LocalGenerator/infini_local/core/vfx/schema.py"
       ]
     },
     {
@@ -128,11 +130,12 @@
       "id": "shared-llm-boundaries",
       "patterns": [
         "LocalGenerator/infini_local/core/llm_json_tools.py",
+        "LocalGenerator/infini_local/core/provider_schema.py",
         "LocalGenerator/infini_local/core/schema_validation.py",
-        "LocalGenerator/infini_local/pipelines/llm_transport.py",
-        "LocalGenerator/infini_local/pipelines/llm_profiles.py",
-        "LocalGenerator/infini_local/pipelines/llm_admission.py",
-        "LocalGenerator/infini_local/pipelines/llm_provider_wire.py"
+        "LocalGenerator/infini_local/pipelines/transport/client.py",
+        "LocalGenerator/infini_local/pipelines/transport/profiles.py",
+        "LocalGenerator/infini_local/pipelines/transport/admission.py",
+        "LocalGenerator/infini_local/pipelines/transport/provider_wire.py"
       ],
       "checks": [
         "project_hygiene"
@@ -153,7 +156,7 @@
       ],
       "entrypoints": [
         "LocalGenerator/infini_local/AGENTS.md",
-        "LocalGenerator/infini_local/pipelines/llm_transport.py"
+        "LocalGenerator/infini_local/pipelines/transport/client.py"
       ]
     },
     {
@@ -184,10 +187,21 @@
     {
       "id": "offline-craft-audit",
       "area": "tooling",
-      "patterns": ["tools/craft-audit/**", "toolbox/tests/test_craft_audit.py"],
-      "checks": ["project_hygiene", "schema_check"],
-      "tests": ["toolbox/tests/test_craft_audit.py"],
-      "entrypoints": ["tools/craft-audit/audit.py", "tools/craft-audit/README_RU.md"],
+      "patterns": [
+        "tools/craft-audit/**",
+        "toolbox/tests/test_craft_audit.py"
+      ],
+      "checks": [
+        "project_hygiene",
+        "schema_check"
+      ],
+      "tests": [
+        "toolbox/tests/test_craft_audit.py"
+      ],
+      "entrypoints": [
+        "tools/craft-audit/audit.py",
+        "tools/craft-audit/README_RU.md"
+      ],
       "context": []
     },
     {

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from infini_local.core import llm_config
-from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
+from infini_local.pipelines.vfx import request as vfx_transport
 
 from copy import deepcopy
 import json
@@ -10,10 +10,14 @@ import json
 import pytest
 
 from prompt_packet_helpers import request_dossier
-from infini_local.core import vfx_manifest as vfx
+import infini_local.core.vfx.contract as vfx_contract
+import infini_local.core.vfx.validation as vfx_validation
+import infini_local.pipelines.vfx.prompt as vfx_prompt
+import infini_local.pipelines.vfx.stage as vfx_stage
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.pipelines import llm_authoring_pipeline as author
-from infini_local.pipelines import visual_generation_pipeline as visual
+from infini_local.pipelines.author import request as author
+import infini_local.pipelines.visual.context as visual_context
+import infini_local.pipelines.visual.request as visual_request
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
@@ -33,10 +37,10 @@ def _capture_visual(monkeypatch, data, *, repair=False):
         return {"choices": [{"message": {"content": "{}"}}]}
 
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
-    monkeypatch.setattr(visual, "resolve_llm_model", lambda: "test-model")
-    monkeypatch.setattr(visual, "llm_chat_json", offline_response)
+    monkeypatch.setattr(visual_request, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(visual_request, "llm_chat_json", offline_response)
     kwargs = {"repair_errors": [], "previous": {}, "repair_scope": {}} if repair else {}
-    visual._request_visual_kit(data, {}, {}, **kwargs)
+    visual_request._request_visual_kit(data, {}, {}, **kwargs)
     assert len(sent) == 1
     return sent[0], request_dossier(sent[0])
 
@@ -46,8 +50,8 @@ def test_visual_packet_explains_geometry_without_prescribing_terminal_sprite_pat
     frozen = deepcopy(data)
     request, packet = _capture_visual(monkeypatch, data)
     assert packet["acceptedPresentationMechanicsReadOnly"]["bindings"] == data["runtimeProgram"]["bindings"]
-    assert packet["runtimeEntities"] == visual._runtime_card(data)
-    assert packet["assetModeCatalog"] == visual.visual_asset_mode_catalog()
+    assert packet["runtimeEntities"] == visual_context._runtime_card(data)
+    assert packet["assetModeCatalog"] == visual_request.visual_asset_mode_catalog()
     assert data == frozen
 
 
@@ -64,7 +68,7 @@ def _capture_vfx(monkeypatch, data, *, repair=False):
     monkeypatch.setattr(vfx_transport, "resolve_llm_model", lambda: "test-model")
     monkeypatch.setattr(vfx_transport, "llm_chat_json", offline_response)
     kwargs = {"repair_errors": [], "previous": {}, "repair_scope": {}} if repair else {}
-    vfx._request(vfx_transport.call_llm_vfx_director, vfx._prompt_packet(data, {}, {}), **kwargs)
+    vfx_stage._request(vfx_transport.call_llm_vfx_director, vfx_prompt._prompt_packet(data, {}, {}), **kwargs)
     assert len(sent) == 1
     return sent[0], request_dossier(sent[0])
 
@@ -82,7 +86,7 @@ def test_vfx_packet_preserves_geometry_choices_without_adding_effects(monkeypatc
                    if row["entityId"] == entity["id"])
     assert offered["sources"] == ["anchorHistory", "whip", "ownerLink"]
     assert packet["outputSchema"]["properties"]["slots"]["minItems"] == 0
-    assert vfx.validate_vfx_director_output({"schema": vfx.VFX_DIRECTOR_SCHEMA, "slots": []}, data)["ok"]
+    assert vfx_validation.validate_vfx_director_output({"schema": vfx_contract.VFX_DIRECTOR_SCHEMA, "slots": []}, data)["ok"]
     assert "vfxManifest" not in data and data == frozen
 
     # Geometry availability follows accepted runtime facts, not names or prose.
@@ -105,8 +109,8 @@ def test_shared_geometry_guidance_remains_neutral_in_serialized_repair(monkeypat
     scope = packet["repairScope"]
     assert scope == {}  # Shared presentation facts do not expand permissions.
     if director == "visual":
-        assert packet["runtimeEntitiesReadOnly"] == visual._runtime_card(data)
-        assert packet["assetModeCatalog"] == visual.visual_asset_mode_catalog()
+        assert packet["runtimeEntitiesReadOnly"] == visual_context._runtime_card(data)
+        assert packet["assetModeCatalog"] == visual_request.visual_asset_mode_catalog()
     else:
         assert packet["acceptedRuntimeProgramReadOnly"]["bindings"] == data["runtimeProgram"]["bindings"]
 
@@ -117,7 +121,7 @@ def test_author_packet_retains_full_grammar_without_counterexample_item_anecdote
         BINDING_ACTION_REGISTRY, ENTITY_KIND_REGISTRY, EVENT_KIND_REGISTRY,
         INPUT_KIND_REGISTRY, CAPABILITY_REGISTRY,
     )
-    from infini_local.pipelines.llm_authoring_prompt import sharp_engine_fn_catalog_for_llm
+    from infini_local.pipelines.author.prompt import sharp_engine_fn_catalog_for_llm
 
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
     parent = {"name": "Source object", "damage": 13, "useTime": 21,
@@ -166,9 +170,9 @@ def test_author_packet_retains_full_grammar_without_counterexample_item_anecdote
 
 
 def test_image_packet_preserves_literal_art_and_selected_facts_without_build_examples(monkeypatch):
-    from infini_local.pipelines import image_backend_pipeline as image
-    from infini_local.pipelines import pipeline_visual_config as config
-    from infini_local.pipelines.visual_prompt_contracts import normalize_asset_prompt
+    from infini_local.pipelines.images import backends as image
+    from infini_local.core.images import config
+    from infini_local.pipelines.images.prompts import normalize_asset_prompt
 
     monkeypatch.setattr(config, "BG_COLOR", "transparent")
     monkeypatch.setattr(image, "SDCPP_LORA_PROMPT_TAGS", "")

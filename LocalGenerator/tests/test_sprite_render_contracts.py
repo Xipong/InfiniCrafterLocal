@@ -4,14 +4,17 @@ from prompt_packet_helpers import request_dossier
 
 import pytest
 from PIL import Image, ImageDraw
-from infini_local.pipelines import sprite_contracts as contracts
-from infini_local.pipelines import sprite_postprocess as post
-from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+from infini_local.core.images import contracts
+from infini_local.pipelines.images import postprocess as post
+import infini_local.pipelines.images.pixels as post_pixels
+import infini_local.pipelines.images.retry as post_retry
+import infini_local.pipelines.images.validation as post_validation
+from infini_local.pipelines.visual.assets import build_visual_asset_plan
 import copy
 from pathlib import Path
-from infini_local.pipelines import visual_sprite_generation as generation
+from infini_local.pipelines.images import stage as generation
 from infini_local.core.runtime_authoring.capability_registry import VISUAL_ROLE_BY_ENTITY_KIND
-from infini_local.pipelines.visual_prompt_contracts import normalize_asset_prompt
+from infini_local.pipelines.images.prompts import normalize_asset_prompt
 
 
 CHROMA = {
@@ -22,9 +25,9 @@ CHROMA = {
 
 @pytest.mark.parametrize("name,rgb", CHROMA.items())
 def test_chroma_prompt_keyer_and_retry_agree(monkeypatch, name, rgb):
-    from infini_local.pipelines import pipeline_visual_config as config
-    from infini_local.pipelines import visual_prompt_contracts as prompts
-    from infini_local.pipelines import sprite_keyer as keyer
+    from infini_local.core.images import config
+    from infini_local.pipelines.images import prompts
+    from infini_local.pipelines.images import keyer
     monkeypatch.setattr(config, "BG_COLOR", name)
     assert contracts.chroma_rgb() == prompts.chroma_rgb() == keyer.chroma_rgb() == rgb
     authored = "a magenta crystal, cyan rim and white tip"
@@ -39,8 +42,8 @@ def test_chroma_prompt_keyer_and_retry_agree(monkeypatch, name, rgb):
     assert cleaned.getpixel((0, 0))[3] == 0
     assert cleaned.getpixel((32, 32)) == (180, 100, 30, 255)
     for zimage in (False, True):
-        monkeypatch.setattr(post, "image_backend_is_zimage", lambda: zimage)
-        retry = post.build_retry_prompt_from_validation(prompt, {}, "item", 1, 128)
+        monkeypatch.setattr(post_retry, "image_backend_is_zimage", lambda: zimage)
+        retry = post_retry.build_retry_prompt_from_validation(prompt, {}, "item", 1, 128)
         assert contracts.chroma_name() in retry
         assert authored in retry
 
@@ -51,8 +54,8 @@ def test_chroma_prompt_keyer_and_retry_agree(monkeypatch, name, rgb):
     ("black", (0, 0, 0), (255, 255, 255, 255)),
 ])
 def test_nonmagenta_keys_preserve_authored_palette(monkeypatch, name, rgb, foreground):
-    from infini_local.pipelines import pipeline_visual_config as config
-    from infini_local.pipelines import sprite_keyer as keyer
+    from infini_local.core.images import config
+    from infini_local.pipelines.images import keyer
     monkeypatch.setattr(config, "BG_COLOR", name)
     raw = Image.new("RGBA", (64, 64), (*rgb, 255))
     raw.paste((180, 100, 30, 255), (12, 12, 52, 52))
@@ -60,22 +63,22 @@ def test_nonmagenta_keys_preserve_authored_palette(monkeypatch, name, rgb, foreg
     profile = keyer.estimate_sprite_key_profile(raw)
     cleaned = keyer.apply_background_removal(raw)
     cleaned = keyer.remove_key_colored_holes(cleaned, profile)
-    cleaned = post.defringe_chroma_edges(cleaned)
-    cleaned = post.neutralize_chroma_edge_colors(cleaned)
+    cleaned = post_pixels.defringe_chroma_edges(cleaned)
+    cleaned = post_pixels.neutralize_chroma_edge_colors(cleaned)
     assert cleaned.getpixel((32, 32)) == foreground
     assert cleaned.getpixel((0, 0))[3] == 0
 
 def test_nonmagenta_key_does_not_resample_magenta_art_as_background(monkeypatch):
-    from infini_local.pipelines import pipeline_visual_config as config
-    from infini_local.pipelines import sprite_keyer as keyer
+    from infini_local.core.images import config
+    from infini_local.pipelines.images import keyer
     monkeypatch.setattr(config, "BG_COLOR", "cyan")
     raw = Image.new("RGBA", (64, 64), (202, 4, 140, 255))
     assert keyer.estimate_sprite_key_profile(raw)["key"] == (0, 255, 255)
 
 @pytest.mark.parametrize("name", ("chartreuse", ""))
 def test_invalid_chroma_is_diagnostic(monkeypatch, name):
-    from infini_local.pipelines import pipeline_visual_config as config
-    from infini_local.pipelines import visual_prompt_contracts as prompts
+    from infini_local.core.images import config
+    from infini_local.pipelines.images import prompts
     monkeypatch.setattr(config, "BG_COLOR", name)
     with pytest.raises(ValueError, match="INFINI_BG_COLOR"):
         prompts.normalize_asset_prompt({}, "item", "red crystal", 32)
@@ -91,9 +94,10 @@ def test_invalid_chroma_is_diagnostic(monkeypatch, name):
 ])
 def test_delivered_visual_rules_match_raw_background_transport(monkeypatch, color, remove_bg, mode, keyed, repair):
     import json
-    from infini_local.pipelines import pipeline_visual_config as config
-    from infini_local.pipelines import visual_generation_pipeline as stage
-    from infini_local.pipelines import visual_prompt_contracts as prompts
+    from infini_local.core.images import config
+    from infini_local.pipelines.visual import stage as stage
+    import infini_local.pipelines.visual.request as stage_request
+    from infini_local.pipelines.images import prompts
     monkeypatch.setattr(config, "REMOVE_BG", remove_bg)
     monkeypatch.setattr(config, "BG_REMOVE_MODE", mode)
     monkeypatch.setattr(config, "BG_COLOR", color)
@@ -101,9 +105,9 @@ def test_delivered_visual_rules_match_raw_background_transport(monkeypatch, colo
     def transport(request, **kwargs):
         captured.update(request)
         return {"choices": [{"message": {"content": "{}"}}]}
-    monkeypatch.setattr(stage, "llm_chat_json", transport)
-    monkeypatch.setattr(stage, "resolve_llm_model", lambda: "test-model")
-    stage._request_visual_kit({}, {}, {}, repair_errors=[] if repair else None)
+    monkeypatch.setattr(stage_request, "llm_chat_json", transport)
+    monkeypatch.setattr(stage_request, "resolve_llm_model", lambda: "test-model")
+    stage_request._request_visual_kit({}, {}, {}, repair_errors=[] if repair else None)
     rules = request_dossier(captured)["rules"]
     rule = next((rule for rule in rules if "final PNG" in rule), "")
     assert "transparent background" in rule
@@ -119,17 +123,17 @@ def test_delivered_visual_rules_match_raw_background_transport(monkeypatch, colo
         assert "transparent background" in prompt
 
 def test_retry_diagnostic_uses_configured_key(monkeypatch):
-    from infini_local.pipelines import pipeline_visual_config as config
+    from infini_local.core.images import config
     monkeypatch.setattr(config, "BG_COLOR", "cyan")
-    notes = post.validation_retry_notes({"reasons": ["magenta_key_background_left", "almost_no_transparency_after_bg_removal", "very_dense_opaque_area"]}, "item")
+    notes = post_retry.validation_retry_notes({"reasons": ["magenta_key_background_left", "almost_no_transparency_after_bg_removal", "very_dense_opaque_area"]}, "item")
     assert "magenta" not in notes
     assert contracts.chroma_name() in notes
 
 
 @pytest.mark.parametrize("remove_bg", (False, True))
 def test_transparent_selects_native_alpha_without_a_chroma_fallback(monkeypatch, remove_bg):
-    from infini_local.pipelines import pipeline_visual_config as config
-    from infini_local.pipelines import visual_prompt_contracts as prompts
+    from infini_local.core.images import config
+    from infini_local.pipelines.images import prompts
     monkeypatch.setattr(config, "BG_COLOR", "transparent")
     monkeypatch.setattr(config, "REMOVE_BG", remove_bg)
     monkeypatch.setattr(config, "BG_REMOVE_MODE", "sprite_keyer")
@@ -173,14 +177,14 @@ def test_full_pipeline_alpha_and_source_preservation(tmp_path, monkeypatch, role
         for stage in ("10_sprite_keyer_fullres", "20_master_norm", "30_baked_final"):
             stage_image = Image.open(tmp_path / f"result_stage_{stage}.png")
             assert set(stage_image.getchannel("A").tobytes()) - {0, 255}
-        validation = post.validate_processed_sprite(str(output), role)
+        validation = post_validation.validate_processed_sprite(str(output), role)
         assert validation["ok"], validation
         assert "many_partial_alpha_pixels" not in validation["warnings"]
 
 @pytest.mark.parametrize("remove_bg,role,opaque_first", [(False, "item", False), (True, "impact", False), (True, "vfx_strip", False), (False, "item", True)])
 def test_native_alpha_background_bypasses_keying_through_retry_and_saved_png(tmp_path, monkeypatch, remove_bg, role, opaque_first):
-    from infini_local.pipelines import pipeline_visual_config as config
-    from infini_local.pipelines import sprite_keyer as keyer
+    from infini_local.core.images import config
+    from infini_local.pipelines.images import keyer
     monkeypatch.setattr(config, "BG_COLOR", "transparent")
     monkeypatch.setattr(config, "REMOVE_BG", remove_bg)
     monkeypatch.setattr(config, "BG_REMOVE_MODE", "sprite_keyer")
@@ -191,8 +195,8 @@ def test_native_alpha_background_bypasses_keying_through_retry_and_saved_png(tmp
     authored = "transparent glass with magenta crystal and white tip"
     validation = {"reasons": ["almost_no_transparency_after_bg_removal", "very_dense_opaque_area"]}
     for zimage in (False, True):
-        monkeypatch.setattr(post, "image_backend_is_zimage", lambda: zimage)
-        retry = post.build_retry_prompt_from_validation(authored, validation, role, 1, 32)
+        monkeypatch.setattr(post_retry, "image_backend_is_zimage", lambda: zimage)
+        retry = post_retry.build_retry_prompt_from_validation(authored, validation, role, 1, 32)
         assert authored in retry and "transparent background" in retry
         assert "configured key" not in retry and "pure flat" not in retry
     monkeypatch.setattr(post, "SAVE_SPRITE_STAGES", False)
@@ -215,7 +219,7 @@ def test_native_alpha_background_bypasses_keying_through_retry_and_saved_png(tmp
     assert published and status == "generated", data
     assert len(captured) == 2
     assert all(authored in call["prompt"] and "transparent background" in call["prompt"] for call in captured)
-    assert post.validate_processed_sprite(published, role)["ok"]
+    assert post_validation.validate_processed_sprite(published, role)["ok"]
     with Image.open(published) as final:
         assert final.mode == "RGBA" and final.size == (32, 32)
         assert final.getchannel("A").getextrema()[0] == 0
@@ -287,17 +291,17 @@ def test_plan_backend_postprocess_is_independent_of_entity_id(tmp_path, monkeypa
 @pytest.mark.parametrize("role", ["impact", "runtime:field"])
 def test_soft_policy_preserves_low_alpha_but_rejects_empty(tmp_path, role):
     image = Image.new("RGBA", (32, 32), (35, 130, 225, 1))
-    assert post.cleanup_alpha(image, role).getpixel((0, 0))[3] == 1
+    assert post_pixels.cleanup_alpha(image, role).getpixel((0, 0))[3] == 1
     empty = tmp_path / "empty.png"
     Image.new("RGBA", (32, 32)).save(empty)
-    validation = post.validate_processed_sprite(str(empty), role)
+    validation = post_validation.validate_processed_sprite(str(empty), role)
     assert "empty_alpha_bbox" in validation["reasons"]
-    assert post.sprite_validation_fatal(validation)
+    assert post_validation.sprite_validation_fatal(validation)
 
 def test_runtime_projectile_does_not_canonicalize_to_legacy_x():
     image = Image.new("RGBA", (64, 64))
     ImageDraw.Draw(image).rectangle((28, 8, 36, 56), fill=(200, 100, 30, 255))
-    output, evidence = post.canonicalize_projectile_forward_axis(image, "runtime:projectile")
+    output, evidence = post_pixels.canonicalize_projectile_forward_axis(image, "runtime:projectile")
     assert output.tobytes() == image.tobytes()
     assert not evidence["rotated"] and not evidence["flipped"]
 
@@ -391,7 +395,7 @@ def test_asset_plan_refuses_nonobject_root_visual_for_item_canvas(root):
     ("prompt", 0), ("prompt", 129),
 ])
 def test_canvas_boundary_refusal(entry, canvas):
-    from infini_local.pipelines import visual_prompt_contracts as prompts
+    from infini_local.pipelines.images import prompts
     image = Image.new("RGBA", (32, 32))
     consumer = prompts.sprite_contract_for if entry == "prompt" else getattr(post, entry)
     args = ("item", canvas) if entry == "prompt" else (image, "test", canvas) if entry == "prepare_sprite_master" else (image, canvas)
@@ -456,7 +460,7 @@ def test_fit_refit_samples_retained_master_not_degraded_final(tmp_path):
         draw.line((40, y, 55, y), fill=((220, 25, 15, 255) if y % 4 < 2 else (230, 190, 30, 255)))
     master_path = tmp_path / 'master.png'
     master.save(master_path)
-    final = post.bake_sprite_from_master(master, 24, 'field')
+    final = post_pixels.bake_sprite_from_master(master, 24, 'field')
     path = tmp_path / 'final.png'
     final.save(path)
     validation = generation.validate_processed_sprite(str(path), 'field')
@@ -486,12 +490,12 @@ def test_postprocess_retains_exact_prebake_master_privately(tmp_path, monkeypatc
         output_dir=tmp_path, master_output=master_path)
     master = Image.open(master_path)
     assert master.width > 24
-    assert Image.open(final_path).tobytes() == post.bake_sprite_from_master(master, 24, 'field').tobytes()
+    assert Image.open(final_path).tobytes() == post_pixels.bake_sprite_from_master(master, 24, 'field').tobytes()
 
 @pytest.mark.parametrize("mode", ["RGB", "RGBA"])
 @pytest.mark.parametrize("role", ["item", "runtime:child_projectile", "vfx_cutout"])
 def test_native_alpha_raw_opaque_card_cannot_become_valid_by_padding(tmp_path, monkeypatch, mode, role):
-    from infini_local.pipelines import pipeline_visual_config as config
+    from infini_local.core.images import config
     monkeypatch.setattr(config, "BG_COLOR", "transparent")
     monkeypatch.setattr(post, "SAVE_SPRITE_STAGES", False)
     raw = Image.new(mode, (64, 64), "white")
@@ -511,7 +515,7 @@ def test_native_alpha_raw_opaque_card_cannot_become_valid_by_padding(tmp_path, m
 
 
 def test_native_alpha_checker_pattern_is_not_a_semantic_rejection(tmp_path, monkeypatch):
-    from infini_local.pipelines import pipeline_visual_config as config
+    from infini_local.core.images import config
     monkeypatch.setattr(config, "BG_COLOR", "transparent")
     monkeypatch.setattr(post, "SAVE_SPRITE_STAGES", False)
     raw = Image.new("RGBA", (64, 64))
@@ -522,4 +526,4 @@ def test_native_alpha_checker_pattern_is_not_a_semantic_rejection(tmp_path, monk
     source = tmp_path / "authored-pattern.png"
     raw.save(source)
     result = post.postprocess_sprite(str(source), "pattern-result", 32, "runtime:child_projectile", output_dir=tmp_path)
-    assert post.validate_processed_sprite(result, "runtime:child_projectile", expected_canvas=32)["ok"]
+    assert post_validation.validate_processed_sprite(result, "runtime:child_projectile", expected_canvas=32)["ok"]

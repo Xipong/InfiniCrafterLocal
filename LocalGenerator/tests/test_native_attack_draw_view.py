@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from infini_local.pipelines.native_attack_behavior_view import _program, project_attack_behavior
-from infini_local.pipelines.native_attack_draw_view import project_draw_layers
-from infini_local.pipelines.native_attack_expression_view import compact_attack_expressions
-from infini_local.pipelines.parent_context_pipeline import compact_projectile_profile
+from infini_local.pipelines.context.attack_behavior import _program, project_attack_behavior
+from infini_local.pipelines.context.attack_draw import project_draw_layers
+from infini_local.pipelines.context.attack_expressions import compact_attack_expressions
+from infini_local.pipelines.context.parents import compact_projectile_profile
 
 
 def captured():

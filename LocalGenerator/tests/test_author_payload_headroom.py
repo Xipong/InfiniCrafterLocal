@@ -8,8 +8,8 @@ from typing import Any
 import pytest
 
 from infini_local.core import llm_config
-from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
-from infini_local.pipelines.llm_authoring_prompt import PLANNER_PROMPT_LIMIT_CHARS, PLANNER_PROMPT_MIN_HEADROOM_CHARS
+from infini_local.pipelines.author.request import build_initial_author_request
+from infini_local.pipelines.author.prompt import PLANNER_PROMPT_LIMIT_CHARS, PLANNER_PROMPT_MIN_HEADROOM_CHARS
 from infini_local.core.runtime_authoring.capability_registry import compact_capability_catalog
 from test_author_request_compaction import _expand_constraint_references
 from test_source_unit_guidance import _serialized_chat_request
@@ -276,7 +276,7 @@ def test_shared_target_kind_sets_preserve_every_exact_capability_domain():
 
 @pytest.mark.parametrize("extra_room", [None, 31], ids=["declared-limit", "changed-limit"])
 def test_decimal_character_guard_accepts_exact_boundary_and_rejects_next_unicode_character(monkeypatch, extra_room):
-    from infini_local.pipelines import llm_authoring_prompt as prompt
+    from infini_local.pipelines.author import prompt
 
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
     _, initial, _ = build_initial_author_request({}, {}, "", model_name="offline")

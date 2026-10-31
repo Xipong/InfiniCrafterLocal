@@ -43,7 +43,7 @@ Gameplay Author непосредственно составляет bounded `run
 
 Найди затронутый owner по известному symbol/caller либо [карте](docs/development/CODE_MAP_RU.md#fast-start) и читай только соответствующие контракт, consumer и документы. Для **новой capability** используй [инструкцию по добавлению](docs/development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md) и полный vertical slice ниже; локальная правка не требует предварительного чтения всего runtime-каталога.
 
-Owners: authored shape — `program_schema.py`; mechanical/event facts — `capability_registry.py`; lossless projections/receipts — `technical_lowering.py`; model-facing prose — `author_item_contract.py`. Для новой capability нельзя создавать facade/shadow contract или вручную добавлять её лишь в один слой.
+Owners: authored shape — `program_schema.py`; mechanical/event facts — `capability_registry.py`; lossless projections/receipts — `technical_lowering.py`; model-facing prose — `pipelines/author/item_contract.py`. Для новой capability нельзя создавать facade/shadow contract или вручную добавлять её лишь в один слой.
 
 ## Запрещено
 

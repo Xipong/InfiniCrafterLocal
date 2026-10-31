@@ -15,7 +15,7 @@
 - Transient HTTP 408/409/425/500/502/503/504, reset/URLError/incomplete body повторяются в едином monotonic generation-transport deadline. Частичные SSE deltas разных попыток не склеиваются.
 - Image sends: `INFINI_SPRITE_RETRIES + 1`, 1…9. Text sends: `INFINI_LLM_FALLBACK_NETWORK_FAILS`, 1…10. Это один transport owner, не вложенные бюджеты.
 - Auth/quota 401/402/403/429, permanent/request-shape HTTP, redirect/TLS refusal, malformed response и исчерпанный deadline terminal. OAuth credential acquisition сохраняет отдельный прежний budget. Blocking DNS не объявляется исправленным.
-- `visual_sprite_generation.py` сохраняет terminal deadline attribution вместо прежнего ошибочного PNG-write wrapper; exhausted transport не входит в semantic sprite regeneration.
+- `pipelines/images/stage.py` сохраняет terminal deadline attribution вместо прежнего ошибочного PNG-write wrapper; exhausted transport не входит в semantic sprite regeneration.
 - Pattern-only `rt_` распознаётся только с начала токена. Обычный `*_dart_raw_openai_codex_0.png` сохраняется; known-secret/JWT/API-key redaction остаётся. Полные diagnostics по-прежнему sanitized.
 
 ## Native cursor и held proxy

@@ -1,6 +1,6 @@
 # LLM transport: форма запроса и ошибки
 
-[HTTP/deadline/retry owner](../../../LocalGenerator/infini_local/pipelines/llm_transport.py), [provider shape/cache owner](../../../LocalGenerator/infini_local/pipelines/llm_provider_wire.py), [GUI presets](../../../LocalGenerator/infini_local/desktop/settings_schema.py), [setup/restart](../../user/SETTINGS_RU.md). Локальный serializer и прежний live probe — не универсальные capabilities provider/model.
+[HTTP/deadline/retry owner](../../../LocalGenerator/infini_local/pipelines/transport/client.py), [provider shape/cache owner](../../../LocalGenerator/infini_local/pipelines/transport/provider_wire.py), [GUI presets](../../../LocalGenerator/infini_local/desktop/settings_schema.py), [setup/restart](../../user/SETTINGS_RU.md). Локальный serializer и прежний live probe — не универсальные capabilities provider/model.
 
 ## Настройки
 

@@ -15,7 +15,9 @@ import time
 
 def reset_llm_runtime():
     """Reset each owner's process state between offline transport scenarios."""
-    from infini_local.pipelines import llm_admission, llm_profiles, llm_transport
+    from infini_local.pipelines.transport import admission as llm_admission
+    from infini_local.pipelines.transport import profiles as llm_profiles
+    from infini_local.pipelines.transport import client as llm_transport
 
     with llm_profiles._LLM_POOL_LOCK:
         llm_profiles._LLM_POOL_CURSOR = 0
@@ -97,8 +99,9 @@ class OwnedProcess:
 
 def deliverable_recipe(tmp_path, monkeypatch, *, manifest_key):
     """Real cache/delivery consumers with an explicitly synthetic image control."""
-    from infini_local.core.vfx_manifest import _compile_manifest
-    from infini_local.pipelines import combine_pipeline as pipeline, visual_delivery_gate as visual
+    from infini_local.core.vfx.projection import _compile_manifest
+    from infini_local.pipelines import combine_pipeline as pipeline
+    from infini_local.pipelines.visual import delivery as visual
     from infini_local.qa.live_no_image_fixture import (
         hydrate_no_image_fixture_assets, synthetic_no_image_execution_control,
         write_no_image_fixture_png,

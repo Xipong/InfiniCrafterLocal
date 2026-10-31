@@ -13,8 +13,9 @@ from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 import infini_local.core.runtime_authoring.program_schema as program_schema
-from infini_local.pipelines import gameplay_stage, llm_authoring_pipeline
-from infini_local.pipelines.generated_parent_summary import generated_parent_summary_from_data
+from infini_local.pipelines.author import stage as gameplay_stage
+from infini_local.pipelines.author import request as llm_authoring_pipeline
+from infini_local.pipelines.context.generated_summary import generated_parent_summary_from_data
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 

@@ -93,7 +93,7 @@ Optional-null inverse допустим только для объявленны�
 <a id="vfx"></a>
 ## VFX: common controls не универсальная физика
 
-Source: [vfx_manifest.py](../../../LocalGenerator/infini_local/core/vfx_manifest.py) (`_VFX_NUMERIC_DESCRIPTIONS`, `_RENDERER_SEMANTICS`, Director/Repair schemas) и [presentation guide](../presentation/PRESENTATION_CONSISTENCY_RU.md#legacy-vfx). Material payload ranges/units/zeros/profiles имеют отдельный [контракт](../presentation/VFX_MATERIAL_ELEMENTS_RU.md), а не старые knobs.
+Source: [VFX semantics](../../../LocalGenerator/infini_local/core/vfx/contract.py) (`_VFX_NUMERIC_DESCRIPTIONS`, `_RENDERER_SEMANTICS`) и [Director/Repair schemas](../../../LocalGenerator/infini_local/core/vfx/schema.py) и [presentation guide](../presentation/PRESENTATION_CONSISTENCY_RU.md#legacy-vfx). Material payload ranges/units/zeros/profiles имеют отдельный [контракт](../presentation/VFX_MATERIAL_ELEMENTS_RU.md), а не старые knobs.
 
 VFX Director/Repair получают точный `acceptedGameplayReadOnly`: в частности base `useTime/useAnimation` и `itemScale` не восстанавливаются из realization. Для body sprite copies с declared `renderSizePx` коэффициент `q=R/max(actual final PNG frame)` берётся у выбранного texture owner. Projectile copies используют current P (уже D×E с последующим growth), slot scale и q; не повторно E/G. Dedicated impact, material world-pixel shapes и legacy absent-R ветки имеют отдельные правила в actual schema descriptions.
 

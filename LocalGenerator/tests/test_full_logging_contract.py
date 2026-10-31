@@ -1,5 +1,5 @@
 from __future__ import annotations
-from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
+from infini_local.pipelines.vfx import request as vfx_transport
 
 import importlib
 import json
@@ -15,7 +15,8 @@ from infini_local.storage import trace_runtime, trace_tools
 @pytest.mark.parametrize("enabled", [True, False])
 def test_real_director_seams_store_complete_response_and_request_without_semantic_changes(monkeypatch, tmp_path, stage, enabled):
     import copy
-    from infini_local.pipelines import llm_authoring_pipeline as author, visual_generation_pipeline as visual
+    from infini_local.pipelines.author import request as author
+    import infini_local.pipelines.visual.request as visual_request
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     _runtime_cache(monkeypatch, tmp_path)
@@ -27,7 +28,7 @@ def test_real_director_seams_store_complete_response_and_request_without_semanti
     def respond(request, **kwargs):
         captured.append(copy.deepcopy(request))
         return {"choices": [{"message": {"content": raw}}]}
-    for owner in (author, visual, vfx_transport):
+    for owner in (author, visual_request, vfx_transport):
         monkeypatch.setattr(owner, "llm_chat_json", respond)
         monkeypatch.setattr(owner, "resolve_llm_model", lambda: "offline-model")
     if stage.startswith("visual"):
@@ -37,15 +38,16 @@ def test_real_director_seams_store_complete_response_and_request_without_semanti
         kwargs = {"repair_errors": [{"path": "$.item.silhouette", "message": "required"}],
                   "previous": {"item": {"prompt": "frozen"}},
                   "repair_scope": {"itemMutable": True, "fieldPermissions": {"itemPaths": ["silhouette"]}}} if stage.endswith("repair") else {}
-        result = visual._request_visual_kit(data, {}, {}, **kwargs)
+        result = visual_request._request_visual_kit(data, {}, {}, **kwargs)
         assert data == before
     else:
-        from infini_local.core import vfx_manifest as vfx
+        import infini_local.pipelines.vfx.prompt as vfx_prompt
+        import infini_local.pipelines.vfx.stage as vfx_stage
         from prompt_packet_helpers import request_dossier
         data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
         data.update(id="g_exact", recipeKey="r_exact")
-        packet = vfx._prompt_packet(data, {}, {})
-        arguments = vfx._request(lambda *args, **kwargs: (args, kwargs), packet,
+        packet = vfx_prompt._prompt_packet(data, {}, {})
+        arguments = vfx_stage._request(lambda *args, **kwargs: (args, kwargs), packet,
                                  **({"repair_errors": [{"path": "$.slots", "message": "required"}],
                                      "previous": {}, "repair_scope": {}} if stage.endswith("repair") else {}))
         user = arguments[0][1]
@@ -55,7 +57,7 @@ def test_real_director_seams_store_complete_response_and_request_without_semanti
                     {"role": "user", "name": "vfx_repair_context", "content": json.dumps(user, ensure_ascii=False)}] if stage.endswith("repair") else None
         result = vfx_transport.call_llm_vfx_director("exact contract", user, 123, 0.2, 5, messages=messages)
         assert user == before
-        from infini_local.core.vfx_material_contract import vfx_model_context
+        from infini_local.core.vfx.materials import vfx_model_context
         projected = request_dossier(captured[0])
         assert projected == vfx_model_context(before)
         assert projected["source"] == before["source"], "literal input bytes survive model spelling and logging"
@@ -136,7 +138,7 @@ def test_http_access_diagnostics_are_silent_off_and_redacted_on(monkeypatch, cap
 @pytest.mark.parametrize("enabled", [True, False])
 def test_sdcpp_lifecycle_recording_obeys_logging_toggle_without_launching_backend(monkeypatch, tmp_path, enabled):
     from infini_local.services import sdcpp_service
-    from infini_local.pipelines import image_backend_pipeline as backend
+    from infini_local.pipelines.images import backends as backend
     _runtime_cache(monkeypatch, tmp_path)
     monkeypatch.setattr(trace_runtime, "TRACE_PROMPTS_ENABLED", enabled)
     state = sdcpp_service.SdcppServerState()

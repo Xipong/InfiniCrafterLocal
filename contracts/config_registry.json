@@ -5,27 +5,27 @@
     {
       "declarations": [
         {
-          "default": {
-            "expression": "A1111_BATCH_SIZE"
-          },
-          "file": "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
+          "default": 1,
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 16,
           "minimum": 1,
           "type": "integer"
         },
         {
-          "default": 1,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "default": {
+            "expression": "A1111_BATCH_SIZE"
+          },
+          "file": "LocalGenerator/infini_local/pipelines/images/backends.py",
           "maximum": 16,
           "minimum": 1,
           "type": "integer"
         }
       ],
       "default": [
+        1,
         {
           "expression": "A1111_BATCH_SIZE"
-        },
-        1
+        }
       ],
       "documented": false,
       "example": null,
@@ -34,8 +34,8 @@
       "minimum": 1,
       "name": "INFINI_A1111_BATCH_SIZE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py",
+        "LocalGenerator/infini_local/pipelines/images/backends.py"
       ],
       "secret": false,
       "type": "integer",
@@ -45,7 +45,7 @@
       "declarations": [
         {
           "default": 5.5,
-          "file": "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
+          "file": "LocalGenerator/infini_local/pipelines/images/backends.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -59,7 +59,7 @@
       "minimum": null,
       "name": "INFINI_A1111_CFG",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py"
+        "LocalGenerator/infini_local/pipelines/images/backends.py"
       ],
       "secret": false,
       "type": "number",
@@ -69,18 +69,18 @@
       "declarations": [
         {
           "default": {
-            "expression": "A1111_HEIGHT"
+            "expression": "A1111_WIDTH"
           },
-          "file": "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 2048,
           "minimum": 64,
           "type": "integer"
         },
         {
           "default": {
-            "expression": "A1111_WIDTH"
+            "expression": "A1111_HEIGHT"
           },
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/pipelines/images/backends.py",
           "maximum": 2048,
           "minimum": 64,
           "type": "integer"
@@ -88,10 +88,10 @@
       ],
       "default": [
         {
-          "expression": "A1111_HEIGHT"
+          "expression": "A1111_WIDTH"
         },
         {
-          "expression": "A1111_WIDTH"
+          "expression": "A1111_HEIGHT"
         }
       ],
       "documented": false,
@@ -101,8 +101,8 @@
       "minimum": 64,
       "name": "INFINI_A1111_HEIGHT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py",
+        "LocalGenerator/infini_local/pipelines/images/backends.py"
       ],
       "secret": false,
       "type": "integer",
@@ -112,7 +112,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -126,7 +126,7 @@
       "minimum": null,
       "name": "INFINI_A1111_LORA_NAME",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -136,7 +136,7 @@
       "declarations": [
         {
           "default": "0.8",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -150,7 +150,7 @@
       "minimum": null,
       "name": "INFINI_A1111_LORA_WEIGHT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -160,7 +160,7 @@
       "declarations": [
         {
           "default": "Euler a",
-          "file": "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
+          "file": "LocalGenerator/infini_local/pipelines/images/backends.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -174,7 +174,7 @@
       "minimum": null,
       "name": "INFINI_A1111_SAMPLER",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py"
+        "LocalGenerator/infini_local/pipelines/images/backends.py"
       ],
       "secret": false,
       "type": "string",
@@ -184,7 +184,7 @@
       "declarations": [
         {
           "default": 16,
-          "file": "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
+          "file": "LocalGenerator/infini_local/pipelines/images/backends.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -198,7 +198,7 @@
       "minimum": null,
       "name": "INFINI_A1111_STEPS",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py"
+        "LocalGenerator/infini_local/pipelines/images/backends.py"
       ],
       "secret": false,
       "type": "integer",
@@ -208,7 +208,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -222,7 +222,7 @@
       "minimum": null,
       "name": "INFINI_A1111_TRIGGER",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -232,7 +232,7 @@
       "declarations": [
         {
           "default": "http://127.0.0.1:7860",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -246,7 +246,7 @@
       "minimum": null,
       "name": "INFINI_A1111_URL",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -255,27 +255,27 @@
     {
       "declarations": [
         {
-          "default": {
-            "expression": "A1111_WIDTH"
-          },
-          "file": "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
+          "default": 512,
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 2048,
           "minimum": 64,
           "type": "integer"
         },
         {
-          "default": 512,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "default": {
+            "expression": "A1111_WIDTH"
+          },
+          "file": "LocalGenerator/infini_local/pipelines/images/backends.py",
           "maximum": 2048,
           "minimum": 64,
           "type": "integer"
         }
       ],
       "default": [
+        512,
         {
           "expression": "A1111_WIDTH"
-        },
-        512
+        }
       ],
       "documented": false,
       "example": null,
@@ -284,8 +284,8 @@
       "minimum": 64,
       "name": "INFINI_A1111_WIDTH",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/image_backend_pipeline.py",
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py",
+        "LocalGenerator/infini_local/pipelines/images/backends.py"
       ],
       "secret": false,
       "type": "integer",
@@ -335,7 +335,7 @@
       "declarations": [
         {
           "default": 28,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -349,7 +349,7 @@
       "minimum": null,
       "name": "INFINI_ALPHA_THRESHOLD",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -384,7 +384,7 @@
       "declarations": [
         {
           "default": "magenta",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -398,7 +398,7 @@
       "minimum": null,
       "name": "INFINI_BG_COLOR",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -408,7 +408,7 @@
       "declarations": [
         {
           "default": "sprite_keyer",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -422,7 +422,7 @@
       "minimum": null,
       "name": "INFINI_BG_REMOVE_MODE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -476,7 +476,7 @@
       "declarations": [
         {
           "default": 0.72,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -490,7 +490,7 @@
       "minimum": null,
       "name": "INFINI_CHILD_ICON_TARGET_FILL",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "number",
@@ -500,7 +500,7 @@
       "declarations": [
         {
           "default": 34,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -514,7 +514,7 @@
       "minimum": null,
       "name": "INFINI_CHROMA_TOLERANCE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -524,7 +524,7 @@
       "declarations": [
         {
           "default": "gpt-image-2",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -538,7 +538,7 @@
       "minimum": null,
       "name": "INFINI_CODEX_IMAGE_MODEL",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -548,7 +548,7 @@
       "declarations": [
         {
           "default": "medium",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -562,7 +562,7 @@
       "minimum": null,
       "name": "INFINI_CODEX_IMAGE_QUALITY",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -572,7 +572,7 @@
       "declarations": [
         {
           "default": "1024x1024",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -586,7 +586,7 @@
       "minimum": null,
       "name": "INFINI_CODEX_IMAGE_SIZE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -596,7 +596,7 @@
       "declarations": [
         {
           "default": 240,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 3600,
           "minimum": 1,
           "type": "integer"
@@ -610,7 +610,7 @@
       "minimum": 1,
       "name": "INFINI_CODEX_IMAGE_TIMEOUT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -716,7 +716,7 @@
       "declarations": [
         {
           "default": 5.5,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -730,7 +730,7 @@
       "minimum": null,
       "name": "INFINI_COMFYUI_CFG",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "number",
@@ -740,7 +740,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -754,7 +754,7 @@
       "minimum": null,
       "name": "INFINI_COMFYUI_CHECKPOINT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -764,7 +764,7 @@
       "declarations": [
         {
           "default": "infinicrafterlocal",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -778,7 +778,7 @@
       "minimum": null,
       "name": "INFINI_COMFYUI_CLIENT_ID",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -788,7 +788,7 @@
       "declarations": [
         {
           "default": 1.0,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -802,7 +802,7 @@
       "minimum": null,
       "name": "INFINI_COMFYUI_DENOISE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "number",
@@ -814,7 +814,7 @@
           "default": {
             "expression": "COMFYUI_WIDTH"
           },
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 2048,
           "minimum": 64,
           "type": "integer"
@@ -830,7 +830,7 @@
       "minimum": 64,
       "name": "INFINI_COMFYUI_HEIGHT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -840,7 +840,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -854,7 +854,7 @@
       "minimum": null,
       "name": "INFINI_COMFYUI_LORA_NAME",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -864,7 +864,7 @@
       "declarations": [
         {
           "default": "0.8",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -878,7 +878,7 @@
       "minimum": null,
       "name": "INFINI_COMFYUI_LORA_WEIGHT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -888,7 +888,7 @@
       "declarations": [
         {
           "default": 0.75,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -902,7 +902,7 @@
       "minimum": null,
       "name": "INFINI_COMFYUI_POLL_INTERVAL",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "number",
@@ -912,7 +912,7 @@
       "declarations": [
         {
           "default": "euler",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -926,7 +926,7 @@
       "minimum": null,
       "name": "INFINI_COMFYUI_SAMPLER",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -936,7 +936,7 @@
       "declarations": [
         {
           "default": "normal",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -950,7 +950,7 @@
       "minimum": null,
       "name": "INFINI_COMFYUI_SCHEDULER",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -960,7 +960,7 @@
       "declarations": [
         {
           "default": 16,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -974,7 +974,7 @@
       "minimum": null,
       "name": "INFINI_COMFYUI_STEPS",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -986,7 +986,7 @@
           "default": {
             "expression": "env_int(\"INFINI_VISUAL_GENERATION_TIMEOUT\", 240, lo=1, hi=3600)"
           },
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 3600,
           "minimum": 1,
           "type": "integer"
@@ -1002,7 +1002,7 @@
       "minimum": 1,
       "name": "INFINI_COMFYUI_TIMEOUT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -1012,7 +1012,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1026,7 +1026,7 @@
       "minimum": null,
       "name": "INFINI_COMFYUI_TRIGGER",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -1036,7 +1036,7 @@
       "declarations": [
         {
           "default": "http://127.0.0.1:8188",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1050,7 +1050,7 @@
       "minimum": null,
       "name": "INFINI_COMFYUI_URL",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -1060,7 +1060,7 @@
       "declarations": [
         {
           "default": 512,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -1074,7 +1074,7 @@
       "minimum": null,
       "name": "INFINI_COMFYUI_WIDTH",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -1084,7 +1084,7 @@
       "declarations": [
         {
           "default": "auto",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1098,7 +1098,7 @@
       "minimum": null,
       "name": "INFINI_COMFYUI_WORKFLOW",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -1108,7 +1108,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1122,7 +1122,7 @@
       "minimum": null,
       "name": "INFINI_COMFYUI_WORKFLOW_LORA",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -1132,7 +1132,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1146,7 +1146,7 @@
       "minimum": null,
       "name": "INFINI_COMFYUI_WORKFLOW_NO_LORA",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -1272,7 +1272,7 @@
       "declarations": [
         {
           "default": false,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -1286,7 +1286,7 @@
       "minimum": null,
       "name": "INFINI_DENOISE_STRAY_PIXELS",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -1296,7 +1296,7 @@
       "declarations": [
         {
           "default": 0.86,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -1310,7 +1310,7 @@
       "minimum": null,
       "name": "INFINI_FIELD_ICON_TARGET_FILL",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "number",
@@ -1365,7 +1365,7 @@
       "declarations": [
         {
           "default": "https://api.openai.com/v1",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1379,7 +1379,7 @@
       "minimum": null,
       "name": "INFINI_IMAGE_API_BASE_URL",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -1389,7 +1389,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1403,7 +1403,7 @@
       "minimum": null,
       "name": "INFINI_IMAGE_API_EXTRA_HEADERS_JSON",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -1413,7 +1413,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1427,7 +1427,7 @@
       "minimum": null,
       "name": "INFINI_IMAGE_API_KEY",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": true,
       "type": "string",
@@ -1437,7 +1437,7 @@
       "declarations": [
         {
           "default": "gpt-image-1",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1451,7 +1451,7 @@
       "minimum": null,
       "name": "INFINI_IMAGE_API_MODEL",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -1461,7 +1461,7 @@
       "declarations": [
         {
           "default": "/images/generations",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1475,7 +1475,7 @@
       "minimum": null,
       "name": "INFINI_IMAGE_API_PATH",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -1485,7 +1485,7 @@
       "declarations": [
         {
           "default": "512x512",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1499,7 +1499,7 @@
       "minimum": null,
       "name": "INFINI_IMAGE_API_SIZE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -1511,7 +1511,7 @@
           "default": {
             "expression": "env_int(\"INFINI_VISUAL_GENERATION_TIMEOUT\", 240, lo=1, hi=3600)"
           },
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 3600,
           "minimum": 1,
           "type": "integer"
@@ -1527,7 +1527,7 @@
       "minimum": 1,
       "name": "INFINI_IMAGE_API_TIMEOUT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -1537,7 +1537,7 @@
       "declarations": [
         {
           "default": "sdcpp",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1565,7 +1565,7 @@
       "minimum": null,
       "name": "INFINI_IMAGE_BACKEND",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+        "LocalGenerator/infini_local/core/images/config.py",
         "LocalGenerator/infini_local/web/server.py"
       ],
       "secret": false,
@@ -1576,7 +1576,7 @@
       "declarations": [
         {
           "default": 4,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 4,
           "minimum": 1,
           "type": "integer"
@@ -1590,7 +1590,7 @@
       "minimum": 1,
       "name": "INFINI_IMAGE_MAX_CONCURRENCY",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -1600,7 +1600,7 @@
       "declarations": [
         {
           "default": true,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -1614,7 +1614,7 @@
       "minimum": null,
       "name": "INFINI_IMAGE_PARALLEL",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -1624,7 +1624,7 @@
       "declarations": [
         {
           "default": 1,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -1638,7 +1638,7 @@
       "minimum": null,
       "name": "INFINI_IMAGE_VARIANTS",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -1648,7 +1648,7 @@
       "declarations": [
         {
           "default": 0.82,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -1662,7 +1662,7 @@
       "minimum": null,
       "name": "INFINI_IMPACT_ICON_TARGET_FILL",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "number",
@@ -1672,7 +1672,7 @@
       "declarations": [
         {
           "default": 0.91,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -1686,7 +1686,7 @@
       "minimum": null,
       "name": "INFINI_ITEM_ICON_TARGET_FILL",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "number",
@@ -2596,7 +2596,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
+          "file": "LocalGenerator/infini_local/pipelines/author/request.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -2610,7 +2610,7 @@
       "minimum": null,
       "name": "INFINI_LLM_REAUTHOR_TEMPERATURE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py"
+        "LocalGenerator/infini_local/pipelines/author/request.py"
       ],
       "secret": false,
       "type": "string",
@@ -2620,7 +2620,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
+          "file": "LocalGenerator/infini_local/pipelines/author/request.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -2634,7 +2634,7 @@
       "minimum": null,
       "name": "INFINI_LLM_REPAIR_TEMPERATURE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py"
+        "LocalGenerator/infini_local/pipelines/author/request.py"
       ],
       "secret": false,
       "type": "string",
@@ -2644,7 +2644,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/llm_transport.py",
+          "file": "LocalGenerator/infini_local/pipelines/transport/client.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -2658,7 +2658,7 @@
       "minimum": null,
       "name": "INFINI_LLM_REPLAY_RAW",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/llm_transport.py",
+        "LocalGenerator/infini_local/pipelines/transport/client.py",
         "tools/diagnostics/replay_generation_case.py"
       ],
       "secret": false,
@@ -2695,7 +2695,7 @@
           "default": {
             "expression": "float(GENERATION_DEFAULTS[\"INFINI_LLM_TEMPERATURE\"])"
           },
-          "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
+          "file": "LocalGenerator/infini_local/pipelines/author/request.py",
           "maximum": 1.2,
           "minimum": 0.0,
           "type": "number"
@@ -2711,7 +2711,7 @@
       "minimum": 0.0,
       "name": "INFINI_LLM_TEMPERATURE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py"
+        "LocalGenerator/infini_local/pipelines/author/request.py"
       ],
       "secret": false,
       "type": "number",
@@ -2732,7 +2732,7 @@
           "default": {
             "expression": "int(GENERATION_DEFAULTS[\"INFINI_LLM_TIMEOUT\"])"
           },
-          "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
+          "file": "LocalGenerator/infini_local/pipelines/author/request.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -2741,7 +2741,7 @@
           "default": {
             "expression": "int(GENERATION_DEFAULTS[\"INFINI_LLM_TIMEOUT\"])"
           },
-          "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
+          "file": "LocalGenerator/infini_local/pipelines/author/request.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -2750,7 +2750,7 @@
           "default": {
             "expression": "int(GENERATION_DEFAULTS[\"INFINI_LLM_TIMEOUT\"])"
           },
-          "file": "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
+          "file": "LocalGenerator/infini_local/pipelines/author/request.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -2759,7 +2759,7 @@
           "default": {
             "expression": "int(GENERATION_DEFAULTS[\"INFINI_LLM_TIMEOUT\"])"
           },
-          "file": "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
+          "file": "LocalGenerator/infini_local/pipelines/visual/request.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -2776,8 +2776,8 @@
       "name": "INFINI_LLM_TIMEOUT",
       "owners": [
         "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py",
-        "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py"
+        "LocalGenerator/infini_local/pipelines/author/request.py",
+        "LocalGenerator/infini_local/pipelines/visual/request.py"
       ],
       "secret": false,
       "type": "integer",
@@ -2835,7 +2835,7 @@
       "declarations": [
         {
           "default": 32,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -2849,7 +2849,7 @@
       "minimum": null,
       "name": "INFINI_MAX_COLORS",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -2955,7 +2955,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -2969,7 +2969,7 @@
       "minimum": null,
       "name": "INFINI_OPENAI_COMPAT_IMAGE_API_KEY",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": true,
       "type": "string",
@@ -2979,7 +2979,7 @@
       "declarations": [
         {
           "default": "https://api.openai.com/v1",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -2993,7 +2993,7 @@
       "minimum": null,
       "name": "INFINI_OPENAI_COMPAT_IMAGE_BASE_URL",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3003,7 +3003,7 @@
       "declarations": [
         {
           "default": "gpt-image-1",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3017,7 +3017,7 @@
       "minimum": null,
       "name": "INFINI_OPENAI_COMPAT_IMAGE_MODEL",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3027,7 +3027,7 @@
       "declarations": [
         {
           "default": "512x512",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3041,7 +3041,7 @@
       "minimum": null,
       "name": "INFINI_OPENAI_COMPAT_IMAGE_SIZE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3235,7 +3235,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3249,7 +3249,7 @@
       "minimum": null,
       "name": "INFINI_PIXEL_LORA_NAME",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3259,7 +3259,7 @@
       "declarations": [
         {
           "default": "0.8",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3273,7 +3273,7 @@
       "minimum": null,
       "name": "INFINI_PIXEL_LORA_WEIGHT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3283,7 +3283,7 @@
       "declarations": [
         {
           "default": true,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -3297,7 +3297,7 @@
       "minimum": null,
       "name": "INFINI_PIXEL_POSTERIZE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -3307,7 +3307,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3321,7 +3321,7 @@
       "minimum": null,
       "name": "INFINI_PIXEL_TRIGGER",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3362,7 +3362,7 @@
       "declarations": [
         {
           "default": 0.84,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -3376,7 +3376,7 @@
       "minimum": null,
       "name": "INFINI_PROJECTILE_ICON_TARGET_FILL",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "number",
@@ -3450,7 +3450,7 @@
       "declarations": [
         {
           "default": true,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -3464,7 +3464,7 @@
       "minimum": null,
       "name": "INFINI_REMOVE_BG",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -3474,7 +3474,7 @@
       "declarations": [
         {
           "default": true,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -3488,7 +3488,7 @@
       "minimum": null,
       "name": "INFINI_REQUIRE_PILLOW",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -3498,7 +3498,7 @@
       "declarations": [
         {
           "default": false,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -3512,7 +3512,7 @@
       "minimum": null,
       "name": "INFINI_SAVE_SPRITE_STAGES",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -3522,7 +3522,7 @@
       "declarations": [
         {
           "default": 1.0,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 30.0,
           "minimum": 0.0,
           "type": "number"
@@ -3536,7 +3536,7 @@
       "minimum": 0.0,
       "name": "INFINI_SDCPP_CFG",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "number",
@@ -3548,7 +3548,7 @@
           "default": {
             "expression": "SDCPP_WIDTH"
           },
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 2048,
           "minimum": 64,
           "type": "integer"
@@ -3564,7 +3564,7 @@
       "minimum": 64,
       "name": "INFINI_SDCPP_HEIGHT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -3574,7 +3574,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3588,7 +3588,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_LLM",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3598,7 +3598,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3612,7 +3612,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_LORA_DIR",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3622,7 +3622,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3636,7 +3636,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_LORA_FILE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3646,7 +3646,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3660,7 +3660,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_LORA_PROMPT_TAGS",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3670,7 +3670,7 @@
       "declarations": [
         {
           "default": "0.25",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3684,7 +3684,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_LORA_WEIGHT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3694,7 +3694,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3708,7 +3708,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_MODEL",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3718,7 +3718,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3732,7 +3732,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_ROCM_COMPAT_ROOT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3742,7 +3742,7 @@
       "declarations": [
         {
           "default": "euler",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3756,7 +3756,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SAMPLER",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3766,7 +3766,7 @@
       "declarations": [
         {
           "default": -1,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -3780,7 +3780,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SEED",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -3790,7 +3790,7 @@
       "declarations": [
         {
           "default": false,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -3804,7 +3804,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_AUTOSTART",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+        "LocalGenerator/infini_local/core/images/config.py",
         "tools/diagnostics/measure_llm_request_sizes.py"
       ],
       "secret": false,
@@ -3815,7 +3815,7 @@
       "declarations": [
         {
           "default": "safe_args",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3829,7 +3829,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_COMMAND_MODE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3839,7 +3839,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3853,7 +3853,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_COMMAND_TEMPLATE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3863,7 +3863,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3877,7 +3877,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_EXE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3887,7 +3887,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3901,7 +3901,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_EXTRA_ARGS",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3911,7 +3911,7 @@
       "declarations": [
         {
           "default": "/,/health,/sdapi/v1/sd-models",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3925,7 +3925,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_HEALTH_PATHS",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3935,7 +3935,7 @@
       "declarations": [
         {
           "default": "127.0.0.1",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3949,7 +3949,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_HOST",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3961,7 +3961,7 @@
           "default": {
             "expression": "str(CACHE_DIR / \"sdcpp_server.log\")"
           },
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -3977,7 +3977,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_LOG_FILE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -3987,7 +3987,7 @@
       "declarations": [
         {
           "default": "auto",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -4001,7 +4001,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_PAYLOAD_STYLE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -4011,7 +4011,7 @@
       "declarations": [
         {
           "default": 7861,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 65535,
           "minimum": 1,
           "type": "integer"
@@ -4025,7 +4025,7 @@
       "minimum": 1,
       "name": "INFINI_SDCPP_SERVER_PORT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4037,7 +4037,7 @@
           "default": {
             "expression": "SDCPP_TIMEOUT"
           },
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 3600,
           "minimum": 1,
           "type": "integer"
@@ -4053,7 +4053,7 @@
       "minimum": 1,
       "name": "INFINI_SDCPP_SERVER_REQUEST_TIMEOUT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4065,7 +4065,7 @@
           "default": {
             "expression": "os.name == \"nt\""
           },
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -4081,7 +4081,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_SHOW_CONSOLE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -4091,7 +4091,7 @@
       "declarations": [
         {
           "default": 180,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -4105,7 +4105,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_STARTUP_TIMEOUT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4115,7 +4115,7 @@
       "declarations": [
         {
           "default": "/sdapi/v1/txt2img,/txt2img,/generate",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -4129,7 +4129,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_TXT2IMG_PATHS",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -4139,7 +4139,7 @@
       "declarations": [
         {
           "default": "http://127.0.0.1:7861",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -4153,7 +4153,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_URL",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -4163,7 +4163,7 @@
       "declarations": [
         {
           "default": 8,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 150,
           "minimum": 1,
           "type": "integer"
@@ -4177,7 +4177,7 @@
       "minimum": 1,
       "name": "INFINI_SDCPP_STEPS",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4189,7 +4189,7 @@
           "default": {
             "expression": "env_int(\"INFINI_VISUAL_GENERATION_TIMEOUT\", 240, lo=1, hi=3600)"
           },
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 3600,
           "minimum": 1,
           "type": "integer"
@@ -4205,7 +4205,7 @@
       "minimum": 1,
       "name": "INFINI_SDCPP_TIMEOUT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4215,7 +4215,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -4229,7 +4229,7 @@
       "minimum": null,
       "name": "INFINI_SDCPP_VAE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -4239,7 +4239,7 @@
       "declarations": [
         {
           "default": 512,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 2048,
           "minimum": 64,
           "type": "integer"
@@ -4253,7 +4253,7 @@
       "minimum": 64,
       "name": "INFINI_SDCPP_WIDTH",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4280,7 +4280,7 @@
       "declarations": [
         {
           "default": true,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -4294,7 +4294,7 @@
       "minimum": null,
       "name": "INFINI_SPRITE_CHROMA_DEFRINGE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -4304,7 +4304,7 @@
       "declarations": [
         {
           "default": "box",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -4318,7 +4318,7 @@
       "minimum": null,
       "name": "INFINI_SPRITE_DOWNSCALE_FILTER",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -4328,7 +4328,7 @@
       "declarations": [
         {
           "default": 40,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -4342,7 +4342,7 @@
       "minimum": null,
       "name": "INFINI_SPRITE_EFFECT_CORE_ALPHA_THRESHOLD",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4352,7 +4352,7 @@
       "declarations": [
         {
           "default": 56,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -4366,7 +4366,7 @@
       "minimum": null,
       "name": "INFINI_SPRITE_ITEM_CORE_ALPHA_THRESHOLD",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4376,7 +4376,7 @@
       "declarations": [
         {
           "default": 8,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -4390,7 +4390,7 @@
       "minimum": null,
       "name": "INFINI_SPRITE_KEYER_RESIDUE_STEPS",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4400,7 +4400,7 @@
       "declarations": [
         {
           "default": 3,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -4414,7 +4414,7 @@
       "minimum": null,
       "name": "INFINI_SPRITE_KEYER_SPILL_RADIUS",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4424,7 +4424,7 @@
       "declarations": [
         {
           "default": 256,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 2048,
           "minimum": 64,
           "type": "integer"
@@ -4438,7 +4438,7 @@
       "minimum": 64,
       "name": "INFINI_SPRITE_MASTER_CANVAS",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4448,7 +4448,7 @@
       "declarations": [
         {
           "default": 0.92,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -4462,7 +4462,7 @@
       "minimum": null,
       "name": "INFINI_SPRITE_MAX_BBOX_RATIO",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "number",
@@ -4472,7 +4472,7 @@
       "declarations": [
         {
           "default": 0.12,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -4486,7 +4486,7 @@
       "minimum": null,
       "name": "INFINI_SPRITE_MAX_EDGE_TOUCH_PCT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "number",
@@ -4496,7 +4496,7 @@
       "declarations": [
         {
           "default": 0.82,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -4510,7 +4510,7 @@
       "minimum": null,
       "name": "INFINI_SPRITE_MAX_OPAQUE_PCT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "number",
@@ -4520,7 +4520,7 @@
       "declarations": [
         {
           "default": 0.1,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -4534,7 +4534,7 @@
       "minimum": null,
       "name": "INFINI_SPRITE_MIN_BBOX_RATIO",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "number",
@@ -4544,7 +4544,7 @@
       "declarations": [
         {
           "default": 0.015,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -4558,7 +4558,7 @@
       "minimum": null,
       "name": "INFINI_SPRITE_MIN_OPAQUE_PCT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "number",
@@ -4568,7 +4568,7 @@
       "declarations": [
         {
           "default": 2,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -4582,7 +4582,7 @@
       "minimum": null,
       "name": "INFINI_SPRITE_PADDING",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4592,7 +4592,7 @@
       "declarations": [
         {
           "default": true,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -4606,7 +4606,7 @@
       "minimum": null,
       "name": "INFINI_SPRITE_PREMULTIPLIED_RESIZE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -4616,7 +4616,7 @@
       "declarations": [
         {
           "default": 2,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 8,
           "minimum": 0,
           "type": "integer"
@@ -4637,7 +4637,7 @@
       "minimum": 0,
       "name": "INFINI_SPRITE_RETRIES",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+        "LocalGenerator/infini_local/core/images/config.py",
         "LocalGenerator/infini_local/services/codex_auth.py"
       ],
       "secret": false,
@@ -4804,7 +4804,7 @@
       "declarations": [
         {
           "default": 420,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "file": "LocalGenerator/infini_local/core/vfx/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -4818,7 +4818,7 @@
       "minimum": null,
       "name": "INFINI_VFX_EMERGENCY_MAX_DRAW_CALLS",
       "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+        "LocalGenerator/infini_local/core/vfx/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4828,7 +4828,7 @@
       "declarations": [
         {
           "default": 240,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "file": "LocalGenerator/infini_local/core/vfx/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -4842,7 +4842,7 @@
       "minimum": null,
       "name": "INFINI_VFX_EMERGENCY_MAX_PARTICLES_PER_TICK",
       "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+        "LocalGenerator/infini_local/core/vfx/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4852,7 +4852,7 @@
       "declarations": [
         {
           "default": 9000,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "file": "LocalGenerator/infini_local/core/vfx/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -4866,7 +4866,7 @@
       "minimum": null,
       "name": "INFINI_VFX_EMERGENCY_MAX_PARTICLES_TOTAL",
       "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+        "LocalGenerator/infini_local/core/vfx/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4876,7 +4876,7 @@
       "declarations": [
         {
           "default": true,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "file": "LocalGenerator/infini_local/core/vfx/config.py",
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -4890,7 +4890,7 @@
       "minimum": null,
       "name": "INFINI_VFX_LLM_DIRECTOR",
       "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+        "LocalGenerator/infini_local/core/vfx/config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -4900,7 +4900,7 @@
       "declarations": [
         {
           "default": 5,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "file": "LocalGenerator/infini_local/core/vfx/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -4914,7 +4914,7 @@
       "minimum": null,
       "name": "INFINI_VFX_LLM_DIRECTOR_MAX_SLOTS",
       "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+        "LocalGenerator/infini_local/core/vfx/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4924,7 +4924,7 @@
       "declarations": [
         {
           "default": "<redacted>",
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "file": "LocalGenerator/infini_local/core/vfx/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -4938,7 +4938,7 @@
       "minimum": null,
       "name": "INFINI_VFX_LLM_DIRECTOR_MAX_TOKENS",
       "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+        "LocalGenerator/infini_local/core/vfx/config.py"
       ],
       "secret": true,
       "type": "integer",
@@ -4948,7 +4948,7 @@
       "declarations": [
         {
           "default": 1,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "file": "LocalGenerator/infini_local/core/vfx/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -4962,7 +4962,7 @@
       "minimum": null,
       "name": "INFINI_VFX_LLM_DIRECTOR_REPAIR_ATTEMPTS",
       "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+        "LocalGenerator/infini_local/core/vfx/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4972,7 +4972,7 @@
       "declarations": [
         {
           "default": 0.34,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "file": "LocalGenerator/infini_local/core/vfx/config.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -4986,7 +4986,7 @@
       "minimum": null,
       "name": "INFINI_VFX_LLM_DIRECTOR_TEMPERATURE",
       "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+        "LocalGenerator/infini_local/core/vfx/config.py"
       ],
       "secret": false,
       "type": "number",
@@ -4998,7 +4998,7 @@
           "default": {
             "expression": "LLM_TIMEOUT"
           },
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "file": "LocalGenerator/infini_local/core/vfx/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -5014,7 +5014,7 @@
       "minimum": null,
       "name": "INFINI_VFX_LLM_DIRECTOR_TIMEOUT",
       "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+        "LocalGenerator/infini_local/core/vfx/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -5024,7 +5024,7 @@
       "declarations": [
         {
           "default": 0.12,
-          "file": "LocalGenerator/infini_local/core/vfx_manifest_config.py",
+          "file": "LocalGenerator/infini_local/core/vfx/config.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -5038,7 +5038,7 @@
       "minimum": null,
       "name": "INFINI_VFX_LLM_REPAIR_TEMPERATURE",
       "owners": [
-        "LocalGenerator/infini_local/core/vfx_manifest_config.py"
+        "LocalGenerator/infini_local/core/vfx/config.py"
       ],
       "secret": false,
       "type": "number",
@@ -5048,7 +5048,7 @@
       "declarations": [
         {
           "default": false,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -5062,7 +5062,7 @@
       "minimum": null,
       "name": "INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -5072,7 +5072,7 @@
       "declarations": [
         {
           "default": "full",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -5086,7 +5086,7 @@
       "minimum": null,
       "name": "INFINI_VISUAL_ASSET_MODE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -5096,7 +5096,7 @@
       "declarations": [
         {
           "default": true,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -5110,7 +5110,7 @@
       "minimum": null,
       "name": "INFINI_VISUAL_DIRECTOR_LLM",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -5120,7 +5120,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/llm_provider_wire.py",
+          "file": "LocalGenerator/infini_local/pipelines/transport/provider_wire.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -5134,7 +5134,7 @@
       "minimum": null,
       "name": "INFINI_VISUAL_DIRECTOR_MAX_TOKENS",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/llm_provider_wire.py"
+        "LocalGenerator/infini_local/pipelines/transport/provider_wire.py"
       ],
       "secret": true,
       "type": "string",
@@ -5146,7 +5146,7 @@
           "default": {
             "expression": "float(GENERATION_DEFAULTS[\"INFINI_VISUAL_DIRECTOR_TEMPERATURE\"])"
           },
-          "file": "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
+          "file": "LocalGenerator/infini_local/pipelines/visual/request.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -5162,7 +5162,7 @@
       "minimum": null,
       "name": "INFINI_VISUAL_DIRECTOR_TEMPERATURE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py"
+        "LocalGenerator/infini_local/pipelines/visual/request.py"
       ],
       "secret": false,
       "type": "number",
@@ -5172,28 +5172,28 @@
       "declarations": [
         {
           "default": 240,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
         },
         {
           "default": 240,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 3600,
           "minimum": 1,
           "type": "integer"
         },
         {
           "default": 240,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 3600,
           "minimum": 1,
           "type": "integer"
         },
         {
           "default": 240,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": 3600,
           "minimum": 1,
           "type": "integer"
@@ -5207,7 +5207,7 @@
       "minimum": 1,
       "name": "INFINI_VISUAL_GENERATION_TIMEOUT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "integer",
@@ -5217,7 +5217,7 @@
       "declarations": [
         {
           "default": "author_visualpack_v2",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -5231,7 +5231,7 @@
       "minimum": null,
       "name": "INFINI_VISUAL_PIPELINE_PROFILE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -5241,7 +5241,7 @@
       "declarations": [
         {
           "default": 0.12,
-          "file": "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
+          "file": "LocalGenerator/infini_local/pipelines/visual/request.py",
           "maximum": null,
           "minimum": null,
           "type": "number"
@@ -5255,7 +5255,7 @@
       "minimum": null,
       "name": "INFINI_VISUAL_REPAIR_TEMPERATURE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py"
+        "LocalGenerator/infini_local/pipelines/visual/request.py"
       ],
       "secret": false,
       "type": "number",
@@ -5265,7 +5265,7 @@
       "declarations": [
         {
           "default": true,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -5279,7 +5279,7 @@
       "minimum": null,
       "name": "INFINI_VISUAL_REQUIRE_ITEM_SPRITE",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -5289,7 +5289,7 @@
       "declarations": [
         {
           "default": false,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -5303,7 +5303,7 @@
       "minimum": null,
       "name": "INFINI_VISUAL_REQUIRE_ZIMAGE_BACKEND",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -5313,7 +5313,7 @@
       "declarations": [
         {
           "default": true,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -5327,7 +5327,7 @@
       "minimum": null,
       "name": "INFINI_VISUAL_STRICT_AI_AUTHORSHIP",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -5367,7 +5367,7 @@
       "declarations": [
         {
           "default": true,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "boolean"
@@ -5381,7 +5381,7 @@
       "minimum": null,
       "name": "INFINI_ZIMAGE_POSITIVE_ONLY",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -5391,7 +5391,7 @@
       "declarations": [
         {
           "default": "auto",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -5405,7 +5405,7 @@
       "minimum": null,
       "name": "INFINI_ZIMAGE_PROMPT_CONTRACT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/core/images/config.py"
       ],
       "secret": false,
       "type": "string",
@@ -5429,7 +5429,7 @@
       "declarations": [
         {
           "default": 2200,
-          "file": "LocalGenerator/infini_local/pipelines/sprite_postprocess.py",
+          "file": "LocalGenerator/infini_local/pipelines/images/retry.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
@@ -5443,7 +5443,7 @@
       "minimum": null,
       "name": "INFINI_ZIMAGE_RETRY_PROMPT_LIMIT",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/sprite_postprocess.py"
+        "LocalGenerator/infini_local/pipelines/images/retry.py"
       ],
       "secret": false,
       "type": "integer",
@@ -5452,7 +5452,7 @@
   ],
   "errors": [],
   "fieldCount": 222,
-  "fingerprint": "5a94273a7402ea2f37af9422793c43fd16c750801f23d8e95c59ae27d646f007",
+  "fingerprint": "3af862113d1cb78642b69eebd38f23c7c9503fae74f4452b7b0061d5b0feeba2",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

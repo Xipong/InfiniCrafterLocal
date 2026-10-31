@@ -1,10 +1,16 @@
 """History authoring distinguishes actual positions, poses, sampling and opacity."""
+
+from infini_local.core.vfx import contract as vfx_contract
+from infini_local.core.vfx import projection as vfx_projection
+from infini_local.core.vfx import surface as vfx_surface
+from infini_local.core.vfx import validation as vfx_validation
+
 import copy
 
 import pytest
 
 from infini_local.core.schema_validation import strict_schema_errors
-from infini_local.core.vfx_history_contract import history_schema, history_slot_clauses
+from infini_local.core.vfx.history import history_schema, history_slot_clauses
 
 
 def trail(draw="stroke"):
@@ -71,12 +77,11 @@ def test_sparse_or_empty_requested_history_is_not_rewritten():
 
 
 def history_case(draw="stroke"):
-    from infini_local.core import vfx_manifest as vfx
     from test_low_level_three_stage_pipeline import _accepted_visual_data
     data = _accepted_visual_data("door_on_chain")
-    pair = next(p for p in vfx.vfx_director_surface(data)["runtimePairs"]
+    pair = next(p for p in vfx_surface.vfx_director_surface(data)["runtimePairs"]
                 if p["entityId"] != data["runtimeProgram"]["itemEntityId"] and p["event"] == "periodic")
-    raw = {"schema": vfx.VFX_DIRECTOR_SCHEMA, "slots": [{
+    raw = {"schema": vfx_contract.VFX_DIRECTOR_SCHEMA, "slots": [{
         "id": "authored_history", "entityId": pair["entityId"], "event": pair["event"],
         "rendererKind": "historyTrail", "anchor": "self", "blend": "alpha", "layer": "AfterProjectiles",
         "trail": trail(draw),
@@ -86,43 +91,43 @@ def history_case(draw="stroke"):
 
 @pytest.mark.parametrize("draw", ["stroke", "sprites"])
 def test_actual_director_compile_wire_preserves_complete_history_design(draw):
-    from infini_local.core import vfx_manifest as vfx
     data, raw = history_case(draw)
     before = copy.deepcopy(raw)
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"], report["errors"]
     assert report["normalized"] == raw
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "history-contract-test")
-    assert vfx.validate_vfx_manifest_wire(data)["ok"]
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "history-contract-test")
+    assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
     assert data["vfxManifest"]["slots"][0]["trail"] == raw["slots"][0]["trail"]
     assert raw == before
 
 
 def test_history_texture_requires_exact_bound_producer():
-    from infini_local.core import vfx_manifest as vfx
     data, raw = history_case("sprites")
     entity_id = raw["slots"][0]["entityId"]
     entity = next(e for e in data["runtimeProgram"]["entities"] if e["id"] == entity_id)
     entity["visual"]["assetMode"] = "no_asset"
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert not report["ok"]
     raw["slots"][0]["trail"]["texture"] = {"source": "asset", "assetId": "missing", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
-    assert not vfx.validate_vfx_director_output(raw, data)["ok"]
+    assert not vfx_validation.validate_vfx_director_output(raw, data)["ok"]
 
 
 def test_history_leaf_repair_keeps_pose_sampling_and_width_frozen():
-    from infini_local.core import vfx_manifest as vfx
+    import infini_local.core.vfx.contract as vfx_contract
+    import infini_local.core.vfx.repair as vfx_repair
+    import infini_local.core.vfx.validation as vfx_validation
     data, raw = history_case("sprites")
     raw["slots"][0]["trail"]["opacityProfile"]["middle"] = 2
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert not report["ok"]
-    scope = vfx._build_vfx_repair_scope(raw, report["errors"])
+    scope = vfx_repair._build_vfx_repair_scope(raw, report["errors"])
     candidate = copy.deepcopy(raw["slots"][0])
     candidate["trail"]["opacityProfile"]["middle"] = 0.3
     candidate["trail"].update(pose="current", sampleStepTicks=1, scale=3)
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [candidate], "note": "repair middle opacity only"}
-    repaired, audit = vfx._apply_vfx_repair_patch(data, raw, patch, scope, return_audit=True)
-    assert vfx.validate_vfx_director_output(repaired, data)["ok"]
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [candidate], "note": "repair middle opacity only"}
+    repaired, audit = vfx_repair._apply_vfx_repair_patch(data, raw, patch, scope, return_audit=True)
+    assert vfx_validation.validate_vfx_director_output(repaired, data)["ok"]
     expected = copy.deepcopy(raw)
     expected["slots"][0]["trail"]["opacityProfile"]["middle"] = 0.3
     assert repaired == expected

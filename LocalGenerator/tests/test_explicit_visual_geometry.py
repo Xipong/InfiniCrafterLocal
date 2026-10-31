@@ -5,7 +5,10 @@ import pytest
 
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.pipelines import visual_generation_pipeline as visual
+import infini_local.pipelines.visual.contract as visual_contract
+import infini_local.pipelines.visual.repair as visual_repair
+import infini_local.pipelines.visual.repair_scope as visual_repair_scope
+import infini_local.pipelines.visual.stage as visual_stage
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 from test_low_level_three_stage_pipeline import _visual_kit
@@ -24,7 +27,7 @@ def case():
 
 def validate(data, kit):
     runtime = data["runtimeProgram"]
-    return visual._validate_kit(kit, [e["id"] for e in runtime["entities"]], runtime["itemEntityId"], accepted_data=data)
+    return visual_contract._validate_kit(kit, [e["id"] for e in runtime["entities"]], runtime["itemEntityId"], accepted_data=data)
 
 
 def test_geometry_is_literal_through_visual_and_delivered_wire():
@@ -32,7 +35,7 @@ def test_geometry_is_literal_through_visual_and_delivered_wire():
     before = copy.deepcopy(data["runtimeProgram"])
     accepted, errors = validate(data, kit)
     assert accepted is not None, errors
-    result = sanitize_recipe_for_delivery(visual._apply_kit(data, accepted))
+    result = sanitize_recipe_for_delivery(visual_stage._apply_kit(data, accepted))
     entity = next(e for e in result["runtimeProgram"]["entities"] if e["id"] == row["entityId"])
     assert entity["visual"]["geometry"] == row["geometry"]
     assert validate_runtime_wire(result)["ok"]
@@ -80,12 +83,12 @@ def test_geometry_repair_keeps_other_valid_leaves_frozen():
     _, errors = validate(data, kit)
     runtime = data["runtimeProgram"]
     ids = [e["id"] for e in runtime["entities"]]
-    scope = visual._build_visual_repair_scope(kit, errors, ids, runtime["itemEntityId"])
+    scope = visual_repair_scope._build_visual_repair_scope(kit, errors, ids, runtime["itemEntityId"])
     changed = copy.deepcopy(row)
     changed["geometry"].update(opacity=0.25, color="#ffffff", widthPx=99)
-    patch = {"schema": visual.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": None,
+    patch = {"schema": visual_contract.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": None,
              "entitiesUpsert": [changed], "entityIdsDelete": [], "entityIndicesDelete": [], "note": "repair opacity"}
-    repaired, audit = visual._apply_visual_repair_patch(kit, patch, scope, ids, return_audit=True)
+    repaired, audit = visual_repair._apply_visual_repair_patch(kit, patch, scope, ids, return_audit=True)
     accepted, errors = validate(data, repaired)
     assert accepted is not None, errors
     geometry = next(r["geometry"] for r in accepted["entities"] if r["entityId"] == row["entityId"])
@@ -99,8 +102,8 @@ def test_scoped_geometry_repair_requests_only_invalid_leaf():
     _, errors = validate(data, kit)
     runtime = data["runtimeProgram"]
     ids = [e["id"] for e in runtime["entities"]]
-    scope = visual._build_visual_repair_scope(kit, errors, ids, runtime["itemEntityId"])
-    schema = visual._scoped_visual_repair_schema(ids, False, runtime["itemEntityId"], scope, kit)
+    scope = visual_repair_scope._build_visual_repair_scope(kit, errors, ids, runtime["itemEntityId"])
+    schema = visual_repair_scope._scoped_visual_repair_schema(ids, False, runtime["itemEntityId"], scope, kit)
     entity_schema = schema["properties"]["entitiesUpsert"]["items"]
     assert set(entity_schema["properties"]) == {"entityId", "geometry"}
     assert set(entity_schema["properties"]["geometry"]["properties"]) == {"opacity"}
@@ -108,7 +111,7 @@ def test_scoped_geometry_repair_requests_only_invalid_leaf():
 
 def test_saved_missing_geometry_preserves_wire_but_invalid_present_fails():
     data, kit, row = case()
-    projected = visual._apply_kit(data, kit)
+    projected = visual_stage._apply_kit(data, kit)
     entity = next(e for e in projected["runtimeProgram"]["entities"] if e["id"] == row["entityId"])
     entity["visual"].pop("geometry")
     assert validate_runtime_wire(projected)["ok"]
@@ -122,13 +125,13 @@ def test_geometry_repair_removes_only_unknown_nested_field():
     _, errors = validate(data, kit)
     runtime = data["runtimeProgram"]
     ids = [e["id"] for e in runtime["entities"]]
-    scope = visual._build_visual_repair_scope(kit, errors, ids, runtime["itemEntityId"])
+    scope = visual_repair_scope._build_visual_repair_scope(kit, errors, ids, runtime["itemEntityId"])
     changed = copy.deepcopy(row)
     changed["geometry"].pop("inventedGlow")
     changed["geometry"]["color"] = "#ffffff"
-    patch = {"schema": visual.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": None,
+    patch = {"schema": visual_contract.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": None,
              "entitiesUpsert": [changed], "entityIdsDelete": [], "entityIndicesDelete": [], "note": "remove unknown field"}
-    repaired, _ = visual._apply_visual_repair_patch(kit, patch, scope, ids, return_audit=True)
+    repaired, _ = visual_repair._apply_visual_repair_patch(kit, patch, scope, ids, return_audit=True)
     accepted, errors = validate(data, repaired)
     assert accepted is not None, errors
     geometry = next(r["geometry"] for r in accepted["entities"] if r["entityId"] == row["entityId"])
@@ -136,9 +139,9 @@ def test_geometry_repair_removes_only_unknown_nested_field():
 
 
 def test_vfx_receives_explicit_body_shape_not_collision_shape_or_light():
-    from infini_local.core.vfx_manifest import _body_presentation
+    from infini_local.core.vfx.surface import _body_presentation
     data, kit, row = case()
-    projected = visual._apply_kit(data, kit)
+    projected = visual_stage._apply_kit(data, kit)
     entity = next(e for e in projected["runtimeProgram"]["entities"] if e["id"] == row["entityId"])
     entity["lashGeometry"] = {}
     entity["light"] = {"color": "#ff0000"}

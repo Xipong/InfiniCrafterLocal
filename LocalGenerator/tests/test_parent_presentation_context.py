@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from infini_local.pipelines.native_attack_tables import unpack_attack_tables
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
-from infini_local.pipelines.parent_presentation_context import presentation_attack_reference, presentation_parent_card_for_llm
+from infini_local.pipelines.context.attack_tables import unpack_attack_tables
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
+from infini_local.pipelines.context.presentation import presentation_attack_reference, presentation_parent_card_for_llm
 
 
 def captured_parent():
@@ -48,7 +48,7 @@ def test_unknown_parent_attack_schema_and_generated_appearance_remain_literal(st
 @pytest.mark.parametrize("repair", [False, True])
 def test_actual_visual_request_exposes_exact_readonly_child_light(monkeypatch, mode, strength, repair):
     from infini_local.core import llm_config
-    from infini_local.pipelines import visual_generation_pipeline as visual
+    import infini_local.pipelines.visual.request as visual_request
     from prompt_packet_helpers import request_dossier
     from test_low_level_three_stage_pipeline import _accepted_visual_data, _visual_kit
     from test_parent_attack_reference import _capture_stage, _CapturedRequest
@@ -58,11 +58,11 @@ def test_actual_visual_request_exposes_exact_readonly_child_light(monkeypatch, m
     entity["light"] = {"strength": strength, "color": "yellow"}
     before = copy.deepcopy(child)
     captured = []
-    _capture_stage(monkeypatch, visual, captured)
+    _capture_stage(monkeypatch, visual_request, captured)
     scope = {"fieldPermissions": {"itemPaths": ["prompt"], "entities": [], "equipOverlayPaths": []}}
     kwargs = {"repair_errors": [{"path": "$.item.prompt"}], "previous": _visual_kit(child), "repair_scope": scope} if repair else {}
     with pytest.raises(_CapturedRequest):
-        visual._request_visual_kit(child, {}, {}, **kwargs)
+        visual_request._request_visual_kit(child, {}, {}, **kwargs)
     packet = request_dossier(captured[0])
     rows = packet["runtimeEntitiesReadOnly" if repair else "runtimeEntities"]
     assert next(row for row in rows if row["id"] == entity["id"])["light"] == {"strength": strength, "color": "yellow"}
@@ -78,8 +78,10 @@ def test_actual_visual_request_exposes_exact_readonly_child_light(monkeypatch, m
 @pytest.mark.parametrize("strength", [0.0, 0.6])
 @pytest.mark.parametrize("repair", [False, True])
 def test_actual_vfx_request_retains_child_light_even_without_parent_design_context(monkeypatch, mode, strength, repair):
-    from infini_local.core import llm_config, vfx_manifest as vfx
-    from infini_local.pipelines import vfx_generation_pipeline as transport
+    from infini_local.core import llm_config
+    import infini_local.pipelines.vfx.prompt as vfx_prompt
+    import infini_local.pipelines.vfx.stage as vfx_stage
+    from infini_local.pipelines.vfx import request as transport
     from prompt_packet_helpers import request_dossier
     from test_low_level_three_stage_pipeline import _accepted_visual_data
     from test_parent_attack_reference import _capture_stage, _CapturedRequest
@@ -94,7 +96,7 @@ def test_actual_vfx_request_retains_child_light_even_without_parent_design_conte
     scope = {"fieldPermissions": {"globals": {}, "slots": [], "assets": []}}
     kwargs = {"repair_errors": [], "previous": {}, "repair_scope": scope} if repair else {}
     with pytest.raises(_CapturedRequest):
-        vfx._request(transport.call_llm_vfx_director, vfx._prompt_packet(child, {}, {}), **kwargs)
+        vfx_stage._request(transport.call_llm_vfx_director, vfx_prompt._prompt_packet(child, {}, {}), **kwargs)
     packet = request_dossier(captured[0])
     rows = packet["acceptedRuntimeProgramReadOnly"]["entities"]
     assert next(row for row in rows if row["id"] == entity["id"])["light"] == {"strength": strength, "color": "yellow"}

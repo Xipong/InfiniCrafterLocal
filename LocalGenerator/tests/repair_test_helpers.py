@@ -14,8 +14,8 @@ from infini_local.core.runtime_authoring.validator import validate_runtime_progr
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.binding_use_policy import action_kind
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-from infini_local.pipelines import author_item_contract as contract
-from infini_local.pipelines import llm_authoring_pipeline as author
+from infini_local.pipelines.author import item_contract as contract
+from infini_local.pipelines.author import request as author
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_codex_subscription_contract import _encode_nullable_fixture

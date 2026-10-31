@@ -37,7 +37,7 @@ def read(path: str) -> str:
 def generated_parent_semantics_preserved() -> bool:
     # Execute the canonical projection. Requiring individual key spellings in
     # its source incorrectly rejects a lossless whole-object deep copy.
-    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
     definition = {
         "id": "audit_parent", "gameplay": {"potion": True, "ammoCategory": "bullet",
             "ammoProjectileId": 14, "ammoShootSpeedPxPerTick": 2.5, "notAmmo": False,
@@ -72,9 +72,9 @@ def report() -> dict[str, Any]:
     dto = read("ModSources/InfiniCrafterLocal/Common/Models/Contracts/RuntimeProgramSpec.cs")
     projectile = read("ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.cs")
     executors = read("ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Executors.cs")
-    profiles = read("LocalGenerator/infini_local/pipelines/llm_profiles.py")
-    image_config = read("LocalGenerator/infini_local/pipelines/pipeline_visual_config.py")
-    parent_cards = read("LocalGenerator/infini_local/pipelines/parent_context_cards.py")
+    profiles = read("LocalGenerator/infini_local/pipelines/transport/profiles.py")
+    image_config = read("LocalGenerator/infini_local/core/images/config.py")
+    parent_cards = read("LocalGenerator/infini_local/pipelines/context/cards.py")
     parent_constants = read("LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py")
     generator_client = read("ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.ParentFacts.cs")
     generated_item = read("ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.Use.cs")
@@ -185,7 +185,7 @@ def report() -> dict[str, Any]:
     # controls, not capabilities that documentation must promise to preserve.
     from infini_local.core.runtime_authoring.program_schema import author_item_response_schema
     from infini_local.core.schema_validation import strict_schema_errors
-    from infini_local.core.vfx_material_contract import rgb_schema
+    from infini_local.core.vfx.materials import rgb_schema
 
     category_schema = author_item_response_schema()["properties"]["category"]
     categories = category_schema["enum"]

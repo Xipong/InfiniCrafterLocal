@@ -10,8 +10,12 @@ from typing import Any
 
 import pytest
 from infini_local.core import llm_config
-from infini_local.core import vfx_manifest as vfx
-from infini_local.pipelines import vfx_generation_pipeline as stage
+import infini_local.core.vfx.contract as vfx_contract
+import infini_local.core.vfx.projection as vfx_projection
+import infini_local.core.vfx.repair as vfx_repair
+import infini_local.core.vfx.validation as vfx_validation
+import infini_local.pipelines.vfx.stage as vfx_stage
+from infini_local.pipelines.vfx import request as stage
 from tests.test_repair_vfx_contract import _offline_transport
 from tests.vfx_material_fixtures import _data, _legacy, _shape, _native
 
@@ -46,17 +50,17 @@ def test_selected_sample_survives_director_compiler_and_wire(monkeypatch, sound_
     before = copy.deepcopy(data)
     raw = _sound(data, sound_id, projectile=projectile)
     raw_before = copy.deepcopy(raw)
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"], report["errors"]
     assert report["normalized"]["slots"][0]["soundId"] == sound_id
     sent = _offline_transport(monkeypatch, f"sound_{projectile}_{sound_id}", [raw])
-    final = vfx.attach_vfx_manifest(data, "exact-sound", llm_director=stage.call_llm_vfx_director)
+    final = vfx_stage.attach_vfx_manifest(data, "exact-sound", llm_director=stage.call_llm_vfx_director)
     assert len(sent) == 1
     packet = request_dossier(sent[0])
     assert packet["runtimeVocabulary"]["soundId"] == list(SOUND_IDS)
     assert packet["outputSchema"]["properties"]["slots"]["items"]["properties"]["soundId"]["enum"] == list(SOUND_IDS)
     assert final["vfxManifest"]["slots"][0]["soundId"] == sound_id
-    assert vfx.validate_vfx_manifest_wire(json.loads(json.dumps(final)))["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(json.loads(json.dumps(final)))["ok"]
     assert final["runtimeProgram"] == before["runtimeProgram"]
     assert final["gameplay"] == before["gameplay"]
     assert raw == raw_before
@@ -77,12 +81,12 @@ def test_invalid_present_sound_is_rejected_by_director_and_persisted_wire(bad, r
     raw = _sound(data) if renderer == "soundCue" else _shape(data) if renderer == "shape" else _native(data, renderer)
     raw["slots"][0][field] = bad
     before = copy.deepcopy(raw)
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert not report["ok"]
     assert {e["path"] for e in report["errors"]} == {"$.slots[0]." + field}
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "bad-sound")
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "bad-sound")
     wire_before = copy.deepcopy(data)
-    persisted = vfx.validate_vfx_manifest_wire(data)
+    persisted = vfx_validation.validate_vfx_manifest_wire(data)
     assert not persisted["ok"], persisted
     assert {e["path"] for e in persisted["errors"]} == {"$.vfxManifest.slots[0]." + field}
     assert data == wire_before and raw == before
@@ -100,15 +104,15 @@ def test_sound_absence_refuses_director_persisted_wire_and_cache_without_default
     for field in missing:
         raw["slots"][0].pop(field)
     raw_before = copy.deepcopy(raw)
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert not report["ok"]
     assert {e["path"] for e in report["errors"]} == {"$.slots[0]." + field for field in missing}
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "retired-sound-absence")
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "retired-sound-absence")
     # Historical alpha/phase values must not make missing audio choices valid.
     data["vfxManifest"]["slots"][0].update(alpha=0.61, phaseOffset=-0.75)
     persisted = json.loads(json.dumps(data))
     before = copy.deepcopy(persisted)
-    report = vfx.validate_vfx_manifest_wire(persisted)
+    report = vfx_validation.validate_vfx_manifest_wire(persisted)
     assert not report["ok"], report
     assert {e["path"] for e in report["errors"]} == {"$.vfxManifest.slots[0]." + field for field in (*missing, "alpha")}
     assert not world_storage.is_deliverable_recipe_payload(persisted, check_assets=False)
@@ -117,11 +121,11 @@ def test_sound_absence_refuses_director_persisted_wire_and_cache_without_default
     # Exercise the actual file reader with a valid current cache record whose
     # only mutations are the retired audio absences and old alpha/phase inputs.
     current = _data()
-    current["vfxManifest"] = vfx._compile_manifest(current, _sound(current), "current-cache-sound")
+    current["vfxManifest"] = vfx_projection._compile_manifest(current, _sound(current), "current-cache-sound")
     from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
     current.update(id="sound_cache_probe", schemaVersion=5, runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION,
                    sourceMode="offline_contract_fixture")
-    from infini_local.pipelines import visual_delivery_gate
+    from infini_local.pipelines.visual import delivery as visual_delivery_gate
     from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png, synthetic_no_image_execution_control
     monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path)
     current["visual"] = {"preferredCanvasSize": 32}
@@ -171,22 +175,22 @@ def test_real_repair_corrects_only_diagnosed_sound_leaf(monkeypatch, bad, mode):
         raw["slots"][0].pop("soundId")
     else:
         raw["slots"][0]["soundId"] = bad
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert not report["ok"]
-    scope = vfx._build_vfx_repair_scope(raw, report["errors"])
+    scope = vfx_repair._build_vfx_repair_scope(raw, report["errors"])
     assert scope["fieldPermissions"] == {"globals": {}, "slots": [{"slotId": "explicit_sound", "paths": paths}], "assets": []}
     candidate = copy.deepcopy(accepted["slots"][0])
     candidate.update(alpha=0.1, rendererKind="nativeLight",  entityId=data["runtimeProgram"]["entities"][1]["id"], event="on_kill")
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "sound only", "slotsUpsert": [candidate], "slotIdsDelete": ["explicit_sound"]}
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "note": "sound only", "slotsUpsert": [candidate], "slotIdsDelete": ["explicit_sound"]}
     raw_before = copy.deepcopy(raw)
     sent = _offline_transport(monkeypatch, "sound_repair_" + str(bad) + mode, [raw, patch])
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
-    final = vfx.attach_vfx_manifest(data, "sound-repair", llm_director=stage.call_llm_vfx_director)
+    final = vfx_stage.attach_vfx_manifest(data, "sound-repair", llm_director=stage.call_llm_vfx_director)
     assert final["debug"]["vfxDirectorRaw"] == accepted
     assert raw == raw_before
     assert final["gameplay"] == before["gameplay"] and final["runtimeProgram"] == before["runtimeProgram"]
     assert final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"] == ["$.slotsUpsert[0]." + path for path in paths]
-    assert vfx.validate_vfx_manifest_wire(final)["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(final)["ok"]
     assert len(sent) == 2
     director, repair = [request_dossier(r) for r in sent]
     assert repair["runtimeVocabularyReadOnly"]["soundId"] == director["runtimeVocabulary"]["soundId"] == list(SOUND_IDS)
@@ -206,8 +210,8 @@ def test_sound_wire_survives_delivery_projection_and_real_cache_shape_admission(
     data.update(id="sound_cache_probe", schemaVersion=5, runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION,
                 sourceMode="offline_contract_fixture")
     raw = _sound(data, sound_id)
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "cache-sound")
-    from infini_local.pipelines import visual_delivery_gate
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "cache-sound")
+    from infini_local.pipelines.visual import delivery as visual_delivery_gate
     from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png, synthetic_no_image_execution_control
     monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path)
     data["visual"] = {"preferredCanvasSize": 32}
@@ -240,11 +244,11 @@ def test_non_sound_wire_omission_remains_valid_without_audio_materialization(sil
     raw = _shape(data)
     if silent:
         raw["slots"] = []
-    assert vfx.validate_vfx_director_output(raw, data)["ok"]
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "non-sound-omission")
+    assert vfx_validation.validate_vfx_director_output(raw, data)["ok"]
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "non-sound-omission")
     persisted = json.loads(json.dumps(data))
     before = copy.deepcopy(persisted)
-    assert vfx.validate_vfx_manifest_wire(persisted)["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(persisted)["ok"]
     assert persisted == before
     assert all("soundId" not in slot and "sound" not in slot for slot in persisted["vfxManifest"]["slots"])
 
@@ -254,11 +258,11 @@ def test_real_transport_never_strips_present_null_to_legacy_absence(monkeypatch,
     from infini_local.core.errors import PlannerUnavailable
     data = _data()
     raw = _sound(data, None)
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "no sound correction"}
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "note": "no sound correction"}
     sent = _offline_transport(monkeypatch, "null_sound_noop_" + mode, [raw, patch])
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     with pytest.raises(PlannerUnavailable, match="VFX Repair did not produce"):
-        vfx.attach_vfx_manifest(data, "null-audio", llm_director=stage.call_llm_vfx_director)
+        vfx_stage.attach_vfx_manifest(data, "null-audio", llm_director=stage.call_llm_vfx_director)
     assert len(sent) == 2 and "vfxManifest" not in data
     assert raw["slots"][0]["soundId"] is None
     assert request_dossier(sent[1])["repairScope"]["fieldPermissions"]["slots"] == [{"slotId": "explicit_sound", "paths": ["soundId"]}]
@@ -269,14 +273,14 @@ def test_foreign_sound_leaf_can_be_deleted_without_thawing_valid_renderer(monkey
     accepted = _shape(data)
     raw = copy.deepcopy(accepted)
     raw["slots"][0]["soundId"] = "Item4"
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert {e["path"] for e in report["errors"]} == {"$.slots[0].soundId"}
-    scope = vfx._build_vfx_repair_scope(raw, report["errors"])
+    scope = vfx_repair._build_vfx_repair_scope(raw, report["errors"])
     assert scope["fieldPermissions"]["slots"] == [{"slotId": "explicit_shape", "paths": ["soundId"], "deletePaths": ["soundId"]}]
     candidate = copy.deepcopy(accepted["slots"][0])
     candidate.update(rendererKind="nativeLight",  alpha=0.1)
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "delete only foreign sound field", "slotsUpsert": [candidate]}
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "note": "delete only foreign sound field", "slotsUpsert": [candidate]}
     _offline_transport(monkeypatch, "foreign_sound_delete", [raw, patch])
-    final = vfx.attach_vfx_manifest(data, "foreign-sound", llm_director=stage.call_llm_vfx_director)
+    final = vfx_stage.attach_vfx_manifest(data, "foreign-sound", llm_director=stage.call_llm_vfx_director)
     assert final["debug"]["vfxDirectorRaw"] == accepted
-    assert vfx.validate_vfx_manifest_wire(final)["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(final)["ok"]

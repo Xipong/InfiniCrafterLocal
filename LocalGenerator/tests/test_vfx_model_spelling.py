@@ -1,9 +1,14 @@
 """Model spelling is lossless; canonical material wire and clocks remain unchanged."""
+
+from infini_local.core.vfx import contract as vfx_contract
+from infini_local.pipelines.vfx import stage as vfx_stage
+from infini_local.core.vfx import validation as vfx_validation
+
 import copy
 
 import pytest
 
-from infini_local.core.vfx_material_contract import (
+from infini_local.core.vfx.materials import (
     element_schema, path_schema, screen_shake_schema,
     vfx_model_context, vfx_model_payload, vfx_model_schema,
 )
@@ -71,8 +76,7 @@ def test_repair_context_paths_fragments_and_frozen_schema_share_spelling():
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_actual_provider_short_response_repairs_exact_field_and_preserves_wire(monkeypatch, mode):
     import json
-    from infini_local.core import vfx_manifest as vfx
-    from infini_local.pipelines import vfx_generation_pipeline as stage
+    from infini_local.pipelines.vfx import request as stage
     from prompt_packet_helpers import request_dossier
     from vfx_material_fixtures import _data, _sprite
 
@@ -90,7 +94,7 @@ def test_actual_provider_short_response_repairs_exact_field_and_preserves_wire(m
     }
     initial = copy.deepcopy(native)
     initial["slots"][0]["element"] = dict(material, speedMax=25)
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "speed limit only",
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "note": "speed limit only",
              "slotsUpsert": [dict(initial["slots"][0], element=material)]}
     pending, sent = iter([initial, patch]), []
 
@@ -104,9 +108,9 @@ def test_actual_provider_short_response_repairs_exact_field_and_preserves_wire(m
     monkeypatch.setattr(stage, "llm_json_response_format", lambda name, **kw:
                         {"type": "json_schema", "json_schema": {"name": name, "schema": kw["schema"], "strict": True}}
                         if mode == "json_schema" else {"type": "json_object"})
-    result = vfx.attach_vfx_manifest(data, "short-vfx-repair", llm_director=stage.call_llm_vfx_director)
+    result = vfx_stage.attach_vfx_manifest(data, "short-vfx-repair", llm_director=stage.call_llm_vfx_director)
     assert result["debug"]["vfxDirectorRaw"] == native
-    assert vfx.validate_vfx_manifest_wire(result)["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(result)["ok"]
     assert len(sent) == 2
     initial_context, repair = map(request_dossier, sent)
     element = initial_context["outputSchema"]["properties"]["slots"]["items"]["properties"]["element"]
@@ -123,15 +127,15 @@ def test_actual_provider_short_response_repairs_exact_field_and_preserves_wire(m
 
 
 def test_fresh_provider_does_not_accept_old_wire_spelling(monkeypatch):
-    from infini_local.core.vfx_manifest import MalformedVfxDirectorOutput
-    from infini_local.pipelines import vfx_generation_pipeline as stage
+    from infini_local.core.vfx.contract import MalformedVfxDirectorOutput
+    from infini_local.pipelines.vfx import request as stage
     monkeypatch.setattr(stage, "USE_LLM", True)
     monkeypatch.setattr(stage, "resolve_llm_model", lambda: "explicit-offline-model")
     monkeypatch.setattr(stage, "llm_chat_json", lambda *_a, **_kw: {
         "choices": [{"message": {"content": '{"slots":[{"element":{"speedMinPxPerTick":1}}]}'}}]})
-    from infini_local.core import vfx_manifest as vfx
+    import infini_local.pipelines.vfx.prompt as vfx_prompt
     from vfx_material_fixtures import _data
-    output = stage.call_llm_vfx_director("test", vfx._prompt_packet(_data(), None, None), 100, 0, 1)
+    output = stage.call_llm_vfx_director("test", vfx_prompt._prompt_packet(_data(), None, None), 100, 0, 1)
     assert isinstance(output, MalformedVfxDirectorOutput)
     assert "persisted-wire spelling" in output.error
 

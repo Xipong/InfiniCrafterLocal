@@ -3,7 +3,7 @@
 <a id="current"></a>
 ## Текущая архитектура
 
-[combine_balance.stat_profile_for](../../../LocalGenerator/infini_local/pipelines/combine_balance.py#L60) вычисляет broad **numeric parent guidance**, а [llm_authoring_prompt._balance_corridor](../../../LocalGenerator/infini_local/pipelines/llm_authoring_prompt.py#L182) проецирует его в Author packet. Источники: damage/useTime, tool power, sustain/defense, rarity/value и explicit generated generationDepth. Names/tags/category/tooltip/knowledge не читаются для corridor. Формулы не копируются в prose или новые modules.
+[combine_balance.stat_profile_for](../../../LocalGenerator/infini_local/pipelines/combine_balance.py#L60) вычисляет broad **numeric parent guidance**, а [llm_authoring_prompt._balance_corridor](../../../LocalGenerator/infini_local/pipelines/author/prompt.py#L182) проецирует его в Author packet. Источники: damage/useTime, tool power, sustain/defense, rarity/value и explicit generated generationDepth. Names/tags/category/tooltip/knowledge не читаются для corridor. Формулы не копируются в prose или новые modules.
 
 `authority=source_numeric_facts_only`, `gameplayRouter=false`: powerBudget и оставшийся broadEnvelope не разрешают коду выбрать mechanic/kind/input/asset или переписать design. Расчёт рекомендуемого урона и производный коридор damage удалены: packet сохраняет исходный parentDamage, но не превращает лечение, tool power, цену или rarity ID в suggested damage. Урон результата выбирает Author; schema/validator/runtime применяют hard contract/safety bounds, не «идеальный балансер». Current combine path не содержит post-Author `report|safety|normalize` mode policy. Terraria progression guide — human reference, не активный helper/prompt ontology.
 

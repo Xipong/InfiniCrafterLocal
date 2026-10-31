@@ -9,17 +9,18 @@ from pathlib import Path
 
 import pytest
 
-from infini_local.pipelines import visual_delivery_gate as delivery
-from infini_local.pipelines import visual_sprite_generation as generation
+from infini_local.pipelines.visual import delivery
+from infini_local.pipelines.images import stage as generation
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 from tests.vfx_image_fixtures import _data, _request, _existing_texture_data, offline_backend
 
 
 def _retained_delivery():
-    from infini_local.core.vfx_manifest import _compile_manifest, VFX_DIRECTOR_SCHEMA
+    from infini_local.core.vfx.projection import _compile_manifest
+    from infini_local.core.vfx.contract import VFX_DIRECTOR_SCHEMA
     from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     import json
-    from infini_local.pipelines import visual_generation_pipeline as visual
+    import infini_local.pipelines.visual.stage as visual_stage
     from tests.test_low_level_three_stage_pipeline import _visual_kit
 
     # Replay unchanged saved wire through existing presentation adapters. Fresh
@@ -29,7 +30,7 @@ def _retained_delivery():
     saved = json.loads(fixture.read_text(encoding="utf-8"))
     assert validate_runtime_wire(saved)["ok"]
     mechanics = copy.deepcopy(saved["runtimeProgram"])
-    data = visual._apply_kit(saved, _visual_kit(saved))
+    data = visual_stage._apply_kit(saved, _visual_kit(saved))
     data.update(id="docx_image_ready_offline", sourceMode="generated", schemaVersion=5,
                 runtimeApiVersion="infini.runtime-program.v5", recipeKey="docx_readiness_offline")
     data["vfxManifest"] = _compile_manifest(data, {"schema": VFX_DIRECTOR_SCHEMA, "slots": []}, "offline_recipe")
@@ -85,7 +86,7 @@ def test_retained_native_fixture_is_real_final_offline_projection(offline_backen
     retained = json.loads((root / "docx-image-ready-delivered.json").read_text(encoding="utf-8"))
     from collections import Counter
     from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-    from infini_local.core.vfx_manifest import validate_vfx_manifest_wire
+    from infini_local.core.vfx.validation import validate_vfx_manifest_wire
     # This native witness fixes image delivery, not every later gameplay field.
     # Preserve its historical bytes and prove both payloads remain consumable.
     for payload in (retained, outgoing):

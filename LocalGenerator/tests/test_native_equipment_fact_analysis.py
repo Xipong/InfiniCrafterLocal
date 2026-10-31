@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools/generate"))
 from native_hit_status_analysis import Instruction as I
 from native_equipment_fact_analysis import equipment_facts, armor_set_facts
-from infini_local.pipelines.parent_context_pipeline import compact_item_raw_for_llm
+from infini_local.pipelines.context.parents import compact_item_raw_for_llm
 
 
 def program(ops):

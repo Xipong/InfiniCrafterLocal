@@ -8,16 +8,18 @@ import json
 from pathlib import Path
 from urllib.parse import urlencode
 import pytest
-from infini_local.core.vfx_manifest import validate_vfx_manifest_wire
-from infini_local.pipelines import visual_delivery_gate, visual_sprite_generation
-from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+from infini_local.core.vfx.validation import validate_vfx_manifest_wire
+from infini_local.pipelines.visual import delivery as visual_delivery_gate
+from infini_local.pipelines.images import stage as visual_sprite_generation
+from infini_local.pipelines.visual.assets import build_visual_asset_plan
 from infini_local.pipelines.combine_pipeline import _cached_payload_report
 from infini_local.services import asset_sync_service
 from infini_local.storage import world_storage
 from infini_local.web.server_utility_routes import ServerUtilityRoutes
 import threading
-from infini_local.pipelines.visual_generation_pipeline import _apply_kit, _validate_kit
-from infini_local.core.vfx_manifest import VFX_MANIFEST_SCHEMA, _compile_manifest, _hydrate_vfx_asset_prompts
+from infini_local.pipelines.visual.stage import _apply_kit
+from infini_local.pipelines.visual.contract import _validate_kit
+from infini_local.core.vfx.projection import _compile_manifest, _hydrate_vfx_asset_prompts
 from infini_local.qa.live_no_image_fixture import write_no_image_fixture_png
 from infini_local.services.sdcpp_service import ImageRequestGate
 from infini_local.web.vfx_debug_routes import _sample_data
@@ -331,7 +333,7 @@ def _equipment_data() -> dict:
 
 
 def _equipment_kit(*, include_overlay: bool) -> dict:
-    from infini_local.pipelines.visual_generation_pipeline import VISUAL_KIT_SCHEMA
+    from infini_local.pipelines.visual.contract import VISUAL_KIT_SCHEMA
     item = {
         "prompt": "literal inventory icon", "negativePrompt": "authored negative exact",
         "silhouette": "compact icon", "visualIdentity": "literal item", "palette": ["steel", "amber"],

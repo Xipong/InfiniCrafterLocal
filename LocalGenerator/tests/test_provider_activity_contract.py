@@ -13,23 +13,21 @@ from urllib.error import HTTPError
 
 import pytest
 from provider_test_support import deliverable_recipe, loopback_server, write_json_response, endpoint_options
-from infini_local.pipelines import llm_admission
+from infini_local.pipelines.transport import admission as llm_admission
 from infini_local.core import llm_config
-from infini_local.pipelines import llm_profiles
+from infini_local.pipelines.transport import profiles as llm_profiles
 from provider_test_support import reset_llm_runtime
-from infini_local.pipelines import (
-    combine_pipeline as pipeline,
-    gameplay_stage,
-    llm_transport as transport,
-    llm_authoring_pipeline as author,
-    generation_debug,
-)
+from infini_local.pipelines import combine_pipeline as pipeline
+from infini_local.pipelines.author import stage as gameplay_stage
+from infini_local.pipelines.transport import client as transport
+from infini_local.pipelines.author import request as author
+from infini_local.pipelines import generation_debug
 from infini_local.services import combine_endpoint as endpoint
 from infini_local.storage import world_storage, world_recipe_runtime as recipes
 from infini_local.web.server_handler import build_handler
 from infini_local.web import http_response_helpers as helpers
 from infini_local.core.errors import PlannerUnavailable
-from infini_local.pipelines.visual_delivery_gate import VisualDeliveryBlocked
+from infini_local.pipelines.visual.delivery import VisualDeliveryBlocked
 
 PAYLOAD = {
     "worldId": "11111111-1111-1111-1111-111111111111",

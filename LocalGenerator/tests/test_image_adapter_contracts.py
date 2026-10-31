@@ -7,12 +7,14 @@ import json
 from pathlib import Path
 import time
 import pytest
-from infini_local.pipelines import image_backend_pipeline as backend
-from infini_local.pipelines import visual_sprite_generation as generation
+from infini_local.pipelines.images import backends as backend
+from infini_local.pipelines.images import stage as generation
 from infini_local.services import codex_auth, asset_sync_service, visual_asset_pipeline
 from PIL import Image, ImageDraw
-from infini_local.pipelines import image_backend_pipeline, visual_delivery_gate, visual_sprite_generation
-from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+from infini_local.pipelines.images import backends as image_backend_pipeline
+from infini_local.pipelines.visual import delivery as visual_delivery_gate
+from infini_local.pipelines.images import stage as visual_sprite_generation
+from infini_local.pipelines.visual.assets import build_visual_asset_plan
 from tests.test_image_attempt_contracts import Response, offline, png
 from tests.vfx_image_fixtures import _data, _request, offline_backend
 from provider_test_support import loopback_server
@@ -411,7 +413,7 @@ def test_vfx_comfy_placeholder_preserves_the_accepted_nonce_digest_calls(adapter
     import hashlib
     from types import SimpleNamespace
     from tests.vfx_image_fixtures import _data, _request
-    from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+    from infini_local.pipelines.visual.assets import build_visual_asset_plan
     root, requests, raw = adapter_transport
     nonce = '0123456789abcdef0123456789abcdef'
     monkeypatch.setattr(generation.uuid, 'uuid4', lambda: SimpleNamespace(hex=nonce))

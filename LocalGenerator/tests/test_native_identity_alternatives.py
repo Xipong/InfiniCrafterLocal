@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from infini_local.pipelines.native_attack_behavior_view import (
+from infini_local.pipelines.context.attack_behavior import (
     _identity_alternatives, known_identity_alternatives, project_attack_behavior,
 )
 
@@ -75,7 +75,7 @@ def test_projected_disclosure_unknown_schema_does_not_authorize_stage_omission(m
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
 def test_actual_author_request_keeps_other_identity_choices_visible(monkeypatch, mode):
     from infini_local.core import llm_config
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from infini_local.pipelines.author.request import build_initial_author_request
     from prompt_packet_helpers import request_dossier, expand_native_source_references
     monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     parents = [{'directProjectileRaw': {'type': entry['identityPredicates']['Projectile.type'],

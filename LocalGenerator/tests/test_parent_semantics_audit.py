@@ -11,7 +11,7 @@ def test_standardization_audit_accepts_exact_deepcopy_parent_projection(monkeypa
     spec.loader.exec_module(audit)
     row = next(row for row in audit.report()["checks"] if row["name"] == "generated_parent_preserves_exact_item_semantics")
     assert row["ok"], row
-    from infini_local.pipelines import parent_context_cards
+    from infini_local.pipelines.context import cards as parent_context_cards
     original = parent_context_cards.raw_parent_card_for_llm
 
     def lossy(*args, **kwargs):

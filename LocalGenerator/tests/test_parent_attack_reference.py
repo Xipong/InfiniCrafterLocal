@@ -5,13 +5,16 @@ owns admission, identity, provenance, coverage and the observation's JSON shape.
 """
 from __future__ import annotations
 
+from infini_local.pipelines.visual import request as visual_request
+
+
 import copy
 import json
 import socket
 
 import pytest
 
-from infini_local.pipelines import llm_authoring_pipeline as author
+from infini_local.pipelines.author import request as author
 from prompt_packet_helpers import expand_native_source_references, request_dossier
 
 
@@ -66,8 +69,8 @@ def test_attack_observation_reaches_serialized_author_without_loss_or_parent_mut
 
 
 def test_producer_owned_nested_keys_are_not_stripped_as_derived_parent_hints():
-    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
-    from infini_local.pipelines.parent_context_pipeline import compact_projectile_profile
+    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
+    from infini_local.pipelines.context.parents import compact_projectile_profile
 
     observation = source_defined_attack_fixture()
     observation["visual"]["frames"] = [{"class": "Fixture.NativeDraw", "tags": [],
@@ -88,7 +91,7 @@ def test_producer_owned_nested_keys_are_not_stripped_as_derived_parent_hints():
 
 @pytest.mark.parametrize("origin", ["live", "fingerprint", "runtime_dump"])
 def test_serialized_author_all_projectile_surfaces_keep_exact_observations(monkeypatch, packet_mode, origin):
-    from infini_local.pipelines import parent_context_pipeline as context
+    from infini_local.pipelines.context import parents as context
     observation = source_defined_attack_fixture()
     observation["visual"]["frames"] = [{"class": "source literal", "tags": [], "semantics": None}]
     # More than the ordinary compact list/depth boundaries, preserving order and
@@ -150,7 +153,7 @@ def test_distinct_attack_references_never_alias_effective_or_ammo_profiles(packe
 
 
 def test_identical_attack_profile_alias_retains_only_top_level_source_difference():
-    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
     observation = source_defined_attack_fixture()
     direct = {"type": 42, "source": "direct fixture", "attackReference": observation}
     same = {**copy.deepcopy(direct), "source": "effective fixture"}
@@ -164,7 +167,7 @@ def test_identical_attack_profile_alias_retains_only_top_level_source_difference
 
 @pytest.mark.parametrize("extra", [{}, {"attackReference": None}, {"attackReference": []}])
 def test_missing_attack_observation_is_not_inferred_from_names_ai_or_other_references(extra):
-    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
     projectile = {"type": 42, "fullName": "Fixture/Attack", "aiStyle": 1,
         "motionReference": {"firstGravityUpdate": 0}, "collisionReference": {"radius": 5}, **extra}
     card = raw_parent_card_for_llm({"directProjectileRaw": projectile})
@@ -188,7 +191,6 @@ def _capture_stage(monkeypatch, module, captured):
 
 
 def test_attack_reference_survives_actual_visual_director_and_design_repair_requests(monkeypatch, packet_mode):
-    from infini_local.pipelines import visual_generation_pipeline as visual
     from test_low_level_three_stage_pipeline import _accepted_visual_data, _visual_kit
     observation = source_defined_attack_fixture()
     observation["visual"]["sourceMembers"] = {"class": "native member", "tags": [], "semantics": None}
@@ -196,11 +198,11 @@ def test_attack_reference_survives_actual_visual_director_and_design_repair_requ
     child = _accepted_visual_data("workbench_blade")
     before = copy.deepcopy((parent, child))
     captured = []
-    _capture_stage(monkeypatch, visual, captured)
+    _capture_stage(monkeypatch, visual_request, captured)
     scope = {"fieldPermissions": {"itemPaths": ["prompt"], "entities": [], "equipOverlayPaths": []}}
     for repair in (False, True):
         with pytest.raises(_CapturedRequest):
-            visual._request_visual_kit(child, parent, parent, **({"repair_errors": [
+            visual_request._request_visual_kit(child, parent, parent, **({"repair_errors": [
                 {"path": "$.item.prompt", "message": "source-defined invalid prompt"}],
                 "previous": _visual_kit(child), "repair_scope": scope} if repair else {}))
     assert len(captured) == 2
@@ -253,7 +255,7 @@ def test_native_attack_context_does_not_widen_actual_frozen_gameplay_repair(monk
 
 
 def test_attack_packet_size_is_measured_and_existing_guard_refuses_instead_of_clipping(packet_mode):
-    from infini_local.pipelines.llm_authoring_prompt import (
+    from infini_local.pipelines.author.prompt import (
         PLANNER_PROMPT_LIMIT_CHARS, planner_prompt_usability_report)
     observation = source_defined_attack_fixture()
     parent = {"directProjectileRaw": {"type": 42, "attackReference": observation}}
@@ -273,7 +275,7 @@ def test_attack_packet_size_is_measured_and_existing_guard_refuses_instead_of_cl
 # Consumer-specific repair context follows the editable leaf, not ancestry.
 @pytest.mark.parametrize("leaf", ["inventoryScale", "scale", "grip.normalizedX"])
 def test_sizing_only_visual_repair_excludes_native_attack_but_keeps_size_reference(monkeypatch, packet_mode, leaf):
-    from infini_local.pipelines import visual_generation_pipeline as visual
+    import infini_local.pipelines.visual.request as visual_request
     from test_low_level_three_stage_pipeline import _accepted_visual_data, _visual_kit
     parent = {"directProjectileRaw": {"type": 42, "attackReference": source_defined_attack_fixture()}}
     parent["spriteReferenceRaw"] = {
@@ -282,12 +284,12 @@ def test_sizing_only_visual_repair_excludes_native_attack_but_keeps_size_referen
     before = copy.deepcopy(parent)
     child = _accepted_visual_data("workbench_blade")
     captured = []
-    _capture_stage(monkeypatch, visual, captured)
+    _capture_stage(monkeypatch, visual_request, captured)
     scope = {"fieldPermissions": {"itemPaths": [leaf] if leaf != "scale" else [],
         "entities": [] if leaf != "scale" else [{"entityId": child["runtimeProgram"]["itemEntityId"], "paths": [leaf]}],
         "equipOverlayPaths": []}}
     with pytest.raises(_CapturedRequest):
-        visual._request_visual_kit(child, parent, {}, repair_errors=[{"path": "$.item." + leaf}],
+        visual_request._request_visual_kit(child, parent, {}, repair_errors=[{"path": "$.item." + leaf}],
             previous=_visual_kit(child), repair_scope=scope)
     packet = request_dossier(captured[0])
     assert "parentFactsReadOnly" not in packet
@@ -300,8 +302,9 @@ def test_sizing_only_visual_repair_excludes_native_attack_but_keeps_size_referen
 
 @pytest.mark.parametrize("repair", [False, True], ids=["director", "repair"])
 def test_attack_observation_reaches_actual_vfx_parent_context(monkeypatch, packet_mode, repair):
-    from infini_local.core import vfx_manifest as vfx
-    from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
+    import infini_local.pipelines.vfx.prompt as vfx_prompt
+    import infini_local.pipelines.vfx.stage as vfx_stage
+    from infini_local.pipelines.vfx import request as vfx_transport
     from test_low_level_three_stage_pipeline import _accepted_visual_data
     child = _accepted_visual_data("workbench_blade")
     parent = {"directProjectileRaw": {"type": 42, "attackReference": source_defined_attack_fixture()}}
@@ -309,10 +312,10 @@ def test_attack_observation_reaches_actual_vfx_parent_context(monkeypatch, packe
     captured = []
     _capture_stage(monkeypatch, vfx_transport, captured)
     monkeypatch.setattr(vfx_transport, "USE_LLM", True)
-    packet = vfx._prompt_packet(child, parent, parent)
+    packet = vfx_prompt._prompt_packet(child, parent, parent)
     scope = {"allowCreateSlots": True, "fieldPermissions": {"globals": {}, "slots": [], "assets": []}}
     with pytest.raises(_CapturedRequest):
-        vfx._request(vfx_transport.call_llm_vfx_director, packet,
+        vfx_stage._request(vfx_transport.call_llm_vfx_director, packet,
             **({"repair_errors": [], "previous": {}, "repair_scope": scope} if repair else {}))
     dossier = request_dossier(captured[0])
     parents = dossier["parentFactsReadOnly" if repair else "parents"]

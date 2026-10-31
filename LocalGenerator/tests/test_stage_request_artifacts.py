@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from infini_local.pipelines.visual import request as visual_request
+
+
 from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
@@ -104,7 +107,7 @@ def test_missing_recipe_join_is_an_explicit_refusal_not_an_unowned_artifact(monk
 
 @pytest.mark.parametrize('stage', ['gameplay_author', 'gameplay_format_repair', 'gameplay_repair', 'visual_director', 'visual_repair'])
 def test_actual_stage_seam_records_complete_request_before_provider_without_live_calls(monkeypatch, tmp_path, stage):
-    from infini_local.pipelines import llm_authoring_pipeline as author, visual_generation_pipeline as visual
+    from infini_local.pipelines.author import request as author
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     _cache(monkeypatch, tmp_path)
@@ -118,7 +121,7 @@ def test_actual_stage_seam_records_complete_request_before_provider_without_live
         raise AssertionError('network forbidden in stage artifact tests')
     monkeypatch.setattr(socket.socket, 'connect', no_network)
     monkeypatch.setattr(socket, 'create_connection', no_network)
-    for owner in (author, visual):
+    for owner in (author, visual_request):
         monkeypatch.setattr(owner, 'llm_chat_json', stop)
         monkeypatch.setattr(owner, 'resolve_llm_model', lambda: 'offline-model')
     monkeypatch.setattr(author, 'USE_LLM', True)
@@ -145,7 +148,7 @@ def test_actual_stage_seam_records_complete_request_before_provider_without_live
             data_before = copy.deepcopy(data)
             kwargs = {'repair_errors': [{'path': '$.item.silhouette', 'message': 'required'}],
                 'previous': {'item': {'prompt': 'frozen'}}, 'repair_scope': {'itemMutable': True, 'fieldPermissions': {'itemPaths': ['silhouette']}}} if stage == 'visual_repair' else {}
-            visual._request_visual_kit(data, parent, parent, **kwargs)
+            visual_request._request_visual_kit(data, parent, parent, **kwargs)
     paths = list((tmp_path / 'stage_requests').glob('*.json'))
     assert len(paths) == 1, 'production stage must persist the exact request at its provider seam'
     artifact = json.loads(paths[0].read_bytes())
@@ -181,7 +184,7 @@ def test_actual_stage_seam_records_complete_request_before_provider_without_live
 @pytest.mark.parametrize('changed_value', [False, True], ids=['syntax-only', 'semantic-change-refused'])
 def test_format_repair_capture_joins_author_owner_without_changing_frozen_fields(monkeypatch, tmp_path, context_join, changed_value):
     from infini_local.core.errors import PlannerUnavailable
-    from infini_local.pipelines import llm_authoring_pipeline as author
+    from infini_local.pipelines.author import request as author
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     _cache(monkeypatch, tmp_path)
     monkeypatch.setattr(author, 'USE_LLM', True)
@@ -241,7 +244,7 @@ def test_format_repair_capture_joins_author_owner_without_changing_frozen_fields
 
 
 def test_unknown_sprite_reference_never_comes_from_collider_dump_or_fallback(monkeypatch, tmp_path):
-    from infini_local.pipelines import visual_generation_pipeline as visual
+    import infini_local.pipelines.visual.request as visual_request
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     _cache(monkeypatch, tmp_path)
@@ -256,12 +259,12 @@ def test_unknown_sprite_reference_never_comes_from_collider_dump_or_fallback(mon
     def stop(request, **kwargs):
         requests.append(copy.deepcopy(request))
         raise CaptureComplete()
-    monkeypatch.setattr(visual, 'llm_chat_json', stop)
-    monkeypatch.setattr(visual, 'resolve_llm_model', lambda: 'offline-model')
+    monkeypatch.setattr(visual_request, 'llm_chat_json', stop)
+    monkeypatch.setattr(visual_request, 'resolve_llm_model', lambda: 'offline-model')
     for repair in (False, True):
         kwargs = {'repair_errors': [], 'previous': {'item': {}}, 'repair_scope': {}} if repair else {}
         with pytest.raises(CaptureComplete):
-            visual._request_visual_kit(data, parent, parent, **kwargs)
+            visual_request._request_visual_kit(data, parent, parent, **kwargs)
     paths = list((tmp_path / 'stage_requests').glob('*.json'))
     assert len(paths) == 2
     for path in paths:

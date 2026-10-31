@@ -460,7 +460,7 @@ def _walk_forbidden(value: Any, path: str = "$") -> list[dict[str, str]]:
 def _validate_sprite_presentation(visual: Mapping[str, Any], path: str, errors: list[dict[str, Any]], *, entity_kind: str | None = None) -> None:
     """Validate presentation choices at their explicit image owner."""
     from infini_local.core.visual_contract_schema import grip_schema, sprite_presentation_properties
-    from infini_local.pipelines.visual_generation_pipeline import _visual_item_schema
+    from infini_local.pipelines.visual.contract import _visual_item_schema
     fields = ("renderSizePx", "forwardAngleDegrees", "grip") if entity_kind is None else ("renderSizePx", "forwardAngleDegrees", "preferredCanvasSize", "grip")
     properties = {**sprite_presentation_properties(), "grip": grip_schema(),
                   "preferredCanvasSize": _visual_item_schema()["properties"]["preferredCanvasSize"]}

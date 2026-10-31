@@ -13,8 +13,9 @@ from infini_local.core.runtime_authoring.program_schema import (
 from infini_local.core.runtime_authoring.capability_registry import capability_inventory_rows
 from infini_local.core.runtime_authoring.repair_scope import runtime_repair_scope_schema
 from infini_local.core.runtime_authoring.technical_lowering import technical_lowering_manifest
-from infini_local.core.vfx_manifest import vfx_director_schema, vfx_repair_schema
-from infini_local.pipelines.visual_generation_pipeline import visual_repair_schema, visual_response_schema
+from infini_local.core.vfx.schema import vfx_director_schema
+from infini_local.core.vfx.repair import vfx_repair_schema
+from infini_local.pipelines.visual.contract import visual_repair_schema, visual_response_schema
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 OUT=ROOT/"contracts/schemas"

@@ -9,8 +9,8 @@
 
 | Объект | Единственный владелец |
 |---|---|
-| Принятые Visual/VFX requests | Канонические Visual DTO и `vfxManifest`; `visual_asset_plan.py` создаёт deep-copy план, не вторую truth source |
-| Техническая image-попытка | `_execute_image_request` в `visual_sprite_generation.py` |
+| Принятые Visual/VFX requests | Канонические Visual DTO и `vfxManifest`; `pipelines/visual/assets.py` создаёт deep-copy план, не вторую truth source |
+| Техническая image-попытка | `_execute_image_request` в `pipelines/images/stage.py` |
 | Provider transport, seed/variants, backend admission | Существующие backend adapters и `IMAGE_GENERATION_GATE` |
 | Raw/stages/master/final/refit промежуточные файлы | Явный invocation/attempt `output_dir` |
 | Публичный завершённый PNG | Общий атомарный publisher |
@@ -21,9 +21,9 @@
 
 Diagnostic manifest и `debug.visualAssetPlan` остаются наблюдениями; изменение этих отчётов не меняет фактический roster или разрешения.
 
-Source owners: [executor](../../../LocalGenerator/infini_local/pipelines/visual_sprite_generation.py), [backend adapters](../../../LocalGenerator/infini_local/pipelines/image_backend_pipeline.py), [plan](../../../LocalGenerator/infini_local/pipelines/visual_asset_plan.py), [delivery](../../../LocalGenerator/infini_local/pipelines/visual_delivery_gate.py), [storage admission](../../../LocalGenerator/infini_local/storage/world_storage.py), [AssetSync](../../../ModSources/InfiniCrafterLocal/Common/Services/Assets/GeneratedAssetSyncService.cs), [texture cache](../../../ModSources/InfiniCrafterLocal/Common/Services/Assets/RuntimeSpriteCache.cs).
+Source owners: [executor](../../../LocalGenerator/infini_local/pipelines/images/stage.py), [backend adapters](../../../LocalGenerator/infini_local/pipelines/images/backends.py), [plan](../../../LocalGenerator/infini_local/pipelines/visual/assets.py), [delivery](../../../LocalGenerator/infini_local/pipelines/visual/delivery.py), [storage admission](../../../LocalGenerator/infini_local/storage/world_storage.py), [AssetSync](../../../ModSources/InfiniCrafterLocal/Common/Services/Assets/GeneratedAssetSyncService.cs), [texture cache](../../../ModSources/InfiniCrafterLocal/Common/Services/Assets/RuntimeSpriteCache.cs).
 
-sd.cpp: `pipeline_visual_config.py` читает настройки и владеет process state/cleanup; единственный `_sdcpp_config()` в `image_backend_pipeline.py` собирает effective runtime config (включая LoRA file → directory/tags). `services/sdcpp_backend.py` владеет command/payload primitives, `sdcpp_service.py` — процессом. Не добавлять параллельный config builder или forwarding helpers без consumer: неиспользуемые command/argv facades удалены. Provider routing, deadlines, retries, cancellation и private output остаются в прежнем рабочем пути.
+sd.cpp: `core/images/config.py` читает настройки и владеет process state/cleanup; единственный `_sdcpp_config()` в `pipelines/images/backends.py` собирает effective runtime config (включая LoRA file → directory/tags). `services/sdcpp_backend.py` владеет command/payload primitives, `sdcpp_service.py` — процессом. Не добавлять параллельный config builder или forwarding helpers без consumer: неиспользуемые command/argv facades удалены. Provider routing, deadlines, retries, cancellation и private output остаются в прежнем рабочем пути.
 
 <a id="attempts"></a>
 ## Одна попытка, private output и atomic publication
@@ -98,7 +98,7 @@ Debug snapshot сохраняет resident `TextureCount`/`EstimatedTextureBytes
 <a id="configuration"></a>
 ## Где менять настройку, а не контракт
 
-Полный живой inventory — [pipeline_visual_config.py](../../../LocalGenerator/infini_local/pipelines/pipeline_visual_config.py), [vfx_manifest_config.py](../../../LocalGenerator/infini_local/core/vfx_manifest_config.py), [settings_schema.py](../../../LocalGenerator/infini_local/desktop/settings_schema.py), [config registry](../../../contracts/config_registry.json) и [config example](../../../LocalGenerator/config.example.env). Это не копия старой таблицы defaults/строк аудита.
+Полный живой inventory — [core/images/config.py](../../../LocalGenerator/infini_local/core/images/config.py), [core/vfx/config.py](../../../LocalGenerator/infini_local/core/vfx/config.py), [settings_schema.py](../../../LocalGenerator/infini_local/desktop/settings_schema.py), [config registry](../../../contracts/config_registry.json) и [config example](../../../LocalGenerator/config.example.env). Это не копия старой таблицы defaults/строк аудита.
 
 - `INFINI_IMAGE_PARALLEL=1` включает параллельную генерацию по умолчанию; галочка в Studio → Изображения отключает её для локальных моделей с ограниченной видеопамятью. После сохранения нужен перезапуск сервера. При `0` backend gate всегда равен 1, независимо от сохранённого лимита. `INFINI_IMAGE_MAX_CONCURRENCY` задаёт лимит при включённой галочке, default 4, range 1..4; endpoint combine/multidev semaphores не заменяют его. Gate не охватывает CPU/postprocess/publication.
 - `INFINI_VISUAL_ASSET_MODE` ограничивает materialization; обязательный authored asset, отключённый настройкой, не становится optional для delivery. Exact `assetMode`/Visual project выбирает Director, не старый GUI role toggle.

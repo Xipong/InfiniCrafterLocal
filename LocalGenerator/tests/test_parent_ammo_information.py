@@ -6,8 +6,8 @@ import copy
 import pytest
 
 from prompt_packet_helpers import request_dossier
-from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+from infini_local.pipelines.author.request import build_initial_author_request
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])

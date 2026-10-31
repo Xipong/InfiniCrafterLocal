@@ -28,7 +28,7 @@ LLM/image-запросов, импорта runtime, создания cache/PNG/�
 | Разобрать сохранённую кампанию | `python -m toolbox summary /path/to/campaign` | Results + logical/HTTP/retry/image ledgers, пропуски, дубликаты и незавершённые запросы |
 | Проверить сохранённый предмет | `python -m toolbox replay /path/to/case --compare` | Настоящие strict wire / delivery projection и сравнение `compiled_runtime.json`; без inference |
 | Исполнить предмет и посмотреть записанный цикл | `python -m toolbox workbench --help` | [Native Item Test Workbench](../tools/item-test-workbench/README.md): настоящий C# runtime, телеметрия и поддерживаемые native render passes; без LLM |
-| Проверить затронутый код | `python -m toolbox verify --path LocalGenerator/infini_local/pipelines/llm_transport.py` | Делегирует существующему `tools/agentctl.py verify`, сохраняет аргументы и exit code |
+| Проверить затронутый код | `python -m toolbox verify --path LocalGenerator/infini_local/pipelines/transport/client.py` | Делегирует существующему `tools/agentctl.py verify`, сохраняет аргументы и exit code |
 | Показать owner-проверки без запуска | `python -m toolbox verify --area csharp --plan` | Только план; это не PASS и не native execution |
 
 `replay` читает `final_item.json` в каталоге case; `--compare` дополнительно требует

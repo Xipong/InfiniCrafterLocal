@@ -8,7 +8,9 @@ from tests.visual_geometry_fixtures import segment_geometry, collision_geometry
 
 from prompt_packet_helpers import request_dossier
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.pipelines import visual_generation_pipeline as visual
+import infini_local.pipelines.visual.contract as visual_contract
+import infini_local.pipelines.visual.request as visual_request
+import infini_local.pipelines.visual.stage as visual_stage
 from infini_local.qa.capability_witnesses import build_capability_witness
 from test_low_level_three_stage_pipeline import _visual_kit, wire_transport
 
@@ -48,13 +50,13 @@ def test_attachment_requires_exact_selected_png_owner_metadata(mode, field):
     owner = raw["item"] if mode == "reuse_item_icon" else raw["entities"][1]
     owner.pop(field)
     frozen = copy.deepcopy((data, raw))
-    accepted, errors = visual._validate_kit(raw, ["item", "witness_entity"], "item", accepted_data=data)
+    accepted, errors = visual_contract._validate_kit(raw, ["item", "witness_entity"], "item", accepted_data=data)
     path = ("$.item." if mode == "reuse_item_icon" else "$.entities[1].") + field
     assert accepted is None
     assert any(row["path"] == path for row in errors)
     assert any(row["path"] == path and row["code"] == "front_hand_sprite_metadata_required"
                for row in front_hand_sprite_errors(data, kit=raw))
-    projected = visual._apply_kit(data, raw)
+    projected = visual_stage._apply_kit(data, raw)
     delivery_path = ("$.visual." if mode == "reuse_item_icon" else "$.runtimeProgram.entities[1].visual.") + field
     assert any(row["path"] == delivery_path for row in front_hand_sprite_errors(projected))
     assert (data, raw) == frozen
@@ -78,9 +80,9 @@ def test_visual_and_frozen_repair_expose_components_and_true_hand_semantics(wire
     raw["item"].pop("grip")
     frozen = copy.deepcopy((data, raw))
     responses, requests = wire_transport
-    responses.extend([raw, dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA, itemPatch={"grip": GRIP, "renderSizePx": 400},
+    responses.extend([raw, dict(schema=visual_contract.VISUAL_REPAIR_PATCH_SCHEMA, itemPatch={"grip": GRIP, "renderSizePx": 400},
                                entitiesUpsert=[], entityIdsDelete=[], entityIndicesDelete=[], note="grip only")])
-    result = visual.apply_visual_director(data, {}, {})
+    result = visual_stage.apply_visual_director(data, {}, {})
     assert len(requests) == 2 and not responses
     for request, key in zip(requests, ("runtimeEntities", "runtimeEntitiesReadOnly")):
         assert request["response_format"]["type"] == format_name
@@ -119,20 +121,21 @@ def test_visual_and_frozen_repair_expose_components_and_true_hand_semantics(wire
                               "bendRatio": 0.25, "useOwnerGravity": False, "useWhipRange": False}),
 ])
 def test_vfx_and_frozen_repair_use_independent_collision_geometry(wire_transport, monkeypatch, format_name, geometry, component, expected):
-    from infini_local.core import vfx_manifest as vfx
-    from infini_local.pipelines import vfx_generation_pipeline as stage
+    import infini_local.core.vfx.contract as vfx_contract
+    import infini_local.pipelines.vfx.stage as vfx_stage
+    from infini_local.pipelines.vfx import request as stage
     from test_low_level_three_stage_pipeline import _vfx_output
     monkeypatch.setattr("infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE", format_name)
     data, raw = _presentation_input("runtime_geometry", attachment=False)
     data["runtimeProgram"]["entities"][1][component] = copy.deepcopy(expected)
-    data = visual._apply_kit(data, raw)
+    data = visual_stage._apply_kit(data, raw)
     before = copy.deepcopy(data)
     authored = _vfx_output(data)
     authored["slots"][0]["alpha"] = 2
     candidate = dict(authored["slots"][0], alpha=0.65, duration=500)
     responses, requests = wire_transport
-    responses.extend([authored, {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "alpha only", "slotsUpsert": [candidate]}])
-    result = vfx.attach_vfx_manifest(data, "independent-geometry", llm_director=stage.call_llm_vfx_director)
+    responses.extend([authored, {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "note": "alpha only", "slotsUpsert": [candidate]}])
+    result = vfx_stage.attach_vfx_manifest(data, "independent-geometry", llm_director=stage.call_llm_vfx_director)
     assert len(requests) == 2 and not responses
     mechanics = copy.deepcopy(before["runtimeProgram"])
     for row in mechanics["entities"]:
@@ -158,7 +161,7 @@ def test_vfx_and_frozen_repair_use_independent_collision_geometry(wire_transport
 @pytest.mark.parametrize("attachment,pose", [(True, False), (False, True)])
 def test_hand_anchor_reader_and_pose_writer_keep_asset_choice_independent(wire_transport, mode, attachment, pose):
     from infini_local.core.visual_contract_schema import front_hand_sprite_errors, front_hand_sprite_requirement
-    from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+    from infini_local.pipelines.visual.assets import build_visual_asset_plan
     data, raw = _presentation_input(mode, attachment=attachment, pose=pose)
     if not attachment:
         raw["item"].pop("grip", None)
@@ -166,7 +169,7 @@ def test_hand_anchor_reader_and_pose_writer_keep_asset_choice_independent(wire_t
     before = copy.deepcopy(data)
     responses, requests = wire_transport
     responses.append(raw)
-    result = visual.apply_visual_director(data, {}, {})
+    result = visual_stage.apply_visual_director(data, {}, {})
     assert len(requests) == 1 and not responses
     body = result["runtimeProgram"]["entities"][1]
     assert bool(front_hand_sprite_requirement(body)) == attachment
@@ -189,11 +192,11 @@ def test_hand_anchor_reader_and_pose_writer_keep_asset_choice_independent(wire_t
 @pytest.mark.parametrize("with_base_flight", [True, False])
 def test_real_no_image_request_carries_selected_grip_and_actual_components(monkeypatch, mode, with_base_flight):
     import json
-    from infini_local.pipelines import visual_sprite_generation as images
+    from infini_local.pipelines.images import stage as images
     data, raw = _presentation_input(mode, pose=True)
     if not with_base_flight:
         data["runtimeProgram"]["entities"][1].pop("movement")
-    projected = visual._apply_kit(data, raw)
+    projected = visual_stage._apply_kit(data, raw)
     before = copy.deepcopy(projected)
     monkeypatch.setattr(images, "IMAGE_BACKEND", "off")
     role = "item" if mode == "reuse_item_icon" else "runtime:held_body"
@@ -221,7 +224,7 @@ def test_real_no_image_request_carries_selected_grip_and_actual_components(monke
     (None, None), ("unknown", None),
 ])
 def test_source_units_preserve_explicit_sine_law_without_inferring_it(law, expected):
-    from infini_local.pipelines.llm_authoring_prompt import source_wire_units_for_llm
+    from infini_local.pipelines.author.prompt import source_wire_units_for_llm
     oscillator = {"amplitude": 0.125, **({"law": law} if law is not None else {})}
     source = {"raw": {"generatedParent": {"runtimeProgram": {"entities": [{"oscillation": oscillator}]}}}}
     before = copy.deepcopy(source)
@@ -236,7 +239,7 @@ def test_source_units_preserve_explicit_sine_law_without_inferring_it(law, expec
 
 
 def test_author_usability_reports_only_current_catalog_choices():
-    from infini_local.pipelines.llm_authoring_prompt import planner_prompt_usability_report
+    from infini_local.pipelines.author.prompt import planner_prompt_usability_report
     report = planner_prompt_usability_report({}, {}, "current-motion")
     assert report["ok"], report
 
@@ -252,16 +255,17 @@ def test_author_usability_reports_only_current_catalog_choices():
         "initialWidthMultiplier": 1.0, "damageStartProgress": 1.0, "raycastTiles": False}}}, "beam", False),
 ])
 def test_accepted_historical_wire_drivers_are_presented_without_recompilation(wire_transport, driver, source, needs_grip):
-    from infini_local.core import vfx_manifest as vfx
-    from infini_local.pipelines import vfx_generation_pipeline as stage
+    import infini_local.pipelines.vfx.prompt as vfx_prompt
+    import infini_local.pipelines.vfx.stage as vfx_stage
+    from infini_local.pipelines.vfx import request as stage
     data, _ = _presentation_input(attachment=False)
     body = data["runtimeProgram"]["entities"][1]
     body.update(copy.deepcopy(driver))
     before = copy.deepcopy(data)
     responses, requests = wire_transport
     responses.extend([{}, {}])
-    visual._request_visual_kit(data, {}, {})
-    vfx._request(stage.call_llm_vfx_director, vfx._prompt_packet(data, {}, {}))
+    visual_request._request_visual_kit(data, {}, {})
+    vfx_stage._request(stage.call_llm_vfx_director, vfx_prompt._prompt_packet(data, {}, {}))
     row = next(row for row in request_dossier(requests[0])["runtimeEntities"] if row["id"] == body["id"])
     for key, value in driver.items():
         assert row[key] == value
@@ -277,7 +281,7 @@ def test_accepted_historical_wire_drivers_are_presented_without_recompilation(wi
 @pytest.mark.parametrize("offset", [0.0, 1.57])
 def test_visual_axis_repair_keeps_world_rotation_and_delivers_declared_pixels(wire_transport, monkeypatch, format_name, offset):
     """Visual cannot compensate accepted rotation by rewriting mechanics."""
-    from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+    from infini_local.pipelines.visual.assets import build_visual_asset_plan
     monkeypatch.setattr("infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE", format_name)
     data, raw = _presentation_input("baked_sprite", attachment=False)
     body = data["runtimeProgram"]["entities"][1]
@@ -287,10 +291,10 @@ def test_visual_axis_repair_keeps_world_rotation_and_delivers_declared_pixels(wi
     row["forwardAngleDegrees"] = None
     row["prompt"] = "One narrow wooden object pointing vertically upward; tip at top."
     responses, requests = wire_transport
-    responses.extend([raw, {"schema": visual.VISUAL_REPAIR_PATCH_SCHEMA,
+    responses.extend([raw, {"schema": visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,
                            "entitiesUpsert": [{"entityId": row["entityId"], "forwardAngleDegrees": -90,
                                                "renderSizePx": 300}], "note": "axis only"}])
-    result = visual.apply_visual_director(data, {}, {})
+    result = visual_stage.apply_visual_director(data, {}, {})
     assert len(requests) == 2 and not responses
     for request, key in zip(requests, ("runtimeEntities", "runtimeEntitiesReadOnly")):
         packet = request_dossier(request)
@@ -311,8 +315,9 @@ def test_visual_axis_repair_keeps_world_rotation_and_delivers_declared_pixels(wi
 
 @pytest.mark.parametrize("body_mode", ["runtime_geometry", "no_asset"])
 def test_selected_curve_body_and_animation_intent_reach_actual_vfx_request(wire_transport, body_mode):
-    from infini_local.core import vfx_manifest as vfx
-    from infini_local.pipelines import vfx_generation_pipeline as transport
+    import infini_local.core.vfx.contract as vfx_contract
+    import infini_local.pipelines.vfx.stage as vfx_stage
+    from infini_local.pipelines.vfx import request as transport
     data = compile_runtime_program(build_capability_witness("lash_geometry"))
     raw = _visual_kit(data)
     raw["entities"][1].update(assetMode=body_mode, visualProjectRef="none")
@@ -320,10 +325,10 @@ def test_selected_curve_body_and_animation_intent_reach_actual_vfx_request(wire_
         raw["entities"][1]["geometry"] = collision_geometry()
     raw["animationPlan"] = "A textured copper ribbon follows the existing curved path, with a narrow dark edge."
     responses, requests = wire_transport
-    responses.extend([raw, {"schema": vfx.VFX_DIRECTOR_SCHEMA, "slots": []}])
-    rendered = visual.apply_visual_director(data, {}, {})
+    responses.extend([raw, {"schema": vfx_contract.VFX_DIRECTOR_SCHEMA, "slots": []}])
+    rendered = visual_stage.apply_visual_director(data, {}, {})
     before = copy.deepcopy(rendered)
-    final = vfx.attach_vfx_manifest(rendered, "curve-presentation", llm_director=transport.call_llm_vfx_director)
+    final = vfx_stage.attach_vfx_manifest(rendered, "curve-presentation", llm_director=transport.call_llm_vfx_director)
     packet = request_dossier(requests[1])
     assert packet["acceptedVisualKit"] == raw
     assert packet["acceptedVisualKit"]["entities"][1]["assetMode"] == body_mode

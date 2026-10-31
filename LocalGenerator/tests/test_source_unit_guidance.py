@@ -9,10 +9,10 @@ import socket
 
 import pytest
 
-from infini_local.pipelines import llm_admission
+from infini_local.pipelines.transport import admission as llm_admission
 from infini_local.core import llm_config
-from infini_local.pipelines import llm_authoring_pipeline as author
-from infini_local.pipelines import llm_transport as transport
+from infini_local.pipelines.author import request as author
+from infini_local.pipelines.transport import client as transport
 
 
 @pytest.fixture(autouse=True)
@@ -126,7 +126,7 @@ def test_serialized_author_requests_notes_and_repair_retains_advisory_replacemen
     assert isinstance(author_packet["requiredJsonShape"]["concept"], str)
     assert set(author_packet["requiredJsonShape"]["realization"]) == {"description", "selfEvaluation"}
     advisory = repair_packet["requiredJsonShape"]["realizationReplacement"]
-    from infini_local.pipelines.author_item_contract import author_item_repair_prompt_shape_card
+    from infini_local.pipelines.author.item_contract import author_item_repair_prompt_shape_card
     assert advisory == author_item_repair_prompt_shape_card()["realizationReplacement"]
     # Inspect the literal serialized message rows, not just local schema annotations
     # or the helper's merged view. Strict provider projection removes annotations.
@@ -146,8 +146,8 @@ def test_serialized_author_requests_notes_and_repair_retains_advisory_replacemen
 def test_lowery_renderer_projects_shared_player_description_and_unit_guidance():
     import runpy
     from pathlib import Path
-    from infini_local.pipelines.author_item_contract import author_item_repair_prompt_shape_card
-    from infini_local.pipelines.llm_authoring_prompt import concise_terraria_tick_guide_for_llm
+    from infini_local.pipelines.author.item_contract import author_item_repair_prompt_shape_card
+    from infini_local.pipelines.author.prompt import concise_terraria_tick_guide_for_llm
 
     root = Path(__file__).resolve().parents[2]
     generator = runpy.run_path(str(root / "tools" / "generate" / "generate_lowery.py"))
@@ -228,7 +228,7 @@ def test_scoped_repair_carries_canonical_clock_units_without_expanding_permissio
     from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.core.runtime_authoring.capability_registry import runtime_authoring_prompt_field_guide
-    from infini_local.pipelines.llm_authoring_prompt import concise_terraria_tick_guide_for_llm
+    from infini_local.pipelines.author.prompt import concise_terraria_tick_guide_for_llm
 
     source, item = _source(), _broken_item()
     author_request, author_packet = _author_request(monkeypatch, mode, source)
@@ -341,7 +341,7 @@ def test_packet_glossary_is_derived_from_registry_metadata_not_capability_name(m
     }), final_wire_paths=("armor.unfamiliar", "gameplay.generatedBuff.another", "accessory.same", "gameplay.ratio", "gameplay.shifted", "gameplay.not_a_param"))
     mutated = {**registry.CAPABILITY_REGISTRY, arbitrary.name: arbitrary}
     monkeypatch.setattr(registry, "CAPABILITY_REGISTRY", mutated)
-    from infini_local.pipelines import llm_authoring_prompt
+    from infini_local.pipelines.author import prompt as llm_authoring_prompt
     monkeypatch.setattr(llm_authoring_prompt, "CAPABILITY_REGISTRY", mutated)
     source = _source()
     source["generatedData"]["armor"]["unfamiliar"] = 0.2
@@ -430,7 +430,7 @@ def test_source_unit_guidance_never_grants_hostile_repair_edits(monkeypatch, mod
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_repair_source_units_cover_every_registry_path_without_changing_scope(monkeypatch, mode):
-    from infini_local.pipelines.llm_authoring_prompt import source_wire_units_for_llm
+    from infini_local.pipelines.author.prompt import source_wire_units_for_llm
 
     full = source_wire_units_for_llm()
     packet = {}

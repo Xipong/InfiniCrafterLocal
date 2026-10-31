@@ -23,12 +23,12 @@ import pytest
 
 from provider_test_support import HttpReply, HttpSender, physical_attempt, loopback_server, write_json_response
 
-from infini_local.pipelines import llm_admission
+from infini_local.pipelines.transport import admission as llm_admission
 from infini_local.core import llm_config
-from infini_local.pipelines import llm_profiles
-from infini_local.pipelines import llm_provider_wire
+from infini_local.pipelines.transport import profiles as llm_profiles
+from infini_local.pipelines.transport import provider_wire as llm_provider_wire
 from provider_test_support import reset_llm_runtime
-from infini_local.pipelines import llm_transport as transport
+from infini_local.pipelines.transport import client as transport
 
 PIN = "ExactVendor/Endpoint-Turbo"
 STAGES = ("planner", "visual_director", "vfx_director")
@@ -1014,7 +1014,7 @@ def test_a1111_image_json_does_not_inherit_text_response_ceiling(loopback_transp
     import io
     from PIL import Image
     from infini_local.core.http_io import HttpResponseTooLarge
-    from infini_local.pipelines import image_backend_pipeline as images
+    from infini_local.pipelines.images import backends as images
 
     buffer = io.BytesIO()
     Image.new("RGBA", (2, 2), "red").save(buffer, format="PNG")

@@ -3,9 +3,9 @@ import copy
 
 import pytest
 
-from infini_local.pipelines.native_attack_behavior_view import project_attack_behavior
-from infini_local.pipelines.native_attack_tables import unpack_attack_tables
-from infini_local.pipelines.parent_context_pipeline import compact_projectile_profile
+from infini_local.pipelines.context.attack_behavior import project_attack_behavior
+from infini_local.pipelines.context.attack_tables import unpack_attack_tables
+from infini_local.pipelines.context.parents import compact_projectile_profile
 
 
 def native_reference():
@@ -93,8 +93,8 @@ def test_unknown_contract_is_literal_detached(extra):
 def test_real_native_capture_keeps_attack_geometry_timing_targets_and_draw():
     import json
     from pathlib import Path
-    from infini_local.pipelines.native_attack_expression_view import compact_attack_expressions
-    from infini_local.pipelines.native_attack_tables import pack_attack_tables
+    from infini_local.pipelines.context.attack_expressions import compact_attack_expressions
+    from infini_local.pipelines.context.attack_tables import pack_attack_tables
     parent = json.loads((Path(__file__).parent / "fixtures" / "native_excalibur_parent_capture.json").read_text())
     snapshot = copy.deepcopy(parent)
     raw = parent["directProjectileRaw"]
@@ -352,7 +352,7 @@ def test_address_load_store_never_guesses_unknown_pointee(element_type):
 
 
 def test_ordered_context_preserves_steps_guards_snapshots_and_unknown_programs():
-    from infini_local.pipelines.native_attack_behavior_view import ordered_attack_context
+    from infini_local.pipelines.context.attack_behavior import ordered_attack_context
     source = native_reference()
     program = source['motion']['programs'][0]
     del program['dependencies']['addressed_l2']
@@ -387,7 +387,7 @@ def test_inlined_numeric_lexemes_keep_subtraction_multiplication_grouping(litera
 
 
 def test_ordered_context_future_consumer_and_semantic_name_collision_stay_literal():
-    from infini_local.pipelines.native_attack_behavior_view import ordered_attack_context
+    from infini_local.pipelines.context.attack_behavior import ordered_attack_context
     source = native_reference()
     del source['motion']['programs'][0]['dependencies']['addressed_l2']
     projected = project_attack_behavior(source)
@@ -401,7 +401,7 @@ def test_ordered_context_future_consumer_and_semantic_name_collision_stay_litera
 
 @pytest.mark.parametrize('op,successors', [('switch', [20, 20, 21, 22]), ('future_branch', [20, 21]), ('beq', [20])])
 def test_ordered_context_does_not_reinterpret_switch_or_unknown_edge_shape(op, successors):
-    from infini_local.pipelines.native_attack_behavior_view import ordered_attack_context
+    from infini_local.pipelines.context.attack_behavior import ordered_attack_context
     source = native_reference()
     del source['motion']['programs'][0]['dependencies']['addressed_l2']
     projected = project_attack_behavior(source)

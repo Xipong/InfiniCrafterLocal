@@ -32,7 +32,7 @@ receipts, C# DTO/executors, IDs, budgets и numeric domains не изменяю�
 ## Nullable inverse
 
 Annotation removal и conditional grouping выполняются внутри общего
-`author_item_contract._provider_strict_projection`, который также использует
+`core.provider_schema._provider_strict_projection`, который также использует
 nullable inverse. Отдельная очистка только outgoing JSON была бы ошибкой:
 inverse больше не распознал бы собственный optional wrapper и оставил `null`.
 Gameplay Author/Repair явно включают удаление annotations; Visual сохраняет

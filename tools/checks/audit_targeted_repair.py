@@ -22,7 +22,7 @@ from infini_local.core.runtime_authoring.repair_scope import (
 from infini_local.core.runtime_authoring.validator import VALIDATION_ERROR_CODES, validate_runtime_program
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-from infini_local.pipelines.llm_authoring_pipeline import (
+from infini_local.pipelines.author.request import (
     build_gameplay_repair_dossier,
     build_initial_author_request,
 )
@@ -191,8 +191,8 @@ def _emitted_validator_codes() -> set[str]:
 def _frozen_callsite_audit() -> dict[str, Any]:
     paths = [
         ROOT / "LocalGenerator/infini_local/core/runtime_authoring/repair_scope.py",
-        ROOT / "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
-        ROOT / "LocalGenerator/infini_local/core/vfx_manifest.py",
+        ROOT / "LocalGenerator/infini_local/pipelines/visual/repair.py",
+        ROOT / "LocalGenerator/infini_local/core/vfx/repair.py",
     ]
     total = 0
     explicit_false = 0

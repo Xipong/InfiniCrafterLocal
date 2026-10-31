@@ -371,7 +371,7 @@ def test_nested_repair_changes_only_the_broken_leaf(fn, broken, value, frozen_ke
                                   "move_boomerang", "move_proximity_missile", "channel_beam", "charge_then_release"])
 def test_retired_author_call_is_absent_from_schema_prompt_and_repair(fn):
     from infini_local.core.runtime_authoring.capability_registry import compact_capability_catalog, capability_provider_union
-    from infini_local.pipelines.llm_authoring_pipeline import build_gameplay_repair_dossier
+    from infini_local.pipelines.author.request import build_gameplay_repair_dossier
     if fn in CAPABILITY_REGISTRY:
         assert CAPABILITY_REGISTRY[fn].author_visible is False
         with pytest.raises(KeyError, match=fn):

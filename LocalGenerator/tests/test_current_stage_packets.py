@@ -5,6 +5,9 @@ Useful nonexecuted artist prose is not a retired executable contract field.
 """
 from __future__ import annotations
 
+from infini_local.pipelines.visual import contract as visual_contract, repair as visual_repair
+from infini_local.core.vfx import contract as vfx_contract, repair as vfx_repair, validation as vfx_validation
+
 import copy
 import json
 import sys
@@ -12,7 +15,7 @@ from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -126,7 +129,7 @@ def test_actual_outgoing_packets_preserve_roles_schema_and_frozen_authority(capt
 
 
 def test_author_and_format_provider_shape_matches_actual_author_consumer(capture):
-    from infini_local.pipelines.author_item_contract import author_item_response_schema
+    from infini_local.pipelines.author.item_contract import author_item_response_schema
     from test_codex_subscription_contract import _encode_nullable_fixture
     for stage in ("author", "format_repair"):
         packet, evidence = capture.builder(stage, COHORT[0], "json_schema")
@@ -149,7 +152,7 @@ def test_author_and_format_provider_shape_matches_actual_author_consumer(capture
 
 @pytest.mark.parametrize("stage", ["visual_repair", "vfx_repair", "gameplay_repair"])
 def test_captured_permissions_drive_real_frozen_merge_not_provider_schema_alone(capture, stage):
-    from infini_local.pipelines.author_item_contract import author_item_repair_response_schema
+    from infini_local.pipelines.author.item_contract import author_item_repair_response_schema
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
     from infini_local.core.runtime_authoring.repair_scope import filter_repair_patch_scope
     from test_codex_subscription_contract import _encode_nullable_fixture
@@ -160,24 +163,24 @@ def test_captured_permissions_drive_real_frozen_merge_not_provider_schema_alone(
     provider_schema = schema_from_wire(capture.wire(packet, "responses")["packet"])
     assert isinstance(provider_schema, dict)
     if stage == "visual_repair":
-        patch = {"schema": capture.visual.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": {"renderSizePx": 40, "inventoryScale": 2.0},
+        patch = {"schema": visual_contract.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": {"renderSizePx": 40, "inventoryScale": 2.0},
                  "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [], "note": "one leaf"}
         ids = [row["id"] for row in inputs["data"]["runtimeProgram"]["entities"]]
         valid = {"schema": patch["schema"], "itemPatch": {"renderSizePx": 40}, "note": "one leaf"}
         assert Draft202012Validator(provider_schema).is_valid(valid)
         assert not Draft202012Validator(provider_schema).is_valid(patch)
-        fixed, audit = capture.visual._apply_visual_repair_patch(broken, patch, scope, ids, return_audit=True)
+        fixed, audit = visual_repair._apply_visual_repair_patch(broken, patch, scope, ids, return_audit=True)
         assert fixed == inputs["visualKit"]
         assert audit["ignoredChanges"]
     elif stage == "vfx_repair":
         slot = copy.deepcopy(inputs["vfxOutput"]["slots"][0])
         slot["duration"] = 100
-        patch = {"schema": capture.vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [slot], "note": "one leaf"}
+        patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [slot], "note": "one leaf"}
         valid = {"schema": patch["schema"], "slotsUpsert": inputs["vfxOutput"]["slots"], "note": "one leaf"}
-        from infini_local.core.vfx_material_contract import vfx_model_payload
+        from infini_local.core.vfx.materials import vfx_model_payload
         assert Draft202012Validator(provider_schema).is_valid(vfx_model_payload(valid))
         assert not Draft202012Validator(provider_schema).is_valid(vfx_model_payload(patch))
-        fixed, audit = capture.vfx._apply_vfx_repair_patch(inputs["visualData"], broken, patch, scope, return_audit=True)
+        fixed, audit = vfx_repair._apply_vfx_repair_patch(inputs["visualData"], broken, patch, scope, return_audit=True)
         assert fixed == inputs["vfxOutput"]
         assert audit["ignoredChanges"]
     else:
@@ -278,7 +281,7 @@ def test_provider_schema_and_real_consumer_accept_same_control_refusals(capture,
     if domain == "visual":
         ids = [row["id"] for row in inputs["data"]["runtimeProgram"]["entities"]]
         item_id = inputs["data"]["runtimeProgram"]["itemEntityId"]
-        local = capture.visual._response_schema(ids, False, item_id)
+        local = visual_contract._response_schema(ids, False, item_id)
         def encode(value):
             # Nullable fixture projection intentionally drops unknown keys; the
             # provider refusal control must retain an actually outgoing unknown.
@@ -286,15 +289,15 @@ def test_provider_schema_and_real_consumer_accept_same_control_refusals(capture,
             if "effectColor" in value["item"]:
                 projected["item"]["effectColor"] = value["item"]["effectColor"]
             return projected
-        accepted = lambda value: capture.visual._validate_kit(value, ids, item_id)[0] is not None
+        accepted = lambda value: visual_contract._validate_kit(value, ids, item_id)[0] is not None
         invalid = copy.deepcopy(valid)
         invalid["item"]["inventoryScale"] = True
         retired = copy.deepcopy(valid)
         retired["item"]["effectColor"] = "gold"
     else:
-        from infini_local.core.vfx_material_contract import vfx_model_payload
+        from infini_local.core.vfx.materials import vfx_model_payload
         encode = vfx_model_payload
-        accepted = lambda value: capture.vfx.validate_vfx_director_output(value, inputs["visualData"])["ok"]
+        accepted = lambda value: vfx_validation.validate_vfx_director_output(value, inputs["visualData"])["ok"]
         invalid = copy.deepcopy(valid)
         invalid["slots"][0]["particle"]["colorStart"]["r"] = True
         retired = copy.deepcopy(valid)

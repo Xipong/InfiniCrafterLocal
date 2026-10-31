@@ -9,7 +9,7 @@ import threading
 
 import pytest
 
-from infini_local.pipelines import visual_sprite_generation as generation
+from infini_local.pipelines.images import stage as generation
 from infini_local.services.sdcpp_service import ImageRequestGate
 from tests.vfx_image_fixtures import _data, _request, _existing_texture_data, offline_backend  # noqa: F401
 
@@ -97,7 +97,7 @@ def test_runtime_checkbox_overrides_saved_limit(toggle, limit, expected):
             env.pop(key, None)
         else:
             env[key] = value
-    result = subprocess.run([sys.executable, "-c", "from infini_local.pipelines.pipeline_visual_config import IMAGE_GENERATION_GATE; print(IMAGE_GENERATION_GATE.capacity)"], env=env, capture_output=True, text=True, check=True, timeout=20)
+    result = subprocess.run([sys.executable, "-c", "from infini_local.core.images.config import IMAGE_GENERATION_GATE; print(IMAGE_GENERATION_GATE.capacity)"], env=env, capture_output=True, text=True, check=True, timeout=20)
     assert int(result.stdout.strip().splitlines()[-1]) == expected
 
 

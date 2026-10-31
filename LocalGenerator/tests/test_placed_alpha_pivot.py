@@ -1,5 +1,10 @@
 """Opt-in alpha-bounds pivot: real Author/compiler/final-wire boundaries, offline."""
 
+from infini_local.pipelines.visual import contract as visual_contract
+from infini_local.pipelines.visual import request as visual_request
+from infini_local.pipelines.visual import stage as visual_stage
+
+
 import copy
 import json
 import pytest
@@ -61,10 +66,9 @@ def test_neutral_omission_receipt_and_historical_wire_absence_preserve_frame():
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_real_provider_and_visual_repair_describe_selected_basis_readonly(wire_transport, monkeypatch, mode):
-    from infini_local.pipelines import author_item_contract as contract
-    from infini_local.pipelines import llm_authoring_pipeline as author
-    from infini_local.pipelines import visual_generation_pipeline as visual
-    from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+    from infini_local.pipelines.author import item_contract as contract
+    from infini_local.pipelines.author import request as author
+    from infini_local.pipelines.visual.assets import build_visual_asset_plan
     from test_codex_subscription_contract import _encode_nullable_fixture
     from test_low_level_three_stage_pipeline import _visual_kit
     from jsonschema import Draft202012Validator
@@ -89,8 +93,8 @@ def test_real_provider_and_visual_repair_describe_selected_basis_readonly(wire_t
     before = copy.deepcopy(wire)
     kit = _visual_kit(wire)
     for repair in (False, True):
-        responses.append(kit if not repair else {"schema":visual.VISUAL_REPAIR_PATCH_SCHEMA,"note":"offline no-op"})
-        visual._request_visual_kit(wire, {}, {}, **({"repair_errors":[],"previous":kit,"repair_scope":{}} if repair else {}))
+        responses.append(kit if not repair else {"schema":visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,"note":"offline no-op"})
+        visual_request._request_visual_kit(wire, {}, {}, **({"repair_errors":[],"previous":kit,"repair_scope":{}} if repair else {}))
         packet = request_dossier(requests[-1])
         guidance = packet["spritePresentationReadOnly"]["placedBody"]
         assert "pivotSpace" in guidance["ownership"]
@@ -101,7 +105,7 @@ def test_real_provider_and_visual_repair_describe_selected_basis_readonly(wire_t
         assert bindings == wire["runtimeProgram"]["bindings"]
         assert placement({"runtimeProgram":{"bindings":bindings}})["placedBody"]["pivotSpace"] == "alpha_bounds"
     assert wire == before
-    projected = visual._apply_kit(wire, kit)
+    projected = visual_stage._apply_kit(wire, kit)
     frame = copy.deepcopy(projected)
     placement(frame)["placedBody"]["pivotSpace"] = "frame"
     assert build_visual_asset_plan(projected) == build_visual_asset_plan(frame)
@@ -116,7 +120,7 @@ def test_current_nested_dto_audit_classifies_optional_selector_not_hidden_storag
 
 
 def test_outgoing_placement_cards_keep_native_containers_at_existing_placement(wire_transport):
-    from infini_local.pipelines import llm_authoring_pipeline as author
+    from infini_local.pipelines.author import request as author
     from test_placed_light_capability import lit
     from test_dual_use_placeable_contract import _dual_use_placeable
     responses, requests = wire_transport
@@ -214,7 +218,7 @@ def test_immutable_old_delivery_keeps_absence_through_current_sanitizer(tmp_path
     import hashlib
     from pathlib import Path
     from PIL import Image
-    from infini_local.pipelines import visual_delivery_gate as gate
+    from infini_local.pipelines.visual import delivery as gate
     from infini_local.storage.world_storage import sanitize_recipe_for_delivery
     path = Path(__file__).resolve().parents[2] / "tools/fixtures/placed-body-pre-alpha-delivered.json"
     raw = path.read_bytes()
@@ -234,15 +238,15 @@ def test_immutable_old_delivery_keeps_absence_through_current_sanitizer(tmp_path
 def test_real_final_delivery_sanitizer_keeps_alpha_choice_and_refuses_foreign_leaf(tmp_path, monkeypatch):
     from pathlib import Path
     from PIL import Image
-    from infini_local.pipelines import visual_generation_pipeline as visual
-    from infini_local.pipelines import visual_delivery_gate as gate
+    import infini_local.pipelines.visual.stage as visual_stage
+    from infini_local.pipelines.visual import delivery as gate
     from infini_local.storage.world_storage import sanitize_recipe_for_delivery, is_deliverable_recipe_payload
-    from infini_local.core.vfx_manifest import attach_vfx_manifest
+    from infini_local.pipelines.vfx.stage import attach_vfx_manifest
     from test_low_level_three_stage_pipeline import _visual_kit, _vfx_output
     document = placed()
     document["runtimeProgram"]["calls"][-1]["params"]["pivotSpace"] = "alpha_bounds"
     wire = compile_runtime_program(document)
-    wire = visual._apply_kit(wire, _visual_kit(wire))
+    wire = visual_stage._apply_kit(wire, _visual_kit(wire))
     wire = attach_vfx_manifest(wire, "offline-alpha-delivery", llm_director=lambda *_a, **_kw: _vfx_output(wire))
     wire.update(id="alpha_delivery_fixture", sourceMode="llm", schemaVersion=5, runtimeApiVersion="infini.runtime-program.v5")
     png = tmp_path / "alpha.png"

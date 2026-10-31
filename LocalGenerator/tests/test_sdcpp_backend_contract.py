@@ -70,7 +70,7 @@ def _check_backend_extracts_a1111_base64_response(tmp_path: Path) -> None:
 
 
 def _check_image_pipeline_derives_sdcpp_lora_tag_from_selected_file_when_prompt_tags_blank() -> None:
-    from infini_local.pipelines import image_backend_pipeline as pipeline
+    from infini_local.pipelines.images import backends as pipeline
 
     old_file = pipeline.SDCPP_LORA_FILE
     old_dir = pipeline.SDCPP_LORA_DIR

@@ -7,7 +7,10 @@ import json
 import pytest
 from jsonschema import Draft202012Validator
 
-from infini_local.core import vfx_manifest as vfx
+import infini_local.core.vfx.contract as vfx_contract
+import infini_local.core.vfx.projection as vfx_projection
+import infini_local.core.vfx.validation as vfx_validation
+import infini_local.pipelines.vfx.stage as vfx_stage
 from infini_local.core.schema_validation import strict_schema_errors
 from tests.vfx_material_fixtures import _data, _path, _sent
 from tests.test_low_level_three_stage_pipeline import wire_transport
@@ -21,9 +24,9 @@ def test_owner_link_requires_exact_anchor_choice_on_actual_sent_schemas(anchor):
         schema = _sent(data, repair)["outputSchema"]["properties"]["slotsUpsert" if repair else "slots"]["items"]
         assert not strict_schema_errors(raw["slots"][0], schema)
         Draft202012Validator(schema).validate(raw["slots"][0])
-    final = vfx.attach_vfx_manifest(data, "chosen-owner-anchor", llm_director=lambda *_a, **_kw: raw)
+    final = vfx_stage.attach_vfx_manifest(data, "chosen-owner-anchor", llm_director=lambda *_a, **_kw: raw)
     assert final["vfxManifest"]["slots"][0]["path"]["ownerAnchor"] == anchor
-    assert vfx.validate_vfx_manifest_wire(final)["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(final)["ok"]
 
 
 @pytest.mark.parametrize("choice", [None, "", "MountedCenter", "front_hand", " frontHand", True, 0])
@@ -54,9 +57,9 @@ def _assert_anchor_refused(data, raw):
         schema = _sent(data, repair)["outputSchema"]["properties"]["slotsUpsert" if repair else "slots"]["items"]
         assert strict_schema_errors(raw["slots"][0], schema)
         assert not Draft202012Validator(schema).is_valid(raw["slots"][0])
-    assert not vfx.validate_vfx_director_output(raw, data)["ok"]
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "refused-anchor")
-    assert not vfx.validate_vfx_manifest_wire(data)["ok"]
+    assert not vfx_validation.validate_vfx_director_output(raw, data)["ok"]
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "refused-anchor")
+    assert not vfx_validation.validate_vfx_manifest_wire(data)["ok"]
     assert raw == before
 
 
@@ -79,9 +82,9 @@ def test_owner_link_real_builder_schema_compiler_tracer():
         Draft202012Validator.check_schema(schema)
         assert not strict_schema_errors(raw["slots"][0], schema)
         Draft202012Validator(schema).validate(raw["slots"][0])
-    final = vfx.attach_vfx_manifest(data, "explicit-owner-link", llm_director=lambda *_a, **_kw: raw)
+    final = vfx_stage.attach_vfx_manifest(data, "explicit-owner-link", llm_director=lambda *_a, **_kw: raw)
     assert final["vfxManifest"]["slots"][0]["path"] == raw["slots"][0]["path"]
-    assert vfx.validate_vfx_manifest_wire(final)["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(final)["ok"]
     assert final["debug"]["llmStageAccounting"]["vfxRepairCalls"] == 0
     assert data["runtimeProgram"] == before
 
@@ -89,11 +92,11 @@ def test_owner_link_real_builder_schema_compiler_tracer():
 def test_sent_director_instructions_explain_explicit_connector_without_forcing_one(monkeypatch):
     from prompt_packet_helpers import request_dossier
     from tests.test_repair_vfx_contract import _offline_transport
-    from infini_local.pipelines import vfx_generation_pipeline as stage
+    from infini_local.pipelines.vfx import request as stage
     data = _data("seek")
-    raw = {"schema": vfx.VFX_DIRECTOR_SCHEMA, "slots": []}
+    raw = {"schema": vfx_contract.VFX_DIRECTOR_SCHEMA, "slots": []}
     sent = _offline_transport(monkeypatch, "owner_link_guidance", [raw])
-    final = vfx.attach_vfx_manifest(data, "owner-link-guidance", llm_director=stage.call_llm_vfx_director)
+    final = vfx_stage.attach_vfx_manifest(data, "owner-link-guidance", llm_director=stage.call_llm_vfx_director)
     dossier = request_dossier(sent[0])
     semantics = dossier["runtimeVocabulary"]["rendererSemantics"]["texturedPath"]
     assert "ownerLink" in semantics and "hand" in semantics and "cosmetic" in semantics
@@ -105,16 +108,17 @@ def test_sent_director_instructions_explain_explicit_connector_without_forcing_o
 
 def test_actual_visual_packet_explains_owner_link_composition(wire_transport):
     from prompt_packet_helpers import request_dossier
-    from infini_local.pipelines import visual_generation_pipeline as visual
+    import infini_local.pipelines.visual.context as visual_context
+    import infini_local.pipelines.visual.request as visual_request
     from tests.test_low_level_three_stage_pipeline import _accepted_visual_data
     data = _accepted_visual_data("workbench_blade")
     responses, sent = wire_transport
     responses.append({})
-    visual._request_visual_kit(data, {}, {})
+    visual_request._request_visual_kit(data, {}, {})
     packet = request_dossier(sent[0])
-    assert packet["runtimeEntities"] == visual._runtime_card(data)
+    assert packet["runtimeEntities"] == visual_context._runtime_card(data)
     assert packet["acceptedPresentationMechanicsReadOnly"]["itemUse"] == data["runtimeProgram"]["itemUse"]
-    assert packet["assetModeCatalog"] == visual.visual_asset_mode_catalog()
+    assert packet["assetModeCatalog"] == visual_request.visual_asset_mode_catalog()
 
 
 
@@ -125,7 +129,7 @@ def test_owner_link_surface_is_generic_registry_derived_not_a_flail_preset(kind)
     entity["kind"] = kind  # VFX reads accepted kind facts, not movement/archetype.
     data.update(name="unrelated object", category="unrelated category")
     raw = _owner_path(data, "mountedCenter")
-    assert vfx.validate_vfx_director_output(raw, data)["ok"]
+    assert vfx_validation.validate_vfx_director_output(raw, data)["ok"]
     assert "ownerLink" in next(row["sources"] for row in _sent(data, False)["runtimeSurface"]["texturedPathSources"] if row["entityId"] == entity["id"])
 
 
@@ -150,9 +154,9 @@ def test_owner_link_rejects_foreign_controls_at_director_schema_and_wire(field, 
         schema = _sent(data, repair)["outputSchema"]["properties"]["slotsUpsert" if repair else "slots"]["items"]
         assert strict_schema_errors(raw["slots"][0], schema), (field, bad)
         assert not Draft202012Validator(schema).is_valid(raw["slots"][0]), (field, bad)
-    assert not vfx.validate_vfx_director_output(raw, data)["ok"]
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "invalid-explicit-link")
-    assert not vfx.validate_vfx_manifest_wire(data)["ok"]
+    assert not vfx_validation.validate_vfx_director_output(raw, data)["ok"]
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "invalid-explicit-link")
+    assert not vfx_validation.validate_vfx_manifest_wire(data)["ok"]
     assert raw == before
 
 
@@ -160,12 +164,12 @@ def test_owner_link_rejects_foreign_controls_at_director_schema_and_wire(field, 
 def test_owner_link_actual_repair_freezes_valid_design_and_mechanics(monkeypatch, broken_field, bad, good):
     from prompt_packet_helpers import request_dossier
     from tests.test_repair_vfx_contract import _offline_transport, _patch
-    from infini_local.pipelines import vfx_generation_pipeline as stage
+    from infini_local.pipelines.vfx import request as stage
     data = _data("seek")
     raw = _owner_path(data, "mountedCenter")
     raw["slots"][0]["path"][broken_field] = bad
     before, mechanics = copy.deepcopy(raw), copy.deepcopy(data["runtimeProgram"])
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert not report["ok"]
     assert {row["path"] for row in report["errors"]} == {f"$.slots[0].path.{broken_field}"}
     candidate = copy.deepcopy(raw["slots"][0])
@@ -174,20 +178,20 @@ def test_owner_link_actual_repair_freezes_valid_design_and_mechanics(monkeypatch
         candidate["path"]["source"] = "beam"
     candidate.update(alpha=0.1, anchor="owner", event="on_hit")
     sent = _offline_transport(monkeypatch, "owner-link-frozen-" + broken_field, [raw, _patch(slotsUpsert=[candidate])])
-    final = vfx.attach_vfx_manifest(data, "owner-link-frozen", llm_director=stage.call_llm_vfx_director)
+    final = vfx_stage.attach_vfx_manifest(data, "owner-link-frozen", llm_director=stage.call_llm_vfx_director)
     expected = copy.deepcopy(before)
     expected["slots"][0]["path"][broken_field] = good
     assert final["debug"]["vfxDirectorRaw"] == expected
     assert request_dossier(sent[1])["repairScope"]["fieldPermissions"]["slots"] == [{"slotId": "connected_path", "paths": ["path." + ("width" if broken_field == "widthPx" else broken_field)]}]
     assert final["runtimeProgram"] == mechanics
     assert raw == before
-    assert vfx.validate_vfx_manifest_wire(final)["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(final)["ok"]
 
 
 def test_owner_link_delivery_preserves_explicit_strip_and_existing_paths(tmp_path, monkeypatch):
     from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
     from infini_local.storage import world_storage
-    from infini_local.pipelines import visual_delivery_gate
+    from infini_local.pipelines.visual import delivery as visual_delivery_gate
     from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png, synthetic_no_image_execution_control
     from tests.vfx_material_fixtures import _asset
     data = _data("seek")
@@ -200,7 +204,7 @@ def test_owner_link_delivery_preserves_explicit_strip_and_existing_paths(tmp_pat
     history["id"] = "unchanged_history"
     raw["slots"].append(history)
     gameplay = copy.deepcopy(data["runtimeProgram"])
-    data = vfx.attach_vfx_manifest(data, "synthetic-owner-link", llm_director=lambda *_a, **_kw: raw)
+    data = vfx_stage.attach_vfx_manifest(data, "synthetic-owner-link", llm_director=lambda *_a, **_kw: raw)
     monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path)
     data["visual"] = {"preferredCanvasSize": 32}
     for entity in data["runtimeProgram"]["entities"]:
@@ -216,7 +220,7 @@ def test_owner_link_delivery_preserves_explicit_strip_and_existing_paths(tmp_pat
     assert delivered["vfxManifest"]["slots"][1]["path"] == raw["slots"][1]["path"]
     assert delivered["vfxManifest"]["assets"][0]["layout"] == "strip"
     assert delivered["vfxManifest"]["assets"][0]["prompt"] == raw["assets"][0]["prompt"]
-    assert vfx.validate_vfx_manifest_wire(delivered)["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(delivered)["ok"]
     assert world_storage.is_deliverable_recipe_payload(delivered, check_assets=False)
     world_storage.write_world_recipe_cache(tmp_path, "owner-link", "owner-link", "world", data)
     cached = world_storage.read_world_recipe_cache(tmp_path, "owner-link", "v5", "owner-link", "world")
@@ -233,7 +237,7 @@ def test_existing_path_sources_compile_byte_semantics_unchanged(source, capabili
     raw = _path(data, source)
     assert "ownerAnchor" not in raw["slots"][0]["path"]
     authored = json.dumps(raw, sort_keys=True)
-    final = vfx.attach_vfx_manifest(data, "unchanged-path", llm_director=lambda *_a, **_kw: raw)
+    final = vfx_stage.attach_vfx_manifest(data, "unchanged-path", llm_director=lambda *_a, **_kw: raw)
     assert json.dumps(final["vfxManifest"]["slots"][0]["path"], sort_keys=True) == json.dumps(raw["slots"][0]["path"], sort_keys=True)
     assert json.dumps(raw, sort_keys=True) == authored
-    assert vfx.validate_vfx_manifest_wire(final)["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(final)["ok"]

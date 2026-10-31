@@ -40,6 +40,6 @@ python tools/build_documentation.py
 - [capability_registry.py](../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) — операции, параметры, единицы и ограничения.
 - [program_schema.py](../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py) — формат ответа модели.
 - [technical_lowering.py](../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py) — точные преобразования и записи об их происхождении.
-- [author_item_contract.py](../../LocalGenerator/infini_local/pipelines/author_item_contract.py) — инструкции модели.
+- [author_item_contract.py](../../LocalGenerator/infini_local/pipelines/author/item_contract.py) — инструкции модели.
 
 Проверка актуальности подтверждает совпадение таблиц с кодом, а не выполнение механики в игре. Статические и игровые проверки описаны в [руководстве по тестированию](../development/TESTING_RU.md).

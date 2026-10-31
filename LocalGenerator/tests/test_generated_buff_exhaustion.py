@@ -11,7 +11,7 @@ from infini_local.core import llm_config
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
-from infini_local.pipelines import llm_authoring_pipeline as author
+from infini_local.pipelines.author import request as author
 
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
@@ -309,7 +309,7 @@ def test_default_and_named_policies_are_independently_authored_not_inferred(monk
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_provider_null_scaffolding_is_only_optional_omission_not_authored_null(monkeypatch, mode):
     from jsonschema import Draft202012Validator
-    from infini_local.pipelines.author_item_contract import author_item_response_schema
+    from infini_local.pipelines.author.item_contract import author_item_response_schema
     from test_codex_subscription_contract import _encode_nullable_fixture
 
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
@@ -336,7 +336,7 @@ def test_provider_null_scaffolding_is_only_optional_omission_not_authored_null(m
 @pytest.mark.parametrize("value", [True, False, "180", -1, 361])
 def test_serialized_strict_provider_rejects_bad_policy_tokens(monkeypatch, value):
     from jsonschema import Draft202012Validator
-    from infini_local.pipelines.author_item_contract import author_item_response_schema
+    from infini_local.pipelines.author.item_contract import author_item_response_schema
     from test_codex_subscription_contract import _encode_nullable_fixture
 
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_schema")

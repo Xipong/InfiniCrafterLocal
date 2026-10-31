@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from infini_local.pipelines.native_attack_geometry_view import project_collision_behavior
+from infini_local.pipelines.context.attack_geometry import project_collision_behavior
 
 
 def reference():

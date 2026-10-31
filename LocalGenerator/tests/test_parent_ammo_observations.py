@@ -5,7 +5,7 @@ import copy
 
 import pytest
 
-from infini_local.pipelines.parent_context_pipeline import compact_ammo_profile
+from infini_local.pipelines.context.parents import compact_ammo_profile
 from tests.test_units_packet_preservation import _source_packets, offline_packets  # noqa: F401
 
 

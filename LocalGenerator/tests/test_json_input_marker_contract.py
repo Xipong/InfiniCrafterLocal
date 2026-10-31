@@ -5,8 +5,8 @@ import copy
 
 import pytest
 
-from infini_local.pipelines import llm_provider_wire
-from infini_local.pipelines import llm_transport as transport
+from infini_local.pipelines.transport import provider_wire as llm_provider_wire
+from infini_local.pipelines.transport import client as transport
 
 
 MARKER = {"role": "user", "content": "JSON response."}

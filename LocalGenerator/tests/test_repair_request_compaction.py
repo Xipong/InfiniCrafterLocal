@@ -14,8 +14,9 @@ from infini_local.core.runtime_authoring.program_schema import apply_repair_patc
 from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.repair_scope import runtime_repair_schema_capabilities
-from infini_local.pipelines import author_item_contract as contract
-from infini_local.pipelines import llm_authoring_pipeline as author
+from infini_local.pipelines.author import item_contract as contract
+import infini_local.core.provider_schema as contract_provider_schema
+from infini_local.pipelines.author import request as author
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_codex_subscription_contract import _encode_nullable_fixture
 from test_gameplay_repair_readonly_context import _offline_builder
@@ -34,7 +35,7 @@ def _wire_roundtrip(patch, local):
     provider = contract.author_item_provider_repair_response_schema(local_schema=local)
     encoded = _encode_nullable_fixture(patch, local)
     Draft202012Validator(provider).validate(encoded)
-    restored = contract.project_provider_nullable_optionals_to_local(
+    restored = contract_provider_schema.project_provider_nullable_optionals_to_local(
         encoded, local_schema=local,
         response_format={"type": "json_schema", "json_schema": {"schema": provider}})
     assert restored == patch
@@ -100,7 +101,7 @@ def test_single_function_schema_never_decodes_an_unknown_function_by_object_type
     local = contract.author_item_repair_response_schema(capability_names=["item_stats"])
     provider = contract.author_item_provider_repair_response_schema(local_schema=local)
     bad = {"note": "unknown function", "callsUpsert": [{"id": "probe", "fn": "not_registered", "target": "item", "params": {"manaCost": None}}]}
-    actual = contract.project_provider_nullable_optionals_to_local(
+    actual = contract_provider_schema.project_provider_nullable_optionals_to_local(
         bad, local_schema=local, response_format={"type": "json_schema", "json_schema": {"schema": provider}})
     assert actual == bad
     assert not Draft202012Validator(provider).is_valid(bad)

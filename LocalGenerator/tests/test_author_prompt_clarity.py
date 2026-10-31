@@ -3,7 +3,7 @@
 import json
 import pytest
 from infini_local.core import llm_config
-from infini_local.pipelines import llm_authoring_pipeline as author
+from infini_local.pipelines.author import request as author
 
 
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
@@ -15,7 +15,7 @@ from infini_local.pipelines import llm_authoring_pipeline as author
 def test_actual_repair_call_guide_has_only_the_scoped_canonical_forms(monkeypatch, mode, fn, leaf, bad_value):
     from copy import deepcopy
     from infini_local.core.runtime_authoring.repair_scope import runtime_repair_schema_capabilities
-    from infini_local.pipelines.author_item_contract import author_item_repair_response_schema
+    from infini_local.pipelines.author.item_contract import author_item_repair_response_schema
     from infini_local.qa.capability_witnesses import build_capability_witness
     from test_repair_gameplay_contract import _offline_gameplay_repair
 
@@ -40,7 +40,7 @@ def test_actual_repair_call_guide_has_only_the_scoped_canonical_forms(monkeypatc
 @pytest.mark.parametrize('mode', ['off', 'json_object', 'json_schema'])
 def test_balance_distinguishes_ammunition_contribution_from_autonomous_attack(monkeypatch, mode):
     from copy import deepcopy
-    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 
     monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     source = {'name': 'Unnamed source', 'damage': 50, 'useTime': 10, 'ammo': 71,
@@ -58,7 +58,7 @@ def test_balance_distinguishes_ammunition_contribution_from_autonomous_attack(mo
 @pytest.mark.parametrize('mode', ['off', 'json_object', 'json_schema'])
 def test_ingredient_grounded_balance_prices_total_output_and_reusable_benefit(monkeypatch, mode):
     from copy import deepcopy
-    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 
     monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     parents = ({'name': 'Source A', 'damage': 0, 'value': 100, 'rare': 0, 'consumable': True},

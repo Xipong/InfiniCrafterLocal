@@ -23,22 +23,23 @@ from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.llm_config import ALLOW_DETERMINISTIC_DEV_FALLBACK, USE_LLM
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION, RUNTIME_WIRE_SCHEMA
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.vfx_manifest import attach_vfx_manifest, validate_vfx_manifest_wire
+from infini_local.pipelines.vfx.stage import attach_vfx_manifest
+from infini_local.core.vfx.validation import validate_vfx_manifest_wire
 from infini_local.pipelines import generation_debug
-from infini_local.pipelines.gameplay_stage import compile_and_validate_authored_runtime, validate_final_runtime_wire_boundary
-from infini_local.pipelines.vfx_generation_pipeline import call_llm_vfx_director
+from infini_local.pipelines.author.stage import compile_and_validate_authored_runtime, validate_final_runtime_wire_boundary
+from infini_local.pipelines.vfx.request import call_llm_vfx_director
 from infini_local.pipelines.final_normalize import final_normalize
-from infini_local.pipelines.generated_parent_summary import attach_generated_parent_summary
-from infini_local.pipelines.llm_authoring_pipeline import try_llm_plan
-from infini_local.pipelines.llm_profiles import (
+from infini_local.pipelines.context.generated_summary import attach_generated_parent_summary
+from infini_local.pipelines.author.request import try_llm_plan
+from infini_local.pipelines.transport.profiles import (
     begin_llm_item_lease,
     end_llm_item_lease,
 )
-from infini_local.pipelines.pipeline_visual_config import VISUAL_PIPELINE_PROFILE, contract_versions_payload
-from infini_local.pipelines.visual_asset_plan import finalize_visual_asset_runtime_gates
-from infini_local.pipelines.visual_delivery_gate import assert_visual_delivery_ready, visual_delivery_report
-from infini_local.pipelines.visual_generation_pipeline import apply_visual_director, attach_visual
-from infini_local.pipelines.visual_sprite_generation import maybe_generate_visual_assets, overlap_visual_images
+from infini_local.core.images.config import VISUAL_PIPELINE_PROFILE, contract_versions_payload
+from infini_local.pipelines.visual.assets import finalize_visual_asset_runtime_gates
+from infini_local.pipelines.visual.delivery import assert_visual_delivery_ready, visual_delivery_report
+from infini_local.pipelines.visual.stage import apply_visual_director, attach_visual
+from infini_local.pipelines.images.stage import maybe_generate_visual_assets, overlap_visual_images
 from infini_local.services import asset_sync_service
 from infini_local.services.combine_endpoint import generation_stage
 from infini_local.storage import world_storage

@@ -140,19 +140,19 @@ def test_sdcpp_readiness_identifies_the_actual_image_service(monkeypatch, path, 
 @pytest.mark.parametrize("probe,overrides,code,expected", [
     pytest.param("bounded-env", {"INFINI_SDCPP_WIDTH": "-5", "INFINI_SDCPP_HEIGHT": "99999",
         "INFINI_SDCPP_STEPS": "0", "INFINI_SDCPP_CFG": "-2", "INFINI_SDCPP_SERVER_PORT": "70000"},
-        "from infini_local.pipelines import pipeline_visual_config as v, image_backend_pipeline as i; print(json.dumps([v.SDCPP_WIDTH,v.SDCPP_HEIGHT,v.SDCPP_STEPS,v.SDCPP_CFG,v.SDCPP_SERVER_PORT,i.SDCPP_WIDTH,i.SDCPP_HEIGHT]))",
+        "from infini_local.core.images import config as v; from infini_local.pipelines.images import backends as i; print(json.dumps([v.SDCPP_WIDTH,v.SDCPP_HEIGHT,v.SDCPP_STEPS,v.SDCPP_CFG,v.SDCPP_SERVER_PORT,i.SDCPP_WIDTH,i.SDCPP_HEIGHT]))",
         [64, 2048, 1, 0.0, 65535, 64, 2048], id="bounded-env-shared-backend"),
     pytest.param("lora-file", {
         "INFINI_SDCPP_LORA_FILE": r"D:\Art\loras\terraria_items.safetensors",
         "INFINI_SDCPP_LORA_DIR": r"C:\stale\wrong_loras", "INFINI_SDCPP_LORA_PROMPT_TAGS": "",
         "INFINI_SDCPP_LORA_WEIGHT": "0.55", "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
         "INFINI_SDCPP_SERVER_EXTRA_ARGS": ""},
-        "from infini_local.pipelines import pipeline_visual_config as v, image_backend_pipeline as i; "
+        "from infini_local.core.images import config as v; from infini_local.pipelines.images import backends as i; "
         "cmd,shell=i.build_sdcpp_server_command(); print(json.dumps([shell,v.SDCPP_LORA_DIR,"
         "cmd[cmd.index('--lora-model-dir')+1],v.SDCPP_LORA_PROMPT_TAGS]))",
         [False, r"D:\Art\loras", r"D:\Art\loras", "<lora:terraria_items:0.55>"], id="selected-lora-file-overrides-stale-directory"),
     pytest.param("signal-import", {},
-        "import signal; signals=[s for s in (getattr(signal,'SIGINT',None),getattr(signal,'SIGTERM',None)) if s is not None]; before=[signal.getsignal(s) for s in signals]; import infini_local.pipelines.pipeline_visual_config; after=[signal.getsignal(s) for s in signals]; print(json.dumps([a is b for a,b in zip(before,after)]))",
+        "import signal; signals=[s for s in (getattr(signal,'SIGINT',None),getattr(signal,'SIGTERM',None)) if s is not None]; before=[signal.getsignal(s) for s in signals]; import infini_local.core.images.config; after=[signal.getsignal(s) for s in signals]; print(json.dumps([a is b for a,b in zip(before,after)]))",
         [True, True], id="import-does-not-own-process-signals"),
 ])
 def test_visual_configuration_is_bounded_and_import_inert(probe, overrides, code, expected):

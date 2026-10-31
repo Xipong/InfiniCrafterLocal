@@ -1,10 +1,17 @@
 """Offline literal grammar and native serialization witnesses for Director caches."""
+
+from infini_local.core.vfx import contract as vfx_contract
+from infini_local.core.vfx import repair as vfx_repair
+from infini_local.core.vfx import schema as vfx_schema
+from infini_local.pipelines.visual import contract as visual_contract
+from infini_local.core import provider_schema
+
 import copy
 import json
 
 import pytest
 
-from infini_local.core.vfx_material_contract import vfx_model_schema, vfx_model_payload
+from infini_local.core.vfx.materials import vfx_model_schema, vfx_model_payload
 
 from infini_local.core.llm_prompt_cache import (
     with_instruction_segments, with_schema_instruction_definitions,
@@ -75,14 +82,15 @@ def _packet(monkeypatch, stage, fixture, mode, *, captured=None, vfx_source=None
         mp.setattr(vfx_material_fixtures, "_data", lambda: copy.deepcopy(data))
         mp.setattr(vfx_material_fixtures, "_legacy", lambda current: copy.deepcopy(vfx_source) if vfx_source is not None else _vfx_output(current))
         if captured is not None:
-            from infini_local.pipelines import vfx_generation_pipeline as sender, visual_generation_pipeline as visual
+            from infini_local.pipelines.vfx import request as sender
+            import infini_local.pipelines.visual.request as visual_request
             def record(payload, dossier, static_keys):
                 # Observe the actual builder before optional schema extraction.
                 # Scoped Visual Repair deliberately does not call the extractor.
                 segmented = with_instruction_segments(payload, dossier, static_keys)
                 captured.append(copy.deepcopy(segmented))
                 return segmented
-            mp.setattr(visual, "with_instruction_segments", record)
+            mp.setattr(visual_request, "with_instruction_segments", record)
             mp.setattr(sender, "with_instruction_segments", record)
         return stage_packets(mp, stage, format_mode=mode, labels=("novel-a",))[0], data
 
@@ -90,7 +98,6 @@ def _packet(monkeypatch, stage, fixture, mode, *, captured=None, vfx_source=None
 def _assert_visual_size_repair_packet(packet, data, mode):
     from jsonschema import Draft202012Validator
     from prompt_packet_helpers import request_dossier
-    from infini_local.pipelines import visual_generation_pipeline as visual
     from test_visual_presentation_metadata import _visual_kit
 
     dossier = request_dossier(packet)
@@ -101,7 +108,7 @@ def _assert_visual_size_repair_packet(packet, data, mode):
     }
     # Only the canonical editable leaf is offered; valid equipment and entities
     # remain USER-owned frozen context even when the initial contract needs them.
-    full = visual._visual_repair_schema([row["id"] for row in data["runtimeProgram"]["entities"]])
+    full = visual_contract._visual_repair_schema([row["id"] for row in data["runtimeProgram"]["entities"]])
     leaf = full["properties"]["itemPatch"]["anyOf"][0]["properties"]["renderSizePx"]
     expected = {"type": "object", "additionalProperties": False, "properties": {
         "schema": full["properties"]["schema"], "note": full["properties"]["note"],
@@ -109,14 +116,14 @@ def _assert_visual_size_repair_packet(packet, data, mode):
             "properties": {"renderSizePx": leaf}, "required": ["renderSizePx"]}, {"type": "null"}]},
     }, "required": ["schema", "note", "itemPatch"]}
     if mode == "json_schema":
-        expected = visual._provider_strict_projection(expected)
+        expected = provider_schema._provider_strict_projection(expected)
         assert packet["response_format"]["json_schema"]["schema"] == expected
     assert dynamic["responseSchema"] == dossier["responseSchema"] == expected
     source = _visual_kit(data)
     assert dossier["brokenFragments"]["item"] == dict(source["item"], renderSizePx=None)
     assert dossier["validGeneratedContext"]["entities"] == source["entities"]
     assert dossier["validGeneratedContext"]["equipOverlay"] == source.get("equipOverlay")
-    valid = {"schema": visual.VISUAL_REPAIR_PATCH_SCHEMA, "note": "size only", "itemPatch": {"renderSizePx": 48}}
+    valid = {"schema": visual_contract.VISUAL_REPAIR_PATCH_SCHEMA, "note": "size only", "itemPatch": {"renderSizePx": 48}}
     assert Draft202012Validator(expected).is_valid(valid)
     for hostile in (dict(valid, entitiesUpsert=[]), dict(valid, equipOverlayPatch={}),
                     dict(valid, itemPatch={"renderSizePx": True}),
@@ -127,7 +134,6 @@ def _assert_visual_size_repair_packet(packet, data, mode):
 def _assert_vfx_alpha_repair_packet(packet, data, mode):
     from jsonschema import Draft202012Validator
     from prompt_packet_helpers import request_dossier
-    from infini_local.core import vfx_manifest as vfx
     from test_low_level_three_stage_pipeline import _vfx_output
 
     static, dynamic = [json.loads(row["content"]) for row in packet["messages"][1:]]
@@ -138,7 +144,7 @@ def _assert_vfx_alpha_repair_packet(packet, data, mode):
     assert dossier["repairScope"]["fieldPermissions"] == {
         "globals": {}, "slots": [{"slotId": source["slots"][0]["id"], "paths": ["alpha"]}], "assets": [],
     }
-    canonical = vfx._director_schema(data)["properties"]["slots"]["items"]
+    canonical = vfx_schema._director_schema(data)["properties"]["slots"]["items"]
     slot = schema["properties"]["slotsUpsert"]["items"]
     assert schema["properties"]["slotsUpsert"]["maxItems"] == 1
     assert slot["properties"]["alpha"] == canonical["properties"]["alpha"]
@@ -156,7 +162,7 @@ def _assert_vfx_alpha_repair_packet(packet, data, mode):
     assert static["schemaDefinitions"] == {"$defs": {"slot_alpha": canonical["properties"]["alpha"]}}
     assert dynamic["outputSchema"]["properties"]["slotsUpsert"]["items"]["properties"]["alpha"] == {"$ref": "#/$defs/slot_alpha"}
     assert dossier["brokenFragments"]["slots"] == [dict(source["slots"][0], alpha=None)]
-    valid = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "alpha only", "slotsUpsert": source["slots"]}
+    valid = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "note": "alpha only", "slotsUpsert": source["slots"]}
     assert Draft202012Validator(schema).is_valid(valid)
     for hostile in (dict(valid, assetsUpsert=[]), dict(valid, slotIdsDelete=[]),
                     dict(valid, slotsUpsert=[dict(source["slots"][0], alpha=True)]),
@@ -170,7 +176,6 @@ def _assert_vfx_alpha_repair_packet(packet, data, mode):
 @pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
 def test_visual_caches_literal_entity_grammar_not_roster(monkeypatch, stage, mode):
     from prompt_packet_helpers import request_dossier
-    from infini_local.pipelines import visual_generation_pipeline as visual
     packets = []
     for fixture in ("workbench_blade", "door_on_chain", "beam_geometry"):
         packet, data = _packet(monkeypatch, stage, fixture, mode)
@@ -192,9 +197,9 @@ def test_visual_caches_literal_entity_grammar_not_roster(monkeypatch, stage, mod
         else:
             assert dynamic["responseSchema"]["properties"]["animationPlan"] == {"$ref": "#/$defs/animationPlan"}
         ids = [row["id"] for row in data["runtimeProgram"]["entities"]]
-        canonical = (visual._visual_repair_schema if stage.endswith("repair") else visual._response_schema)(ids, False, data["runtimeProgram"]["itemEntityId"])
+        canonical = (visual_contract._visual_repair_schema if stage.endswith("repair") else visual_contract._response_schema)(ids, False, data["runtimeProgram"]["itemEntityId"])
         if mode == "json_schema":
-            canonical = visual._provider_strict_projection(canonical)
+            canonical = provider_schema._provider_strict_projection(canonical)
             assert packet["response_format"]["json_schema"]["schema"] == canonical
         assert request_dossier(packet)["responseSchema"] == canonical
         assert branches[0]["properties"]["entityId"]["enum"] == [data["runtimeProgram"]["itemEntityId"]]
@@ -214,7 +219,6 @@ def test_visual_item_only_roster_preserves_optional_equipment_contract(monkeypat
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.capability_witnesses import build_capability_witness
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-    from infini_local.pipelines import visual_generation_pipeline as visual
     from test_stable_schema_data import capture_wire
     import vfx_material_fixtures
 
@@ -232,9 +236,9 @@ def test_visual_item_only_roster_preserves_optional_equipment_contract(monkeypat
         wire = capture_wire(monkeypatch, packet, context)
         assert wire["prompt_cache_key"] and wire["instructions"] == packet["messages"][0]["content"]
         return
-    canonical = (visual._visual_repair_schema if stage.endswith("repair") else visual._response_schema)(ids, overlay, ids[0])
+    canonical = (visual_contract._visual_repair_schema if stage.endswith("repair") else visual_contract._response_schema)(ids, overlay, ids[0])
     if mode == "json_schema":
-        canonical = visual._provider_strict_projection(canonical)
+        canonical = provider_schema._provider_strict_projection(canonical)
         assert packet["response_format"]["json_schema"]["schema"] == canonical
     assert request_dossier(packet)["responseSchema"] == canonical
     static, dynamic = [json.loads(row["content"]) for row in packet["messages"][1:]]
@@ -253,7 +257,6 @@ def test_visual_item_only_roster_preserves_optional_equipment_contract(monkeypat
 @pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
 def test_vfx_caches_owned_slot_grammar_not_dynamic_compatibility(monkeypatch, stage, mode):
     from prompt_packet_helpers import request_dossier
-    from infini_local.core import vfx_manifest as vfx
     packets = []
     for fixture in ("workbench_blade", "door_on_chain", "beam_geometry"):
         packet, data = _packet(monkeypatch, stage, fixture, mode)
@@ -270,7 +273,7 @@ def test_vfx_caches_owned_slot_grammar_not_dynamic_compatibility(monkeypatch, st
         assert schema["properties"]["assetsUpsert" if repair else "assets"]["items"] == {"$ref": "#/$defs/asset"}
         for field in ("element", "path", "screenShake", "particle", "sound"):
             assert slot["properties"][field] == {"$ref": "#/$defs/" + field}
-        canonical = vfx_model_schema((vfx._vfx_repair_schema if repair else vfx._director_schema)(data))
+        canonical = vfx_model_schema((vfx_repair._vfx_repair_schema if repair else vfx_schema._director_schema)(data))
         assert request_dossier(packet)["outputSchema"] == canonical
         if mode == "json_schema":
             assert packet["response_format"]["json_schema"]["schema"] == canonical
@@ -342,7 +345,6 @@ def test_actual_native_serialization_is_static_across_three_rosters_with_exact_d
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
 def test_vfx_cache_tracks_exact_scope_but_not_source_specific_constants(monkeypatch, mode):
-    from infini_local.core import vfx_manifest as vfx
     from prompt_packet_helpers import request_dossier
     from test_stable_schema_data import capture_wire
     from vfx_material_fixtures import _data
@@ -361,7 +363,7 @@ def test_vfx_cache_tracks_exact_scope_but_not_source_specific_constants(monkeypa
     static = [json.loads(packet["messages"][1]["content"]) for packet in packets]
     assert packets[0]["messages"][:2] == packets[1]["messages"][:2]
     assert static[0]["schemaDefinitions"] == static[1]["schemaDefinitions"]
-    canonical = vfx._director_schema(data)["properties"]["slots"]["items"]["properties"]
+    canonical = vfx_schema._director_schema(data)["properties"]["slots"]["items"]["properties"]
     assert static[0]["schemaDefinitions"]["$defs"] == {"slot_alpha": canonical["alpha"]}
     assert static[2]["schemaDefinitions"]["$defs"] == {
         "slot_alpha": canonical["alpha"], "slot_duration": canonical["duration"],
@@ -387,8 +389,7 @@ def test_vfx_cache_tracks_exact_scope_but_not_source_specific_constants(monkeypa
 def test_reference_schema_reconstructs_owner_admission_and_refusal(monkeypatch, stage, mode):
     from jsonschema import Draft202012Validator
     from infini_local.core.schema_validation import strict_schema_errors
-    from infini_local.core import vfx_manifest as vfx
-    from infini_local.pipelines import visual_generation_pipeline as visual
+    import infini_local.core.vfx.contract as vfx_contract
     from test_visual_presentation_metadata import _visual_kit
     from test_codex_subscription_contract import _encode_nullable_fixture
     from vfx_material_fixtures import _sprite
@@ -408,11 +409,11 @@ def test_reference_schema_reconstructs_owner_admission_and_refusal(monkeypatch, 
     if mode == "json_schema":
         assert inline == packet["response_format"]["json_schema"]["schema"]
     if visual_stage:
-        valid = ({"schema": visual.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": {"renderSizePx": 48},
+        valid = ({"schema": visual_contract.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": {"renderSizePx": 48},
                   "note": "one leaf"} if repair else _visual_kit(data))
         if mode == "json_schema":
             ids = [e["id"] for e in data["runtimeProgram"]["entities"]]
-            local = visual._response_schema(ids, False, data["runtimeProgram"]["itemEntityId"])
+            local = visual_contract._response_schema(ids, False, data["runtimeProgram"]["itemEntityId"])
             valid = _encode_nullable_fixture(valid, local)
         invalid = copy.deepcopy(valid)
         invalid["itemPatch" if repair else "item"]["renderSizePx" if repair else "inventoryScale"] = True
@@ -425,7 +426,7 @@ def test_reference_schema_reconstructs_owner_admission_and_refusal(monkeypatch, 
         valid = _sprite(data)
         if repair:
             from test_low_level_three_stage_pipeline import _vfx_output
-            valid = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "one leaf", "slotsUpsert": _vfx_output(data)["slots"]}
+            valid = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "note": "one leaf", "slotsUpsert": _vfx_output(data)["slots"]}
         valid = vfx_model_payload(valid)
         slot_key = "slotsUpsert" if repair else "slots"
         invalid = copy.deepcopy(valid)

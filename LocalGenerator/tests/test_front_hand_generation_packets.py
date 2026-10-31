@@ -8,9 +8,11 @@ from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.pipelines import llm_authoring_pipeline as author
-from infini_local.pipelines import llm_provider_wire, llm_transport
-from infini_local.pipelines import visual_generation_pipeline as visual
+from infini_local.pipelines.author import request as author
+from infini_local.pipelines.transport import provider_wire as llm_provider_wire
+from infini_local.pipelines.transport import client as llm_transport
+import infini_local.pipelines.visual.contract as visual_contract
+import infini_local.pipelines.visual.stage as visual_stage
 from prompt_packet_helpers import request_dossier
 from repair_test_helpers import provider_roundtrip, repair_with_response
 from test_composable_motion_primitives import add
@@ -122,10 +124,10 @@ def test_visual_and_repair_do_not_promise_contact_for_every_grip(wire_transport,
     broken = deepcopy(raw)
     broken["item"]["renderSizePx"] = 0
     responses, requests = wire_transport
-    responses.extend([broken, {"schema": visual.VISUAL_REPAIR_PATCH_SCHEMA,
+    responses.extend([broken, {"schema": visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,
         "itemPatch": {"renderSizePx": raw["item"]["renderSizePx"], "grip": {"normalizedX": .9, "normalizedY": .9}},
         "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [], "note": "size only"}])
-    projected = visual.apply_visual_director(accepted, {}, {})
+    projected = visual_stage.apply_visual_director(accepted, {}, {})
     assert len(requests) == 2 and not responses
     assert projected["visualKit"] == raw
     assert {k: v for k, v in accepted.items() if k != "debug"} == frozen

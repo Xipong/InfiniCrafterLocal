@@ -8,9 +8,10 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from infini_local.pipelines import pipeline_visual_config as config
-from infini_local.pipelines import sprite_postprocess as post
-from infini_local.pipelines import visual_sprite_generation as generation
+from infini_local.core.images import config
+from infini_local.pipelines.images import postprocess as post
+import infini_local.pipelines.images.validation as post_validation
+from infini_local.pipelines.images import stage as generation
 
 
 @pytest.fixture
@@ -59,9 +60,9 @@ def test_production_refit_publishes_master_detail_without_second_generation(tmp_
     assert json.loads(data["debug"][role + "SpriteRefit"])["samplingSource"] == "pre_bake_master"
     assert Path(published).read_bytes() == refit.read_bytes()
     assert pipeline[0]["source"].read_bytes() == pipeline[0]["source_bytes"]
-    before = post.validate_processed_sprite(str(original), role, expected_canvas=24)
-    assert not before["ok"] and not post.sprite_validation_fatal(before)
-    assert post.validate_processed_sprite(published, role, expected_canvas=24)["ok"]
+    before = post_validation.validate_processed_sprite(str(original), role, expected_canvas=24)
+    assert not before["ok"] and not post_validation.sprite_validation_fatal(before)
+    assert post_validation.validate_processed_sprite(published, role, expected_canvas=24)["ok"]
     original_bytes = original.read_bytes()
     low = generation.refit_processed_sprite_to_contract(str(original), "low-detail", 24, role, before, output_dir=tmp_path)
     assert original.read_bytes() == original_bytes
@@ -108,7 +109,7 @@ def test_unavailable_master_preserves_bake_and_uses_only_safe_existing_source(pi
     else:
         assert status == "generated"
         assert json.loads(data["debug"]["fieldSpriteRefit"])["samplingSource"] == "processed_sprite"
-    assert not post.sprite_validation_fatal(post.validate_processed_sprite(published, "field", expected_canvas=24))
+    assert not post_validation.sprite_validation_fatal(post_validation.validate_processed_sprite(published, "field", expected_canvas=24))
 
 
 @pytest.mark.parametrize("fault", ["master-write", "master-read", "refit-write", "publication"])
@@ -153,7 +154,7 @@ def test_local_refit_io_fault_never_spends_another_generation(tmp_path, pipeline
 def test_mixed_fatal_and_fit_validation_retries_without_refit(pipeline, monkeypatch):
     # Increase only the existing opacity admission scalar so the same real small
     # PNG has both fit and fatal opacity findings. No validator/refit is mocked.
-    monkeypatch.setattr(post, "SPRITE_MIN_OPAQUE_PCT", 0.20)
+    monkeypatch.setattr(post_validation, "SPRITE_MIN_OPAQUE_PCT", 0.20)
     data = {"id": "mixed-reasons"}
     published, _, _, status = generation.generate_visual_asset(data, "runtime:projectile", "authored striped mark", "", "stripe", 24)
     assert not published and status == "failed", data
@@ -177,7 +178,7 @@ def test_refit_preserves_authored_parts_without_topology_retry(pipeline, source_
     data = {"id": "two-parts", "visual": {"topology": topology, "partCountMin": 2, "partCountMax": 2}}
     published, _, _, status = generation.generate_visual_asset(data, "item", "two authored separated colored marks", "", "parts", 24)
     assert published and status == "generated" and len(pipeline) == 1, data
-    checked = post.validate_processed_sprite(published, "item", expected_canvas=24, topology=topology, part_count_min=2, part_count_max=2)
+    checked = post_validation.validate_processed_sprite(published, "item", expected_canvas=24, topology=topology, part_count_min=2, part_count_max=2)
     assert checked["ok"] and checked["bboxStats"]["significantAlphaComponents"] == 2
     assert checked["topology"] == topology
     with Image.open(published) as image:
@@ -190,7 +191,7 @@ def test_refit_preserves_authored_parts_without_topology_retry(pipeline, source_
 
 
 def test_fatal_refit_is_not_published_over_usable_original(pipeline, source_pixels, monkeypatch):
-    monkeypatch.setattr(post, "SPRITE_MAX_OPAQUE_PCT", 0.50)
+    monkeypatch.setattr(post_validation, "SPRITE_MAX_OPAQUE_PCT", 0.50)
     source_pixels.paste((0, 0, 0, 0), (0, 0, 64, 64))
     source_pixels.paste((180, 100, 30, 255), (26, 26, 38, 38))
     data = {"id": "solid-square"}
@@ -199,7 +200,7 @@ def test_fatal_refit_is_not_published_over_usable_original(pipeline, source_pixe
     original = pipeline[0]["output_dir"] / "square.png"
     assert Path(published).read_bytes() == original.read_bytes()
     rows = json.loads(data["debug"]["itemSpriteValidation"])
-    assert not post.sprite_validation_fatal(rows[0]["validation"])
-    assert post.sprite_validation_fatal(rows[0]["refit"]["validation"])
+    assert not post_validation.sprite_validation_fatal(rows[0]["validation"])
+    assert post_validation.sprite_validation_fatal(rows[0]["refit"]["validation"])
     assert "itemSpriteRefit" not in data["debug"]
     assert pipeline[0]["source"].read_bytes() == pipeline[0]["source_bytes"]

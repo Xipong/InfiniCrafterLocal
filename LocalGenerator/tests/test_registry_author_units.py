@@ -27,7 +27,7 @@ from infini_local.core.runtime_authoring.technical_lowering import audit_compile
 from infini_local.qa.capability_witnesses import build_capability_witness
 from test_author_projectile_aliases import selected as _scalar_name_call
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+from infini_local.pipelines.author.request import build_initial_author_request
 
 FN = "generated_buff_on_use"
 

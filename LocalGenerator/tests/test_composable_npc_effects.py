@@ -216,7 +216,7 @@ def test_omitted_neutrals_have_exact_receipts_and_no_input_mutation():
 def test_actual_offline_author_request_transports_typed_composition(monkeypatch, mode):
     from repair_test_helpers import provider_roundtrip
     from infini_local.core import llm_config
-    from infini_local.pipelines import llm_authoring_pipeline as author
+    from infini_local.pipelines.author import request as author
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     request, user, _ = author.build_initial_author_request({}, {}, "numeric NPC effects", model_name="offline")
     request = json.loads(json.dumps(request))

@@ -3,7 +3,7 @@ from copy import deepcopy
 
 import pytest
 
-from infini_local.core import vfx_manifest as vfx
+import infini_local.core.vfx.surface as vfx_surface
 from tests.test_director_example_neutrality import _accepted_data, _capture_vfx
 
 
@@ -47,15 +47,15 @@ def test_geometry_facts_follow_selected_data_not_name_or_missing_defaults():
     entity = next(row for row in data["runtimeProgram"]["entities"] if "lashGeometry" in row)
     entity["visual"] = {"assetMode": "runtime_geometry"}
     entity["hitbox"] = {"widthPx": 2, "hitboxScale": 0.1}
-    first = vfx._body_presentation(data)
+    first = vfx_surface._body_presentation(data)
     row = next(row for row in first if row["entityId"] == entity["id"])
     assert row["widthPx"] == 4  # same actual native collision/render minimum
     data["name"] = "invisible rigid sword"
-    assert vfx._body_presentation(data) == first
+    assert vfx_surface._body_presentation(data) == first
     entity["hitbox"].pop("hitboxScale")
-    assert "widthPx" not in next(row for row in vfx._body_presentation(data) if row["entityId"] == entity["id"])
+    assert "widthPx" not in next(row for row in vfx_surface._body_presentation(data) if row["entityId"] == entity["id"])
     entity.pop("lashGeometry")
-    row = next(row for row in vfx._body_presentation(data) if row["entityId"] == entity["id"])
+    row = next(row for row in vfx_surface._body_presentation(data) if row["entityId"] == entity["id"])
     assert row["coverage"] == "body_segment"
     assert "widthPx" not in row
 
@@ -66,7 +66,7 @@ def test_item_body_uses_root_image_and_preserves_explicit_hidden_use():
     body["visual"] = {"assetMode": "baked_sprite"}
     data["visual"] = {"renderSizePx": 48, "forwardAngleDegrees": 0}
     data["runtimeProgram"]["itemUse"] = {"hideUseGraphic": True, "releaseTiming": "immediate"}
-    row = next(row for row in vfx._body_presentation(data) if row["entityId"] == body["id"])
+    row = next(row for row in vfx_surface._body_presentation(data) if row["entityId"] == body["id"])
     assert row["image"] == {"renderSizePx": 48, "forwardAngleDegrees": 0}
     assert row["coverage"] == "inventory_and_item_use"
     assert row["itemUse"] == {"hideUseGraphic": True, "releaseTiming": "immediate"}
@@ -86,7 +86,7 @@ def test_saved_wire_geometry_coverage_matches_path_source_without_recompiling(dr
     entity.update(deepcopy(driver))
     entity["visual"] = {"assetMode": "runtime_geometry"}
     frozen = deepcopy(data)
-    surface = vfx.vfx_director_surface(data)
+    surface = vfx_surface.vfx_director_surface(data)
     paths = next(row for row in surface["texturedPathSources"] if row["entityId"] == entity["id"])
     body = next(row for row in surface["bodyPresentation"] if row["entityId"] == entity["id"])
     assert paths["sources"] == ["anchorHistory", source, "ownerLink"]

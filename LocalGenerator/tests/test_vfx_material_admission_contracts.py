@@ -8,7 +8,14 @@ from tests.vfx_image_fixtures import apply_edits
 import copy
 from typing import Any
 import pytest
-from infini_local.core import vfx_manifest as vfx
+import infini_local.core.vfx.contract as vfx_contract
+import infini_local.core.vfx.materials as vfx_materials
+import infini_local.core.vfx.projection as vfx_projection
+import infini_local.core.vfx.repair as vfx_repair
+import infini_local.core.vfx.schema as vfx_schema
+import infini_local.core.vfx.surface as vfx_surface
+import infini_local.core.vfx.validation as vfx_validation
+import infini_local.pipelines.vfx.stage as vfx_stage
 from infini_local.core.schema_validation import strict_schema_errors
 from jsonschema import Draft202012Validator
 from tests.test_repair_vfx_contract import _patch
@@ -81,7 +88,7 @@ def _library_particle(data: dict[str, Any]) -> dict[str, Any]:
 @pytest.mark.parametrize("format_name", ["json_object", "json_schema"])
 def test_library_material_facts_reach_director_and_frozen_repair(monkeypatch, wire_transport, format_name):
     from prompt_packet_helpers import request_dossier
-    from infini_local.pipelines import vfx_generation_pipeline as transport
+    from infini_local.pipelines.vfx import request as transport
 
     monkeypatch.setattr("infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE", format_name)
     data = _accepted_visual_data("workbench_blade")
@@ -94,9 +101,9 @@ def test_library_material_facts_reach_director_and_frozen_repair(monkeypatch, wi
     candidate = copy.deepcopy(slot)
     candidate["particle"].update(endOpacity=0.7, count=1)
     responses, requests = wire_transport
-    responses.extend([glow, {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "opacity only",
+    responses.extend([glow, {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "note": "opacity only",
                              "slotsUpsert": [candidate]}])
-    result = vfx.attach_vfx_manifest(data, "material_facts", llm_director=transport.call_llm_vfx_director)
+    result = vfx_stage.attach_vfx_manifest(data, "material_facts", llm_director=transport.call_llm_vfx_director)
     assert len(requests) == 2 and not responses
     for request, key in zip(requests, ("runtimeVocabulary", "runtimeVocabularyReadOnly")):
         assert request["response_format"]["type"] == format_name
@@ -143,9 +150,9 @@ def test_library_payload_typed_admission(renderer, edits, valid):
     raw = _renderer_material(data, renderer)
     for path, value in edits.items():
         apply_edits(raw["slots"][0], [("set", path.split("."), value)])
-    assert vfx.validate_vfx_director_output(raw, data)["ok"] is valid
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "library_admission")
-    assert vfx.validate_vfx_manifest_wire(data)["ok"] is valid
+    assert vfx_validation.validate_vfx_director_output(raw, data)["ok"] is valid
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "library_admission")
+    assert vfx_validation.validate_vfx_manifest_wire(data)["ok"] is valid
 
 
 @pytest.mark.parametrize("renderer,payload,leaf,bad,replacement,hostile", [
@@ -158,48 +165,48 @@ def test_library_relation_repair_changes_only_diagnosed_endpoint(renderer, paylo
     data = _data()
     raw = _renderer_material(data, renderer)
     raw["slots"][0][payload][leaf] = bad
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert not report["ok"]
     assert {row["path"] for row in report["errors"]} == {f"$.slots[0].{payload}.{leaf}"}
-    scope = vfx._build_vfx_repair_scope(raw, report["errors"])
+    scope = vfx_repair._build_vfx_repair_scope(raw, report["errors"])
     candidate = copy.deepcopy(raw["slots"][0])
     candidate[payload].update({leaf: replacement, **hostile})
-    repaired = vfx._apply_vfx_repair_patch(data, raw, _patch(slotsUpsert=[candidate]), scope)
+    repaired = vfx_repair._apply_vfx_repair_patch(data, raw, _patch(slotsUpsert=[candidate]), scope)
     expected = copy.deepcopy(raw)
     expected["slots"][0][payload][leaf] = replacement
     assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
-    assert vfx.validate_vfx_director_output(repaired, data)["ok"]
+    assert vfx_validation.validate_vfx_director_output(repaired, data)["ok"]
 
 
 def _compiled() -> dict[str, Any]:
     data = _data()
     raw = _with_asset(data)
     raw["slots"].append(_path(data)["slots"][0])
-    return vfx.attach_vfx_manifest(data, "wire_material", llm_director=lambda *_a, **_kw: raw)
+    return vfx_stage.attach_vfx_manifest(data, "wire_material", llm_director=lambda *_a, **_kw: raw)
 
 
 def test_pending_compiled_and_stripped_ready_runtime_wire_have_distinct_caption_domains() -> None:
     data = _compiled()
     before = copy.deepcopy(data)
-    assert vfx.validate_vfx_manifest_wire(data) == {"ok": True, "errors": []}
+    assert vfx_validation.validate_vfx_manifest_wire(data) == {"ok": True, "errors": []}
     asset = data["vfxManifest"]["assets"][0]
     asset.update(prompt="", negativePrompt="", spritePath="canonical_vfx.png", spriteStatus="generated", spriteTechnicalScore=0.8)
-    assert vfx.validate_vfx_manifest_wire(data) == {"ok": True, "errors": []}
+    assert vfx_validation.validate_vfx_manifest_wire(data) == {"ok": True, "errors": []}
     assert before["vfxManifest"]["assets"][0]["spriteStatus"] == "pending"
-    assert not vfx.validate_vfx_director_output({**_with_asset(data), "assets": [asset]}, data)["ok"]
+    assert not vfx_validation.validate_vfx_director_output({**_with_asset(data), "assets": [asset]}, data)["ok"]
 
 
 def test_shared_schema_mutation_reaches_wire_consumer_not_a_duplicate_definition(monkeypatch: pytest.MonkeyPatch) -> None:
     data = _compiled()
-    original = vfx.element_schema
+    original = vfx_materials.element_schema
 
     def tightened(**kwargs: Any) -> dict[str, Any]:
         schema = original(**kwargs)
         schema["properties"]["widthPx"]["maximum"] = 4
         return schema
 
-    monkeypatch.setattr(vfx, "element_schema", tightened)
-    report = vfx.validate_vfx_manifest_wire(data)
+    monkeypatch.setattr(vfx_schema, "element_schema", tightened)
+    report = vfx_validation.validate_vfx_manifest_wire(data)
     assert not report["ok"]
     assert "$.vfxManifest.slots[0].element.widthPx" in {row["path"] for row in report["errors"]}
 
@@ -208,10 +215,10 @@ def test_shared_schema_mutation_reaches_wire_consumer_not_a_duplicate_definition
 def test_wire_slot_ceiling_is_not_bypassed_by_canonical_shape_gate() -> None:
     data = _data()
     raw = _sprite(data)
-    vfx.attach_vfx_manifest(data, "bounded_wire", llm_director=lambda *_a, **_kw: raw)
+    vfx_stage.attach_vfx_manifest(data, "bounded_wire", llm_director=lambda *_a, **_kw: raw)
     slot = data["vfxManifest"]["slots"][0]
     data["vfxManifest"]["slots"] = [{**copy.deepcopy(slot), "id": f"row_{index}"} for index in range(13)]
-    report = vfx.validate_vfx_manifest_wire(data)
+    report = vfx_validation.validate_vfx_manifest_wire(data)
     assert not report["ok"]
     assert "$.vfxManifest.slots" in {r["path"] for r in report["errors"]}
 
@@ -224,7 +231,7 @@ def test_entity_texture_requires_that_exact_accepted_image_tuple(mode: str, vali
     raw["slots"][0].update(entityId=row["id"], event="on_spawn")
     raw["slots"][0]["element"]["texture"] = {"source": "entity", "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
     before = copy.deepcopy(data)
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"] is valid, report["errors"]
     for repair in (False, True):
         packet = _sent(data, repair)
@@ -237,10 +244,10 @@ def test_entity_texture_requires_that_exact_accepted_image_tuple(mode: str, vali
         candidate = copy.deepcopy(raw["slots"][0])
         candidate["element"]["texture"]["source"] = "item"
         candidate["element"]["widthPx"] = 40
-        scope = vfx._build_vfx_repair_scope(raw, report["errors"])
-        repaired = vfx._apply_vfx_repair_patch(data, raw, _patch(slotsUpsert=[candidate]), scope)
+        scope = vfx_repair._build_vfx_repair_scope(raw, report["errors"])
+        repaired = vfx_repair._apply_vfx_repair_patch(data, raw, _patch(slotsUpsert=[candidate]), scope)
         assert repaired["slots"][0]["element"]["widthPx"] == 12.0
-        assert vfx.validate_vfx_director_output(repaired, data)["ok"]
+        assert vfx_validation.validate_vfx_director_output(repaired, data)["ok"]
     assert data == before
 
 @pytest.mark.parametrize("renderer", ["spriteElement", "texturedPath"])
@@ -249,15 +256,15 @@ def test_nested_asset_requires_exact_existing_image_producer(renderer: str) -> N
     raw = _sprite(data) if renderer == "spriteElement" else _path(data)
     name = "element" if renderer == "spriteElement" else "path"
     raw["slots"][0][name]["texture"] = {"source": "asset", "assetId": "exact_impact", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
-    unpaired = vfx.validate_vfx_director_output(raw, data)
+    unpaired = vfx_validation.validate_vfx_director_output(raw, data)
     assert not unpaired["ok"]
     assert {r["path"] for r in unpaired["errors"]} == {f"$.slots[0].{name}.texture.assetId", f"$.slots[0].{name}.texture.source"}
     raw["assets"] = [_asset("exact_impact")]
-    assert vfx.validate_vfx_director_output(raw, data)["ok"]
-    final = vfx.attach_vfx_manifest(data, "nested_asset", llm_director=lambda *_a, **_kw: raw)
-    assert vfx.validate_vfx_manifest_wire(final)["ok"]
+    assert vfx_validation.validate_vfx_director_output(raw, data)["ok"]
+    final = vfx_stage.attach_vfx_manifest(data, "nested_asset", llm_director=lambda *_a, **_kw: raw)
+    assert vfx_validation.validate_vfx_manifest_wire(final)["ok"]
     final["vfxManifest"]["assets"].clear()
-    report = vfx.validate_vfx_manifest_wire(final)
+    report = vfx_validation.validate_vfx_manifest_wire(final)
     assert not report["ok"]
     assert f"$.vfxManifest.slots[0].{name}.texture.assetId" in {r["path"] for r in report["errors"]}
 
@@ -271,12 +278,12 @@ def test_beam_collision_precedence_does_not_advertise_dormant_whip() -> None:
     # second geometry payload; this synthetic overlap is not fresh Author input.
     entity["lashGeometry"] = copy.deepcopy(lash_entity["lashGeometry"])
     before = copy.deepcopy(data)
-    assert vfx.vfx_director_surface(data)["texturedPathSources"] == [{"entityId": entity["id"], "sources": ["anchorHistory", "beam", "ownerLink"]}]
+    assert vfx_surface.vfx_director_surface(data)["texturedPathSources"] == [{"entityId": entity["id"], "sources": ["anchorHistory", "beam", "ownerLink"]}]
     assert data == before
     entity.pop("beamGeometry")
-    assert vfx.vfx_director_surface(data)["texturedPathSources"] == [{"entityId": entity["id"], "sources": ["anchorHistory", "whip", "ownerLink"]}]
+    assert vfx_surface.vfx_director_surface(data)["texturedPathSources"] == [{"entityId": entity["id"], "sources": ["anchorHistory", "whip", "ownerLink"]}]
     entity.pop("lashGeometry")
-    assert vfx.vfx_director_surface(data)["texturedPathSources"] == [{"entityId": entity["id"], "sources": ["anchorHistory", "ownerLink"]}]
+    assert vfx_surface.vfx_director_surface(data)["texturedPathSources"] == [{"entityId": entity["id"], "sources": ["anchorHistory", "ownerLink"]}]
 
 
 MATERIAL_BOUNDARIES = json.loads((Path(__file__).parent / "fixtures/vfx_image_material_boundaries.json").read_text())
@@ -296,13 +303,13 @@ def test_material_boundary_rejection(case):
     elif kind == "later":
         authored = _with_asset(data)
         authored["slots"].append({**copy.deepcopy(authored["slots"][0]), "id": "later_material"})
-        target = vfx.attach_vfx_manifest(data, "large_integer_wire", llm_director=lambda *_a, **_kw: authored)
+        target = vfx_stage.attach_vfx_manifest(data, "large_integer_wire", llm_director=lambda *_a, **_kw: authored)
     else:
         target = _with_asset(data) if kind == "asset" else _path(data, case["source"]) if kind in {"path", "anchor"} else _sprite(data)
     apply_edits(target, case["edits"])
     if case["id"] == "asset:too_many:$.assets":
         # Probe the current array ceiling without a dangling reference.
-        limit = vfx.vfx_director_schema(data)["properties"]["assets"]["maxItems"]
+        limit = vfx_schema.vfx_director_schema(data)["properties"]["assets"]["maxItems"]
         target["assets"] = [_asset("asset_" + str(i)) for i in range(limit + 1)]
         target["slots"][0]["element"]["texture"]["assetId"] = "asset_0"
     if case["id"] == "sprite:foreign_element:element":
@@ -311,7 +318,7 @@ def test_material_boundary_rejection(case):
         target = _shape(data)
         target["slots"][0]["element"] = element
     before = copy.deepcopy(target)
-    validator = vfx.validate_vfx_manifest_wire if case["wire"] else vfx.validate_vfx_director_output
+    validator = vfx_validation.validate_vfx_manifest_wire if case["wire"] else vfx_validation.validate_vfx_director_output
     assert callable(validator), "canonical persisted/admission boundary required"
     report = validator(target) if case["wire"] else validator(target, data)
     assert not report["ok"], case["id"]
@@ -362,10 +369,10 @@ def test_material_payload_roundtrip(kind, source, capability):
     Draft202012Validator.check_schema(packet["outputSchema"])
     assert not strict_schema_errors(raw, packet["outputSchema"])
     Draft202012Validator(packet["outputSchema"]).validate(raw)
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"], report["errors"]
     assert report["normalized"] == before
-    final = vfx.attach_vfx_manifest(data, "material_roundtrip", llm_director=lambda *_a, **_kw: raw)
+    final = vfx_stage.attach_vfx_manifest(data, "material_roundtrip", llm_director=lambda *_a, **_kw: raw)
     compiled = final["vfxManifest"]["slots"]
     assert compiled[0]["rendererKind"] == slot["rendererKind"]
     if kind == "shape":
@@ -380,7 +387,7 @@ def test_material_payload_roundtrip(kind, source, capability):
             assert all(field.get("description") for field in payload_schema["properties"].values())
             assert "assets" not in final["vfxManifest"]
             assert "element" not in compiled[0] and "path" not in compiled[0]
-            assert vfx.vfx_png_dependencies(final, final["vfxManifest"])["errors"] == []
+            assert vfx_validation.vfx_png_dependencies(final, final["vfxManifest"])["errors"] == []
         if kind == "sprite":
             raw["slots"][0]["element"]["widthProfile"]["middle"] = 4
             assert compiled[0]["element"]["widthProfile"]["middle"] == 1
@@ -393,7 +400,7 @@ def test_material_payload_roundtrip(kind, source, capability):
             row = next(row for row in surface["texturedPathSources"] if row["entityId"] == slot["entityId"])
             assert source in row["sources"]
     wire_before = copy.deepcopy(final)
-    assert vfx.validate_vfx_manifest_wire(final)["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(final)["ok"]
     assert final == wire_before
     assert final["debug"]["llmStageAccounting"]["vfxRepairCalls"] == 0
     assert data["runtimeProgram"] == gameplay and raw == before
@@ -402,16 +409,16 @@ def test_material_payload_roundtrip(kind, source, capability):
 def test_saved_shape_preset_keeps_wire_bytes_but_retired_material_snapshot_is_refused():
     data = _data()
     raw = _legacy(data)
-    assert not vfx.validate_vfx_director_output(raw, data)["ok"]
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "saved-material")
+    assert not vfx_validation.validate_vfx_director_output(raw, data)["ok"]
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "saved-material")
     before = copy.deepcopy(data)
-    assert vfx.validate_vfx_manifest_wire(data)["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
     assert data == before
     stale = copy.deepcopy(data)
     stale["vfxManifest"] = json.loads((Path(__file__).parent / "fixtures/vfx_material_legacy_manifest.json").read_text())
-    assert not vfx.validate_vfx_manifest_wire(stale)["ok"]
+    assert not vfx_validation.validate_vfx_manifest_wire(stale)["ok"]
 
-ROUTE_SURFACE = vfx.vfx_director_surface(_accepted_visual_data("workbench_blade"))
+ROUTE_SURFACE = vfx_surface.vfx_director_surface(_accepted_visual_data("workbench_blade"))
 
 def _renderer_material(data, renderer):
     from tests.test_vfx_contour_contract import authored as contour
@@ -434,11 +441,11 @@ def test_current_renderer_admission_preserves_complete_authored_fields(renderer)
     before = copy.deepcopy(raw)
     schema = _sent(data, False)["outputSchema"]
     assert not strict_schema_errors(raw, schema)
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"], report["errors"]
     assert report["normalized"] == before
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "literal-current-renderer")
-    assert vfx.validate_vfx_manifest_wire(data)["ok"]
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "literal-current-renderer")
+    assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
     assert [{k: v for k, v in row.items() if k != "slotSeed"}
             for row in data["vfxManifest"]["slots"]] == before["slots"]
     assert raw == before

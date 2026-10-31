@@ -9,8 +9,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from infini_local.web import server
-from infini_local.pipelines import image_backend_pipeline as IMAGE_BACKEND_PIPELINE
-from infini_local.pipelines import pipeline_visual_config as visual_config
+from infini_local.pipelines.images import backends as IMAGE_BACKEND_PIPELINE
+from infini_local.core.images import config as visual_config
 from infini_local.services import sdcpp_backend
 
 
@@ -226,7 +226,7 @@ def test_helper_health_does_not_probe_image_servers(monkeypatch, backend):
 
 
 def _check_sdcpp_health_reads_canonical_state_fields() -> None:
-    import infini_local.pipelines.pipeline_visual_config as pipeline_visual_config
+    import infini_local.core.images.config as pipeline_visual_config
 
     state = pipeline_visual_config.SDCPP_SERVER_STATE
     old_last_command = state.last_command

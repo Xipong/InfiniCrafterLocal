@@ -11,7 +11,7 @@ from infini_local.core.runtime_authoring.wire_validator import validate_runtime_
 from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-from infini_local.pipelines import author_item_contract as contract
+from infini_local.pipelines.author import item_contract as contract
 from infini_local.qa.capability_witnesses import build_capability_witness
 from test_codex_subscription_contract import _encode_nullable_fixture
 from test_runtime_spawn_distributions import VELOCITIES

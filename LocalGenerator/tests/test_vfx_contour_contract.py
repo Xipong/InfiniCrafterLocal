@@ -4,8 +4,11 @@ from __future__ import annotations
 import copy
 import math
 import pytest
-from infini_local.core import vfx_manifest as vfx
-from infini_local.core.vfx_contour_contract import resolve_contours
+import infini_local.core.vfx.contract as vfx_contract
+import infini_local.core.vfx.projection as vfx_projection
+import infini_local.core.vfx.repair as vfx_repair
+import infini_local.core.vfx.validation as vfx_validation
+from infini_local.core.vfx.contours import resolve_contours
 from tests.vfx_material_fixtures import _data
 
 
@@ -52,7 +55,7 @@ def geometry():
 
 def authored(data):
     return {
-        "schema": vfx.VFX_DIRECTOR_SCHEMA,
+        "schema": vfx_contract.VFX_DIRECTOR_SCHEMA,
         "slots": [
             {
                 "id": "contour_accent",
@@ -75,13 +78,13 @@ def test_contour_real_compile_preserves_dag_material_and_has_no_png_job():
     data = _data()
     raw = authored(data)
     before = copy.deepcopy(raw)
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"], report["errors"]
     assert report["normalized"] == before
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "contour")
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "contour")
     assert data["vfxManifest"]["slots"][0]["geometry"] == before["slots"][0]["geometry"]
-    assert vfx.validate_vfx_manifest_wire(data)["ok"]
-    assert not vfx.vfx_png_dependencies(data, raw)["dependencies"]
+    assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
+    assert not vfx_validation.vfx_png_dependencies(data, raw)["dependencies"]
     assert raw == before
 
 
@@ -129,7 +132,7 @@ def test_rejects_invalid_graph_or_topology_without_throwing(mutation):
             for i in range(9)
         ]
         g["draws"][0].update(first="rim0", second="rim1")
-    assert not vfx.validate_vfx_director_output(raw, data)["ok"]
+    assert not vfx_validation.validate_vfx_director_output(raw, data)["ok"]
 
 
 def test_concave_fill_and_wedge_close_preserve_authored_vertices():
@@ -144,12 +147,12 @@ def test_concave_fill_and_wedge_close_preserve_authored_vertices():
     g["draws"] = [
         {"op": "fill", "contour": "face", "material": material, "mapping": {"origin": [0, 0], "size": [20, 20], "addressMode": "clamp"}}
     ]
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"], report["errors"]
     points, _ = resolve_contours(g)
     assert points["face"] == [(0, 0), (20, 0), (8, 8), (20, 20), (0, 20), (0, 0)]
     g["contours"][0]["points"] = [[0, 0], [20, 20], [20, 0], [0, 20]]
-    assert not vfx.validate_vfx_director_output(raw, data)["ok"]
+    assert not vfx_validation.validate_vfx_director_output(raw, data)["ok"]
 
 
 def test_stroke_controls_required_no_fill_path_mapping_guess():
@@ -170,10 +173,10 @@ def test_stroke_controls_required_no_fill_path_mapping_guess():
             "mapping": {"mode": "repeat", "repeatLengthPx": 20, "scrollPxPerTick": 2},
         }
     ]
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"], report["errors"]
     del g["draws"][0]["join"]
-    assert not vfx.validate_vfx_director_output(raw, data)["ok"]
+    assert not vfx_validation.validate_vfx_director_output(raw, data)["ok"]
 
 
 def test_nested_texture_dependency_has_exact_selector_not_fake_renderer():
@@ -181,11 +184,11 @@ def test_nested_texture_dependency_has_exact_selector_not_fake_renderer():
     raw = authored(data)
     texture = raw["slots"][0]["geometry"]["draws"][0]["material"]["texture"]
     texture.update(source="item", assetId="")
-    deps = vfx.vfx_png_dependencies(data, raw)
+    deps = vfx_validation.vfx_png_dependencies(data, raw)
     assert len(deps["dependencies"]) == 1
     assert deps["dependencies"][0]["selectorPath"] == "$.slots[0].geometry.draws[0].material.texture.source"
     texture.update(source="asset", assetId="missing")
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert not report["ok"] and any(e["path"].endswith("draws[0].material.texture.assetId") for e in report["errors"])
 
 
@@ -193,15 +196,15 @@ def test_array_leaf_repair_preserves_other_draw_and_geometry_fields():
     data = _data()
     raw = authored(data)
     raw["slots"][0]["geometry"]["draws"][0]["material"]["opacityEnd"] = 2
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert not report["ok"]
-    scope = vfx._build_vfx_repair_scope(raw, report["errors"])
+    scope = vfx_repair._build_vfx_repair_scope(raw, report["errors"])
     candidate = copy.deepcopy(raw["slots"][0])
     candidate["geometry"]["draws"][0]["material"]["opacityEnd"] = 0
     candidate["geometry"]["contours"][0]["radiusX"] = 100
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [candidate], "note": "only invalid opacity"}
-    repaired, audit = vfx._apply_vfx_repair_patch(data, raw, patch, scope, return_audit=True)
-    assert vfx.validate_vfx_director_output(repaired, data)["ok"]
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [candidate], "note": "only invalid opacity"}
+    repaired, audit = vfx_repair._apply_vfx_repair_patch(data, raw, patch, scope, return_audit=True)
+    assert vfx_validation.validate_vfx_director_output(repaired, data)["ok"]
     assert repaired["slots"][0]["geometry"]["contours"][0]["radiusX"] == 32
     assert audit["ignoredChanges"]
 
@@ -211,12 +214,12 @@ def test_malformed_numeric_graph_leaf_refused_without_native_projection(bad):
     data = _data()
     raw = authored(data)
     raw["slots"][0]["geometry"]["contours"][0]["radiusX"] = bad
-    assert not vfx.validate_vfx_director_output(raw, data)["ok"]
+    assert not vfx_validation.validate_vfx_director_output(raw, data)["ok"]
 
 
 def test_per_operation_mapping_stays_precise_after_schema_deduplication():
     from jsonschema import Draft202012Validator
-    from infini_local.core.vfx_contour_contract import contour_schema
+    from infini_local.core.vfx.contours import contour_schema
 
     value = geometry()
     schema = contour_schema()
@@ -238,7 +241,7 @@ def test_repeated_texture_uses_retain_multiplicity_and_exact_draw_provenance():
     value = raw["slots"][0]["geometry"]
     value["draws"][0]["material"]["texture"].update(source="item", assetId="")
     value["draws"].append(copy.deepcopy(value["draws"][0]))
-    dependencies = vfx.vfx_png_dependencies(data, raw)["dependencies"]
+    dependencies = vfx_validation.vfx_png_dependencies(data, raw)["dependencies"]
     assert len(dependencies) == 2
     assert [row["selectorPath"] for row in dependencies] == [f"$.slots[0].geometry.draws[{i}].material.texture.source" for i in range(2)]
 
@@ -264,14 +267,14 @@ def test_compiler_budgets_complete_multilayer_scene_without_dummy_slots():
     value = raw["slots"][0]["geometry"]
     value["contours"][0]["segments"] = 64
     value["draws"] *= 3
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"], report["errors"]
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "multi-layer")
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "multi-layer")
     assert len(data["vfxManifest"]["slots"]) == 1
     assert 192 <= data["vfxManifest"]["budget"]["maxDrawCalls"] <= 512
-    assert vfx.validate_vfx_manifest_wire(data)["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
     data["vfxManifest"]["budget"]["maxDrawCalls"] = 100
-    assert not vfx.validate_vfx_manifest_wire(data)["ok"]
+    assert not vfx_validation.validate_vfx_manifest_wire(data)["ok"]
 
 
 def test_overcapacity_is_not_silently_clamped_or_permission_for_unrelated_slot():
@@ -283,11 +286,11 @@ def test_overcapacity_is_not_silently_clamped_or_permission_for_unrelated_slot()
     raw["slots"] = [copy.deepcopy(raw["slots"][0]) for _ in range(3)]
     for index, slot in enumerate(raw["slots"]):
         slot["id"] = f"contour_layer_{index}"
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert not report["ok"]
     errors = [error for error in report["errors"] if "shared draw budget" in error["message"]]
     assert len(errors) == 16 and all("$.slots[2].geometry.draws[" in error["path"] for error in errors)
-    scope = vfx._build_vfx_repair_scope(raw, errors)
+    scope = vfx_repair._build_vfx_repair_scope(raw, errors)
     assert not scope["allowCreateSlots"]
     assert not scope["deletableSlotIds"]
 
@@ -367,7 +370,7 @@ def test_one_circle_reused_for_ring_outline_and_closed_quarter_fill():
             "mapping": {"origin": [-32, -32], "size": [64, 64], "addressMode": "clamp"},
         }
     )
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"], report["errors"]
     assert report["normalized"] == raw
 
@@ -378,20 +381,20 @@ def test_expanded_work_ceiling_uses_derived_576_not_blanket_2048():
     value = raw["slots"][0]["geometry"]
     value["contours"][0]["segments"] = 64
     value["draws"] *= 9
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"], report["errors"]
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "expanded-derived-budget")
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "expanded-derived-budget")
     assert data["vfxManifest"]["budget"]["maxDrawCalls"] == 576
-    assert vfx.validate_vfx_manifest_wire(data)["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
 
 
 @pytest.mark.parametrize("explicit_budget", [256, 512])
 def test_expansion_does_not_rewrite_existing_serialized_allowance(explicit_budget):
     data = _data()
-    data["vfxManifest"] = vfx._compile_manifest(data, authored(data), "saved-explicit-budget")
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, authored(data), "saved-explicit-budget")
     data["vfxManifest"]["budget"]["maxDrawCalls"] = explicit_budget
     before = copy.deepcopy(data["vfxManifest"])
-    assert vfx.validate_vfx_manifest_wire(data)["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
     assert data["vfxManifest"] == before
 
 
@@ -431,10 +434,10 @@ def test_one_frozen_repair_simplifies_all_excess_draws_not_earlier_valid_layers(
         ]
     )
     raw["slots"].append(second)
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     errors = [error for error in report["errors"] if "shared draw budget" in error["message"]]
     assert len(errors) == 9
-    scope = vfx._build_vfx_repair_scope(raw, errors)
+    scope = vfx_repair._build_vfx_repair_scope(raw, errors)
     assert scope["mutableSlotIds"] == ["partly_excessive_scene"]
     assert not scope["deletableSlotIds"]
     candidate = copy.deepcopy(raw["slots"])
@@ -442,9 +445,9 @@ def test_one_frozen_repair_simplifies_all_excess_draws_not_earlier_valid_layers(
     candidate[1]["geometry"]["draws"][0]["material"]["opacityStart"] = 0.01
     for draw in candidate[1]["geometry"]["draws"][7:]:
         draw.update(first="small_inner", second="small_outer")
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": candidate, "note": "simplify only diagnosed excessive layers"}
-    repaired, audit = vfx._apply_vfx_repair_patch(data, raw, patch, scope, return_audit=True)
-    result = vfx.validate_vfx_director_output(repaired, data)
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": candidate, "note": "simplify only diagnosed excessive layers"}
+    repaired, audit = vfx_repair._apply_vfx_repair_patch(data, raw, patch, scope, return_audit=True)
+    result = vfx_validation.validate_vfx_director_output(repaired, data)
     assert result["ok"], result["errors"]
     assert repaired["slots"][0] == raw["slots"][0]
     assert repaired["slots"][1]["geometry"]["draws"][:7] == raw["slots"][1]["geometry"]["draws"][:7]
@@ -471,19 +474,19 @@ def test_one_repair_can_explicitly_silence_all_excess_strokes_without_widening()
     slot["geometry"]["draws"] = [copy.deepcopy(stroke) for _ in range(16)]
     raw["slots"].append(copy.deepcopy(slot))
     raw["slots"][1]["id"] = "overflow_strokes"
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     errors = [error for error in report["errors"] if "shared draw budget" in error["message"]]
     assert len(errors) == 11
-    scope = vfx._build_vfx_repair_scope(raw, errors)
+    scope = vfx_repair._build_vfx_repair_scope(raw, errors)
     assert not scope["deletableSlotIds"]
     candidate = copy.deepcopy(raw["slots"])
     candidate[0]["geometry"]["draws"][0]["widthPx"] = 100
     candidate[1]["geometry"]["draws"][0]["material"]["opacityStart"] = 0.01
     for draw in candidate[1]["geometry"]["draws"][5:]:
         draw["widthPx"] = 0
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": candidate, "note": "explicit zero width only on excessive strokes"}
-    repaired, audit = vfx._apply_vfx_repair_patch(data, raw, patch, scope, return_audit=True)
-    result = vfx.validate_vfx_director_output(repaired, data)
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": candidate, "note": "explicit zero width only on excessive strokes"}
+    repaired, audit = vfx_repair._apply_vfx_repair_patch(data, raw, patch, scope, return_audit=True)
+    result = vfx_validation.validate_vfx_director_output(repaired, data)
     assert result["ok"], result["errors"]
     assert repaired["slots"][0] == raw["slots"][0]
     assert repaired["slots"][1]["geometry"]["draws"][:5] == raw["slots"][1]["geometry"]["draws"][:5]
@@ -492,7 +495,7 @@ def test_one_repair_can_explicitly_silence_all_excess_strokes_without_widening()
 
 
 def test_silent_draw_after_overflow_is_not_granted_repair_authority():
-    from infini_local.core.vfx_contour_contract import contour_budget_errors
+    from infini_local.core.vfx.contours import contour_budget_errors
 
     data = _data()
     raw = authored(data)
@@ -512,10 +515,10 @@ def test_silent_draw_after_overflow_is_not_granted_repair_authority():
     value["draws"].append(silent)
     errors = contour_budget_errors(raw["slots"], available=1)
     assert [row["path"] for row in errors] == ["$.slots[0].geometry.draws[0]"]
-    scope = vfx._build_vfx_repair_scope(raw, errors)
+    scope = vfx_repair._build_vfx_repair_scope(raw, errors)
     candidate = copy.deepcopy(raw["slots"][0])
     candidate["geometry"]["draws"][1]["widthPx"] = 8
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [candidate], "note": "attempt to rewrite silent sibling"}
-    repaired, audit = vfx._apply_vfx_repair_patch(data, raw, patch, scope, return_audit=True)
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [candidate], "note": "attempt to rewrite silent sibling"}
+    repaired, audit = vfx_repair._apply_vfx_repair_patch(data, raw, patch, scope, return_audit=True)
     assert repaired == raw
     assert any(row["path"].endswith("draws[1].widthPx") for row in audit["ignoredChanges"])

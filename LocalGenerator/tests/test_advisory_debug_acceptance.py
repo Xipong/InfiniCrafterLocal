@@ -5,9 +5,10 @@ import json
 import pytest
 
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.pipelines import llm_authoring_pipeline as author
-from infini_local.pipelines import visual_generation_pipeline as visual
-from infini_local.pipelines.gameplay_stage import compile_and_validate_authored_runtime
+from infini_local.pipelines.author import request as author
+import infini_local.pipelines.visual.request as visual_request
+import infini_local.pipelines.visual.stage as visual_stage
+from infini_local.pipelines.author.stage import compile_and_validate_authored_runtime
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from repair_test_helpers import offline_builder
 
@@ -94,8 +95,8 @@ def test_development_visual_accepts_nonobject_realization(monkeypatch, value):
     source['realization'] = deepcopy(value)
     compiled = compile_runtime_program(source)
     before = deepcopy(compiled)
-    monkeypatch.setattr(visual, 'USE_LLM', False)
-    projected = visual.apply_visual_director(compiled, {}, {})
+    monkeypatch.setattr(visual_stage, 'USE_LLM', False)
+    projected = visual_stage.apply_visual_director(compiled, {}, {})
     gameplay = deepcopy(projected['runtimeProgram'])
     for entity in gameplay['entities']:
         entity.pop('visual', None)
@@ -110,7 +111,7 @@ def test_development_visual_accepts_nonobject_realization(monkeypatch, value):
 
 def test_format_repair_preserves_string_reports_through_actual_strict_schema(monkeypatch):
     from jsonschema import Draft202012Validator
-    from infini_local.pipelines.author_item_contract import author_item_response_schema
+    from infini_local.pipelines.author.item_contract import author_item_response_schema
     from test_codex_subscription_contract import _encode_nullable_fixture
 
     source = build_runtime_fixture('workbench_blade')
@@ -157,8 +158,8 @@ def test_whole_input_work_guard_still_refuses_excessively_deep_advisory_json():
 
 
 def test_string_report_reaches_generated_parent_summary_and_vfx_description():
-    from infini_local.core.vfx_manifest import _prompt_packet
-    from infini_local.pipelines.generated_parent_summary import generated_parent_summary_from_data
+    from infini_local.pipelines.vfx.prompt import _prompt_packet
+    from infini_local.pipelines.context.generated_summary import generated_parent_summary_from_data
 
     source = build_runtime_fixture('workbench_blade')
     source['id'] = 'advisory_handoff_fixture'
@@ -178,7 +179,7 @@ def test_string_report_reaches_generated_parent_summary_and_vfx_description():
 @pytest.mark.parametrize('transport', ['exact', 'json_object', 'not-required', 'reversed-wrapper', 'altered-string'])
 def test_initial_report_null_inversion_requires_exact_sent_transport(monkeypatch, field, transport):
     from infini_local.core import llm_config
-    from infini_local.pipelines.author_item_contract import project_provider_author_item_to_local
+    from infini_local.pipelines.author.item_contract import project_provider_author_item_to_local
 
     monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', 'json_schema')
     request, _, _ = author.build_initial_author_request({}, {}, 'report-null', model_name='offline')
@@ -227,12 +228,12 @@ def test_plain_design_notes_reach_actual_visual_packet_without_mechanical_change
         return {'choices': [{'message': {'content': '{}'}}]}
 
     offline_builder(monkeypatch, 'json_object', respond)
-    monkeypatch.setattr(visual, 'llm_chat_json', respond)
-    monkeypatch.setattr(visual, 'resolve_llm_model', lambda: 'offline')
-    monkeypatch.setattr(visual, 'trace_event', lambda *args, **kwargs: None)
-    monkeypatch.setattr(visual, 'trace_stage_request', lambda *args, **kwargs: None)
-    visual._request_visual_kit(compiled, {}, {})
-    visual._request_visual_kit(control, {}, {})
+    monkeypatch.setattr(visual_request, 'llm_chat_json', respond)
+    monkeypatch.setattr(visual_request, 'resolve_llm_model', lambda: 'offline')
+    monkeypatch.setattr(visual_request, 'trace_event', lambda *args, **kwargs: None)
+    monkeypatch.setattr(visual_request, 'trace_stage_request', lambda *args, **kwargs: None)
+    visual_request._request_visual_kit(compiled, {}, {})
+    visual_request._request_visual_kit(control, {}, {})
     packet, baseline = map(request_dossier, requests)
     assert packet['item']['concept'] == source['concept']
     assert packet['item']['realization'] == source['realization']
@@ -244,9 +245,9 @@ def test_plain_design_notes_reach_actual_visual_packet_without_mechanical_change
 
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
 def test_separate_player_description_and_full_debug_through_real_handoffs(monkeypatch, mode):
-    from infini_local.core.vfx_manifest import _prompt_packet
-    from infini_local.pipelines.generated_parent_summary import generated_parent_summary_from_data
-    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+    from infini_local.pipelines.vfx.prompt import _prompt_packet
+    from infini_local.pipelines.context.generated_summary import generated_parent_summary_from_data
+    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 
     source = build_runtime_fixture('workbench_blade')
     source['id'] = 'separate_advisory_fixture'
@@ -287,7 +288,7 @@ def test_separate_player_description_and_full_debug_through_real_handoffs(monkey
 @pytest.mark.parametrize('length', [0, 4001, 5500, 100000])
 def test_format_repair_preserves_separated_notes_without_promoting_debug(monkeypatch, mode, length):
     from jsonschema import Draft202012Validator
-    from infini_local.pipelines.author_item_contract import author_item_response_schema
+    from infini_local.pipelines.author.item_contract import author_item_response_schema
     from test_codex_subscription_contract import _encode_nullable_fixture
 
     source = build_runtime_fixture('workbench_blade')
@@ -320,8 +321,8 @@ def test_format_repair_preserves_separated_notes_without_promoting_debug(monkeyp
 @pytest.mark.parametrize('field,maximum', [('description', 4000), ('playerExperience', 3000)])
 @pytest.mark.parametrize('extra', [0, 1, 1500, 96000])
 def test_summary_matches_native_unicode_bound_without_touching_raw(field, maximum, extra):
-    from infini_local.pipelines.generated_parent_summary import generated_parent_summary_from_data
-    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+    from infini_local.pipelines.context.generated_summary import generated_parent_summary_from_data
+    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 
     text = 'ж' * (maximum - 1) + '🌟' + 'TAIL' * extra
     source = compile_runtime_program(build_runtime_fixture('workbench_blade'))
@@ -338,7 +339,7 @@ def test_summary_matches_native_unicode_bound_without_touching_raw(field, maximu
 
 
 def test_summary_unicode_scalars_and_dotnet_trim_edge_cases():
-    from infini_local.pipelines.generated_parent_summary import generated_parent_summary_from_data
+    from infini_local.pipelines.context.generated_summary import generated_parent_summary_from_data
 
     source = {'id': 'unicode_edges', 'realization': {'description': '\x1c\ud83c\udf1f\ud800\x1c'}}
     before = deepcopy(source)
@@ -348,7 +349,7 @@ def test_summary_unicode_scalars_and_dotnet_trim_edge_cases():
 
 def test_fresh_strict_transport_decodes_only_declared_optional_report_fields(monkeypatch):
     from jsonschema import Draft202012Validator
-    from infini_local.pipelines.author_item_contract import author_item_response_schema
+    from infini_local.pipelines.author.item_contract import author_item_response_schema
     from test_codex_subscription_contract import _encode_nullable_fixture
 
     source = build_runtime_fixture('workbench_blade')

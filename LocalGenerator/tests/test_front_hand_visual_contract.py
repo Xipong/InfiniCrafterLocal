@@ -9,7 +9,8 @@ from tests.visual_geometry_fixtures import segment_geometry
 
 from prompt_packet_helpers import request_dossier
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.pipelines import visual_generation_pipeline as visual
+import infini_local.pipelines.visual.contract as visual_contract
+import infini_local.pipelines.visual.stage as visual_stage
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 from test_low_level_three_stage_pipeline import _visual_kit, wire_transport
@@ -37,7 +38,7 @@ def test_distinct_grip_survives_fresh_director_and_delivery(wire_transport):
     before = copy.deepcopy(data)
     responses, requests = wire_transport
     responses.append(raw)
-    projected = visual.apply_visual_director(data, {}, {})
+    projected = visual_stage.apply_visual_director(data, {}, {})
     delivered = sanitize_recipe_for_delivery(projected)
     entity = next(row for row in delivered["runtimeProgram"]["entities"] if row["id"] == "witness_entity")
     assert entity["visual"]["grip"] == ENTITY_GRIP
@@ -73,13 +74,13 @@ def test_missing_selected_grip_repairs_only_that_owner(wire_transport, mode):
     corrected: dict = dict(body, scale=4)
     if mode == "baked_sprite":
         corrected["grip"] = copy.deepcopy(ENTITY_GRIP)
-    patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA,
+    patch = dict(schema=visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,
                  itemPatch={"grip": ROOT_GRIP, "prompt": "hostile root rewrite"},
                  entitiesUpsert=[corrected], entityIdsDelete=[], entityIndicesDelete=[],
                  animationPlan="hostile animation", note="only selected grip")
     responses, requests = wire_transport
     responses.extend([raw, patch])
-    result = visual.apply_visual_director(data, {}, {})
+    result = visual_stage.apply_visual_director(data, {}, {})
     assert len(requests) == 2 and not responses
     scope = request_dossier(requests[1])["repairScope"]
     expected = copy.deepcopy(before)
@@ -101,16 +102,16 @@ def test_missing_selected_grip_repairs_only_that_owner(wire_transport, mode):
 @pytest.mark.parametrize("mode", ["reuse_item_icon", "baked_sprite"])
 @pytest.mark.parametrize("field", ["grip", "renderSizePx", "forwardAngleDegrees"])
 def test_delivery_and_director_reject_the_same_missing_selected_metadata(monkeypatch, mode, field):
-    from infini_local.pipelines import visual_delivery_gate as gate
+    from infini_local.pipelines.visual import delivery as gate
     data, raw = _hand_input(mode)
     if mode == "reuse_item_icon":
         raw["item"]["grip"] = copy.deepcopy(ROOT_GRIP)
     owner = raw["item"] if mode == "reuse_item_icon" else raw["entities"][1]
     owner.pop(field)
-    accepted, errors = visual._validate_kit(raw, ["item", "witness_entity"], "item", accepted_data=data)
+    accepted, errors = visual_contract._validate_kit(raw, ["item", "witness_entity"], "item", accepted_data=data)
     path = "$.item." + field if mode == "reuse_item_icon" else "$.entities[1]." + field
     assert accepted is None and path in {row["path"] for row in errors}
-    projected = visual._apply_kit(data, raw)
+    projected = visual_stage._apply_kit(data, raw)
     # Isolate metadata from disk/PNG health without writing image assets.
     monkeypatch.setattr(gate, "VISUAL_REQUIRE_ITEM_SPRITE", False)
     report = gate.visual_delivery_report(projected, check_backend_config=False)
@@ -124,10 +125,10 @@ def test_director_and_frozen_repair_packets_explain_exact_hand_dependencies(wire
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', format_name)
     data, raw = _hand_input("reuse_item_icon")
     responses, requests = wire_transport
-    responses.extend([raw, dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA,
+    responses.extend([raw, dict(schema=visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,
                                itemPatch={"grip": ROOT_GRIP}, entitiesUpsert=[], entityIdsDelete=[],
                                entityIndicesDelete=[], note="missing root grip")])
-    visual.apply_visual_director(data, {}, {})
+    visual_stage.apply_visual_director(data, {}, {})
     for request, key in zip(requests, ("runtimeEntities", "runtimeEntitiesReadOnly")):
         assert request["response_format"]["type"] == format_name
         packet = request_dossier(request)
@@ -150,12 +151,12 @@ def test_director_and_frozen_repair_packets_explain_exact_hand_dependencies(wire
 
 
 def test_distinct_image_request_forwards_exact_grip_without_truncating_art(monkeypatch):
-    from infini_local.pipelines import visual_sprite_generation as images
-    from infini_local.pipelines.visual_prompt_contracts import image_final_frame_prompt_clause
+    from infini_local.pipelines.images import stage as images
+    from infini_local.pipelines.images.prompts import image_final_frame_prompt_clause
     data, raw = _hand_input("baked_sprite")
     raw["item"]["grip"] = ROOT_GRIP
     raw["entities"][1]["prompt"] = ("independent brass handle with three oak panels; " + "literal engraving " * 100)[:1400]
-    data = visual._apply_kit(data, raw)
+    data = visual_stage._apply_kit(data, raw)
     monkeypatch.setattr(images, "IMAGE_BACKEND", "off")
     # Exercise the real image request adapter, with prompt-only policy: no PNG,
     # backend, GPU, image workspace or provider calls.
@@ -180,7 +181,7 @@ def test_non_png_hand_modes_do_not_require_grip(wire_transport, mode):
     data, raw = _hand_input(mode)
     responses, requests = wire_transport
     responses.append(raw)
-    result = visual.apply_visual_director(data, {}, {})
+    result = visual_stage.apply_visual_director(data, {}, {})
     assert not front_hand_sprite_errors(result)
     assert "grip" not in result["visual"]
     assert "grip" not in result["runtimeProgram"]["entities"][1]["visual"]
@@ -214,9 +215,9 @@ def test_distinct_atomic_grip_rejects_invalid_presence_at_exact_leaf(bad_grip, l
     from infini_local.core.visual_contract_schema import front_hand_sprite_errors
     data, raw = _hand_input("baked_sprite")
     raw["entities"][1]["grip"] = bad_grip
-    accepted, errors = visual._validate_kit(raw, ["item", "witness_entity"], "item", accepted_data=data)
+    accepted, errors = visual_contract._validate_kit(raw, ["item", "witness_entity"], "item", accepted_data=data)
     assert accepted is None and "$.entities[1]." + leaf in {row["path"] for row in errors}
-    projected = visual._apply_kit(data, raw)
+    projected = visual_stage._apply_kit(data, raw)
     assert "$.runtimeProgram.entities[1].visual." + leaf in {row["path"] for row in front_hand_sprite_errors(projected)}
 
 
@@ -226,10 +227,10 @@ def test_partial_distinct_grip_repair_preserves_valid_coordinate(wire_transport)
     corrected = copy.deepcopy(raw["entities"][1])
     corrected["grip"] = {"normalizedX": 0.9, "normalizedY": ENTITY_GRIP["normalizedY"]}
     responses, requests = wire_transport
-    responses.extend([raw, dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA,
+    responses.extend([raw, dict(schema=visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,
                                itemPatch=None, entitiesUpsert=[corrected], entityIdsDelete=[],
                                entityIndicesDelete=[], note="Y only")])
-    result = visual.apply_visual_director(data, {}, {})
+    result = visual_stage.apply_visual_director(data, {}, {})
     assert result["visualKit"]["entities"][1]["grip"] == ENTITY_GRIP
     assert request_dossier(requests[1])["repairScope"]["fieldPermissions"]["entities"] == [
         {"entityId": "witness_entity", "paths": ["grip.normalizedY"]}]
@@ -239,7 +240,7 @@ def test_partial_distinct_grip_repair_preserves_valid_coordinate(wire_transport)
 def test_delivery_missing_root_owner_reports_exact_missing_metadata():
     from infini_local.core.visual_contract_schema import front_hand_sprite_errors
     data, raw = _hand_input("reuse_item_icon")
-    projected = visual._apply_kit(data, raw)
+    projected = visual_stage._apply_kit(data, raw)
     projected.pop("visual")
     assert {row["path"] for row in front_hand_sprite_errors(projected)} == {
         "$.visual.renderSizePx", "$.visual.forwardAngleDegrees", "$.visual.grip"}
@@ -249,7 +250,7 @@ def test_delivery_rejects_duplicate_reuse_grip_even_with_valid_root():
     from infini_local.core.visual_contract_schema import front_hand_sprite_errors
     data, raw = _hand_input("reuse_item_icon")
     raw["item"]["grip"] = ROOT_GRIP
-    projected = visual._apply_kit(data, raw)
+    projected = visual_stage._apply_kit(data, raw)
     projected["runtimeProgram"]["entities"][1]["visual"]["grip"] = ROOT_GRIP
     errors = front_hand_sprite_errors(projected)
     assert {row["path"] for row in errors} == {"$.runtimeProgram.entities[1].visual.grip"}
@@ -258,10 +259,10 @@ def test_delivery_rejects_duplicate_reuse_grip_even_with_valid_root():
 
 @pytest.mark.parametrize("mode", ["reuse_item_icon", "baked_sprite"])
 def test_real_image_retry_keeps_selected_owner_grip_without_png_or_provider_calls(monkeypatch, tmp_path, mode):
-    from infini_local.pipelines import visual_sprite_generation as images
+    from infini_local.pipelines.images import stage as images
     data, raw = _hand_input(mode)
     raw["item"]["grip"] = ROOT_GRIP
-    projected = visual._apply_kit(data, raw)
+    projected = visual_stage._apply_kit(data, raw)
     monkeypatch.setattr(images, "IMAGE_BACKEND", "openai_codex")
     monkeypatch.setattr(images, "IMAGE_BACKEND_CONFIG_ERROR", "")
     monkeypatch.setattr(images, "SPRITE_RETRIES", 1)
@@ -296,7 +297,7 @@ def test_plain_flight_does_not_gain_hand_requirements_or_grip(wire_transport):
     raw = _visual_kit(data)
     responses, requests = wire_transport
     responses.append(raw)
-    result = visual.apply_visual_director(data, {}, {})
+    result = visual_stage.apply_visual_director(data, {}, {})
     assert not front_hand_sprite_errors(result)
     assert "grip" not in result["visual"]
     assert all("grip" not in row["visual"] for row in result["runtimeProgram"]["entities"])
@@ -308,7 +309,7 @@ def test_valid_selected_metadata_has_no_dependency_errors_in_either_stage():
     for mode in ("reuse_item_icon", "baked_sprite"):
         data, raw = _hand_input(mode)
         raw["item"]["grip"] = ROOT_GRIP
-        accepted, errors = visual._validate_kit(raw, ["item", "witness_entity"], "item", accepted_data=data)
+        accepted, errors = visual_contract._validate_kit(raw, ["item", "witness_entity"], "item", accepted_data=data)
         assert accepted is not None and not errors
-        delivered = sanitize_recipe_for_delivery(visual._apply_kit(data, accepted))
+        delivered = sanitize_recipe_for_delivery(visual_stage._apply_kit(data, accepted))
         assert not front_hand_sprite_errors(delivered)

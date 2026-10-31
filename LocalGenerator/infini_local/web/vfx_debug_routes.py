@@ -9,16 +9,14 @@ IR. The remaining endpoints inspect or regenerate only exact entity/event slots.
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION, RUNTIME_WIRE_SCHEMA
 from infini_local.core.runtime_authoring.wire_views import runtime_event_inventory
-from infini_local.core.vfx_manifest import (
-    VFX_MANIFEST_SCHEMA,
-    attach_vfx_manifest,
-    validate_vfx_director_output,
-    vfx_director_surface,
-)
+from infini_local.core.vfx.contract import VFX_MANIFEST_SCHEMA
+from infini_local.pipelines.vfx.stage import attach_vfx_manifest
+from infini_local.core.vfx.validation import validate_vfx_director_output
+from infini_local.core.vfx.surface import vfx_director_surface
 
 
 def _sample_data() -> dict[str, Any]:

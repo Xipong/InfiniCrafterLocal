@@ -11,13 +11,13 @@ from infini_local.core.runtime_authoring.technical_lowering import audit_compile
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.web.vfx_debug_routes import _sample_data
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
-from infini_local.core.vfx_manifest import _compile_manifest
+from infini_local.core.vfx.projection import _compile_manifest
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery, is_deliverable_recipe_payload
 
 
 def test_unknown_author_root_cannot_survive_validation_and_compilation():
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-    from infini_local.pipelines.llm_authoring_pipeline import _prepare_parsed_author_item
+    from infini_local.pipelines.author.request import _prepare_parsed_author_item
 
     source = build_runtime_fixture("workbench_blade")
     assert validate_runtime_program(source)["ok"]
@@ -286,7 +286,7 @@ def test_generated_buff_dependency_and_legacy_absence(change):
     pytest.param("buff_duration", "$.gameplay.generatedBuff.durationTicks", "invalid_integer", id="buff_duration"),
 ])
 def test_rejected_wire_is_quarantined_by_real_cache_lookup(tmp_path, monkeypatch, wire, mutation, error_path, code):
-    from infini_local.pipelines import visual_delivery_gate
+    from infini_local.pipelines.visual import delivery as visual_delivery_gate
     from infini_local.pipelines.combine_pipeline import _cached_payload_report, combine_cache_lookup
     from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png, synthetic_no_image_execution_control
     from infini_local.storage import world_recipe_runtime, world_storage

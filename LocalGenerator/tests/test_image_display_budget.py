@@ -15,12 +15,15 @@ from PIL import Image
 
 from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.pipelines import pipeline_visual_config as config
-from infini_local.pipelines import image_backend_pipeline as backend
-from infini_local.pipelines import sprite_postprocess as post
-from infini_local.pipelines import visual_generation_pipeline as visual
-from infini_local.pipelines import visual_sprite_generation as generation
-from infini_local.pipelines.visual_prompt_contracts import image_final_frame_prompt_clause
+from infini_local.core.images import config
+from infini_local.pipelines.images import backends as backend
+from infini_local.pipelines.images import postprocess as post
+import infini_local.pipelines.images.retry as post_retry
+import infini_local.pipelines.images.validation as post_validation
+import infini_local.pipelines.visual.contract as visual_contract
+import infini_local.pipelines.visual.stage as visual_stage
+from infini_local.pipelines.images import stage as generation
+from infini_local.pipelines.images.prompts import image_final_frame_prompt_clause
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
@@ -62,11 +65,11 @@ def _accepted_visual_data(*, long_art: bool = False, curve_mirror: bool | None =
                              preferredCanvasSize=32, renderSizePx=22, forwardAngleDegrees=0, scale=0.8))
         else:
             rows.append(dict(entityId=entity["id"], assetMode="reuse_item_icon", visualProjectRef="item", scale=0.75))
-    kit, errors = visual._validate_kit(dict(schema=visual.VISUAL_KIT_SCHEMA, item=item, entities=rows,
+    kit, errors = visual_contract._validate_kit(dict(schema=visual_contract.VISUAL_KIT_SCHEMA, item=item, entities=rows,
                                          animationPlan="Follow accepted movement without changing gameplay."),
                                      [row["id"] for row in data["runtimeProgram"]["entities"]], item_id)
     assert kit is not None, errors
-    return visual._apply_kit(data, kit)
+    return visual_stage._apply_kit(data, kit)
 
 
 def _framing(text: str) -> dict:
@@ -105,7 +108,7 @@ def _capture_backend(monkeypatch, tmp_path: Path, *, retries: bool = False) -> l
 
 
 def test_absent_presentation_stays_absent_and_special_assets_do_not_borrow_root_budget():
-    from infini_local.pipelines.visual_prompt_contracts import normalize_asset_prompt
+    from infini_local.pipelines.images.prompts import normalize_asset_prompt
 
     data = _accepted_visual_data()
     legacy = copy.deepcopy(data)
@@ -133,7 +136,7 @@ def test_absent_presentation_stays_absent_and_special_assets_do_not_borrow_root_
 @pytest.mark.parametrize("zimage", [False, True])
 def test_real_retry_compactor_retains_selected_frame_with_long_art_and_png_diagnostics(monkeypatch, tmp_path, style, zimage):
     monkeypatch.setattr(llm_config, "PROMPT_STYLE", style)
-    monkeypatch.setattr(post, "image_backend_is_zimage", lambda: zimage)
+    monkeypatch.setattr(post_retry, "image_backend_is_zimage", lambda: zimage)
     monkeypatch.setenv("INFINI_ZIMAGE_RETRY_PROMPT_LIMIT", "2200")
     data = _accepted_visual_data(long_art=True)
     frozen = copy.deepcopy(data)
@@ -152,7 +155,7 @@ def test_real_retry_compactor_retains_selected_frame_with_long_art_and_png_diagn
         validation = attempts[0]["validation"]
         assert not validation["ok"] and any(reason.startswith("too_few_opaque_pixels") for reason in validation["reasons"])
         assert len(validation["reasons"]) >= 2
-        assert post.validation_retry_notes(validation, role)
+        assert post_retry.validation_retry_notes(validation, role)
         assert "Technical correction:" in retry["prompt"] if zimage else "fix these technical issues:" in retry["prompt"]
         from infini_local.services.sdcpp_backend import server_payload
         for call in (first, retry):
@@ -244,7 +247,7 @@ def test_real_image_jobs_forward_exact_selected_frame_owner_and_multipliers(monk
     assert result["runtimeProgram"]["entities"][1]["visual"]["spritePath"] == result["visual"]["spritePath"]
     for owner, role in ((result["visual"], "item"), (result["runtimeProgram"]["entities"][2]["visual"], "runtime:child_projectile")):
         assert owner["spriteStatus"] == "generated"
-        assert post.validate_processed_sprite(owner["spritePath"], role)["ok"]
+        assert post_validation.validate_processed_sprite(owner["spritePath"], role)["ok"]
 
 
 @pytest.mark.parametrize("curve_mirror", [None, False, True])

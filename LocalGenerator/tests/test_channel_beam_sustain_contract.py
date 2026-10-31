@@ -11,8 +11,8 @@ from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.pipelines.author_item_contract import project_provider_author_item_to_local
-from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+from infini_local.pipelines.author.item_contract import project_provider_author_item_to_local
+from infini_local.pipelines.author.request import build_initial_author_request
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
