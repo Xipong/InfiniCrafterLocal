@@ -1714,6 +1714,18 @@ def audit_compiler_receipts(
             for name in declared_neutral_omissions(fn, params):
                 source_path = f"runtimeProgram.calls[{index}].params.{name}"
                 for expected in _parameter_outputs(fn, name, params):
+                    spec = receipt_param_spec(CAPABILITY_REGISTRY[fn], name)
+                    if spec is not None and spec.wire_preserve_absence and final_document is not None:
+                        # Additive neutral leaves were absent from older compiler
+                        # output. Authenticate this exact target/component; a
+                        # present leaf still requires its unique omission proof.
+                        entities = _final_value(final_document, "runtimeProgram.entities")
+                        targets = [expected.replace("entities[]", f"entities[{ei}]")
+                                   for ei, entity in enumerate(entities if isinstance(entities, list) else [])
+                                   if isinstance(entity, Mapping) and entity.get("id") == source_call.get("target")]
+                        if (len(targets) == 1 and isinstance(_final_value(final_document, targets[0].rsplit(".", 1)[0]), Mapping)
+                                and _final_value(final_document, targets[0]) is _MISSING):
+                            continue
                     matching = [row for row in receipt_rows
                                 if row.get("fn") == fn and row.get("callId") == source_call.get("id")
                                 and row.get("authoredPath") == source_path

@@ -36,6 +36,8 @@ public static class RuntimeMotionNumbers
     { public Width() : base("0.001", "128") { } }
     public sealed class OptionalWidth : RawJsonNullableFloatDomainConverter
     { public OptionalWidth() : base("0.001", "128") { } }
+    public sealed class OptionalBeamOrigin : RawJsonNullableFloatDomainConverter
+    { public OptionalBeamOrigin() : base("-30720", "30720") { } }
     public sealed class Speed : RawJsonFloatDomainConverter
     { public Speed() : base("0.001", "80") { } }
     public sealed class OptionalSpeed : RawJsonNullableFloatDomainConverter
@@ -607,12 +609,26 @@ public sealed class RuntimeBeamGeometrySpec
 {
     [JsonConverter(typeof(RuntimeMotionNumbers.Radius))]
     [JsonRequired] public float LengthPx { get; set; }
+    private float? _startOffsetPx;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(RuntimeMotionNumbers.OptionalBeamOrigin))]
+    public float? StartOffsetPx
+    {
+        get => _startOffsetPx;
+        set
+        {
+            if (value is not float offset || !float.IsFinite(offset) || offset < -30720f || offset > 30720f)
+                throw new InvalidDataException("present StartOffsetPx requires finite -30720..30720 world pixels");
+            _startOffsetPx = offset;
+        }
+    }
     [JsonConverter(typeof(RuntimeMotionNumbers.Width))]
     [JsonRequired] public float WidthPx { get; set; }
     [JsonRequired] public bool RaycastTiles { get; set; }
     public void Validate()
     {
         RuntimeMotionAdmission.Range(LengthPx, 0.001d, 1920d);
+        if (StartOffsetPx.HasValue) RuntimeMotionAdmission.Range(StartOffsetPx.Value, -30720d, 30720d);
         RuntimeMotionAdmission.Range(WidthPx, 0.001d, 128d);
     }
 }

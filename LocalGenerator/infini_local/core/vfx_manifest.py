@@ -73,7 +73,12 @@ _ACCEPTED_GAMEPLAY_CONTEXT_RULE = (
     "anchor + aimAxis*(axisOffsetPx + active reachOffsetPx) + normal*normalOffsetPx; normal is aimAxis rotated +pi/2. "
     "reach and armPose curves sample clamped active world age/durationTicks; windows gate them, not restart them. "
     "Reach translates the rigid body and is not canceled by PNG grip. armPose writes a native pose, not a body anchor. "
-    "A beam texturedPath follows the exact beamStart and beamAxis, not inventory grip or a guessed hand contact; "
+    "For beamGeometry, beamStart.anchor is the base pivot: start=projectile.Center+axis*startOffsetPx, "
+    "end=start+axis*lengthPx, on the same Aim world unit axis (MotionAxis). "
+    "Read startOffsetPx only when present in frame.beamGeometry; historical absence means zero and stays absent. "
+    "The signed offset changes only line origin, never length, width, attachment/reach, body physics or PNG scale; "
+    "explicit tile raycast may clip length from that start. Retained controller beamStart keeps its native anchor/offset. "
+    "A beam texturedPath follows this exact shared line and beamAxis, not inventory grip or a guessed hand contact; "
     "no_asset still permits explicit path decoration without an underlying body. These facts do not guarantee hand contact. "
     "A window may be phase-only or include clock/startDelayTicks/durationTicks together. "
     "Absent window means all active updates; since_release/since_return are inactive before their latch, "
@@ -304,7 +309,7 @@ def _body_presentation_frame(entity: Mapping[str, Any], geometry: str | None) ->
         "armPose": ("durationTicks", "startStretch", "peakStretch", "endStretch", "peakProgress", "window"),
     }
     if geometry == "beam":
-        fields.update(beamGeometry=("lengthPx", "widthPx", "raycastTiles"),
+        fields.update(beamGeometry=("lengthPx", "widthPx", "raycastTiles", "startOffsetPx"),
                       beamRamp=("warmupTicks", "initialWidthMultiplier"))
     frame: dict[str, Any] = {
         component: {key: copy.deepcopy(value[key]) for key in keys if key in value}

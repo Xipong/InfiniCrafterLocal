@@ -141,7 +141,8 @@ def test_ramp_neutrals_have_exact_full_and_stripped_wire_with_complete_provenanc
     _, explicit = compile_ok(doc)
     assert sparse == explicit
     rows = wire["runtimeContract"]["finalWireReceipts"]
-    omitted = [r for r in rows if r.get("callId") == call["id"] and r["status"] == "declared_neutral_omission"]
+    omitted = [r for r in rows if r.get("callId") == call["id"] and r["status"] == "declared_neutral_omission"
+               and f".params.{property}." in r["authoredPath"]]
     assert len(omitted) == len(neutrals)
     assert {r["authoredPath"].rsplit(".", 1)[-1]: r["value"] for r in omitted} == neutrals
     for authored in (before, None):

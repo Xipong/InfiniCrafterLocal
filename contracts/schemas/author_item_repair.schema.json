@@ -1515,7 +1515,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "length": {
-                    "description": "Author units: blocks. Native consumer: Positive line length.",
+                    "description": "Author units: blocks. Native consumer: Positive line length, measured from the independently offset start; tile raycast may clip it.",
                     "maximum": 120.0,
                     "minimum": 6.25e-05,
                     "type": "number",
@@ -1597,6 +1597,25 @@
                     "description": "Clip shared line against tiles; not projectile tile-collision policy.",
                     "type": "boolean",
                     "x-infini-semanticType": "tiles"
+                  },
+                  "startOffsetBlocks": {
+                    "default": 0,
+                    "description": "Author units: blocks. Native consumer: Signed line-origin displacement from body center along the same Aim world unit axis (MotionAxis); negative starts behind the pivot. Changes origin only, not length, width, attachment/reach, body physics or PNG scale. Zero/omission starts at body center.",
+                    "maximum": 1920.0,
+                    "minimum": -1920.0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "blocks",
+                    "x-infini-units": "blocks"
                   },
                   "widthBlocks": {
                     "description": "Author units: blocks. Native consumer: Positive collision line width.",

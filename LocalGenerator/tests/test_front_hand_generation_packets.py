@@ -91,7 +91,7 @@ def test_author_and_scoped_repair_deliver_physical_facts_without_reauthoring(mon
         prose = " ".join(m["content"] for m in packet["messages"])
         for fact in ("MountedCenter", "front_arm_pose", "reachCurve", "4 to 10px",
                      "no automatic arm", "selected PNG", "beam", "Visual", "constant contact",
-                     "compensates attachment offsets only"):
+                     "compensates attachment offsets only", "hilt region", "native held-projectile pass"):
             assert fact in prose, fact
     cards = request_dossier(initial_packet, declaration=initial)["runtimeCapabilityContract"]["catalog"]["capabilities"]
     attach = next(c for c in cards if c["fn"] == "attach")
@@ -112,6 +112,7 @@ def test_visual_and_repair_do_not_promise_contact_for_every_grip(wire_transport,
         source, _ = fixture(axisOffsetBlocks=0)
     else:
         source = _displaced_source("owner_mounted" if composition == "mounted-path" else "front_hand")
+        next(c for c in source["runtimeProgram"]["calls"] if c["fn"] == "beam_geometry")["params"]["startOffsetBlocks"] = -2
     accepted = compile_runtime_program(source)
     frozen = deepcopy(accepted)
     raw = _visual_kit(accepted)
@@ -151,6 +152,10 @@ def test_visual_and_repair_do_not_promise_contact_for_every_grip(wire_transport,
             for fact in ("front_hand", "offset", "reach", "selected PNG", "no_asset", "body center"):
                 assert fact in contact, fact
             assert "compensates attachment offsets only, not reach" in contact
+            for fact in ("startOffsetPx", "MotionAxis", "end=start+axis*lengthPx", "hilt region", "native held-projectile pass"):
+                assert fact in contact, fact
+            if composition != "rigid-hand-png":
+                assert row["beamGeometry"]["startOffsetPx"] == -32
             assert "cannot" in contact
         if key == "runtimeEntitiesReadOnly":
             assert packet["repairScope"]["fieldPermissions"]["itemPaths"] == ["renderSizePx"]

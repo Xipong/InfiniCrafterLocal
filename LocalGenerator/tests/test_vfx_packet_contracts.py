@@ -25,7 +25,9 @@ def test_material_and_body_facts_survive_final_http_serialization(monkeypatch, l
     from test_vfx_material_admission_contracts import _library_particle
 
     endpoint, _events = loopback_transport
-    data = compile_runtime_program(build_capability_witness("beam_geometry"))
+    source = build_capability_witness("beam_geometry")
+    next(c for c in source["runtimeProgram"]["calls"] if c["fn"] == "beam_geometry")["params"]["startOffsetBlocks"] = -2
+    data = compile_runtime_program(source)
     body = data["runtimeProgram"]["entities"][1]
     body["attachment"] = {"anchor": "owner_mounted", "axisOffsetPx": 8, "normalOffsetPx": 0}
     body["reach"] = {"durationTicks": 12, "startOffsetPx": 0, "peakOffsetPx": 32,
@@ -61,7 +63,12 @@ def test_material_and_body_facts_survive_final_http_serialization(monkeypatch, l
         assert row["coverage"] == "no_body" and "image" not in row
         assert row["frame"]["attachment"] == body["attachment"]
         assert row["frame"]["reach"] == body["reach"]
+        assert row["frame"]["beamGeometry"] == body["beamGeometry"]
+        assert row["frame"]["beamGeometry"]["startOffsetPx"] == -32
         assert row["frame"]["beamStart"] == {"anchor": "projectile.Center"}
+        prose = " ".join(message["content"] for message in request["messages"])
+        assert "start=projectile.Center+axis*startOffsetPx" in prose
+        assert "end=start+axis*lengthPx" in prose and "MotionAxis" in prose
         if surface_key == "runtimeSurfaceReadOnly":
             assert facts["repairScope"]["fieldPermissions"]["slots"] == [{"slotId": accepted["slots"][0]["id"], "paths": ["alpha"]}]
     assert final["runtimeProgram"] == before["runtimeProgram"]
@@ -69,12 +76,15 @@ def test_material_and_body_facts_survive_final_http_serialization(monkeypatch, l
 
 
 @pytest.mark.parametrize("format_name", ["json_object", "json_schema"])
-def test_actual_body_attachment_reach_and_beam_frame_reach_both_requests(wire_transport, monkeypatch, format_name):
+@pytest.mark.parametrize("offset", [None, -32, 0])
+def test_actual_body_attachment_reach_and_beam_frame_reach_both_requests(wire_transport, monkeypatch, format_name, offset):
     monkeypatch.setattr("infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE", format_name)
     data = compile_runtime_program(build_capability_witness("beam_geometry"))
     body = data["runtimeProgram"]["entities"][1]
     # Explicit final-wire presentation controls, not a new Author/compiler contract.
     body["beamGeometry"] = {"lengthPx": 64, "widthPx": 10, "raycastTiles": False}
+    if offset is not None:
+        body["beamGeometry"]["startOffsetPx"] = offset
     body["beamRamp"] = {"warmupTicks": 4, "initialWidthMultiplier": 0.5,
                         "initialDamageMultiplier": 0.7, "damageStartProgress": 0.2}
     body["attachment"] = {"anchor": "owner_mounted", "axisOffsetPx": 8, "normalOffsetPx": -2,
@@ -104,6 +114,7 @@ def test_actual_body_attachment_reach_and_beam_frame_reach_both_requests(wire_tr
         assert frame["units"] == {"distance": "native_world_pixels", "duration": "world_ticks"}
         for component in ("aim", "attachment", "reach", "armPose", "beamGeometry"):
             assert frame[component] == before["runtimeProgram"]["entities"][1][component]
+        assert ("startOffsetPx" in frame["beamGeometry"]) is (offset is not None)
         assert frame["attachmentAnchor"] == "owner.MountedCenter"
         assert frame["beamStart"] == {"anchor": "projectile.Center"}
         assert frame["beamAxis"] == "motion_axis"

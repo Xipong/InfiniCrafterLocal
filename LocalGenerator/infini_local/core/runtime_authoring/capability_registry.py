@@ -409,6 +409,9 @@ class ParamSpec:
     min_properties: int | None = None
     omission_condition: OmissionCondition | None = None
     wire_presence_requires_receipt: bool = False
+    # Additive neutral leaf: fresh compilation emits its omission receipt, but
+    # saved wire may retain historical absence without inventing that receipt.
+    wire_preserve_absence: bool = False
     shared_type: str = ""
     # Explicit numeric wire contract. Predecessors are receipt paths only, never Author aliases.
     predecessor_names: tuple[str, ...] = ()
@@ -999,6 +1002,7 @@ class CapabilitySpec:
                 for left, lr in variants for right, rr in spec.flat_wire_variants(name))
         neutral_fields = tuple(spec.wire_name or name for name, spec in self.params.items()
             if name not in self.nested_components and self.category == "motion_primitive" and not spec.required and spec.default is not None
+            and not spec.wire_preserve_absence
             and type(spec.default) is type(spec.neutral) and spec.default == spec.neutral)
         if self.wire_components:
             nested = []
@@ -1881,8 +1885,9 @@ _CAPS: list[CapabilitySpec] = [
         "enabled": _p("boolean", "Whether contact damage is eligible within the selected window."),
         "window": _motion_window(required=True),
     }, cs="Content/Projectiles/GeneratedProjectile.DamageGate.cs::CanDamage", window=False, persisted_name='gate_projectile_contact'),
-    _motion_cap("beam_geometry", "Share a line between collision, draw and VFX, starting at body center along the Aim axis; this is not a hand anchor or a PNG grip and follows actual attachment/reach displacement.", {
-        "length": _previous_param_name('lengthBlocks', _motion_number("lengthPx", "Positive line length.", 0.001, 1920, multiplier=16, units="blocks")),
+    _motion_cap("beam_geometry", "Share a line between collision, draw and VFX along the existing Aim world unit axis (MotionAxis): start=body center+axis*startOffsetBlocks, end=start+axis*length, with blocks converted to world pixels. Omitted offset is zero; this is not a hand anchor or a PNG grip and follows actual attachment/reach displacement. Offset moves only the line origin, never body physics, length, width, reach or PNG scale.", {
+        "length": _previous_param_name('lengthBlocks', _motion_number("lengthPx", "Positive line length, measured from the independently offset start; tile raycast may clip it.", 0.001, 1920, multiplier=16, units="blocks")),
+        "startOffsetBlocks": replace(_motion_number("startOffsetPx", "Signed line-origin displacement from body center along the same Aim world unit axis (MotionAxis); negative starts behind the pivot. Changes origin only, not length, width, attachment/reach, body physics or PNG scale. Zero/omission starts at body center.", -30720, 30720, multiplier=16, units="blocks"), required=False, default=0, neutral=0, predecessor_names=(), wire_preserve_absence=True),
         "widthBlocks": _motion_number("widthPx", "Positive collision line width.", 0.001, 128, multiplier=16, units="blocks"),
         "raycastTiles": _p("boolean", "Clip shared line against tiles; not projectile tile-collision policy."),
     }, cs="Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry", window=False, requirements=(RequirementSpec("capability_present", capability="set_aim", message="Beam geometry requires explicit Aim."),

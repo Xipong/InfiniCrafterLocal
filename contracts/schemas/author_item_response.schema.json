@@ -1604,12 +1604,31 @@
                         "type": "number",
                         "minimum": 6.25e-05,
                         "maximum": 120.0,
-                        "description": "Author units: blocks. Native consumer: Positive line length.",
+                        "description": "Author units: blocks. Native consumer: Positive line length, measured from the independently offset start; tile raycast may clip it.",
                         "x-infini-units": "blocks",
                         "x-infini-semanticType": "blocks",
                         "x-infini-consumerConstraint": {
                           "storage": "float32",
                           "neutral": null,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values."
+                        },
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true
+                        }
+                      },
+                      "startOffsetBlocks": {
+                        "type": "number",
+                        "minimum": -1920.0,
+                        "maximum": 1920.0,
+                        "description": "Author units: blocks. Native consumer: Signed line-origin displacement from body center along the same Aim world unit axis (MotionAxis); negative starts behind the pivot. Changes origin only, not length, width, attachment/reach, body physics or PNG scale. Zero/omission starts at body center.",
+                        "x-infini-units": "blocks",
+                        "x-infini-semanticType": "blocks",
+                        "default": 0,
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
                           "rule": "nonneutral_must_remain_nonneutral",
                           "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values."
                         },
