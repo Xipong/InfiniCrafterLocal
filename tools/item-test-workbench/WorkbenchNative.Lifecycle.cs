@@ -28,6 +28,7 @@ internal static partial class EngineRuntimeChecks
             if(WNoNonFinite(new JsonArray(Sample(),last)))throw new Exception("Final-frame nonfinite observer missed "+key);
         }
         CheckWorkbenchTargetHitAssertions();
+        CheckWorkbenchVfxContracts();
         Console.WriteLine("PASS: finite and final-frame player/dummy/projectile/hostile snapshot and target-specific hit assertion controls (not gameplay)");
     }
     // Assertions read observed native state/events. They never drive item/projectile logic.

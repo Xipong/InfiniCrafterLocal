@@ -16,6 +16,7 @@ using Terraria;
 using Terraria.ModLoader;
 using ParticleLibrary.Core.V3;
 using InfiniCrafterLocal.Common.VFX;
+using InfiniCrafterLocal.Common.Models;
 
 // Executes original resource loaders, VFX update, and both original draw layers. No particle model lives here.
 internal sealed partial class WNativeVfxRenderer : IDisposable
@@ -86,8 +87,9 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
     readonly JsonArray snapshots=new();
     bool disposed;
     public JsonObject Report { get; }
-    public WNativeVfxRenderer(WorkbenchGraphicsContext graphics,JsonObject settings,string absoluteFramesDir)
+    public WNativeVfxRenderer(WorkbenchGraphicsContext graphics,JsonObject settings,string absoluteFramesDir,GeneratedItemData? data)
     {
+        string[] libraryTexturePaths=SelectedLibraryTexturePaths(data);
         this.graphics=graphics;framesDir=Path.GetFullPath(absoluteFramesDir);
         foreach(string key in settings.Select(x=>x.Key)) if(key is not ("capture" or "width" or "height" or "cameraX" or "cameraY" or "zoom" or "drawArtwork" or "artworkFiles" or "drawPlayer" or "playerAssetRoot" or "dummyAssetRoot" or "drawNativeDust" or "lightingMode" or "drawPlacedBodies" or "drawDroppedItems" or "drawVanillaProjectiles" or "drawProjectileVfx"))throw new ArgumentException("Unknown nativeRender setting: "+key);
         ConfigureScene(settings);drawVanillaProjectiles=settings["drawVanillaProjectiles"]?.GetValue<bool>()??false;drawDroppedItems=settings["drawDroppedItems"]?.GetValue<bool>()??false; if(drawDroppedItems && !(settings["drawArtwork"]?.GetValue<bool>()??false))throw new ArgumentException("drawDroppedItems requires drawArtwork");
@@ -120,12 +122,37 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
             var config=new ParticleLibrary.ParticleLibraryConfig();typeof(Terraria.ModLoader.Config.ModConfig).GetProperty("Mod",All)!.SetValue(config,mod);typeof(Terraria.ModLoader.Config.ConfigManager).GetMethod("Add",All)!.Invoke(null,new object[]{config});
             actualMod=new ParticleLibrary.ParticleLibrary();typeof(Mod).GetProperty("Logger",All)!.SetValue(actualMod,log4net.LogManager.GetLogger("WorkbenchParticleLibrary"));actualMod.Load();
             particleManager=new ParticleManagerV3();typeof(ModType).GetProperty("Mod",All)!.SetValue(particleManager,mod);particleManager.Load();
-            Invoke("LoadLibrary");Invoke("EnsureLibraryReady");typeof(Main).GetMethod("ConsumeAllMainThreadActions",All)!.Invoke(null,null);
-            if(!(bool)Invoke("EnsureLibraryReady")!)throw new InvalidOperationException("Original ParticleLibrary readiness did not succeed after native main-thread queue");
+            Invoke("LoadLibrary");
+            // ParticleManager's effect load is itself queued. Production readiness
+            // additionally serializes texture requests through one queued owner.
+            typeof(Main).GetMethod("ConsumeAllMainThreadActions",All)!.Invoke(null,null);
+            if(ParticleManagerV3.InstancedParticleEffect is null)throw new InvalidOperationException("Original ParticleLibrary effect did not load after native main-thread queue");
+            PrewarmLibraryTextures(libraryTexturePaths,path=>(bool)Invoke("EnsureLibraryReady",path)!,
+                ()=>typeof(Main).GetMethod("ConsumeAllMainThreadActions",All)!.Invoke(null,null));
         } finally {Main.dedServ=oldDedicated;}
         batch=new SpriteBatch(graphics.Device);Main.spriteBatch=batch;target=new RenderTarget2D(graphics.Device,width,height);
         if(capture)Directory.CreateDirectory(framesDir);
         Report=new JsonObject{["backend"]="original_mod_draw_layers",["backendDescription"]="Original InfiniDetachedVfxSystem draw layers / FNA3D software OpenGL",["scope"]="VFX-only original mod layers on neutral black background; no Terraria scene artwork",["capture"]=capture,["pngExportEnabled"]=capture,["gpuRenderLifecycleEnabled"]=capture||drawNativeDust||drawVanillaProjectiles,["gpuRenderLifecycleExecuted"]=false,["nativeDustDrawEnabled"]=drawNativeDust,["nativeDustDrawExecuted"]=false,["soundValidated"]=false,["itemArtworkRendered"]=false,["projectileArtworkRendered"]=false,["worldRendered"]=false,["unrenderedArtwork"]=new JsonArray("item artwork","projectile artwork","Terraria world/player/NPC artwork"),["missingVfxAssets"]=new JsonArray(),["resourceReady"]=true,["originalParticleLibraryEffect"]=ParticleManagerV3.InstancedParticleEffect is not null,["libraryBuffers"]=(GetStatic("LibraryBuffers") as Array)?.Length??0,["starSha256"]=Hash(File.ReadAllBytes(Path.Combine(contentRoot,"Assets/Textures/Star.png"))),["effectSha256"]=Hash(File.ReadAllBytes(Path.Combine(contentRoot,"Assets/Effects/InstancedParticle.xnb"))),["loadedAssetSha256"]=JsonSerializer.SerializeToNode(Directory.EnumerateFiles(contentRoot,"*",SearchOption.AllDirectories).OrderBy(p=>p).ToDictionary(p=>Path.GetRelativePath(contentRoot,p),p=>Hash(File.ReadAllBytes(p)))),["particleLibraryAssemblySha256"]=Hash(File.ReadAllBytes(typeof(ParticleManagerV3).Assembly.Location)),["graphics"]=graphics.Provenance.DeepClone(),["width"]=width,["height"]=height,["cameraX"]=camera.X,["cameraY"]=camera.Y,["zoom"]=zoom,["frames"]=frames,["snapshots"]=snapshots};
+        Report["readyLibraryTexturePaths"]=JsonSerializer.SerializeToNode(libraryTexturePaths);
+    }
+    // Resolve exactly the particle textures selected by this item, through the
+    // production registry. No synthetic Star selection for empty/vanilla scenes.
+    internal static string[] SelectedLibraryTexturePaths(GeneratedItemData? data)
+    {
+        var resolve=typeof(InfiniDetachedVfxSystem).Assembly.GetType("InfiniCrafterLocal.Common.VFX.VfxLibraryTextures",throwOnError:true)!.GetMethod("TryGetPath",All)!;
+        return (data?.VfxManifest.Slots??Array.Empty<VfxSlotSpec>()).Where(s=>s.Particle is not null)
+            .Select(s=>{
+                object?[] args={s.Particle!.TextureId,null};
+                if(!(bool)resolve.Invoke(null,args)!)throw new NotSupportedException("Unknown selected particle texture: "+s.Particle.TextureId);
+                return (string)args[1]!;
+            }).Distinct(StringComparer.Ordinal).ToArray();
+    }
+    internal static void PrewarmLibraryTextures(string[] paths,Func<string,bool> ensure,Action drain)
+    {
+        foreach(string path in paths) {
+            ensure(path);drain();
+            if(!ensure(path))throw new InvalidOperationException("Original ParticleLibrary readiness failed for selected texture after native main-thread queue: "+path);
+        }
     }
     public void Step(int tick)
     {

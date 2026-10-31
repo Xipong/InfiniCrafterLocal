@@ -388,12 +388,46 @@ export only. Recorded `activeProjectileVfx.historyRibbonDraws` contain actual na
 history samples, submitted SpriteBatch segments and geometry. A stationary history
 can correctly submit zero segments. These observations are not whole-artwork approval.
 
-Reusable native controls, optionally including an unchanged authored item:
+The separate current `historyTrail` renderer is admitted only for `trail.draw:
+"stroke"`, `trail.source: "center"` with **`drawPlayer:true`** (and therefore
+`drawArtwork:true`, exact publication PNGs and verified native player resources).
+It executes the original full `GeneratedProjectile.PreDraw` and its live trail
+samples. Partial authored draw-core and procedural-only scenes still refuse this
+renderer; sprite/tip trail variants are not admitted by this bounded lane. No
+new texture is synthesized for the stroke. `activeProjectileVfx.historyTrailDraws`
+records original SpriteBatch submission counts per slot; admission alone, a
+stationary zero-segment history or a PNG hash is not visual approval.
+
+Particle resource readiness uses each selected `slot.particle.textureId` through
+the production texture registry and drains the native main-thread queue per
+distinct path. `nativeRender.readyLibraryTexturePaths` lists the paths actually
+prewarmed; no particle slots means no invented particle texture. Missing selected
+resources fail explicitly instead of substituting Star/WhitePixel. The existing
+Star/effect resource prerequisites and receipts remain in force. Only the existing
+ParticleLibrary resource mod is registered: a selected Luminance particle texture
+without its resource context is a refusal, not automatic dependency provisioning.
+
+Reusable native controls, optionally including an unchanged historyRibbon item:
 
 ```sh
 python tools/item-test-workbench/verify_history_ribbon.py --no-build \
   --out artifacts/history-controls --item /path/item.json
 ```
+
+This matrix also exercises synthetic stroke/center `historyTrail`, both selected
+Star/solidPixel particle resources, a native training dummy plus an invisible
+moving hostile, capture-disabled parity, missing selected texture and partial/
+procedural refusal controls. It now also needs the existing dummy assets
+(`--include-dummy` setup above). Its `--item` option retains the earlier
+**procedural historyRibbon** scene; it is not a generic full-artwork item launcher.
+Use `workbench run` with an explicit full-artwork scenario for such an input.
+
+Controlled `hostiles` remain **unrendered**. Only their `NPC.UpdateNPC` runs with
+`dedServ:true`, omitting client FindFrame/artwork; a scoped restore also covers an
+exception. Training-dummy client AI/frame and subsequent native client projectile,
+damage, VFX and render phases are unchanged. `execution.controlledHostiles` and
+the individual native phase events disclose this intervention. This is not
+visible-enemy or complete NPC/client parity.
 
 `drawNativeDust: true` runs original `Main.DrawDust` after the player pass. Because
 that method can retire dust, **`capture: false` still executes the GPU draw lifecycle

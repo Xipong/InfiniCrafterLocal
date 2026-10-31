@@ -166,12 +166,12 @@ internal static partial class EngineRuntimeChecks
         var fill = VfxContourGeometry.Fill(p);
         Equal(4, fill.Length, "concave n-2 triangles");
         Equal(64d, ContourArea(fill), "concave exact area");
-        Equal(64d, ContourArea(VfxContourGeometry.Fill(p.Reverse().ToArray())), "reverse winding same area");
+        Equal(64d, ContourArea(VfxContourGeometry.Fill(System.Linq.Enumerable.Reverse(p).ToArray())), "reverse winding same area");
         ContourRejected(() => VfxContourGeometry.Fill(new[] { new Vector2(0, 0), new Vector2(10, 10), new Vector2(0, 10), new Vector2(10, 0), new Vector2(0, 0) }), "bow tie rejected");
         ContourRejected(() => VfxContourGeometry.Fill(new[] { Vector2.Zero, Vector2.UnitX, Vector2.UnitY }), "open fill rejected");
         var composition = VfxContourGeometry.Resolve(new[] { new VfxContourNode { Id = "a", Kind = "line", From = new[] { 0f, 0f }, To = new[] { 10f, 0f } }, new VfxContourNode { Id = "b", Kind = "line", From = new[] { 10f, 0f }, To = new[] { 10f, 10f } }, new VfxContourNode { Id = "joined", Kind = "concat", Sources = new[] { "a", "b" } }, new VfxContourNode { Id = "portion", Kind = "trim", Source = "joined", Start = .25f, End = .75f }, new VfxContourNode { Id = "back", Kind = "trim", Source = "joined", Start = .75f, End = .25f } });
         Equal(true, composition["portion"].SequenceEqual(new[] { new Vector2(5, 0), new Vector2(10, 0), new Vector2(10, 5) }), "trim preserves original interior corner");
-        Equal(true, composition["back"].SequenceEqual(composition["portion"].Reverse()), "descending trim range explicitly reverses");
+        Equal(true, composition["back"].SequenceEqual(System.Linq.Enumerable.Reverse(composition["portion"])), "descending trim range explicitly reverses");
         ContourRejected(() => VfxContourGeometry.Resolve(new[] { new VfxContourNode { Id = "a", Kind = "line", From = new[] { 0f, 0f }, To = new[] { 10f, 0f } }, new VfxContourNode { Id = "bad", Kind = "concat", Sources = new[] { "a", "a" } } }), "concat never invents a bridge");
         var a = new[]
         {
@@ -185,7 +185,7 @@ internal static partial class EngineRuntimeChecks
             new Vector2(10, 2)
         };
         Equal(20d, ContourArea(VfxContourGeometry.Band(a, b)), "band preserves unequal contour corner fractions");
-        ContourRejected(() => VfxContourGeometry.Band(a, b.Reverse().ToArray()), "band reversed direction not guessed");
+        ContourRejected(() => VfxContourGeometry.Band(a, System.Linq.Enumerable.Reverse(b).ToArray()), "band reversed direction not guessed");
         var outer = new[]
         {
             new Vector2(-10, -10),

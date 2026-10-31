@@ -27,6 +27,25 @@ internal static partial class EngineRuntimeChecks
             new InfiniCrafterLocal.Common.Runtime.RuntimeHitNpcGeneration().OnSpawn(npc,Terraria.Main.player[0].GetSource_Misc("workbench-controlled-hostile"));
         }
     }
+    // Controlled hostiles have no client artwork. Keep native NPC integration
+    // while skipping its client FindFrame/presentation, never the damage phase.
+    private readonly struct WUnrenderedNpcUpdate : IDisposable
+    {
+        private readonly bool previous;
+        public WUnrenderedNpcUpdate(){previous=Terraria.Main.dedServ;Terraria.Main.dedServ=true;}
+        public void Dispose(){Terraria.Main.dedServ=previous;}
+    }
+    private static void WUpdateControlledHostiles(JsonArray events,JsonObject report)
+    {
+        for(int slot=2;slot<10;slot++) {
+            var npc=Terraria.Main.npc[slot];if(!npc.active)continue;
+            using(new WUnrenderedNpcUpdate())npc.UpdateNPC(slot);
+            events.Add(new JsonObject{["kind"]="native_phase",["phase"]="controlled hostile NPC.UpdateNPC",["npcId"]=slot,
+                ["dedServ"]=true,["restoredDedServ"]=Terraria.Main.dedServ,["artworkRendered"]=false,
+                ["scope"]="Unrendered controlled NPC; native dedicated update, client FindFrame omitted; projectile damage remains in its own phase"});
+            WRequireFinite(npc,"hostile",slot,"after NPC.UpdateNPC",events,report);
+        }
+    }
     private static JsonArray WHostileSnapshots()=>new(Terraria.Main.npc.Skip(2).Take(8).Where(n=>n.type==NPCID.Zombie).Select(n=>(JsonNode?)new JsonObject{
         ["targetState"]=WTargetState(n),["slot"]=n.whoAmI,["nativeType"]=n.type,["active"]=n.active,["life"]=n.life,["x"]=WFinite(n.position.X),["y"]=WFinite(n.position.Y),["width"]=n.width,["height"]=n.height,["nonFinite"]=!WEntityFinite(n),["controlledAiStyle"]=n.aiStyle}).ToArray());
     private static bool WReactionAction(string kind)=>kind is "hurt_player" or "strike_hostile";
