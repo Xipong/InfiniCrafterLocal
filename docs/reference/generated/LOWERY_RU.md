@@ -252,6 +252,7 @@ Typed structured choices и конечные enum-отображения так�
 | apply_projectile_charge_release.knockbackMultiplier | 1 | unconditional declared neutral |
 | apply_projectile_charge_release.speedMultiplier | 1 | unconditional declared neutral |
 | apply_projectile_charge_release.pauseLifetimeWhileCharging | False | unconditional declared neutral |
+| beam_geometry.startOffsetBlocks | 0 | unconditional declared neutral |
 | set_projectile_beam_ramp.initialWidthMultiplier | 1 | unconditional declared neutral |
 | set_projectile_beam_ramp.initialDamageMultiplier | 1 | unconditional declared neutral |
 | set_projectile_beam_ramp.damageStartProgress | 0 | unconditional declared neutral |

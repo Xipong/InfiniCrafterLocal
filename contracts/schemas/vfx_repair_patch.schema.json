@@ -2484,7 +2484,7 @@
                 "type": "number"
               },
               "textureId": {
-                "description": "Exact ParticleLibrary built-in Star texture: opaque grayscale including black texels. Alpha blend includes its black rectangular footprint; additive makes black contribute zero. Choose blend explicitly. Not a motion/weapon preset; no PNG generation.",
+                "description": "Exact ParticleLibrary built-in Star texture: a soft circular radial glow, not a crisp star-shaped sparkle. The mask is opaque grayscale including black texels: alpha blend includes its black rectangular footprint; additive makes black contribute zero. Point-emitter: all count particles start at the same captured anchor; count is multiplicity, not spatial scatter. spreadRadians changes initial velocity directions, not initial positions. Additive overlap sums light with the background and can saturate tinted colors toward white; more coincident particles increase energy, not separation. Choose blend, count, dimensions, opacity and motion deliberately; glow and zero remain valid. For authored crisp artwork, spriteElement can use an explicit custom texture instead; no automatic substitution or PNG generation in this renderer.",
                 "enum": [
                   "star"
                 ],

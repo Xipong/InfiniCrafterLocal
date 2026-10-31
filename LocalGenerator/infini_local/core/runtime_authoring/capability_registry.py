@@ -409,6 +409,9 @@ class ParamSpec:
     min_properties: int | None = None
     omission_condition: OmissionCondition | None = None
     wire_presence_requires_receipt: bool = False
+    # Additive neutral leaf: fresh compilation emits its omission receipt, but
+    # saved wire may retain historical absence without inventing that receipt.
+    wire_preserve_absence: bool = False
     shared_type: str = ""
     # Explicit numeric wire contract. Predecessors are receipt paths only, never Author aliases.
     predecessor_names: tuple[str, ...] = ()
@@ -999,6 +1002,7 @@ class CapabilitySpec:
                 for left, lr in variants for right, rr in spec.flat_wire_variants(name))
         neutral_fields = tuple(spec.wire_name or name for name, spec in self.params.items()
             if name not in self.nested_components and self.category == "motion_primitive" and not spec.required and spec.default is not None
+            and not spec.wire_preserve_absence
             and type(spec.default) is type(spec.neutral) and spec.default == spec.neutral)
         if self.wire_components:
             nested = []
@@ -1881,8 +1885,9 @@ _CAPS: list[CapabilitySpec] = [
         "enabled": _p("boolean", "Whether contact damage is eligible within the selected window."),
         "window": _motion_window(required=True),
     }, cs="Content/Projectiles/GeneratedProjectile.DamageGate.cs::CanDamage", window=False, persisted_name='gate_projectile_contact'),
-    _motion_cap("beam_geometry", "Share a line between collision, draw and VFX, starting at body center along the Aim axis.", {
-        "length": _previous_param_name('lengthBlocks', _motion_number("lengthPx", "Positive line length.", 0.001, 1920, multiplier=16, units="blocks")),
+    _motion_cap("beam_geometry", "Share a line between collision, draw and VFX along the existing Aim world unit axis (MotionAxis): start=body center+axis*startOffsetBlocks, end=start+axis*length, with blocks converted to world pixels. Omitted offset is zero; this is not a hand anchor or a PNG grip and follows actual attachment/reach displacement. Offset moves only the line origin, never body physics, length, width, reach or PNG scale.", {
+        "length": _previous_param_name('lengthBlocks', _motion_number("lengthPx", "Positive line length, measured from the independently offset start; tile raycast may clip it.", 0.001, 1920, multiplier=16, units="blocks")),
+        "startOffsetBlocks": replace(_motion_number("startOffsetPx", "Signed line-origin displacement from body center along the same Aim world unit axis (MotionAxis); negative starts behind the pivot. Changes origin only, not length, width, attachment/reach, body physics or PNG scale. Zero/omission starts at body center.", -30720, 30720, multiplier=16, units="blocks"), required=False, default=0, neutral=0, predecessor_names=(), wire_preserve_absence=True),
         "widthBlocks": _motion_number("widthPx", "Positive collision line width.", 0.001, 128, multiplier=16, units="blocks"),
         "raycastTiles": _p("boolean", "Clip shared line against tiles; not projectile tile-collision policy."),
     }, cs="Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry", window=False, requirements=(RequirementSpec("capability_present", capability="set_aim", message="Beam geometry requires explicit Aim."),
@@ -1918,13 +1923,13 @@ _CAPS: list[CapabilitySpec] = [
         "turnOwner": _p("boolean", "Turn the owner toward the axis.", required=False, default=False, neutral=False),
     }, window=False, persisted_name='set_projectile_aim'),
     _motion_cap("attach", "Set body center from a native anchor and axis/normal offsets. Always-active attachment bypasses native integration and requires tileCollide=false; a phase/timing-limited attachment allows tile collision during free flight.", {
-        "anchor": _p("string", "Multiple attachments can share front_hand; front_arm_pose controls its pose.", enum=("owner_center", "owner_mounted", "front_hand")),
+        "anchor": _p("string", "owner_center reads owner.Center; owner_mounted reads owner.MountedCenter, not the hand. front_hand reads the native front hand, with no automatic arm follow; front_arm_pose independently writes its pose. Multiple attachments can share that hand. front_hand does not cancel physical axis/normal offsets or reachCurve displacement. Its PNG grip adapter compensates attachment offsets only, not reachCurve or beam origin.", enum=("owner_center", "owner_mounted", "front_hand")),
         "axisOffsetBlocks": replace(_motion_number("axisOffsetPx", "Signed axial offset.", -4096, 4096, multiplier=16, units="blocks"), required=False, default=0, neutral=0),
         "normalOffsetBlocks": replace(_motion_number("normalOffsetPx", "Signed normal offset.", -4096, 4096, multiplier=16, units="blocks"), required=False, default=0, neutral=0),
     }, position="owns_position_while_active", requirements=(
         RequirementSpec("capability_present", capability="set_aim", message="Attachment requires an explicit Aim axis."),
     ), persisted_name='attach_projectile'),
-    _motion_cap("front_arm_pose", "Write the primary front arm pose; interpolate stretch lengths piecewise, nearest stretch ties shorter.", {
+    _motion_cap("front_arm_pose", "Write the primary front arm pose independently of attachment; no automatic body attachment or reach cancellation. Native hand stretch length is only 4 to 10px; interpolate stretch lengths piecewise, nearest stretch ties shorter.", {
         "duration": _previous_param_name('durationSeconds', _seconds(_p("integer", "Pose cycle duration.", minimum=2, maximum=240), "durationTicks")),
         "startStretch": _p("string", "Starting native stretch.", enum=_NATIVE_ARM_STRETCH),
         "peakStretch": _p("string", "Peak native stretch; may be smaller than endpoints.", enum=_NATIVE_ARM_STRETCH),
@@ -1936,7 +1941,7 @@ _CAPS: list[CapabilitySpec] = [
         RequirementSpec("binding_tuple_present", any_of=("primary_use|spawn_entity", "alternate_use|spawn_entity"), message="Arm pose requires an active primary spawn binding."),
         RequirementSpec("item_capability_param", target="item_body", capability="item_use", param="handPose", equals="", allow_absent=True, message="Item handPose cannot compete with the explicit arm writer."),
     ), persisted_name='set_front_arm_pose'),
-    _motion_cap("set_projectile_reach_curve", "Add a piecewise linear axial reach displacement to an explicit attachment; no cycle kill or sprite inference.", {
+    _motion_cap("set_projectile_reach_curve", "Translate actual body center, collision geometry and selected PNG grip axially relative to an explicit attachment, including front_hand; not an arm stretch or draw-only extension. No cycle kill or sprite inference.", {
         "duration": _previous_param_name('durationSeconds', _seconds(_p("integer", "Reach cycle duration.", minimum=1, maximum=21600), "durationTicks")),
         "startOffsetBlocks": _motion_number("startOffsetPx", "Signed initial axial displacement.", -4096, 4096, multiplier=16, units="blocks"),
         "peakOffsetBlocks": _motion_number("peakOffsetPx", "Signed peak axial displacement.", -4096, 4096, multiplier=16, units="blocks"),
@@ -3898,7 +3903,7 @@ def _package_motion_property(parent: str, child: str, parameter: str, meaning: s
 _package_motion_property("beam_geometry", "set_projectile_beam_ramp", "ramp",
     "Optional warmup of this beam's width and hit-time damage. Absent means no ramp.")
 _package_motion_property("attach", "set_projectile_reach_curve", "reachCurve",
-    "Optional age-based axial reach curve. Its own window intersects attachment activity; it does not restart the curve.")
+    "Optional age-based axial translation of actual body center, collision geometry and selected PNG grip, even with front_hand; not arm stretch or a draw-only extension. Its own window intersects attachment activity; it does not restart the curve. Absence adds no reach displacement.")
 _package_motion_property("charge", "apply_projectile_charge_release", "releaseEffect",
     "Optional release effect; absent leaves velocity and combat unchanged. Present rewrites launch velocity even with unit multipliers.")
 

@@ -92,6 +92,7 @@ internal sealed partial class WNativeArtwork:IDisposable {
   var rootIdentity=new[]{data.Id,"item","",data.Id};
   var selected=new List<(string Role,SpritePresentationSelection Selection,string[] Identity)>{("item",SpritePresentation.Root(data),rootIdentity)};
   foreach(var entity in data.RuntimeProgram.Entities) {
+   if(entity.Visual.AssetMode is "runtime_geometry" or "no_asset")continue; // Native geometry/VFX owns this body; no PNG is selected or substituted.
    if(entity.Visual.AssetMode is not ("baked_sprite" or "reuse_item_icon"))throw new NotSupportedException("Authored PNG artwork requires baked_sprite/reuse_item_icon, not "+entity.Visual.AssetMode+" for "+entity.Id);
    selected.Add((entity.Id,SpritePresentation.Entity(data,entity),entity.Kind==RuntimeEntityKind.ItemBody||entity.Visual.AssetMode=="reuse_item_icon"?rootIdentity:new[]{data.Id,"runtime:"+RuntimeEntityKind.VisualRoleFor(entity.Kind),entity.Id,data.Id+"_"+entity.Id}));
   }

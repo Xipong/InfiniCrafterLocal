@@ -1431,7 +1431,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "length": {
-                    "description": "Author units: blocks. Native consumer: Positive line length.",
+                    "description": "Author units: blocks. Native consumer: Positive line length, measured from the independently offset start; tile raycast may clip it.",
                     "maximum": 120.0,
                     "minimum": 6.25e-05,
                     "type": "number",
@@ -1513,6 +1513,25 @@
                     "description": "Clip shared line against tiles; not projectile tile-collision policy.",
                     "type": "boolean",
                     "x-infini-semanticType": "tiles"
+                  },
+                  "startOffsetBlocks": {
+                    "default": 0,
+                    "description": "Author units: blocks. Native consumer: Signed line-origin displacement from body center along the same Aim world unit axis (MotionAxis); negative starts behind the pivot. Changes origin only, not length, width, attachment/reach, body physics or PNG scale. Zero/omission starts at body center.",
+                    "maximum": 1920.0,
+                    "minimum": -1920.0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "blocks",
+                    "x-infini-units": "blocks"
                   },
                   "widthBlocks": {
                     "description": "Author units: blocks. Native consumer: Positive collision line width.",
@@ -1860,7 +1879,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "anchor": {
-                    "description": "Multiple attachments can share front_hand; front_arm_pose controls its pose.",
+                    "description": "owner_center reads owner.Center; owner_mounted reads owner.MountedCenter, not the hand. front_hand reads the native front hand, with no automatic arm follow; front_arm_pose independently writes its pose. Multiple attachments can share that hand. front_hand does not cancel physical axis/normal offsets or reachCurve displacement. Its PNG grip adapter compensates attachment offsets only, not reachCurve or beam origin.",
                     "enum": [
                       "owner_center",
                       "owner_mounted",
@@ -1909,7 +1928,7 @@
                   },
                   "reachCurve": {
                     "additionalProperties": false,
-                    "description": "Optional age-based axial reach curve. Its own window intersects attachment activity; it does not restart the curve.",
+                    "description": "Optional age-based axial translation of actual body center, collision geometry and selected PNG grip, even with front_hand; not arm stretch or a draw-only extension. Its own window intersects attachment activity; it does not restart the curve. Absence adds no reach displacement.",
                     "properties": {
                       "duration": {
                         "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Reach cycle duration.",

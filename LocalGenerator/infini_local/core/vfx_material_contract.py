@@ -132,9 +132,21 @@ def element_schema() -> dict[str, Any]:
     })
 
 
+LIBRARY_PARTICLE_MATERIAL_DESCRIPTION = (
+    "Exact ParticleLibrary built-in Star texture: a soft circular radial glow, not a crisp star-shaped sparkle. "
+    "The mask is opaque grayscale including black texels: alpha blend includes its black rectangular footprint; "
+    "additive makes black contribute zero. Point-emitter: all count particles start at the same captured anchor; "
+    "count is multiplicity, not spatial scatter. spreadRadians changes initial velocity directions, not initial positions. "
+    "Additive overlap sums light with the background and can saturate tinted colors toward white; "
+    "more coincident particles increase energy, not separation. Choose blend, count, dimensions, opacity and motion "
+    "deliberately; glow and zero remain valid. For authored crisp artwork, spriteElement can use an explicit custom "
+    "texture instead; no automatic substitution or PNG generation in this renderer."
+)
+
+
 def library_particle_schema() -> dict[str, Any]:
     return _object({
-        "textureId": {"type": "string", "enum": ["star"], "description": "Exact ParticleLibrary built-in Star texture: opaque grayscale including black texels. Alpha blend includes its black rectangular footprint; additive makes black contribute zero. Choose blend explicitly. Not a motion/weapon preset; no PNG generation."},
+        "textureId": {"type": "string", "enum": ["star"], "description": LIBRARY_PARTICLE_MATERIAL_DESCRIPTION},
         "count": _number(0, 64, "Integer particles per emission; zero is silence; shares existing instance budgets.", integer=True),
         "speedMinPxPerTick": _number(0, 24, "Minimum initial speed in world pixels/world tick."),
         "speedMaxPxPerTick": _number(0, 24, "Maximum initial speed in world pixels per world tick, must be >= speedMinPxPerTick."),

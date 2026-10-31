@@ -28,6 +28,7 @@ from infini_local.core.visual_contract_schema import SPRITE_CANVAS_SIZES
 from infini_local.core.vfx_material_contract import (
     ASSET_ID_PATTERN,
     MATERIAL_RENDERERS,
+    LIBRARY_PARTICLE_MATERIAL_DESCRIPTION,
     asset_schema,
     element_schema,
     library_particle_schema,
@@ -67,7 +68,19 @@ _ACCEPTED_GAMEPLAY_CONTEXT_RULE = (
     "missing values, live attack-speed modifiers or event frequency from names/prose. "
     "runtimePairs owns event availability; acceptedRuntimeProgramReadOnly owns exact bindings/events and "
     "independent motion fields, including ordered seek. attachment reads an anchor; armPose alone does not "
-    "attach a body. A window may be phase-only or include clock/startDelayTicks/durationTicks together. "
+    "attach a body. bodyPresentation.frame carries only present native wire operands: distances are world pixels, "
+    "not Gameplay Author blocks; durations are world ticks. While its window is active, the attachment step sets body center to "
+    "anchor + aimAxis*(axisOffsetPx + active reachOffsetPx) + normal*normalOffsetPx; normal is aimAxis rotated +pi/2. "
+    "reach and armPose curves sample clamped active world age/durationTicks; windows gate them, not restart them. "
+    "Reach translates the rigid body and is not canceled by PNG grip. armPose writes a native pose, not a body anchor. "
+    "For beamGeometry, beamStart.anchor is the base pivot: start=projectile.Center+axis*startOffsetPx, "
+    "end=start+axis*lengthPx, on the same Aim world unit axis (MotionAxis). "
+    "Read startOffsetPx only when present in frame.beamGeometry; historical absence means zero and stays absent. "
+    "The signed offset changes only line origin, never length, width, attachment/reach, body physics or PNG scale; "
+    "explicit tile raycast may clip length from that start. Retained controller beamStart keeps its native anchor/offset. "
+    "A beam texturedPath follows this exact shared line and beamAxis, not inventory grip or a guessed hand contact; "
+    "no_asset still permits explicit path decoration without an underlying body. These facts do not guarantee hand contact. "
+    "A window may be phase-only or include clock/startDelayTicks/durationTicks together. "
     "Absent window means all active updates; since_release/since_return are inactive before their latch, "
     "released may overlap returning. Native counts stay native counts. Read-only motion creates no slots, "
     "events, textures or Repair permissions."
@@ -134,7 +147,7 @@ _READABILITY_RULE = (
 )
 
 _RENDERER_SEMANTICS = {
-    "libraryParticle": "Real ParticleLibrary V3 instanced Star particles, separate from Terraria Dust. Explicit particle controls choose count, motion, dimensions, spin, color and lifetime fade; world-only attachment captures event-time pose. duration is individual lifetime; event startTick is delay/repeatEvery=0, periodic repeatEvery>=1 and item startTick=0. Velocity updates once per world tick as velocity*drag+world acceleration, then position+=velocity. Common alpha multiplies linear endOpacity once; dimensions multiply linear endScaleMultiplier. Explicit alpha/additive blend and exact before/after projectile layer remain choices. Uses existing cadence/occurrence/source budgets; disabled library suppresses this lane with no Dust fallback. No damage, gameplay child, generated PNG or inferred direction.",
+    "libraryParticle": LIBRARY_PARTICLE_MATERIAL_DESCRIPTION + " Real ParticleLibrary V3 instanced particles, separate from Terraria Dust. Explicit particle controls choose count, motion, dimensions, spin, color and lifetime fade; world-only attachment captures event-time pose. duration is individual lifetime; event startTick is delay/repeatEvery=0, periodic repeatEvery>=1 and item startTick=0. Velocity updates once per world tick as velocity*drag+world acceleration, then position+=velocity. Common alpha multiplies linear endOpacity once; dimensions multiply linear endScaleMultiplier. Explicit alpha/additive blend and exact before/after projectile layer remain choices. Uses existing cadence/occurrence/source budgets; disabled library suppresses this lane with no Dust fallback. No damage, gameplay child, generated PNG or inferred direction.",
     "screenShakeCue": "Controls: startTick is event delay, NOT shake lifetime. dissipationPxPerFrame subtracts strength per native camera visit, NOT per world tick or assumed 60 Hz frame. Explicit nonperiodic local camera cue through Luminance ScreenShakeSystem.StartShakeAtPoint, attenuated from the exact event anchor to the viewer. Six controls are mandatory in screenShake; no implicit damage/weapon-triggered shake. startTick is event-relative delay in world ticks; the captured anchor/forward survive source retirement. strengthPx=0 is silence. Dissipation follows native camera visits, not simulation ticks. Each handle shares the existing instance budgets. Native Luminance/user screenshake settings remain authoritative; a disabled backend suppresses this lane without substitution. No PNG, light, sound or particles are added.",
     "spriteStampTrail": "Periodic projectile: textured history stamps at samples 2,5,... in a 20-world-tick history, using body rotation/flip. Projectile event: one fading snapshot of captured body rotation/scale/flip/gfx offset at the resolved event-time anchor; item emission is a directional texture stamp, not a player/held-pose snapshot. No fabricated history.",
     "historyRibbon": "Controls: duration is NOT history length; active history drawing does not consume duration/startTick. Alpha is a draw multiplier (RGB and alpha together), not native reverse-byte alpha. Connected center-history segments (20 world samples), fading toward the oldest point. Uses actual center history, not a relocated owner trajectory; on_spawn can start a live trail.",
@@ -286,6 +299,38 @@ def _entity_texture_sources(data: Mapping[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _body_presentation_frame(entity: Mapping[str, Any], geometry: str | None) -> dict[str, Any]:
+    """Small typed view of admitted frame operands, never a pose/contact prediction."""
+    fields = {
+        "aim": ("source", "turnOwner"),
+        "rotation": ("mode", "offsetRadians", "radiansPerUpdate", "window"),
+        "attachment": ("anchor", "axisOffsetPx", "normalOffsetPx", "window"),
+        "reach": ("durationTicks", "startOffsetPx", "peakOffsetPx", "endOffsetPx", "peakProgress", "window"),
+        "armPose": ("durationTicks", "startStretch", "peakStretch", "endStretch", "peakProgress", "window"),
+    }
+    if geometry == "beam":
+        fields.update(beamGeometry=("lengthPx", "widthPx", "raycastTiles", "startOffsetPx"),
+                      beamRamp=("warmupTicks", "initialWidthMultiplier"))
+    frame: dict[str, Any] = {
+        component: {key: copy.deepcopy(value[key]) for key in keys if key in value}
+        for component, keys in fields.items() if isinstance(value := entity.get(component), Mapping)
+    }
+    attachment = frame.get("attachment", {})
+    selector = attachment.get("anchor")
+    anchor = {"owner_mounted": "owner.MountedCenter", "owner_center": "owner.Center",
+              "front_hand": "owner.current_composite_front_hand"}.get(selector) if isinstance(selector, str) else None
+    if anchor is not None:
+        frame["attachmentAnchor"] = anchor
+    if geometry == "beam":
+        current = "beamGeometry" in frame
+        frame["beamStart"] = {"anchor": "projectile.Center"} if current else {
+            "anchor": "owner.MountedCenter", "forwardOffsetPx": 18}
+        frame["beamAxis"] = "motion_axis" if current else "velocity_or_initial_direction"
+    if frame:
+        frame["units"] = {"distance": "native_world_pixels", "duration": "world_ticks"}
+    return frame
+
+
 def _body_presentation(data: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Exact selected body coverage, without asset paths or inferred art choices.
 
@@ -306,12 +351,15 @@ def _body_presentation(data: Mapping[str, Any]) -> list[dict[str, Any]]:
         mode = visual.get("assetMode")
         geometry = _collision_path_source(entity)
         row: dict[str, Any] = {"entityId": entity["id"], "assetMode": mode}
+        frame = _body_presentation_frame(entity, geometry)
+        if frame:
+            row["frame"] = frame
         if mode in ("baked_sprite", "reuse_item_icon"):
             selected = root if mode == "reuse_item_icon" or entity.get("kind") == "item_body" else visual
             row["coverage"] = "single_sprite_at_body"
             if isinstance(selected, Mapping):
                 row["image"] = {key: copy.deepcopy(selected[key]) for key in
-                    ("renderSizePx", "forwardAngleDegrees", "silhouette", "visualIdentity") if key in selected}
+                    ("renderSizePx", "forwardAngleDegrees", "grip", "silhouette", "visualIdentity") if key in selected}
             if entity.get("kind") == "item_body":
                 row["coverage"] = "inventory_and_item_use"
                 use = runtime.get("itemUse") if isinstance(runtime, Mapping) else None

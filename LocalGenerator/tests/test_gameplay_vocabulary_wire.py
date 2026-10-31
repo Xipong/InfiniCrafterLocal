@@ -22,12 +22,24 @@ def executable_wire(document):
 
 
 @pytest.mark.parametrize("case", _CAPTURE["cases"], ids=lambda row: row["previousFn"])
-def test_canonical_choices_emit_exact_prechange_wire_and_old_wire_still_loads(case):
+def test_canonical_choices_preserve_prechange_execution_and_old_wire_still_loads(case):
     before = deepcopy(case)
     source = case["author"]
     assert validate_runtime_program(source)["ok"]
     wire = compile_runtime_program(source)
-    assert executable_wire(wire) == executable_wire(case["wire"])
+    actual = executable_wire(wire)
+    expected = executable_wire(case["wire"])
+    if case["previousFn"] == "set_projectile_beam_geometry":
+        # New fresh compilation declares one neutral origin leaf. Keep the
+        # frozen old capture byte-for-byte; compare every retained field exactly.
+        call = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "beam_geometry")
+        assert "startOffsetBlocks" not in call["params"]
+        fresh = next(row for row in actual["runtimeProgram"]["entities"] if row["id"] == call["target"])
+        old = next(row for row in expected["runtimeProgram"]["entities"] if row["id"] == call["target"])
+        assert "startOffsetPx" not in old["beamGeometry"]
+        neutral = fresh["beamGeometry"].pop("startOffsetPx")
+        assert type(neutral) in (int, float) and neutral == 0
+    assert actual == expected
     assert validate_runtime_wire(wire)["ok"]
     assert validate_runtime_wire(case["wire"])["ok"]
     assert audit_compiler_receipts(case["wire"]["runtimeContract"]["finalWireReceipts"], final_document=case["wire"])["ok"]

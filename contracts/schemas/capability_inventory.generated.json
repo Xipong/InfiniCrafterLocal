@@ -363,6 +363,7 @@
       "exclusiveGroup": "",
       "finalWirePaths": [
         "runtimeProgram.entities[].beamGeometry.lengthPx",
+        "runtimeProgram.entities[].beamGeometry.startOffsetPx",
         "runtimeProgram.entities[].beamGeometry.widthPx",
         "runtimeProgram.entities[].beamGeometry.raycastTiles",
         "runtimeProgram.entities[].beamRamp.warmupTicks",
@@ -403,6 +404,16 @@
           "semanticType": "tiles",
           "units": ""
         },
+        "startOffsetBlocks": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1920.0,
+          "minimum": -1920.0,
+          "reference": null,
+          "required": false,
+          "semanticType": "blocks",
+          "units": "blocks"
+        },
         "widthBlocks": {
           "enum": [],
           "kind": "number",
@@ -415,7 +426,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Share a line between collision, draw and VFX, starting at body center along the Aim axis.",
+      "purpose": "Share a line between collision, draw and VFX along the existing Aim world unit axis (MotionAxis): start=body center+axis*startOffsetBlocks, end=start+axis*length, with blocks converted to world pixels. Omitted offset is zero; this is not a hand anchor or a PNG grip and follows actual attachment/reach displacement. Offset moves only the line origin, never body physics, length, width, reach or PNG scale.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -1037,7 +1048,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Write the primary front arm pose; interpolate stretch lengths piecewise, nearest stretch ties shorter.",
+      "purpose": "Write the primary front arm pose independently of attachment; no automatic body attachment or reach cancellation. Native hand stretch length is only 4 to 10px; interpolate stretch lengths piecewise, nearest stretch ties shorter.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -1169,7 +1180,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Add a piecewise linear axial reach displacement to an explicit attachment; no cycle kill or sprite inference.",
+      "purpose": "Translate actual body center, collision geometry and selected PNG grip axially relative to an explicit attachment, including front_hand; not an arm stretch or draw-only extension. No cycle kill or sprite inference.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
