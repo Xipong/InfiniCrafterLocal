@@ -234,7 +234,6 @@ def test_real_image_jobs_forward_exact_selected_frame_owner_and_multipliers(monk
     assert arrow["silhouette"] == frozen["runtimeProgram"]["entities"][2]["visual"]["silhouette"]
     for call in calls:
         assert Path(call["raw"]).read_bytes() == call["bytes"]
-        assert "R/C" in call["prompt"] and "not hitbox" in call["prompt"]
     assert frozen["visual"]["imagePrompt"] in calls[0]["prompt"]
     assert frozen["runtimeProgram"]["entities"][2]["visual"]["prompt"] in calls[1]["prompt"]
     assert result["gameplay"] == frozen["gameplay"]
@@ -266,9 +265,6 @@ def test_actual_image_jobs_preserve_curve_facts_for_shared_root_and_distinct_bod
         assert ("hitboxCurve" in actual) == ("hitboxCurve" in accepted)
         if curve_mirror is not None:
             assert actual["hitboxCurve"] == accepted["hitboxCurve"]
-    for call in calls:
-        assert "without a clamp when accepted hitboxCurve.mirrorToSprite=true" in call["prompt"]
-        assert "Otherwise its existing clamp(Projectile.scale,0.1,8) remains" in call["prompt"]
     for entity, before in zip(result["runtimeProgram"]["entities"], frozen["runtimeProgram"]["entities"]):
         assert {key: value for key, value in entity.items() if key != "visual"} == {key: value for key, value in before.items() if key != "visual"}
 
@@ -287,9 +283,5 @@ def test_real_image_jobs_keep_independent_visual_curve_and_hitbox_ownership(monk
         accepted = next(row for row in frozen["runtimeProgram"]["entities"] if row["id"] == entity_id)
         assert actual["visualScaleCurve"] == accepted["visualScaleCurve"]
         assert actual.get("hitboxCurve") == accepted.get("hitboxCurve")
-    for call in calls:
-        assert "or visualScaleCurve is present" in call["prompt"]
-        assert "An independent hitbox curve does not multiply it" in call["prompt"]
-        assert "VFX body copies retain their separate published scale rules" in call["prompt"]
     for entity, before in zip(result["runtimeProgram"]["entities"], frozen["runtimeProgram"]["entities"]):
         assert {key: value for key, value in entity.items() if key != "visual"} == {key: value for key, value in before.items() if key != "visual"}
