@@ -224,6 +224,10 @@ internal static partial class EngineRuntimeChecks
         var copied = projectile.velocity; copied.Y = 777f;
         AttackOtherProjectile!.velocity.Y = 888f;
     }
+    private static void AttackMotionTargetMarker(Projectile projectile)
+    {
+        projectile.velocity.Y = 999f;
+    }
     private static void ProjectileSharedAiCaptureSelectsBeforeSourceBudgets()
     {
         MethodInfo Method(string name) => typeof(EngineRuntimeChecks).GetMethod(name, BindingFlags.Static | BindingFlags.NonPublic)!;
@@ -237,11 +241,20 @@ internal static partial class EngineRuntimeChecks
             Equal(type is >= 10 and <= 12, range.Contains("1.25", StringComparison.Ordinal), "unsigned subtraction range preserves underflow semantics");
             Equal(type is < 10 or > 12, range.Contains("2.5", StringComparison.Ordinal), "unsigned subtraction rejects outside range");
         }
-        string components = GeneratorClient.InspectProjectileAttackSource(Method(nameof(AttackMotionVectorComponents)), "motion").ToJsonString();
+        static string MotionEvidence(JsonObject source) => new JsonObject {
+            ["observations"] = source["observations"]!.DeepClone(),
+            ["dependencies"] = source["dependencies"]!.DeepClone(),
+            ["predicates"] = source["predicates"]!.DeepClone(),
+        }.ToJsonString();
+        static bool HasLiteral(string evidence, string value) => System.Text.RegularExpressions.Regex.IsMatch(
+            evidence, @"(?<![0-9.])" + value + @"(?:\.0+)?(?![0-9.])");
+        string components = MotionEvidence(GeneratorClient.InspectProjectileAttackSource(Method(nameof(AttackMotionVectorComponents)), "motion"));
+        string targetMarker = MotionEvidence(GeneratorClient.InspectProjectileAttackSource(Method(nameof(AttackMotionTargetMarker)), "motion"));
+        Equal(true, HasLiteral(targetMarker, "999"), "captured actor vector write retains its literal");
         foreach (string fact in new[] { "Vector2.Y", "Entity.velocity", "Entity.position", "0.1", "16" })
             Equal(true, components.Contains(fact, StringComparison.Ordinal), "native vector component sink captured: " + fact);
         foreach (string excluded in new[] { "999", "777", "888" })
-            Equal(false, components.Contains(excluded, StringComparison.Ordinal), "local/foreign vector is not captured actor motion: " + excluded);
+            Equal(false, HasLiteral(components, excluded), "local/foreign vector is not captured actor motion: " + excluded);
         foreach (int type in new[] { ProjectileID.WoodenArrowFriendly, ProjectileID.FireArrow, ProjectileID.UnholyArrow })
         {
             var projectile = new Projectile(); projectile.SetDefaults(type);
