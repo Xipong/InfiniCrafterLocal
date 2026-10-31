@@ -65,7 +65,7 @@ Resource thresholds — целые 0…1000; сравнение сохраняе
 
 ## Совместимость и проверка
 
-Canonical owners: `capability_registry.py`, `program_schema.py`, `compiler.py`, `technical_lowering.py`, `validator.py`, `repair_scope.py`. Их generated schema/cards обновляются штатными generators. Provider получает ту же взаимоисключающую форму через доказанное disjoint-union преобразование, а nullable inverse использует тот же контракт.
+Canonical owners: `capability_registry.py`, `program_schema.py`, `compiler.py`, `technical_lowering.py`, `validator.py`, `repair/{schema,scope,filter,validation}.py`. Их generated schema/cards обновляются штатными generators. Provider получает ту же взаимоисключающую форму через доказанное disjoint-union преобразование, а nullable inverse использует тот же контракт.
 
 Retired parameter receipts больше не поддерживаются ни source-aware, ни source-free audit. Проверки требуют текущую canonical projection, exact source owner и полную уникальную coverage. Stored data не удаляется и не мигрируется; архивные fixtures сохраняются как отрицательная evidence.
 

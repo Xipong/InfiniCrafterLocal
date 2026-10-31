@@ -7,12 +7,12 @@ is green only when schema, prompt, validator, compiler receipt and C# ownership
 can all be mechanically traced from the same declaration.
 """
 
-from dataclasses import asdict, dataclass
 import importlib
 import importlib.util
 import math
-from pathlib import Path
 import re
+from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any, Mapping
 
 from infini_local.core.runtime_authoring.capability_registry import (
@@ -22,15 +22,15 @@ from infini_local.core.runtime_authoring.capability_registry import (
     EVENT_KIND_REGISTRY,
     INPUT_KIND_REGISTRY,
     NETWORK_AUTHORITIES,
-    CapabilitySpec,
-    ParamSpec,
+)
+from infini_local.core.runtime_authoring.parameter_contract import ParamSpec
+from infini_local.core.runtime_authoring.registry_views import (
     capability_provider_union,
     compact_capability_catalog,
     runtime_authoring_registry_manifest,
 )
 from infini_local.core.runtime_authoring.technical_lowering import GLOBAL_TECHNICAL_LOWERINGS, path_matches
 from infini_local.qa.capability_witnesses import capability_vertical_slice_report
-
 
 AUDIT_SCHEMA = "infini.capability-library-audit.v1"
 KNOWN_REQUIREMENT_KINDS = frozenset({

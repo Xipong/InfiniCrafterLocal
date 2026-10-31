@@ -5,8 +5,6 @@
       "id": "runtime-authoring-contract",
       "patterns": [
         "LocalGenerator/infini_local/core/runtime_authoring/**",
-        "LocalGenerator/infini_local/pipelines/llm_authoring_*.py",
-        "LocalGenerator/infini_local/pipelines/author_item_*.py",
         "contracts/schemas/runtime_program_*.json",
         "tools/checks/audit_capability_library.py",
         "tools/checks/check_delivery_contract.py",
@@ -15,7 +13,8 @@
         "LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py",
         "docs/reference/generated/LOWERY_RU.md",
         "tools/checks/audit_terraria_standardization.py",
-        "LocalGenerator/infini_local/pipelines/author/stage.py"
+        "LocalGenerator/infini_local/pipelines/author/stage.py",
+        "LocalGenerator/infini_local/pipelines/author/**"
       ],
       "checks": [
         "schema_check",
@@ -132,10 +131,7 @@
         "LocalGenerator/infini_local/core/llm_json_tools.py",
         "LocalGenerator/infini_local/core/provider_schema.py",
         "LocalGenerator/infini_local/core/schema_validation.py",
-        "LocalGenerator/infini_local/pipelines/transport/client.py",
-        "LocalGenerator/infini_local/pipelines/transport/profiles.py",
-        "LocalGenerator/infini_local/pipelines/transport/admission.py",
-        "LocalGenerator/infini_local/pipelines/transport/provider_wire.py"
+        "LocalGenerator/infini_local/pipelines/transport/**"
       ],
       "checks": [
         "project_hygiene"

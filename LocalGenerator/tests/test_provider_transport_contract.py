@@ -4,31 +4,31 @@ Named scenarios cover distinct external behavior, not stage/API/lease products.
 """
 from __future__ import annotations
 
-from collections import deque
-from concurrent.futures import ThreadPoolExecutor
-from contextlib import ExitStack, contextmanager
-from http.server import BaseHTTPRequestHandler
-import http.client
-from pathlib import Path
-import time
 import copy
-from email.message import Message
+import http.client
 import io
 import json
 import threading
+import time
 import urllib.error
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack, contextmanager
+from email.message import Message
+from http.server import BaseHTTPRequestHandler
+from pathlib import Path
 from types import SimpleNamespace
 
+import infini_local.pipelines.transport.diagnostics as transport_diagnostics
+import infini_local.pipelines.transport.http as transport_http
 import pytest
-
-from provider_test_support import HttpReply, HttpSender, physical_attempt, loopback_server, write_json_response
-
-from infini_local.pipelines.transport import admission as llm_admission
 from infini_local.core import llm_config
+from infini_local.core.http_io import HttpDeadlineExceeded
+from infini_local.pipelines.transport import admission as llm_admission
+from infini_local.pipelines.transport import client as transport
 from infini_local.pipelines.transport import profiles as llm_profiles
 from infini_local.pipelines.transport import provider_wire as llm_provider_wire
-from provider_test_support import reset_llm_runtime
-from infini_local.pipelines.transport import client as transport
+from provider_test_support import HttpReply, HttpSender, loopback_server, physical_attempt, reset_llm_runtime, write_json_response
 
 PIN = "ExactVendor/Endpoint-Turbo"
 STAGES = ("planner", "visual_director", "vfx_director")
@@ -41,11 +41,11 @@ def test_provider_json_byte_limit_rejects_overflow_without_truncation(loopback_t
     body = {"value": "x" * 256}
     encoded = json.dumps(body).encode()
     base, _observed = endpoint([{"body": body}, {"body": body}])
-    send = (lambda limit: transport.http_get_json(base + "/models")) if method == "GET" else (
-        lambda limit: transport.http_json(base + "/chat/completions", {"model": "test"}, max_response_bytes=limit))
-    monkeypatch.setattr(transport, "MAX_PROVIDER_JSON_BYTES", len(encoded))
+    send = (lambda limit: transport_http.http_get_json(base + "/models")) if method == "GET" else (
+        lambda limit: transport_http.http_json(base + "/chat/completions", {"model": "test"}, max_response_bytes=limit))
+    monkeypatch.setattr(transport_http, "MAX_PROVIDER_JSON_BYTES", len(encoded))
     assert send(len(encoded)) == body
-    monkeypatch.setattr(transport, "MAX_PROVIDER_JSON_BYTES", len(encoded) - 1)
+    monkeypatch.setattr(transport_http, "MAX_PROVIDER_JSON_BYTES", len(encoded) - 1)
     with pytest.raises(HttpResponseTooLarge):
         send(len(encoded) - 1)
 
@@ -151,8 +151,8 @@ def wire(monkeypatch):
     monkeypatch.delenv("INFINI_LLM_REPLAY_RAW", raising=False)
     monkeypatch.setattr(transport, "log_event", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(transport.time, "sleep", lambda _seconds: None)
-    monkeypatch.setattr(transport, "http_json", recorder)
-    monkeypatch.setattr(transport, "http_get_json", lambda *_args, **_kwargs: pytest.fail("unexpected model discovery"))
+    monkeypatch.setattr(transport_http, "http_json", recorder)
+    monkeypatch.setattr(transport_http, "http_get_json", lambda *_args, **_kwargs: pytest.fail("unexpected model discovery"))
     yield recorder
     reset_llm_runtime()
 
@@ -305,7 +305,7 @@ def test_shared_http_read_returns_exact_bytes_or_refuses_byte_overflow(loopback_
     endpoint, _events = loopback_transport
     base, observed = endpoint([{"body": {"value": "loopback"}}])
     deadline = time.monotonic() + 1
-    with http_io.urlopen_no_redirect(transport.urlrequest.Request(base), deadline=deadline) as response:
+    with http_io.urlopen_no_redirect(transport_http.urlrequest.Request(base), deadline=deadline) as response:
         if oversized:
             with pytest.raises(http_io.HttpResponseTooLarge):
                 http_io.read_with_deadline(response, deadline=deadline, max_bytes=3)
@@ -329,7 +329,7 @@ def test_real_http_physical_attempt_timeline_is_bounded_safe_and_survives_failur
     monkeypatch.setattr(llm_config, "OPENROUTER_BASE_URL", base)
     monkeypatch.setattr(llm_config, "LLM_API_MODE", "auto")
     if outcome == "bounded":
-        monkeypatch.setattr(transport, "_LLM_MAX_DIAGNOSTIC_ATTEMPTS", 2)
+        monkeypatch.setattr(transport_diagnostics, "_LLM_MAX_DIAGNOSTIC_ATTEMPTS", 2)
     request = packet(schema=True)
     request["messages"][1]["content"] = "PRIVATE_AUTHOR_PACKET"
     with llm_profiles.llm_item_lease("physical-attribution") as lease:
@@ -749,6 +749,8 @@ def rate_clock(monkeypatch):
     reset_llm_runtime()
     fake_time = SimpleNamespace(monotonic=clock.monotonic, sleep=clock.sleep, time=lambda: 1_700_000_020.0)
     monkeypatch.setattr(transport, "time", fake_time)
+    monkeypatch.setattr(transport_http, "time", fake_time)
+    monkeypatch.setattr(transport_diagnostics, "time", fake_time)
     monkeypatch.setattr(llm_admission, "time", fake_time)
     monkeypatch.setattr(http_io, "time", fake_time)
     monkeypatch.setattr(transport, "log_event", lambda *_args, **_kwargs: None)
@@ -782,14 +784,14 @@ def test_http_admission_uses_feedback_only_for_exact_nous_route(
     clock = rate_clock
     payload = {"model": model, "messages": [{"role": "user", "content": "x" * 80_000}]}
     before = copy.deepcopy(payload)
-    sender = HttpSender(monkeypatch, transport, clock, default_body=json.dumps({
+    sender = HttpSender(monkeypatch, transport_http, clock, default_body=json.dumps({
         "usage": {"input_tokens": 20000, "input_tokens_details": {"cached_tokens": cached}},
     }).encode())
     observations = []
 
     def call():
-        with physical_attempt(transport, observations):
-            return transport.http_json(url, payload, timeout=10)
+        with physical_attempt(transport_diagnostics, observations):
+            return transport_http.http_json(url, payload, timeout=10)
 
     assert clock.start("first", call) == "done"
     assert clock.start("second", call) == "waiting"
@@ -804,7 +806,7 @@ def test_http_admission_uses_feedback_only_for_exact_nous_route(
         assert [row["rateAdmissionPolicy"] for row in observations] == [policy] * 2
     else:
         assert clock.step("second", 1010.0) == "done"
-        assert isinstance(clock.results["second"], transport.HttpDeadlineExceeded)
+        assert isinstance(clock.results["second"], HttpDeadlineExceeded)
         assert len(sender.sends) == 1
         assert observations[1]["rateAdmissionPolicy"] == policy
     assert all(sent[0] == before for sent in sender.sends)
@@ -832,12 +834,12 @@ def test_http_quota_headers_block_admission_without_retaining_other_headers(rate
 
     reply = (urllib.error.HTTPError(url, 429, "synthetic quota", headers, io.BytesIO(b'{}'))
              if status == 429 else HttpReply(headers=headers))
-    sender = HttpSender(monkeypatch, transport, clock, [reply])
+    sender = HttpSender(monkeypatch, transport_http, clock, [reply])
     sends = sender.sends
 
     def call(timeout):
-        with physical_attempt(transport, rows):
-            return transport.http_json(url, payload, timeout=timeout)
+        with physical_attempt(transport_diagnostics, rows):
+            return transport_http.http_json(url, payload, timeout=timeout)
 
     assert clock.start("first", lambda: call(100)) == "done"
     if status == 429:
@@ -853,7 +855,7 @@ def test_http_quota_headers_block_admission_without_retaining_other_headers(rate
     assert "synthetic-" not in json.dumps(rows)
     assert clock.start("second", lambda: call(10)) == "waiting"
     assert clock.step("second", 1010.0) == "done"
-    assert isinstance(clock.results["second"], transport.HttpDeadlineExceeded)
+    assert isinstance(clock.results["second"], HttpDeadlineExceeded)
     assert len(sends) == 1 and rows[1]["networkStarted"] is False
     assert rows[1]["rateWaitReason"] == ("provider_cooldown" if status == 429 else "provider_quota")
     assert clock.start("third", lambda: call(100)) == "waiting"
@@ -895,22 +897,22 @@ def test_http_rate_fifo_reaches_sender_without_changing_wire_or_deadline(rate_cl
     llm_admission._reserve_remote_rate_slot(url, {"model": model}, b"{}")
     sends, diagnostics = [], {}
 
-    sender = HttpSender(monkeypatch, transport, clock)
+    sender = HttpSender(monkeypatch, transport_http, clock)
     sends = sender.sends
 
     def call(name, content):
         request = llm_provider_wire.with_llm_stage({"model": model, "messages": [
             {"role": "user", "content": content}], "response_format": {"type": "json_object"}}, "visual_director")
-        state = transport._new_llm_diagnostics(request)
-        token = transport._CURRENT_LLM_DIAGNOSTICS.set(state)
+        state = transport_diagnostics._new_llm_diagnostics(request)
+        token = transport_diagnostics._CURRENT_LLM_DIAGNOSTICS.set(state)
         try:
             result = transport._perform_llm_http(url, request, 70, {
                 "provider": "openai_compat", "model": model, "profile_id": "offline",
             }, api_mode="chat_completions")
             assert result == {}
         finally:
-            diagnostics[name] = transport._llm_diagnostic_summary(state)
-            transport._CURRENT_LLM_DIAGNOSTICS.reset(token)
+            diagnostics[name] = transport_diagnostics._llm_diagnostic_summary(state)
+            transport_diagnostics._CURRENT_LLM_DIAGNOSTICS.reset(token)
 
     assert clock.start("older", lambda: call("older", "x" * 64_000)) == "waiting"
     clock.now = 1010.0
@@ -922,7 +924,7 @@ def test_http_rate_fifo_reaches_sender_without_changing_wire_or_deadline(rate_cl
     assert sends[0][1:] == (1060.0, 1070.0)
     assert clock.step("younger", 1060.0) == "waiting"
     assert clock.step("younger", 1080.0) == "done"
-    assert isinstance(clock.results["younger"], transport.HttpDeadlineExceeded)
+    assert isinstance(clock.results["younger"], HttpDeadlineExceeded)
     assert len(sends) == 1
     first, second = diagnostics["older"], diagnostics["younger"]
     assert first["physicalAttemptCount"] == 1 and first["rateWaitMsTotal"] == 60_000
@@ -957,7 +959,7 @@ def test_concurrent_leases_isolate_profile_and_response_chain(wire, monkeypatch)
         assert llm_profiles.current_llm_item_lease() is None
         return recipe
 
-    monkeypatch.setattr(transport, "http_json", respond)
+    monkeypatch.setattr(transport_http, "http_json", respond)
     with ThreadPoolExecutor(max_workers=4) as pool:
         recipes = list(pool.map(run_item, range(4)))
     assert len(calls) == 8
@@ -1004,17 +1006,18 @@ def test_http_valid_json_prefix_does_not_hide_truncated_body(monkeypatch, declar
         url = f"http://127.0.0.1:{server.server_port}/models"
         if declared_length == 3:
             with pytest.raises(http.client.IncompleteRead):
-                transport.http_get_json(url)
+                transport_http.http_get_json(url)
         else:
-            assert transport.http_get_json(url) == {}
+            assert transport_http.http_get_json(url) == {}
 
 
 def test_a1111_image_json_does_not_inherit_text_response_ceiling(loopback_transport, monkeypatch, tmp_path):
     import base64
     import io
-    from PIL import Image
+
     from infini_local.core.http_io import HttpResponseTooLarge
     from infini_local.pipelines.images import backends as images
+    from PIL import Image
 
     buffer = io.BytesIO()
     Image.new("RGBA", (2, 2), "red").save(buffer, format="PNG")
@@ -1023,12 +1026,12 @@ def test_a1111_image_json_does_not_inherit_text_response_ceiling(loopback_transp
     endpoint, _events = loopback_transport
     base, _observed = endpoint([{"body": body}, {"body": body}])
     with pytest.raises(HttpResponseTooLarge):
-        transport.http_json(base + "/sdapi/v1/txt2img", {}, max_response_bytes=32)
+        transport_http.http_json(base + "/sdapi/v1/txt2img", {}, max_response_bytes=32)
 
     # Exercise the image caller with a small default text cap: it must explicitly
     # retain the image response policy rather than inherit the text-model cap.
     def image_transport(url, payload, **kwargs):
-        return transport.http_json(url, payload, **{"max_response_bytes": 32, **kwargs})
+        return transport_http.http_json(url, payload, **{"max_response_bytes": 32, **kwargs})
 
     monkeypatch.setattr(images, "http_json", image_transport)
     monkeypatch.setattr(images, "A1111_URL", base)

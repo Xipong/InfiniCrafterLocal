@@ -1,10 +1,10 @@
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import dossier_text, request_dossier
+
 """Exact read-only Gameplay Repair facts must survive the real request builder."""
 import copy
 import json
 
 import pytest
-
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.pipelines.author import request as author
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
@@ -14,7 +14,8 @@ class _CapturedBeforeTransport(BaseException):
     pass
 
 
-from repair_test_helpers import offline_builder as _offline_builder, repair_with_response as _repair_with_response
+from repair_test_helpers import offline_builder as _offline_builder
+from repair_test_helpers import repair_with_response as _repair_with_response
 
 
 def _capture_request(monkeypatch, item, format_mode):
@@ -91,7 +92,7 @@ def test_binding_index_retains_current_flat_lanes_in_serialized_request(monkeypa
 
 @pytest.mark.parametrize("action_value", ["absent", None, {}, {"kind": None, "targetId": 0}])
 def test_binding_index_never_uses_legacy_wrapper_or_materializes_absences(action_value):
-    from infini_local.core.runtime_authoring.repair_scope import runtime_repair_fragments
+    from infini_local.core.runtime_authoring.repair.fragments import runtime_repair_fragments
     item = _broken_held_and_deployed()
     binding = item["runtimeProgram"]["bindings"][0]
     binding["usePolicy"] = {"action": {"kind": "legacy_must_not_win", "targetId": "legacy_must_not_win"}}
@@ -163,7 +164,7 @@ def _hostile_patch(item):
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_visible_independent_facts_grant_no_edits_through_real_repair(monkeypatch, format_mode):
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 
     item = _broken_held_and_deployed()
     _call(item, "item_stats")["params"].pop("manaCost")
@@ -205,11 +206,12 @@ def test_readonly_context_is_not_an_output_schema_extension(context_key):
 @pytest.mark.parametrize("unknown_fn", [False, True], ids=["parameter-only", "unknown-function"])
 def test_repair_request_documents_grammar_without_expanding_frozen_permissions(monkeypatch, format_mode, unknown_fn):
     from collections import Counter
+
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-    from infini_local.core.runtime_authoring.repair_scope import (
-        build_runtime_repair_scope, filter_repair_patch_scope, runtime_repair_schema_capabilities,
-    )
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.schema import runtime_repair_schema_capabilities
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 
     item = build_runtime_fixture("held_and_deployed")
     call = {"id": "audit_light", "fn": "add_light" if unknown_fn else "held_light",

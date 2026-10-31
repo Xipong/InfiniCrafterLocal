@@ -2,13 +2,13 @@
 from copy import deepcopy
 
 import pytest
-
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.technical_lowering import STACK_CHANCE_LOWERER_ID, audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts, STACK_CHANCE_LOWERER_ID
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
@@ -134,6 +134,7 @@ def test_malformed_wire_input_with_stack_chance_is_structured_refusal(input_valu
 @pytest.mark.parametrize("input_value", [[], {}])
 def test_explicit_input_repair_uses_real_caller_without_host_coercion(monkeypatch, format_mode, input_value):
     import json
+
     from test_repair_gameplay_contract import _offline_gameplay_repair
 
     doc = _fixture()

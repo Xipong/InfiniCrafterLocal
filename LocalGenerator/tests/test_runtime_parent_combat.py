@@ -1,23 +1,20 @@
 """Live-parent combat is an explicit producer choice with exact retained provenance."""
-from copy import deepcopy
 import hashlib
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
-from repair_test_helpers import frozen_call_repair, provider_roundtrip
-
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.core.runtime_authoring.repair_scope import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch, strict_author_shape_report
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.program_schema import strict_author_shape_report
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.pipelines.author import item_contract as contract
 from infini_local.qa.capability_witnesses import build_capability_witness
-
+from repair_test_helpers import frozen_call_repair, provider_roundtrip
 
 _PRODUCERS = ("spawn_on_event", "target_and_fire")
 _RETAINED = Path(__file__).with_name("fixtures") / "parent_combat_retained_wire.json"

@@ -2,8 +2,8 @@
 import copy
 import json
 
+import infini_local.pipelines.transport.http as transport_http
 import pytest
-
 from infini_local.pipelines.transport import client as transport
 from test_craft_instruction_segments import stage_packets
 
@@ -15,16 +15,17 @@ def no_network(monkeypatch):
 
 
 def capture_wire(monkeypatch, packet, context):
-    from test_craft_instruction_segments import Captured
-    from infini_local.services import codex_auth as auth
     from types import SimpleNamespace
+
+    from infini_local.services import codex_auth as auth
+    from test_craft_instruction_segments import Captured
     wires = []
     def stop(url, wire, **kwargs):
         wires.append(copy.deepcopy(wire))
         if context["provider"] == "openai_codex":
             assert kwargs["headers"]["session-id"] == wire["prompt_cache_key"]
         raise Captured()
-    monkeypatch.setattr(transport, "http_json", stop)
+    monkeypatch.setattr(transport_http, "http_json", stop)
     monkeypatch.setattr(auth, "get_credentials", lambda: SimpleNamespace(access_token="offline", account_id="offline"))
     monkeypatch.setattr(auth, "post_sse", stop)
     with pytest.raises(Captured):
@@ -97,10 +98,10 @@ def test_actual_senders_cache_grammar_instructions_and_preserve_author(monkeypat
     pytest.param("lash_geometry", "vfx_repair", "json_schema", id="vfx-repair-whip"),
 ])
 def test_static_definitions_remain_case_independent_across_runtime_domains(monkeypatch, fixture, stage, mode):
-    from vfx_material_fixtures import _data
     import vfx_material_fixtures
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+    from vfx_material_fixtures import _data
     ordinary, = stage_packets(monkeypatch, stage, format_mode=mode, labels=("novel-a",))
     if fixture in {"beam_geometry", "lash_geometry"}:
         data = _data(fixture)

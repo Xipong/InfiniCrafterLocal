@@ -14,8 +14,8 @@ from infini_local.core.runtime_authoring.capability_registry import (  # noqa: E
     CAPABILITY_REGISTRY,
     CONTROLLER_OPCODE,
     ENTITY_KIND_REGISTRY,
-    EVENT_KIND_REGISTRY,
     EVENT_ACTION_OPCODE,
+    EVENT_KIND_REGISTRY,
     MOVEMENT_OPCODE,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
@@ -37,7 +37,6 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (  # noqa: E
     DAMAGE_CLASS_TMODLOADER_NAMES,
     ITEM_USE_STYLE_TMODLOADER_NAMES,
 )
-
 from infini_local.pipelines.author.item_contract import author_item_repair_prompt_shape_card  # noqa: E402
 from infini_local.pipelines.author.prompt import concise_terraria_tick_guide_for_llm  # noqa: E402
 
@@ -98,7 +97,7 @@ def render() -> str:
         ("lossless projections, exact outputs, receipts, repetition policy", "runtime_authoring/technical_lowering.py", "compiler, audits, this document"),
         ("Author/Repair model-facing prose and unit explanation", "pipelines/author/item_contract.py + pipelines/author/prompt.py", "serialized Author/Repair messages, this document"),
         ("validation truth", "runtime_authoring/validator.py", "Repair requirements and final acceptance"),
-        ("Repair permissions/filter", "runtime_authoring/repair_scope.py", "conditional Repair dossier and merge report"),
+        ("Repair scope/permissions/filter", "runtime_authoring/repair/{schema,scope,filter,validation,fragments}.py", "conditional Repair dossier and merge report"),
         ("wire materialization", "runtime_authoring/compiler.py", "RuntimeProgram wire + finalWireReceipts"),
         ("runtime execution", "ModSources/.../RuntimeProgramSpec.cs + executors", "tModLoader behavior"),
     ])

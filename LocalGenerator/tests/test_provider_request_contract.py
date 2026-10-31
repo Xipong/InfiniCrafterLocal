@@ -4,15 +4,15 @@ from __future__ import annotations
 import copy
 import urllib.error
 
+import infini_local.pipelines.transport.http as transport_http
 import pytest
-
 from infini_local.core import llm_config
-from infini_local.pipelines.transport import profiles as llm_profiles
-from infini_local.pipelines.transport import provider_wire as llm_provider_wire
 from infini_local.core.llm_json_tools import json_object_candidates, parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_prompt_cache import with_prompt_cache_prefix
 from infini_local.pipelines.transport import client as llm
-from test_provider_transport_contract import schema_error, packet, wire, loopback_transport  # noqa: F401 - imported pytest fixtures
+from infini_local.pipelines.transport import profiles as llm_profiles
+from infini_local.pipelines.transport import provider_wire as llm_provider_wire
+from test_provider_transport_contract import loopback_transport, packet, schema_error, wire  # noqa: F401 - imported pytest fixtures
 
 SCHEMA_REJECTION = {"error": {"code": "unsupported_response_format", "param": "response_format",
                               "message": "json_schema response_format is not supported"}}
@@ -169,8 +169,8 @@ def test_real_http_schema_cache_requires_relevant_rejection_valid_recovery_and_e
 
 
 def test_shape_rejection_reaches_actual_author_failure_with_operator_diagnosis(wire, monkeypatch):
-    from infini_local.pipelines.author import request as author
     from infini_local.core.errors import PlannerUnavailable
+    from infini_local.pipelines.author import request as author
     wire.configure(OPENROUTER_PROVIDER="", LLM_PROVIDER="openai_compat", OPENAI_COMPAT_BASE_URL=GOOGLE,
                    OPENAI_COMPAT_MODEL="gemini-3.5-flash-lite", LLM_API_MODE="chat_completions")
     wire.replies.extend([schema_error(GOOGLE + "/chat/completions"), 400])
@@ -389,7 +389,7 @@ def test_json_syntax_recovery_never_invents_or_rewrites_values(text, expected):
 
 
 def test_platform_responses_explicit_breakpoint_preserves_exact_content_and_is_stateless(monkeypatch):
-    monkeypatch.setattr(llm, "http_json", lambda url, body, **kw: sent.append(body) or {
+    monkeypatch.setattr(transport_http, "http_json", lambda url, body, **kw: sent.append(body) or {
         "id": "resp-id", "output_text": "{}", "usage": {"input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 12}}})
     sent = []
     ctx = {"provider": "openai_compat", "base_url": "https://api.openai.com/v1", "model": "gpt-5.6", "api_mode": "responses", "api_key": "test"}

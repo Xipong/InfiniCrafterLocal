@@ -1,28 +1,30 @@
 """Canonical registry inventories and real schema/validator/Repair/compiler consumers."""
 
 from __future__ import annotations
+
+import json
+from copy import deepcopy
 from dataclasses import replace
 from types import MappingProxyType
-from copy import deepcopy
-import json
+
+import infini_local.core.runtime_authoring.capability_registry as capability_registry
+import infini_local.core.runtime_authoring.capability_registry as registry_module
+import infini_local.core.runtime_authoring.repair.scope as repair_scope
+import infini_local.core.runtime_authoring.validator as validator
+import infini_local.core.runtime_authoring.validator as validator_module
 import pytest
 from infini_local.core.runtime_authoring.capability_registry import (
-    CAPABILITY_REGISTRY,
     BINDING_ACTION_REGISTRY,
+    CAPABILITY_REGISTRY,
     ENTITY_KIND_REGISTRY,
     EVENT_KIND_REGISTRY,
     INPUT_KIND_REGISTRY,
-    runtime_authoring_registry_manifest,
 )
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import runtime_program_author_schema
+from infini_local.core.runtime_authoring.registry_views import runtime_authoring_registry_manifest
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-import infini_local.core.runtime_authoring.validator as validator
-import infini_local.core.runtime_authoring.repair_scope as repair_scope
-import infini_local.core.runtime_authoring.capability_registry as capability_registry
-import infini_local.core.runtime_authoring.capability_registry as registry_module
-import infini_local.core.runtime_authoring.validator as validator_module
-from infini_local.core.runtime_authoring.program_schema import runtime_program_author_schema
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
@@ -53,8 +55,8 @@ def test_machine_manifest_has_exact_registry_identity(key, identity, registry):
 
 @pytest.mark.parametrize("fn", [cap.name for cap in CAPABILITY_REGISTRY.values() if cap.author_visible])
 def test_registered_capability_reaches_provider_and_wire_without_mutation(fn):
-    from jsonschema import Draft202012Validator
     from infini_local.pipelines.author.item_contract import author_item_response_schema
+    from jsonschema import Draft202012Validator
 
     item = build_capability_witness(fn)
     before = deepcopy(item)

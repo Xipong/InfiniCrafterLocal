@@ -6,19 +6,19 @@ import hashlib
 import io
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
+import infini_local.pipelines.transport.http as transport_http
 import pytest
-
 from infini_local.core import llm_config
-from infini_local.pipelines.transport import profiles as llm_profiles
-from infini_local.pipelines.transport import provider_wire as llm_provider_wire
 from infini_local.core.llm_prompt_cache import PROMPT_CACHE_METADATA_KEY, with_prompt_cache_prefix
 from infini_local.pipelines.transport import client as llm
-from infini_local.services import codex_auth as auth, codex_text_backend as backend
-
+from infini_local.pipelines.transport import profiles as llm_profiles
+from infini_local.pipelines.transport import provider_wire as llm_provider_wire
+from infini_local.services import codex_auth as auth
+from infini_local.services import codex_text_backend as backend
 
 CONTEXT = {"provider": "openai_codex", "base_url": "https://chatgpt.com/backend-api/codex",
            "model": "offline-codex-model", "api_mode": "responses", "api_key": ""}
@@ -60,8 +60,8 @@ def native_wire(monkeypatch):
 
     monkeypatch.setattr(auth, "get_credentials", lambda: credentials)
     monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *_: Opener())
-    monkeypatch.setattr(llm, "http_json", lambda *_a, **_k: pytest.fail("non-native provider called"))
-    monkeypatch.setattr(llm, "http_get_json", lambda *_a, **_k: pytest.fail("model discovery called"))
+    monkeypatch.setattr(transport_http, "http_json", lambda *_a, **_k: pytest.fail("non-native provider called"))
+    monkeypatch.setattr(transport_http, "http_get_json", lambda *_a, **_k: pytest.fail("model discovery called"))
     monkeypatch.setattr(llm, "log_event", lambda *_a, **_k: None)
     monkeypatch.delenv("INFINI_LLM_REPLAY_RAW", raising=False)
     return calls
@@ -288,7 +288,7 @@ def test_non_codex_preparation_and_dispatched_wire_are_identical(monkeypatch, pr
     def offline_http(url, body, **options):
         calls.append((url, copy.deepcopy(body), options.get("headers")))
         return {"status": "completed", "output_text": "{}", "choices": [{"message": {"content": "{}"}}]}
-    monkeypatch.setattr(llm, "http_json", offline_http)
+    monkeypatch.setattr(transport_http, "http_json", offline_http)
     monkeypatch.setattr(llm, "log_event", lambda *_a, **_k: None)
     monkeypatch.delenv("INFINI_LLM_REPLAY_RAW", raising=False)
     context = {"provider": provider, "base_url": base, "model": model, "api_key": "offline-test-key", "api_mode": mode}

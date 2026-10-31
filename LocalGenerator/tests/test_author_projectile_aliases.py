@@ -1,18 +1,17 @@
 """Fresh projectile Author choices preserve existing executor inputs and provenance."""
-from copy import deepcopy
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
-
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, MOVEMENT_OPCODE
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.capability_registry import MOVEMENT_OPCODE
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
@@ -370,7 +369,7 @@ def test_nested_repair_changes_only_the_broken_leaf(fn, broken, value, frozen_ke
 @pytest.mark.parametrize("fn", ["spawn_over_target", "move_bounce", "move_gravity_arc", "move_orbit",
                                   "move_boomerang", "move_proximity_missile", "channel_beam", "charge_then_release"])
 def test_retired_author_call_is_absent_from_schema_prompt_and_repair(fn):
-    from infini_local.core.runtime_authoring.capability_registry import compact_capability_catalog, capability_provider_union
+    from infini_local.core.runtime_authoring.registry_views import capability_provider_union, compact_capability_catalog
     from infini_local.pipelines.author.request import build_gameplay_repair_dossier
     if fn in CAPABILITY_REGISTRY:
         assert CAPABILITY_REGISTRY[fn].author_visible is False

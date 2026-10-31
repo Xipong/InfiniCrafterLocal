@@ -2,22 +2,21 @@
 from __future__ import annotations
 
 import copy
-from http.client import IncompleteRead
 import io
 import json
 import ssl
-from pathlib import Path
 from email.message import Message
+from http.client import IncompleteRead
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 
+import infini_local.pipelines.transport.http as transport_http
 import pytest
-
 from infini_local.core import llm_config
 from infini_local.pipelines.transport import profiles as llm_profiles
 from infini_local.pipelines.transport import provider_wire as llm_provider_wire
 from infini_local.services import codex_auth as auth
 from infini_local.storage import trace_tools
-
 
 CLEAN_PATH = (r"C:\Users\Cosmi\LocalGenerator\cache\image-diagnostics\image-pibcq_5y\attempt-0"
               r"\g_c606cc2b5adac118_trap_returner_dart_raw_openai_codex_0.png")
@@ -57,8 +56,8 @@ def test_real_persisted_sinks_preserve_dart_raw_paths_while_redacting_credential
 
 @pytest.fixture
 def codex_image(monkeypatch, tmp_path):
-    from infini_local.pipelines.images import backends as backend
     from infini_local.core.images import config
+    from infini_local.pipelines.images import backends as backend
     from infini_local.pipelines.images import stage as generation
     from PIL import Image, ImageDraw
     for name, value in {"INFINI_SPRITE_RETRIES": "1", "INFINI_LLM_FALLBACK_NETWORK_FAILS": "2"}.items():
@@ -100,8 +99,8 @@ def test_image_503_replays_exact_request_without_touching_valid_gameplay_or_asse
     import base64
     accepted_bytes = base64.b64decode(json.loads(response)["data"][0]["b64_json"])
     accepted.write_bytes(accepted_bytes)
-    from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
+    from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     data = build_runtime_fixture("workbench_blade")
     assert validate_runtime_program(data)["ok"]
     data["visual"] = {"spritePath": str(accepted), "spriteStatus": "generated"}
@@ -125,7 +124,7 @@ def test_text_503_has_one_transport_owner_and_one_logical_author_stage(monkeypat
     monkeypatch.setenv("INFINI_LLM_FALLBACK_NETWORK_FAILS", "2")
     monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
     monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "synthetic-codex-model")
-    monkeypatch.setattr(llm, "http_json", lambda *_a, **_k: pytest.fail("paid transport called"))
+    monkeypatch.setattr(transport_http, "http_json", lambda *_a, **_k: pytest.fail("paid transport called"))
     monkeypatch.setattr(auth, "get_credentials", lambda: auth.Credentials("synthetic-access", "synthetic-refresh", "synthetic-account", 9999999999))
     completion = {"type": "response.completed", "response": {"status": "completed", "output": [{
         "type": "message", "role": "assistant", "content": [{"type": "output_text", "text": '{"valid":true}'}],
@@ -235,7 +234,7 @@ def test_text_terminal_failures_do_not_multiply_logical_or_physical_budget(monke
     monkeypatch.setenv("INFINI_LLM_FALLBACK_NETWORK_FAILS", str(budget))
     monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
     monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "synthetic-codex-model")
-    monkeypatch.setattr(llm, "http_json", lambda *_a, **_k: pytest.fail("paid transport called"))
+    monkeypatch.setattr(transport_http, "http_json", lambda *_a, **_k: pytest.fail("paid transport called"))
     monkeypatch.setattr(auth, "get_credentials", lambda: auth.Credentials("synthetic-access", "synthetic-refresh", "synthetic-account", 9999999999))
     calls = []
     class Opener:

@@ -1,22 +1,21 @@
 """Structured Author parameters keep strict shape and exact wire provenance."""
+import json
+import sys
 from collections import Counter
 from copy import deepcopy
 from dataclasses import replace
-import json
 from pathlib import Path
-import sys
-
-import pytest
-from hypothesis import example, given, settings, strategies as st
-from jsonschema import Draft202012Validator
 
 import infini_local.core.runtime_authoring.capability_registry as registry
 import infini_local.core.runtime_authoring.compiler as compiler
 import infini_local.core.runtime_authoring.technical_lowering as technical_lowering
-from infini_local.core.runtime_authoring.capability_registry import ParamSpec
+import pytest
+from hypothesis import example, given, settings
+from hypothesis import strategies as st
+from infini_local.core.runtime_authoring.parameter_contract import ParamSpec
 from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
 from infini_local.qa.capability_witnesses import build_capability_witness
-
+from jsonschema import Draft202012Validator
 
 JSON_VALUES = st.recursive(
     st.none() | st.booleans() | st.integers() | st.floats(allow_nan=False, allow_infinity=False)

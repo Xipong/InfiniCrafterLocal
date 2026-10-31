@@ -4,14 +4,15 @@ import copy
 from typing import Any, Iterable, Mapping, NoReturn
 
 from infini_local.core.repair_merge import json_path_child
-from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.core.runtime_authoring.capability_registry import (
     ENTITY_KIND_REGISTRY,
     INPUT_KIND_REGISTRY,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
-    capability_provider_union, shared_parameter_schemas,
 )
+from infini_local.core.runtime_authoring.registry_views import capability_provider_union, shared_parameter_schemas
+from infini_local.core.schema_validation import strict_schema_errors
+
 _ID_PATTERN = r"^[a-z][a-z0-9_]{0,47}$"
 ITEM_NAME_MAX_LENGTH = 80
 PRIMARY_ENTITY_FIELD = "primaryEntityId"

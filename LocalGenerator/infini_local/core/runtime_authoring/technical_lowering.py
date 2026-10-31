@@ -1,30 +1,30 @@
 from __future__ import annotations
 
-import re
 import json
+import re
 from typing import Any, Iterable, Mapping
 
 from infini_local.core.runtime_authoring.capability_registry import (
     CAPABILITY_REGISTRY,
-    target_updates_per_tick,
     CONTROLLER_OPCODE,
+    ENTITY_KIND_REGISTRY,
     MOVEMENT_OPCODE,
     PROJECTILE_MODIFIER_COMPONENTS,
-    ENTITY_KIND_REGISTRY,
-    WIRE_EVENT_ACTION_OPCODE,
-    ParamSpec,
     RUNTIME_PROGRAM_SCHEMA,
     VISUAL_ROLE_BY_ENTITY_KIND,
+    WIRE_EVENT_ACTION_OPCODE,
     equipment_damage_wire_path,
+    target_updates_per_tick,
 )
+from infini_local.core.runtime_authoring.parameter_contract import ParamSpec
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_AUTHOR_PATH,
 )
-
 from infini_local.core.runtime_authoring.receipt_input import (
-    prepare_receipt_rows, receipt_param_spec, receipt_path_segments,
+    prepare_receipt_rows,
+    receipt_param_spec,
+    receipt_path_segments,
 )
-
 
 TECHNICAL_LOWERING_SCHEMA = "infini.technical-lowering-manifest.v1"
 MIN_EXACT_REPETITION_COMPRESSION = 5
@@ -216,7 +216,8 @@ GLOBAL_TECHNICAL_LOWERINGS: tuple[dict[str, Any], ...] = (
 def _exact_mechanical_view(document: Mapping[str, Any]) -> dict[str, Any]:
     """Private selected-branch expansion; never an admission/import/Repair writer."""
     import copy
-    from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY, BINDING_ACTION_REGISTRY
+
+    from infini_local.core.runtime_authoring.capability_registry import BINDING_ACTION_REGISTRY, INPUT_KIND_REGISTRY
     out = copy.deepcopy(dict(document))
     program = out.get("runtimeProgram")
     if not isinstance(program, dict):
@@ -713,7 +714,7 @@ def _global_receipt_wire_error(receipt: Mapping[str, Any], final_document: Mappi
 
 def _wire_projection_witness(spec: ParamSpec, name: str, prefix: str, final: Mapping[str, Any]) -> tuple[Any, ...]:
     """Prove one complete typed projection without inventing inverse Author values."""
-    from infini_local.core.runtime_authoring.capability_registry import ParamProjection
+    from infini_local.core.runtime_authoring.parameter_contract import ParamProjection
     from infini_local.core.schema_validation import strict_schema_errors
 
     # A nested DTO object is a closed wire variant, not just a bag of known

@@ -3,14 +3,15 @@ from copy import deepcopy
 from dataclasses import replace
 from types import MappingProxyType
 
-import pytest
-
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
-from infini_local.core.runtime_authoring.validator import validate_runtime_program
 import infini_local.core.runtime_authoring.capability_registry as registry
-import infini_local.core.runtime_authoring.repair_scope as repair_scope
+import infini_local.core.runtime_authoring.parameter_contract as registry_parameter_contract
+from infini_local.core.runtime_authoring.repair import choices as repair_choices, facts as repair_facts, filter as repair_filter, schema as repair_schema, scope as repair_scope, validation as repair_validation
 import infini_local.core.runtime_authoring.validator as validator
+import pytest
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
@@ -20,17 +21,17 @@ def constrained_reference(monkeypatch):
     # supply real adapter names/opcodes; this framework test adds no runtime alias.
     source = registry.CAPABILITY_REGISTRY["spawn_on_event"]
     params = dict(source.params)
-    params["entity"] = replace(params["entity"], reference=registry.ReferenceSpec(
+    params["entity"] = replace(params["entity"], reference=registry_parameter_contract.ReferenceSpec(
         "entity", ("free_projectile", "child_projectile"), False, True))
     requirements = (*source.requirements,
-        registry.RequirementSpec("referenced_entity_capability_params", param="entity", capability="spawn",
+        registry_parameter_contract.RequirementSpec("referenced_entity_capability_params", param="entity", capability="spawn",
             equals={"position": {"at": "activation_origin"}, "aim": "velocity", "offsetBlocks": 0},
             message="The emission reference needs explicit origin/velocity spawn without offset."),
-        registry.RequirementSpec("referenced_entity_without_capability", param="entity", capability="projectile_light",
+        registry_parameter_contract.RequirementSpec("referenced_entity_without_capability", param="entity", capability="projectile_light",
             message="This test-local reference forbids an independently valid light capability."))
     cap = replace(source, name="probe_reference_adapter", params=MappingProxyType(params), requirements=requirements)
     mapping = dict(registry.CAPABILITY_REGISTRY, probe_reference_adapter=cap)
-    for owner in (registry, validator, repair_scope):
+    for owner in (registry, validator, repair_choices, repair_facts, repair_filter, repair_schema, repair_scope, repair_validation):
         monkeypatch.setattr(owner, "CAPABILITY_REGISTRY", mapping)
     return cap
 
@@ -83,7 +84,7 @@ def test_reference_exact_params_have_no_missing_or_boolean_numeric_fallback(cons
 
 
 def test_reference_exact_number_uses_declared_json_numeric_domain(constrained_reference):
-    requirement = registry.RequirementSpec("referenced_entity_capability_params", param="entity",
+    requirement = registry_parameter_contract.RequirementSpec("referenced_entity_capability_params", param="entity",
         capability="spawn", equals={"spreadRadians": 0})
     for value, accepted in [(0, True), (0.0, True), (False, False), (0.1, False)]:
         rows = {"child": [{"fn": "spawn", "params": {"spreadRadians": value}}]}
@@ -182,11 +183,11 @@ def test_cross_namespace_reference_dependency_ids_do_not_thaw_child(constrained_
 @pytest.mark.parametrize("graph_edge", [False, True])
 def test_second_entity_reference_in_same_call_keeps_child_frozen(constrained_reference, monkeypatch, graph_edge):
     params = dict(constrained_reference.params)
-    params["otherEntity"] = replace(params["entity"], reference=registry.ReferenceSpec(
+    params["otherEntity"] = replace(params["entity"], reference=registry_parameter_contract.ReferenceSpec(
         "entity", ("free_projectile", "child_projectile"), False, graph_edge))
     cap = replace(constrained_reference, params=MappingProxyType(params))
     mapping = dict(registry.CAPABILITY_REGISTRY, probe_reference_adapter=cap)
-    for owner in (registry, validator, repair_scope):
+    for owner in (registry, validator, repair_choices, repair_facts, repair_filter, repair_schema, repair_scope, repair_validation):
         monkeypatch.setattr(owner, "CAPABILITY_REGISTRY", mapping)
     doc = _doc()
     doc["runtimeProgram"]["calls"] = [row for row in doc["runtimeProgram"]["calls"] if row["id"] != "shed_nails"]

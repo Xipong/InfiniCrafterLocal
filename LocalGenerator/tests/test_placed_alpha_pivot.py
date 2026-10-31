@@ -1,22 +1,18 @@
 """Opt-in alpha-bounds pivot: real Author/compiler/final-wire boundaries, offline."""
+import copy
+import json
 
+import pytest
+from infini_local.core import llm_config
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.pipelines.visual import contract as visual_contract
 from infini_local.pipelines.visual import request as visual_request
 from infini_local.pipelines.visual import stage as visual_stage
-
-
-import copy
-import json
-import pytest
-
 from prompt_packet_helpers import request_dossier
 from test_low_level_three_stage_pipeline import wire_transport
-
-from infini_local.core import llm_config
-from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from test_placed_body_capability import FN, placed, placement
 
 
@@ -69,9 +65,9 @@ def test_real_provider_and_visual_repair_describe_selected_basis_readonly(wire_t
     from infini_local.pipelines.author import item_contract as contract
     from infini_local.pipelines.author import request as author
     from infini_local.pipelines.visual.assets import build_visual_asset_plan
+    from jsonschema import Draft202012Validator
     from test_codex_subscription_contract import _encode_nullable_fixture
     from test_low_level_three_stage_pipeline import _visual_kit
-    from jsonschema import Draft202012Validator
 
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     document = {key: value for key, value in placed().items() if key in {"name", "category", "runtimeProgram"}}
@@ -121,8 +117,8 @@ def test_current_nested_dto_audit_classifies_optional_selector_not_hidden_storag
 
 def test_outgoing_placement_cards_keep_native_containers_at_existing_placement(wire_transport):
     from infini_local.pipelines.author import request as author
-    from test_placed_light_capability import lit
     from test_dual_use_placeable_contract import _dual_use_placeable
+    from test_placed_light_capability import lit
     responses, requests = wire_transport
     document = placed()
     document["runtimeProgram"]["calls"].append(lit()["runtimeProgram"]["calls"][-1])
@@ -192,8 +188,9 @@ def test_alpha_receipt_cannot_be_forged_or_dropped(attack):
 
 @pytest.mark.parametrize("old", ["absent", "alpha_bounds", "frame", "invalid"])
 def test_frozen_leaf_repair_preserves_basis_and_absence(old):
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     document = placed()
     call = document["runtimeProgram"]["calls"][-1]
     if old != "absent": call["params"]["pivotSpace"] = old
@@ -217,9 +214,10 @@ def test_frozen_leaf_repair_preserves_basis_and_absence(old):
 def test_immutable_old_delivery_keeps_absence_through_current_sanitizer(tmp_path, monkeypatch):
     import hashlib
     from pathlib import Path
-    from PIL import Image
+
     from infini_local.pipelines.visual import delivery as gate
     from infini_local.storage.world_storage import sanitize_recipe_for_delivery
+    from PIL import Image
     path = Path(__file__).resolve().parents[2] / "tools/fixtures/placed-body-pre-alpha-delivered.json"
     raw = path.read_bytes()
     assert hashlib.sha256(raw).hexdigest() == "90d1d3c16b4d6b0b5cf5ce69eaa25731bb3a9518b80bd8c8c896f09a585e7fa7"
@@ -237,12 +235,13 @@ def test_immutable_old_delivery_keeps_absence_through_current_sanitizer(tmp_path
 
 def test_real_final_delivery_sanitizer_keeps_alpha_choice_and_refuses_foreign_leaf(tmp_path, monkeypatch):
     from pathlib import Path
-    from PIL import Image
+
     import infini_local.pipelines.visual.stage as visual_stage
-    from infini_local.pipelines.visual import delivery as gate
-    from infini_local.storage.world_storage import sanitize_recipe_for_delivery, is_deliverable_recipe_payload
     from infini_local.pipelines.vfx.stage import attach_vfx_manifest
-    from test_low_level_three_stage_pipeline import _visual_kit, _vfx_output
+    from infini_local.pipelines.visual import delivery as gate
+    from infini_local.storage.world_storage import is_deliverable_recipe_payload, sanitize_recipe_for_delivery
+    from PIL import Image
+    from test_low_level_three_stage_pipeline import _vfx_output, _visual_kit
     document = placed()
     document["runtimeProgram"]["calls"][-1]["params"]["pivotSpace"] = "alpha_bounds"
     wire = compile_runtime_program(document)

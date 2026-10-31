@@ -1,23 +1,22 @@
 """Explicit offline sound choices through the real VFX stage, never a provider call."""
 from __future__ import annotations
 
-from prompt_packet_helpers import request_dossier, dossier_text
-
 import copy
 import json
 from pathlib import Path
 from typing import Any
 
-import pytest
-from infini_local.core import llm_config
 import infini_local.core.vfx.contract as vfx_contract
 import infini_local.core.vfx.projection as vfx_projection
 import infini_local.core.vfx.repair as vfx_repair
 import infini_local.core.vfx.validation as vfx_validation
 import infini_local.pipelines.vfx.stage as vfx_stage
+import pytest
+from infini_local.core import llm_config
 from infini_local.pipelines.vfx import request as stage
+from prompt_packet_helpers import request_dossier
 from tests.test_repair_vfx_contract import _offline_transport
-from tests.vfx_material_fixtures import _data, _legacy, _shape, _native
+from tests.vfx_material_fixtures import _data, _legacy, _native, _shape
 
 # Exact installed Terraria.ID.SoundID members; no weapon/archetype aliases.
 _INVENTORY = json.loads((Path(__file__).parent / "fixtures/vfx_sound_inventory.json").read_text())
@@ -126,7 +125,11 @@ def test_sound_absence_refuses_director_persisted_wire_and_cache_without_default
     current.update(id="sound_cache_probe", schemaVersion=5, runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION,
                    sourceMode="offline_contract_fixture")
     from infini_local.pipelines.visual import delivery as visual_delivery_gate
-    from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png, synthetic_no_image_execution_control
+    from infini_local.qa.live_no_image_fixture import (
+        hydrate_no_image_fixture_assets,
+        synthetic_no_image_execution_control,
+        write_no_image_fixture_png,
+    )
     monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path)
     current["visual"] = {"preferredCanvasSize": 32}
     for entity in current["runtimeProgram"]["entities"]:
@@ -212,7 +215,11 @@ def test_sound_wire_survives_delivery_projection_and_real_cache_shape_admission(
     raw = _sound(data, sound_id)
     data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "cache-sound")
     from infini_local.pipelines.visual import delivery as visual_delivery_gate
-    from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png, synthetic_no_image_execution_control
+    from infini_local.qa.live_no_image_fixture import (
+        hydrate_no_image_fixture_assets,
+        synthetic_no_image_execution_control,
+        write_no_image_fixture_png,
+    )
     monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path)
     data["visual"] = {"preferredCanvasSize": 32}
     for entity in data["runtimeProgram"]["entities"]:

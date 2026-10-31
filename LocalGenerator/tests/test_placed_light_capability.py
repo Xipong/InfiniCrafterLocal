@@ -1,16 +1,19 @@
 from prompt_packet_helpers import request_dossier
+from test_low_level_three_stage_pipeline import wire_transport
+
 """Independent explicit placed-light vertical slice; offline, no inference."""
 import copy
 import json
-import pytest
 
+import pytest
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from test_dual_use_placeable_contract import _dual_use_placeable
 from test_placed_body_capability import placement
 
@@ -93,7 +96,7 @@ def test_light_receipts_cannot_be_removed_or_forged(attack):
 
 
 def test_placed_sprite_and_light_compose_without_overwriting_each_other():
-    from test_placed_body_capability import placed, TRANSFORM
+    from test_placed_body_capability import TRANSFORM, placed
     document = placed(); document["runtimeProgram"]["calls"].append(lit()["runtimeProgram"]["calls"][-1])
     wire = compile_runtime_program(document)
     assert placement(wire)["placedBody"] == {**TRANSFORM, "pivotSpace":"frame"}
@@ -126,7 +129,6 @@ def test_registry_witness_executes_dependency_and_native_surface_audit():
 
 
 
-from test_low_level_three_stage_pipeline import wire_transport
 
 
 def test_real_serialized_author_repair_carries_independent_placed_light(wire_transport):

@@ -44,7 +44,7 @@ def test_real_campaign_entry_records_synthetic_sender_without_network_or_live_in
         subprocess.run(['git', '-C', str(project), '-c', 'user.name=QA', '-c', 'user.email=qa@example.invalid',
                         'commit', '--allow-empty', '-qm', 'synthetic admission fixture'], check=True)
         head = subprocess.check_output(['git', '-C', str(project), 'rev-parse', 'HEAD'], text=True).strip()
-        from infini_local.pipelines.transport import client as llm_transport
+        from infini_local.pipelines.transport import http as transport_http
         physical = []
         responses = None
         def synthetic_sender(url, payload, **kwargs):
@@ -64,7 +64,7 @@ def test_real_campaign_entry_records_synthetic_sender_without_network_or_live_in
                 responses = [authored, _visual_kit(compiled), vfx_model_payload(_vfx_output(compiled))]
             assert responses, 'unexpected extra stage/Repair'
             return {'choices': [{'message': {'content': json.dumps(responses.pop(0))}}]}
-        llm_transport.http_json = synthetic_sender
+        transport_http.http_json = synthetic_sender
         sys.argv = ['campaign', '--run', '--panel', panel, '--output', str(output),
             '--project', str(project), '--expected-head', head, '--cases', case_id, '--preset', preset,
             '--expected-case-count', '1', '--parallel-crafts', '1',

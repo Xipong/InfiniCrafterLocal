@@ -7,7 +7,6 @@ import sys
 
 import pytest
 
-
 PACKAGE = "infini_local.core.runtime_authoring"
 
 
@@ -28,15 +27,15 @@ def test_registry_import_does_not_load_compilation_repair_or_transport() -> None
     assert PACKAGE + ".capability_registry" in loaded
     assert not loaded & {
         PACKAGE + ".compiler", PACKAGE + ".validator", PACKAGE + ".wire_validator",
-        PACKAGE + ".repair_scope", PACKAGE + ".program_schema", PACKAGE + ".technical_lowering",
+        PACKAGE + ".repair.scope", PACKAGE + ".program_schema", PACKAGE + ".technical_lowering",
         "infini_local.pipelines.transport.client", "infini_local.core.config_bootstrap",
     }
 
 
 @pytest.mark.parametrize("owners", [
-    ("compiler", "repair_scope", "wire_validator", "program_schema", "validator"),
-    ("wire_validator", "validator", "program_schema", "repair_scope", "compiler"),
-    ("repair_scope", "program_schema", "compiler", "validator", "wire_validator"),
+    ("compiler", "repair.scope", "repair.filter", "repair.validation", "wire_validator", "program_schema", "validator"),
+    ("wire_validator", "validator", "program_schema", "repair.validation", "repair.filter", "repair.scope", "compiler"),
+    ("repair.scope", "repair.filter", "repair.validation", "program_schema", "compiler", "validator", "wire_validator"),
 ])
 def test_runtime_owners_import_independently_of_barrel_order(owners: tuple[str, ...]) -> None:
     names = {PACKAGE + "." + name for name in owners}
@@ -53,7 +52,7 @@ def test_presentation_readers_do_not_import_gameplay_generation(reader: str) -> 
     loaded = _imported_modules(reader)
     assert reader in loaded
     assert not loaded & {
-        PACKAGE + ".compiler", PACKAGE + ".repair_scope",
+        PACKAGE + ".compiler", PACKAGE + ".repair.scope",
         "infini_local.pipelines.author.request", "infini_local.pipelines.author.stage",
     }
 
@@ -61,6 +60,7 @@ def test_presentation_readers_do_not_import_gameplay_generation(reader: str) -> 
 def test_vfx_contracts_execute_without_generation_packages() -> None:
     """VFX and provider contracts execute without a model-stage installation."""
     from pathlib import Path
+
     from tests.vfx_material_fixtures import _data
 
     script = """
@@ -102,4 +102,53 @@ assert not validate_vfx_manifest_wire(data)['ok']
         [sys.executable, "-c", script], input=json.dumps(_data()),
         cwd=Path(__file__).resolve().parents[1], check=True,
         capture_output=True, text=True, timeout=20,
+    )
+
+
+def test_parameter_contract_executes_without_capability_inventory() -> None:
+    """Parameter conversions need their declaration, not initialized mechanics."""
+    from pathlib import Path
+
+    script = """
+import importlib.abc
+import sys
+from types import MappingProxyType
+
+class NoInventory(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if (fullname == 'infini_local.core.runtime_authoring.capability_registry'
+                or fullname == 'infini_local.pipelines'
+                or fullname.startswith('infini_local.pipelines.')):
+            raise ImportError('inventory/generation intentionally unavailable')
+
+sys.meta_path.insert(0, NoInventory())
+from infini_local.core.runtime_authoring.parameter_contract import ParamSpec, author_parameter_shape
+
+speed = ParamSpec('number', 'Declared speed', wire_name='speedPxPerTick',
+                 wire_kind='number', wire_multiplier=16, wire_divisor=60,
+                 wire_updates_power=1, wire_minimum=0)
+assert speed.to_wire(30, updates_per_tick=2) == 4
+assert speed.from_wire(4, updates_per_tick=2) == 30
+assert speed.consumer_value_error(-1, updates_per_tick=2) is not None
+try:
+    speed.to_wire(30)
+except ValueError:
+    pass
+else:
+    raise AssertionError('missing explicit update context was accepted')
+
+group = ParamSpec('object', 'Declared component',
+                 properties=MappingProxyType({'speed': speed}))
+projected = group.projected_fields({'speed': 30}, 'motion', updates_per_tick=2)
+assert [(row.authored_path, row.wire_path, row.value) for row in projected] == [
+    ('motion.speed', 'speedPxPerTick', 4)]
+schema = group.schema()
+card = author_parameter_shape(schema)
+card['properties']['speed']['meaning'] = 'changed presentation copy'
+assert group.schema() == schema
+assert speed.description == 'Declared speed'
+"""
+    subprocess.run(
+        [sys.executable, "-c", script], cwd=Path(__file__).resolve().parents[1],
+        check=True, capture_output=True, text=True, timeout=20,
     )

@@ -1,26 +1,26 @@
 """Explicit placed-body Author -> compiler -> wire tracer bullets (offline)."""
 from __future__ import annotations
 
-from infini_local.pipelines.visual import contract as visual_contract
-from infini_local.pipelines.visual import request as visual_request
-from infini_local.pipelines.visual import stage as visual_stage
-
-
-from prompt_packet_helpers import request_dossier
 import copy
 import hashlib
 import json
 from pathlib import Path
+
 import pytest
 from infini_local.core import llm_config
-from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+from infini_local.pipelines.visual import contract as visual_contract
+from infini_local.pipelines.visual import request as visual_request
+from infini_local.pipelines.visual import stage as visual_stage
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from prompt_packet_helpers import request_dossier
 from test_dual_use_placeable_contract import _dual_use_placeable
 from test_low_level_three_stage_pipeline import wire_transport as wire_transport
 
@@ -303,10 +303,10 @@ def test_real_gameplay_repair_request_retains_frozen_transform_and_native_call(w
 
 
 def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_path, monkeypatch):
-    from PIL import Image
     import infini_local.pipelines.visual.stage as visual_stage
     from infini_local.pipelines.visual import delivery as gate
     from infini_local.storage.world_storage import is_deliverable_recipe_payload, sanitize_recipe_for_delivery
+    from PIL import Image
     from test_low_level_three_stage_pipeline import _visual_kit
     png = tmp_path / "placed.png"
     Image.new("RGBA", (32,32), (240,90,20,255)).save(png)
@@ -359,12 +359,13 @@ def test_absent_placed_member_preserves_current_wire_without_migrating_archive()
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire_transport, monkeypatch, format_mode):
     """Current-main additions coexist with this feature through real offline callers."""
-    from copy import deepcopy
     import json
-    from jsonschema import Draft202012Validator
-    from infini_local.qa.capability_witnesses import build_capability_witness
+    from copy import deepcopy
+
     from infini_local.pipelines.author import item_contract as contract
     from infini_local.pipelines.author import request as author
+    from infini_local.qa.capability_witnesses import build_capability_witness
+    from jsonschema import Draft202012Validator
     from test_codex_subscription_contract import _encode_nullable_fixture
     from test_repair_gameplay_contract import _offline_gameplay_repair
 

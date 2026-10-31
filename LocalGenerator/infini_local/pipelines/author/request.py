@@ -7,30 +7,46 @@ from typing import Any, Mapping
 
 from infini_local.core import llm_config
 from infini_local.core.env_utils import env_first_allow_empty, env_float, env_int
-from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 from infini_local.core.errors import PlannerUnavailable
+from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 from infini_local.core.item_identity_tools import name_of, stable_hash
 from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.llm_config import USE_LLM
-from infini_local.core.llm_prompt_cache import with_instruction_segments
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
+from infini_local.core.llm_prompt_cache import with_instruction_segments
 from infini_local.core.llm_stage_messages import (
     generation_system_suffix,
     stage_chat_message,
 )
-from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION, RUNTIME_PROGRAM_SCHEMA, CAPABILITY_REGISTRY
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope, runtime_repair_fragments
-from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.provider_schema import project_provider_nullable_optionals_to_local, provider_nullable_transport_rule
+from infini_local.core.runtime_authoring.capability_registry import (
+    CAPABILITY_REGISTRY,
+    RUNTIME_PROGRAM_API_VERSION,
+    RUNTIME_PROGRAM_SCHEMA,
+    STACK_COST_RULE,
+)
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_SELECTION_FIELD,
+    apply_repair_patch,
     assert_bounded_author_input,
     strict_repair_structure_report,
 )
-from infini_local.core.runtime_authoring.capability_registry import STACK_COST_RULE
-from infini_local.core.runtime_authoring.repair_scope import runtime_repair_schema_capabilities
-from infini_local.pipelines.author.item_contract import PRIMARY_REPAIR_SYSTEM_RULE, RUNTIME_ROW_SHAPE_RULE, author_item_generation_provider_schema, author_item_provider_repair_response_schema, author_item_provider_response_schema, author_item_response_schema, author_item_repair_prompt_shape_card, author_item_repair_response_schema, project_provider_author_item_to_local
-from infini_local.core.provider_schema import provider_nullable_transport_rule, project_provider_nullable_optionals_to_local
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.fragments import runtime_repair_fragments
+from infini_local.core.runtime_authoring.repair.schema import runtime_repair_schema_capabilities
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.pipelines.author.item_contract import (
+    PRIMARY_REPAIR_SYSTEM_RULE,
+    RUNTIME_ROW_SHAPE_RULE,
+    author_item_generation_provider_schema,
+    author_item_provider_repair_response_schema,
+    author_item_provider_response_schema,
+    author_item_repair_prompt_shape_card,
+    author_item_repair_response_schema,
+    author_item_response_schema,
+    project_provider_author_item_to_local,
+)
 from infini_local.pipelines.author.prompt import (
     build_llm_author_payload,
     realization_execution_truth_for_llm,
@@ -38,24 +54,22 @@ from infini_local.pipelines.author.prompt import (
     sharp_engine_fn_catalog_for_llm,
     source_wire_units_for_llm,
 )
-
-from infini_local.pipelines.context.cards import raw_parent_card_for_llm, parent_context_for_stage
-from infini_local.pipelines.transport.provider_wire import (
-    effective_response_format,
-    apply_minimum_reasoning_effort,
-    apply_llm_common_options,
-    llm_json_response_format,
-    llm_reasoning_system_suffix,
-    with_llm_stage,
-)
-from infini_local.pipelines.transport.profiles import active_llm_provider
+from infini_local.pipelines.context.cards import parent_context_for_stage, raw_parent_card_for_llm
 from infini_local.pipelines.transport.client import (
     llm_chat_json,
     resolve_llm_model,
 )
+from infini_local.pipelines.transport.profiles import active_llm_provider
+from infini_local.pipelines.transport.provider_wire import (
+    apply_llm_common_options,
+    apply_minimum_reasoning_effort,
+    effective_response_format,
+    llm_json_response_format,
+    llm_reasoning_system_suffix,
+    with_llm_stage,
+)
 from infini_local.storage.trace_runtime import trace_event, trace_stage_request
 from infini_local.storage.trace_tools import trace_message_summary
-
 
 _AUTHOR_CACHE_PREFIX_KEYS = (
     "priorityHeader", "runtimeProgramInvariants",

@@ -1,11 +1,11 @@
 """Absolute-position tile policies must name an actual reachable native consumer."""
 from copy import deepcopy
-import pytest
 
-from test_composable_motion_primitives import base_document, add
-from infini_local.core.runtime_authoring.validator import validate_runtime_program
+import pytest
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+from test_composable_motion_primitives import add, base_document
 
 
 def absolute_body(lash=False, window=None):
@@ -54,8 +54,9 @@ def test_stripped_wire_checks_the_same_absolute_tile_consumer(lash):
 
 
 def test_collision_refusal_repair_does_not_open_other_valid_body_choices():
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     doc, collision = absolute_body()
     frozen = deepcopy(doc)
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])

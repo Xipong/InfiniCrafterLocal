@@ -1,23 +1,20 @@
 """Actual typed Author/provider/compiler/provenance/Repair tests for initial velocity."""
+import json
 from copy import deepcopy
 from dataclasses import replace
-import json
 
 import pytest
-from repair_test_helpers import frozen_call_repair, provider_roundtrip, gameplay_repair
-
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch, strict_author_shape_report
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import filter_repair_patch_scope
-from infini_local.core.runtime_authoring.program_schema import strict_author_shape_report
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.pipelines.author import item_contract as contract
 from infini_local.qa.capability_witnesses import build_capability_witness
-
+from repair_test_helpers import frozen_call_repair, gameplay_repair, provider_roundtrip
 
 VELOCITIES = [
     {'speed': (8.5) * 60 / 16},

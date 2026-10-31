@@ -6,11 +6,8 @@ import random
 import time
 from pathlib import Path
 from typing import Any
-
-from infini_local.core.env_utils import env_float, env_int, env_str
-from infini_local.core.http_io import HttpDeadlineExceeded, remaining_seconds, read_with_deadline, urlopen_no_redirect
-from urllib import request as urlrequest
 from urllib import error as urlerror
+from urllib import request as urlrequest
 from urllib.parse import urlencode
 
 from infini_local.core.config_bootstrap import (
@@ -19,6 +16,8 @@ from infini_local.core.config_bootstrap import (
     ROOT,
     SPRITE_DIR,
 )
+from infini_local.core.env_utils import env_float, env_int, env_str
+from infini_local.core.http_io import HttpDeadlineExceeded, read_with_deadline, remaining_seconds, urlopen_no_redirect
 from infini_local.core.image_dependencies import (
     Image,
 )
@@ -69,6 +68,7 @@ from infini_local.core.images.config import (
     SDCPP_LORA_PROMPT_TAGS,
     SDCPP_LORA_WEIGHT,
     SDCPP_MODEL,
+    SDCPP_ROCM_COMPAT_ROOT,
     SDCPP_SAMPLER,
     SDCPP_SEED,
     SDCPP_SERVER_AUTOSTART,
@@ -81,7 +81,6 @@ from infini_local.core.images.config import (
     SDCPP_SERVER_LOG_FILE,
     SDCPP_SERVER_PAYLOAD_STYLE,
     SDCPP_SERVER_PORT,
-    SDCPP_ROCM_COMPAT_ROOT,
     SDCPP_SERVER_REQUEST_TIMEOUT,
     SDCPP_SERVER_SHOW_CONSOLE,
     SDCPP_SERVER_STARTUP_TIMEOUT,
@@ -96,27 +95,22 @@ from infini_local.core.images.config import (
     ZIMAGE_PROMPT_CONTRACT,
     cleanup_sdcpp_server_process,
 )
+from infini_local.core.item_identity_tools import safe_file_part
+from infini_local.pipelines.images.prompts import (
+    image_backend_is_zimage,
+    zimage_positive_only_enabled,
+)
+from infini_local.pipelines.transport.http import http_get_json, http_json
 from infini_local.services import (
     sdcpp_backend,
     sdcpp_service,
 )
+from infini_local.services.visual_asset_pipeline import ImageOutputIOError, write_image_bytes
 from infini_local.storage.trace_runtime import (
     log_event,
     trace_event,
 )
 from infini_local.storage.trace_tools import tail_text_file
-from infini_local.core.item_identity_tools import safe_file_part
-from infini_local.services.visual_asset_pipeline import ImageOutputIOError, write_image_bytes
-
-from infini_local.pipelines.transport.client import (
-    http_get_json,
-    http_json,
-)
-
-from infini_local.pipelines.images.prompts import (
-    image_backend_is_zimage,
-    zimage_positive_only_enabled,
-)
 
 
 def http_binary_get(url: str, timeout: float = 30, *, deadline: float | None = None) -> bytes:
@@ -490,10 +484,10 @@ def extract_image_from_api_response(raw: bytes, ctype: str, out_path: Path, time
     return False
 
 def generate_openai_codex(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> list[str]:
-    from infini_local.services import codex_auth
-    from infini_local.services.codex_image_backend import generate_image
     from infini_local.core.images import config
     from infini_local.core.images.contracts import uses_key_background
+    from infini_local.services import codex_auth
+    from infini_local.services.codex_image_backend import generate_image
     background_args = {} if uses_key_background() else {"background": "transparent"}
     paths = []
     for variant in range(max(1, int(GENERATE_VARIANTS))):

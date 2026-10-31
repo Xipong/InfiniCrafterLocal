@@ -1,21 +1,33 @@
 """Exact redundant binding literals preserve mechanics and source presence."""
-from copy import deepcopy
 import json
+from copy import deepcopy
 
 import pytest
-
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-
-
 from repair_test_helpers import (
-    DELETE, binding_case as _binding_case, explicit_binding as _explicit,
-    assert_delivery as _assert_delivery, assert_repaired_source,
-    binding_transaction as binding_transaction, edit_fields, gameplay_repair as _offline_gameplay_repair,
+    DELETE,
+    assert_repaired_source,
+    edit_fields,
+)
+from repair_test_helpers import (
+    assert_delivery as _assert_delivery,
+)
+from repair_test_helpers import (
+    binding_case as _binding_case,
+)
+from repair_test_helpers import (
+    binding_transaction as binding_transaction,
+)
+from repair_test_helpers import (
+    explicit_binding as _explicit,
+)
+from repair_test_helpers import (
+    gameplay_repair as _offline_gameplay_repair,
 )
 
 
@@ -248,8 +260,9 @@ def test_fixed_leaf_transaction_repair(monkeypatch, binding_transaction, case, e
 ])
 def test_input_only_repair_ignores_hostile_frozen_binding_lanes(monkeypatch, binding_transaction, source_shape, body_id):
     format_mode = "json_schema"
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 
     transaction = binding_transaction("equipped", explicit=source_shape == "explicit", body_id=body_id,
                                       values={"action": {}} if source_shape == "empty" else {})
@@ -273,8 +286,9 @@ def test_input_only_repair_ignores_hostile_frozen_binding_lanes(monkeypatch, bin
 
 @pytest.mark.parametrize("body_ids", [[], ["body_a", "body_b"]], ids=["no-body", "ambiguous-body"])
 def test_empty_action_input_correction_never_selects_missing_or_ambiguous_body(body_ids):
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 
     doc, row = _binding_case("equipped")
     doc["runtimeProgram"]["entities"] = [{"id": body_id, "kind": "item_body"} for body_id in body_ids]
@@ -334,7 +348,8 @@ def test_effect_binding_target_repair_reuses_existing_consumer(monkeypatch, bind
 ])
 def test_effect_binding_target_dependency_requires_explicit_exact_repair(target, no_upsert):
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 
     doc, row = _binding_case("effects")
     row.update(_explicit(doc, row))
@@ -351,7 +366,7 @@ def test_effect_binding_target_dependency_requires_explicit_exact_repair(target,
 
 @pytest.mark.parametrize("consumer", ["absent", "different_action", "different_group"])
 def test_effect_dependency_does_not_retarget_frozen_or_unrelated_consumer(consumer):
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 
     doc, row = _binding_case("effects")
     row.update(_explicit(doc, row))
@@ -470,7 +485,8 @@ def test_consumer_repair_does_not_choose_other_unresolved_actions(monkeypatch, a
 @pytest.mark.parametrize("leaf", ["stackCost", "contactDamage", "foreign", "action.foreign"])
 def test_sparse_input_alternatives_project_only_exact_diagnosed_siblings(leaf):
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 
     doc = build_capability_witness("accessory")
     binding = doc["runtimeProgram"]["bindings"][0]

@@ -1,22 +1,22 @@
 """Physical contact facts survive real stage packets and provider HTTP serialization."""
-from copy import deepcopy
 import json
+from copy import deepcopy
 
+import infini_local.pipelines.transport.http as transport_http
+import infini_local.pipelines.visual.contract as visual_contract
+import infini_local.pipelines.visual.stage as visual_stage
 import pytest
-
 from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.pipelines.author import request as author
+from infini_local.pipelines.transport import admission
 from infini_local.pipelines.transport import provider_wire as llm_provider_wire
-from infini_local.pipelines.transport import client as llm_transport
-import infini_local.pipelines.visual.contract as visual_contract
-import infini_local.pipelines.visual.stage as visual_stage
 from prompt_packet_helpers import request_dossier
 from repair_test_helpers import provider_roundtrip, repair_with_response
 from test_composable_motion_primitives import add
-from test_front_hand_movement import fixture, entity
+from test_front_hand_movement import entity, fixture
 from test_low_level_three_stage_pipeline import _visual_kit, wire_transport
 
 
@@ -32,10 +32,10 @@ def _http_packet(monkeypatch, request):
         raise Captured()
 
     with monkeypatch.context() as patch:
-        patch.setattr(llm_transport, "urlopen_no_redirect", intercept)
-        patch.setattr(llm_transport.admission, "_reserve_remote_rate_slot", lambda *a, **kw: None)
+        patch.setattr(transport_http, "urlopen_no_redirect", intercept)
+        patch.setattr(admission, "_reserve_remote_rate_slot", lambda *a, **kw: None)
         with pytest.raises(Captured):
-            llm_transport.http_json("https://offline.invalid/v1/chat/completions",
+            transport_http.http_json("https://offline.invalid/v1/chat/completions",
                                     llm_provider_wire._clean_llm_payload(request))
     assert len(captured) == 1
     return json.loads(captured[0])
