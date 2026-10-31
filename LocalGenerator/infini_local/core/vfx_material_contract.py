@@ -167,7 +167,7 @@ def library_particle_schema(*, include_legacy: bool = False) -> dict[str, Any]:
         "textureId": {"type": "string", "enum": list(LIBRARY_PARTICLE_TEXTURES),
                       "description": "Exact existing library texture, no PNG generation or motion preset. "
                       + " ".join(key + "=" + value for key, value in LIBRARY_PARTICLE_TEXTURES.items())
-                      + " All textures have opaque alpha. Glow/flare black RGB contributes zero in additive, recommended for luminous effects; alpha blend visibly includes the black rectangle. Both blends are literal choices, never auto-converted. Dimensions are authored world pixels, not native texture dimensions."
+                      + " All textures have opaque alpha. Glow/flare black RGB contributes zero in additive; alpha blend visibly includes the black rectangle. Additive overlap sums light and can saturate tinted colors toward white; coincident particles increase energy, not separation. spawn controls initial positions; spreadRadians controls velocity directions. Both blends are literal choices, never auto-converted. Dimensions are authored world pixels, not native texture dimensions."
                       },
         "sampling": {"type": "string", "enum": ["point", "linear"], "description": "Exact PointClamp (crisp texels) or LinearClamp (interpolated texels); no geometry/opacity changes. Old saved omission means point."},
         "count": _number(0, 64, "Integer particles per emission; zero is silence; shares existing instance budgets.", integer=True),

@@ -98,7 +98,7 @@ def test_parent_combat_composes_with_accepted_volley_ammo_lifecycle_beam_through
         }
     beam = next(entity for entity in wire["runtimeProgram"]["entities"] if entity["id"] == "held_lantern_pike")
     assert beam["manaSustain"] == {"cadence": "held_item_use_time"}
-    assert beam["beamGeometry"] == {"lengthPx": 320, "widthPx": 12, "raycastTiles": True}
+    assert beam["beamGeometry"] == {"lengthPx": 320, "widthPx": 12, "raycastTiles": True, "startOffsetPx": 0}
     assert beam["beamRamp"] == {"warmupTicks": 12, "initialDamageMultiplier": 0.35,
                                 "initialWidthMultiplier": 0.22, "damageStartProgress": 0.08}
     assert beam["ownerControl"]["requireHeldItem"] is True

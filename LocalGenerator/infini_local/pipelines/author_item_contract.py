@@ -40,6 +40,23 @@ RUNTIME_ROW_SHAPE_RULE = (
     "place_item stackCost=1 and contactDamage=false. Active non-placement kind, stackCost and contactDamage are explicit. "
     "placementCallId belongs only to place_item; effectGroupId belongs only to apply_item_effects, "
     "where absence selects ungrouped effects."
+    " Physical composition: owner_mounted is owner.MountedCenter, not the hand. "
+    "attach reads an anchor; front_arm_pose independently writes the front arm, whose native stretch length is only 4 to 10px. "
+    "There is no automatic arm follow of body motion. front_hand reads the native hand but does not cancel "
+    "physical axis/normal offsets or reachCurve: they translate actual body center and collision geometry. "
+    "The selected PNG grip adapter compensates attachment offsets only, not reachCurve. "
+    "For constant contact of a rigid PNG grip, use front_hand with the selected grip and no reachCurve; "
+    "its static attachment offsets remain compensated by that PNG adapter. A hand-rooted beam/path needs its "
+    "authored line origin at the hand; front_arm_pose independently chooses arm motion, not line displacement. "
+    "PNG grip metadata is needed only by PNG consumers. Deliberately displaced bodies remain valid. "
+    "beam_geometry uses the same Aim world unit axis (MotionAxis): start=body center+axis*startOffsetBlocks, "
+    "end=start+axis*length, with blocks converted to world pixels; omitted offset is zero. "
+    "Its signed offset changes only the line origin, never length, width, attachment/reach, body physics or PNG scale. "
+    "An inventory grip or hidden root PNG does not anchor a separate path surface. "
+    "For native-like held motion, projectile.Center is not the grip: a rigid body may extend behind its pivot "
+    "while its hilt region slides beneath the palm. A held claim draws a selected body PNG in the native held-projectile pass, "
+    "where the front hand can cover it; detached VFX layers do not imply that occlusion. This is not a fixed grip-point guarantee. "
+    "Visual/VFX cannot repair accepted attachment, pose or geometry. These facts grant no Repair edit permissions."
 )
 
 

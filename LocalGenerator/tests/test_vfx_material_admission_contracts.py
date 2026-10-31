@@ -12,7 +12,7 @@ from infini_local.core import vfx_manifest as vfx
 from infini_local.core.schema_validation import strict_schema_errors
 from jsonschema import Draft202012Validator
 from tests.test_repair_vfx_contract import _patch
-from tests.test_low_level_three_stage_pipeline import _accepted_visual_data
+from tests.test_low_level_three_stage_pipeline import _accepted_visual_data, _vfx_output, wire_transport  # noqa: F401
 from tests.vfx_material_fixtures import _asset, _data, _legacy, _shape, _native, _history, _path, _sent, _sprite, _with_asset
 
 
@@ -76,6 +76,39 @@ def _library_particle(data: dict[str, Any]) -> dict[str, Any]:
         "endScaleMultiplier": 0.0, "endOpacity": 0.0,
     }
     return raw
+
+
+@pytest.mark.parametrize("format_name", ["json_object", "json_schema"])
+def test_library_material_facts_reach_director_and_frozen_repair(monkeypatch, wire_transport, format_name):
+    from prompt_packet_helpers import request_dossier
+    from infini_local.pipelines import vfx_generation_pipeline as transport
+
+    monkeypatch.setattr("infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE", format_name)
+    data = _accepted_visual_data("workbench_blade")
+    before = copy.deepcopy(data)
+    glow = _library_particle(data)
+    slot = glow["slots"][0]
+    slot.update(alpha=0.95)
+    slot["particle"].update(count=5, widthPx=15, heightPx=10,
+                            speedMinPxPerTick=0, speedMaxPxPerTick=0, endOpacity=2)
+    candidate = copy.deepcopy(slot)
+    candidate["particle"].update(endOpacity=0.7, count=1)
+    responses, requests = wire_transport
+    responses.extend([glow, {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "opacity only",
+                             "slotsUpsert": [candidate]}])
+    result = vfx.attach_vfx_manifest(data, "material_facts", llm_director=transport.call_llm_vfx_director)
+    assert len(requests) == 2 and not responses
+    for request, key in zip(requests, ("runtimeVocabulary", "runtimeVocabularyReadOnly")):
+        assert request["response_format"]["type"] == format_name
+    scope = request_dossier(requests[1])["repairScope"]
+    assert scope["fieldPermissions"]["slots"] == [{"slotId": slot["id"], "paths": ["particle.endOpacity"]}]
+    expected = copy.deepcopy(slot)
+    expected["particle"]["endOpacity"] = 0.7
+    compiled = result["vfxManifest"]["slots"]
+    assert len(compiled) == 1 and type(compiled[0]["slotSeed"]) is int
+    assert {key: value for key, value in compiled[0].items() if key != "slotSeed"} == expected
+    assert result["runtimeProgram"] == before["runtimeProgram"]
+    assert result["visual"] == before["visual"]
 
 
 @pytest.mark.parametrize("renderer,edits,valid", [

@@ -137,7 +137,7 @@ def test_free_beam_geometry_and_ramp_do_not_imply_channel_or_attachment():
     next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "beam_geometry")["params"]["ramp"] = {"warmupSeconds": 0, "initialWidthMultiplier": 1,
         "initialDamageMultiplier": 1, "damageStartProgress": 0}
     wire, entity = compile_ok(doc)
-    assert entity["beamGeometry"] == {"lengthPx": 320, "widthPx": 8, "raycastTiles": True}
+    assert entity["beamGeometry"] == {"lengthPx": 320, "widthPx": 8, "raycastTiles": True, "startOffsetPx": 0}
     assert entity["beamRamp"]["warmupTicks"] == 0
     assert wire["runtimeProgram"]["itemUse"]["channel"] is False
     assert "manaSustain" not in entity

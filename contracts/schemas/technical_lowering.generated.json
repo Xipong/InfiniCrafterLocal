@@ -67,6 +67,7 @@
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry|Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::BeamWarmupProgress|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
       "outputs": [
         "runtimeProgram.entities[].beamGeometry.lengthPx",
+        "runtimeProgram.entities[].beamGeometry.startOffsetPx",
         "runtimeProgram.entities[].beamGeometry.widthPx",
         "runtimeProgram.entities[].beamGeometry.raycastTiles",
         "runtimeProgram.entities[].beamRamp.warmupTicks",
