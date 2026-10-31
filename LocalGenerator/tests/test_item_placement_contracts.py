@@ -11,8 +11,8 @@ from infini_local.core.runtime_authoring.repair_scope import build_runtime_repai
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+from infini_local.pipelines.author.prompt import build_llm_author_payload
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 from test_dual_use_placeable_contract import _dual_use_placeable
 
 

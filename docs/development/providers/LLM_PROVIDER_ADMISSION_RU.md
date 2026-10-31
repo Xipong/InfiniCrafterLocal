@@ -1,6 +1,6 @@
 # Provider-aware admission для LLM HTTP
 
-Canonical owners: FIFO quota/rate admission — `LocalGenerator/infini_local/pipelines/llm_admission.py`; profile/lease/cooldown — `llm_profiles.py`; logical deadline, physical attempts и HTTP — `llm_transport.py` в той же папке. Admission получает attempt diagnostics от executor явно.
+Canonical owners: FIFO quota/rate admission — `LocalGenerator/infini_local/pipelines/transport/admission.py`; profile/lease/cooldown — `pipelines/transport/profiles.py`; logical deadline, physical attempts и HTTP — `pipelines/transport/client.py` в той же папке. Admission получает attempt diagnostics от executor явно.
 Это transport policy, не gameplay normalization и не изменение Author/parent packets.
 
 ## Что известно о quota contract

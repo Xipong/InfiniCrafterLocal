@@ -15,7 +15,7 @@ def _reference(**fields):
 
 
 def test_uniform_observations_pack_smaller_and_roundtrip_from_json():
-    from infini_local.pipelines.native_attack_tables import (
+    from infini_local.pipelines.context.attack_tables import (
         pack_attack_tables,
         unpack_attack_tables,
     )
@@ -38,7 +38,7 @@ def test_uniform_observations_pack_smaller_and_roundtrip_from_json():
 
 
 def test_certificates_and_module_identity_are_shared_without_fact_loss():
-    from infini_local.pipelines.native_attack_tables import pack_attack_tables, unpack_attack_tables
+    from infini_local.pipelines.context.attack_tables import pack_attack_tables, unpack_attack_tables
 
     def certificate(n):
         return {"method": f"Native.Source.Method{n}", "sourceModuleVersionId": "module-" + "a" * 36,
@@ -63,7 +63,7 @@ def test_certificates_and_module_identity_are_shared_without_fact_loss():
 
 
 def test_repeated_mixed_shapes_keep_missing_null_empty_and_order():
-    from infini_local.pipelines.native_attack_tables import pack_attack_tables, unpack_attack_tables
+    from infini_local.pipelines.context.attack_tables import pack_attack_tables, unpack_attack_tables
 
     rows = []
     for n in range(40):
@@ -86,7 +86,7 @@ def test_repeated_mixed_shapes_keep_missing_null_empty_and_order():
 
 
 def _envelope(data, **metadata):
-    from infini_local.pipelines.native_attack_tables import pack_attack_tables
+    from infini_local.pipelines.context.attack_tables import pack_attack_tables
 
     specimen = _reference(observations=[{"long_native_column_name": n} for n in range(80)])
     wrapper = pack_attack_tables(specimen)
@@ -117,7 +117,7 @@ def _envelope(data, **metadata):
     {"$table": "list", "columns": ["x"], "rows": [[1]], "extra": "do not discard"},
 ])
 def test_recursive_table_bounds_refuse_instead_of_silently_dropping_facts(bad_table):
-    from infini_local.pipelines.native_attack_tables import unpack_attack_tables
+    from infini_local.pipelines.context.attack_tables import unpack_attack_tables
 
     nested = {"$table": "list", "columns": ["nested"], "rows": [[bad_table]]}
     encoded = _envelope(_reference(observations=nested))
@@ -130,7 +130,7 @@ def test_recursive_table_bounds_refuse_instead_of_silently_dropping_facts(bad_ta
 @pytest.mark.parametrize("marker", ["$module", "$certificate"])
 @pytest.mark.parametrize("index", [-1, 1, True, 0.0, "0", None])
 def test_pool_indices_are_strict_bounded_in_nested_table_cells(marker, index):
-    from infini_local.pipelines.native_attack_tables import unpack_attack_tables
+    from infini_local.pipelines.context.attack_tables import unpack_attack_tables
 
     encoded = _envelope(_reference(observations={
         "$table": "dict", "keys": ["local"], "columns": ["expression"],
@@ -149,7 +149,7 @@ def test_pool_indices_are_strict_bounded_in_nested_table_cells(marker, index):
     {"$module": 0, "$certificate": 0},
 ])
 def test_reference_collisions_are_rejected_without_overwriting_fields(value):
-    from infini_local.pipelines.native_attack_tables import unpack_attack_tables
+    from infini_local.pipelines.context.attack_tables import unpack_attack_tables
 
     encoded = _envelope(_reference(unknown=value), modules=["m"], certificates=[{
         "method": "M", "sourceModuleVersionId": "m", "sourceMethodSha256": "h"
@@ -172,7 +172,7 @@ def test_reference_collisions_are_rejected_without_overwriting_fields(value):
     _reference(coverage={"unresolved": []}),
 ])
 def test_unknown_refused_small_and_colliding_sources_pass_through_detached(reference):
-    from infini_local.pipelines.native_attack_tables import pack_attack_tables, unpack_attack_tables
+    from infini_local.pipelines.context.attack_tables import pack_attack_tables, unpack_attack_tables
 
     before = copy.deepcopy(reference)
     for transform in (pack_attack_tables, unpack_attack_tables):
@@ -213,7 +213,7 @@ def test_independent_reader_fresh_process_and_detached_nested_values():
     import subprocess
     import sys
 
-    from infini_local.pipelines.native_attack_tables import pack_attack_tables, unpack_attack_tables
+    from infini_local.pipelines.context.attack_tables import pack_attack_tables, unpack_attack_tables
 
     cert = {"method": "Native.M", "sourceModuleVersionId": "m" * 40, "sourceMethodSha256": "h" * 64}
     original = _reference(
@@ -231,7 +231,7 @@ def test_independent_reader_fresh_process_and_detached_nested_values():
     assert _json(_independent_decode(json.loads(packed_wire))) == _json(original)
     process = subprocess.run(
         [sys.executable, "-c", "import json,sys; "
-         "from infini_local.pipelines.native_attack_tables import unpack_attack_tables; "
+         "from infini_local.pipelines.context.attack_tables import unpack_attack_tables; "
          "print(json.dumps(unpack_attack_tables(json.load(sys.stdin)),ensure_ascii=False,separators=(',',':')))"],
         input=packed_wire, text=True, encoding="utf-8", capture_output=True, check=True, timeout=30,
     )
@@ -248,7 +248,7 @@ def test_independent_reader_fresh_process_and_detached_nested_values():
 def test_deterministic_json_tree_corpus_preserves_scalar_types_and_field_order():
     import random
 
-    from infini_local.pipelines.native_attack_tables import pack_attack_tables, unpack_attack_tables
+    from infini_local.pipelines.context.attack_tables import pack_attack_tables, unpack_attack_tables
 
     rng = random.Random(401)
     atoms = [None, True, False, 0, 1, 1.0, -0.0, "", "$certificate", "текст😺"]
@@ -292,7 +292,7 @@ def test_deterministic_json_tree_corpus_preserves_scalar_types_and_field_order()
     {"data": []},
 ])
 def test_known_envelope_never_discards_unknown_metadata_or_invents_source(change):
-    from infini_local.pipelines.native_attack_tables import unpack_attack_tables
+    from infini_local.pipelines.context.attack_tables import unpack_attack_tables
 
     encoded = _envelope(_reference())
     encoded.update(change)
@@ -301,7 +301,7 @@ def test_known_envelope_never_discards_unknown_metadata_or_invents_source(change
 
 
 def test_size_gate_counts_envelope_legend_and_pools():
-    from infini_local.pipelines.native_attack_tables import pack_attack_tables
+    from infini_local.pipelines.context.attack_tables import pack_attack_tables
 
     # A local column table saves characters, but not its complete reading legend.
     original = _reference(observations=[{"a_repeated_column_name": n} for n in range(5)])
@@ -309,7 +309,7 @@ def test_size_gate_counts_envelope_legend_and_pools():
 
 
 def test_certificate_identity_uses_full_literal_tuple_and_retains_unknown_fields():
-    from infini_local.pipelines.native_attack_tables import pack_attack_tables, unpack_attack_tables
+    from infini_local.pipelines.context.attack_tables import pack_attack_tables, unpack_attack_tables
 
     cert = {"method": "Native.SameMethod", "sourceModuleVersionId": "a" * 40,
             "sourceMethodSha256": "h" * 64}

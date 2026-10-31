@@ -10,8 +10,9 @@ from jsonschema import Draft202012Validator
 
 import infini_local.core.runtime_authoring.capability_registry as registry
 from infini_local.core.runtime_authoring.capability_registry import ParamSpec
-from infini_local.pipelines import author_item_contract as contract
-from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+from infini_local.pipelines.author import item_contract as contract
+import infini_local.core.provider_schema as contract_provider_schema
+from infini_local.pipelines.author.request import build_initial_author_request
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_codex_subscription_contract import _encode_nullable_fixture
 
@@ -45,7 +46,7 @@ def _schema(spec):
 
 
 def _inverse(value, local, provider):
-    return contract.project_provider_nullable_optionals_to_local(
+    return contract_provider_schema.project_provider_nullable_optionals_to_local(
         value, local, response_format={"type": "json_schema", "json_schema": {"schema": provider}})
 
 
@@ -59,7 +60,7 @@ def _inverse(value, local, provider):
 def test_canonical_typed_alternatives_roundtrip_without_defaults(spec, value):
     local = _schema(spec)
     before = copy.deepcopy(local)
-    provider = contract._provider_strict_projection(local)
+    provider = contract_provider_schema._provider_strict_projection(local)
     authored = {"choice": value}
     assert Draft202012Validator(local).is_valid(authored)
     encoded = _encode_nullable_fixture(authored, local)
@@ -78,7 +79,7 @@ def test_canonical_typed_alternatives_roundtrip_without_defaults(spec, value):
 ])
 def test_unknown_missing_null_and_conflicting_choices_stay_invalid(value):
     local = _schema(SPAWNS)
-    provider = contract._provider_strict_projection(local)
+    provider = contract_provider_schema._provider_strict_projection(local)
     encoded = {"choice": value, "tail": None}
     before = copy.deepcopy(encoded)
     assert not Draft202012Validator(provider).is_valid(encoded)
@@ -94,7 +95,7 @@ def test_unknown_missing_null_and_conflicting_choices_stay_invalid(value):
 
 def test_structural_choice_keeps_invalid_neighbour_for_repair_without_validating_whole_branch():
     local = _schema(SPAWNS)
-    provider = contract._provider_strict_projection(local)
+    provider = contract_provider_schema._provider_strict_projection(local)
     encoded = {"choice": {"above": "cursor", "heightTiles": "invalid", "delayTicks": None}, "tail": None}
     restored = _inverse(encoded, local, provider)
     assert restored == {"choice": {"above": "cursor", "heightTiles": "invalid"}}
@@ -112,12 +113,12 @@ def test_each_pair_can_have_a_different_proven_discriminator():
         _closed({"a": {"const": "y"}, "b": {"const": "p"}}),
         _closed({"b": {"const": "q"}}),
     ]
-    assert contract._union_discriminator_paths(branches) == []
+    assert contract_provider_schema._union_discriminator_paths(branches) == []
     local = {"oneOf": branches}
-    provider = contract._provider_strict_projection(local)
+    provider = contract_provider_schema._provider_strict_projection(local)
     for value in ({"a": "x"}, {"a": "y", "b": "p"}, {"b": "q"}, {}, {"a": "y"}, {"a": "x", "b": "q"}):
         assert Draft202012Validator(local).is_valid(value) == Draft202012Validator(provider).is_valid(value)
-    assert provider["anyOf"] == [contract._provider_strict_projection(branch) for branch in branches]
+    assert provider["anyOf"] == [contract_provider_schema._provider_strict_projection(branch) for branch in branches]
 
 
 @pytest.mark.parametrize("branches", [
@@ -134,17 +135,17 @@ def test_one_overlapping_or_unproved_pair_rejects_the_entire_projection(branches
     local = {"oneOf": branches}
     before = copy.deepcopy(local)
     with pytest.raises(ValueError, match="Unproved provider oneOf"):
-        contract._provider_strict_projection(local)
+        contract_provider_schema._provider_strict_projection(local)
     assert local == before
 
 
 def test_nested_closed_keys_require_every_ancestor_and_keep_json_boolean_numeric_distinction():
     local = {"oneOf": [_closed({"nested": _closed({name: {"type": "integer"}})}) for name in ("a", "b")]}
-    provider = contract._provider_strict_projection(local)
+    provider = contract_provider_schema._provider_strict_projection(local)
     for value in ({"nested": {"a": 1}}, {"nested": {"b": 2}}, {"nested": {}}, {}):
         assert Draft202012Validator(local).is_valid(value) == Draft202012Validator(provider).is_valid(value)
     scalar = {"oneOf": [{"enum": [True]}, {"enum": [1]}]}
-    projected = contract._provider_strict_projection(scalar)
+    projected = contract_provider_schema._provider_strict_projection(scalar)
     for value in (True, False, 1, 1.0, 0):
         assert Draft202012Validator(scalar).is_valid(value) == Draft202012Validator(projected).is_valid(value)
 

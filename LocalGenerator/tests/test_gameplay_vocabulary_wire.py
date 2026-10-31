@@ -78,7 +78,7 @@ def test_transparency_byte_is_exact_existing_native_domain(value):
 @pytest.mark.parametrize("previous_fn", ["apply_generated_buff_on_use", "spawn_entity_on_event", "seek_projectile"])
 def test_saved_generated_parent_keeps_old_wire_in_next_craft_with_current_unit_guide(monkeypatch, mode, previous_fn):
     from infini_local.core import llm_config
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from infini_local.pipelines.author.request import build_initial_author_request
     from prompt_packet_helpers import request_dossier
     case = next(row for row in _CAPTURE["cases"] if row["previousFn"] == previous_fn)
     parent = {"name": "accepted saved craft", "generatedData": deepcopy(case["wire"])}

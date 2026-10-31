@@ -8,7 +8,7 @@ import pytest
 
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 
@@ -33,7 +33,7 @@ def test_card_preserves_complete_accepted_mechanics(capability):
         entity.pop("visual", None)
     assert card["runtimeProgram"] == expected_runtime
     assert card["id"] == data["id"]
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from infini_local.pipelines.author.request import build_initial_author_request
     import json
     request, user, _ = build_initial_author_request(parent, parent, "complete-parent", model_name="offline-test-model")
     packet = json.loads(user)
@@ -48,7 +48,7 @@ def test_card_preserves_complete_accepted_mechanics(capability):
 
 
 def _accepted_appearance_parent():
-    from infini_local.pipelines import visual_generation_pipeline as visual
+    from infini_local.pipelines.visual import contract as visual_contract, stage as visual_stage
     from test_low_level_three_stage_pipeline import _visual_kit
 
     data = compile_runtime_program(build_capability_witness("move_straight"))
@@ -70,12 +70,12 @@ def _accepted_appearance_parent():
                 visualIdentity="detached cyan bead", preferredCanvasSize=32,
                 renderSizePx=12, forwardAngleDegrees=0,
             )
-    accepted, errors = visual._validate_kit(
+    accepted, errors = visual_contract._validate_kit(
         kit, [entity["id"] for entity in data["runtimeProgram"]["entities"]],
         data["runtimeProgram"]["itemEntityId"],
     )
     assert accepted is not None, errors
-    delivered = sanitize_recipe_for_delivery(visual._apply_kit(data, accepted))
+    delivered = sanitize_recipe_for_delivery(visual_stage._apply_kit(data, accepted))
     delivered.update(id="literal-parent-definition", recipeKey="literal-parent-recipe")
     return {"name": "opaque identity", "generatedData": delivered}
 
@@ -117,7 +117,8 @@ def test_serialized_visual_director_repair_keep_exact_parent_facts(monkeypatch, 
     import json
     import socket
     from collections import deque
-    from infini_local.pipelines import visual_generation_pipeline as visual
+    from infini_local.pipelines.visual import contract as visual_contract, stage as visual_stage
+    from infini_local.pipelines.visual import context as visual_context, request as visual_request
     from test_low_level_three_stage_pipeline import _visual_kit
 
     def denied(*args, **kwargs):
@@ -127,10 +128,10 @@ def test_serialized_visual_director_repair_keep_exact_parent_facts(monkeypatch, 
     monkeypatch.setattr(socket.socket, "connect_ex", denied)
     monkeypatch.setattr(socket, "create_connection", denied)
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', format_mode)
-    monkeypatch.setattr(visual, "USE_LLM", True)
-    monkeypatch.setattr(visual, "VISUAL_DIRECTOR_LLM", True)
-    monkeypatch.setattr(visual, "resolve_llm_model", lambda: "offline-test-model")
-    monkeypatch.setattr(visual, "trace_stage_request", lambda *a, **k: None)
+    monkeypatch.setattr(visual_stage, "USE_LLM", True)
+    monkeypatch.setattr(visual_stage, "VISUAL_DIRECTOR_LLM", True)
+    monkeypatch.setattr(visual_request, "resolve_llm_model", lambda: "offline-test-model")
+    monkeypatch.setattr(visual_request, "trace_stage_request", lambda *a, **k: None)
     parent = _accepted_appearance_parent()
     child = compile_runtime_program(build_capability_witness("generated_buff_on_use"))
     before = copy.deepcopy((parent, child))
@@ -138,7 +139,7 @@ def test_serialized_visual_director_repair_keep_exact_parent_facts(monkeypatch, 
     broken = copy.deepcopy(chosen)
     broken["item"]["inventoryScale"] = 99
     responses = deque([broken, {
-        "schema": visual.VISUAL_REPAIR_PATCH_SCHEMA,
+        "schema": visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,
         "itemPatch": {"inventoryScale": chosen["item"]["inventoryScale"]},
         "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [],
         "note": "exact invalid scale only",
@@ -149,8 +150,8 @@ def test_serialized_visual_director_repair_keep_exact_parent_facts(monkeypatch, 
         requests.append(copy.deepcopy(request))
         return {"choices": [{"message": {"content": json.dumps(responses.popleft())}}]}
 
-    monkeypatch.setattr(visual, "llm_chat_json", provider_stub)
-    result = visual.apply_visual_director(child, parent, parent)
+    monkeypatch.setattr(visual_request, "llm_chat_json", provider_stub)
+    result = visual_stage.apply_visual_director(child, parent, parent)
     assert len(requests) == 2 and not responses
     assert result["visualKit"] == chosen
     director, repair = [request_dossier(request) for request in requests]
@@ -167,8 +168,8 @@ def test_serialized_visual_director_repair_keep_exact_parent_facts(monkeypatch, 
                      for row in generated["runtimeProgram"]["entities"]],
     }
     assert repair["parentSizeReferencesReadOnly"] == {"parentA": reference, "parentB": reference}
-    assert repair["acceptedPresentationMechanicsReadOnly"]["gameplay"] == visual._presentation_packet_context(
-        child, visual._runtime_card(child))["acceptedPresentationMechanicsReadOnly"]["gameplay"]
+    assert repair["acceptedPresentationMechanicsReadOnly"]["gameplay"] == visual_context._presentation_packet_context(
+        child, visual_context._runtime_card(child))["acceptedPresentationMechanicsReadOnly"]["gameplay"]
     assert repair["repairScope"]["fieldPermissions"]["itemPaths"] == ["inventoryScale"]
     assert parent == before[0]
     assert {key: value for key, value in child.items() if key != "debug"} == before[1]
@@ -177,7 +178,7 @@ def test_serialized_visual_director_repair_keep_exact_parent_facts(monkeypatch, 
 
 def test_real_author_builder_preserves_present_accepted_parent_without_visuals(monkeypatch):
     import json
-    from infini_local.pipelines import llm_authoring_pipeline as author
+    from infini_local.pipelines.author import request as author
 
     # Sparse wire control proves presence/absence semantics independently from
     # complete compiler witnesses and the frozen-corpus replay; nothing is clipped.
@@ -223,8 +224,8 @@ def test_real_author_builder_preserves_present_accepted_parent_without_visuals(m
 def test_literal_tooltip_source_survives_real_author_visual_repair(monkeypatch, status, lines):
     import json
     import socket
-    from infini_local.pipelines import llm_authoring_pipeline as author
-    from infini_local.pipelines import visual_generation_pipeline as visual
+    from infini_local.pipelines.author import request as author
+    from infini_local.pipelines.visual import request as visual_request
 
     def denied(*args, **kwargs):
         raise AssertionError("offline test forbids network")
@@ -233,8 +234,8 @@ def test_literal_tooltip_source_survives_real_author_visual_repair(monkeypatch, 
     monkeypatch.setattr(socket.socket, "connect_ex", denied)
     monkeypatch.setattr(socket, "create_connection", denied)
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_object")
-    monkeypatch.setattr(visual, "resolve_llm_model", lambda: "offline-test-model")
-    monkeypatch.setattr(visual, "trace_stage_request", lambda *a, **k: None)
+    monkeypatch.setattr(visual_request, "resolve_llm_model", lambda: "offline-test-model")
+    monkeypatch.setattr(visual_request, "trace_stage_request", lambda *a, **k: None)
     parent = {
         "name": "literal source", "fullName": "Terraria/RecallPotion",
         "tooltipLines": lines, "tooltipSource": {
@@ -253,10 +254,10 @@ def test_literal_tooltip_source_survives_real_author_visual_repair(monkeypatch, 
         captured.append(copy.deepcopy(request))
         return {"choices": [{"message": {"content": "{}"}}]}
 
-    monkeypatch.setattr(visual, "llm_chat_json", provider_stub)
+    monkeypatch.setattr(visual_request, "llm_chat_json", provider_stub)
     data = compile_runtime_program(build_capability_witness("generated_buff_on_use"))
-    visual._request_visual_kit(data, parent, {})
-    visual._request_visual_kit(data, parent, {}, repair_errors=[], previous={}, repair_scope={})
+    visual_request._request_visual_kit(data, parent, {})
+    visual_request._request_visual_kit(data, parent, {}, repair_errors=[], previous={}, repair_scope={})
     packets = [author_packet,
                request_dossier(captured[0])["parents"]["parentA"]["packet"],
                request_dossier(captured[1])["parentFactsReadOnly"]["parentA"]["packet"]]
@@ -287,9 +288,10 @@ def test_visual_projection_keeps_independent_source_when_runtime_is_unknown(runt
 @pytest.mark.parametrize("surface", ["directProjectileRaw", "effectiveProjectileRaw"])
 def test_verified_motion_reference_is_exact_in_author_visual_repair(monkeypatch, surface):
     import json
-    from infini_local.pipelines import llm_authoring_pipeline as author
-    from infini_local.pipelines import visual_generation_pipeline as visual
-    from infini_local.pipelines.parent_context_pipeline import compact_projectile_profile
+    from infini_local.pipelines.author import request as author
+    from infini_local.pipelines.visual import request as visual_request
+    import infini_local.pipelines.visual.request as visual_request
+    from infini_local.pipelines.context.parents import compact_projectile_profile
 
     observation = {
         "source": "verified_native_AI_001_reference", "fullName": "Terraria/WoodenArrowFriendly",
@@ -311,8 +313,8 @@ def test_verified_motion_reference_is_exact_in_author_visual_repair(monkeypatch,
     parent = {"name": "literal source", surface: source}
     parent_before = copy.deepcopy(parent)
     _, user, _ = author.build_initial_author_request(parent, {}, "source-motion", model_name="offline-test-model")
-    monkeypatch.setattr(visual, "resolve_llm_model", lambda: "offline-test-model")
-    monkeypatch.setattr(visual, "trace_stage_request", lambda *a, **k: None)
+    monkeypatch.setattr(visual_request, "resolve_llm_model", lambda: "offline-test-model")
+    monkeypatch.setattr(visual_request, "trace_stage_request", lambda *a, **k: None)
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_object")
     requests = []
 
@@ -320,10 +322,10 @@ def test_verified_motion_reference_is_exact_in_author_visual_repair(monkeypatch,
         requests.append(copy.deepcopy(request))
         return {"choices": [{"message": {"content": "{}"}}]}
 
-    monkeypatch.setattr(visual, "llm_chat_json", provider_stub)
+    monkeypatch.setattr(visual_request, "llm_chat_json", provider_stub)
     child = compile_runtime_program(build_capability_witness("move_straight"))
-    visual._request_visual_kit(child, parent, {})
-    visual._request_visual_kit(child, parent, {}, repair_errors=[], previous={}, repair_scope={})
+    visual_request._request_visual_kit(child, parent, {})
+    visual_request._request_visual_kit(child, parent, {}, repair_errors=[], previous={}, repair_scope={})
     packets = [json.loads(user)["parents"]["A"]["packet"],
                request_dossier(requests[0])["parents"]["parentA"]["packet"],
                request_dossier(requests[1])["parentFactsReadOnly"]["parentA"]["packet"]]

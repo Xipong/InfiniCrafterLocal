@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from infini_local.core import vfx_manifest as vfx
+import infini_local.core.vfx.contract as vfx_contract
+import infini_local.pipelines.vfx.prompt as vfx_prompt
+import infini_local.pipelines.vfx.stage as vfx_stage
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
@@ -14,7 +16,7 @@ def _data(capability: str = "") -> dict[str, Any]:
 def _legacy(data: dict[str, Any]) -> dict[str, Any]:
     item_id = data["runtimeProgram"]["itemEntityId"]
     return {
-        "schema": vfx.VFX_DIRECTOR_SCHEMA,
+        "schema": vfx_contract.VFX_DIRECTOR_SCHEMA,
         "slots": [{
             "color": {"r": 17, "g": 93, "b": 241},
             "id": "old_slot", "entityId": item_id, "event": "on_use", "rendererKind": "impactRing",
@@ -28,7 +30,7 @@ def _legacy(data: dict[str, Any]) -> dict[str, Any]:
 def _shape(data: dict[str, Any]) -> dict[str, Any]:
     """Explicit expanding arc: authored dimensions, colors and opacity, no preset."""
     from math import tau
-    return {"schema": vfx.VFX_DIRECTOR_SCHEMA, "slots": [{
+    return {"schema": vfx_contract.VFX_DIRECTOR_SCHEMA, "slots": [{
         "id": "explicit_shape", "entityId": data["runtimeProgram"]["itemEntityId"],
         "event": "on_use", "rendererKind": "shape", "anchor": "self", "blend": "additive",
         "layer": "AfterProjectiles", "startTick": 0, "repeatEvery": 0, "duration": 20,
@@ -42,7 +44,7 @@ def _shape(data: dict[str, Any]) -> dict[str, Any]:
 
 def _history(data: dict[str, Any], texture: str = "item") -> dict[str, Any]:
     entity_id = next((row["id"] for row in data["runtimeProgram"].get("entities", []) if row["kind"] != "item_body"), data["runtimeProgram"]["itemEntityId"])
-    return {"schema": vfx.VFX_DIRECTOR_SCHEMA, "slots": [{
+    return {"schema": vfx_contract.VFX_DIRECTOR_SCHEMA, "slots": [{
         "id": "explicit_history", "entityId": entity_id,
         "event": "periodic", "rendererKind": "historyTrail", "anchor": "self", "blend": "alpha",
         "layer": "AfterProjectiles", "trail": {
@@ -65,7 +67,7 @@ def _native(data: dict[str, Any], renderer: str = "nativeDust") -> dict[str, Any
                         "speedMaxPxPerTick": 2, "spreadRadians": .5, "inheritVelocity": .2,
                         "angularDistribution": "random", "directionFrame": "source", "angleOffsetRadians": 0,
                         "nativeAlpha": 100, "noGravity": True}
-    return {"schema": vfx.VFX_DIRECTOR_SCHEMA, "slots": [slot]}
+    return {"schema": vfx_contract.VFX_DIRECTOR_SCHEMA, "slots": [slot]}
 
 
 def _profile(start: Any = 1.0, middle: Any = 1.0, end: Any = 0.0, curve: str = "linear") -> dict[str, Any]:
@@ -96,12 +98,12 @@ def _sent(data: dict[str, Any], repair: bool, packet: dict[str, Any] | None = No
         sent.append(json.loads(kwargs["messages"][1]["content"]) if repair else json.loads(json.dumps(user)))
         return {}
 
-    packet = vfx._prompt_packet(data, None, None) if packet is None else packet
+    packet = vfx_prompt._prompt_packet(data, None, None) if packet is None else packet
     if repair:
-        vfx._request(capture, packet, repair_errors=[{"path": "$.slots[0].alpha", "message": "invalid"}],
+        vfx_stage._request(capture, packet, repair_errors=[{"path": "$.slots[0].alpha", "message": "invalid"}],
                      previous={"slots": []}, repair_scope={"fieldPermissions": {"slots": []}})
     else:
-        vfx._request(capture, packet)
+        vfx_stage._request(capture, packet)
     return sent[0]
 
 def _asset(asset_id: str = "Glow_A-1", layout: str = "cutout") -> dict[str, Any]:

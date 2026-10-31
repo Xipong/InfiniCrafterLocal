@@ -18,7 +18,7 @@ from infini_local.core.runtime_authoring.program_schema import strict_schema_err
 from infini_local.core.runtime_authoring.terraria_vocabulary import DAMAGE_CLASS_TOKENS
 from infini_local.qa.capability_witnesses import build_capability_witness
 from test_registry_receipt_identity import _call, _receipt
-from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+from infini_local.pipelines.author.request import build_initial_author_request
 
 # The registry owns the permitted omission surface. Tests constrain its meaning
 # (optional, type-exact neutral, admitted) instead of maintaining a second roster

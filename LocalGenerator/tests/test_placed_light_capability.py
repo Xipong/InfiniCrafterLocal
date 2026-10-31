@@ -130,7 +130,7 @@ from test_low_level_three_stage_pipeline import wire_transport
 
 
 def test_real_serialized_author_repair_carries_independent_placed_light(wire_transport):
-    from infini_local.pipelines import llm_authoring_pipeline as gameplay
+    from infini_local.pipelines.author import request as gameplay
     responses, requests = wire_transport
     document = lit(); responses.append(document)
     accepted = gameplay.try_llm_plan({"name": "A"}, {"name": "B"}, "offline-placed-light")

@@ -13,17 +13,22 @@ from pathlib import Path
 import pytest
 
 from infini_local.core import llm_config
-from infini_local.core import vfx_manifest as vfx
+import infini_local.core.vfx.contract as vfx_contract
+import infini_local.core.vfx.projection as vfx_projection
+import infini_local.core.vfx.repair as vfx_repair
+import infini_local.core.vfx.validation as vfx_validation
+import infini_local.pipelines.vfx.prompt as vfx_prompt
+import infini_local.pipelines.vfx.stage as vfx_stage
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.schema_validation import strict_schema_errors
-from infini_local.core.vfx_material_contract import vfx_model_payload
-from infini_local.pipelines import vfx_generation_pipeline as stage
-from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+from infini_local.core.vfx.materials import vfx_model_payload
+from infini_local.pipelines.vfx import request as stage
+from infini_local.pipelines.visual.assets import build_visual_asset_plan
 from tests.vfx_material_fixtures import _asset, _data, _shape, _path, _sprite, _with_asset
 
 
 def _patch(**edits):
-    return {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "repair exact diagnosed leaves only", **edits}
+    return {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "note": "repair exact diagnosed leaves only", **edits}
 
 
 def _offline_transport(monkeypatch, case, replies):
@@ -68,9 +73,9 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
         raw["assets"] = [_asset()] if domain == "nonempty" else []
     before, raw_before = copy.deepcopy(data), copy.deepcopy(raw)
     if outcome != "valid":
-        initial_report = vfx.validate_vfx_director_output(raw, data)
+        initial_report = vfx_validation.validate_vfx_director_output(raw, data)
         assert not initial_report["ok"]
-        initial_scope = vfx._build_vfx_repair_scope(raw, initial_report["errors"])
+        initial_scope = vfx_repair._build_vfx_repair_scope(raw, initial_report["errors"])
         initial_paths = [payload + ".texture.assetId", *([payload + ".texture.source"] if domain != "nonempty" else [])]
         assert initial_scope["fieldPermissions"] == {"globals": {}, "slots": [{"slotId": raw["slots"][0]["id"], "paths": initial_paths}], "assets": []}, "empty_domain_selector_permission"
     plan_before = build_visual_asset_plan(data)
@@ -92,23 +97,23 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
     case = renderer + "_" + domain + "_" + outcome
     sent = _offline_transport(monkeypatch, case, [raw] if outcome == "valid" else [raw, correction])
     if outcome == "noop":
-        scope = vfx._build_vfx_repair_scope(raw, vfx.validate_vfx_director_output(raw, data)["errors"])
-        merged, audit = vfx._apply_vfx_repair_patch(data, raw, correction, scope, return_audit=True)
+        scope = vfx_repair._build_vfx_repair_scope(raw, vfx_validation.validate_vfx_director_output(raw, data)["errors"])
+        merged, audit = vfx_repair._apply_vfx_repair_patch(data, raw, correction, scope, return_audit=True)
         assert merged == raw_before and audit["acceptedPaths"] == []
-        assert not vfx.validate_vfx_director_output(merged, data)["ok"]
+        assert not vfx_validation.validate_vfx_director_output(merged, data)["ok"]
         with pytest.raises(PlannerUnavailable, match="VFX Repair did not produce"):
-            vfx.attach_vfx_manifest(data, case, llm_director=stage.call_llm_vfx_director)
+            vfx_stage.attach_vfx_manifest(data, case, llm_director=stage.call_llm_vfx_director)
         assert len(sent) == 2 and "vfxManifest" not in data
         final = data
     else:
         expected = copy.deepcopy(raw_before)
         if outcome != "valid":
             expected["slots"][0][payload]["texture"] = ({"source": "asset", "assetId": _asset()["id"], "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}} if domain == "nonempty" else texture)
-        expected_plan = build_visual_asset_plan({**before, "vfxManifest": vfx._compile_manifest(before, expected, case)}) if domain == "nonempty" else plan_before
-        final = vfx.attach_vfx_manifest(data, case, llm_director=stage.call_llm_vfx_director)
+        expected_plan = build_visual_asset_plan({**before, "vfxManifest": vfx_projection._compile_manifest(before, expected, case)}) if domain == "nonempty" else plan_before
+        final = vfx_stage.attach_vfx_manifest(data, case, llm_director=stage.call_llm_vfx_director)
         assert final["debug"]["vfxDirectorRaw"] == expected, "only_diagnosed_texture_leaves_change"
-        assert final["vfxManifest"] == vfx._compile_manifest(before, expected, case)
-        assert vfx.validate_vfx_manifest_wire(final)["ok"]
+        assert final["vfxManifest"] == vfx_projection._compile_manifest(before, expected, case)
+        assert vfx_validation.validate_vfx_manifest_wire(final)["ok"]
         assert build_visual_asset_plan(final) == expected_plan
         assert len([row for row in expected_plan if row["role"].startswith(("vfx:", "impact:"))]) == int(domain == "nonempty")
         assert ("assets" in final["vfxManifest"]) == (domain != "omitted")
@@ -135,7 +140,7 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
         director, repair = [request_dossier(request) for request in sent]
         assert repair["acceptedRuntimeProgramReadOnly"] == director["acceptedRuntimeProgramReadOnly"]
         assert repair["acceptedVisualKitReadOnly"] == director["acceptedVisualKit"]
-        assert repair["exactErrors"] == vfx.validate_vfx_director_output(raw, final)["errors"]
+        assert repair["exactErrors"] == vfx_validation.validate_vfx_director_output(raw, final)["errors"]
         scope = repair["repairScope"]
         paths = [payload + ".texture.assetId", *([payload + ".texture.source"] if domain != "nonempty" else [])]
         assert scope["fieldPermissions"] == {"globals": {}, "slots": [{"slotId": raw["slots"][0]["id"], "paths": paths}], "assets": []}
@@ -159,7 +164,7 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
             assert strict_schema_errors(correction, schema)
             within_scope = _patch(slotsUpsert=copy.deepcopy(final["debug"]["vfxDirectorRaw"]["slots"]))
             assert not strict_schema_errors(vfx_model_payload(within_scope), schema)
-            scoped_result, scoped_audit = vfx._apply_vfx_repair_patch(data, raw, within_scope, scope, return_audit=True)
+            scoped_result, scoped_audit = vfx_repair._apply_vfx_repair_patch(data, raw, within_scope, scope, return_audit=True)
             assert scoped_result == final["debug"]["vfxDirectorRaw"]
             assert scoped_audit["acceptedPaths"] == final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"]
             assert scoped_audit["ignoredChanges"] == []
@@ -199,13 +204,13 @@ def test_vfx_exact_leaf_stage_contract(monkeypatch, case):
         candidate["alpha"] = 1.0 if case == "alpha-type-frozen" else 1
         patch = _patch(slotsUpsert=[candidate],   slotIdsDelete=[], slotIndicesDelete=[])
     before, patch_before = copy.deepcopy(raw), json.dumps(patch)
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"] is (case == "alpha-type-frozen")
-    scope = vfx._build_vfx_repair_scope(raw, report["errors"])
+    scope = vfx_repair._build_vfx_repair_scope(raw, report["errors"])
     row_id = raw[domain][0]["id"]
     expected_permissions = [] if case == "alpha-type-frozen" else [{"assetId" if domain == "assets" else "slotId": row_id, "paths": [leaf], **({"deletePaths": [leaf]} if case == "foreign-payload" else {})}]
     assert scope["fieldPermissions"][domain] == expected_permissions
-    repaired, audit = vfx._apply_vfx_repair_patch(data, raw, patch, scope, return_audit=True)
+    repaired, audit = vfx_repair._apply_vfx_repair_patch(data, raw, patch, scope, return_audit=True)
     expected = copy.deepcopy(before)
     if case == "profile-knot":
         expected["slots"][0]["element"]["widthProfile"]["middle"] = 1.0
@@ -220,7 +225,7 @@ def test_vfx_exact_leaf_stage_contract(monkeypatch, case):
         expected["slots"][0]["alpha"] = 1
     assert audit["ok"], audit
     assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True), "typed_exact_leaf_survives_filter_apply"
-    assert vfx.validate_vfx_director_output(repaired, data)["ok"]
+    assert vfx_validation.validate_vfx_director_output(repaired, data)["ok"]
     if case.startswith("alpha"):
         assert type(repaired["slots"][0]["alpha"]) is int
         assert audit["acceptedPaths"] == ([] if case == "alpha-type-frozen" else ["$.slotsUpsert[0].alpha"])
@@ -235,17 +240,17 @@ def test_vfx_exact_leaf_stage_contract(monkeypatch, case):
     if case == "asset-canvas":
         assert any(row["path"].endswith(".prompt") for row in audit["ignoredChanges"])
     sent = _offline_transport(monkeypatch, case, [raw] if case == "alpha-type-frozen" else [raw, patch])
-    final = vfx.attach_vfx_manifest(data, case, llm_director=stage.call_llm_vfx_director)
+    final = vfx_stage.attach_vfx_manifest(data, case, llm_director=stage.call_llm_vfx_director)
     assert json.dumps(final["debug"]["vfxDirectorRaw"], sort_keys=True) == json.dumps(expected, sort_keys=True)
-    assert final["vfxManifest"] == vfx._compile_manifest(data, expected, case)
-    assert vfx.validate_vfx_manifest_wire(final)["ok"]
+    assert final["vfxManifest"] == vfx_projection._compile_manifest(data, expected, case)
+    assert vfx_validation.validate_vfx_manifest_wire(final)["ok"]
     assert len(sent) == (1 if case == "alpha-type-frozen" else 2)
     if case != "alpha-type-frozen":
         request = request_dossier(sent[1])
         assert request["repairScope"] == scope
         if case == "asset-canvas":
             assert request["brokenFragments"]["assets"] == before["assets"]
-            packet = vfx._prompt_packet(data, None, None)
+            packet = vfx_prompt._prompt_packet(data, None, None)
             canonical = packet["outputSchema"]["properties"]["assets"]["items"]
             offered = request["outputSchema"]["properties"]["assetsUpsert"]["items"]
             assert set(request["outputSchema"]["properties"]) == {"schema", "note", "assetsUpsert"}
@@ -257,7 +262,7 @@ def test_vfx_exact_leaf_stage_contract(monkeypatch, case):
         schema = request["outputSchema"]
         assert not strict_schema_errors(vfx_model_payload(within_scope), schema)
         assert strict_schema_errors(vfx_model_payload(patch), schema), "hostile/full-shape answer is outside the sent provider grammar"
-        scoped_result, scoped_audit = vfx._apply_vfx_repair_patch(data, raw, within_scope, scope, return_audit=True)
+        scoped_result, scoped_audit = vfx_repair._apply_vfx_repair_patch(data, raw, within_scope, scope, return_audit=True)
         assert scoped_result == expected
         assert scoped_audit["acceptedPaths"] == audit["acceptedPaths"]
         assert scoped_audit["ignoredChanges"] == []
@@ -272,10 +277,10 @@ def test_vfx_asset_delete_permission_preserves_first_request(duplicate):
     data = _data()
     raw = _with_asset(data)
     raw["assets"].append(_asset() if duplicate else _asset("unused"))
-    scope = vfx._build_vfx_repair_scope(raw, vfx.validate_vfx_director_output(raw, data)["errors"])
-    repaired = vfx._apply_vfx_repair_patch(data, raw, _patch(assetIndicesDelete=[1]) if duplicate else _patch(assetIdsDelete=["unused"]), scope)
+    scope = vfx_repair._build_vfx_repair_scope(raw, vfx_validation.validate_vfx_director_output(raw, data)["errors"])
+    repaired = vfx_repair._apply_vfx_repair_patch(data, raw, _patch(assetIndicesDelete=[1]) if duplicate else _patch(assetIdsDelete=["unused"]), scope)
     assert repaired["assets"] == [_asset()]
-    assert vfx.validate_vfx_director_output(repaired, data)["ok"]
+    assert vfx_validation.validate_vfx_director_output(repaired, data)["ok"]
 
 
 @pytest.mark.parametrize("field", ["slotsUpsert", "slotIdsDelete", "slotIndicesDelete", "assetsUpsert", "assetIdsDelete", "assetIndicesDelete"])
@@ -286,7 +291,7 @@ def test_vfx_repair_optional_edit_absence_is_not_null(monkeypatch, field):
     raw["slots"][0]["alpha"] = None
     patch = _patch(slotsUpsert=accepted["slots"])
     sent = _offline_transport(monkeypatch, "optional_" + field, [raw, patch])
-    final = vfx.attach_vfx_manifest(data, "optional_" + field, llm_director=stage.call_llm_vfx_director)
+    final = vfx_stage.attach_vfx_manifest(data, "optional_" + field, llm_director=stage.call_llm_vfx_director)
     assert len(sent) == 2 and final["debug"]["vfxDirectorRaw"] == accepted
     schema = request_dossier(sent[1])["outputSchema"]
     assert set(schema["properties"]) == {"schema", "note", "slotsUpsert"}

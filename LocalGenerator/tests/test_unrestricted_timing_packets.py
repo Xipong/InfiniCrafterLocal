@@ -7,7 +7,7 @@ import pytest
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.pipelines import llm_authoring_pipeline as author
+from infini_local.pipelines.author import request as author
 from prompt_packet_helpers import request_dossier
 from repair_test_helpers import provider_roundtrip, repair_with_response
 from test_modifier_timing_windows import CASES, document

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
+from infini_local.pipelines.vfx import request as vfx_transport
 from prompt_packet_helpers import request_dossier, dossier_text
 from contextlib import nullcontext
 
@@ -8,15 +8,20 @@ import json
 
 import pytest
 
-import infini_local.pipelines.llm_authoring_pipeline as gameplay_stage
-import infini_local.pipelines.gameplay_stage as combine_stage
-import infini_local.pipelines.visual_generation_pipeline as visual_stage
-import infini_local.core.vfx_manifest as vfx_stage
+import infini_local.pipelines.author.request as gameplay_stage
+import infini_local.pipelines.author.stage as combine_stage
+import infini_local.pipelines.visual.stage as visual_stage
+import infini_local.pipelines.visual.contract as visual_stage_contract
+import infini_local.pipelines.visual.stage as visual_stage_stage
+import infini_local.pipelines.visual.request as visual_request
+import infini_local.core.vfx.config as vfx_stage_config
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.program_schema import strict_repair_shape_report
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.core.vfx_manifest import VFX_DIRECTOR_SCHEMA, VFX_REPAIR_PATCH_SCHEMA, attach_vfx_manifest, vfx_director_surface
+from infini_local.core.vfx.contract import VFX_DIRECTOR_SCHEMA, VFX_REPAIR_PATCH_SCHEMA
+from infini_local.pipelines.vfx.stage import attach_vfx_manifest
+from infini_local.core.vfx.surface import vfx_director_surface
 from infini_local.pipelines.combine_pipeline import _assert_stage_topology
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from collections import deque
@@ -81,7 +86,7 @@ def _visual_kit(data: dict) -> dict:
         "inventoryScale": 1.0, "worldScale": 1.0,
     }
     return {
-        "schema": visual_stage.VISUAL_KIT_SCHEMA,
+        "schema": visual_stage_contract.VISUAL_KIT_SCHEMA,
         "item": item,
         "entities": [
             ({
@@ -99,19 +104,19 @@ def _visual_kit(data: dict) -> dict:
 def _accepted_visual_data(fixture_name: str) -> dict:
     data = compile_runtime_program(build_runtime_fixture(fixture_name))
     runtime = data["runtimeProgram"]
-    kit, errors = visual_stage._validate_kit(
+    kit, errors = visual_stage_contract._validate_kit(
         _visual_kit(data), [row["id"] for row in runtime["entities"]], runtime["itemEntityId"],
     )
     assert kit is not None, errors
     # VFX follows Visual in production; a mechanics-only compiler result or an
     # ignored visualKit assignment does not project the actual PNG producers.
-    return visual_stage._apply_kit(data, kit)
+    return visual_stage_stage._apply_kit(data, kit)
 
 
 def _visual_patch(data: dict) -> dict:
     kit = _visual_kit(data)
     return {
-        "schema": visual_stage.VISUAL_REPAIR_PATCH_SCHEMA,
+        "schema": visual_stage_contract.VISUAL_REPAIR_PATCH_SCHEMA,
         "itemPatch": kit["item"],
         "entitiesUpsert": kit["entities"],
         "entityIdsDelete": [],
@@ -166,7 +171,7 @@ def wire_transport(monkeypatch):
         value = responses.popleft()
         if request.get("_infini_stage") in {"vfx_director", "vfx_repair"} and isinstance(value, dict):
             # Fixtures are persisted-wire candidates; fake provider speaks the model schema.
-            from infini_local.core.vfx_material_contract import vfx_model_payload
+            from infini_local.core.vfx.materials import vfx_model_payload
             value = vfx_model_payload(value)
         if isinstance(value, BaseException):
             raise value
@@ -174,13 +179,14 @@ def wire_transport(monkeypatch):
 
     for module in (gameplay_stage, visual_stage, vfx_transport):
         monkeypatch.setattr(module, "USE_LLM", True)
+    for module in (gameplay_stage, visual_request, vfx_transport):
         monkeypatch.setattr(module, "resolve_llm_model", lambda: "test-model")
         monkeypatch.setattr(module, "llm_chat_json", reply)
-    monkeypatch.setattr(visual_stage, "VISUAL_DIRECTOR_LLM", True)
+    monkeypatch.setattr(visual_stage_stage, "VISUAL_DIRECTOR_LLM", True)
     monkeypatch.setenv("INFINI_VISUAL_DIRECTOR_TEMPERATURE", "0.5")
     monkeypatch.setenv("INFINI_VISUAL_REPAIR_TEMPERATURE", "0.12")
-    monkeypatch.setattr(vfx_stage, "VFX_LLM_DIRECTOR_TEMPERATURE", 0.5)
-    monkeypatch.setattr(vfx_stage, "VFX_LLM_REPAIR_TEMPERATURE", 0.12)
+    monkeypatch.setattr(vfx_stage_config, "VFX_LLM_DIRECTOR_TEMPERATURE", 0.5)
+    monkeypatch.setattr(vfx_stage_config, "VFX_LLM_REPAIR_TEMPERATURE", 0.12)
     return responses, requests
 
 
@@ -197,11 +203,11 @@ def test_three_stage_wire_and_conditional_repairs(wire_transport, fixture_name, 
     assert planned["debug"]["llmStageAccounting"]["gameplayAuthorCalls"] == 1
     compiled = compile_runtime_program(planned)
     compiled["debug"] = copy.deepcopy(planned["debug"])
-    responses.append({"schema": visual_stage.VISUAL_KIT_SCHEMA, "item": {}, "entities": [],
+    responses.append({"schema": visual_stage_contract.VISUAL_KIT_SCHEMA, "item": {}, "entities": [],
                       "animationPlan": "already valid animation"} if repair_needed else _visual_kit(compiled))
     if repair_needed:
         responses.append(_visual_patch(compiled))
-    visual = visual_stage.apply_visual_director(compiled, {}, {})
+    visual = visual_stage_stage.apply_visual_director(compiled, {}, {})
     assert visual["debug"]["llmStageAccounting"]["visualDirectorCalls"] == 1
     assert visual["debug"]["llmStageAccounting"]["visualRepairCalls"] == int(repair_needed)
     if repair_needed:
@@ -288,7 +294,7 @@ def test_single_format_repair_preserves_recoverable_design(wire_transport, stage
             if scenario == "empty":
                 patch.update(itemPatch=None, entitiesUpsert=[])
     else:
-        data = visual_stage._apply_kit(data, _visual_kit(data))
+        data = visual_stage_stage._apply_kit(data, _visual_kit(data))
         valid = _vfx_output(data)
         raw = json.dumps(valid).replace('"layer": "BeforeProjectiles"', '"layer": "Projectiles" if false else "BeforeProjectiles"', 1)
         patch = {"schema": VFX_REPAIR_PATCH_SCHEMA,
@@ -303,7 +309,7 @@ def test_single_format_repair_preserves_recoverable_design(wire_transport, stage
                 combine_stage.compile_and_validate_authored_runtime(result, {}, {}, "a+b",
                     run_stage=lambda _label, fn, *args, **kwargs: fn(*args, **kwargs))
         elif stage == "visual":
-            result = visual_stage.apply_visual_director(data, {}, {})
+            result = visual_stage_stage.apply_visual_director(data, {}, {})
         else:
             result = attach_vfx_manifest(data, "a+b", llm_director=vfx_transport.call_llm_vfx_director)
     names = {"gameplay": ["planner", "author_repair"], "visual": ["visual_director", "visual_repair"], "vfx": ["vfx_director", "vfx_repair"]}[stage]

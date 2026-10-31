@@ -6,8 +6,8 @@ import re
 
 import pytest
 
-from infini_local.pipelines.parent_stat_view import parent_stat_context
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+from infini_local.pipelines.context.stats import parent_stat_context
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 from prompt_packet_helpers import request_dossier, expand_native_source_references
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -98,7 +98,7 @@ def test_multiplier_operation_is_factor_not_a_bonus_percentage():
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
 def test_actual_author_request_uses_one_source_vocabulary_without_mutating_parent(monkeypatch, mode):
     from infini_local.core import llm_config
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from infini_local.pipelines.author.request import build_initial_author_request
     monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     a = {'name': 'Source sample', 'lifeRegen': 4, 'nativeEquipmentReference': equipment(410)}
     b = {'nativeBuffEffectReference': regeneration()}
@@ -173,7 +173,7 @@ def captured_stat_parents():
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
 def test_actual_native_prepare_stat_sections_drop_only_audit_metadata_in_author(monkeypatch, mode):
     from infini_local.core import llm_config
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from infini_local.pipelines.author.request import build_initial_author_request
     monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     a, b = captured_stat_parents()
     before = copy.deepcopy((a, b))

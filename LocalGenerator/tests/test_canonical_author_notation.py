@@ -33,8 +33,8 @@ def _explicit_calls(source):
 def test_provider_roundtrip_preserves_sparse_and_explicit_envelope_branches(monkeypatch, mode, fn):
     import json
     from jsonschema import Draft202012Validator
-    from infini_local.pipelines.author_item_contract import author_item_response_schema, project_provider_author_item_to_local
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from infini_local.pipelines.author.item_contract import author_item_response_schema, project_provider_author_item_to_local
+    from infini_local.pipelines.author.request import build_initial_author_request
     from test_codex_subscription_contract import _encode_nullable_fixture
     # Heavy serialized observers cover each distinct branch, not the registry x format product.
     shapes = {(cap.target_kinds == ("item_body",), bool(cap.params)) for cap in CAPABILITY_REGISTRY.values()}
@@ -98,8 +98,8 @@ def test_present_call_fields_are_never_ignored(field, value):
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_nullable_transport_does_not_erase_invalid_present_call_neighbours(monkeypatch, mode):
-    from infini_local.pipelines.author_item_contract import author_item_response_schema, project_provider_author_item_to_local
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from infini_local.pipelines.author.item_contract import author_item_response_schema, project_provider_author_item_to_local
+    from infini_local.pipelines.author.request import build_initial_author_request
     from test_codex_subscription_contract import _encode_nullable_fixture
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     request, _, _ = build_initial_author_request({}, {}, "invalid-call-envelope", model_name="offline")
@@ -449,7 +449,7 @@ def test_current_scoped_repair_preserves_original_bad_rows_and_frozen_lanes():
 
 def test_actual_initial_format_and_scoped_repair_builders_share_current_grammar(monkeypatch):
     import json
-    from infini_local.pipelines import llm_authoring_pipeline as pipeline
+    from infini_local.pipelines.author import request as pipeline
     from test_repair_gameplay_contract import _offline_gameplay_repair
     source = build_runtime_fixture("workbench_blade")
     for mode in ("json_object", "json_schema"):
@@ -584,7 +584,7 @@ def test_source_native_repair_can_create_implied_item_call_without_authored_targ
 
 def test_real_author_card_uses_one_explicit_call_envelope(monkeypatch):
     from infini_local.core.runtime_authoring.capability_registry import capability_provider_union
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from infini_local.pipelines.author.request import build_initial_author_request
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_object")
     request, _, _ = build_initial_author_request({}, {}, "current-call-grammar", model_name="offline")
     packet = request_dossier(request)

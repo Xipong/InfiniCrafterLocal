@@ -6,7 +6,8 @@ import pytest
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.visual_contract_schema import front_hand_sprite_errors
-from infini_local.pipelines import visual_generation_pipeline as visual
+import infini_local.pipelines.visual.contract as visual_contract
+import infini_local.pipelines.visual.stage as visual_stage
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 from test_front_hand_movement import fixture, entity, saved_hand_wire
@@ -14,7 +15,7 @@ from test_low_level_three_stage_pipeline import _visual_kit, wire_transport
 
 
 def test_real_author_visual_frozen_grip_repair_survives_strict_delivery(wire_transport):
-    from infini_local.pipelines import llm_authoring_pipeline
+    from infini_local.pipelines.author import request as llm_authoring_pipeline
 
     author, _ = fixture()
     responses, requests = wire_transport
@@ -29,10 +30,10 @@ def test_real_author_visual_frozen_grip_repair_survives_strict_delivery(wire_tra
                 visualIdentity="bronze blade, red handle", preferredCanvasSize=32,
                 renderSizePx=41, forwardAngleDegrees=17)
     corrected = dict(body, grip={"normalizedX": .2, "normalizedY": .6})
-    responses.extend([kit, {"schema": visual.VISUAL_REPAIR_PATCH_SCHEMA,
+    responses.extend([kit, {"schema": visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,
         "itemPatch": None, "entitiesUpsert": [corrected], "entityIdsDelete": [],
         "entityIndicesDelete": [], "note": "selected grip only"}])
-    projected = visual.apply_visual_director(compiled, {}, {})
+    projected = visual_stage.apply_visual_director(compiled, {}, {})
     delivered = sanitize_recipe_for_delivery(projected)
     assert not responses
     assert [r["_infini_stage"] for r in requests] == ["planner", "visual_director", "visual_repair"]

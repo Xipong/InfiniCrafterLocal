@@ -17,7 +17,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     RUNTIME_WIRE_SCHEMA,
 )
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.vfx_manifest import validate_vfx_manifest_wire
+from infini_local.core.vfx.validation import validate_vfx_manifest_wire
 
 
 # Exact lower-camel nested DTO surfaces accepted by strict C# v5 deserialization.
@@ -412,7 +412,7 @@ def _cache_assets_ready(data: dict[str, Any]) -> bool:
     requires its selected producer's ready
     status; ingredient canvas and alpha remain owned by the delivery gate.
     """
-    from infini_local.pipelines.visual_delivery_gate import visual_delivery_report
+    from infini_local.pipelines.visual.delivery import visual_delivery_report
 
     return bool(visual_delivery_report(data, check_backend_config=False)["ok"])
 

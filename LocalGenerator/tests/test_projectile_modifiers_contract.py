@@ -50,7 +50,7 @@ def entity(wire, fn):
     ("homing", "json_schema", True),
 ])
 def test_actual_visual_and_repair_packets_preserve_exact_modifier_owner(wire_transport, monkeypatch, fn, format_mode, repair):
-    from infini_local.pipelines import visual_generation_pipeline as visual
+    import infini_local.pipelines.visual.request as visual_request
 
     data = compile_runtime_program(source(fn))
     frozen = deepcopy(data)
@@ -58,7 +58,7 @@ def test_actual_visual_and_repair_packets_preserve_exact_modifier_owner(wire_tra
     responses.append({})
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", format_mode)
     kwargs = {"repair_errors": [{"path": "$.item.renderSizePx", "message": "required"}], "previous": {"item": {}}, "repair_scope": {}} if repair else {}
-    visual._request_visual_kit(data, {}, {}, **kwargs)
+    visual_request._request_visual_kit(data, {}, {}, **kwargs)
     packet = request_dossier(sent[-1])
     rows = packet["runtimeEntitiesReadOnly" if repair else "runtimeEntities"]
     members = (*PROJECTILE_MODIFIER_COMPONENTS.values(), "whipUsesOwnerGravity")

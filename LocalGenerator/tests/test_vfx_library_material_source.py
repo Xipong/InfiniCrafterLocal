@@ -1,10 +1,11 @@
 """Native texture selection reuses material controls without requesting artwork."""
 import pytest
-from infini_local.core import vfx_manifest as vfx
-from infini_local.core.vfx_material_contract import LIBRARY_PARTICLE_TEXTURES
+import infini_local.core.vfx.projection as vfx_projection
+import infini_local.core.vfx.validation as vfx_validation
+from infini_local.core.vfx.materials import LIBRARY_PARTICLE_TEXTURES
 from tests.vfx_material_fixtures import _data, _sprite, _path, _history
 from tests.vfx_image_fixtures import offline_backend
-from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+from infini_local.pipelines.visual.assets import build_visual_asset_plan
 
 
 @pytest.mark.parametrize("factory,payload", [(_sprite,"element"), (_path,"path"), (_history,"trail")])
@@ -14,10 +15,10 @@ def test_native_material_source_has_no_generated_png_dependency(factory, payload
     before = build_visual_asset_plan(data)
     raw = factory(data)
     raw["slots"][0][payload]["texture"] = {"source": "library", "assetId": texture_id, "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
-    assert vfx.validate_vfx_director_output(raw, data)["ok"]
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "native_material")
-    assert vfx.validate_vfx_manifest_wire(data)["ok"]
-    dependencies = vfx.vfx_png_dependencies(data)
+    assert vfx_validation.validate_vfx_director_output(raw, data)["ok"]
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "native_material")
+    assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
+    dependencies = vfx_validation.vfx_png_dependencies(data)
     assert dependencies == {"dependencies": [], "errors": []}
     assert build_visual_asset_plan(data) == before
     assert data["vfxManifest"].get("assets", []) == []
@@ -28,17 +29,18 @@ def test_library_id_is_not_a_fallback_for_invalid_or_missing_generated_asset(sou
     data = _data()
     raw = _sprite(data)
     raw["slots"][0]["element"]["texture"] = {"source": source, "assetId": texture_id, "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
-    assert not vfx.validate_vfx_director_output(raw, data)["ok"]
+    assert not vfx_validation.validate_vfx_director_output(raw, data)["ok"]
 
 
 def test_native_material_requests_zero_vfx_image_calls_and_no_png_delivery_error(offline_backend):
     from tests.vfx_image_fixtures import _data as image_data
-    from infini_local.pipelines import visual_sprite_generation, visual_delivery_gate
+    from infini_local.pipelines.images import stage as visual_sprite_generation
+    from infini_local.pipelines.visual import delivery as visual_delivery_gate
     calls, _ = offline_backend
     data = image_data([])
     raw = _sprite(data)
     raw["slots"][0]["element"]["texture"] = {"source": "library", "assetId": "shineFlare", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "native_material_images")
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "native_material_images")
     result = visual_sprite_generation.maybe_generate_visual_assets(data)
     assert all("_vfx_" not in row["id"] for row in calls)
     assert not any(row["role"].startswith("vfx:") for row in build_visual_asset_plan(result))

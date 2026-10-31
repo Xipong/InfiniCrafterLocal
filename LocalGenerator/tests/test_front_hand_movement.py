@@ -235,7 +235,7 @@ def test_non_damage_hand_animation_does_not_select_style_class_visibility_or_met
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
 def test_real_author_packet_offers_separate_hand_choices_not_retired_profiles(monkeypatch, mode):
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from infini_local.pipelines.author.request import build_initial_author_request
     from prompt_packet_helpers import request_dossier
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     request, _, _ = build_initial_author_request({}, {}, "unrelated", model_name="test-model")

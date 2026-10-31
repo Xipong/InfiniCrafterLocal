@@ -4,8 +4,8 @@ from urllib.error import HTTPError
 
 import pytest
 
-from infini_local.pipelines import llm_profiles
-from infini_local.pipelines import llm_transport
+from infini_local.pipelines.transport import profiles as llm_profiles
+from infini_local.pipelines.transport import client as llm_transport
 
 
 def test_openrouter_auth_diagnostics_are_exposed_and_fail_fast(monkeypatch):

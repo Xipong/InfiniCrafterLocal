@@ -7,9 +7,14 @@ import copy
 import pytest
 from pathlib import Path
 from PIL import Image, ImageDraw
-from infini_local.pipelines import sprite_postprocess, visual_asset_manifest, visual_sprite_generation, visual_delivery_gate, pipeline_visual_config
+from infini_local.pipelines.images import postprocess as sprite_postprocess
+from infini_local.pipelines.images import manifest as visual_asset_manifest
+from infini_local.pipelines.images import stage as visual_sprite_generation
+from infini_local.pipelines.visual import delivery as visual_delivery_gate
+from infini_local.core.images import config as pipeline_visual_config
 from infini_local.services.sdcpp_service import ImageRequestGate
-from infini_local.core.vfx_manifest import VFX_DIRECTOR_SCHEMA, _compile_manifest
+from infini_local.core.vfx.contract import VFX_DIRECTOR_SCHEMA
+from infini_local.core.vfx.projection import _compile_manifest
 from infini_local.web.vfx_debug_routes import _sample_data
 
 def _request(asset_id: str = "grain", *, layout: str = "cutout", canvas: int = 32) -> dict:

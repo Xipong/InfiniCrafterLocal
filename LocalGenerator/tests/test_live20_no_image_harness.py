@@ -10,9 +10,10 @@ from PIL import Image
 import pytest
 
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.core.vfx_manifest import _compile_manifest, validate_vfx_director_output
-from infini_local.pipelines import visual_delivery_gate
-from infini_local.pipelines.visual_delivery_gate import visual_delivery_report
+from infini_local.core.vfx.projection import _compile_manifest
+from infini_local.core.vfx.validation import validate_vfx_director_output
+from infini_local.pipelines.visual import delivery as visual_delivery_gate
+from infini_local.pipelines.visual.delivery import visual_delivery_report
 from infini_local.qa.live_no_image_fixture import (
     hydrate_no_image_fixture_assets,
     write_no_image_fixture_png,
@@ -56,8 +57,8 @@ def test_campaign_placed_body_uses_authenticated_qa_root_png(tmp_path):
 @pytest.mark.parametrize("mode", ["runtime_geometry", "no_asset", "baked_sprite"])
 def test_campaign_normalizes_prompts_only_for_image_jobs(tmp_path, mode):
     from typing import Any, cast
-    from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
-    from infini_local.pipelines.visual_prompt_contracts import asset_negative_prompt, normalize_asset_prompt
+    from infini_local.pipelines.visual.assets import build_visual_asset_plan
+    from infini_local.pipelines.images.prompts import asset_negative_prompt, normalize_asset_prompt
 
     data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
     data.update(id="qa-prompt-boundary", visual={
@@ -227,8 +228,9 @@ def test_campaign_fixture_uses_canonical_serving_root(tmp_path, monkeypatch, out
 @pytest.mark.parametrize("selection", ["baked_history", "projectile_body", "reuse_item_icon", "item_body"])
 def test_campaign_execution_control_preserves_selected_owner_and_qa_evidence(campaign_case, tmp_path, monkeypatch, selection):
     from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
-    from infini_local.core.vfx_manifest import vfx_png_dependencies
-    from infini_local.pipelines import combine_pipeline, visual_sprite_generation as sprites
+    from infini_local.core.vfx.validation import vfx_png_dependencies
+    from infini_local.pipelines import combine_pipeline
+    from infini_local.pipelines.images import stage as sprites
     from infini_local.qa.live_no_image_fixture import synthetic_no_image_execution_control
     import hashlib
 

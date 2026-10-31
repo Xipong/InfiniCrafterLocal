@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from infini_local.pipelines.parent_context_cards import parent_context_for_stage, raw_parent_card_for_llm
-from infini_local.pipelines.native_attack_tables import unpack_attack_tables
+from infini_local.pipelines.context.cards import parent_context_for_stage, raw_parent_card_for_llm
+from infini_local.pipelines.context.attack_tables import unpack_attack_tables
 from prompt_packet_helpers import request_dossier, expand_native_source_references
 
 
@@ -25,7 +25,7 @@ def _assert_only_item_regen_units_changed(output, original):
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_actual_author_briefs_precede_details_and_preserve_all_gameplay(monkeypatch, mode):
     from infini_local.core import llm_config
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from infini_local.pipelines.author.request import build_initial_author_request
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     a = _native()
     b = {"name": "Material", "damage": 0, "consumable": False, "maxStack": 9999, "tooltipLines": ["literal"]}
@@ -45,7 +45,7 @@ def test_actual_author_briefs_precede_details_and_preserve_all_gameplay(monkeypa
     old.pop("draw")
     # Includes complete conditions, collision/target admission, clocks and gaps;
     # no reduced graph based on a guessed weapon family or inferred DPS.
-    from infini_local.pipelines.native_attack_behavior_view import ordered_attack_context
+    from infini_local.pipelines.context.attack_behavior import ordered_attack_context
     assert current == ordered_attack_context(old)
     assert (a, b) == before
 
@@ -82,7 +82,7 @@ def test_unknown_draw_kept_and_parent_names_do_not_select_projection(stage, as_l
     else:
         program["layers"][0]["tint"] = {"futureBinding": "motion.programs"}
     if stage in {"visual", "vfx"}:
-        from infini_local.pipelines.parent_presentation_context import presentation_attack_reference
+        from infini_local.pipelines.context.presentation import presentation_attack_reference
         assert presentation_attack_reference(attack, stage=stage) == attack
     source["raw"]["directProjectile"]["attackReference"] = attack
     parents = [{"packet": source}] if as_list else {"A": {"packet": source}}
@@ -102,7 +102,7 @@ def test_unknown_draw_kept_and_parent_names_do_not_select_projection(stage, as_l
                                      "future_program", "future_row", "future_coverage", "future_admission"])
 def test_unknown_native_source_remains_literal_through_actual_author(monkeypatch, mode, mutation):
     from infini_local.core import llm_config
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from infini_local.pipelines.author.request import build_initial_author_request
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     item = _native()
     # Already-produced behavior view isolates the stage boundary from capture
@@ -144,7 +144,7 @@ def test_visual_vfx_keep_complete_drawing_but_briefs_never_claim_final_palette()
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_real_arrow_selected_motion_and_raw_refusal_reach_actual_author(monkeypatch, mode):
     from infini_local.core import llm_config
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from infini_local.pipelines.author.request import build_initial_author_request
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     arrow = json.loads((Path(__file__).parent / "fixtures/native_wooden_arrow_parent_capture.json").read_text())
     before = copy.deepcopy(arrow)
@@ -189,7 +189,7 @@ def test_real_arrow_selected_motion_and_raw_refusal_reach_actual_author(monkeypa
     assert predicates["b49427"]["inputs"] == ["(ldflda(Entity.velocity,this)).Vector2.Y", "-16"]
     assert predicates["b49461"]["inputs"] == ["(ldflda(Entity.velocity,this)).Vector2.Y", "16"]
     assert len(definitions) == 0
-    from infini_local.pipelines.native_attack_behavior_view import ordered_attack_context
+    from infini_local.pipelines.context.attack_behavior import ordered_attack_context
     assert reference == ordered_attack_context(unpack_attack_tables(raw_parent_card_for_llm(arrow)["raw"]["directProjectile"]["attackReference"]))
     assert arrow == before
 
@@ -197,7 +197,7 @@ def test_real_arrow_selected_motion_and_raw_refusal_reach_actual_author(monkeypa
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
 def test_current_native_integration_slice_remains_conditional_in_author_request(monkeypatch, mode):
     from infini_local.core import llm_config
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from infini_local.pipelines.author.request import build_initial_author_request
     monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     capture = json.loads((Path(__file__).parent / 'fixtures/native_position_integration_capture.json').read_text())
     parents = []

@@ -18,13 +18,10 @@ from infini_local.core.runtime_authoring.program_schema import (
     strict_author_shape_report,
     strict_repair_shape_report,
 )
-from infini_local.pipelines.author_item_contract import (
-    author_item_provider_response_schema,
-    author_item_response_schema,
-)
-from infini_local.pipelines import llm_authoring_pipeline as pipeline
-from infini_local.pipelines.generated_parent_summary import generated_parent_summary_from_data
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+from infini_local.pipelines.author.item_contract import author_item_provider_response_schema, author_item_response_schema
+from infini_local.pipelines.author import request as pipeline
+from infini_local.pipelines.context.generated_summary import generated_parent_summary_from_data
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture as _runtime_fixture
 from infini_local.storage.world_storage import atomic_write_json, sanitize_recipe_for_delivery
 
@@ -37,7 +34,7 @@ def build_runtime_fixture(name):
 
 @pytest.mark.parametrize("length,accepted", [(80, True), (81, False)])
 def test_fresh_item_name_has_80_unicode_character_boundary(length, accepted):
-    from infini_local.pipelines.gameplay_stage import authored_item_validation_report
+    from infini_local.pipelines.author.stage import authored_item_validation_report
 
     item = build_runtime_fixture("workbench_blade")
     item["name"] = "🌟" * length

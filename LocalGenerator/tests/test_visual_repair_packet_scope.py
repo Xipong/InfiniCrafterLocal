@@ -3,12 +3,17 @@ import copy
 
 import pytest
 from jsonschema import Draft202012Validator
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+from infini_local.core.provider_schema import _provider_strict_projection
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 
 from prompt_packet_helpers import request_dossier
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-from infini_local.pipelines import visual_generation_pipeline as visual
+import infini_local.pipelines.visual.context as visual_context
+import infini_local.pipelines.visual.contract as visual_contract
+import infini_local.pipelines.visual.repair_scope as visual_repair_scope
+import infini_local.pipelines.visual.request as visual_request
+import infini_local.pipelines.visual.stage as visual_stage
 from test_low_level_three_stage_pipeline import _visual_kit, wire_transport
 
 
@@ -19,9 +24,9 @@ def test_size_leaf_sender_has_only_permitted_grammar_and_frozen_art(wire_transpo
     previous = _visual_kit(data)
     previous["item"]["renderSizePx"] = None
     responses, requests = wire_transport
-    patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA, itemPatch={"renderSizePx": 48}, note="size only")
+    patch = dict(schema=visual_contract.VISUAL_REPAIR_PATCH_SCHEMA, itemPatch={"renderSizePx": 48}, note="size only")
     responses.extend([previous, patch])
-    result = visual.apply_visual_director(data, {"name": "parent A"}, {"name": "parent B"})
+    result = visual_stage.apply_visual_director(data, {"name": "parent A"}, {"name": "parent B"})
     packet = request_dossier(requests[1])
     schema = packet["responseSchema"]
     assert set(schema["properties"]) == {"schema", "note", "itemPatch"}
@@ -52,11 +57,11 @@ def test_partial_owner_patch_retains_valid_siblings_and_exact_schema(wire_transp
     else:
         previous["equipOverlay"] = dict(prompt="badge", silhouette="badge", visualIdentity="badge", preferredCanvasSize=32, accessoryMount="bad")
         operation, leaf, value = "equipOverlayPatch", "accessoryMount", "back"
-    patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA, note="one exact leaf")
+    patch = dict(schema=visual_contract.VISUAL_REPAIR_PATCH_SCHEMA, note="one exact leaf")
     patch[operation] = [{"entityId": previous["entities"][1]["entityId"], leaf: value}] if target == "entity" else {leaf: value}
     responses, requests = wire_transport
     responses.extend([previous, patch])
-    result = visual.apply_visual_director(data, {}, {})
+    result = visual_stage.apply_visual_director(data, {}, {})
     packet = request_dossier(requests[1])
     schema = packet["responseSchema"]
     assert set(schema["properties"]) == {"schema", "note", operation}
@@ -80,12 +85,12 @@ def test_hostile_complete_patch_still_hits_authoritative_frozen_filter(wire_tran
     data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
     previous = _visual_kit(data)
     previous["item"]["renderSizePx"] = None
-    patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA, note="hostile siblings",
+    patch = dict(schema=visual_contract.VISUAL_REPAIR_PATCH_SCHEMA, note="hostile siblings",
                  itemPatch={"renderSizePx": 48, "prompt": "rewrite", "grip": {"normalizedX": 0.5, "normalizedY": 0.5}},
                  entitiesUpsert=[dict(previous["entities"][1], scale=4)], entityIdsDelete=["chained_door"], entityIndicesDelete=[0])
     responses, requests = wire_transport
     responses.extend([previous, patch])
-    result = visual.apply_visual_director(data, {}, {})
+    result = visual_stage.apply_visual_director(data, {}, {})
     assert result["visualKit"] == dict(previous, item=dict(previous["item"], renderSizePx=48))
     assert result["debug"]["visualRepairFilterAudit"]["ignoredChanges"]
     assert not Draft202012Validator(request_dossier(requests[1])["responseSchema"]).is_valid(patch)
@@ -95,16 +100,16 @@ def test_hostile_complete_patch_still_hits_authoritative_frozen_filter(wire_tran
 def test_whole_response_repair_keeps_complete_contract_and_raw_source(wire_transport, monkeypatch, mode):
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
-    source = visual.MalformedVisualDirectorOutput(raw_text='{"schema":', error="syntax")
+    source = visual_contract.MalformedVisualDirectorOutput(raw_text='{"schema":', error="syntax")
     errors = [{"path": "$", "message": "malformed_json"}]
     ids = [row["id"] for row in data["runtimeProgram"]["entities"]]
-    scope = visual._build_visual_repair_scope(source, errors, ids, "item")
+    scope = visual_repair_scope._build_visual_repair_scope(source, errors, ids, "item")
     responses, requests = wire_transport
     responses.append({})
-    visual._request_visual_kit(data, {}, {}, repair_errors=errors, previous=source, repair_scope=scope)
+    visual_request._request_visual_kit(data, {}, {}, repair_errors=errors, previous=source, repair_scope=scope)
     packet = request_dossier(requests[0])
-    expected = visual._visual_repair_schema(ids, False, "item")
-    assert packet["responseSchema"] == (visual._provider_strict_projection(expected) if mode == "json_schema" else expected)
+    expected = visual_contract._visual_repair_schema(ids, False, "item")
+    assert packet["responseSchema"] == (_provider_strict_projection(expected) if mode == "json_schema" else expected)
     assert packet["malformedRawText"] == source.raw_text
     assert "parentFactsReadOnly" in packet
     assert "preserve all recoverable visual fields" in requests[0]["messages"][0]["content"]
@@ -115,11 +120,11 @@ def test_malformed_entity_collection_keeps_complete_replacement_domain(wire_tran
     data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
     accepted = _visual_kit(data)
     broken = dict(accepted, entities=bad_rows)
-    patch = {"schema": visual.VISUAL_REPAIR_PATCH_SCHEMA, "note": "replace malformed collection",
+    patch = {"schema": visual_contract.VISUAL_REPAIR_PATCH_SCHEMA, "note": "replace malformed collection",
              "entitiesUpsert": accepted["entities"]}
     responses, requests = wire_transport
     responses.extend([broken, patch])
-    result = visual.apply_visual_director(data, {}, {})
+    result = visual_stage.apply_visual_director(data, {}, {})
     assert result["visualKit"] == accepted
     assert Draft202012Validator(request_dossier(requests[1])["responseSchema"]).is_valid(patch)
     assert not responses
@@ -134,11 +139,11 @@ def test_malformed_entity_identity_reaches_authorized_replacement_repair(wire_tr
     broken = copy.deepcopy(accepted)
     replacement = copy.deepcopy(accepted["entities"][1])
     broken["entities"][1]["entityId"] = bad_id
-    patch = {"schema": visual.VISUAL_REPAIR_PATCH_SCHEMA, "note": "replace malformed identity",
+    patch = {"schema": visual_contract.VISUAL_REPAIR_PATCH_SCHEMA, "note": "replace malformed identity",
              "entitiesUpsert": [replacement], "entityIndicesDelete": [1]}
     responses, requests = wire_transport
     responses.extend([broken, patch])
-    result = visual.apply_visual_director(data, {}, {})
+    result = visual_stage.apply_visual_director(data, {}, {})
     packet = request_dossier(requests[1])
     assert packet["repairScope"]["deletableEntityIndices"] == [1]
     retained = [*packet["brokenFragments"]["entities"], *packet["validGeneratedContext"]["entities"]]
@@ -169,7 +174,7 @@ def test_actual_http_sender_preserves_calibration_and_size_dependencies(mode):
         assert references["entities"] == [{"id": row["id"], "visual": row["visual"]} for row in expected["runtimeProgram"]["entities"]]
         assert full["brokenFragments"]["item"] == evidence["broken"]["item"]
         assert full["acceptedPresentationMechanicsReadOnly"]["gameplay"]["itemScale"] == evidence["inputs"]["data"]["gameplay"]["itemScale"]
-        assert full["runtimeEntitiesReadOnly"] == visual._runtime_card(evidence["inputs"]["data"])
+        assert full["runtimeEntitiesReadOnly"] == visual_context._runtime_card(evidence["inputs"]["data"])
         for route in ROUTES:
             observed = capture.wire(packet, route)
             assert json.loads(observed["body"]) == observed["packet"]

@@ -13,10 +13,10 @@ import sys
 import pytest
 
 from infini_local.core import llm_config
-from infini_local.pipelines import llm_profiles
-from infini_local.pipelines import llm_provider_wire
+from infini_local.pipelines.transport import profiles as llm_profiles
+from infini_local.pipelines.transport import provider_wire as llm_provider_wire
 from infini_local.core.llm_prompt_cache import PROMPT_CACHE_METADATA_KEY, with_prompt_cache_prefix
-from infini_local.pipelines import llm_transport as llm
+from infini_local.pipelines.transport import client as llm
 from infini_local.services import codex_auth as auth, codex_text_backend as backend
 
 
@@ -342,7 +342,7 @@ def test_framing_authority_version_is_in_identity_and_survives_process_restart()
     digest = hashlib.sha256(json.dumps(expected, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     key = llm_provider_wire._prompt_cache_identity(source, source["model"], context=CONTEXT)
     assert key == "infini-" + digest[:32]
-    script = "from infini_local.pipelines.llm_provider_wire import _prompt_cache_identity; print(_prompt_cache_identity(" + repr(source) + ", " + repr(source["model"]) + ", context=" + repr(CONTEXT) + "))"
+    script = "from infini_local.pipelines.transport.provider_wire import _prompt_cache_identity; print(_prompt_cache_identity(" + repr(source) + ", " + repr(source["model"]) + ", context=" + repr(CONTEXT) + "))"
     child = subprocess.run([sys.executable, "-c", script], cwd=Path(__file__).resolve().parents[1],
                            env={**os.environ, "PYTHONHASHSEED": "71"}, text=True, capture_output=True, check=True, timeout=30)
     assert child.stdout.strip() == key
@@ -350,7 +350,7 @@ def test_framing_authority_version_is_in_identity_and_survives_process_restart()
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_current_author_builder_explicit_opt_in_preserves_all_fields_and_dynamic_parents(monkeypatch, native_wire, format_mode):
-    from infini_local.pipelines import llm_authoring_pipeline as author
+    from infini_local.pipelines.author import request as author
 
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", format_mode)
     packets = []

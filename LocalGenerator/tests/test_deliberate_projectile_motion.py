@@ -5,7 +5,7 @@ import pytest
 
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.pipelines.llm_authoring_pipeline import try_llm_plan
+from infini_local.pipelines.author.request import try_llm_plan
 from infini_local.qa.capability_witnesses import build_capability_witness
 from test_low_level_three_stage_pipeline import wire_transport  # noqa: F401
 

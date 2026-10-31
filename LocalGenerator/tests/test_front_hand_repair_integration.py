@@ -47,7 +47,7 @@ def test_missing_axis_repair_creates_only_exact_dependency_not_retired_bundle(so
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("selected_axis", ["initial", "cursor", "facing", "velocity"])
 def test_invalid_axis_serialized_repair_offers_exact_choices_and_freezes_siblings(monkeypatch, mode, selected_axis):
-    from infini_local.pipelines import llm_authoring_pipeline as stage
+    from infini_local.pipelines.author import request as stage
     from prompt_packet_helpers import request_dossier
     from repair_test_helpers import repair_with_response
     from test_low_level_three_stage_pipeline import _empty_gameplay_patch

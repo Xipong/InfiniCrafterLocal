@@ -54,7 +54,7 @@ def test_machine_manifest_has_exact_registry_identity(key, identity, registry):
 @pytest.mark.parametrize("fn", [cap.name for cap in CAPABILITY_REGISTRY.values() if cap.author_visible])
 def test_registered_capability_reaches_provider_and_wire_without_mutation(fn):
     from jsonschema import Draft202012Validator
-    from infini_local.pipelines.author_item_contract import author_item_response_schema
+    from infini_local.pipelines.author.item_contract import author_item_response_schema
 
     item = build_capability_witness(fn)
     before = deepcopy(item)
@@ -145,7 +145,7 @@ def test_event_registry_mutation_reaches_validator_and_repair_projection(monkeyp
 
 @pytest.mark.parametrize("name", list(EVENT_KIND_REGISTRY))
 def test_author_event_cards_preserve_all_nonempty_producer_conditions(name):
-    from infini_local.pipelines.llm_authoring_prompt import sharp_engine_fn_catalog_for_llm
+    from infini_local.pipelines.author.prompt import sharp_engine_fn_catalog_for_llm
 
     source = EVENT_KIND_REGISTRY[name].prompt_card()
     rows = [row for row in sharp_engine_fn_catalog_for_llm()["events"] if row["event"] == name]

@@ -6,12 +6,16 @@ import copy
 import pytest
 
 from prompt_packet_helpers import request_dossier
-from infini_local.core import llm_config, vfx_manifest as vfx
+from infini_local.core import llm_config
+import infini_local.pipelines.vfx.prompt as vfx_prompt
+import infini_local.pipelines.vfx.stage as vfx_stage
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.pipelines import vfx_generation_pipeline as stage
-from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
-from infini_local.pipelines import visual_generation_pipeline as visual
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+from infini_local.pipelines.vfx import request as stage
+from infini_local.pipelines.author.request import build_initial_author_request
+import infini_local.pipelines.visual.contract as visual_contract
+import infini_local.pipelines.visual.request as visual_request
+import infini_local.pipelines.visual.stage as visual_stage
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_low_level_three_stage_pipeline import _accepted_visual_data, _visual_kit, _vfx_output, wire_transport
@@ -38,17 +42,17 @@ def test_provider_instructions_stay_static_while_recipe_and_parent_facts_change(
         if director == "visual":
             kwargs = {} if not repair else {
                 "repair_errors": [{"path": "$.item.inventoryScale", "message": "invalid"}],
-                "previous": {"schema": visual.VISUAL_KIT_SCHEMA, "item": {"inventoryScale": 99}, "entities": []},
+                "previous": {"schema": visual_contract.VISUAL_KIT_SCHEMA, "item": {"inventoryScale": 99}, "entities": []},
                 "repair_scope": {"fieldPermissions": {"itemPaths": ["inventoryScale"]}},
             }
-            visual._request_visual_kit(data, parent, {}, **kwargs)
+            visual_request._request_visual_kit(data, parent, {}, **kwargs)
         else:
             kwargs = {} if not repair else {
                 "repair_errors": [{"path": "$.slots[0].alpha", "message": "invalid"}],
                 "previous": _vfx_output(data),
                 "repair_scope": {"fieldPermissions": {"slots": [{"slotId": "slot_0", "paths": ["alpha"]}]}},
             }
-            vfx._request(stage.call_llm_vfx_director, vfx._prompt_packet(data, parent, {}), **kwargs)
+            vfx_stage._request(stage.call_llm_vfx_director, vfx_prompt._prompt_packet(data, parent, {}), **kwargs)
         request = sent[-1]
         assert [row["role"] for row in request["messages"]] == ["system", "developer", "user"]
         assert request["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
@@ -97,11 +101,11 @@ def test_catalog_revision_reaches_outgoing_instruction_not_recipe_tail(wire_tran
     responses, sent = wire_transport
     data = _accepted_visual_data("door_on_chain")
     responses.extend([{}, {}])
-    visual._request_visual_kit(data, {}, {})
-    catalog = copy.deepcopy(visual.visual_asset_mode_catalog())
+    visual_request._request_visual_kit(data, {}, {})
+    catalog = copy.deepcopy(visual_request.visual_asset_mode_catalog())
     catalog[0]["runtimeEffect"] += " Explicit catalog revision."
-    monkeypatch.setattr(visual, "visual_asset_mode_catalog", lambda: catalog)
-    visual._request_visual_kit(data, {}, {})
+    monkeypatch.setattr(visual_request, "visual_asset_mode_catalog", lambda: catalog)
+    visual_request._request_visual_kit(data, {}, {})
     assert sent[0]["messages"][1]["content"] != sent[1]["messages"][1]["content"]
     assert sent[0]["messages"][2]["content"] == sent[1]["messages"][2]["content"]
     assert request_dossier(sent[1])["assetModeCatalog"] == catalog
@@ -122,7 +126,7 @@ def test_visual_preserves_literal_synthesis_without_promoting_gameplay_intent(wi
         }
         before = copy.deepcopy(data)
         responses.append({})
-        visual._request_visual_kit(data, {}, {})
+        visual_request._request_visual_kit(data, {}, {})
         packet = request_dossier(sent[-1])
         assert packet["item"] == {"name": data["name"], "realization": {}, "literalSynthesis": synthesis}
         assert "UNREALIZED_GAMEPLAY_INTENT" not in str(sent[-1]["messages"])
@@ -144,7 +148,7 @@ def test_visual_does_not_invent_literal_synthesis_from_missing_or_malformed_advi
     data["concept"] = concept
     before = copy.deepcopy(data)
     responses.append({})
-    visual._request_visual_kit(data, {}, {})
+    visual_request._request_visual_kit(data, {}, {})
     assert "literalSynthesis" not in request_dossier(sent[0])["item"]
     assert data == before and not responses
 
@@ -158,7 +162,7 @@ def test_visual_receives_authored_hitbox_curve_without_selecting_sprite_scale(wi
     before = copy.deepcopy(data)
     responses, sent = wire_transport
     responses.append({})
-    visual._request_visual_kit(data, {}, {})
+    visual_request._request_visual_kit(data, {}, {})
     packet = request_dossier(sent[0])
     entity = next(row for row in packet["runtimeEntities"] if "hitboxCurve" in row)
     assert entity["hitboxCurve"]["startScale"] == 0.25
@@ -190,7 +194,7 @@ def test_physical_geometry_is_read_only_guidance_and_can_have_no_vfx_slots(wire_
     authored["slots"] = []
     responses, sent = wire_transport
     responses.extend([raw, authored])
-    projected = visual.apply_visual_director(beam, {}, {})
+    projected = visual_stage.apply_visual_director(beam, {}, {})
     packet = request_dossier(sent[0])
     entity = next(row for row in packet["runtimeEntities"] if "beamGeometry" in row)
     assert entity["beamGeometry"]["lengthPx"] == 16.0
@@ -200,7 +204,7 @@ def test_physical_geometry_is_read_only_guidance_and_can_have_no_vfx_slots(wire_
     assert entity["controller"] == {}
     if not base_flight:
         assert entity["attachment"] == before["runtimeProgram"]["entities"][1]["attachment"]
-    final = vfx.attach_vfx_manifest(projected, "beam-geometry", llm_director=stage.call_llm_vfx_director)
+    final = vfx_stage.attach_vfx_manifest(projected, "beam-geometry", llm_director=stage.call_llm_vfx_director)
     surface = request_dossier(sent[1])["runtimeSurface"]
     assert "beam" in next(row["sources"] for row in surface["texturedPathSources"] if row["entityId"] == "witness_entity")
     assert final["vfxManifest"]["slots"] == []
@@ -220,9 +224,9 @@ def test_visual_style_changes_advisory_system_only(wire_transport, monkeypatch):
     responses, sent = wire_transport
     responses.extend([{}, {}])
     monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Default", raising=False)
-    visual._request_visual_kit(data, {}, {})
+    visual_request._request_visual_kit(data, {}, {})
     monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Terraria Like", raising=False)
-    visual._request_visual_kit(data, {}, {})
+    visual_request._request_visual_kit(data, {}, {})
     assert "Terraria Like art direction" in sent[1]["messages"][0]["content"]
     assert sent[0]["messages"][1:] == sent[1]["messages"][1:]
     assert sent[0]["response_format"] == sent[1]["response_format"]
@@ -231,7 +235,7 @@ def test_visual_style_changes_advisory_system_only(wire_transport, monkeypatch):
 def test_invalid_visual_style_is_rejected_by_its_visual_consumer(wire_transport, monkeypatch):
     monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Unknown", raising=False)
     with pytest.raises(ValueError, match="INFINI_PROMPT_STYLE"):
-        visual._request_visual_kit(_accepted_visual_data("door_on_chain"), {}, {})
+        visual_request._request_visual_kit(_accepted_visual_data("door_on_chain"), {}, {})
     assert wire_transport[1] == [], "invalid style must fail before provider transport"
 
 
@@ -244,9 +248,9 @@ def test_generated_parent_visual_calibration_stays_in_visual_tail_not_gameplay(w
     data = _accepted_visual_data("door_on_chain")
     responses, sent = wire_transport
     responses.extend([{}, {}])
-    visual._request_visual_kit(data, parent, {})
+    visual_request._request_visual_kit(data, parent, {})
     parent["generatedData"]["visual"]["renderSizePx"] = 48
-    visual._request_visual_kit(data, parent, {})
+    visual_request._request_visual_kit(data, parent, {})
     packets = [request_dossier(request)["parents"]["parentA"]["packet"] for request in sent]
     assert packets[0]["raw"]["generatedParent"]["visual"] == {"renderSizePx": 47, "preferredCanvasSize": 32}
     assert packets[1]["raw"]["generatedParent"]["visual"]["renderSizePx"] == 48
@@ -284,13 +288,13 @@ def test_parent_reference_never_invents_pixels_from_gameplay_bounds(defect):
 
 
 def test_public_visual_schemas_share_owner_catalogs_without_per_token_cases():
-    director = visual.visual_response_schema(["item", "body"], True, item_body_id="item")["properties"]
-    repair = visual.visual_repair_schema(["item", "body"], True, item_body_id="item")["properties"]
+    director = visual_contract.visual_response_schema(["item", "body"], True, item_body_id="item")["properties"]
+    repair = visual_contract.visual_repair_schema(["item", "body"], True, item_body_id="item")["properties"]
     assert "effectColor" not in director["item"]["properties"]
     assert "effectColor" not in repair["itemPatch"]["anyOf"][0]["properties"]
     assert director["equipOverlay"]["properties"]["accessoryMount"]["enum"] == repair["equipOverlayPatch"]["anyOf"][0]["properties"]["accessoryMount"]["enum"]
     modes = {branch["properties"]["assetMode"]["const"] for branch in director["entities"]["items"]["oneOf"]}
-    assert modes == {row["mode"] for row in visual.visual_asset_mode_catalog()}
+    assert modes == {row["mode"] for row in visual_request.visual_asset_mode_catalog()}
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
@@ -305,7 +309,7 @@ def test_minimal_author_result_preserves_visual_mechanics_and_parent_facts(wire_
     assert validate_runtime_program(minimal)["ok"]
     if mode == "json_schema":
         from jsonschema import Draft202012Validator
-        from infini_local.pipelines import author_item_contract as contract
+        from infini_local.pipelines.author import item_contract as contract
         from test_codex_subscription_contract import _encode_nullable_fixture
 
         request, _, _ = build_initial_author_request({}, {}, "minimal-visual", model_name="offline")
@@ -328,8 +332,8 @@ def test_minimal_author_result_preserves_visual_mechanics_and_parent_facts(wire_
     frozen = copy.deepcopy((data, parents))
     responses, sent = wire_transport
     responses.extend([{}, {}])
-    visual._request_visual_kit(data, *parents)
-    visual._request_visual_kit(compile_runtime_program(source), *parents)
+    visual_request._request_visual_kit(data, *parents)
+    visual_request._request_visual_kit(compile_runtime_program(source), *parents)
     packet, advisory_packet = (request_dossier(request) for request in sent)
     assert packet["item"] == {"name": source["name"], "realization": {}}
     assert packet["requiredEntityIds"] == [entity["id"] for entity in data["runtimeProgram"]["entities"]]

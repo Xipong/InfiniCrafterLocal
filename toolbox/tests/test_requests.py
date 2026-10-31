@@ -38,10 +38,10 @@ def test_actual_request_and_parser_through_campaign_hooks(tmp_path, mutation, ex
         sys.addaudithook(offline)
         from toolbox.live.options import build_parser
         from toolbox.live import support
-        from infini_local.pipelines import llm_transport
-        from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+        from infini_local.pipelines.transport import client as llm_transport
+        from infini_local.pipelines.author.request import build_initial_author_request
         from infini_local.core.llm_json_tools import parse_first_valid_llm_json
-        from infini_local.pipelines.llm_provider_wire import with_llm_stage
+        from infini_local.pipelines.transport.provider_wire import with_llm_stage
         args = build_parser().parse_args(['--expected-model', 'qa-model', '--expected-temperature', '0.5', '--expected-max-tokens', '512', '--expected-response-format', 'json_object'])
         from contextvars import ContextVar
         active_stage = ContextVar('test_stage', default='non_author')

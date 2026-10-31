@@ -5,7 +5,7 @@ import json
 import pytest
 
 from infini_local.core import llm_config
-from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+from infini_local.pipelines.author.request import build_initial_author_request
 from prompt_packet_helpers import request_dossier, expand_native_source_references
 from test_source_unit_guidance import _serialized_chat_request
 
@@ -53,7 +53,7 @@ def test_author_explicitly_composes_buffs_and_debuffs_without_requiring_native_i
 
 @pytest.mark.parametrize("mode", ["json_schema", "json_object"])
 def test_exact_repeated_source_facts_fit_original_budget_without_losing_any_value(monkeypatch, mode):
-    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     scope = "Synthetic transport proof, not native behavior: " + "Ж" * 5000
     source = {

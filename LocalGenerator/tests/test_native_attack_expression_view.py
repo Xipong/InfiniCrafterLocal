@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from infini_local.pipelines.native_attack_expression_view import compact_attack_expressions, expand_attack_expressions
-from infini_local.pipelines.parent_context_pipeline import compact_projectile_profile
+from infini_local.pipelines.context.attack_expressions import compact_attack_expressions, expand_attack_expressions
+from infini_local.pipelines.context.parents import compact_projectile_profile
 
 
 def attack_fixture():
@@ -22,7 +22,7 @@ def attack_fixture():
 def test_actual_parent_projection_marks_behavior_view_and_keeps_raw_detached():
     source = attack_fixture()
     result = compact_projectile_profile({"type": 982, "attackReference": source})["attackReference"]
-    from infini_local.pipelines.native_attack_tables import unpack_attack_tables
+    from infini_local.pipelines.context.attack_tables import unpack_attack_tables
     result = unpack_attack_tables(result)
     assert result["behaviorView"]["version"] == 1
     assert result["coverage"] == source["coverage"]
@@ -108,16 +108,18 @@ def test_unknown_nested_fields_and_literal_tooltips_are_not_interpreted():
 @pytest.mark.parametrize("stage", ["Author", "GameplayRepair", "Visual", "VisualRepair", "VFX", "VFXRepair"])
 @pytest.mark.parametrize("fixture", ["synthetic", "native_excalibur"])
 def test_native_v1_behavior_view_at_each_real_serialized_stage(monkeypatch, mode, stage, fixture):
-    from infini_local.core import llm_config, vfx_manifest as vfx
-    from infini_local.pipelines import llm_authoring_pipeline as author
-    from infini_local.pipelines import visual_generation_pipeline as visual
-    from infini_local.pipelines import vfx_generation_pipeline as transport
+    from infini_local.core import llm_config
+    import infini_local.pipelines.vfx.prompt as vfx_prompt
+    import infini_local.pipelines.vfx.stage as vfx_stage
+    from infini_local.pipelines.author import request as author
+    import infini_local.pipelines.visual.request as visual_request
+    from infini_local.pipelines.vfx import request as transport
     from prompt_packet_helpers import request_dossier, expand_native_source_references
     from test_low_level_three_stage_pipeline import _accepted_visual_data, _visual_kit
     from test_parent_attack_reference import _capture_stage, _CapturedRequest
     # Table packing is a separate, explicit decoding layer. Do not modify the
     # ordinary packet reader to conceal what the model literally receives.
-    from infini_local.pipelines.native_attack_tables import unpack_attack_tables
+    from infini_local.pipelines.context.attack_tables import unpack_attack_tables
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     source = attack_fixture()
     # A representative repeated-row program amortizes the self-contained guide.
@@ -145,13 +147,13 @@ def test_native_v1_behavior_view_at_each_real_serialized_stage(monkeypatch, mode
     else:
         child = _accepted_visual_data("workbench_blade")
         if stage.startswith("Visual"):
-            _capture_stage(monkeypatch, visual, captured)
+            _capture_stage(monkeypatch, visual_request, captured)
             kwargs = {}
             if stage == "VisualRepair":
                 scope = {"fieldPermissions": {"itemPaths": ["prompt"], "entities": [], "equipOverlayPaths": []}}
                 kwargs = {"repair_errors": [{"path": "$.item.prompt"}], "previous": _visual_kit(child), "repair_scope": scope}
             with pytest.raises(_CapturedRequest):
-                visual._request_visual_kit(child, parent, parent, **kwargs)
+                visual_request._request_visual_kit(child, parent, parent, **kwargs)
         else:
             _capture_stage(monkeypatch, transport, captured)
             monkeypatch.setattr(transport, "USE_LLM", True)
@@ -160,7 +162,7 @@ def test_native_v1_behavior_view_at_each_real_serialized_stage(monkeypatch, mode
                 scope = {"allowCreateSlots": True, "fieldPermissions": {"globals": {}, "slots": [], "assets": []}}
                 kwargs = {"repair_errors": [], "previous": {}, "repair_scope": scope}
             with pytest.raises(_CapturedRequest):
-                vfx._request(transport.call_llm_vfx_director, vfx._prompt_packet(child, parent, parent), **kwargs)
+                vfx_stage._request(transport.call_llm_vfx_director, vfx_prompt._prompt_packet(child, parent, parent), **kwargs)
         request = captured[0]
     assert request["response_format"]["type"] == mode
     packet = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
@@ -182,13 +184,13 @@ def test_native_v1_behavior_view_at_each_real_serialized_stage(monkeypatch, mode
             # This future-shaped coverage fixture deliberately adds unknown
             # fields. Stage pruning must retain its complete connected graph.
             assert "(1+(l1@130*0.6))" in json.dumps(view)
-        from infini_local.pipelines.native_attack_behavior_view import project_attack_behavior
+        from infini_local.pipelines.context.attack_behavior import project_attack_behavior
         projected = unpack_attack_tables(view)
         expected = project_attack_behavior(source)
         author_presentation = fixture == "native_excalibur" and stage in {"Author", "GameplayRepair"}
         if author_presentation:
             expected.pop("draw")
-            from infini_local.pipelines.native_attack_behavior_view import ordered_attack_context
+            from infini_local.pipelines.context.attack_behavior import ordered_attack_context
             expected = ordered_attack_context(expected)
             assert "Native draw layer instructions omitted" in projected.pop("presentationScope")
         if fixture == "native_excalibur" and stage not in {"Author", "GameplayRepair"}:

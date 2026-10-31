@@ -50,7 +50,7 @@ def test_projectile_collision_exposes_terraria_liquid_and_immunity_semantics() -
 
 
 def test_generated_parent_preserves_exact_ammo_and_potion_facts() -> None:
-    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 
     item = {
         "name": "Generated Ammo Tonic",
@@ -98,7 +98,7 @@ def test_generated_parent_preserves_exact_ammo_and_potion_facts() -> None:
 
 
 def test_cross_mod_identity_does_not_duplicate_placeable_runtime_facts() -> None:
-    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 
     card = raw_parent_card_for_llm({
         "name": "Glowing Mushroom",

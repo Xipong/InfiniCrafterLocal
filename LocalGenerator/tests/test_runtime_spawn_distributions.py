@@ -15,7 +15,7 @@ from infini_local.core.runtime_authoring.repair_scope import filter_repair_patch
 from infini_local.core.runtime_authoring.program_schema import strict_author_shape_report
 from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-from infini_local.pipelines import author_item_contract as contract
+from infini_local.pipelines.author import item_contract as contract
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 

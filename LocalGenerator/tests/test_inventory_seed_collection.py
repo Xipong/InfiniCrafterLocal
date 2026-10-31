@@ -121,7 +121,7 @@ def test_seed_witness_is_inventory_only_without_active_use_or_binding():
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
 def test_real_author_packet_exposes_explicit_inventory_capability_without_inheritance(monkeypatch, mode):
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from infini_local.pipelines.author.request import build_initial_author_request
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     request, _, _ = build_initial_author_request({"dropSeedsIfInInventory": True}, {}, "offline", model_name="offline-no-model")
     dossier = request_dossier(request)

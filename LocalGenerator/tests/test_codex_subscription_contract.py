@@ -17,8 +17,9 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 
 from infini_local.core import llm_config
-from infini_local.pipelines import llm_provider_wire
-from infini_local.pipelines import llm_transport as llm, pipeline_visual_config as config
+from infini_local.pipelines.transport import provider_wire as llm_provider_wire
+from infini_local.pipelines.transport import client as llm
+from infini_local.core.images import config
 from infini_local.services import codex_auth as auth, codex_catalog as catalog, codex_text_backend as backend
 from test_provider_transport_contract import PIN, packet, wire  # noqa: F401 - imported pytest fixture
 from provider_test_support import HttpReply, RecordingOpener
@@ -51,7 +52,8 @@ def _assert_structured_outputs_subset(schema):
 
 @pytest.mark.parametrize("stage", ["author", "repair"])
 def test_subscription_sends_supported_schema_without_mutating_authored_packet(monkeypatch, subscription_sends, stage):
-    from infini_local.pipelines import author_item_contract as contract, llm_authoring_pipeline as author
+    from infini_local.pipelines.author import item_contract as contract
+    from infini_local.pipelines.author import request as author
 
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
     if stage == "author":
@@ -118,7 +120,8 @@ def _sparse_event_item(event):
 
 @pytest.mark.parametrize("control", ["nullable-valid", "required-null", "unknown-function"])
 def test_subscription_author_parse_preserves_nullable_optionals_and_refuses_invalid_authorship(monkeypatch, control):
-    from infini_local.pipelines import author_item_contract as contract, llm_authoring_pipeline as author
+    from infini_local.pipelines.author import item_contract as contract
+    from infini_local.pipelines.author import request as author
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
 
     item, _ = _sparse_event_item("on_hit")
@@ -156,7 +159,8 @@ def test_subscription_author_parse_preserves_nullable_optionals_and_refuses_inva
 
 def test_subscription_repair_wire_inverse_precedes_frozen_merge(monkeypatch):
     from jsonschema import Draft202012Validator
-    from infini_local.pipelines import author_item_contract as contract, llm_authoring_pipeline as author
+    from infini_local.pipelines.author import item_contract as contract
+    from infini_local.pipelines.author import request as author
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
 
     item, selected = _sparse_event_item("periodic")
@@ -723,7 +727,7 @@ def test_native_session_roundtrip_is_private_and_status_has_no_secrets(tmp_path)
     ("magenta", True, "off", "transparent"),
 ])
 def test_codex_dispatch_writes_verified_png_and_preserves_authored_prompt(tmp_path, monkeypatch, color, remove_bg, mode, background):
-    from infini_local.pipelines import pipeline_visual_config as visual_config
+    from infini_local.core.images import config as visual_config
     monkeypatch.setattr(visual_config, "BG_COLOR", color)
     monkeypatch.setattr(visual_config, "REMOVE_BG", remove_bg)
     monkeypatch.setattr(visual_config, "BG_REMOVE_MODE", mode)
@@ -734,7 +738,8 @@ def test_codex_dispatch_writes_verified_png_and_preserves_authored_prompt(tmp_pa
     import io
     import time
     from PIL import Image
-    from infini_local.pipelines import image_backend_pipeline as backend, visual_sprite_generation as visual
+    from infini_local.pipelines.images import backends as backend
+    from infini_local.pipelines.images import stage as visual
     from infini_local.services import codex_auth as auth
     assert hasattr(backend, "generate_openai_codex"), "Codex is not connected to sprite dispatch"
     stream = io.BytesIO()
@@ -773,7 +778,7 @@ def test_codex_dispatch_writes_verified_png_and_preserves_authored_prompt(tmp_pa
 
 
 def test_codex_auth_error_is_not_retried_or_replaced_by_procedural(monkeypatch):
-    from infini_local.pipelines import visual_sprite_generation as visual
+    from infini_local.pipelines.images import stage as visual
     from infini_local.services.codex_auth import CodexError
     calls, fallbacks = [], []
     def fail(*args, **kwargs):

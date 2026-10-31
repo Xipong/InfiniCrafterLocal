@@ -73,19 +73,30 @@ class OfflineCapture:
         self.root = Path(root).resolve()
         sys.dont_write_bytecode = True
         sys.path[:0] = [str(self.root / "LocalGenerator"), str(self.root / "LocalGenerator/tests")]
-        from infini_local.core import llm_config, vfx_manifest
+        from infini_local.core import llm_config
+        from infini_local.core.vfx import validation as vfx_validation, repair as vfx_repair
+        from infini_local.pipelines.vfx import stage as vfx_stage, prompt as vfx_prompt
         from infini_local.core.runtime_authoring.compiler import compile_runtime_program
         from infini_local.core.runtime_authoring.validator import validate_runtime_program
-        from infini_local.pipelines import llm_admission, llm_authoring_pipeline, llm_profiles, llm_transport, visual_generation_pipeline, vfx_generation_pipeline
-        from infini_local.pipelines.generated_parent_summary import attach_generated_parent_summary
+        from infini_local.pipelines.transport import admission as llm_admission
+        from infini_local.pipelines.author import request as llm_authoring_pipeline
+        from infini_local.pipelines.transport import profiles as llm_profiles
+        from infini_local.pipelines.transport import client as llm_transport
+        from infini_local.pipelines.visual import contract as visual_contract, repair_scope as visual_scope, request as visual_request, stage as visual_stage
+        from infini_local.pipelines.vfx import request as vfx_generation_pipeline
+        from infini_local.pipelines.context.generated_summary import attach_generated_parent_summary
         from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
         from infini_local.services import codex_auth
         from test_low_level_three_stage_pipeline import _visual_kit
         from test_low_level_three_stage_pipeline import _vfx_output
-        self.config, self.vfx = llm_config, vfx_manifest
+        self.config = llm_config
+        self.vfx_validation, self.vfx_repair = vfx_validation, vfx_repair
+        self.vfx_stage, self.vfx_prompt = vfx_stage, vfx_prompt
         self.author, self.transport = llm_authoring_pipeline, llm_transport
         self.profiles, self.admission = llm_profiles, llm_admission
-        self.visual, self.vfx_sender = visual_generation_pipeline, vfx_generation_pipeline
+        self.visual_contract, self.visual_scope = visual_contract, visual_scope
+        self.visual_request, self.visual_stage = visual_request, visual_stage
+        self.vfx_sender = vfx_generation_pipeline
         self.compile, self.validate, self.fixture = compile_runtime_program, validate_runtime_program, build_runtime_fixture
         self.attach_parent, self.auth = attach_generated_parent_summary, codex_auth
         self.visual_fixture, self.vfx_fixture = _visual_kit, _vfx_output
@@ -112,7 +123,7 @@ class OfflineCapture:
             (self.auth, {"get_credentials": lambda: SimpleNamespace(access_token="offline", account_id="offline"),
                          "_generation_request": forbidden}),
         ]
-        for owner in (self.author, self.visual, self.vfx_sender):
+        for owner in (self.author, self.visual_request, self.vfx_sender):
             values = {"resolve_llm_model": lambda: MODEL, "llm_chat_json": forbidden}
             for name in ("USE_LLM", "trace_event", "trace_stage_request"):
                 if hasattr(owner, name):
@@ -152,19 +163,19 @@ class OfflineCapture:
         kit = self.visual_fixture(data)
         # The canonical fixture omits overlay when not requested; add the existing
         # test overlay design only for a runtime that actually requires one.
-        from infini_local.pipelines.visual_asset_plan import equipment_overlay_requirement
+        from infini_local.pipelines.visual.assets import equipment_overlay_requirement
         if equipment_overlay_requirement(data)["required"] and "equipOverlay" not in kit:
             kit["equipOverlay"] = {"prompt": "badge", "silhouette": "badge", "visualIdentity": "badge", "preferredCanvasSize": 32}
         runtime = data["runtimeProgram"]
         ids = [row["id"] for row in runtime["entities"]]
-        accepted, errors = self.visual._validate_kit(kit, ids, runtime["itemEntityId"],
+        accepted, errors = self.visual_contract._validate_kit(kit, ids, runtime["itemEntityId"],
             equipment_overlay_required=bool(equipment_overlay_requirement(data)["required"]))
         assert accepted is not None, errors
-        visual_data = self.visual._apply_kit(copy.deepcopy(data), accepted)
+        visual_data = self.visual_stage._apply_kit(copy.deepcopy(data), accepted)
         raw_vfx = self.vfx_fixture(visual_data)
         # Use the selected checkout's actual supported fixture without translating
         # historical manifests or filling current fields.
-        report = self.vfx.validate_vfx_director_output(raw_vfx, visual_data)
+        report = self.vfx_validation.validate_vfx_director_output(raw_vfx, visual_data)
         assert report["ok"], report["errors"]
         return {"parentA": a, "parentB": b, "authored": authored, "data": data,
                 "visualKit": kit, "visualData": visual_data, "vfxOutput": raw_vfx,
@@ -191,7 +202,7 @@ class OfflineCapture:
             raise Captured()
 
         with ExitStack() as stack:
-            for owner in (self.author, self.visual, self.vfx_sender):
+            for owner in (self.author, self.visual_request, self.vfx_sender):
                 stack.enter_context(patch.object(owner, "llm_chat_json", stop))
             try:
                 if stage == "author":
@@ -217,24 +228,24 @@ class OfflineCapture:
                         broken["item"]["renderSizePx"] = None
                         runtime = data["runtimeProgram"]
                         ids = [row["id"] for row in runtime["entities"]]
-                        _, errors = self.visual._validate_kit(broken, ids, runtime["itemEntityId"])
+                        _, errors = self.visual_contract._validate_kit(broken, ids, runtime["itemEntityId"])
                         assert errors
-                        scope = self.visual._build_visual_repair_scope(broken, errors, ids, runtime["itemEntityId"])
+                        scope = self.visual_scope._build_visual_repair_scope(broken, errors, ids, runtime["itemEntityId"])
                         evidence.update(broken=broken, errors=errors, repairScope=scope)
                         kwargs = dict(repair_errors=errors, previous=broken, repair_scope=scope)
-                    self._invoke(self.visual._request_visual_kit, data, a, b, **kwargs)
+                    self._invoke(self.visual_request._request_visual_kit, data, a, b, **kwargs)
                 elif stage.startswith("vfx"):
                     kwargs = {}
                     if stage.endswith("repair"):
                         broken = copy.deepcopy(inputs["vfxOutput"])
                         broken["slots"][0]["alpha"] = 2.0
-                        report = self.vfx.validate_vfx_director_output(broken, inputs["visualData"])
+                        report = self.vfx_validation.validate_vfx_director_output(broken, inputs["visualData"])
                         assert not report["ok"]
-                        scope = self.vfx._build_vfx_repair_scope(broken, report["errors"])
+                        scope = self.vfx_repair._build_vfx_repair_scope(broken, report["errors"])
                         evidence.update(broken=broken, errors=report["errors"], repairScope=scope)
                         kwargs = dict(repair_errors=report["errors"], previous=broken, repair_scope=scope)
-                    self.vfx._request(self.vfx_sender.call_llm_vfx_director,
-                        self.vfx._prompt_packet(inputs["visualData"], a, b), **kwargs)
+                    self.vfx_stage._request(self.vfx_sender.call_llm_vfx_director,
+                        self.vfx_prompt._prompt_packet(inputs["visualData"], a, b), **kwargs)
                 else:
                     raise ValueError(stage)
             except Captured:

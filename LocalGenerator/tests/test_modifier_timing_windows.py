@@ -213,14 +213,14 @@ def test_incomplete_pair_repair_opens_only_missing_half(fn, member, author_leaf,
 @pytest.mark.parametrize("form", ["omitted", "pair", "window", "intersection"])
 def test_strict_provider_nullable_transport_preserves_selected_timing_shape(fn, member, author_leaf, wire_leaf, value, form):
     from jsonschema import Draft202012Validator
-    from infini_local.pipelines import author_item_contract as contract
+    import infini_local.core.provider_schema as contract_provider_schema
     from test_codex_subscription_contract import _encode_nullable_fixture
 
     _, call = document(fn, form)
     local = CAPABILITY_REGISTRY[fn].provider_variant_schema()
-    provider = contract._provider_strict_projection(local)
+    provider = contract_provider_schema._provider_strict_projection(local)
     encoded = _encode_nullable_fixture(call, local)
     assert Draft202012Validator(provider).is_valid(encoded)
-    restored = contract.project_provider_nullable_optionals_to_local(encoded, local,
+    restored = contract_provider_schema.project_provider_nullable_optionals_to_local(encoded, local,
         response_format={"type": "json_schema", "json_schema": {"schema": provider}})
     assert restored == call

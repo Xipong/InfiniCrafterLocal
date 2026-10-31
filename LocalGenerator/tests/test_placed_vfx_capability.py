@@ -8,8 +8,11 @@ from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-from infini_local.core.vfx_manifest import (VFX_DIRECTOR_SCHEMA, validate_vfx_director_output,
-    validate_vfx_manifest_wire, _compile_manifest, vfx_director_surface, _prompt_packet)
+from infini_local.core.vfx.contract import VFX_DIRECTOR_SCHEMA
+from infini_local.core.vfx.validation import validate_vfx_director_output, validate_vfx_manifest_wire
+from infini_local.core.vfx.projection import _compile_manifest
+from infini_local.core.vfx.surface import vfx_director_surface
+from infini_local.pipelines.vfx.prompt import _prompt_packet
 
 
 def authored():
@@ -101,28 +104,32 @@ def test_authored_reference_and_receipts_are_exact_and_repair_leaf_frozen():
 
 
 def test_real_director_and_repair_packets_freeze_sibling_selector_absence():
-    from infini_local.core import vfx_manifest as vfx
+    import infini_local.core.vfx.contract as vfx_contract
+    import infini_local.core.vfx.repair as vfx_repair
+    import infini_local.core.vfx.validation as vfx_validation
+    import infini_local.pipelines.vfx.prompt as vfx_prompt
+    import infini_local.pipelines.vfx.stage as vfx_stage
     from vfx_material_fixtures import _sent
     wire=compile_runtime_program(authored());raw={'schema':VFX_DIRECTOR_SCHEMA,'slots':[light_slot()]}
     sibling=light_slot();sibling.pop('placementBindingId');sibling['id']='held_glow'
     raw['slots'].append(sibling)
     raw['slots'][0]['placementBindingId']='wrong'
-    errors=vfx.validate_vfx_director_output(raw,wire)['errors']
-    scope=vfx._build_vfx_repair_scope(raw,errors)
+    errors=vfx_validation.validate_vfx_director_output(raw,wire)['errors']
+    scope=vfx_repair._build_vfx_repair_scope(raw,errors)
     assert scope['fieldPermissions']['slots']==[{'slotId':'placed_glow','paths':['placementBindingId']}]
-    packet=vfx._prompt_packet(wire,{},{});sent=_sent(wire,False,packet)
+    packet=vfx_prompt._prompt_packet(wire,{},{});sent=_sent(wire,False,packet)
     assert sent['runtimeSurface']['placementBindings'][0]['maxFrameY']==35
     captures=[]
     def capture(system,user,*args,**kwargs):
         captures.append(json.loads(kwargs['messages'][1]['content']));return {}
-    vfx._request(capture,packet,repair_errors=errors,previous=raw,repair_scope=scope)
+    vfx_stage._request(capture,packet,repair_errors=errors,previous=raw,repair_scope=scope)
     assert captures[0]['runtimeSurfaceReadOnly']['placementBindings']==sent['runtimeSurface']['placementBindings']
     attack=copy.deepcopy(raw['slots'][0]);attack.update(placementBindingId='alternate_install');attack['light']['intensity']=1
     sibling_attack=copy.deepcopy(sibling);sibling_attack['placementBindingId']='alternate_install'
-    fixed=vfx._apply_vfx_repair_patch(wire,raw,{'schema':vfx.VFX_REPAIR_PATCH_SCHEMA,'note':'exact selector','slotsUpsert':[attack,sibling_attack]},scope)
+    fixed=vfx_repair._apply_vfx_repair_patch(wire,raw,{'schema':vfx_contract.VFX_REPAIR_PATCH_SCHEMA,'note':'exact selector','slotsUpsert':[attack,sibling_attack]},scope)
     expected=copy.deepcopy(raw);expected['slots'][0]['placementBindingId']='alternate_install'
     assert fixed==expected
-    assert vfx.validate_vfx_director_output(fixed,wire)['ok']
+    assert vfx_validation.validate_vfx_director_output(fixed,wire)['ok']
 
 
 def test_new_registry_witness_and_native_bounds_surface():
@@ -141,15 +148,17 @@ from test_low_level_three_stage_pipeline import wire_transport
 
 def test_actual_author_and_visual_repairs_preserve_independent_placed_components(wire_transport):
     from prompt_packet_helpers import request_dossier
-    from infini_local.pipelines import llm_authoring_pipeline as author, visual_generation_pipeline as visual
+    from infini_local.pipelines.author import request as author
+    import infini_local.pipelines.visual.contract as visual_contract
+    import infini_local.pipelines.visual.request as visual_request
     from test_low_level_three_stage_pipeline import _visual_kit
     responses,requests=wire_transport
     d=authored();responses.append(d)
     assert author.try_llm_plan({'name':'A'},{'name':'B'},'placed-offline') is not None
     wire=compile_runtime_program(d);kit=_visual_kit(wire)
     for repair in (False,True):
-        responses.append(kit if not repair else {'schema':visual.VISUAL_REPAIR_PATCH_SCHEMA,'note':'no-op'})
-        visual._request_visual_kit(wire,{}, {}, **({'repair_errors':[],'previous':kit,'repair_scope':{}} if repair else {}))
+        responses.append(kit if not repair else {'schema':visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,'note':'no-op'})
+        visual_request._request_visual_kit(wire,{}, {}, **({'repair_errors':[],'previous':kit,'repair_scope':{}} if repair else {}))
         packet=request_dossier(requests[-1])
         assert packet['acceptedPresentationMechanicsReadOnly']['bindings']==wire['runtimeProgram']['bindings']
     broken=copy.deepcopy(d);broken['runtimeProgram']['calls'][-1]['params']['placementCallId']='wrong'

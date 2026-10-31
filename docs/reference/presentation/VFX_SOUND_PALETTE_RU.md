@@ -4,7 +4,7 @@
 
 Доступны **84 exact `SoundID`**. Canonical domain берётся у owner ниже; [независимый inventory fixture](../../../LocalGenerator/tests/fixtures/vfx_sound_inventory.json) сохраняет reference mapping, не альтернативный runtime selector.
 
-Канонический runtime-facing owner — [`vfx_manifest.py`](../../../LocalGenerator/infini_local/core/vfx_manifest.py): `_SOUND_IDS` определяет один finite selector domain, `_sound_schema()` — три playback controls. Director, Repair и persisted wire берут определения отсюда. Gameplay Author не получает звуковых capabilities. Выбор не зависит от названия, класса урона, parent prose, размера visual budget или категории оружия.
+Канонический runtime-facing owner — [`core/vfx/contract.py`](../../../LocalGenerator/infini_local/core/vfx/contract.py): `_SOUND_IDS` определяет один finite selector domain, `_sound_schema()` — три playback controls. Director, Repair и persisted wire берут определения отсюда. Gameplay Author не получает звуковых capabilities. Выбор не зависит от названия, класса урона, parent prose, размера visual budget или категории оружия.
 
 Прежние acoustic IDs вроде `bow_release` используются только как историческое свидетельство. Они не входят в новый enum и не запускают routing. Модель передаёт конкретный `SoundID`, например `Item5`, `Item58`, `Item71`, `Item152` или `Item169`.
 

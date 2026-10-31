@@ -14,10 +14,11 @@ from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-from infini_local.pipelines import author_item_contract as contract
+from infini_local.pipelines.author import item_contract as contract
+import infini_local.core.provider_schema as contract_provider_schema
 from infini_local.pipelines import combine_balance as balance
-from infini_local.pipelines import llm_authoring_pipeline as author
-from infini_local.pipelines import llm_authoring_prompt as prompt
+from infini_local.pipelines.author import request as author
+from infini_local.pipelines.author import prompt
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_codex_subscription_contract import _encode_nullable_fixture
@@ -215,7 +216,7 @@ def test_provider_omits_only_schema_annotations_and_preserves_literal_properties
         "required": ["description", "x-infini-real-field"],
     }
     before = copy.deepcopy(local)
-    provider = contract._provider_strict_projection(local, omit_annotations=True)
+    provider = contract_provider_schema._provider_strict_projection(local, omit_annotations=True)
     assert "description" not in provider
     assert set(provider["properties"]) == {"description", "x-infini-real-field"}
     assert provider["properties"]["description"] == {"type": "string", "minLength": 2}
@@ -232,14 +233,14 @@ def test_nullable_inverse_accepts_both_exact_projection_policies(omit_annotation
     local = {"type": "object", "additionalProperties": False, "required": [],
              "properties": {"optional": {"type": "number", "minimum": 2,
                                            "description": "Visual may use this guidance"}}}
-    provider = contract._provider_strict_projection(local, omit_annotations=omit_annotations)
+    provider = contract_provider_schema._provider_strict_projection(local, omit_annotations=omit_annotations)
     wrapper = provider["properties"]["optional"]["anyOf"][0]
     assert ("description" in wrapper) is not omit_annotations
     response_format = {"type": "json_schema", "json_schema": {"schema": provider}}
-    assert contract.project_provider_nullable_optionals_to_local(
+    assert contract_provider_schema.project_provider_nullable_optionals_to_local(
         {"optional": None}, local, response_format=response_format) == {}
     wrapper["minimum"] = 1
-    assert contract.project_provider_nullable_optionals_to_local(
+    assert contract_provider_schema.project_provider_nullable_optionals_to_local(
         {"optional": None}, local, response_format=response_format) == {"optional": None}
 
 

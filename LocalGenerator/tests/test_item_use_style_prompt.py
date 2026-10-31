@@ -1,4 +1,4 @@
-from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
+from infini_local.pipelines.vfx import request as vfx_transport
 from prompt_packet_helpers import request_dossier
 """Verify complete animation vocabulary reaches the production serialized Author request."""
 
@@ -9,12 +9,14 @@ import pytest
 
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.pipelines import llm_authoring_pipeline as gameplay, visual_generation_pipeline as visual
+from infini_local.pipelines.author import request as gameplay
+import infini_local.pipelines.visual.contract as visual_contract
+import infini_local.pipelines.visual.stage as visual_stage
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_low_level_three_stage_pipeline import _visual_kit, _vfx_output
 from test_low_level_three_stage_pipeline import wire_transport as wire_transport
 
-from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+from infini_local.pipelines.author.request import build_initial_author_request
 
 
 @pytest.mark.parametrize("format_mode", ["json_schema", "json_object"])
@@ -46,18 +48,19 @@ def test_visibility_advisory_reaches_real_packets_without_changing_choices(wire_
     accepted_kit = _visual_kit(baseline)
     broken_kit = copy.deepcopy(accepted_kit)
     broken_kit["item"]["inventoryScale"] = 99
-    responses.extend([broken_kit, {"schema": visual.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": {"inventoryScale": 1.0}, "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [], "note": "inventoryScale only"}])
-    projected = visual.apply_visual_director(baseline, parent, parent)
+    responses.extend([broken_kit, {"schema": visual_contract.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": {"inventoryScale": 1.0}, "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [], "note": "inventoryScale only"}])
+    projected = visual_stage.apply_visual_director(baseline, parent, parent)
     visual_packets = [request_dossier(r) for r in requests[1:]]
     assert projected["visualKit"] == accepted_kit
     assert projected["runtimeProgram"]["itemUse"] == baseline["runtimeProgram"]["itemUse"]
     assert visual_packets[1]["repairScope"]["fieldPermissions"]["itemPaths"] == ["inventoryScale"]
-    from infini_local.core import vfx_manifest as vfx
+    import infini_local.core.vfx.contract as vfx_contract
+    import infini_local.pipelines.vfx.stage as vfx_stage
     accepted_vfx = _vfx_output(projected)
     broken_vfx = copy.deepcopy(accepted_vfx)
     broken_vfx["slots"][0]["alpha"] = 2
-    responses.extend([broken_vfx, {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": accepted_vfx["slots"], "note": "alpha only"}])
-    final = vfx.attach_vfx_manifest(projected, "visibility", llm_director=vfx_transport.call_llm_vfx_director)
+    responses.extend([broken_vfx, {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": accepted_vfx["slots"], "note": "alpha only"}])
+    final = vfx_stage.attach_vfx_manifest(projected, "visibility", llm_director=vfx_transport.call_llm_vfx_director)
     vfx_packets = [request_dossier(r) for r in requests[3:]]
     assert final["debug"]["vfxDirectorRaw"] == accepted_vfx
     assert final["runtimeProgram"]["itemUse"] == baseline["runtimeProgram"]["itemUse"]

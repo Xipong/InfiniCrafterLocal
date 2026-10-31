@@ -7,8 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from infini_local.core.vfx_manifest import _compile_manifest
-from infini_local.pipelines import combine_pipeline, visual_delivery_gate
+from infini_local.core.vfx.projection import _compile_manifest
+from infini_local.pipelines import combine_pipeline
+from infini_local.pipelines.visual import delivery as visual_delivery_gate
 from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png, synthetic_no_image_execution_control
 from infini_local.services.combine_endpoint import handle_combine_request
 from infini_local.storage import world_recipe_runtime, world_storage
@@ -365,7 +366,7 @@ def test_no_image_record_is_refused_by_both_storage_and_strict_combine(cache_rec
     _, request, key, path, data = cache_record
     # No-assets/no-VFX-PNG is not permission to omit the required item PNG.
     # This explicitly corrupt durable witness must be refused, never completed.
-    from infini_local.core.vfx_manifest import _compile_manifest
+    from infini_local.core.vfx.projection import _compile_manifest
 
     data["vfxManifest"] = _compile_manifest(data, {"slots": []}, key)
     data.pop("visual", None)

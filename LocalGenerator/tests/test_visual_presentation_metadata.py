@@ -6,13 +6,15 @@ import copy
 import pytest
 
 from prompt_packet_helpers import request_dossier
-from infini_local.core import vfx_manifest as vfx
+import infini_local.core.vfx.validation as vfx_validation
+import infini_local.pipelines.vfx.stage as vfx_stage
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.pipelines import vfx_generation_pipeline as stage
-from infini_local.pipelines import visual_generation_pipeline as visual
-from infini_local.pipelines.image_backend_pipeline import comfyui_mapping
-from infini_local.pipelines.visual_asset_plan import apply_visual_asset_runtime_gates, build_visual_asset_plan
+from infini_local.pipelines.vfx import request as stage
+import infini_local.pipelines.visual.contract as visual_contract
+import infini_local.pipelines.visual.stage as visual_stage
+from infini_local.pipelines.images.backends import comfyui_mapping
+from infini_local.pipelines.visual.assets import apply_visual_asset_runtime_gates, build_visual_asset_plan
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 from test_low_level_three_stage_pipeline import _accepted_visual_data, _visual_kit, _vfx_output, wire_transport
@@ -29,7 +31,7 @@ def _runtime_mechanics(data):
 def kit() -> dict:
     """Opaque-ID input retained for adjacent exact Repair-location scenarios."""
     item = dict(prompt="object", negativePrompt="", silhouette="object", visualIdentity="object", palette=["red"], preferredCanvasSize=32, renderSizePx=40, forwardAngleDegrees=45, inventoryScale=1.0, worldScale=1.0)
-    return dict(schema=visual.VISUAL_KIT_SCHEMA, item=item, equipOverlay=dict(prompt="badge", silhouette="badge", visualIdentity="badge", preferredCanvasSize=32), entities=[dict(entityId="opaque_id", assetMode="baked_sprite", visualProjectRef="item", scale=1.0)], animationPlan="unchanged")
+    return dict(schema=visual_contract.VISUAL_KIT_SCHEMA, item=item, equipOverlay=dict(prompt="badge", silhouette="badge", visualIdentity="badge", preferredCanvasSize=32), entities=[dict(entityId="opaque_id", assetMode="baked_sprite", visualProjectRef="item", scale=1.0)], animationPlan="unchanged")
 
 
 def test_director_projects_root_and_distinct_art_without_changing_mechanics(wire_transport):
@@ -45,7 +47,7 @@ def test_director_projects_root_and_distinct_art_without_changing_mechanics(wire
                 renderSizePx=48, forwardAngleDegrees=-30)
     responses, requests = wire_transport
     responses.append(raw)
-    projected = visual.apply_visual_director(data, {}, {})
+    projected = visual_stage.apply_visual_director(data, {}, {})
     plan = {row["entityId"]: row for row in build_visual_asset_plan(projected)}
     assert (plan["item"]["canvas"], plan["item"]["renderSizePx"], plan["item"]["forwardAngleDegrees"]) == (96, 40, 45)
     assert (plan["chained_door"]["canvas"], plan["chained_door"]["renderSizePx"], plan["chained_door"]["forwardAngleDegrees"]) == (64, 48, -30)
@@ -80,7 +82,7 @@ def test_item_body_references_root_visual_project_without_duplicate_design(wire_
     responses, requests = wire_transport
     responses.append(raw)
 
-    projected = visual.apply_visual_director(data, {}, {})
+    projected = visual_stage.apply_visual_director(data, {}, {})
 
     assert projected["visualKit"]["item"] == root_before
     accepted_body = next(row for row in projected["visualKit"]["entities"] if row["entityId"] == "item")
@@ -99,13 +101,13 @@ def test_root_design_repair_does_not_open_entity_permissions(wire_transport, fie
     raw = _visual_kit(data)
     raw["item"][field] = ""
     entities_before = copy.deepcopy(raw["entities"])
-    patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA,
+    patch = dict(schema=visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,
                  itemPatch={field: "repaired root design"}, entitiesUpsert=[],
                  entityIdsDelete=[], entityIndicesDelete=[], note="root leaf only")
     responses, requests = wire_transport
     responses.extend([raw, patch])
 
-    result = visual.apply_visual_director(data, {}, {})
+    result = visual_stage.apply_visual_director(data, {}, {})
 
     assert result["visualKit"]["item"][field] == "repaired root design"
     assert result["visualKit"]["entities"] == entities_before
@@ -120,7 +122,7 @@ def test_root_design_repair_does_not_open_entity_permissions(wire_transport, fie
 def test_fresh_item_body_cannot_reintroduce_a_second_design(field):
     raw = kit()
     raw["entities"][0][field] = raw["item"][field]
-    accepted, errors = visual._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
+    accepted, errors = visual_contract._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
     assert accepted is None and any(row["path"] == f"$.entities[0].{field}" for row in errors)
 
 
@@ -130,13 +132,13 @@ def test_repair_removes_only_forbidden_body_copies_without_reauthoring_root(wire
     reference = copy.deepcopy(raw["entities"][0])
     raw["entities"][0].update({field: raw["item"][field] for field in ("prompt", "silhouette", "visualIdentity")})
     root_before = copy.deepcopy(raw["item"])
-    patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA,
+    patch = dict(schema=visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,
                  itemPatch={"prompt": "unrequested root rewrite"}, entitiesUpsert=[reference],
                  entityIdsDelete=[], entityIndicesDelete=[], note="remove duplicate leaves only")
     responses, requests = wire_transport
     responses.extend([raw, patch])
 
-    result = visual.apply_visual_director(data, {}, {})
+    result = visual_stage.apply_visual_director(data, {}, {})
 
     assert result["visualKit"]["item"] == root_before
     assert result["visualKit"]["entities"][0] == reference
@@ -152,7 +154,7 @@ def test_visual_refuses_retired_global_effect_color_without_changing_art():
     raw = kit()
     raw["item"]["effectColor"] = "gold"
     before = copy.deepcopy(raw)
-    accepted, errors = visual._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
+    accepted, errors = visual_contract._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
     assert accepted is None
     assert any(row["path"] == "$.item.effectColor" for row in errors)
     assert raw == before
@@ -165,7 +167,7 @@ def test_animation_advisory_never_spends_visual_repair(wire_transport, plan):
     raw["animationPlan"] = plan
     responses, requests = wire_transport
     responses.append(raw)
-    result = visual.apply_visual_director(data, {}, {})
+    result = visual_stage.apply_visual_director(data, {}, {})
     assert result["visualKit"].get("animationPlan") == plan
     assert len(requests) == 1 and not responses
 
@@ -177,7 +179,7 @@ def test_descriptive_palette_survives_director_and_delivery_without_repair(wire_
     raw["item"]["palette"] = [description]
     responses, requests = wire_transport
     responses.append(raw)
-    projected = visual.apply_visual_director(data, {}, {})
+    projected = visual_stage.apply_visual_director(data, {}, {})
     assert projected["visual"]["palette"] == [description]
     assert sanitize_recipe_for_delivery(projected)["visual"]["palette"] == [description]
     assert len(requests) == 1 and not responses
@@ -191,7 +193,7 @@ def test_equipment_overlay_keeps_authored_mount_and_single_badge_plan(wire_trans
     raw["equipOverlay"] = dict(kit()["equipOverlay"], accessoryMount="back")
     responses, _ = wire_transport
     responses.append(raw)
-    projected = visual.apply_visual_director(data, {}, {})
+    projected = visual_stage.apply_visual_director(data, {}, {})
     badge = next(row for row in build_visual_asset_plan(projected) if row["role"] == "equip_overlay")
     assert (badge["entityId"], badge["canvas"], badge["prompt"], badge["equipmentSlot"]) == ("item", 32, "badge", "accessory")
     assert sanitize_recipe_for_delivery(projected)["visual"]["accessoryMount"] == "back"
@@ -209,7 +211,7 @@ def test_present_metadata_refuses_representative_bad_inputs(container, field, va
     raw = kit()
     raw[container][field] = value
     before = copy.deepcopy(raw)
-    accepted, errors = visual._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
+    accepted, errors = visual_contract._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
     assert accepted is None and any(row["path"].startswith(f"$.{container}.{field}") for row in errors)
     assert raw == before
 
@@ -225,7 +227,7 @@ def test_visual_admission_does_not_invent_identity_or_presentation(bad_field, va
     target = raw["entities"][0] if bad_field in {"entityId", "assetMode"} else raw["item"]
     target[bad_field] = value
     before = copy.deepcopy(raw)
-    accepted, errors = visual._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
+    accepted, errors = visual_contract._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
     assert accepted is None and any(row["path"] == path for row in errors)
     assert raw == before
 
@@ -241,14 +243,14 @@ def test_scoped_visual_repair_preserves_good_siblings_absence_and_mechanics(wire
         raw["item"]["inventoryScale"] = 99
     raw_before = copy.deepcopy(raw)
     hostile_entity = dict(raw["entities"][1], scale=4)
-    patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA,
+    patch = dict(schema=visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,
                  itemPatch={"grip": {"normalizedX": 0.9, "normalizedY": 0.75}, "inventoryScale": 2,
                             "negativePrompt": "unrequested palette rewrite", "prompt": "unrequested replacement"},
                  entitiesUpsert=[hostile_entity], entityIdsDelete=["chained_door"], entityIndicesDelete=[],
                  animationPlan="unrequested animation", note="repair only the bad leaf")
     responses, requests = wire_transport
     responses.extend([raw, patch])
-    result = visual.apply_visual_director(data, {}, {})
+    result = visual_stage.apply_visual_director(data, {}, {})
     repaired = result["visualKit"]
     if repair_grip:
         assert repaired["item"]["grip"] == {"normalizedX": 0.25, "normalizedY": 0.75}
@@ -287,11 +289,11 @@ def test_item_png_fix_requires_complete_authored_design(design, accepted):
         raw["item"]["prompt"] = ""
     elif design == "explicit-no-asset":
         row["assetMode"] = "no_asset"
-    result, errors = visual._validate_kit(raw, ["item", "chained_door"], "item")
+    result, errors = visual_contract._validate_kit(raw, ["item", "chained_door"], "item")
     assert (result is not None) is accepted, errors
     # The ordinary projector resolves root art before runtime-gate admission;
     # the thin model row is not itself a delivered runtime visual DTO.
-    data = visual._apply_kit(data, result if result is not None else raw)
+    data = visual_stage._apply_kit(data, result if result is not None else raw)
     if "assetMode" not in row:
         body = next(entity for entity in data["runtimeProgram"]["entities"] if entity["id"] == "item")
         body["visual"].pop("assetMode", None)
@@ -328,7 +330,7 @@ def test_legacy_absence_remains_absent_and_fresh_director_clears_stale_metadata(
     delivered = sanitize_recipe_for_delivery(legacy)
     assert all(field not in delivered.get("visual", {}) for field in ("renderSizePx", "grip", "accessoryMount"))
     legacy["visual"] = {"grip": {"normalizedX": 0, "normalizedY": 0}, "accessoryMount": "chest"}
-    projected = visual._apply_kit(legacy, _visual_kit(legacy))
+    projected = visual_stage._apply_kit(legacy, _visual_kit(legacy))
     assert all(field not in projected["visual"] for field in ("grip", "accessoryMount"))
 
 
@@ -336,7 +338,7 @@ def test_vfx_consumes_art_palette_and_exact_impact_binding_without_prose_or_audi
     data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
     raw = _visual_kit(data)
     raw["item"].update(palette=["dark blue copper"], grip={"normalizedX": 0.25, "normalizedY": 0.75})
-    data = visual._apply_kit(data, raw)
+    data = visual_stage._apply_kit(data, raw)
     before = copy.deepcopy(data)
     from tests.vfx_material_fixtures import _with_asset
     authored = _with_asset(data)
@@ -347,7 +349,7 @@ def test_vfx_consumes_art_palette_and_exact_impact_binding_without_prose_or_audi
                                           inheritVelocity=0, accelerationYPxPerTickSquared=0)
     responses, requests = wire_transport
     responses.append(authored)
-    final = vfx.attach_vfx_manifest(data, "door-impact", llm_director=stage.call_llm_vfx_director)
+    final = vfx_stage.attach_vfx_manifest(data, "door-impact", llm_director=stage.call_llm_vfx_director)
     packet = request_dossier(requests[0])
     assert packet["acceptedVisualKit"]["item"]["palette"] == ["dark blue copper"]
     assert {("chained_door", "on_hit"), ("item", "on_use")}.issubset({(row["entityId"], row["event"]) for row in packet["runtimeSurface"]["runtimePairs"]})
@@ -359,7 +361,7 @@ def test_vfx_consumes_art_palette_and_exact_impact_binding_without_prose_or_audi
     assert impact["prompt"] == "literal door impact" and impact["negativePrompt"] == ""
     assert final["gameplay"] == before["gameplay"]
     assert _runtime_mechanics(final) == _runtime_mechanics(before)
-    assert vfx.validate_vfx_manifest_wire(sanitize_recipe_for_delivery(final))["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(sanitize_recipe_for_delivery(final))["ok"]
     assert not responses
 
 
@@ -374,5 +376,5 @@ def test_vfx_admission_refuses_outside_runtime_or_unknown_fields(change, path):
         raw["slots"][0].update(entityId="outside_runtime", event="on_hit")
     else:
         raw["slots"][0]["inventedStyle"] = "must not be dropped"
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert not report["ok"] and any(path in row["path"] or path in row["message"] for row in report["errors"])

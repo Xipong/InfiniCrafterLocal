@@ -7,8 +7,8 @@ from jsonschema import Draft202012Validator
 
 from prompt_packet_helpers import request_dossier
 from infini_local.core import llm_config
-from infini_local.pipelines import author_item_contract as contract
-from infini_local.pipelines import llm_authoring_pipeline as author
+from infini_local.pipelines.author import item_contract as contract
+from infini_local.pipelines.author import request as author
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])

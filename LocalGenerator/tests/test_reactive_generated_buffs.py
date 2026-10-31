@@ -84,7 +84,7 @@ def test_repair_changes_only_broken_selector_and_freezes_buff_definition():
 @pytest.mark.parametrize("mode", ["json_schema", "json_object"])
 def test_actual_author_and_repair_packets_expose_complete_reaction_contract(monkeypatch, mode):
     from infini_local.core import llm_config
-    from infini_local.pipelines import llm_authoring_pipeline as author
+    from infini_local.pipelines.author import request as author
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     request, user, _ = author.build_initial_author_request({}, {}, "reactive-buff", model_name="offline")
     cards = json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"]

@@ -5,7 +5,7 @@ import math
 import pytest
 
 from infini_local.core.schema_validation import strict_schema_errors
-from infini_local.core.vfx_native_cue_contract import (
+from infini_local.core.vfx.native_cues import (
     NATIVE_DUST_TYPES, native_cue_errors, native_cue_slot_clauses,
     native_dust_schema, native_light_schema,
 )

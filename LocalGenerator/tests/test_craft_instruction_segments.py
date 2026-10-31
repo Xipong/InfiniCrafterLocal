@@ -1,15 +1,20 @@
 
+from infini_local.pipelines.visual import contract as visual_contract
+from infini_local.pipelines.visual import repair_scope as visual_repair_scope
+from infini_local.pipelines.visual import request as visual_request
+
+
 from infini_local.core import llm_config
-from infini_local.pipelines import llm_provider_wire
-from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
+from infini_local.pipelines.transport import provider_wire as llm_provider_wire
+from infini_local.pipelines.vfx import request as vfx_transport
 """Canonical full-craft authority is owned by production builders, not adapters."""
 import copy
 import json
 
 import pytest
 
-from infini_local.pipelines import llm_authoring_pipeline as author
-from infini_local.pipelines import llm_transport as transport
+from infini_local.pipelines.author import request as author
+from infini_local.pipelines.transport import client as transport
 
 
 @pytest.fixture(autouse=True)
@@ -40,8 +45,10 @@ class Captured(BaseException):
 
 
 def stage_packets(monkeypatch, stage, format_mode="json_object", *, labels=("novel-a", "novel-b")):
-    from infini_local.pipelines import visual_generation_pipeline as visual
-    from infini_local.core import vfx_manifest as vfx
+    import infini_local.core.vfx.repair as vfx_repair
+    import infini_local.core.vfx.validation as vfx_validation
+    import infini_local.pipelines.vfx.prompt as vfx_prompt
+    import infini_local.pipelines.vfx.stage as vfx_stage
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     from vfx_material_fixtures import _data, _legacy
@@ -52,7 +59,7 @@ def stage_packets(monkeypatch, stage, format_mode="json_object", *, labels=("nov
     monkeypatch.setattr(vfx_transport, "USE_LLM", True)
     monkeypatch.setattr(author, "resolve_llm_model", lambda: "test-model")
     monkeypatch.setattr(vfx_transport, "resolve_llm_model", lambda: "test-model")
-    monkeypatch.setattr(visual, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(visual_request, "resolve_llm_model", lambda: "test-model")
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", format_mode)
     packets = []
     def capture(packet, **kwargs):
@@ -60,7 +67,7 @@ def stage_packets(monkeypatch, stage, format_mode="json_object", *, labels=("nov
         raise Captured()
     monkeypatch.setattr(author, "llm_chat_json", capture)
     monkeypatch.setattr(vfx_transport, "llm_chat_json", capture)
-    monkeypatch.setattr(visual, "llm_chat_json", capture)
+    monkeypatch.setattr(visual_request, "llm_chat_json", capture)
     for label in labels:
         a = {"name": label, "damage": 7, "useTime": 20}
         data = {}
@@ -84,15 +91,15 @@ def stage_packets(monkeypatch, stage, format_mode="json_object", *, labels=("nov
                 broken = _visual_kit(data)
                 broken["item"]["renderSizePx"] = None
                 ids = [e["id"] for e in data["runtimeProgram"]["entities"]]
-                _, errors = visual._validate_kit(broken, ids, data["runtimeProgram"]["itemEntityId"])
-                scope = visual._build_visual_repair_scope(broken, errors, ids, data["runtimeProgram"]["itemEntityId"])
-                visual._request_visual_kit(data, a, {}, **({"repair_errors": errors, "previous": broken, "repair_scope": scope} if stage.endswith("repair") else {}))
+                _, errors = visual_contract._validate_kit(broken, ids, data["runtimeProgram"]["itemEntityId"])
+                scope = visual_repair_scope._build_visual_repair_scope(broken, errors, ids, data["runtimeProgram"]["itemEntityId"])
+                visual_request._request_visual_kit(data, a, {}, **({"repair_errors": errors, "previous": broken, "repair_scope": scope} if stage.endswith("repair") else {}))
             else:
                 broken = _legacy(data)
                 broken["slots"][0]["alpha"] = None
-                errors = vfx.validate_vfx_director_output(broken, data)["errors"]
-                scope = vfx._build_vfx_repair_scope(broken, errors)
-                vfx._request(vfx_transport.call_llm_vfx_director, vfx._prompt_packet(data, a, {}),
+                errors = vfx_validation.validate_vfx_director_output(broken, data)["errors"]
+                scope = vfx_repair._build_vfx_repair_scope(broken, errors)
+                vfx_stage._request(vfx_transport.call_llm_vfx_director, vfx_prompt._prompt_packet(data, a, {}),
                     **({"repair_errors": errors, "previous": broken, "repair_scope": scope} if stage.endswith("repair") else {}))
     return packets
 
@@ -126,7 +133,7 @@ def test_every_production_stage_owns_only_complete_static_instructions(monkeypat
 
 @pytest.mark.parametrize("stage", ["visual", "visual_repair"])
 def test_visual_presentation_instructions_precede_only_user_owned_bake_facts(monkeypatch, stage):
-    from infini_local.pipelines import visual_generation_pipeline as visual
+    import infini_local.pipelines.visual.context as visual_context
     from prompt_packet_helpers import request_dossier
     first, second = stage_packets(monkeypatch, stage)
     static = json.loads(first["messages"][1]["content"])
@@ -145,7 +152,7 @@ def test_visual_presentation_instructions_precede_only_user_owned_bake_facts(mon
     assert first["messages"][:2] == second["messages"][:2]
     # Role roster and gameplay alter only facts, never the instructions.
     for kind, role in (("item_body", "item"), ("projectile", "field"), ("projectile", "helper")):
-        context = visual._presentation_packet_context(
+        context = visual_context._presentation_packet_context(
             {"gameplay": {"itemScale": 3}, "runtimeProgram": {"bindings": [{"id": role}]}},
             [{"kind": kind, "visualRole": role}],
         )

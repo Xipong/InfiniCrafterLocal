@@ -24,7 +24,7 @@ from infini_local.core.runtime_authoring.wire_validator import validate_runtime_
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.capability_library_audit import _runtime_param_bound_rows
-from infini_local.pipelines import llm_authoring_pipeline as gameplay
+from infini_local.pipelines.author import request as gameplay
 from test_low_level_three_stage_pipeline import wire_transport
 
 

@@ -10,8 +10,10 @@ from infini_local.core.runtime_authoring.program_schema import apply_repair_patc
 from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.pipelines.llm_authoring_pipeline import build_gameplay_repair_dossier
-from infini_local.pipelines import visual_generation_pipeline as visual
+from infini_local.pipelines.author.request import build_gameplay_repair_dossier
+import infini_local.pipelines.visual.contract as visual_contract
+import infini_local.pipelines.visual.repair as visual_repair
+import infini_local.pipelines.visual.repair_scope as visual_repair_scope
 from tests.test_visual_presentation_metadata import kit
 from tests.captured_projectile_author import project_captured_projectile_call
 from tests.captured_parent_combat_author import captured_parent_combat_author
@@ -22,8 +24,8 @@ def test_saved_initial_projectile_lifetime_compiles_without_repair(monkeypatch):
     # Exact initial saved answer, not the campaign's later repaired/final output.
     import hashlib
     from test_gameplay_repair_readonly_context import _offline_builder
-    from infini_local.pipelines import llm_authoring_pipeline as author
-    from infini_local.pipelines import gameplay_stage as combine
+    from infini_local.pipelines.author import request as author
+    from infini_local.pipelines.author import stage as combine
     from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 
@@ -96,20 +98,20 @@ def test_visual_literal_member_deletion_is_exact(domain):
         original["grip"][key] = "foreign"
         patch_edits = {"itemPatch": {"grip": {"normalizedX": 0.9, "normalizedY": 0.1}}}
     before = copy.deepcopy(raw)
-    _, errors = visual._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
+    _, errors = visual_contract._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
     assert errors
-    scope = visual._build_visual_repair_scope(raw, errors, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
+    scope = visual_repair_scope._build_visual_repair_scope(raw, errors, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
     assert (scope["fieldPermissions"]["entities"] if domain == "entity" else scope["fieldPermissions"]["itemPaths"]) == ([{"entityId": "opaque_id", "paths": [relative]}] if domain == "entity" else [relative])
     patch = {
-        "schema": visual.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": None, "equipOverlayPatch": None,
+        "schema": visual_contract.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": None, "equipOverlayPatch": None,
         "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [],
         "note": "remove literal member", **patch_edits}
-    repaired, audit = visual._apply_visual_repair_patch(raw, patch, scope, ["opaque_id"], return_audit=True)
+    repaired, audit = visual_repair._apply_visual_repair_patch(raw, patch, scope, ["opaque_id"], return_audit=True)
     expected = copy.deepcopy(raw)
     (expected["entities"][0] if domain == "entity" else expected["item"]["grip"]).pop(key)
     assert repaired == expected, "visual_literal_member_and_frozen_siblings"
     assert audit["ok"] and audit["ignoredChanges"]
-    assert not visual._validate_kit(repaired, ["opaque_id"], "opaque_id", equipment_overlay_required=True)[1]
+    assert not visual_contract._validate_kit(repaired, ["opaque_id"], "opaque_id", equipment_overlay_required=True)[1]
     assert raw == before
 
 
@@ -317,15 +319,15 @@ def test_captured_visual_repair_replay(case, monkeypatch):
     # Declared test-only historical schema projection, not fresh v1 admission.
     # Saved RAW/patch bytes and all authored choices remain untouched. The v1
     # replay verifies its old frozen deletion only; no new sizing is invented.
-    current_item_schema = visual._visual_item_schema
+    current_item_schema = visual_contract._visual_item_schema
     def historical_item_schema():
         schema = current_item_schema()
         for field in ("renderSizePx", "forwardAngleDegrees"):
             del schema["properties"][field]
             schema["required"].remove(field)
         return schema
-    monkeypatch.setattr(visual, "_visual_item_schema", historical_item_schema)
-    current_entity_schema = visual._visual_entity_schema
+    monkeypatch.setattr(visual_contract, "_visual_item_schema", historical_item_schema)
+    current_entity_schema = visual_contract._visual_entity_schema
     def historical_entity_schema(entity_ids, item_body_id=None):
         schema = current_entity_schema(entity_ids, item_body_id)
         root = (schema.get("oneOf") or [schema])[0]
@@ -334,20 +336,25 @@ def test_captured_visual_repair_replay(case, monkeypatch):
             root["required"].append(field)
         return schema
     # Preserve the captured v1 grammar; this is not a production legacy reader.
-    monkeypatch.setattr(visual, "_visual_entity_schema", historical_entity_schema)
-    monkeypatch.setattr(visual, "VISUAL_KIT_SCHEMA", "infini.visual-kit.runtime-entities.v1")
-    monkeypatch.setattr(visual, "VISUAL_REPAIR_PATCH_SCHEMA", "infini.visual-kit-repair-patch.runtime-entities.v1")
+    monkeypatch.setattr(visual_contract, "_visual_entity_schema", historical_entity_schema)
+    monkeypatch.setattr(visual_contract, "VISUAL_KIT_SCHEMA", "infini.visual-kit.runtime-entities.v1")
+    monkeypatch.setattr(visual_contract, "VISUAL_REPAIR_PATCH_SCHEMA", "infini.visual-kit-repair-patch.runtime-entities.v1")
+    # Replay adapters must patch the filtering consumer as well as the grammar owner.
+    monkeypatch.setattr(visual_repair, "_visual_item_schema", historical_item_schema)
+    monkeypatch.setattr(visual_repair, "_visual_entity_schema", historical_entity_schema)
+    monkeypatch.setattr(visual_repair, "VISUAL_KIT_SCHEMA", "infini.visual-kit.runtime-entities.v1")
+    monkeypatch.setattr(visual_repair, "VISUAL_REPAIR_PATCH_SCHEMA", "infini.visual-kit-repair-patch.runtime-entities.v1")
     replay = copy.deepcopy(_REPLAY["visualApplyCases"][case])
     raw, entity_ids, item_id = replay["visualRaw"], replay["entityIds"], replay["itemBodyId"]
-    kit_before, errors = visual._validate_kit(raw, entity_ids, item_id)
+    kit_before, errors = visual_contract._validate_kit(raw, entity_ids, item_id)
     assert kit_before is None
     old_paths = replay["expectedInitialErrorPaths"]
     if "$.item.:palette" in old_paths:
         assert ":palette" in raw["item"]
     expected_paths = ['$.item[":palette"]' if path == "$.item.:palette" else path for path in old_paths]
     assert [row["path"] for row in errors] == expected_paths
-    scope = visual._build_visual_repair_scope(raw, errors, entity_ids, item_id)
-    repaired, audit = visual._apply_visual_repair_patch(raw, replay["visualRepairPatch"], scope, entity_ids, return_audit=True)
+    scope = visual_repair_scope._build_visual_repair_scope(raw, errors, entity_ids, item_id)
+    repaired, audit = visual_repair._apply_visual_repair_patch(raw, replay["visualRepairPatch"], scope, entity_ids, return_audit=True)
     assert audit["ok"], audit
-    final, final_errors = visual._validate_kit(repaired, entity_ids, item_id)
+    final, final_errors = visual_contract._validate_kit(repaired, entity_ids, item_id)
     assert final is not None, final_errors

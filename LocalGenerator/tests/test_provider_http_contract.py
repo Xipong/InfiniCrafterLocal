@@ -16,7 +16,7 @@ import pytest
 from provider_test_support import deliverable_recipe, endpoint_options
 from test_provider_transport_contract import loopback_transport  # noqa: F401 - imported pytest fixture
 
-from infini_local.pipelines import llm_transport as transport
+from infini_local.pipelines.transport import client as transport
 from infini_local.storage import world_storage
 from infini_local.web.http_response_helpers import _combine_failure_http_response, _combine_failure_payload
 from infini_local.web.server_handler import JSON_BODY_READ_TIMEOUT_SECONDS, MAX_JSON_BODY_BYTES, build_handler
@@ -578,7 +578,7 @@ def test_debug_manifest_never_adopts_forced_authority(monkeypatch) -> None:
 
 
 def test_debug_views_consume_authoritative_recipe_files(tmp_path: Path, monkeypatch) -> None:
-    from infini_local.pipelines import visual_delivery_gate
+    from infini_local.pipelines.visual import delivery as visual_delivery_gate
     from infini_local.qa.live_no_image_fixture import write_no_image_fixture_png
 
     # Present transfer-roster paths require actual offline PNG bytes in the
@@ -591,7 +591,7 @@ def test_debug_views_consume_authoritative_recipe_files(tmp_path: Path, monkeypa
     routes.read_json_file = world_storage.read_json_file
 
     from infini_local.web.vfx_debug_routes import _sample_data
-    from infini_local.core.vfx_manifest import attach_vfx_manifest
+    from infini_local.pipelines.vfx.stage import attach_vfx_manifest
     from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
 
     for suffix, parents, versions in [

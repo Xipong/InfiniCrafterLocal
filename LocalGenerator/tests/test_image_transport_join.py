@@ -9,10 +9,10 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from infini_local.pipelines import image_backend_pipeline as backend
-from infini_local.pipelines import pipeline_visual_config as config
-from infini_local.pipelines import sprite_postprocess as post
-from infini_local.pipelines import visual_sprite_generation as visual
+from infini_local.pipelines.images import backends as backend
+from infini_local.core.images import config
+from infini_local.pipelines.images import postprocess as post
+from infini_local.pipelines.images import stage as visual
 from infini_local.services import codex_auth as auth
 from infini_local.storage import trace_runtime as trace
 

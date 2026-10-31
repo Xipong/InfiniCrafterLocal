@@ -15,7 +15,7 @@ from infini_local.core.runtime_authoring.wire_validator import validate_runtime_
 from infini_local.core.runtime_authoring.program_schema import strict_author_shape_report
 from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-from infini_local.pipelines import author_item_contract as contract
+from infini_local.pipelines.author import item_contract as contract
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
@@ -71,7 +71,7 @@ def _accepted_main_combat_composition(damage_basis="live_parent", knockback_basi
 def test_parent_combat_composes_with_accepted_volley_ammo_lifecycle_beam_through_serialized_provider(
     monkeypatch, mode, damage_basis, knockback_basis, multiplier,
 ):
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from infini_local.pipelines.author.request import build_initial_author_request
 
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     request, user, _ = build_initial_author_request({}, {}, "combined-combat", model_name="test-model")

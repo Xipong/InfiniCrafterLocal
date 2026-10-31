@@ -5,8 +5,8 @@ import json
 
 import pytest
 
-from infini_local.pipelines import llm_authoring_pipeline as author
-from infini_local.pipelines.parent_context_pipeline import compact_projectile_profile
+from infini_local.pipelines.author import request as author
+from infini_local.pipelines.context.parents import compact_projectile_profile
 from prompt_packet_helpers import expand_native_source_references
 
 
@@ -137,7 +137,7 @@ def test_parent_source_graph_is_delivered_literally_with_unknowns_and_references
 
 
 def test_generated_parent_does_not_borrow_native_proxy_source_graph():
-    from infini_local.pipelines.parent_context_pipeline import compact_item_raw_for_llm
+    from infini_local.pipelines.context.parents import compact_item_raw_for_llm
 
     parent = {"generatedData": {"runtimeProgram": {"entities": [], "bindings": [], "calls": []}},
               "parentSourceGraph": {"source": "proxy_native_hooks"}}

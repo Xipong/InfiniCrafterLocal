@@ -4,7 +4,7 @@ from prompt_packet_helpers import dossier_text
 import copy
 import json
 from infini_local.core import llm_config
-from infini_local.pipelines import llm_authoring_pipeline as author
+from infini_local.pipelines.author import request as author
 
 
 def packet(monkeypatch, a=None, b=None):

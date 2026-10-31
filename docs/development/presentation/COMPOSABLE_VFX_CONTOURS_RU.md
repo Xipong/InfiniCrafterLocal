@@ -54,4 +54,4 @@ Fill/band имеют статическую топологию; общие `tran
 
 Repair может исправить диагностированный лист внутри `contours[]` или `draws[]`, но не получает разрешение менять соседние поля, переставлять/увеличивать массив или переписывать валидные slots. Изменения вне scope игнорируются с audit. Библиотечная текстура не создаёт PNG-job; реальный item/entity/asset selector проходит общий dependency owner с точным путём конкретного draw.
 
-Канонический Python-контракт: `LocalGenerator/infini_local/core/vfx_contour_contract.py`. Нативная геометрия: `Common/VFX/VfxContourGeometry.cs`.
+Канонический Python-контракт: `LocalGenerator/infini_local/core/vfx/contours.py`. Нативная геометрия: `Common/VFX/VfxContourGeometry.cs`.

@@ -23,7 +23,7 @@ Station A/B inputs
 <a id="authority"></a>
 ## Stage entrypoints и зависимости
 
-`combine_pipeline.combine` владеет порядком стадий, cache/lease и final commit. `gameplay_stage.compile_and_validate_authored_runtime` держит вместе strict Author/identity acceptance, parent context, compilation, wire gate и один conditional Repair/revalidation. `llm_authoring_pipeline` строит Author/Repair requests; `vfx_generation_pipeline` — VFX requests. Ни одна presentation-стадия не импортирует Gameplay Author только ради JSON helper.
+`combine_pipeline.combine` владеет порядком стадий, cache/lease и final commit. `author.stage.compile_and_validate_authored_runtime` держит вместе strict Author/identity acceptance, parent context, compilation, wire gate и один conditional Repair/revalidation. `author.request` строит Author/Repair requests; `vfx.request` — VFX requests. Ни одна presentation-стадия не импортирует Gameplay Author только ради JSON helper.
 
 `wire_views` читает accepted wire для Visual/VFX/diagnostics, не компилирует его заново. Runtime package не реэкспортирует owners: прямой import указывает точку изменения и не загружает всю authoring цепочку. [Маршруты задач](../CODE_MAP_RU.md#fast-start) сохраняют полный vertical slice для настоящих contract changes.
 
@@ -41,7 +41,7 @@ Station A/B inputs
 | Runtime / multiplayer / drawing | [C# consumers](../CODE_MAP_RU.md#csharp), [module boundaries](../MODULES_RU.md#runtime-presentation) |
 | Studio/config/process lifecycle | Existing native controller + browser adapter; [UI boundary](../MODULES_RU.md#studio) |
 
-Registry объявляет runtime `infini.runtime-program.v5`, fresh Author `infini.runtime-program.authoring.v6`, persisted wire `infini.runtime-program.wire.v3`. Entities/bindings/calls, movement/controller slots, event/rate/lifetime/depth limits задаются live registry/schema/validator, не copied counts в обзоре. Это конечная композиция, не arbitrary ECS/VM/generated C#.
+Registry объявляет runtime `infini.runtime-program.v5`, fresh Author `infini.runtime-program.authoring.v7`, persisted wire `infini.runtime-program.wire.v3`. Entities/bindings/calls, movement/controller slots, event/rate/lifetime/depth limits задаются live registry/schema/validator, не copied counts в обзоре. Это конечная композиция, не arbitrary ECS/VM/generated C#.
 
 Whole-weapon macros, semantic family/profile routers, legacy weapon IR и importer, угадывающий/переавторствующий механику, запрещены. Отдельное [локальное чтение сохранённых v5](ENGINE_RUNTIME_BOUNDARIES_RU.md#saved-v5) с перечисленными inert-field removals и точной persisted presentation normalization не является таким importer и не открывает старую grammar для Author/network. Name/category/tags/prose не выбирают механику. Четыре класса преобразований — [Fallback / Fix / declared Normalization / lossless Alias](TECHNICAL_LOWERING_POLICY_RU.md#transformations); generated [boundary](../../reference/generated/LOWERY_RU.md) и receipts не являются вторым registry. Новая capability завершается только [полным vertical slice](../ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md).
 
@@ -70,7 +70,7 @@ Fresh Author shape и persisted wire/recipes имеют разные readers/pro
 
 ## Transport не выбирает gameplay
 
-Cache-marked stage packets самодостаточны и не используют Responses history: каждый запрос несёт текущие instructions и read-only context. У unmarked двухсообщенческих system/user запросов Responses continuation остаётся внутри текущей item lease; cache marker исключает continuation и очищает chain, failover её сбрасывает. Prompt-cache identity не является conversation state и не дополняет отсутствующие факты. Owners — stage request builders и `pipelines/llm_transport.py`; [cache/latency](../providers/LLM_PROMPT_CACHE_AND_LATENCY_RU.md), [request shape](../providers/LLM_TRANSPORT_REQUEST_SHAPE_RU.md), [provider admission](../providers/LLM_PROVIDER_ADMISSION_RU.md).
+Cache-marked stage packets самодостаточны и не используют Responses history: каждый запрос несёт текущие instructions и read-only context. У unmarked двухсообщенческих system/user запросов Responses continuation остаётся внутри текущей item lease; cache marker исключает continuation и очищает chain, failover её сбрасывает. Prompt-cache identity не является conversation state и не дополняет отсутствующие факты. Owners — stage request builders и `pipelines/transport/client.py`; [cache/latency](../providers/LLM_PROMPT_CACHE_AND_LATENCY_RU.md), [request shape](../providers/LLM_TRANSPORT_REQUEST_SHAPE_RU.md), [provider admission](../providers/LLM_PROVIDER_ADMISSION_RU.md).
 
 Multi-dev lanes — операционная изоляция, не Author capability. `/multidevcraft 2|3` даёт отдельные A/B escrow/request/task/progress/refund и pin к `llm_1/2/3` без profile/model hopping. Обычный single-lane сохраняет transport round-robin/failover. Profile добавляется только в multi-dev world recipe cache identity, не wire/schema; upstream provider pin — отдельная настройка.
 

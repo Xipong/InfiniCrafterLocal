@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from infini_local.pipelines import llm_transport as transport
+from infini_local.pipelines.transport import client as transport
 from test_craft_instruction_segments import stage_packets
 
 

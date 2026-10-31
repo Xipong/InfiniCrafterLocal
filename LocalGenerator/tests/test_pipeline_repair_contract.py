@@ -5,9 +5,11 @@ import json
 
 import pytest
 
-import infini_local.pipelines.llm_authoring_pipeline as gameplay_stage
-import infini_local.pipelines.visual_generation_pipeline as visual_stage
-import infini_local.core.vfx_manifest as vfx_stage
+import infini_local.pipelines.author.request as gameplay_stage
+import infini_local.pipelines.visual.contract as visual_stage_contract
+import infini_local.pipelines.visual.repair as visual_stage_repair
+import infini_local.pipelines.visual.repair_scope as visual_stage_repair_scope
+import infini_local.core.vfx.contract as vfx_stage_contract
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
@@ -22,14 +24,11 @@ from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.wire_views import runtime_event_inventory
 from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.core.vfx_manifest import (
-    VFX_REPAIR_PATCH_SCHEMA,
-    _apply_vfx_repair_patch,
-    _build_vfx_repair_scope,
-    validate_vfx_director_output,
-    vfx_director_surface,
-)
-from infini_local.pipelines.gameplay_stage import authored_item_validation_report
+from infini_local.core.vfx.contract import VFX_REPAIR_PATCH_SCHEMA
+from infini_local.core.vfx.repair import _apply_vfx_repair_patch, _build_vfx_repair_scope
+from infini_local.core.vfx.validation import validate_vfx_director_output
+from infini_local.core.vfx.surface import vfx_director_surface
+from infini_local.pipelines.author.stage import authored_item_validation_report
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from pipeline_test_support import RepairTransaction
@@ -444,10 +443,10 @@ def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(wi
 
 def test_malformed_vfx_repair_output_fails_closed_as_planner_unavailable() -> None:
     current = build_runtime_fixture("workbench_blade")
-    previous = vfx_stage.MalformedVfxDirectorOutput("{", "initial malformed JSON")
+    previous = vfx_stage_contract.MalformedVfxDirectorOutput("{", "initial malformed JSON")
     report = validate_vfx_director_output(previous, current)
     scope = _build_vfx_repair_scope(previous, report["errors"])
-    malformed_patch = vfx_stage.MalformedVfxDirectorOutput("{", "repair truncated")
+    malformed_patch = vfx_stage_contract.MalformedVfxDirectorOutput("{", "repair truncated")
 
     with pytest.raises(PlannerUnavailable, match="VFX Repair patch shape rejected"):
         _apply_vfx_repair_patch(current, previous, malformed_patch, scope)
@@ -507,8 +506,8 @@ def test_visual_repair_freezes_valid_fields_and_ignores_scope_escape() -> None:
     old_silhouette = previous["entities"][1]["silhouette"]
     entity_ids = [row["id"] for row in data["runtimeProgram"]["entities"]]
     item_id = data["runtimeProgram"]["itemEntityId"]
-    _kit, errors = visual_stage._validate_kit(previous, entity_ids, item_id)
-    scope = visual_stage._build_visual_repair_scope(previous, errors, entity_ids, item_id)
+    _kit, errors = visual_stage_contract._validate_kit(previous, entity_ids, item_id)
+    scope = visual_stage_repair_scope._build_visual_repair_scope(previous, errors, entity_ids, item_id)
     fixed_row = copy.deepcopy(previous["entities"][1])
     fixed_row["prompt"] = "fixed chained door"
     fixed_row["scale"] = 1.25
@@ -516,11 +515,11 @@ def test_visual_repair_freezes_valid_fields_and_ignores_scope_escape() -> None:
     unrelated_row = copy.deepcopy(previous["entities"][0])
     unrelated_row["scale"] = 4
     patch = {
-        "schema": visual_stage.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": None,
+        "schema": visual_stage_contract.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": None,
         "entitiesUpsert": [fixed_row, unrelated_row], "entityIdsDelete": [], "entityIndicesDelete": [],
         "animationPlan": "SHOULD_BE_IGNORED", "note": "repair one entity row",
     }
-    repaired, audit = visual_stage._apply_visual_repair_patch(previous, patch, scope, entity_ids, return_audit=True)
+    repaired, audit = visual_stage_repair._apply_visual_repair_patch(previous, patch, scope, entity_ids, return_audit=True)
     assert repaired["item"]["prompt"] == "KEEP_VALID_ITEM_PROMPT"
     assert repaired["entities"][0] == previous["entities"][0]
     assert repaired["entities"][1]["scale"] == 1.25
@@ -754,7 +753,7 @@ def _bounded_invalid_buff_calls(fields=("duration",)):
     pytest.param(("buffId", "duration"), "orchestration", id="all-canonical-leaves-reach-single-repair")
 ])
 def test_bounded_dossier_preserves_all_canonical_errors_without_broad_permissions(failure_envelope, fields):
-    from infini_local.pipelines.gameplay_stage import _failure_report
+    from infini_local.pipelines.author.stage import _failure_report
 
     current, good = _bounded_invalid_buff_calls(fields)
     assert validate_runtime_program(good)["ok"]
@@ -789,8 +788,8 @@ def test_bounded_dossier_preserves_all_canonical_errors_without_broad_permission
 
 @pytest.mark.parametrize("identity_tail", [False, True], ids=["shape-only", "author-identity-after-shape"])
 def test_strict_author_exception_keeps_all_targets_separate_from_display(identity_tail):
-    from infini_local.pipelines.gameplay_stage import _failure_report
-    from infini_local.pipelines.gameplay_stage import strict_validate_authored_item
+    from infini_local.pipelines.author.stage import _failure_report
+    from infini_local.pipelines.author.stage import strict_validate_authored_item
 
     current, _ = _bounded_invalid_buff_calls(("buffId", "duration"))
     parent_a, parent_b = {"name": "Parent A"}, {"name": "Parent B"}
