@@ -148,8 +148,11 @@ def _director_system(*, repair: bool = False) -> str:
         ) + generation_system_suffix()
     return (
         "You are the VFX Director. Author finite Terraria presentation only for accepted low-level runtime entity/event pairs. "
-        "Make the accepted item’s motion, timing and impacts legible in a coherent visual style informed by its authored concept. "
-        "Gameplay is immutable. Do not infer or create weapon families. Return strict JSON only."
+        "Make the accepted item’s body, motion, timing and impacts legible as one coherent design. "
+        "Preserve its intended physical identity: a held, floating or detached body should read as a deliberate part of the "
+        "composition, not an unexplained visual gap. Collision geometry describes coverage; it does not require the "
+        "visible object to resemble a bare collision primitive. Work within the accepted Visual and gameplay choices. "
+        "Gameplay is immutable. Return strict JSON only."
     ) + generation_system_suffix()
 
 

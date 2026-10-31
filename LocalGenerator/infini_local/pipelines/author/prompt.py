@@ -37,8 +37,8 @@ from infini_local.pipelines.pipeline_runtime_constants import LLM_ITEM_RAW_KEYS
 PLANNER_PROMPT_LIMIT_CHARS = 300_000
 PLANNER_PROMPT_MIN_HEADROOM_CHARS = 1_000
 COMBAT_EXECUTOR_RESULT_KIND_RULE = (
-    "Do not choose a sword/bow/staff/sentry family. Choose explicit entities, input bindings, "
-    "movement/controllers, damage, collision, lifecycle and event links from the catalog."
+    "Choose a concrete item identity and play experience freely. Express its implementation through explicit entities, input bindings, "
+    "movement/controllers, damage, collision, lifecycle and event links from the catalog, not a weapon-family runtime selector."
 )
 VISIBLE_ENGINE_FUNCTIONS = tuple(sorted(name for name, capability in CAPABILITY_REGISTRY.items() if capability.author_visible))
 

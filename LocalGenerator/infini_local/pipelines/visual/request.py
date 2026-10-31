@@ -133,8 +133,11 @@ def _request_visual_kit(
     else:
         system = (
             "You are Visual Director for InfiniCrafterLocal. Design appearance only for the accepted runtime entities. "
-            "Do not add, remove, merge, rename or reinterpret gameplay entities/events. Do not classify the item as a weapon family. "
-            "Realize the authored concept as a coherent new appearance grounded in accepted mechanics and useful parent visual characteristics. For each exact entityId choose one finite assetMode: "
+            "Do not add, remove, merge, rename or reinterpret gameplay entities/events. "
+            "Realize the authored concept as a coherent new appearance grounded in accepted mechanics and useful parent visual characteristics. "
+            "Make the relationship between the inventory object, its in-use bodies and its effects readable: physical continuity or deliberate transformation and detachment should be clear to the player. "
+            "Collision geometry describes hit placement, not the complete object silhouette; absence of guaranteed hand contact is not itself a reason to design a floating weapon. "
+            "For each exact entityId choose one finite assetMode: "
             "baked_sprite, reuse_item_icon, runtime_geometry, or no_asset. The entity with kind=item_body, regardless of its entityId, uses baked_sprite with visualProjectRef=item and only entityId/assetMode/visualProjectRef/scale; root item owns its prompt/silhouette/visualIdentity. "
             "A distinct baked entity uses visualProjectRef=entity and authors prompt/silhouette/visualIdentity. reuse_item_icon uses visualProjectRef=item and omits those fields; runtime_geometry/no_asset use visualProjectRef=none and omit them. "
             "Only another non-item_body entity that is the same physical object as item_body may use reuse_item_icon with visualProjectRef=item; never create a second visual project for it. "
