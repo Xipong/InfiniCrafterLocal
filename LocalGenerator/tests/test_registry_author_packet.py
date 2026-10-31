@@ -1,29 +1,40 @@
 """The serialized Author packet exposes the canonical shape, units and construction grammar."""
 
 from __future__ import annotations
-from infini_local.core.runtime_authoring.capability_registry import (
-    CAPABILITY_REGISTRY, BINDING_ACTION_REGISTRY, ENTITY_KIND_REGISTRY,
-    EVENT_KIND_REGISTRY, author_parameter_shape,
-)
-from prompt_packet_helpers import request_dossier, dossier_text, expand_catalog_targets
+
 import copy
 import json
-import pytest
-from repair_test_helpers import offline_builder, repair_with_response, assert_repaired_source
 
-from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY
-from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.core.runtime_authoring.capability_registry import runtime_authoring_prompt_field_guide
+import pytest
+from infini_local.core.runtime_authoring.capability_registry import (
+    BINDING_ACTION_REGISTRY,
+    CAPABILITY_REGISTRY,
+    ENTITY_KIND_REGISTRY,
+    EVENT_KIND_REGISTRY,
+    INPUT_KIND_REGISTRY,
+)
+from infini_local.core.runtime_authoring.parameter_contract import author_parameter_shape
 from infini_local.core.runtime_authoring.program_schema import binding_schema, strict_schema_errors
-from infini_local.pipelines.author.item_contract import author_item_response_schema, author_item_provider_response_schema, author_item_prompt_shape_card, author_item_repair_prompt_shape_card, author_item_repair_response_schema, project_provider_author_item_to_local
+from infini_local.core.runtime_authoring.registry_views import runtime_authoring_prompt_field_guide
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.pipelines.author import request as pipeline
+from infini_local.pipelines.author.item_contract import (
+    author_item_prompt_shape_card,
+    author_item_provider_response_schema,
+    author_item_repair_prompt_shape_card,
+    author_item_repair_response_schema,
+    author_item_response_schema,
+    project_provider_author_item_to_local,
+)
 from infini_local.pipelines.author.prompt import (
     PLANNER_PROMPT_LIMIT_CHARS,
     PLANNER_PROMPT_MIN_HEADROOM_CHARS,
     planner_prompt_usability_report,
 )
 from infini_local.pipelines.author.request import build_initial_author_request
-from infini_local.pipelines.author import request as pipeline
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from prompt_packet_helpers import dossier_text, expand_catalog_targets, request_dossier
+from repair_test_helpers import assert_repaired_source, offline_builder, repair_with_response
 
 
 def _assert_catalog_delivery(catalog, capabilities=CAPABILITY_REGISTRY):
@@ -62,8 +73,11 @@ def _assert_catalog_delivery(catalog, capabilities=CAPABILITY_REGISTRY):
     canonical["types"] = {name: author_parameter_shape(schema) for name, schema in canonical["types"].items()}
     assert {key: catalog["fieldGuide"][key] for key in canonical} == canonical
     from infini_local.core.runtime_authoring.terraria_vocabulary import (
-        DAMAGE_CLASS_MEANINGS, DAMAGE_CLASS_TOKENS,
-        ITEM_USE_STYLE_MEANINGS, ITEM_USE_STYLE_TMODLOADER_NAMES, ITEM_USE_STYLE_TOKENS,
+        DAMAGE_CLASS_MEANINGS,
+        DAMAGE_CLASS_TOKENS,
+        ITEM_USE_STYLE_MEANINGS,
+        ITEM_USE_STYLE_TMODLOADER_NAMES,
+        ITEM_USE_STYLE_TOKENS,
     )
     for key, tokens, meanings in (
         ("damageClass", DAMAGE_CLASS_TOKENS, DAMAGE_CLASS_MEANINGS),
@@ -231,11 +245,12 @@ def test_catalog_delivery_oracle_accepts_reordering_and_rejects_loss(monkeypatch
 def test_rewording_canonical_cards_reaches_author_and_repair_without_changing_mechanics(monkeypatch):
     """A safe editorial change must propagate without requiring test rewrites."""
     from dataclasses import replace
+
     import infini_local.core.runtime_authoring.capability_registry as registry
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.pipelines.author import prompt
-    from test_source_unit_guidance import _serialized_chat_request
     from infini_local.qa.capability_witnesses import build_capability_witness
+    from test_source_unit_guidance import _serialized_chat_request
 
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_schema")
     source = build_capability_witness("item_stats")

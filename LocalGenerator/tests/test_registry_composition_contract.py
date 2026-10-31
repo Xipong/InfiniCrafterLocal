@@ -1,19 +1,21 @@
 """Authored composition ownership, non-archetypal runtime programs and engine seams."""
 
 from __future__ import annotations
+
 import copy
-from copy import deepcopy
 import json
+from copy import deepcopy
+
 import pytest
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-from infini_local.pipelines.context.generated_summary import generated_parent_summary_from_data
-from infini_local.pipelines.context.cards import raw_parent_card_for_llm
-from infini_local.pipelines.context.parents import projectile_profile_of, effective_projectile_profile_of
 from infini_local.pipelines.author.prompt import build_llm_author_payload
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
+from infini_local.pipelines.context.generated_summary import generated_parent_summary_from_data
+from infini_local.pipelines.context.parents import effective_projectile_profile_of, projectile_profile_of
 from infini_local.qa.runtime_program_fixtures import NON_ARCHETYPAL_FIXTURES, build_runtime_fixture
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 
@@ -54,8 +56,8 @@ def test_canonical_synthetic_fixtures_validate_compile_and_deliver_current_wire(
 
 
 def test_current_schema_export_renders_accepted_fixture_without_writing_artifacts():
-    from pathlib import Path
     import runpy
+    from pathlib import Path
 
     exporter = Path(__file__).resolve().parents[2] / "tools/generate/export_contract_schemas.py"
     rows = runpy.run_path(str(exporter))["render"]()

@@ -1,24 +1,27 @@
 """Declared full-Author neutrals, exact omission provenance, and frozen Repair absence."""
 
+import json
 from copy import deepcopy
 from dataclasses import replace
 from itertools import product
-import json
+
+import infini_local.core.runtime_authoring.technical_lowering as technical_lowering
 import pytest
-from hypothesis import example, given, settings, strategies as st
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, capability_provider_union
+from hypothesis import example, given, settings
+from hypothesis import strategies as st
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch, strict_schema_errors
+from infini_local.core.runtime_authoring.registry_views import capability_provider_union
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+from infini_local.core.runtime_authoring.terraria_vocabulary import DAMAGE_CLASS_TOKENS
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
-import infini_local.core.runtime_authoring.technical_lowering as technical_lowering
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
-from infini_local.core.runtime_authoring.terraria_vocabulary import DAMAGE_CLASS_TOKENS
+from infini_local.pipelines.author.request import build_initial_author_request
 from infini_local.qa.capability_witnesses import build_capability_witness
 from test_registry_receipt_identity import _call, _receipt
-from infini_local.pipelines.author.request import build_initial_author_request
 
 # The registry owns the permitted omission surface. Tests constrain its meaning
 # (optional, type-exact neutral, admitted) instead of maintaining a second roster

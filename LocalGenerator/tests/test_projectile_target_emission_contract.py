@@ -1,27 +1,24 @@
 """Explicit bounded target links emit authored physical children; no radial alias."""
-
-from copy import deepcopy
 import hashlib
 import json
+from copy import deepcopy
 
 import pytest
-from repair_test_helpers import gameplay_repair, frozen_gameplay_repair
-from jsonschema import Draft202012Validator
-
 from infini_local.core import llm_config
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, EVENT_ACTION_OPCODE
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.capability_registry import EVENT_ACTION_OPCODE
-from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.pipelines.author import item_contract as contract
 from infini_local.pipelines.author import request as author
+from infini_local.qa.capability_witnesses import build_capability_witness
+from jsonschema import Draft202012Validator
+from repair_test_helpers import frozen_gameplay_repair, gameplay_repair
 from test_codex_subscription_contract import _encode_nullable_fixture
 from test_low_level_three_stage_pipeline import wire_transport
-
 
 FN = "emit_to_targets_on_event"
 CAP = CAPABILITY_REGISTRY[FN]

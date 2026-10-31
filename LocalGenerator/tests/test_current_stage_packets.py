@@ -5,22 +5,30 @@ Useful nonexecuted artist prose is not a retired executable contract field.
 """
 from __future__ import annotations
 
-from infini_local.pipelines.visual import contract as visual_contract, repair as visual_repair
-from infini_local.core.vfx import contract as vfx_contract, repair as vfx_repair, validation as vfx_validation
-
 import copy
 import json
 import sys
 from pathlib import Path
 
 import pytest
-from jsonschema import Draft202012Validator
+from infini_local.core.vfx import contract as vfx_contract
+from infini_local.core.vfx import repair as vfx_repair
+from infini_local.core.vfx import validation as vfx_validation
 from infini_local.pipelines.context.cards import raw_parent_card_for_llm
+from infini_local.pipelines.visual import contract as visual_contract
+from infini_local.pipelines.visual import repair as visual_repair
+from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from tools.diagnostics.measure_llm_request_sizes import (  # noqa: E402
-    COHORT, MODES, ROUTES, STAGES, OfflineCapture, dossier, measurements,
+    COHORT,
+    MODES,
+    ROUTES,
+    STAGES,
+    OfflineCapture,
+    dossier,
+    measurements,
 )
 
 RETIRED_SLOT_FIELDS = {
@@ -152,9 +160,9 @@ def test_author_and_format_provider_shape_matches_actual_author_consumer(capture
 
 @pytest.mark.parametrize("stage", ["visual_repair", "vfx_repair", "gameplay_repair"])
 def test_captured_permissions_drive_real_frozen_merge_not_provider_schema_alone(capture, stage):
-    from infini_local.pipelines.author.item_contract import author_item_repair_response_schema
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-    from infini_local.core.runtime_authoring.repair_scope import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.pipelines.author.item_contract import author_item_repair_response_schema
     from test_codex_subscription_contract import _encode_nullable_fixture
     packet, evidence = capture.builder(stage, COHORT[0], "json_schema")
     full = dossier(packet)

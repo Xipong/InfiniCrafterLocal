@@ -3,9 +3,9 @@ from copy import deepcopy
 from typing import Any
 
 import pytest
-
 from infini_local.core.runtime_authoring.capability_registry import (
-    CAPABILITY_REGISTRY, RUNTIME_PROGRAM_SCHEMA,
+    CAPABILITY_REGISTRY,
+    RUNTIME_PROGRAM_SCHEMA,
 )
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
@@ -305,7 +305,7 @@ def test_non_time_integer_lattices_and_float32_signed_neutrals_remain_exact():
 
 @pytest.mark.parametrize("mutation", ["missing_value", "bad_counter"])
 def test_unresolved_clock_does_not_make_valid_world_values_repairable(mutation):
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     source = projectile_document()
     collision = next(c for c in source["runtimeProgram"]["calls"] if c["fn"] == "projectile_collision")
     if mutation == "missing_value":
@@ -422,6 +422,7 @@ def test_native_float32_engine_endpoints_survive_without_accepting_outside_singl
     # Native serialization has no compiler sidecar: exercise the actual saved
     # wire reader too, not just the scalar helper that feeds receipt admission.
     import re
+
     from infini_local.qa.capability_witnesses import build_capability_witness
     source = build_capability_witness(fn)
     authored_call = next(c for c in source["runtimeProgram"]["calls"] if c["fn"] == fn)

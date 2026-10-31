@@ -1,6 +1,7 @@
 
 """Model-visible ownership and actual field paths, without runtime design policy."""
 import json
+
 import pytest
 from infini_local.core import llm_config
 from infini_local.pipelines.author import request as author
@@ -14,7 +15,8 @@ from infini_local.pipelines.author import request as author
 ])
 def test_actual_repair_call_guide_has_only_the_scoped_canonical_forms(monkeypatch, mode, fn, leaf, bad_value):
     from copy import deepcopy
-    from infini_local.core.runtime_authoring.repair_scope import runtime_repair_schema_capabilities
+
+    from infini_local.core.runtime_authoring.repair.schema import runtime_repair_schema_capabilities
     from infini_local.pipelines.author.item_contract import author_item_repair_response_schema
     from infini_local.qa.capability_witnesses import build_capability_witness
     from test_repair_gameplay_contract import _offline_gameplay_repair
@@ -40,6 +42,7 @@ def test_actual_repair_call_guide_has_only_the_scoped_canonical_forms(monkeypatc
 @pytest.mark.parametrize('mode', ['off', 'json_object', 'json_schema'])
 def test_balance_distinguishes_ammunition_contribution_from_autonomous_attack(monkeypatch, mode):
     from copy import deepcopy
+
     from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 
     monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
@@ -58,6 +61,7 @@ def test_balance_distinguishes_ammunition_contribution_from_autonomous_attack(mo
 @pytest.mark.parametrize('mode', ['off', 'json_object', 'json_schema'])
 def test_ingredient_grounded_balance_prices_total_output_and_reusable_benefit(monkeypatch, mode):
     from copy import deepcopy
+
     from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 
     monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
@@ -78,8 +82,9 @@ def test_ingredient_grounded_balance_prices_total_output_and_reusable_benefit(mo
 
 def test_future_economy_guidance_does_not_thaw_valid_existing_effects_in_repair():
     from copy import deepcopy
+
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-    from infini_local.core.runtime_authoring.repair_scope import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.capability_witnesses import build_capability_witness
 

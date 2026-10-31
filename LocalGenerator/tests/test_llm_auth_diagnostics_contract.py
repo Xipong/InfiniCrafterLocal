@@ -1,11 +1,10 @@
-
 import io
 from urllib.error import HTTPError
 
+import infini_local.pipelines.transport.http as transport_http
 import pytest
-
-from infini_local.pipelines.transport import profiles as llm_profiles
 from infini_local.pipelines.transport import client as llm_transport
+from infini_local.pipelines.transport import profiles as llm_profiles
 
 
 def test_openrouter_auth_diagnostics_are_exposed_and_fail_fast(monkeypatch):
@@ -50,7 +49,7 @@ def test_openrouter_unauthorized_request_reports_actionable_secret_free_diagnosi
         raise HTTPError(url, 401, "Unauthorized", {}, io.BytesIO(
             ('{"error":{"message":"invalid key ' + context["api_key"] + '"}}').encode()))
 
-    monkeypatch.setattr(llm_transport, "http_json", unauthorized)
+    monkeypatch.setattr(transport_http, "http_json", unauthorized)
     monkeypatch.setattr(llm_transport, "log_event", lambda *args: logs.append(args))
     monkeypatch.delenv("INFINI_LLM_REPLAY_RAW", raising=False)
     payload = {"model": "test-model", "messages": [{"role": "user", "content": "literal request"}]}

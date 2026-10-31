@@ -102,7 +102,7 @@ Filter должен выбрать хотя бы одну проверку; comp
 
 ```bash
 python tools/checks/check_code_health.py --base origin/main
-python tools/checks/check_code_health.py --base origin/main --path LocalGenerator/infini_local/core/runtime_authoring/repair_scope.py
+python tools/checks/check_code_health.py --base origin/main --path LocalGenerator/infini_local/core/runtime_authoring/repair/scope.py
 ```
 
 Команда сравнивает текущие Python implementation files с Git merge-base; без `--path` учитывает committed, staged, unstaged и untracked изменения. Без `--base` baseline — `HEAD`. Tests и декларации вне функций не входят в измерение; функции внутри большого registry проверяются как обычно. Старый показатель выше ориентира становится своим текущим пределом: сохранение или уменьшение не даёт предупреждения, рост показывает before/after/cap.

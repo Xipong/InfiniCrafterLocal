@@ -20,7 +20,7 @@ def generation_art_direction() -> str:
         "Terraria Like art direction: aim for a vanilla-Terraria-like item rather than a miniature high-resolution illustration. "
         "Use a readable silhouette, economical pixel clusters, a compact coherent palette, discrete shadow/highlight bands, "
         "and selective material detail readable at 1x gameplay size. Avoid dense grain, many near-identical tones, smooth "
-        "painterly gradients, glossy rendering and unrelated ornament. Preserve literal geometry, materials and identity. "
+        "painterly gradients, glossy rendering and unrelated ornament. When rendering an accepted design, preserve its geometry, materials and identity. "
         "Effects should support that identity with coherent colours and clear rhythms; purposeful spectacle is still legal. "
         "Apply crisp-pixel guidance to solid forms, preserving intentional soft-alpha glows, effect textures and required texture layout."
     )
@@ -31,8 +31,8 @@ def generation_system_suffix() -> str:
     direction = generation_art_direction()
     return (
         "\n\nTarget game: Terraria (tModLoader). Create a generated item or its presentation assets for that game, "
-        "not a standalone illustration. When creating a new design, draw on relevant parent characteristics "
-        "while allowing a coherent transformation. Follow the exact requested output contract. "
+        "not a standalone illustration. When creating a new design, freely choose how the parents influence the result. "
+        "Follow the exact requested output contract. "
         "Art direction is advisory, never permission to change accepted gameplay or frozen fields."
     ) + (f"\n\n{direction}" if direction else "")
 

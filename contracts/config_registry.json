@@ -2644,7 +2644,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/transport/client.py",
+          "file": "LocalGenerator/infini_local/pipelines/transport/replay.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -2658,7 +2658,7 @@
       "minimum": null,
       "name": "INFINI_LLM_REPLAY_RAW",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/transport/client.py",
+        "LocalGenerator/infini_local/pipelines/transport/replay.py",
         "tools/diagnostics/replay_generation_case.py"
       ],
       "secret": false,
@@ -5452,7 +5452,7 @@
   ],
   "errors": [],
   "fieldCount": 222,
-  "fingerprint": "3af862113d1cb78642b69eebd38f23c7c9503fae74f4452b7b0061d5b0feeba2",
+  "fingerprint": "3b49a1850afd9b9b784544c445540a6a7eb93f03b916d7f11f83d15a1e74e0d0",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

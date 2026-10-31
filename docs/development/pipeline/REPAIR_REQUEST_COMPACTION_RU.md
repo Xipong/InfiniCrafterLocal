@@ -4,7 +4,7 @@
 
 Schema `callsUpsert` — request-local projection **того же** canonical
 `program_schema.author_item_repair_schema`. Выбор registry variants задаёт
-`repair_scope.runtime_repair_schema_capabilities`:
+`repair.fragments.runtime_repair_schema_capabilities`:
 
 - параметрический scope включает exact capabilitySubset, direct/support/existing
   blocker names и разрешённые create.calls.allowedFns;

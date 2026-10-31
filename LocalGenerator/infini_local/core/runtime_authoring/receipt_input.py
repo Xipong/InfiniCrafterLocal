@@ -9,7 +9,8 @@ from __future__ import annotations
 import re
 from typing import Any, Iterable, Mapping
 
-from infini_local.core.runtime_authoring.capability_registry import ParamSpec, capability_for_saved_receipt
+from infini_local.core.runtime_authoring.capability_registry import capability_for_saved_receipt
+from infini_local.core.runtime_authoring.parameter_contract import ParamSpec
 
 
 def receipt_param_spec(cap: Any, path: str) -> ParamSpec | None:

@@ -3,26 +3,28 @@ from __future__ import annotations
 
 import base64
 import copy
-from dataclasses import dataclass, field
 import hashlib
 import io
 import json
 import os
 import stat
 import time
+from dataclasses import dataclass, field
 from typing import Any
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 
+import infini_local.pipelines.transport.http as transport_http
 import pytest
-
 from infini_local.core import llm_config
-from infini_local.pipelines.transport import provider_wire as llm_provider_wire
-from infini_local.pipelines.transport import client as llm
 from infini_local.core.images import config
-from infini_local.services import codex_auth as auth, codex_catalog as catalog, codex_text_backend as backend
-from test_provider_transport_contract import PIN, packet, wire  # noqa: F401 - imported pytest fixture
+from infini_local.pipelines.transport import client as llm
+from infini_local.pipelines.transport import provider_wire as llm_provider_wire
+from infini_local.services import codex_auth as auth
+from infini_local.services import codex_catalog as catalog
+from infini_local.services import codex_text_backend as backend
 from provider_test_support import HttpReply, RecordingOpener
+from test_provider_transport_contract import PIN, packet, wire  # noqa: F401 - imported pytest fixture
 
 CODEX = "https://chatgpt.com/backend-api/codex"
 
@@ -120,9 +122,9 @@ def _sparse_event_item(event):
 
 @pytest.mark.parametrize("control", ["nullable-valid", "required-null", "unknown-function"])
 def test_subscription_author_parse_preserves_nullable_optionals_and_refuses_invalid_authorship(monkeypatch, control):
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.pipelines.author import item_contract as contract
     from infini_local.pipelines.author import request as author
-    from infini_local.core.runtime_authoring.validator import validate_runtime_program
 
     item, _ = _sparse_event_item("on_hit")
     encoded = _encode_nullable_fixture(item, contract.author_item_response_schema())
@@ -158,10 +160,10 @@ def test_subscription_author_parse_preserves_nullable_optionals_and_refuses_inva
 
 
 def test_subscription_repair_wire_inverse_precedes_frozen_merge(monkeypatch):
-    from jsonschema import Draft202012Validator
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.pipelines.author import item_contract as contract
     from infini_local.pipelines.author import request as author
-    from infini_local.core.runtime_authoring.validator import validate_runtime_program
+    from jsonschema import Draft202012Validator
 
     item, selected = _sparse_event_item("periodic")
     expected = copy.deepcopy(item)
@@ -443,7 +445,7 @@ def test_subscription_dispatch_strips_foreign_pin_and_never_pays_for_fallback(wi
             raise auth.CodexError("OpenAI HTTP 429: quota")
         return response
     monkeypatch.setattr(auth, "post_sse", post)
-    monkeypatch.setattr(llm, "http_json", lambda *_a, **_k: pytest.fail("paid/legacy HTTP called"))
+    monkeypatch.setattr(transport_http, "http_json", lambda *_a, **_k: pytest.fail("paid/legacy HTTP called"))
     request = packet("visual_director")
     request["provider"] = {"only": [PIN], "allow_fallbacks": False}
     request["reasoning"] = {"effort": "high"}
@@ -599,8 +601,8 @@ def test_expired_session_refreshes_once_under_concurrent_requests(tmp_path, monk
 
 def test_browser_login_exchanges_pkce_once_and_saves_only_after_callback(tmp_path, monkeypatch):
     import threading
-    from urllib.request import urlopen
     from urllib.error import HTTPError
+    from urllib.request import urlopen
     path = tmp_path / "codex-auth.json"
     calls, threads, callback_results = [], [], []
     def post(url, payload, **kwargs):
@@ -737,10 +739,11 @@ def test_codex_dispatch_writes_verified_png_and_preserves_authored_prompt(tmp_pa
     import contextlib
     import io
     import time
-    from PIL import Image
+
     from infini_local.pipelines.images import backends as backend
     from infini_local.pipelines.images import stage as visual
     from infini_local.services import codex_auth as auth
+    from PIL import Image
     assert hasattr(backend, "generate_openai_codex"), "Codex is not connected to sprite dispatch"
     stream = io.BytesIO()
     Image.new("RGBA", (64, 64), (15, 120, 240, 255)).save(stream, format="PNG")

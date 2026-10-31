@@ -1,18 +1,20 @@
 """Opt-in placed sources, real Author/compiler/Director/wire boundaries; offline."""
 import copy
 import json
+
 import pytest
-from test_dual_use_placeable_contract import _dual_use_placeable
-from test_placed_body_capability import placement
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.vfx.contract import VFX_DIRECTOR_SCHEMA
-from infini_local.core.vfx.validation import validate_vfx_director_output, validate_vfx_manifest_wire
 from infini_local.core.vfx.projection import _compile_manifest
 from infini_local.core.vfx.surface import vfx_director_surface
+from infini_local.core.vfx.validation import validate_vfx_director_output, validate_vfx_manifest_wire
 from infini_local.pipelines.vfx.prompt import _prompt_packet
+from test_dual_use_placeable_contract import _dual_use_placeable
+from test_low_level_three_stage_pipeline import wire_transport
+from test_placed_body_capability import placement
 
 
 def authored():
@@ -89,8 +91,9 @@ def test_absent_component_has_no_selectable_binding_and_old_manifest_bytes_uncha
 
 
 def test_authored_reference_and_receipts_are_exact_and_repair_leaf_frozen():
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope,filter_repair_patch_scope
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     d=authored();d['runtimeProgram']['calls'][-1]['params']['placementCallId']='wrong'
     scope=build_runtime_repair_scope(d,validate_runtime_program(d)['errors'])
     assert scope['nonRepairableErrors']==[]
@@ -143,14 +146,13 @@ def test_new_registry_witness_and_native_bounds_surface():
     assert structural_surface_audit().get('placedVfxStorage',{}).get('ok')
 
 
-from test_low_level_three_stage_pipeline import wire_transport
 
 
 def test_actual_author_and_visual_repairs_preserve_independent_placed_components(wire_transport):
-    from prompt_packet_helpers import request_dossier
-    from infini_local.pipelines.author import request as author
     import infini_local.pipelines.visual.contract as visual_contract
     import infini_local.pipelines.visual.request as visual_request
+    from infini_local.pipelines.author import request as author
+    from prompt_packet_helpers import request_dossier
     from test_low_level_three_stage_pipeline import _visual_kit
     responses,requests=wire_transport
     d=authored();responses.append(d)
@@ -182,6 +184,7 @@ def test_independent_body_light_and_vfx_components_compose_without_new_defaults(
 def test_exported_vfx_schema_has_real_opt_in_sample_not_empty_selector_domain():
     import importlib.util
     from pathlib import Path
+
     from infini_local.core.schema_validation import strict_schema_errors
     path=Path(__file__).resolve().parents[2]/'tools/generate/export_contract_schemas.py'
     spec=importlib.util.spec_from_file_location('placed_schema_export',path)

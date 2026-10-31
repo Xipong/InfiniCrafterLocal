@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 import pytest
-
 from infini_local.core.errors import PlannerUnavailable
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
-from infini_local.pipelines.final_normalize import final_normalize
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 from infini_local.pipelines.author.stage import authored_item_validation_report, strict_validate_authored_item
+from infini_local.pipelines.final_normalize import final_normalize
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 

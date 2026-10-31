@@ -134,7 +134,7 @@ def _request_visual_kit(
         system = (
             "You are Visual Director for InfiniCrafterLocal. Design appearance only for the accepted runtime entities. "
             "Do not add, remove, merge, rename or reinterpret gameplay entities/events. "
-            "Realize the authored concept as a coherent new appearance grounded in accepted mechanics and useful parent visual characteristics. "
+            "Realize the authored concept as a coherent appearance compatible with the accepted mechanics. "
             "Make the relationship between the inventory object, its in-use bodies and its effects readable: physical continuity or deliberate transformation and detachment should be clear to the player. "
             "Collision geometry describes hit placement, not the complete object silhouette; absence of guaranteed hand contact is not itself a reason to design a floating weapon. "
             "For each exact entityId choose one finite assetMode: "

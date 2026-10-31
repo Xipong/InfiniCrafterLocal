@@ -1,9 +1,10 @@
 """Capability facts belong to their declaration; projections remain mechanical."""
 from dataclasses import replace
 
-from hypothesis import example, given, settings, strategies as st
-
 import infini_local.core.runtime_authoring.capability_registry as registry
+import infini_local.core.runtime_authoring.parameter_contract as registry_parameter_contract
+from hypothesis import example, given, settings
+from hypothesis import strategies as st
 
 
 @settings(max_examples=60, derandomize=True, deadline=None)
@@ -24,7 +25,7 @@ def test_declared_metadata_changes_reach_finalization_without_name_overrides(nam
     registry, while explicit examples retain event/effect-group special paths.
     """
     declared = next(cap for cap in registry._CAPS if cap.name == name)
-    requirement = registry.RequirementSpec("capability_present", capability="item_use")
+    requirement = registry_parameter_contract.RequirementSpec("capability_present", capability="item_use")
     facts = {
         "csharp_owner": f"{suffix}.cs::Execute",
         "component_slot": suffix,
@@ -48,7 +49,7 @@ def test_declared_metadata_changes_reach_finalization_without_name_overrides(nam
 
 
 def test_one_declaration_is_enough_for_a_new_explicit_metadata_projection():
-    requirement = registry.RequirementSpec("capability_present", capability="item_use")
+    requirement = registry_parameter_contract.RequirementSpec("capability_present", capability="item_use")
     declared = registry._cap(
         "declaration_only_probe", "Metadata ownership probe, never installed in the registry.",
         "item", ("item_body",), {},
@@ -78,7 +79,7 @@ def test_simple_component_wire_paths_still_follow_parameter_projection():
     declared = next(cap for cap in registry._CAPS if cap.name == "projectile_collision")
     assert declared.final_wire_paths == ()
     changed = replace(declared, params={**declared.params,
-                                       "probe": registry.ParamSpec("integer", "test", wire_name="probeWire")})
+                                       "probe": registry_parameter_contract.ParamSpec("integer", "test", wire_name="probeWire")})
     final = registry._enrich_capability(changed)
     assert final.final_wire_paths == (*registry.CAPABILITY_REGISTRY[declared.name].final_wire_paths,
                                      "runtimeProgram.entities[].collision.probeWire")

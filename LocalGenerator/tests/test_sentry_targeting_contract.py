@@ -4,18 +4,17 @@ from copy import deepcopy
 from itertools import product
 
 import pytest
-
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.pipelines.author.item_contract import project_provider_author_item_to_local
 from infini_local.pipelines.author.request import build_initial_author_request
 from infini_local.qa.capability_library_audit import _runtime_param_bound_rows
 from infini_local.qa.capability_witnesses import build_capability_witness
-
 
 OPTIONS = {"count": 4, "spreadRadians": 0.6, "targetPolicy": "player_assigned_first",
            "requireLineOfSight": True, "hardRange": True}

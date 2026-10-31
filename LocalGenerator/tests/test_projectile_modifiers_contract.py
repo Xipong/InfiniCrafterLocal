@@ -1,23 +1,27 @@
-
 from prompt_packet_helpers import request_dossier
+from test_low_level_three_stage_pipeline import wire_transport
+
 """A13/B15.1 explicit phase modifiers, ownership, provenance and frozen Repair."""
 from copy import deepcopy
 
 import pytest
-from repair_test_helpers import (
-    DELETE, projected_params, edit_fields, frozen_call_repair, frozen_gameplay_repair,
-)
-
 from infini_local.core import llm_config
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+from infini_local.core.runtime_authoring.capability_registry import PROJECTILE_MODIFIER_COMPONENTS
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.capability_registry import PROJECTILE_MODIFIER_COMPONENTS
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
-from test_low_level_three_stage_pipeline import wire_transport
+from repair_test_helpers import (
+    DELETE,
+    edit_fields,
+    frozen_call_repair,
+    frozen_gameplay_repair,
+    projected_params,
+)
 
 PARAMS = {
     "turn_velocity": dict(turnRadiansPerSecond=(.04) * 60, startDelay=(0) / 60, duration=(90) / 60),

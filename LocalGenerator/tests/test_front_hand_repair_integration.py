@@ -1,15 +1,15 @@
 """Offline frozen Gameplay Repair for independent hand-component choices."""
-from copy import deepcopy
 import json
+from copy import deepcopy
 
 import pytest
-
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from test_front_hand_movement import fixture, entity
+from test_front_hand_movement import entity, fixture
 
 
 def _call(doc, fn):
@@ -126,7 +126,7 @@ def test_retired_bundle_is_never_a_repair_creation_choice(fn):
 
 @pytest.mark.parametrize("hand_pose,viable", [("", True), ("one_handed", False), (None, False), (False, False)])
 def test_candidate_frozen_pose_dependency_uses_typed_hand_pose_semantics(hand_pose, viable):
-    from infini_local.core.runtime_authoring.repair_scope import _candidate_capability_viable
+    from infini_local.core.runtime_authoring.repair.facts import _candidate_capability_viable
     doc, pose = fixture()
     _call(doc, "item_use")["params"]["handPose"] = hand_pose
     assert validate_runtime_program(doc)["ok"] is viable
@@ -204,7 +204,7 @@ def test_competing_item_pose_repair_thaws_only_exact_item_leaf():
 
 @pytest.mark.parametrize("expected", [{"speed": 0}, [0, {"nested": [False, None, "literal"]}]])
 def test_emitted_json_container_descriptor_keeps_exact_type(expected):
-    from infini_local.core.runtime_authoring.repair_scope import _capability_constraints
+    from infini_local.core.runtime_authoring.repair.facts import _capability_constraints
     encoded = json.dumps(expected, separators=(",", ":"))
     names, constraints = _capability_constraints(["spawn.velocity=" + encoded])
     assert names == {"spawn"}
@@ -215,14 +215,14 @@ def test_emitted_json_container_descriptor_keeps_exact_type(expected):
 @pytest.mark.parametrize("raw,expected", [("true", True), ("FALSE", False), ("null", None), ("1", 1), ("0.0", 0.0),
     ('""', ""), ("'cursor'", "cursor"), ("cursor", "cursor")])
 def test_scalar_constraint_legacy_types_are_unchanged(raw, expected):
-    from infini_local.core.runtime_authoring.repair_scope import _decode_constraint_value
+    from infini_local.core.runtime_authoring.repair.facts import _decode_constraint_value
     actual = _decode_constraint_value(raw)
     assert type(actual) is type(expected) and actual == expected
 
 
 @pytest.mark.parametrize("raw", ['{"speed":', '[0,]', '{"x":0,"x":1}', '[NaN]', '[1e999]'])
 def test_malformed_container_constraint_stays_literal_not_partial_json(raw):
-    from infini_local.core.runtime_authoring.repair_scope import _decode_constraint_value
+    from infini_local.core.runtime_authoring.repair.facts import _decode_constraint_value
     assert _decode_constraint_value(raw) == raw
 
 

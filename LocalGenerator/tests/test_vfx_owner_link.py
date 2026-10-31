@@ -4,16 +4,15 @@ from __future__ import annotations
 import copy
 import json
 
-import pytest
-from jsonschema import Draft202012Validator
-
 import infini_local.core.vfx.contract as vfx_contract
 import infini_local.core.vfx.projection as vfx_projection
 import infini_local.core.vfx.validation as vfx_validation
 import infini_local.pipelines.vfx.stage as vfx_stage
+import pytest
 from infini_local.core.schema_validation import strict_schema_errors
-from tests.vfx_material_fixtures import _data, _path, _sent
+from jsonschema import Draft202012Validator
 from tests.test_low_level_three_stage_pipeline import wire_transport
+from tests.vfx_material_fixtures import _data, _path, _sent
 
 
 @pytest.mark.parametrize("anchor", ["mountedCenter", "frontHand"])
@@ -90,9 +89,9 @@ def test_owner_link_real_builder_schema_compiler_tracer():
 
 
 def test_sent_director_instructions_explain_explicit_connector_without_forcing_one(monkeypatch):
+    from infini_local.pipelines.vfx import request as stage
     from prompt_packet_helpers import request_dossier
     from tests.test_repair_vfx_contract import _offline_transport
-    from infini_local.pipelines.vfx import request as stage
     data = _data("seek")
     raw = {"schema": vfx_contract.VFX_DIRECTOR_SCHEMA, "slots": []}
     sent = _offline_transport(monkeypatch, "owner_link_guidance", [raw])
@@ -107,9 +106,9 @@ def test_sent_director_instructions_explain_explicit_connector_without_forcing_o
 
 
 def test_actual_visual_packet_explains_owner_link_composition(wire_transport):
-    from prompt_packet_helpers import request_dossier
     import infini_local.pipelines.visual.context as visual_context
     import infini_local.pipelines.visual.request as visual_request
+    from prompt_packet_helpers import request_dossier
     from tests.test_low_level_three_stage_pipeline import _accepted_visual_data
     data = _accepted_visual_data("workbench_blade")
     responses, sent = wire_transport
@@ -162,9 +161,9 @@ def test_owner_link_rejects_foreign_controls_at_director_schema_and_wire(field, 
 
 @pytest.mark.parametrize("broken_field,bad,good", [("widthPx", 97, 8), ("source", "ownerlink", "ownerLink")])
 def test_owner_link_actual_repair_freezes_valid_design_and_mechanics(monkeypatch, broken_field, bad, good):
+    from infini_local.pipelines.vfx import request as stage
     from prompt_packet_helpers import request_dossier
     from tests.test_repair_vfx_contract import _offline_transport, _patch
-    from infini_local.pipelines.vfx import request as stage
     data = _data("seek")
     raw = _owner_path(data, "mountedCenter")
     raw["slots"][0]["path"][broken_field] = bad
@@ -190,9 +189,13 @@ def test_owner_link_actual_repair_freezes_valid_design_and_mechanics(monkeypatch
 
 def test_owner_link_delivery_preserves_explicit_strip_and_existing_paths(tmp_path, monkeypatch):
     from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
-    from infini_local.storage import world_storage
     from infini_local.pipelines.visual import delivery as visual_delivery_gate
-    from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png, synthetic_no_image_execution_control
+    from infini_local.qa.live_no_image_fixture import (
+        hydrate_no_image_fixture_assets,
+        synthetic_no_image_execution_control,
+        write_no_image_fixture_png,
+    )
+    from infini_local.storage import world_storage
     from tests.vfx_material_fixtures import _asset
     data = _data("seek")
     data.update(id="owner_link_synthetic_witness", schemaVersion=5, runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION,

@@ -5,16 +5,15 @@ import copy
 import json
 
 import pytest
-
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.pipelines.author.prompt import build_llm_author_payload
 from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 from test_dual_use_placeable_contract import _dual_use_placeable
-
 
 PLACEMENT_FACT_CASES = [
     *[pytest.param(

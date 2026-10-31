@@ -1,21 +1,21 @@
 """Offline canonical sprite render contracts; no live services."""
 from __future__ import annotations
-from prompt_packet_helpers import request_dossier
 
-import pytest
-from PIL import Image, ImageDraw
-from infini_local.core.images import contracts
-from infini_local.pipelines.images import postprocess as post
+import copy
+from pathlib import Path
+
 import infini_local.pipelines.images.pixels as post_pixels
 import infini_local.pipelines.images.retry as post_retry
 import infini_local.pipelines.images.validation as post_validation
-from infini_local.pipelines.visual.assets import build_visual_asset_plan
-import copy
-from pathlib import Path
-from infini_local.pipelines.images import stage as generation
+import pytest
+from infini_local.core.images import contracts
 from infini_local.core.runtime_authoring.capability_registry import VISUAL_ROLE_BY_ENTITY_KIND
+from infini_local.pipelines.images import postprocess as post
+from infini_local.pipelines.images import stage as generation
 from infini_local.pipelines.images.prompts import normalize_asset_prompt
-
+from infini_local.pipelines.visual.assets import build_visual_asset_plan
+from PIL import Image, ImageDraw
+from prompt_packet_helpers import request_dossier
 
 CHROMA = {
     "magenta": (255, 0, 255), "green": (0, 255, 0), "lime": (0, 255, 0),
@@ -26,8 +26,7 @@ CHROMA = {
 @pytest.mark.parametrize("name,rgb", CHROMA.items())
 def test_chroma_prompt_keyer_and_retry_agree(monkeypatch, name, rgb):
     from infini_local.core.images import config
-    from infini_local.pipelines.images import prompts
-    from infini_local.pipelines.images import keyer
+    from infini_local.pipelines.images import keyer, prompts
     monkeypatch.setattr(config, "BG_COLOR", name)
     assert contracts.chroma_rgb() == prompts.chroma_rgb() == keyer.chroma_rgb() == rgb
     authored = "a magenta crystal, cyan rim and white tip"
@@ -93,11 +92,10 @@ def test_invalid_chroma_is_diagnostic(monkeypatch, name):
     ("transparent", True, "sprite_keyer", False, True),
 ])
 def test_delivered_visual_rules_match_raw_background_transport(monkeypatch, color, remove_bg, mode, keyed, repair):
-    import json
-    from infini_local.core.images import config
-    from infini_local.pipelines.visual import stage as stage
     import infini_local.pipelines.visual.request as stage_request
+    from infini_local.core.images import config
     from infini_local.pipelines.images import prompts
+    from infini_local.pipelines.visual import stage as stage
     monkeypatch.setattr(config, "REMOVE_BG", remove_bg)
     monkeypatch.setattr(config, "BG_REMOVE_MODE", mode)
     monkeypatch.setattr(config, "BG_COLOR", color)

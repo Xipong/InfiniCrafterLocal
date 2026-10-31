@@ -1,18 +1,19 @@
 """Composable timed NPC effects use authored quantities, not BuffID semantics."""
-from copy import deepcopy
 import json
+from copy import deepcopy
 
 import pytest
-
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.registry_views import capability_provider_union
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, capability_provider_union
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
 
 FN = "npc_effect_on_event"
 
@@ -214,9 +215,9 @@ def test_omitted_neutrals_have_exact_receipts_and_no_input_mutation():
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_actual_offline_author_request_transports_typed_composition(monkeypatch, mode):
-    from repair_test_helpers import provider_roundtrip
     from infini_local.core import llm_config
     from infini_local.pipelines.author import request as author
+    from repair_test_helpers import provider_roundtrip
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     request, user, _ = author.build_initial_author_request({}, {}, "numeric NPC effects", model_name="offline")
     request = json.loads(json.dumps(request))

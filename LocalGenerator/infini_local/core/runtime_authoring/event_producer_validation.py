@@ -7,12 +7,14 @@ from __future__ import annotations
 from typing import Any, Iterable, Mapping
 
 from infini_local.core.runtime_authoring.binding_use_policy import (
-    action_kind, contact_damage, target_id as binding_target_id,
+    action_kind,
+    contact_damage,
 )
-from infini_local.core.runtime_authoring.capability_registry import (
-    BINDING_ACTION_REGISTRY, EVENT_KIND_REGISTRY, INPUT_KIND_REGISTRY,
-    event_dependency_alternatives,
+from infini_local.core.runtime_authoring.binding_use_policy import (
+    target_id as binding_target_id,
 )
+from infini_local.core.runtime_authoring.capability_registry import BINDING_ACTION_REGISTRY, EVENT_KIND_REGISTRY, INPUT_KIND_REGISTRY
+from infini_local.core.runtime_authoring.event_dependencies import event_dependency_alternatives
 
 
 def item_body_producer_bindings(

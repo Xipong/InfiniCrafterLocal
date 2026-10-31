@@ -1,16 +1,17 @@
 """Independent equipment flags, not source-item presets."""
-from copy import deepcopy
 import json
+from copy import deepcopy
 from pathlib import Path
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import filter_repair_patch_scope
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
+
 import pytest
-from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
@@ -31,8 +32,8 @@ def periodic_equipment_fixture(kind="accessory"):
 
 @pytest.mark.parametrize("kind", ["accessory", "armor"])
 def test_equipped_only_periodic_spawn_reaches_strict_delivery(kind):
-    from jsonschema import Draft202012Validator
     from infini_local.pipelines.author.item_contract import author_item_response_schema
+    from jsonschema import Draft202012Validator
 
     doc = periodic_equipment_fixture(kind)
     assert Draft202012Validator(author_item_response_schema()).is_valid(doc)
@@ -102,15 +103,15 @@ def test_bounded_native_number(field, valid, invalid):
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_serialized_author_and_frozen_leaf_repair(monkeypatch, mode):
-    from test_source_unit_guidance import _author_request, _repair_request, _source, _offline
+    from test_source_unit_guidance import _author_request, _offline, _repair_request, _source
     getattr(_offline, "__wrapped__")(monkeypatch)
     params = {"wireVision": True, "iceSkate": True, "noKnockback": True, "fireWalk": True,
               "rocketBoots": 3, "sprintSpeedFloor": 25.3125, "moveSpeedBonus": 8,
               "defensePoints": 2}
     doc, call = fixture(params)
+    from infini_local.pipelines.author import item_contract as contract
     from jsonschema import Draft202012Validator
     from test_codex_subscription_contract import _encode_nullable_fixture
-    from infini_local.pipelines.author import item_contract as contract
     schema = contract.author_item_response_schema()
     provider = contract.author_item_provider_response_schema()
     encoded = _encode_nullable_fixture(doc, schema)

@@ -1,25 +1,22 @@
 """Offline transactions shared by frozen Repair observers, not alternative contracts."""
 
-from copy import deepcopy
 import json
 import socket
+from copy import deepcopy
 
 import pytest
-from jsonschema import Draft202012Validator
-
-from prompt_packet_helpers import request_dossier
 from infini_local.core import llm_config
+from infini_local.core.runtime_authoring.binding_use_policy import action_kind
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.binding_use_policy import action_kind
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.pipelines.author import item_contract as contract
 from infini_local.pipelines.author import request as author
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from jsonschema import Draft202012Validator
+from prompt_packet_helpers import request_dossier
 from test_codex_subscription_contract import _encode_nullable_fixture
-
 
 DELETE = object()
 
@@ -146,7 +143,8 @@ def provider_roundtrip(doc, response_format):
 def frozen_call_repair(doc, incoming, permissions, expected, *, note):
     """Exercise exact local scope/filter/apply, without manufacturing candidate fields."""
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 
     before = json.dumps(doc, sort_keys=True)
     report = validate_runtime_program(doc)

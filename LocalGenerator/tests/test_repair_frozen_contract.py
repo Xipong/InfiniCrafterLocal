@@ -3,31 +3,32 @@ import copy
 import json
 from pathlib import Path
 
-import pytest
-
-from infini_local.core.repair_merge import merge_frozen_subtree
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
-from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.pipelines.author.request import build_gameplay_repair_dossier
 import infini_local.pipelines.visual.contract as visual_contract
 import infini_local.pipelines.visual.repair as visual_repair
 import infini_local.pipelines.visual.repair_scope as visual_repair_scope
-from tests.test_visual_presentation_metadata import kit
-from tests.captured_projectile_author import project_captured_projectile_call
+import pytest
+from infini_local.core.repair_merge import merge_frozen_subtree
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.pipelines.author.request import build_gameplay_repair_dossier
 from tests.captured_parent_combat_author import captured_parent_combat_author
+from tests.captured_projectile_author import project_captured_projectile_call
 from tests.captured_spawn_velocity_author import captured_spawn_velocity_author
+from tests.test_visual_presentation_metadata import kit
 
 
 def test_saved_initial_projectile_lifetime_compiles_without_repair(monkeypatch):
     # Exact initial saved answer, not the campaign's later repaired/final output.
     import hashlib
-    from test_gameplay_repair_readonly_context import _offline_builder
+
+    from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     from infini_local.pipelines.author import request as author
     from infini_local.pipelines.author import stage as combine
-    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-    from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+    from test_gameplay_repair_readonly_context import _offline_builder
 
     path = Path(__file__).with_name("fixtures") / "projectile_lifetime_initial_author.json"
     raw = path.read_bytes()
@@ -280,8 +281,8 @@ def test_current_grammar_gameplay_repair_scenario_from_capture(section, case, fr
             assert lane["input"] == "alternate_use" and lane["stackCost"] == 1
             assert repaired["runtimeProgram"]["calls"] == initial_before["runtimeProgram"]["calls"]
             if fresh_motion:
-                from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
                 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+                from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
                 wire = compile_runtime_program(repaired)
                 assert validate_runtime_wire(wire)["ok"]
                 for source in (repaired, None):

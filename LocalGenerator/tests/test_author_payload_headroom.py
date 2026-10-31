@@ -1,16 +1,16 @@
 
-from prompt_packet_helpers import request_dossier, dossier_text, expand_catalog_targets
+from prompt_packet_helpers import expand_catalog_targets, request_dossier
+
 """Real builder admission, no provider calls or synthetic responses."""
 import copy
 import json
 from typing import Any
 
 import pytest
-
 from infini_local.core import llm_config
-from infini_local.pipelines.author.request import build_initial_author_request
+from infini_local.core.runtime_authoring.registry_views import compact_capability_catalog
 from infini_local.pipelines.author.prompt import PLANNER_PROMPT_LIMIT_CHARS, PLANNER_PROMPT_MIN_HEADROOM_CHARS
-from infini_local.core.runtime_authoring.capability_registry import compact_capability_catalog
+from infini_local.pipelines.author.request import build_initial_author_request
 from test_author_request_compaction import _expand_constraint_references
 from test_source_unit_guidance import _serialized_chat_request
 
@@ -45,9 +45,10 @@ def test_literal_source_tooltip_context_fits_without_clipping(monkeypatch, mode)
 
 def test_fresh_cards_share_only_exact_parameter_metadata_and_dead_negative_clauses():
     from dataclasses import replace
-    from infini_local.core.runtime_authoring.capability_registry import (
-        CAPABILITY_REGISTRY, RequirementSpec, runtime_authoring_prompt_field_guide,
-    )
+
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+    from infini_local.core.runtime_authoring.parameter_contract import RequirementSpec
+    from infini_local.core.runtime_authoring.registry_views import runtime_authoring_prompt_field_guide
 
     before = {name: cap.audit_card() for name, cap in CAPABILITY_REGISTRY.items()}
     catalog = compact_capability_catalog()
@@ -96,6 +97,7 @@ def test_fresh_cards_share_only_exact_parameter_metadata_and_dead_negative_claus
                                          ("description", "Distinct consumer meaning")])
 def test_shared_parameter_reference_never_hides_a_different_fact(field, value):
     from dataclasses import replace
+
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 
     cap = CAPABILITY_REGISTRY["apply_status_on_event"]

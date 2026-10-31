@@ -1,11 +1,11 @@
 """Independent primitives exercise real Author validation, compilation and wire admission."""
 from copy import deepcopy
-import pytest
 
-from infini_local.qa.capability_witnesses import build_capability_witness
-from infini_local.core.runtime_authoring.validator import validate_runtime_program
+import pytest
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+from infini_local.qa.capability_witnesses import build_capability_witness
 
 
 def base_document():
@@ -171,8 +171,9 @@ def test_active_lash_has_explicit_geometry_without_animation_bound_lifetime_or_t
 
 
 def test_fresh_schema_and_catalog_hide_compound_controllers_but_retain_wire_metadata():
-    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, MOVEMENT_OPCODE, compact_capability_catalog
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, MOVEMENT_OPCODE
     from infini_local.core.runtime_authoring.program_schema import runtime_program_author_schema
+    from infini_local.core.runtime_authoring.registry_views import compact_capability_catalog
     retired = (set(MOVEMENT_OPCODE) - {"move_straight"}) | {"channel_beam", "charge_then_release", "orient_whip_to_owner_gravity"}
     offered = {v["properties"]["fn"]["const"] for v in runtime_program_author_schema()["properties"]["calls"]["items"]["oneOf"]}
     assert not retired & offered
@@ -291,8 +292,12 @@ def test_phase_only_window_has_no_invented_duration_and_partial_timing_is_red():
 
 
 def test_provider_and_prompt_share_one_window_definition():
-    from infini_local.core.runtime_authoring.program_schema import author_item_response_schema, runtime_program_author_schema, author_item_repair_schema
-    from infini_local.core.runtime_authoring.capability_registry import compact_capability_catalog, runtime_authoring_prompt_field_guide
+    from infini_local.core.runtime_authoring.program_schema import (
+        author_item_repair_schema,
+        author_item_response_schema,
+        runtime_program_author_schema,
+    )
+    from infini_local.core.runtime_authoring.registry_views import compact_capability_catalog, runtime_authoring_prompt_field_guide
     from jsonschema import Draft202012Validator
     for schema in (author_item_response_schema(), runtime_program_author_schema(), author_item_repair_schema()):
         Draft202012Validator.check_schema(schema)
@@ -342,8 +347,8 @@ _PACKAGED = [
 
 @pytest.mark.parametrize("parent,property,retired,member,params", _PACKAGED)
 def test_optional_motion_property_is_exact_separate_native_component(parent, property, retired, member, params):
-    from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+    from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 
     doc = build_capability_witness(parent)
     selected = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == parent)

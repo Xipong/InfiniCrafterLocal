@@ -1,23 +1,23 @@
 """Request-local Repair grammar must preserve scope, inverses and exact sources."""
 from __future__ import annotations
-from prompt_packet_helpers import request_dossier
 
 import copy
 import json
 
+import infini_local.core.provider_schema as contract_provider_schema
 import pytest
-from jsonschema import Draft202012Validator
-
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.schema import runtime_repair_schema_capabilities
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.core.runtime_authoring.repair_scope import runtime_repair_schema_capabilities
 from infini_local.pipelines.author import item_contract as contract
-import infini_local.core.provider_schema as contract_provider_schema
 from infini_local.pipelines.author import request as author
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from jsonschema import Draft202012Validator
+from prompt_packet_helpers import request_dossier
 from test_codex_subscription_contract import _encode_nullable_fixture
 from test_gameplay_repair_readonly_context import _offline_builder
 

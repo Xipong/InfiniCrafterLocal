@@ -3,19 +3,18 @@ import copy
 import json
 
 import pytest
-
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope, runtime_repair_fragments
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch, strict_repair_structure_report, strict_schema_errors
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.fragments import runtime_repair_fragments
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.program_schema import strict_repair_structure_report, strict_schema_errors
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-
-
-from repair_test_helpers import gameplay_repair as _offline_gameplay_repair, assert_delivery, assert_repaired_source
+from repair_test_helpers import assert_delivery, assert_repaired_source
+from repair_test_helpers import gameplay_repair as _offline_gameplay_repair
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
@@ -132,12 +131,9 @@ def test_gameplay_conditional_dependency_keeps_frozen_controls(
 @pytest.mark.parametrize("owner", ["item-condition", "projectile-trigger"])
 def test_gameplay_conditional_missing_permissions_follow_registry_owner(monkeypatch, owner):
     from dataclasses import replace
-    import infini_local.core.runtime_authoring.capability_registry as capability_registry
-    import infini_local.core.runtime_authoring.repair_scope as repair_scope
-    import infini_local.core.runtime_authoring.validator as validator
-    import infini_local.core.runtime_authoring.compiler as compiler
-    import infini_local.core.runtime_authoring.technical_lowering as technical_lowering
-    from infini_local.core.runtime_authoring.capability_registry import ParamSpec
+    from importlib import import_module
+
+    from infini_local.core.runtime_authoring.parameter_contract import ParamSpec
 
     fn = "use_condition" if owner == "item-condition" else "pull_on_event"
     root, old_leaf, new_leaf, literal = (("condition", "lifeAtLeast", "customLife", {"useConditionMode": "life_above"})
@@ -149,7 +145,11 @@ def test_gameplay_conditional_missing_permissions_follow_registry_owner(monkeypa
     leaf = next(v.properties[old_leaf] for v in cap.params[root].alternatives if old_leaf in v.properties)
     changed = ParamSpec("object", "Mutated exact typed leaf", properties={new_leaf: leaf}, wire_literals=literal)
     registry = {**CAPABILITY_REGISTRY, fn: replace(cap, params={**cap.params, root: changed})}
-    for consumer in (capability_registry, repair_scope, validator, compiler, technical_lowering):
+    for module_name in (
+        "capability_registry", "validator", "compiler", "technical_lowering",
+        "repair.scope", "repair.facts", "repair.choices", "repair.schema", "repair.filter", "repair.validation",
+    ):
+        consumer = import_module("infini_local.core.runtime_authoring." + module_name)
         monkeypatch.setattr(consumer, "CAPABILITY_REGISTRY", registry)
     call["params"][root] = {new_leaf: True if owner == "item-condition" else 5 / 60}
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])

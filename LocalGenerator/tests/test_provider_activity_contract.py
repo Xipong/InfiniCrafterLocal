@@ -5,29 +5,32 @@ from __future__ import annotations
 import json
 import socket
 import threading
-from pathlib import Path
 from http.server import BaseHTTPRequestHandler
+from pathlib import Path
 from types import SimpleNamespace
-from urllib.request import build_opener, ProxyHandler, Request
 from urllib.error import HTTPError
+from urllib.request import ProxyHandler, Request, build_opener
 
+import infini_local.pipelines.transport.diagnostics as transport_diagnostics
+import infini_local.pipelines.transport.http as transport_http
+import infini_local.pipelines.transport.rejections as transport_rejections
 import pytest
-from provider_test_support import deliverable_recipe, loopback_server, write_json_response, endpoint_options
-from infini_local.pipelines.transport import admission as llm_admission
 from infini_local.core import llm_config
-from infini_local.pipelines.transport import profiles as llm_profiles
-from provider_test_support import reset_llm_runtime
-from infini_local.pipelines import combine_pipeline as pipeline
-from infini_local.pipelines.author import stage as gameplay_stage
-from infini_local.pipelines.transport import client as transport
-from infini_local.pipelines.author import request as author
-from infini_local.pipelines import generation_debug
-from infini_local.services import combine_endpoint as endpoint
-from infini_local.storage import world_storage, world_recipe_runtime as recipes
-from infini_local.web.server_handler import build_handler
-from infini_local.web import http_response_helpers as helpers
 from infini_local.core.errors import PlannerUnavailable
+from infini_local.pipelines import combine_pipeline as pipeline
+from infini_local.pipelines import generation_debug
+from infini_local.pipelines.author import request as author
+from infini_local.pipelines.author import stage as gameplay_stage
+from infini_local.pipelines.transport import admission as llm_admission
+from infini_local.pipelines.transport import client as transport
+from infini_local.pipelines.transport import profiles as llm_profiles
 from infini_local.pipelines.visual.delivery import VisualDeliveryBlocked
+from infini_local.services import combine_endpoint as endpoint
+from infini_local.storage import world_recipe_runtime as recipes
+from infini_local.storage import world_storage
+from infini_local.web import http_response_helpers as helpers
+from infini_local.web.server_handler import build_handler
+from provider_test_support import deliverable_recipe, endpoint_options, loopback_server, reset_llm_runtime, write_json_response
 
 PAYLOAD = {
     "worldId": "11111111-1111-1111-1111-111111111111",
@@ -192,7 +195,7 @@ def test_recipe_read_io_failure_keeps_active_bytes_and_recovers(monkeypatch, rea
 def test_real_author_provider_failure_has_safe_actionable_metadata(
     monkeypatch, real_route, tmp_path, fault, status, provider_code, param, expected, retryable
 ):
-    from infini_local.storage import trace_runtime, failure_state
+    from infini_local.storage import failure_state, trace_runtime
 
     monkeypatch.setattr(trace_runtime, "TRACE_PROMPTS_ENABLED", True)
     monkeypatch.setattr(generation_debug, "CACHE_DIR", tmp_path)
@@ -225,7 +228,7 @@ def test_real_author_provider_failure_has_safe_actionable_metadata(
             from infini_local.core.http_io import HttpDeadlineExceeded
 
             monkeypatch.setattr(
-                transport, "http_json", lambda *_a, **_k: (_ for _ in ()).throw(HttpDeadlineExceeded("HTTP logical-call deadline exceeded"))
+                transport_http, "http_json", lambda *_a, **_k: (_ for _ in ()).throw(HttpDeadlineExceeded("HTTP logical-call deadline exceeded"))
             )
         response_status, body = real_route(dict(PAYLOAD))
         assert "Items were returned" not in body["playerMessage"], "HTTP diagnostics have no material delivery authority"
@@ -301,8 +304,8 @@ def test_endpoint_never_attaches_unjoined_global_failure(monkeypatch):
 
 
 def test_actual_active_stages_are_private_detached_and_removed_with_logging_off(monkeypatch, route_worker, real_route):
-    from infini_local.web import server
     from infini_local.storage import trace_runtime
+    from infini_local.web import server
 
     monkeypatch.setattr(trace_runtime, "TRACE_PROMPTS_ENABLED", False)
     monkeypatch.setattr(server, "llm_auth_snapshot", lambda: {"provider": "local", "model": "offline"})
@@ -422,7 +425,7 @@ def test_real_author_rate_queue_and_network_start_are_live_across_sibling_lanes(
         sleep = time.sleep
 
         def gated_sleep(seconds):
-            if not resume.is_set() and transport._CURRENT_LLM_ATTEMPT.get() is not None:
+            if not resume.is_set() and transport_diagnostics._CURRENT_LLM_ATTEMPT.get() is not None:
                 parked.set()
                 assert resume.wait(5)
             else:
@@ -432,7 +435,7 @@ def test_real_author_rate_queue_and_network_start_are_live_across_sibling_lanes(
         event_wait = threading.Event.wait
 
         def observed_wait(self, timeout=None):
-            row = transport._CURRENT_LLM_ATTEMPT.get()
+            row = transport_diagnostics._CURRENT_LLM_ATTEMPT.get()
             if row is not None and row.get("rateWaitReason") == "rate_queue":
                 queued.set()
             return event_wait(self, timeout)
@@ -480,6 +483,7 @@ def test_real_author_rate_queue_and_network_start_are_live_across_sibling_lanes(
 
 def test_real_author_unsent_rate_deadline_is_not_provider_timeout(monkeypatch, real_route):
     import time
+
     from infini_local.core import http_io
 
     # Only admission sleep spends this test's budget. Real payload preparation
@@ -492,6 +496,8 @@ def test_real_author_unsent_rate_deadline_is_not_provider_timeout(monkeypatch, r
 
     clock = SimpleNamespace(monotonic=lambda: now[0], sleep=advance, time=time.time)
     monkeypatch.setattr(transport, "time", clock)
+    monkeypatch.setattr(transport_http, "time", clock)
+    monkeypatch.setattr(transport_diagnostics, "time", clock)
     monkeypatch.setattr(llm_admission, "time", clock)
     monkeypatch.setattr(http_io, "time", clock)
 
@@ -508,7 +514,7 @@ def test_real_author_unsent_rate_deadline_is_not_provider_timeout(monkeypatch, r
     llm_admission._LLM_RATE_STATE["fixture-deadline"] = {"events": [], "lastRequest": now[0], "blockedUntil": now[0] + 10}
     call = author.llm_chat_json
     monkeypatch.setattr(author, "llm_chat_json", lambda payload, timeout=10: call(payload, timeout=0.04))
-    monkeypatch.setattr(transport, "urlopen_no_redirect", lambda *_a, **_k: pytest.fail("expired admission must never send"))
+    monkeypatch.setattr(transport_http, "urlopen_no_redirect", lambda *_a, **_k: pytest.fail("expired admission must never send"))
     status, body = real_route(dict(PAYLOAD))
     assert status == 504 and body["error"] == "llm_admission_timeout"
     assert sleeps == pytest.approx([0.04])
@@ -602,7 +608,7 @@ def test_activity_projection_is_bounded_and_unknowns_are_not_private_values():
 def test_provider_metadata_unknowns_never_echo_arbitrary_values(bad):
     from infini_local.storage import failure_state
 
-    metadata = transport._provider_error_metadata(json.dumps({"error": bad}))
+    metadata = transport_rejections._provider_error_metadata(json.dumps({"error": bad}))
     assert "PRIVATE" not in json.dumps(metadata)
     snapshot = failure_state.summarize_failure(
         {
@@ -621,7 +627,7 @@ def test_provider_metadata_unknowns_never_echo_arbitrary_values(bad):
 def test_deadline_during_http_error_body_is_deadline_not_stale_provider_status():
     from infini_local.core.http_io import HttpDeadlineExceeded
 
-    metadata = transport._failure_metadata(
+    metadata = transport_rejections._failure_metadata(
         HttpDeadlineExceeded("body read budget"), {"httpStatus": 404, "providerErrorCode": "model_not_found", "networkStarted": True}
     )
     assert metadata["failureCategory"] == "logical_timeout"

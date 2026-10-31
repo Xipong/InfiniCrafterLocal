@@ -3,23 +3,21 @@
 Fresh dependency/Repair controls explicitly compose independent components. These
 are not retrofits of the A2/A3/A4 items or claims of final PNG-ready delivery.
 """
-from copy import deepcopy
 import hashlib
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
-
+from captured_projectile_author import project_captured_world_units
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-
-from captured_projectile_author import project_captured_world_units
-
 
 _FIXTURES = Path(__file__).with_name('fixtures')
 _CAPTURED = json.loads((_FIXTURES / 'played_a2_a3_a4_author.json').read_text())

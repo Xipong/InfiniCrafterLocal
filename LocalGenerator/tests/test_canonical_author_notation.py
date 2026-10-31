@@ -1,16 +1,15 @@
 
 from prompt_packet_helpers import request_dossier
+
 """Current Author notation: one source admission/compiler/Repair boundary."""
 from copy import deepcopy
 
 import pytest
-
 from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
@@ -32,9 +31,10 @@ def _explicit_calls(source):
 @pytest.mark.parametrize("fn", ["accessory", "projectile_lifetime", "move_straight", "collect_seeds"])
 def test_provider_roundtrip_preserves_sparse_and_explicit_envelope_branches(monkeypatch, mode, fn):
     import json
-    from jsonschema import Draft202012Validator
+
     from infini_local.pipelines.author.item_contract import author_item_response_schema, project_provider_author_item_to_local
     from infini_local.pipelines.author.request import build_initial_author_request
+    from jsonschema import Draft202012Validator
     from test_codex_subscription_contract import _encode_nullable_fixture
     # Heavy serialized observers cover each distinct branch, not the registry x format product.
     shapes = {(cap.target_kinds == ("item_body",), bool(cap.params)) for cap in CAPABILITY_REGISTRY.values()}
@@ -134,7 +134,7 @@ def test_nullable_transport_does_not_erase_invalid_present_call_neighbours(monke
 ] + [pytest.param("item_stats", explicit, "foreign-target", id="foreign-target-" + str(explicit)) for explicit in (False, True)]
   + [pytest.param("move_straight", True, "invalid-params", id="invalid-noarg-params")])
 def test_real_repair_preserves_valid_envelope_presence_and_frozen_siblings(monkeypatch, format_mode, fn, explicit, attack):
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     from test_repair_gameplay_contract import _offline_gameplay_repair
     expected = build_capability_witness(fn)
     if explicit:
@@ -224,6 +224,7 @@ def test_source_provenance_rejects_global_item_target_forgery(fn):
 ])
 def test_item_receipt_owner_requires_exact_declared_and_final_identity(owner_field, value):
     import json
+
     from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
     source = build_runtime_fixture("workbench_blade")
     program = source["runtimeProgram"]
@@ -362,8 +363,8 @@ def test_flat_active_binding_preserves_independent_contact_and_stack_lanes():
 
 
 def test_fixed_branches_and_unique_arbitrary_body_references_are_exact():
-    from infini_local.qa.capability_witnesses import build_capability_witness
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+    from infini_local.qa.capability_witnesses import build_capability_witness
     source = build_capability_witness("accessory")
     source["runtimeProgram"]["entities"][0]["id"] = "opaque_body"
     source["runtimeProgram"]["primaryEntityId"] = "opaque_body"
@@ -422,8 +423,9 @@ def test_source_receipts_reject_direct_lane_mutation_and_missing_proof():
 
 
 def test_current_scoped_repair_preserves_original_bad_rows_and_frozen_lanes():
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     source = build_runtime_fixture("workbench_blade")
     binding = source["runtimeProgram"]["bindings"][0]
     binding["stackCost"] = True
@@ -449,6 +451,7 @@ def test_current_scoped_repair_preserves_original_bad_rows_and_frozen_lanes():
 
 def test_actual_initial_format_and_scoped_repair_builders_share_current_grammar(monkeypatch):
     import json
+
     from infini_local.pipelines.author import request as pipeline
     from test_repair_gameplay_contract import _offline_gameplay_repair
     source = build_runtime_fixture("workbench_blade")
@@ -481,9 +484,10 @@ def test_actual_initial_format_and_scoped_repair_builders_share_current_grammar(
 
 
 def test_unresolved_body_is_declaration_repair_not_synthetic_target_authority():
-    from infini_local.qa.capability_witnesses import build_capability_witness
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+    from infini_local.qa.capability_witnesses import build_capability_witness
     for case in ("missing", "duplicate", "invalid"):
         source = build_capability_witness("accessory")
         body = deepcopy(source["runtimeProgram"]["entities"][0])
@@ -543,8 +547,9 @@ def test_derived_role_receipts_reference_only_real_source_dependencies():
 
 def test_current_placement_association_has_only_literal_source_paths():
     import re
-    from test_placed_body_capability import placed
+
     from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+    from test_placed_body_capability import placed
     source = placed()
     wire = compile_runtime_program(source)
     association = next(row for row in wire["runtimeContract"]["finalWireReceipts"]
@@ -569,8 +574,9 @@ def test_wire_only_placement_reader_keeps_explicit_nested_policy_contract():
 
 
 def test_source_native_repair_can_create_implied_item_call_without_authored_target():
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     source = build_runtime_fixture("workbench_blade")
     call = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "item_use")
     source["runtimeProgram"]["calls"].remove(call)
@@ -583,7 +589,7 @@ def test_source_native_repair_can_create_implied_item_call_without_authored_targ
 
 
 def test_real_author_card_uses_one_explicit_call_envelope(monkeypatch):
-    from infini_local.core.runtime_authoring.capability_registry import capability_provider_union
+    from infini_local.core.runtime_authoring.registry_views import capability_provider_union
     from infini_local.pipelines.author.request import build_initial_author_request
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_object")
     request, _, _ = build_initial_author_request({}, {}, "current-call-grammar", model_name="offline")
@@ -595,9 +601,10 @@ def test_real_author_card_uses_one_explicit_call_envelope(monkeypatch):
 
 
 def test_malformed_active_input_repairs_source_leaf_and_freezes_group_and_lanes():
-    from infini_local.qa.capability_witnesses import build_capability_witness
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+    from infini_local.qa.capability_witnesses import build_capability_witness
     for value in ({}, [], None, "unknown"):
         source = build_capability_witness("restore_resources_on_use")
         call = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "restore_resources_on_use")
@@ -625,8 +632,8 @@ def test_malformed_active_input_repairs_source_leaf_and_freezes_group_and_lanes(
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("value", ["unknown", {}, None])
 def test_omission_only_passive_selector_repair_has_only_input_authority(monkeypatch, format_mode, value):
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     from infini_local.qa.capability_witnesses import build_capability_witness
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
     from test_repair_gameplay_contract import _offline_gameplay_repair
     source = build_capability_witness("accessory")
     from test_item_effect_groups import _groups
@@ -657,8 +664,8 @@ def test_omission_only_passive_selector_repair_has_only_input_authority(monkeypa
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("value", [{}, None, ""])
 def test_noop_repair_preserves_malformed_whole_binding_container(monkeypatch, format_mode, value):
-    from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
     from infini_local.core.errors import PlannerUnavailable
+    from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
     from infini_local.qa.capability_witnesses import build_capability_witness
     from test_repair_gameplay_contract import _offline_gameplay_repair
     source = build_capability_witness("accessory")
