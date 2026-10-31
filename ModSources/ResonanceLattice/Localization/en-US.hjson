@@ -1,0 +1,45 @@
+# Resonance Lattice localization (English). UTF-8 only.
+Mods: {
+	ResonanceLattice: {
+		Items: {
+			ResonantConduitItem: {
+				DisplayName: "Resonant Conduit"
+				Tooltip: "Places a Resonant Crystal\nCrystals within 12 tiles link into a lattice network that carries aether charge\nCharge glows, feeds wisps and surges into lightning when overloaded"
+			}
+			AetherCellItem: {
+				DisplayName: "Aether Cell"
+				Tooltip: "Injects 60 aether charge into the nearest lattice network\nOvercharged networks surge and zap nearby enemies"
+			}
+			StormcallerItem: {
+				DisplayName: "Stormcaller"
+				Tooltip: "Fires lattice bolts that feed charge into the grid\nMarked enemies take 30% more damage from all sources"
+			}
+			LatticeProbeItem: {
+				DisplayName: "Lattice Probe"
+				Tooltip: "Left click: report the charge of the nearest lattice network and attune to it if it is at least half charged\nRight click: summon a Lattice Wisp bound to you (max 2)"
+			}
+		}
+		Tiles: {
+			ResonantCrystalTile: {
+				MapEntry: "Resonant Crystal"
+			}
+		}
+		NPCs: {
+			LatticeWispNPC: {
+				DisplayName: "Lattice Wisp"
+			}
+		}
+		Buffs: {
+			LatticeAttunementBuff: {
+				DisplayName: "Lattice Attunement"
+				Description: "Attuned to a charged lattice network: faster mana regeneration"
+			}
+		}
+		Chat: {
+			NoNetwork: "No lattice network in range."
+			ProbeReport: "Lattice network: {0} nodes, {1}/{2} charge ({3}%)"
+			WispSummoned: "A Lattice Wisp answers your call."
+			WispLimit: "You already have the maximum number of wisps."
+		}
+	}
+}

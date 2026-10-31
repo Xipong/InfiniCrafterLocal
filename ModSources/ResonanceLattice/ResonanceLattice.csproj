@@ -1,0 +1,8 @@
+<Project Sdk="Tomat.Terraria.ModLoader.Sdk/2.1.1">
+  <PropertyGroup>
+    <AssemblyName>ResonanceLattice</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <!-- Stable tModLoader (.NET 8) reference assemblies, same SDK setup as InfiniCrafterLocal. -->
+    <TmlVersion>stable</TmlVersion>
+  </PropertyGroup>
+</Project>

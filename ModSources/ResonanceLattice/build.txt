@@ -1,0 +1,5 @@
+displayName = Resonance Lattice
+author = Xipong
+version = 0.1.0
+side = Both
+buildIgnore = *.csproj, *.sln, *.user, obj\*, bin\*, .vs\*
