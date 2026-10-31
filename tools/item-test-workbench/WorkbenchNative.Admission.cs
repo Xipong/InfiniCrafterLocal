@@ -7,6 +7,13 @@ using Terraria;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static void WValidateHistoryTrail(VfxSlotSpec slot,bool drawPlayer)
+    {
+        // Deliberately bounded to the exercised full-PreDraw lane. In particular,
+        // admitting sprite trails would also require their exact texture publications.
+        if(!drawPlayer || slot.Trail is not {Draw:"stroke",Source:"center"})
+            throw new NotSupportedException("historyTrail requires drawPlayer with original full PreDraw/MagicPixel; only stroke/center trails are admitted");
+    }
     private sealed class WWorldIdentity : IDisposable
     {
         private readonly int previous=Terraria.Main.worldID;
