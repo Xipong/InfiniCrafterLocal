@@ -92,7 +92,18 @@ internal static partial class EngineRuntimeChecks
         var root = JsonNode.Parse(baseline.ToJson())!.AsObject();
         var geometry = FrontHandEntity(root)["beamGeometry"]!.AsObject();
         Equal(false, geometry.ContainsKey("startOffsetPx"), "historical absent offset stays absent after native roundtrip");
-        foreach (string invalid in new[] { "null", "true", "\"-32\"", "-30720.001", "30720.001", "{}" }) {
+        foreach (string valid in new[] { "0", "-0", "0e-100", "1e-45", "-1e-45" }) {
+            geometry["startOffsetPx"] = JsonNode.Parse(valid);
+            var accepted = GeneratedItemData.FromJson(root.ToJsonString());
+            Equal(true, accepted is not null, "zero or representable subnormal offset admits " + valid);
+            var offset = accepted!.RuntimeProgram.TryGetEntity(accepted.RuntimeProgram.PrimaryEntityId)!.BeamGeometry!.StartOffsetPx;
+            Equal(true, offset.HasValue, "explicit offset presence survives " + valid);
+            float stored = offset.GetValueOrDefault();
+            if (valid == "1e-45") Equal(true, stored > 0, "positive representable subnormal does not collapse");
+            else if (valid == "-1e-45") Equal(true, stored < 0, "negative representable subnormal does not collapse");
+            else Equal(0f, stored, "explicit mathematical zero remains neutral " + valid);
+        }
+        foreach (string invalid in new[] { "null", "true", "\"-32\"", "-30720.001", "30720.001", "{}", "1e-100", "-1e-100" }) {
             geometry["startOffsetPx"] = JsonNode.Parse(invalid);
             Equal(true, GeneratedItemData.FromJson(root.ToJsonString()) is null, "strict native offset refusal " + invalid);
         }

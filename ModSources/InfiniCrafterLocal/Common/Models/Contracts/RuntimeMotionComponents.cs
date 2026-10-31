@@ -37,7 +37,7 @@ public static class RuntimeMotionNumbers
     public sealed class OptionalWidth : RawJsonNullableFloatDomainConverter
     { public OptionalWidth() : base("0.001", "128") { } }
     public sealed class OptionalBeamOrigin : RawJsonNullableFloatDomainConverter
-    { public OptionalBeamOrigin() : base("-30720", "30720") { } }
+    { public OptionalBeamOrigin() : base("-30720", "30720", "0") { } }
     public sealed class Speed : RawJsonFloatDomainConverter
     { public Speed() : base("0.001", "80") { } }
     public sealed class OptionalSpeed : RawJsonNullableFloatDomainConverter
