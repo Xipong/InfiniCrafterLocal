@@ -68,12 +68,12 @@ def _packet(monkeypatch, stage, fixture, mode, *, captured=None, vfx_source=None
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     import vfx_material_fixtures
+    from test_low_level_three_stage_pipeline import _vfx_output
     data = (vfx_material_fixtures._data("beam_geometry") if fixture == "beam_geometry"
             else compile_runtime_program(build_runtime_fixture(fixture)))
     with monkeypatch.context() as mp:
         mp.setattr(vfx_material_fixtures, "_data", lambda: copy.deepcopy(data))
-        if vfx_source is not None:
-            mp.setattr(vfx_material_fixtures, "_legacy", lambda _data: copy.deepcopy(vfx_source))
+        mp.setattr(vfx_material_fixtures, "_legacy", lambda current: copy.deepcopy(vfx_source) if vfx_source is not None else _vfx_output(current))
         if captured is not None:
             from infini_local.pipelines import vfx_generation_pipeline as sender, visual_generation_pipeline as visual
             def record(payload, dossier, static_keys):
@@ -128,10 +128,10 @@ def _assert_vfx_alpha_repair_packet(packet, data, mode):
     from jsonschema import Draft202012Validator
     from prompt_packet_helpers import request_dossier
     from infini_local.core import vfx_manifest as vfx
-    from vfx_material_fixtures import _legacy
+    from test_low_level_three_stage_pipeline import _vfx_output
 
     static, dynamic = [json.loads(row["content"]) for row in packet["messages"][1:]]
-    source = _legacy(data)
+    source = vfx_model_payload(_vfx_output(data))
     dossier = request_dossier(packet)
     schema = dossier["outputSchema"]
     assert set(schema["properties"]) == {"schema", "note", "slotsUpsert"}
@@ -270,8 +270,6 @@ def test_vfx_caches_owned_slot_grammar_not_dynamic_compatibility(monkeypatch, st
         assert schema["properties"]["assetsUpsert" if repair else "assets"]["items"] == {"$ref": "#/$defs/asset"}
         for field in ("element", "path", "screenShake", "particle", "sound"):
             assert slot["properties"][field] == {"$ref": "#/$defs/" + field}
-        for index, renderer in enumerate(vfx._RENDERER_REQUIREMENTS):
-            assert slot["allOf"][index] == {"$ref": "#/$defs/rendererRule_" + renderer}
         canonical = vfx_model_schema((vfx._vfx_repair_schema if repair else vfx._director_schema)(data))
         assert request_dossier(packet)["outputSchema"] == canonical
         if mode == "json_schema":
@@ -279,7 +277,8 @@ def test_vfx_caches_owned_slot_grammar_not_dynamic_compatibility(monkeypatch, st
         original_slot = canonical["properties"][key]["items"]
         for field in ("entityId", "event"):
             assert slot["properties"][field] == original_slot["properties"][field]
-        assert slot["allOf"][len(vfx._RENDERER_REQUIREMENTS):] == original_slot["allOf"][len(vfx._RENDERER_REQUIREMENTS):]
+        assert slot["allOf"] == original_slot["allOf"]
+        assert not any(key.startswith("rendererRule_") for key in static["schemaDefinitions"]["$defs"])
         packets.append(packet)
     assert packets[0]["messages"][:2] == packets[1]["messages"][:2] == packets[2]["messages"][:2]
     assert len({p["messages"][2]["content"] for p in packets}) == 3
@@ -346,16 +345,17 @@ def test_vfx_cache_tracks_exact_scope_but_not_source_specific_constants(monkeypa
     from infini_local.core import vfx_manifest as vfx
     from prompt_packet_helpers import request_dossier
     from test_stable_schema_data import capture_wire
-    from vfx_material_fixtures import _data, _legacy
+    from vfx_material_fixtures import _data
+    from test_low_level_three_stage_pipeline import _vfx_output
 
     data = _data()
-    first = _legacy(data)
+    first = _vfx_output(data)
     second = copy.deepcopy(first)
-    second["slots"][0]["scale"] = 2
-    # _packet diagnoses alpha=None. The co-diagnosed scale in the third source
+    second["slots"][0]["duration"] = 30
+    # _packet diagnoses alpha=None. The co-diagnosed duration in the third source
     # changes the exact grammar, not a supposedly universal cache definition.
     third = copy.deepcopy(first)
-    third["slots"][0]["scale"] = True
+    third["slots"][0]["duration"] = True
     packets = [_packet(monkeypatch, "vfx_repair", "workbench_blade", mode, vfx_source=source)[0]
                for source in (first, second, third)]
     static = [json.loads(packet["messages"][1]["content"]) for packet in packets]
@@ -364,13 +364,13 @@ def test_vfx_cache_tracks_exact_scope_but_not_source_specific_constants(monkeypa
     canonical = vfx._director_schema(data)["properties"]["slots"]["items"]["properties"]
     assert static[0]["schemaDefinitions"]["$defs"] == {"slot_alpha": canonical["alpha"]}
     assert static[2]["schemaDefinitions"]["$defs"] == {
-        "slot_alpha": canonical["alpha"], "slot_scale": canonical["scale"],
+        "slot_alpha": canonical["alpha"], "slot_duration": canonical["duration"],
     }
-    for packet, value in zip(packets[:2], (1.0, 2)):
+    for packet, value in zip(packets[:2], (20, 30)):
         dossier = request_dossier(packet)
         row = dossier["outputSchema"]["properties"]["slotsUpsert"]["items"]
-        assert row["properties"]["scale"] == {"const": value, "type": "number" if type(value) is float else "integer"}
-        assert dossier["brokenFragments"]["slots"][0]["scale"] == value
+        assert row["properties"]["duration"] == {"const": value, "type": "number" if type(value) is float else "integer"}
+        assert dossier["brokenFragments"]["slots"][0]["duration"] == value
     context = {"provider": "openai_codex", "base_url": "https://chatgpt.com/backend-api/codex",
                "api_mode": "responses", "model": "gpt-6.1-sol"}
     wires = [capture_wire(monkeypatch, packet, context) for packet in packets]
@@ -424,8 +424,8 @@ def test_reference_schema_reconstructs_owner_admission_and_refusal(monkeypatch, 
     else:
         valid = _sprite(data)
         if repair:
-            from vfx_material_fixtures import _legacy
-            valid = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "one leaf", "slotsUpsert": _legacy(data)["slots"]}
+            from test_low_level_three_stage_pipeline import _vfx_output
+            valid = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "one leaf", "slotsUpsert": _vfx_output(data)["slots"]}
         valid = vfx_model_payload(valid)
         slot_key = "slotsUpsert" if repair else "slots"
         invalid = copy.deepcopy(valid)

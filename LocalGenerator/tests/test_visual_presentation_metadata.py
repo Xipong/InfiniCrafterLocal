@@ -338,12 +338,13 @@ def test_vfx_consumes_art_palette_and_exact_impact_binding_without_prose_or_audi
     raw["item"].update(palette=["dark blue copper"], grip={"normalizedX": 0.25, "normalizedY": 0.75})
     data = visual._apply_kit(data, raw)
     before = copy.deepcopy(data)
-    authored = _vfx_output(data)
-    authored["slots"][0].update(id="door_impact", entityId="chained_door", event="on_hit", rendererKind="impactSprite",
-                                textureRole="impact", spriteCanvasSize=32, anchor="hitPoint", layer="AfterProjectiles",
-                                spritePrompt="literal door impact", spriteNegativePrompt="")
-    for field in ("spread", "particleSystemId", "startTick", "repeatEvery", "density"):
-        authored["slots"][0].pop(field)
+    from tests.vfx_material_fixtures import _with_asset
+    authored = _with_asset(data)
+    authored["assets"][0].update(prompt="literal door impact", negativePrompt="", canvasSize=32)
+    authored["slots"][0].update(id="door_impact", entityId="chained_door", event="on_hit",
+                                anchor="hitPoint", layer="AfterProjectiles")
+    authored["slots"][0]["element"].update(count=1, speedMinPxPerTick=0, speedMaxPxPerTick=0,
+                                          inheritVelocity=0, accelerationYPxPerTickSquared=0)
     responses, requests = wire_transport
     responses.append(authored)
     final = vfx.attach_vfx_manifest(data, "door-impact", llm_director=stage.call_llm_vfx_director)
@@ -354,7 +355,7 @@ def test_vfx_consumes_art_palette_and_exact_impact_binding_without_prose_or_audi
     slot, = final["vfxManifest"]["slots"]
     assert (slot["entityId"], slot["event"], slot["layer"]) == ("chained_door", "on_hit", "AfterProjectiles")
     assert "sound" not in slot and "soundId" not in slot and "spritePrompt" not in slot
-    impact = next(row for row in build_visual_asset_plan(final) if row["role"] == "impact:chained_door")
+    impact = next(row for row in build_visual_asset_plan(final) if row["role"] == "vfx:" + authored["assets"][0]["id"])
     assert impact["prompt"] == "literal door impact" and impact["negativePrompt"] == ""
     assert final["gameplay"] == before["gameplay"]
     assert _runtime_mechanics(final) == _runtime_mechanics(before)

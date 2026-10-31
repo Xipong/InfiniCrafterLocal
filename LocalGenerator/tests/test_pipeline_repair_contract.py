@@ -530,7 +530,7 @@ def test_visual_repair_freezes_valid_fields_and_ignores_scope_escape() -> None:
 
 
 @pytest.mark.parametrize("scenario,paths", [
-    pytest.param("slot-params", ["duration", "spread"], id="missing-executable-slot-params-frozen-alpha"),
+    pytest.param("slot-params", ["duration", "startTick"], id="missing-executable-slot-params-frozen-alpha"),
     pytest.param("root-pair", ["entityId", "event"], id="root-pair-frozen-duration"),
 ])
 def test_vfx_exact_slot_closure_freezes_valid_document(scenario, paths):
@@ -539,8 +539,8 @@ def test_vfx_exact_slot_closure_freezes_valid_document(scenario, paths):
     slot = previous["slots"][0]
     if scenario == "slot-params":
         slot["duration"] = 999
-        del slot["spread"]
-        changes = {"duration": 30, "spread": 0.2}
+        del slot["startTick"]
+        changes = {"duration": 30, "startTick": 2}
         hostile = {"alpha": 0.1}
     else:
         slot["entityId"] = "missing_entity"

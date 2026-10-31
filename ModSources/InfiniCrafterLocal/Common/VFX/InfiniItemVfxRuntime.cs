@@ -109,7 +109,7 @@ public static partial class InfiniItemVfxRuntime
     {
         if (Main.dedServ || player is null || !player.active || data is null) return;
         string sourceKey=$"item:{player.whoAmI}:{data.Id}:{entityId}";
-        InfiniDetachedVfxSystem.RegisterPeriodicElements(data,entityId,sourceKey,VfxSourceBinding.Capture(player,sourceItem,data),item:true);
+        InfiniDetachedVfxSystem.RegisterPeriodicElements(data,entityId,sourceKey,VfxSourceBinding.Capture(player,sourceItem,data),item:true,allowLightCue:allowLightCue);
         EmitLocal(player, data, entityId, RuntimeEventKind.Periodic, cadence: true, allowLightCue: allowLightCue);
     }
 

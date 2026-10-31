@@ -19,7 +19,7 @@ from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.core.vfx_material_contract import vfx_model_payload
 from infini_local.pipelines import vfx_generation_pipeline as stage
 from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
-from tests.vfx_material_fixtures import _asset, _data, _legacy, _path, _sprite, _with_asset
+from tests.vfx_material_fixtures import _asset, _data, _shape, _path, _sprite, _with_asset
 
 
 def _patch(**edits):
@@ -63,7 +63,7 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
     for entity in data["runtimeProgram"]["entities"]:
         entity["visual"]["assetMode"] = "baked_sprite" if entity["kind"] == "item_body" else "reuse_item_icon"
     raw = _sprite(data) if renderer == "spriteElement" else _path(data)
-    raw["slots"][0][payload]["texture"] = {"source": "item" if outcome == "valid" else "asset", "assetId": "" if outcome == "valid" else "missing"}
+    raw["slots"][0][payload]["texture"] = {"source": "item" if outcome == "valid" else "asset", "assetId": "" if outcome == "valid" else "missing", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
     if domain != "omitted":
         raw["assets"] = [_asset()] if domain == "nonempty" else []
     before, raw_before = copy.deepcopy(data), copy.deepcopy(raw)
@@ -74,7 +74,7 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
         initial_paths = [payload + ".texture.assetId", *([payload + ".texture.source"] if domain != "nonempty" else [])]
         assert initial_scope["fieldPermissions"] == {"globals": {}, "slots": [{"slotId": raw["slots"][0]["id"], "paths": initial_paths}], "assets": []}, "empty_domain_selector_permission"
     plan_before = build_visual_asset_plan(data)
-    texture = {"source": "item" if outcome == "asset" else outcome, "assetId": _asset()["id"] if outcome == "asset" else ""}
+    texture = {"source": "item" if outcome == "asset" else outcome, "assetId": _asset()["id"] if outcome == "asset" else "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
     correction = _patch()
     if outcome in {"item", "entity", "asset"}:
         candidate = copy.deepcopy(raw["slots"][0])
@@ -84,8 +84,8 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
         candidate[payload]["widthPx"] = 1.0
         if payload == "path":
             candidate[payload]["source"] = "beam"
-        candidate.update(entityId=next(row["id"] for row in data["runtimeProgram"]["entities"] if row["id"] != candidate["entityId"]), event="on_hit", alpha=0.1,  textureRole="impact", spritePrompt="unrequested replacement Visual/image design")
-        new_slot = {**copy.deepcopy(_legacy(data)["slots"][0]), "id": "unrequested_slot"}
+        candidate.update(entityId=next(row["id"] for row in data["runtimeProgram"]["entities"] if row["id"] != candidate["entityId"]), event="on_hit", alpha=0.1)
+        new_slot = {**copy.deepcopy(_shape(data)["slots"][0]), "id": "unrequested_slot"}
         assets = [{**_asset(), "prompt": "unrequested redesign", "canvasSize": 64, "layout": "strip"}] if raw.get("assets") else []
         correction = _patch(slotsUpsert=[candidate, new_slot], slotIdsDelete=[raw["slots"][0]["id"]],
                              assetsUpsert=[*assets, _asset("missing")], assetIdsDelete=[_asset()["id"]])
@@ -103,7 +103,7 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
     else:
         expected = copy.deepcopy(raw_before)
         if outcome != "valid":
-            expected["slots"][0][payload]["texture"] = ({"source": "asset", "assetId": _asset()["id"]} if domain == "nonempty" else texture)
+            expected["slots"][0][payload]["texture"] = ({"source": "asset", "assetId": _asset()["id"], "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}} if domain == "nonempty" else texture)
         expected_plan = build_visual_asset_plan({**before, "vfxManifest": vfx._compile_manifest(before, expected, case)}) if domain == "nonempty" else plan_before
         final = vfx.attach_vfx_manifest(data, case, llm_director=stage.call_llm_vfx_director)
         assert final["debug"]["vfxDirectorRaw"] == expected, "only_diagnosed_texture_leaves_change"
@@ -121,7 +121,7 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
             paths = [f"$.slotsUpsert[0].{payload}.texture.assetId", *([f"$.slotsUpsert[0].{payload}.texture.source"] if domain != "nonempty" else [])]
             assert audit["acceptedPaths"] == paths
             ignored = {row["path"] for row in audit["ignoredChanges"]}
-            assert {"$.slotIdsDelete[0]", "$.slotsUpsert[0].entityId", "$.slotsUpsert[0].event", "$.slotsUpsert[0].textureRole", "$.slotsUpsert[0].spritePrompt", f"$.slotsUpsert[0].{payload}.widthProfile.middle", "$.slotsUpsert[1]", "$.assetsUpsert[0]", "$.assetIdsDelete[0]"} <= ignored
+            assert {"$.slotIdsDelete[0]", "$.slotsUpsert[0].entityId", "$.slotsUpsert[0].event", f"$.slotsUpsert[0].{payload}.widthProfile.middle", "$.slotsUpsert[1]", "$.assetsUpsert[0]", "$.assetIdsDelete[0]"} <= ignored
             if payload == "path":
                 assert "$.slotsUpsert[0].path.source" in ignored
             if domain == "nonempty":
@@ -168,16 +168,16 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
         target.write_text(json.dumps({"sourceBefore": before, "directorBefore": raw_before, "repair": correction, "manifest": final.get("vfxManifest"), "planBefore": plan_before, "planAfter": build_visual_asset_plan(final), "sourceFrozen": True, "directorFrozen": True}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-@pytest.mark.parametrize("case", ["profile-knot", "asset-canvas", "asset-reference", "foreign-payload", "scale-type-repair", "scale-type-frozen"])
+@pytest.mark.parametrize("case", ["profile-knot", "asset-canvas", "asset-reference", "foreign-payload", "alpha-type-repair", "alpha-type-frozen"])
 def test_vfx_exact_leaf_stage_contract(monkeypatch, case):
     data = _data()
-    raw = _with_asset(data) if case.startswith("asset") else _sprite(data) if case == "profile-knot" else _legacy(data)
+    raw = _with_asset(data) if case.startswith("asset") else _shape(data) if case == "foreign-payload" else _sprite(data)
     candidate = copy.deepcopy(raw["slots"][0])
-    domain, leaf = "slots", "scale"
+    domain, leaf = "slots", "alpha"
     if case == "profile-knot":
         raw["slots"][0]["element"]["widthProfile"]["middle"] = True
         candidate["element"]["widthProfile"].update(start=4.0, middle=1.0, end=4.0)
-        candidate["element"]["texture"] = {"source": "entity", "assetId": ""}
+        candidate["element"]["texture"] = {"source": "entity", "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
         leaf = "element.widthProfile.middle"
         patch = _patch(slotsUpsert=[candidate], assetsUpsert=[_asset()])
     elif case == "asset-canvas":
@@ -186,7 +186,7 @@ def test_vfx_exact_leaf_stage_contract(monkeypatch, case):
         patch = _patch(assetsUpsert=[{**_asset(), "prompt": "unrequested redesign", "negativePrompt": "rewrite", "layout": "strip"}])
     elif case == "asset-reference":
         raw["slots"][0]["element"]["texture"]["assetId"] = "missing"
-        candidate["element"]["texture"] = {"source": "item", "assetId": _asset()["id"]}
+        candidate["element"]["texture"] = {"source": "item", "assetId": _asset()["id"], "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
         leaf = "element.texture.assetId"
         patch = _patch(slotsUpsert=[candidate], assetsUpsert=[_asset("missing")], assetIdsDelete=[_asset()["id"]])
     elif case == "foreign-payload":
@@ -195,15 +195,15 @@ def test_vfx_exact_leaf_stage_contract(monkeypatch, case):
         leaf = "element"
         patch = _patch(slotsUpsert=[candidate])
     else:
-        raw["slots"][0]["scale"] = 1 if case == "scale-type-frozen" else True
-        candidate["scale"] = 1.0 if case == "scale-type-frozen" else 1
+        raw["slots"][0]["alpha"] = 1 if case == "alpha-type-frozen" else True
+        candidate["alpha"] = 1.0 if case == "alpha-type-frozen" else 1
         patch = _patch(slotsUpsert=[candidate],   slotIdsDelete=[], slotIndicesDelete=[])
     before, patch_before = copy.deepcopy(raw), json.dumps(patch)
     report = vfx.validate_vfx_director_output(raw, data)
-    assert report["ok"] is (case == "scale-type-frozen")
+    assert report["ok"] is (case == "alpha-type-frozen")
     scope = vfx._build_vfx_repair_scope(raw, report["errors"])
     row_id = raw[domain][0]["id"]
-    expected_permissions = [] if case == "scale-type-frozen" else [{"assetId" if domain == "assets" else "slotId": row_id, "paths": [leaf], **({"deletePaths": [leaf]} if case == "foreign-payload" else {})}]
+    expected_permissions = [] if case == "alpha-type-frozen" else [{"assetId" if domain == "assets" else "slotId": row_id, "paths": [leaf], **({"deletePaths": [leaf]} if case == "foreign-payload" else {})}]
     assert scope["fieldPermissions"][domain] == expected_permissions
     repaired, audit = vfx._apply_vfx_repair_patch(data, raw, patch, scope, return_audit=True)
     expected = copy.deepcopy(before)
@@ -216,31 +216,31 @@ def test_vfx_exact_leaf_stage_contract(monkeypatch, case):
         assert not scope["allowCreateAssets"]
     elif case == "foreign-payload":
         expected["slots"][0].pop("element")
-    elif case == "scale-type-repair":
-        expected["slots"][0]["scale"] = 1
+    elif case == "alpha-type-repair":
+        expected["slots"][0]["alpha"] = 1
     assert audit["ok"], audit
     assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True), "typed_exact_leaf_survives_filter_apply"
     assert vfx.validate_vfx_director_output(repaired, data)["ok"]
-    if case.startswith("scale"):
-        assert type(repaired["slots"][0]["scale"]) is int
-        assert audit["acceptedPaths"] == ([] if case == "scale-type-frozen" else ["$.slotsUpsert[0].scale"])
-        assert len(audit["filteredPatch"]["slotsUpsert"]) == int(case == "scale-type-repair")
-        if case == "scale-type-frozen":
+    if case.startswith("alpha"):
+        assert type(repaired["slots"][0]["alpha"]) is int
+        assert audit["acceptedPaths"] == ([] if case == "alpha-type-frozen" else ["$.slotsUpsert[0].alpha"])
+        assert len(audit["filteredPatch"]["slotsUpsert"]) == int(case == "alpha-type-repair")
+        if case == "alpha-type-frozen":
             assert len(audit["ignoredChanges"]) == 1
             ignored = audit["ignoredChanges"][0]
             assert ignored["path"] == "$.slotsUpsert[0]" and ignored["reason"] == "independent_valid_slot_frozen"
-            assert type(ignored["requested"]["scale"]) is float and type(ignored["preserved"]["scale"]) is int
+            assert type(ignored["requested"]["alpha"]) is float and type(ignored["preserved"]["alpha"]) is int
         else:
             assert audit["ignoredChanges"] == []
     if case == "asset-canvas":
         assert any(row["path"].endswith(".prompt") for row in audit["ignoredChanges"])
-    sent = _offline_transport(monkeypatch, case, [raw] if case == "scale-type-frozen" else [raw, patch])
+    sent = _offline_transport(monkeypatch, case, [raw] if case == "alpha-type-frozen" else [raw, patch])
     final = vfx.attach_vfx_manifest(data, case, llm_director=stage.call_llm_vfx_director)
     assert json.dumps(final["debug"]["vfxDirectorRaw"], sort_keys=True) == json.dumps(expected, sort_keys=True)
     assert final["vfxManifest"] == vfx._compile_manifest(data, expected, case)
     assert vfx.validate_vfx_manifest_wire(final)["ok"]
-    assert len(sent) == (1 if case == "scale-type-frozen" else 2)
-    if case != "scale-type-frozen":
+    assert len(sent) == (1 if case == "alpha-type-frozen" else 2)
+    if case != "alpha-type-frozen":
         request = request_dossier(sent[1])
         assert request["repairScope"] == scope
         if case == "asset-canvas":
@@ -281,7 +281,7 @@ def test_vfx_asset_delete_permission_preserves_first_request(duplicate):
 @pytest.mark.parametrize("field", ["slotsUpsert", "slotIdsDelete", "slotIndicesDelete", "assetsUpsert", "assetIdsDelete", "assetIndicesDelete"])
 def test_vfx_repair_optional_edit_absence_is_not_null(monkeypatch, field):
     data = _data()
-    accepted = _legacy(data)
+    accepted = _sprite(data)
     raw = copy.deepcopy(accepted)
     raw["slots"][0]["alpha"] = None
     patch = _patch(slotsUpsert=accepted["slots"])

@@ -56,6 +56,12 @@ public sealed partial class GeneratedProjectile
 
     private void DrawRuntimeGeometry(Color lightColor)
     {
+        if (_entity!.Visual.Geometry is { } authored)
+        {
+            DrawExplicitBodyGeometry(authored);
+            return;
+        }
+        // Saved items without the new field retain their original presentation.
         Texture2D pixel = TextureAssets.MagicPixel.Value;
         Color color = RuntimeColorPolicy.Resolve(_entity!.Light.Color, Projectile.GetAlpha(lightColor));
         if (HasBeamGeometry)
@@ -87,4 +93,39 @@ public sealed partial class GeneratedProjectile
         Vector2 delta = direction.SafeNormalize(Vector2.UnitX) * length;
         InfiniVfxRuntime.DrawLine(pixel, center - delta * 0.5f, center + delta * 0.5f, color, width, preserveWidth: exactScale);
     }
+    private void DrawExplicitBodyGeometry(RuntimeBodyGeometrySpec geometry)
+    {
+        Texture2D pixel = TextureAssets.MagicPixel.Value;
+        Color color = geometry.ToColor();
+        void Segment(Vector2 a, Vector2 b) => InfiniVfxRuntime.DrawLine(pixel,
+            a - Main.screenPosition, b - Main.screenPosition, color, geometry.WidthPx, preserveWidth: true);
+        if (geometry.Source == "collision_path")
+        {
+            if (HasBeamGeometry) {
+                GetChannelBeamGeometry(out Vector2 start, out Vector2 end, out _);
+                Segment(start, end);
+            } else if (HasLashGeometry) {
+                for (int i = 1; i < _whipPoints.Count; i++) Segment(_whipPoints[i - 1], _whipPoints[i]);
+            } else throw new System.IO.InvalidDataException("Missing collision path for authored body geometry");
+            return;
+        }
+        if (geometry.Axis == "aim" && _entity!.Aim is null)
+            throw new System.IO.InvalidDataException("Body geometry aim axis requires entity aim");
+        // Read-only aim: unlike MotionAxis this must never turn the owner during drawing.
+        Vector2 aim = _entity!.Aim?.Source switch {
+            "cursor" => new Vector2(Projectile.ai[0], Projectile.ai[1]).SafeNormalize(_initialDirection),
+            "facing" => new Vector2(Owner().direction, 0f),
+            "velocity" => Projectile.velocity.SafeNormalize(_motionAxis.SafeNormalize(_initialDirection)),
+            _ => _initialDirection,
+        };
+        Vector2 axis = geometry.Axis switch {
+            "rotation" => Projectile.rotation.ToRotationVector2(),
+            "aim" => aim,
+            "velocity" => Projectile.velocity.SafeNormalize(_initialDirection),
+            _ => throw new System.IO.InvalidDataException("Invalid body geometry axis"),
+        };
+        Vector2 half = axis * (geometry.LengthPx!.Value * 0.5f);
+        Segment(Projectile.Center - half, Projectile.Center + half);
+    }
+
 }

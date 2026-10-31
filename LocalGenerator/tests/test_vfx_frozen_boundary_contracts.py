@@ -18,15 +18,15 @@ from tests.test_low_level_three_stage_pipeline import _vfx_output
 from tests.test_repair_vfx_contract import _offline_transport
 from infini_local.pipelines import visual_delivery_gate, visual_sprite_generation
 from infini_local.storage import world_storage
-from tests.vfx_material_fixtures import _data, _legacy, _sprite, _with_asset
+from tests.vfx_material_fixtures import _data, _legacy, _native, _shape, _sprite, _with_asset
 from tests.test_vfx_dependency_delivery_contracts import visual_data, authored_vfx, roundtrip
 from tests.vfx_image_fixtures import _request, offline_backend as offline_backend
 
 BAD_SELECTORS = [
-    pytest.param("spriteStampTrail", "runtime_geometry", "entity", id="geometry-afterimage"),
-    pytest.param("spriteStampTrail", "no_asset", "entity", id="missing-stamp-png"),
-    pytest.param("spriteStampTrail", "no_asset", "projectile", id="missing-actor-png"),
-    pytest.param("spriteStampTrail", "reuse_item_icon", "field", id="field-role-mismatch"),
+    pytest.param("historyTrail", "runtime_geometry", "entity", id="geometry-afterimage"),
+    pytest.param("historyTrail", "no_asset", "entity", id="missing-stamp-png"),
+    pytest.param("historyTrail", "no_asset", "projectile", id="missing-actor-png"),
+    pytest.param("historyTrail", "reuse_item_icon", "field", id="field-role-mismatch"),
 ]
 
 
@@ -42,10 +42,7 @@ def _serialized_vfx_repair(monkeypatch, data, raw, patch, case, image_calls):
 
 def test_public_vfx_boundary_rejects_invalid_tuple_after_one_repair():
     data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
-    raw = _vfx_output(data)
-    raw["slots"][0]["rendererKind"] = "lightCue"
-    for field in ("alpha", "blend", "layer", "duration", "spread", "particleSystemId", "textureRole"):
-        raw["slots"][0].pop(field)
+    raw = _native(data, "nativeLight")
     raw["slots"][0]["color"]["r"] = 256
     candidate = copy.deepcopy(raw["slots"][0])
     candidate["color"]["r"] = 256
@@ -61,9 +58,9 @@ def test_public_vfx_boundary_rejects_invalid_tuple_after_one_repair():
 
 
 @pytest.mark.parametrize("renderer,selector", [
-    pytest.param("spriteStampTrail", "entity", id="entity-texture"),
+    pytest.param("historyTrail", "entity", id="entity-texture"),
 
-    pytest.param("spriteStampTrail", "impact", id="impact-producer"),
+    pytest.param("spriteElement", "asset", id="named-asset-producer"),
     pytest.param("spriteElement", "entity", id="element-source"),
     pytest.param("texturedPath", "entity", id="path-source"),
 ])
@@ -77,26 +74,27 @@ def test_unknown_entity_pair_repairs_without_thawing_valid_texture_selector(
         entity.update(kind="field", visualRole="field")
         entity["visual"]["role"] = "field"
     accepted = authored_vfx(renderer, selector)
-    if selector == "impact":
-        producer = authored_vfx("impactSprite", "impact")["slots"][0]
-        producer.update(id="impact_producer", spritePrompt="one literal amber impact")
-        accepted["slots"].append(producer)
-        vfx._hydrate_vfx_asset_prompts(data, accepted)
+    if selector == "asset":
+        accepted["assets"] = [_request("exact_impact")]
+        accepted["slots"][0]["element"]["texture"]["assetId"] = "exact_impact"
     assert vfx.validate_vfx_director_output(accepted, data)["ok"]
     raw = copy.deepcopy(accepted)
     raw["slots"][0]["entityId"] = "missing_entity"
     before, raw_before = copy.deepcopy(data), copy.deepcopy(raw)
     projection = vfx.vfx_png_dependencies(data, raw, require_used=True)
     assert projection["errors"] == [], "unresolved entity is not a diagnosed broken PNG selector"
-    assert all(row["slotId"] != "selected" for row in projection["dependencies"])
+    if selector == "asset":
+        assert [row["role"] for row in projection["dependencies"]] == ["vfx:exact_impact"]
+    else:
+        assert all(row["slotId"] != "selected" for row in projection["dependencies"])
     report = vfx.validate_vfx_director_output(raw, data)
     assert not report["ok"]
     assert {error["path"] for error in report["errors"]} == {"$.slots[0]", "$.slots[0].entityId"}
     candidate = copy.deepcopy(accepted["slots"][0])
-    candidate.update(alpha=0.1, scale=2.0)
+    candidate.update(alpha=0.1)
     selector_path = "textureRole"
-    if renderer in {"spriteElement", "texturedPath"}:
-        name = "element" if renderer == "spriteElement" else "path"
+    if renderer in {"spriteElement", "texturedPath", "historyTrail"}:
+        name = "element" if renderer == "spriteElement" else "trail" if renderer == "historyTrail" else "path"
         candidate[name]["texture"]["source"] = "item"
         selector_path = name + ".texture.source"
     else:
@@ -162,26 +160,27 @@ def test_bad_legacy_selector_repairs_only_exact_leaf_before_image_jobs(
     report = vfx.validate_vfx_director_output(raw, data)
     assert calls == [] and data == before and raw == raw_before
     candidate = copy.deepcopy(raw["slots"][0])
-    candidate.update(textureRole="item", entityId="item", event="on_hit", alpha=0.1, duration=120,
-                     rendererKind="impactSprite", spritePrompt="unrequested compensating image")
+    candidate["trail"]["texture"]["source"] = "item"
+    candidate.update(entityId="item", event="on_hit", alpha=0.1, duration=120,
+                     rendererKind="spriteElement", element=_sprite(data)["slots"][0]["element"])
     correction = _patch(slotsUpsert=[candidate], slotIdsDelete=["selected"],
                         assetsUpsert=[{"id": "compensation", "prompt": "unrequested art", "negativePrompt": "",
                                        "canvasSize": 64, "layout": "strip"}])
     final, director, repair = _serialized_vfx_repair(
         monkeypatch, data, raw, correction, "legacy_" + renderer + "_" + mode + "_" + selector, calls)
     assert not report["ok"], "legacy PNG consumer admitted a producer that cannot resolve"
-    assert {error["path"] for error in report["errors"]} == {"$.slots[0].textureRole"}
+    assert {error["path"] for error in report["errors"]} == {"$.slots[0].trail.texture.source"}
     assert repair["repairScope"]["fieldPermissions"] == {
-        "globals": {}, "slots": [{"slotId": "selected", "paths": ["textureRole"]}], "assets": [],
+        "globals": {}, "slots": [{"slotId": "selected", "paths": ["trail.texture.source"]}], "assets": [],
     }
     assert not repair["repairScope"]["allowCreateSlots"] and not repair["repairScope"]["allowCreateAssets"]
     assert repair["acceptedVisualKitReadOnly"] == director["acceptedVisualKit"] == before["visualKit"]
     assert repair["acceptedRuntimeProgramReadOnly"] == director["acceptedRuntimeProgramReadOnly"]
     expected = copy.deepcopy(raw_before)
-    expected["slots"][0]["textureRole"] = "item"  # This choice is the explicit offline Repair response.
+    expected["slots"][0]["trail"]["texture"]["source"] = "item"  # This choice is the explicit offline Repair response.
     assert final["debug"]["vfxDirectorRaw"] == expected
     assert final["runtimeProgram"] == before["runtimeProgram"] and final["visualKit"] == before["visualKit"]
-    assert final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"] == ["$.slotsUpsert[0].textureRole"]
+    assert final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"] == ["$.slotsUpsert[0].trail.texture.source"]
     final = visual_sprite_generation.maybe_generate_visual_assets(final)
     assert len(calls) == 1
     assert visual_delivery_gate.visual_delivery_report(final, check_backend_config=False)["ok"]
@@ -199,11 +198,15 @@ FROZEN_MERGES = json.loads((Path(__file__).parent / "fixtures/vfx_image_frozen_m
 def test_frozen_material_boundary(case):
     data = _data()
     templates = {"sprite": _sprite(data), "asset": _with_asset(data), "legacy": _legacy(data)}
+    if case["base"] == "legacy" and case["bindings"].get("relative") == "element":
+        templates["legacy"] = _shape(data)
+        templates["legacy"]["slots"][0]["id"] = "old_slot"
     raw = apply_edits(copy.deepcopy(templates[case["base"]]), case["rawEdits"])
     # Literal whole-slot replacements retain retired placeholder controls. Their
     # historical successful merges are refusal witnesses, not current inputs.
     retired = any(isinstance(slot, dict) and (
-        set(slot) & {"spritePrompt", "spriteNegativePrompt"}
+        slot.get("rendererKind") not in vfx._FRESH_RENDERERS
+        or slot.get("rendererKind") != "impactSprite" and set(slot) & {"spritePrompt", "spriteNegativePrompt"}
         or slot.get("rendererKind") == "texturedPath" and set(slot) & {"duration", "repeatEvery"}
         or slot.get("rendererKind") in {"spriteElement", "texturedPath", "soundCue"}
         and set(slot) & {"scale", "density", "spread", "particleSystemId", "textureRole"}
@@ -213,7 +216,7 @@ def test_frozen_material_boundary(case):
         assert not vfx.validate_vfx_director_output(raw, data)["ok"]
         historical_merge = apply_edits(copy.deepcopy(raw), case["mergedEdits"])
         assert not vfx.validate_vfx_director_output(historical_merge, data)["ok"]
-        current = templates[case["base"]]
+        current = _shape(data) if case["base"] == "legacy" else templates[case["base"]]
         assert vfx.validate_vfx_director_output(current, data)["ok"]
         final = vfx.attach_vfx_manifest(data, "current-control-for-retired-witness", llm_director=lambda *_a, **_k: current)
         assert vfx.validate_vfx_manifest_wire(final)["ok"]

@@ -13,7 +13,7 @@ from infini_local.core.errors import PlannerUnavailable
 from infini_local.pipelines import vfx_generation_pipeline as stage
 from tests.test_repair_vfx_contract import _offline_transport
 from tests.test_vfx_sound_selection import _sound, _INVENTORY, SOUND_IDS
-from tests.vfx_material_fixtures import _data, _legacy
+from tests.vfx_material_fixtures import _data, _shape, _native
 
 
 def test_palette_restores_every_historical_sample_and_keeps_every_recent_sample():
@@ -177,13 +177,10 @@ def test_actual_repair_transport_restores_only_sound_scope_and_keeps_other_choic
     assert director["runtimeVocabulary"]["sound"] == repair["runtimeVocabularyReadOnly"]["sound"] == vfx._sound_schema()
 
 
-@pytest.mark.parametrize("renderer", ["impactRing", "lightCue", "childMotes"])
+@pytest.mark.parametrize("renderer", ["shape", "nativeLight", "nativeDust"])
 def test_foreign_sound_object_can_only_be_deleted_without_changing_renderer(renderer):
     data = _data()
-    accepted = _legacy(data)
-    accepted["slots"][0]["rendererKind"] = renderer
-    for field in (("alpha", "blend", "layer", "duration", "spread", "particleSystemId", "textureRole", "startTick", "repeatEvery", "density") if renderer == "lightCue" else ("alpha", "blend", "layer", "duration") if renderer == "childMotes" else ()):
-        accepted["slots"][0].pop(field, None)
+    accepted = _shape(data) if renderer == "shape" else _native(data, renderer)
     raw = copy.deepcopy(accepted)
     raw["slots"][0]["sound"] = {"volume": 1, "pitch": 0, "pitchVariance": 0}
     # Unknown branch payload is the error; its presence must not require a new sample.

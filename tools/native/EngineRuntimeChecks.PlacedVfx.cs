@@ -361,8 +361,9 @@ internal static partial class EngineRuntimeChecks
         WithPlacedLedger((player,ledger) => WithVfxGeometryQueue((batch,texture,count,positions,colors) => WithLighting((config,lights) => {
             ulong tick=Terraria.Main.GameUpdateCount;var system=new InfiniDetachedVfxSystem();
             var type=typeof(InfiniDetachedVfxSystem);
-            var buffersField=type.GetField("LibraryBuffers",PersistenceStatic)!;var starField=type.GetField("LibraryStar",PersistenceStatic)!;
-            object? oldBuffers=buffersField.GetValue(null),oldStar=starField.GetValue(null);
+            var buffersField=type.GetField("LibraryBuffers",PersistenceStatic)!;var texturesField=type.GetField("LibraryTextures",PersistenceStatic)!;
+            object? oldBuffers=buffersField.GetValue(null),oldTextures=((System.Collections.Generic.Dictionary<string,Microsoft.Xna.Framework.Graphics.Texture2D>)texturesField.GetValue(null)!).ToArray();
+            var libraryTextures=(System.Collections.Generic.Dictionary<string,Microsoft.Xna.Framework.Graphics.Texture2D>)texturesField.GetValue(null)!;
             // Real native CPU buffers; only GPU allocations/upload/draw are absent.
             var bufferType=type.GetNestedType("LibraryBuffer",BindingFlags.NonPublic)!;
             var buffers=Array.CreateInstance(bufferType,4);
@@ -374,7 +375,7 @@ internal static partial class EngineRuntimeChecks
                 buffers.SetValue(buffer,i);
             }
             try {
-                LibraryInvoke("LoadLibrary");system.OnWorldUnload();buffersField.SetValue(null,buffers);starField.SetValue(null,texture);
+                LibraryInvoke("LoadLibrary");system.OnWorldUnload();buffersField.SetValue(null,buffers);libraryTextures.Clear();libraryTextures["ParticleLibrary/Assets/Textures/Star"]=texture;
                 config.EnableParticleLibraryBackend=true;config.ParticleSpawnMultiplier=1;config.PresentationLightMultiplier=1;
                 var wire=PlacedVfxWire(true);
                 var slots=wire["vfxManifest"]!["slots"]!.AsArray();
@@ -408,7 +409,57 @@ internal static partial class EngineRuntimeChecks
                 bool prior=Terraria.Main.dedServ;Terraria.Main.dedServ=true;
                 try {tile.TileFrameY=0;MaterialClock(tick+33);ledger.PostUpdateEverything();system.PostUpdateEverything();Equal(0,OwnedMaterialQueue().Count,"dedicated server silent");}
                 finally{Terraria.Main.dedServ=prior;}
-            }finally{system.OnWorldUnload();buffersField.SetValue(null,oldBuffers);starField.SetValue(null,oldStar);MaterialClock(tick);}
+            }finally{system.OnWorldUnload();buffersField.SetValue(null,oldBuffers);libraryTextures.Clear();foreach(var pair in (System.Collections.Generic.KeyValuePair<string,Microsoft.Xna.Framework.Graphics.Texture2D>[])oldTextures!)libraryTextures.Add(pair.Key,pair.Value);MaterialClock(tick);}
         })));
     }
+    private static void PlacedVfxOffscreenLightUsesExactSelectors()
+    {
+        foreach (string renderer in new[] { "lightCue", "nativeLight" })
+        WithPlacedLedger((player,ledger)=>WithLighting((config,lights)=> {
+            var system=new InfiniDetachedVfxSystem();ulong tick=Terraria.Main.GameUpdateCount;
+            Vector2 camera=Terraria.Main.screenPosition;int width=Terraria.Main.screenWidth,height=Terraria.Main.screenHeight;
+            bool culling=config.EnableScreenCulling;
+            try {
+                system.OnWorldUnload();config.EnableScreenCulling=true;config.PresentationLightMultiplier=1;
+                Terraria.Main.screenWidth=320;Terraria.Main.screenHeight=240;
+                Terraria.Main.screenPosition=new Vector2(100000,100000);
+                var wire=PlacedVfxWire();
+                string entity=wire["vfxManifest"]!["slots"]![0]!["entityId"]!.GetValue<string>();
+                var row=new JsonObject { ["id"]="placed_light",["entityId"]=entity,["placementBindingId"]="place",
+                    ["event"]="periodic",["rendererKind"]=renderer,["anchor"]="self",["repeatEvery"]=1,["color"]=RgbWire(255,90,20) };
+                if(renderer=="lightCue")row["scale"]=1;
+                else {row["startTick"]=0;row["light"]=new JsonObject{["intensity"]=.6};}
+                wire["vfxManifest"]!["slots"]=new JsonArray(row);
+                wire["vfxManifest"]!.AsObject().Remove("assets");
+                foreach(string selector in new[]{"placementBindingId","entityId"}) {
+                    var invalid=wire.DeepClone();invalid["vfxManifest"]!["slots"]![0]![selector]="unrelated";
+                    Equal(null,GeneratedItemData.FromJson(invalid.ToJsonString()),renderer+" rejects unmatched "+selector+" before acceptance");
+                }
+                var data=ParseMaterialElement(wire);GeneratedItemRegistryService.StampCurrentWorld(data);
+                var placement=data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
+                player.inventory[player.selectedItem]=ReviewItem(data).Item;
+                var tile=Terraria.Main.tile[40,40];tile.HasTile=false;
+                Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,data,placement,40,40),renderer+" offscreen placement authorized");
+                tile.HasTile=true;tile.TileType=TileID.Stone;tile.TileFrameY=0;
+                Equal(true,GeneratedPlacementLedgerSystem.TryCommitAuthorizedPlacement(player),renderer+" offscreen placement committed");
+                var source=GeneratedPlacementLedgerSystem.ActivePlacedVfxSources().Single();
+                Equal(true,source.Binding.IsLive,renderer+" inactive offscreen light allocates real source");
+                Equal(true,InfiniDetachedVfxSystem.MayNeedPlacedVfxFrame(source.View),renderer+" exact view keeps light uncullable");
+                Equal(false,InfiniDetachedVfxSystem.MayNeedPlacedVfxFrame(source.View with { BindingId="unrelated" }),renderer+" another binding cannot activate light source");
+                Equal(false,InfiniDetachedVfxSystem.MayNeedPlacedVfxFrame(source.View with { EntityId="unrelated" }),renderer+" another entity cannot activate light source");
+                MaterialClock(tick+1);ledger.PostUpdateEverything();system.PostUpdateEverything();
+                Equal(1,lights.Count,renderer+" actual Lighting queue receives offscreen light");
+                var actual=(Vector3)lights[0]!.GetType().GetField("Color")!.GetValue(lights[0])!;
+                Equal(new Color(255,90,20).ToVector3()*(renderer=="lightCue"?.2f:.6f),actual,renderer+" preserves selected intensity");
+                Equal(1,PlacedLedgerGroups(ledger).Count,"light admission never changes material ownership");
+                lights.Clear();tile.TileFrameY=36;MaterialClock(tick+2);ledger.PostUpdateEverything();system.PostUpdateEverything();
+                Equal(0,lights.Count,renderer+" offscreen frame gate disables native light consumer");
+                Equal(false,source.Binding.IsLive,renderer+" offscreen gate retires generation");
+            } finally {
+                system.OnWorldUnload();MaterialClock(tick);config.EnableScreenCulling=culling;
+                Terraria.Main.screenPosition=camera;Terraria.Main.screenWidth=width;Terraria.Main.screenHeight=height;
+            }
+        }));
+    }
+
 }

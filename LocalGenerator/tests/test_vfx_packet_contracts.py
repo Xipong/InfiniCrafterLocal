@@ -13,7 +13,7 @@ from test_low_level_three_stage_pipeline import _accepted_visual_data, _visual_k
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.pipelines import visual_generation_pipeline as visual
-from vfx_material_fixtures import _legacy, _sprite
+from vfx_material_fixtures import _sprite, _with_asset
 from test_provider_transport_contract import loopback_transport  # noqa: F401
 
 
@@ -57,8 +57,6 @@ def test_material_and_body_facts_survive_final_http_serialization(monkeypatch, l
         assert request["response_format"]["type"] == format_name
         # Inspect the actual JSON decoded from HTTP bytes, not a stage-template mirror.
         instructions, facts = [json.loads(row["content"]) for row in request["messages"][1:]]
-        semantics = instructions[vocabulary_key]["rendererSemantics"]["libraryParticle"]
-        assert all(concept in semantics for concept in ("soft circular radial glow", "same captured anchor", "saturate", "white"))
         row = next(row for row in facts[surface_key]["bodyPresentation"] if row["entityId"] == body["id"])
         assert row["coverage"] == "no_body" and "image" not in row
         assert row["frame"]["attachment"] == body["attachment"]
@@ -97,7 +95,7 @@ def test_actual_body_attachment_reach_and_beam_frame_reach_both_requests(wire_tr
     kit["entities"][1].update(assetMode="no_asset", visualProjectRef="none")
     data = visual._apply_kit(data, kit)
     before = copy.deepcopy(data)
-    accepted = _legacy(data)
+    accepted = _sprite(data)
     invalid = copy.deepcopy(accepted)
     invalid["slots"][0]["alpha"] = 2
     responses, sent = wire_transport
@@ -157,7 +155,7 @@ def test_body_frame_projection_preserves_absence_offsets_and_selected_image(wire
         body["movement"] = {"name": "move_whip_lash", "code": 18, "params": {"range": 2, "segments": 8}}
     data = visual._apply_kit(data, kit)
     before = copy.deepcopy(data)
-    accepted = _legacy(data)
+    accepted = _sprite(data)
     invalid = copy.deepcopy(accepted)
     invalid["slots"][0]["alpha"] = 2
     responses, sent = wire_transport
@@ -202,11 +200,11 @@ def test_body_frame_projection_preserves_absence_offsets_and_selected_image(wire
 def test_executable_leaf_repair_does_not_create_delete_or_redesign_audio(wire_transport, audio):
     data = _accepted_visual_data("workbench_blade")
     before = copy.deepcopy(data)
-    accepted = _legacy(data)
+    accepted = _sprite(data)
     visual = dict(accepted["slots"][0], id="visible")
     sound = dict(visual, id="authored_sound", rendererKind="soundCue", soundId="Tink",
                  sound={"volume": 0.37, "pitch": -0.2, "pitchVariance": 0.12})
-    for field in ("color", "scale", "spread", "particleSystemId", "textureRole", "duration", "alpha", "blend", "layer", "density", "startTick", "repeatEvery"):
+    for field in ("color", "scale", "spread", "particleSystemId", "textureRole", "duration", "alpha", "blend", "layer", "density", "startTick", "repeatEvery", "element"):
         sound.pop(field, None)
     accepted["slots"] = [visual, sound] if audio else [visual]
     raw = copy.deepcopy(accepted)
@@ -232,23 +230,19 @@ def test_executable_leaf_repair_does_not_create_delete_or_redesign_audio(wire_tr
     assert [request["_infini_stage"] for request in sent] == ["vfx_director", "vfx_repair"] and not responses
 
 
-def test_alpha_repair_preserves_effect_color_profiles_and_dedicated_impact(wire_transport):
+def test_alpha_repair_preserves_effect_color_profiles_and_dedicated_asset(wire_transport):
     data = _accepted_visual_data("workbench_blade")
     data["visual"]["palette"] = data["visualKit"]["item"]["palette"] = ["copper and red fire prose"]
     before = copy.deepcopy(data)
-    accepted = _sprite(data)
+    accepted = _with_asset(data)
     accepted["slots"][0]["element"]["opacityProfile"]["middle"] = 0.25
-    impact = dict(_legacy(data)["slots"][0], id="dedicated_impact", rendererKind="impactSprite", textureRole="impact", spriteCanvasSize=32,
-                  spritePrompt="one dedicated cyan impact sprite", spriteNegativePrompt="no atlas")
-    for field in ("spread", "particleSystemId", "startTick", "repeatEvery", "density"):
-        impact.pop(field)
-    accepted["slots"].append(impact)
+    asset = copy.deepcopy(accepted["assets"][0])
     raw = copy.deepcopy(accepted)
     raw["slots"][0]["alpha"] = 2
     candidate = copy.deepcopy(accepted["slots"][0])
     candidate["element"]["opacityProfile"]["middle"] = 0
     candidate["element"]["colorProfile"]["middle"] = {"r": 255, "g": 192, "b": 203}
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [candidate, dict(impact, spritePrompt="unrequested replacement")], "note": "alpha only"}
+    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [candidate], "assetsUpsert": [dict(asset, prompt="unrequested replacement")], "note": "alpha only"}
     responses, sent = wire_transport
     responses.extend([raw, patch])
     final = vfx.attach_vfx_manifest(data, "frozen-presentation", llm_director=stage.call_llm_vfx_director)
@@ -257,12 +251,11 @@ def test_alpha_repair_preserves_effect_color_profiles_and_dedicated_impact(wire_
     assert element["colorProfile"] == {"start": {"r": 255, "g": 255, "b": 255}, "middle": {"r": 17, "g": 93, "b": 241}, "end": {"r": 210, "g": 180, "b": 140}, "curve": "linear"}
     assert element["opacityProfile"] == {"start": 0, "middle": 0.25, "end": 0, "curve": "smoothStep"}
     assert final["visual"]["palette"] == ["copper and red fire prose"]
-    item = next(row for row in final["runtimeProgram"]["entities"] if row["id"] == "item")
-    assert item["visual"]["impactPrompt"] == "one dedicated cyan impact sprite"
+    assert final["vfxManifest"]["assets"][0]["prompt"] == asset["prompt"]
     assert final["gameplay"] == before["gameplay"]
     packet = request_dossier(sent[1])
     assert packet["repairScope"]["fieldPermissions"] == {"globals": {}, "slots": [{"slotId": "ingredient_element", "paths": ["alpha"]}], "assets": []}
-    assert packet["validGeneratedContext"]["slots"] == [impact]
+    assert packet["validGeneratedContext"]["assets"] == [asset]
     assert packet["acceptedVisualKitReadOnly"] == before["visualKit"]
     assert all("sound" not in slot and "soundId" not in slot for slot in final["vfxManifest"]["slots"])
     assert vfx.validate_vfx_manifest_wire(sanitize_recipe_for_delivery(final))["ok"] and not responses

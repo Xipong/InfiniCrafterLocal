@@ -16,6 +16,47 @@ from infini_local.core.runtime_authoring.capability_registry import MOVEMENT_OPC
 SPRITE_CANVAS_SIZES = (24, 32, 48, 64, 96, 128)
 
 
+def collision_path_source(entity: Mapping[str, Any]) -> str | None:
+    """Exact accepted collision geometry; native beam precedence also applies to saved drivers."""
+    controller, movement = entity.get("controller"), entity.get("movement")
+    if isinstance(entity.get("beamGeometry"), Mapping) or (
+        isinstance(controller, Mapping) and controller.get("name") == "channel_beam"
+        and type(controller.get("code")) is int and controller["code"] == 1):
+        return "beam"
+    if isinstance(entity.get("lashGeometry"), Mapping) or (
+        isinstance(movement, Mapping) and movement.get("name") == "move_whip_lash"
+        and type(movement.get("code")) is int and movement["code"] == 18):
+        return "whip"
+    return None
+
+
+def body_geometry_schema() -> dict[str, Any]:
+    """An explicit solid presentation, not inferred from gameplay dimensions/light."""
+    common = {
+        "schema": {"const": "infini.body-geometry.v1"},
+        "widthPx": {"type": "number", "exclusiveMinimum": 0, "maximum": 1024,
+                    "description": "Solid strip width in world pixels, independent of collision width, projectile/visual scale and light."},
+        "color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$",
+                  "description": "Literal RGB color; not inherited from entity light."},
+        "opacity": {"type": "number", "minimum": 0, "maximum": 1},
+    }
+    branches = []
+    for source in ("body_segment", "collision_path"):
+        props = copy.deepcopy(common)
+        props["source"] = {"const": source}
+        if source == "body_segment":
+            props.update({
+                "lengthPx": {"type": "number", "exclusiveMinimum": 0, "maximum": 4096,
+                             "description": "Centered segment length in world pixels, independent of hitbox and projectile/visual scale."},
+                "axis": {"type": "string", "enum": ["velocity", "rotation", "aim"],
+                         "description": "Use velocity (initial direction at zero speed), literal runtime rotation, or accepted aim axis. aim requires an aim component; no movement-code routing."},
+            })
+        branches.append({"type": "object", "additionalProperties": False,
+                         "properties": props, "required": list(props)})
+    return {"oneOf": branches,
+            "description": "Explicit untextured solid body. body_segment is centered on the entity; collision_path follows only an existing accepted beam/lash centerline. Does not alter gameplay. No inferred dimensions, color, opacity or axis."}
+
+
 def sprite_presentation_properties() -> dict[str, Any]:
     # Direct authored projection, never inferred from hitbox, canvas or prose.
     return {

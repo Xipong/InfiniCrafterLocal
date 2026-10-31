@@ -161,3 +161,5 @@ Native `AI` находится в `GeneratedProjectile.Executors.cs`; общие
 | `config_registry.py` | `contracts/config_registry.json` |
 
 Behavioral owners — [TESTING](TESTING_RU.md); native roster — `tools/native/EngineRuntimeChecks.cs` + `.csproj`; saved replay — `tools/diagnostics/replay_generation_case.py`; impact/tooling — `tools/agentctl.py`, `.agent/manifest.json`, `.agent/impact_rules.json`. Source path существующего файла не является доказательством native/world/GPU приёмки.
+
+Границы выбора модели и технической проекции Visual/VFX: [Авторство Visual и VFX](presentation/VISUAL_VFX_AUTHORSHIP_RU.md).

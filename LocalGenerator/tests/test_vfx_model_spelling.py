@@ -80,7 +80,7 @@ def test_actual_provider_short_response_repairs_exact_field_and_preserves_wire(m
     native = _sprite(data)
     # Hand-written model dialect, independently of the projection under test.
     material = {
-        "texture": {"source": "item", "assetId": ""}, "attachment": "world", "count": 2,
+        "spawn": {"shape": "point"}, "texture": {"source": "item", "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}, "attachment": "world", "count": 2,
         "forwardOffset": 8.0, "sideOffset": -3.0, "speedMin": 1.0, "speedMax": 2.0,
         "coneAngle": 0.75, "inheritVelocity": 0.2, "drag": 0.95,
         "accelX": 0.0, "accelY": 0.05, "rotation": 0.0, "rotationSpeed": -0.1,
