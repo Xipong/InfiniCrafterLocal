@@ -12,7 +12,7 @@ def impact(data, asset_id="impact_a"):
     slot = raw["slots"][0]
     slot.update(id=asset_id, duration=20, alpha=1)
     slot["element"].update(
-        texture={"source": "asset", "assetId": asset_id}, attachment="world", count=1,
+        texture={"source": "asset", "assetId": asset_id, "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}, attachment="world", count=1,
         offsetForwardPx=0, offsetSidePx=0, speedMinPxPerTick=0, speedMaxPxPerTick=0,
         spreadRadians=0, inheritVelocity=0, drag=1, accelerationXPxPerTickSquared=0,
         accelerationYPxPerTickSquared=0, rotationRadians=0, rotationSpeedRadiansPerTick=0,
@@ -58,7 +58,7 @@ def test_more_than_four_distinct_used_artworks_admit_without_legacy_impact_slots
 def test_fresh_material_does_not_accept_retired_impact_producer_selector():
     data = _data()
     raw = impact(data)
-    raw["slots"][0]["element"]["texture"] = {"source": "impact", "assetId": ""}
+    raw["slots"][0]["element"]["texture"] = {"source": "impact", "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
     assert not vfx.validate_vfx_director_output(raw, data)["ok"]
     assert "impactSprite" not in vfx.vfx_director_surface(data)["rendererKind"]
 

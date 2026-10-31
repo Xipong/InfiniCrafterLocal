@@ -340,7 +340,7 @@ def campaign_case(tmp_path):
             authored["slots"][0].update(entityId=entity["id"], event="periodic")
             if selection != "baked_history":
                 authored["slots"][0]["repeatEvery"] = 4
-                authored["slots"][0]["element"]["texture"] = {"source": "entity", "assetId": ""}
+                authored["slots"][0]["element"]["texture"] = {"source": "entity", "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
             admitted = validate_vfx_director_output(authored, data)
             assert admitted["ok"], admitted["errors"]
             data["vfxManifest"] = _compile_manifest(data, admitted["normalized"], identity)

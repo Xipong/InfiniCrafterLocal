@@ -9,6 +9,10 @@ namespace InfiniCrafterLocal.Common.Models;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed class VfxNativeDustSpec
 {
+    private VfxSpawnSpec? _spawn;
+    [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
+    public VfxSpawnSpec? Spawn {get=>_spawn;set=>_spawn=value??throw new InvalidDataException("spawn cannot be null");}
+
     [JsonRequired] public string Type { get; set; } = "";
     [JsonRequired] public int Count { get; set; }
     [JsonRequired] public float Size { get; set; }
@@ -18,10 +22,22 @@ public sealed class VfxNativeDustSpec
     [JsonRequired] public float InheritVelocity { get; set; }
     [JsonRequired] public int NativeAlpha { get; set; }
     [JsonRequired] public bool NoGravity { get; set; }
-    internal VfxNativeDustSpec Copy() => (VfxNativeDustSpec)MemberwiseClone();
+    private string? _angularDistribution,_directionFrame;
+    private float? _angleOffsetRadians;
+    [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
+    public string? AngularDistribution { get=>_angularDistribution; set=>_angularDistribution=value??throw new InvalidDataException("dust angularDistribution cannot be null"); }
+    [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
+    public string? DirectionFrame { get=>_directionFrame; set=>_directionFrame=value??throw new InvalidDataException("dust directionFrame cannot be null"); }
+    [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
+    public float? AngleOffsetRadians { get=>_angleOffsetRadians; set=>_angleOffsetRadians=value??throw new InvalidDataException("dust angleOffsetRadians cannot be null"); }
+    internal VfxNativeDustSpec Copy() { var copy=(VfxNativeDustSpec)MemberwiseClone(); if(Spawn is not null)copy.Spawn=Spawn.Copy();return copy; }
     internal void Validate()
     {
+        Spawn?.Validate();
         _ = VfxRendererRegistry.DustId(Type);
+        if(AngularDistribution is not null)VfxMaterialValidation.Choice(AngularDistribution,"dust distribution","random","even");
+        if(DirectionFrame is not null)VfxMaterialValidation.Choice(DirectionFrame,"dust frame","world","source");
+        if(AngleOffsetRadians is {} offset)VfxMaterialValidation.Range(offset,-MathF.Tau,MathF.Tau,"dust angle offset");
         if (Count is < 0 or > 64 || NativeAlpha is < 0 or > 255) throw new InvalidDataException("Invalid native dust count/alpha");
         VfxNativeCueValidation.Range(Size,0,3); VfxNativeCueValidation.Range(SpeedMinPxPerTick,0,24);
         VfxNativeCueValidation.Range(SpeedMaxPxPerTick,SpeedMinPxPerTick,24);

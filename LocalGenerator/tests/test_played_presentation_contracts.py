@@ -79,7 +79,20 @@ def test_native_silver_fixture_is_actual_final_delivery(wire_transport, monkeypa
         assert validate_runtime_wire(payload)["ok"]
         assert vfx.validate_vfx_manifest_wire(payload)["ok"]
     assert saved["visual"] == current["visual"]
-    assert saved["vfxManifest"] == current["vfxManifest"]
+    # Fresh Director makes historical point sampling/spawning and identity UV explicit. Keep the
+    # stored witness untouched and compare only that declared equivalent choice.
+    comparable = copy.deepcopy(current["vfxManifest"])
+    for previous, fresh in zip(saved["vfxManifest"]["slots"], comparable["slots"], strict=True):
+        if previous["rendererKind"] == "libraryParticle" and "sampling" not in previous["particle"]:
+            assert fresh["particle"].pop("sampling") == "point"
+        for payload in ("element", "particle", "dust"):
+            if payload not in previous:
+                continue
+            if "spawn" not in previous[payload]:
+                assert fresh[payload].pop("spawn") == {"shape": "point"}
+            if "texture" in previous[payload] and "uv" not in previous[payload]["texture"]:
+                assert fresh[payload]["texture"].pop("uv") == {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}
+    assert saved["vfxManifest"] == comparable
     def entity_presentations(payload):
         return Counter((entity["id"], entity["kind"], json.dumps(entity["visual"], sort_keys=True))
                        for entity in payload["runtimeProgram"]["entities"])

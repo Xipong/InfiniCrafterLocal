@@ -33,7 +33,7 @@ def test_standard_schema_and_local_gate_agree_on_exact_asset_ids(repair: bool, a
     assert (not strict_schema_errors(row, asset_schema)) is valid
     slots = schema["properties"]["slotsUpsert" if repair else "slots"]["items"]
     selector_schema = slots["properties"]["element"]["properties"]["texture"]
-    selector = {"source": "asset", "assetId": asset_id}
+    selector = {"source": "asset", "assetId": asset_id, "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
     assert Draft202012Validator(selector_schema).is_valid(selector) is valid
     assert (not strict_schema_errors(selector, selector_schema)) is valid
     if repair:
@@ -68,7 +68,7 @@ def _library_particle(data: dict[str, Any]) -> dict[str, Any]:
     slot.update(id="library_star", rendererKind="libraryParticle",
                 duration=20, repeatEvery=0, alpha=0.8, blend="additive", layer="BeforeProjectiles")
     slot["particle"] = {
-        "textureId": "star", "count": 3, "speedMinPxPerTick": 1.0, "speedMaxPxPerTick": 3.0,
+        "spawn": {"shape": "point"}, "textureId": "star", "sampling": "point", "count": 3, "speedMinPxPerTick": 1.0, "speedMaxPxPerTick": 3.0,
         "spreadRadians": 0.5, "inheritVelocity": 0.25, "drag": 0.9,
         "accelerationXPxPerTickSquared": 0.0, "accelerationYPxPerTickSquared": 0.05,
         "widthPx": 8.0, "heightPx": 2.0, "rotationRadians": 0.0,
@@ -160,8 +160,8 @@ def test_shared_schema_mutation_reaches_wire_consumer_not_a_duplicate_definition
     data = _compiled()
     original = vfx.element_schema
 
-    def tightened() -> dict[str, Any]:
-        schema = original()
+    def tightened(**kwargs: Any) -> dict[str, Any]:
+        schema = original(**kwargs)
         schema["properties"]["widthPx"]["maximum"] = 4
         return schema
 
@@ -189,7 +189,7 @@ def test_entity_texture_requires_that_exact_accepted_image_tuple(mode: str, vali
     row["visual"]["assetMode"] = mode
     raw = _sprite(data)
     raw["slots"][0].update(entityId=row["id"], event="on_spawn")
-    raw["slots"][0]["element"]["texture"] = {"source": "entity", "assetId": ""}
+    raw["slots"][0]["element"]["texture"] = {"source": "entity", "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
     before = copy.deepcopy(data)
     report = vfx.validate_vfx_director_output(raw, data)
     assert report["ok"] is valid, report["errors"]
@@ -215,7 +215,7 @@ def test_nested_asset_requires_exact_existing_image_producer(renderer: str) -> N
     data = _data()
     raw = _sprite(data) if renderer == "spriteElement" else _path(data)
     name = "element" if renderer == "spriteElement" else "path"
-    raw["slots"][0][name]["texture"] = {"source": "asset", "assetId": "exact_impact"}
+    raw["slots"][0][name]["texture"] = {"source": "asset", "assetId": "exact_impact", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
     unpaired = vfx.validate_vfx_director_output(raw, data)
     assert not unpaired["ok"]
     assert {r["path"] for r in unpaired["errors"]} == {f"$.slots[0].{name}.texture.assetId", f"$.slots[0].{name}.texture.source"}

@@ -28,3 +28,34 @@ def test_palette_rejects_unregistered_identity_without_replacing_it(texture):
     raw["slots"][0]["particle"]["textureId"] = texture
     assert not vfx.validate_vfx_director_output(raw, data)["ok"]
     assert raw["slots"][0]["particle"]["textureId"] == texture
+
+
+@pytest.mark.parametrize("sampling", ["point", "linear"])
+def test_library_sampling_survives_snapshot_wire(sampling):
+    data = _data()
+    raw = _library_particle(data)
+    raw["slots"][0]["particle"]["sampling"] = sampling
+    assert vfx.validate_vfx_director_output(raw, data)["ok"]
+    data["vfxManifest"] = vfx._compile_manifest(data, raw, "sampling")
+    assert data["vfxManifest"]["slots"][0]["particle"]["sampling"] == sampling
+    assert vfx.validate_vfx_manifest_wire(data)["ok"]
+
+
+def test_saved_sampling_omission_is_point_compatibility_not_fresh_fallback():
+    data = _data()
+    raw = _library_particle(data)
+    del raw["slots"][0]["particle"]["sampling"]
+    assert not vfx.validate_vfx_director_output(raw, data)["ok"]
+    data["vfxManifest"] = vfx._compile_manifest(data, raw, "saved_sampling")
+    assert vfx.validate_vfx_manifest_wire(data)["ok"]
+    assert "sampling" not in data["vfxManifest"]["slots"][0]["particle"]
+
+
+@pytest.mark.parametrize("sampling", [None, "auto", "nearest", 0])
+def test_invalid_sampling_not_normalized_to_point(sampling):
+    data = _data()
+    raw = _library_particle(data)
+    raw["slots"][0]["particle"]["sampling"] = sampling
+    assert not vfx.validate_vfx_director_output(raw, data)["ok"]
+    data["vfxManifest"] = vfx._compile_manifest(data, raw, "invalid_sampling")
+    assert not vfx.validate_vfx_manifest_wire(data)["ok"]

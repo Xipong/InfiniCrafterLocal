@@ -24,6 +24,7 @@ from infini_local.core.repair_merge import json_path_child, json_path_relative, 
 from infini_local.core.runtime_authoring.capability_registry import ENTITY_KIND_REGISTRY
 from infini_local.core.runtime_authoring.wire_views import runtime_event_inventory, runtime_visual_roles
 from infini_local.core.schema_validation import strict_schema_errors
+from infini_local.core.vfx_spawn_contract import spawn_slot_errors
 from infini_local.core.visual_contract_schema import SPRITE_CANVAS_SIZES, collision_path_source
 from infini_local.core.vfx_material_contract import (
     ASSET_ID_PATTERN,
@@ -31,6 +32,7 @@ from infini_local.core.vfx_material_contract import (
     asset_schema,
     element_schema,
     library_particle_schema,
+    LIBRARY_PARTICLE_TEXTURES,
     material_slot_clauses,
     material_texture_clauses,
     path_schema,
@@ -56,7 +58,7 @@ from infini_local.core.vfx_native_cue_contract import (
     native_dust_schema, native_light_schema, native_cue_slot_clauses, native_cue_errors,
 )
 from infini_local.core.vfx_shape_contract import (
-    LEGACY_SHAPE_RENDERERS, SHAPE_SEMANTICS, shape_schema, shape_slot_clauses,
+    LEGACY_SHAPE_RENDERERS, SHAPE_SEMANTICS, shape_schema, shape_slot_clauses, shape_slot_errors,
 )
 
 
@@ -156,7 +158,7 @@ _RENDERER_SEMANTICS = {
     "historyTrail": HISTORY_SEMANTICS,
     "nativeDust": NATIVE_DUST_SEMANTICS + " " + NATIVE_CUE_TIMING,
     "nativeLight": NATIVE_LIGHT_SEMANTICS + " " + NATIVE_CUE_TIMING,
-    "libraryParticle": "Real ParticleLibrary V3 instanced Star particles, separate from Terraria Dust. Explicit particle controls choose count, motion, dimensions, spin, color and lifetime fade; world-only attachment captures event-time pose. duration is individual lifetime; event startTick is delay/repeatEvery=0, periodic repeatEvery>=1 and item startTick=0. Velocity updates once per world tick as velocity*drag+world acceleration, then position+=velocity. Common alpha multiplies linear endOpacity once; dimensions multiply linear endScaleMultiplier. Explicit alpha/additive blend and exact before/after projectile layer remain choices. Uses existing cadence/occurrence/source budgets; disabled library suppresses this lane with no Dust fallback. No damage, gameplay child, generated PNG or inferred direction.",
+    "libraryParticle": "Real ParticleLibrary V3 instanced particles using the explicit textureId from the registered native palette, separate from Terraria Dust. Explicit particle controls choose count, motion, dimensions, spin, color and lifetime fade; world-only attachment captures event-time pose. duration is individual lifetime; event startTick is delay/repeatEvery=0, periodic repeatEvery>=1 and item startTick=0. Velocity updates once per world tick as velocity*drag+world acceleration, then position+=velocity. Common alpha multiplies linear endOpacity once; dimensions multiply linear endScaleMultiplier. Explicit alpha/additive blend and exact before/after projectile layer remain choices. Uses existing cadence/occurrence/source budgets; disabled library suppresses this lane with no Dust fallback. No damage, gameplay child, generated PNG or inferred direction.",
     "screenShakeCue": "Controls: startTick is event delay, NOT shake lifetime. dissipationPxPerFrame subtracts strength per native camera visit, NOT per world tick or assumed 60 Hz frame. Explicit nonperiodic local camera cue through Luminance ScreenShakeSystem.StartShakeAtPoint, attenuated from the exact event anchor to the viewer. Six controls are mandatory in screenShake; no implicit damage/weapon-triggered shake. startTick is event-relative delay in world ticks; the captured anchor/forward survive source retirement. strengthPx=0 is silence. Dissipation follows native camera visits, not simulation ticks. Each handle shares the existing instance budgets. Native Luminance/user screenshake settings remain authoritative; a disabled backend suppresses this lane without substitution. No PNG, light, sound or particles are added.",
     "spriteStampTrail": "Periodic projectile: textured history stamps at samples 2,5,... in a 20-world-tick history, using body rotation/flip. Projectile event: one fading snapshot of captured body rotation/scale/flip/gfx offset at the resolved event-time anchor; item emission is a directional texture stamp, not a player/held-pose snapshot. No fabricated history.",
     "historyRibbon": "Controls: duration is NOT history length; active history drawing does not consume duration/startTick. Alpha is a draw multiplier (RGB and alpha together), not native reverse-byte alpha. Connected center-history segments (20 world samples), fading toward the oldest point. Uses actual center history, not a relocated owner trajectory; on_spawn can start a live trail.",
@@ -228,7 +230,7 @@ _VFX_NUMERIC_DESCRIPTIONS = {
 _FRESH_VFX_NUMERIC_DESCRIPTIONS = {
     "scale": "Renderer-specific sprite size multiplier, not pixels. impactSprite multiplies its dedicated PNG size; spriteStampTrail multiplies accepted body presentation scale, not hitbox. Explicit shape/material payload dimensions are world pixels and omit common scale.",
     "density": "Only a legacy simple-slot cadence/tessellation control where required by its branch. Projectile repeatEvery=0 cadence is clamp(14-round(8*density),4,18) world ticks. New shapes and native cues forbid density and author count, geometry and cadence independently.",
-    "duration": "Individual detached lifetime in world ticks. shape uses explicit lifetime endpoints without extra fade; spriteElement uses opacityProfile; libraryParticle uses endOpacity. Live path/history owns its own lifetime and omits duration.",
+    "duration": "Individual detached lifetime in world ticks: shape 1..120, other duration-owning renderers 3..120. shape uses explicit lifetime endpoints without extra fade; spriteElement uses opacityProfile; libraryParticle uses endOpacity. Live path/history owns its own lifetime and omits duration.",
     "alpha": "Draw multiplier 0..1, not native reverse-alpha byte. Material/library renderers multiply their explicit opacity once. shape owns opacityStart/End instead and forbids alpha. Dust/light/sound omit this field. Additive blend keeps scaled RGB with zero vertex alpha.",
     "spread": "Legacy simple-slot Dust-speed coefficient; fresh accompaniment is forbidden. New nativeDust uses explicit spreadRadians and independent speed bounds.",
     "startTick": "World-tick emission delay for event shape/material/library/native cues; projectile periodic age gate; item periodic requires zero for those emitters. screenShake uses event delay; texturedPath gates sampling; historyTrail instead selects actual sample ages and omits startTick.",
@@ -301,7 +303,7 @@ def _entity_texture_sources(data: Mapping[str, Any], *, include_legacy: bool = F
             continue
         visual = entity.get("visual")
         mode = visual.get("assetMode") if isinstance(visual, Mapping) else None
-        rows.append({"entityId": entity["id"], "assetMode": mode, "sources": ["item", "asset", *(["impact"] if include_legacy else []), *(["entity"] if mode in ("baked_sprite", "reuse_item_icon") else [])]})
+        rows.append({"entityId": entity["id"], "assetMode": mode, "sources": ["item", "asset", "library", *(["impact"] if include_legacy else []), *(["entity"] if mode in ("baked_sprite", "reuse_item_icon") else [])]})
     return rows
 
 
@@ -404,7 +406,7 @@ def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
         "blend": list(_BLENDS),
         "layer": list(_LAYERS),
         "numericRanges": {
-            "duration": [3, 120], "alpha": [0.0, 1.0],
+            "duration": [1, 120], "alpha": [0.0, 1.0],
             "startTick": [0, 120], "repeatEvery": [0, 120],
         },
         "texturedPathSources": _textured_path_sources(data),
@@ -512,7 +514,7 @@ def _director_schema(data: Mapping[str, Any], *, include_legacy: bool = False) -
             "particleSystemId": {"type": "string", "enum": list(_PARTICLES), "description": "Exact Terraria.ID.DustID member, separate from ParticleLibrary instances: GemDiamond, TintableDustLighted, Glass, Smoke, Electric. none suppresses particles, not independently selected primitive/sprite/light/sound rendering."},
             "scale": {"type": "number", "minimum": 0.15, "maximum": 5.0},
             "density": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-            "duration": {"type": "integer", "minimum": 3, "maximum": 120},
+            "duration": {"type": "integer", "minimum": 1, "maximum": 120},
             "alpha": {"type": "number", "minimum": 0.0, "maximum": 1.0},
             "spread": {"type": "number", "minimum": 0.0, "maximum": 2.0},
             "startTick": {"type": "integer", "minimum": 0, "maximum": 120},
@@ -521,14 +523,14 @@ def _director_schema(data: Mapping[str, Any], *, include_legacy: bool = False) -
             "spriteCanvasSize": {"type": "integer", "enum": list(SPRITE_CANVAS_SIZES), "description": "Exact final square impact PNG canvas in pixels, independent of gameplay hitbox or world scale; only impactSprite owns this request."},
             "spriteNegativePrompt": {"type": "string", "maxLength": 700},
             "color": rgb_schema(),
-            "element": element_schema(),
-            "shape": shape_schema(),
+            "element": element_schema(include_legacy=include_legacy),
+            "shape": shape_schema(persisted_wire=include_legacy),
             "trail": history_schema(),
-            "dust": native_dust_schema(),
+            "dust": native_dust_schema(persisted_wire=include_legacy),
             "light": native_light_schema(),
             "path": path_schema(),
             "screenShake": screen_shake_schema(),
-            "particle": library_particle_schema(),
+            "particle": library_particle_schema(include_legacy=include_legacy),
             "sound": _sound_schema(),
             "soundId": {"type": "string", "enum": list(_SOUND_IDS), "description": "Exact Terraria.ID.SoundID member, selected independently of entity kind, item name, useStyle or damage class. General sample palette, no weapon presets. Only soundCue may carry it; every soundCue requires an explicit selection and complete sound playback controls in Director output and persisted wire. No absent/unknown/null replacement."},
         },
@@ -541,6 +543,10 @@ def _director_schema(data: Mapping[str, Any], *, include_legacy: bool = False) -
         }
         for renderer, required in _RENDERER_REQUIREMENTS.items()
     ]
+    slot["allOf"].append({
+        "if": {"properties": {"rendererKind": {"enum": [r for r in renderers if r != "shape"]}}, "required": ["rendererKind"]},
+        "then": {"properties": {"duration": {"minimum": 3}}},
+    })
     slot["allOf"].append({
         "if": {"required": ["placementBindingId"]},
         "then": {"properties": {"event": {"const": "periodic"}, "anchor": {"const": "self"},
@@ -624,9 +630,13 @@ def _director_schema(data: Mapping[str, Any], *, include_legacy: bool = False) -
     if not include_legacy:
         for payload in ("element", "path", "trail"):
             texture = slot["properties"][payload]["properties"]["texture"]
-            texture["properties"]["source"]["enum"] = ["item", "entity", "asset"]
-            texture["description"] = "Exact accepted item/entity PNG or declared asset ID; no paths, URLs or cross-entity guesses."
-            texture["allOf"][1]["if"]["properties"]["source"]["enum"] = ["item", "entity"]
+            texture["required"].append("uv")
+            texture["properties"]["source"]["enum"] = ["item", "entity", "asset", "library"]
+            texture["description"] = "Exact accepted item/entity PNG, declared asset ID, or registered library texture ID (no PNG generation). No paths, URLs or cross-entity guesses; UV and blend remain literal."
+            for clause in texture["allOf"]:
+                source_gate = clause["if"]["properties"]["source"]
+                if "enum" in source_gate:
+                    source_gate["enum"] = ["item", "entity"]
         # Old artistic presets are persisted readers only, not hidden fresh options.
         for field in ("spritePrompt", "spriteNegativePrompt", "spriteCanvasSize", "textureRole", "particleSystemId", "scale", "spread", "density"):
             slot["properties"].pop(field, None)
@@ -749,6 +759,11 @@ def vfx_png_dependencies(
         entity_visual = raw_visual if isinstance(raw_visual, Mapping) else {}
         mode = entity_visual.get("assetMode")
         role = ""
+        if source == "library" and (renderer in MATERIAL_RENDERERS or renderer == "historyTrail"):
+            if not isinstance(asset_id, str) or asset_id not in LIBRARY_PARTICLE_TEXTURES:
+                errors.append({"path": selector.removesuffix("source") + "assetId", "message": "exact registered library texture id required; no paths or generated artwork"})
+            # Native installed resource, never a generated PNG dependency/job.
+            continue
         if source == "asset" and (renderer in MATERIAL_RENDERERS or renderer == "historyTrail"):
             if not isinstance(asset_id, str) or re.fullmatch(ASSET_ID_PATTERN, asset_id) is None or asset_id not in known:
                 dangling = True
@@ -882,6 +897,8 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
                 errors.append({"path": f"{path}.{field}", "message": f"unsupported value {value!r}"})
             clean[field] = value
         for field, (low, high, integer) in number_fields.items():
+            if field == "duration" and slot.get("rendererKind") == "shape":
+                low = 1
             if field in slot:
                 clean[field] = _number(slot[field], low, high, f"{path}.{field}", errors, integer=integer)
         sprite_prompt = str(slot.get("spritePrompt") or "")
@@ -919,6 +936,8 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
             clean["sound"] = copy.deepcopy(slot["sound"])
         errors.extend(_sound_slot_errors(slot, path))
         errors.extend(_material_slot_errors(slot, path))
+        errors.extend(spawn_slot_errors(slot, path))
+        errors.extend(shape_slot_errors(slot, path))
         errors.extend(native_cue_errors(slot, path))
         normalized_slots.append(clean)
     errors.extend(vfx_png_dependencies(data, raw, require_used=True)["errors"])
@@ -1014,6 +1033,8 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
                 errors.append({"path": path + ".entityId", "message": "runtime wire supports at most one impactSprite asset per entity"})
             impact_entities.add(entity_id)
         errors.extend(_material_slot_errors(slot, path))
+        errors.extend(spawn_slot_errors(slot, path))
+        errors.extend(shape_slot_errors(slot, path))
         errors.extend(native_cue_errors(slot, path, persisted_wire=True))
         errors.extend(_sound_slot_errors(slot, path, persisted_wire=True))
     for error in vfx_png_dependencies(data, manifest)["errors"]:
@@ -1067,7 +1088,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             _ACCEPTED_GAMEPLAY_CONTEXT_RULE,
             _READABILITY_RULE,
             "acceptedRuntimeProgramReadOnly contains the actual accepted mechanics, not another design request. Read its exact movement, controller, lifetime, collision, bindings and event parameters when composing presentation; runtimePairs still owns event availability. Do not invent missing geometry from names or the prose summary. Visual attachment and particle motion never change the source entity's gameplay.",
-            "shape composes explicit bounded line/arc/wave/orbit instances. Duration is lifetime and repeatEvery is emission cadence, never geometric animation period. Only authored color/opacity/radius endpoints and angular speeds animate them; no extra fade or Dust accompaniment. Each segment/mote consumes one shared draw call. nativeDust and nativeLight are independent slots with explicit emission controls.",
+            "shape composes explicit bounded line/arc/wave/orbit/sector instances. Duration is lifetime and repeatEvery is emission cadence, never geometric animation period. Only authored color/opacity/radius endpoints and angular speeds animate them; no extra fade or Dust accompaniment. Each segment/mote consumes one shared draw call. nativeDust and nativeLight are independent slots with explicit emission controls.",
             "Use only enum values and numeric ranges from runtimeVocabulary; each selected rendererKind also requires the exact companion fields in runtimeVocabulary.rendererRequirements (encoded in the slot schema).",
             "spriteElement and texturedPath use only their explicit nested texture and runtimeVocabulary.textureDependencyTuples; omit common scale/density/spread/particleSystemId/textureRole. Respect their own timing, opacity profiles and read-only geometry sources in runtimeVocabulary.rendererSemantics, runtimeSurface.texturedPathSources and outputSchema. Beam/whip/ownerLink current geometry owns placement and requires neutral anchor=self, historyTicks=0, minDistancePx=0 and profileDomain=length; anchorHistory keeps its authored anchor. ownerLink is an explicit optional cosmetic connector to projectile.Center, not automatic from movement, item names or categories. Require path.ownerAnchor=mountedCenter or frontHand only on ownerLink; omit it on all other sources. mountedCenter reads native owner.MountedCenter, not a hand. frontHand requires a currently enabled compositeFrontArm; when unavailable the connector is refused/retired, never guessed from body frames or changed to center.",
             "Compose a coherent visible body, motion and impact from acceptedVisualKit, including its advisory animationPlan. runtimeSurface.bodyPresentation states what is already drawn: solid_untextured is a plain line, not a shaded weapon or textured skin; VFX cannot remove it. no_body has no underlying image. A texturedPath can carry an explicitly authored material along the actual beam/whip curve using a generated strip, width/color/opacity profiles and UV choice. Do not stretch a full inventory icon into a rope or mistake an impact spark for body coverage. Keep these choices deliberate; restrained presentation may still use empty slots.",

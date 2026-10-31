@@ -20,11 +20,11 @@ public static partial class InfiniVfxRuntime
     private static Texture2D? TrailTexture(GeneratedItemData data,string entityId,VfxHistoryTrailSpec trail,out SpritePresentationSelection selected)
     {
         var texture=trail.Texture!;
-        if(texture.Source=="asset") {
+        if(texture.Source is "asset" or "library") {
             string path=InfiniDetachedVfxSystem.ResolveMaterialTexture(data,entityId,texture);
             selected=new(path,null,null,ImpactTexture:true);
         } else selected=SpritePresentation.Resolve(data,entityId,texture.Source);
-        return string.IsNullOrEmpty(selected.Path)?null:InfiniCrafterLocalMod.Sprites.TryGet(selected.Path);
+        return string.IsNullOrEmpty(selected.Path)?null:InfiniDetachedVfxSystem.MaterialTexture(selected.Path,texture.Source=="library"?texture.AssetId:null);
     }
     private static VfxTrailPose? CaptureTrailPose(Texture2D texture,Projectile projectile,RuntimeEntitySpec? entity,SpritePresentationSelection selected,float scale)
     {
@@ -103,8 +103,8 @@ public static partial class InfiniVfxRuntime
                 var pose=trail.Pose=="sampled"?sample.Pose:currentPose;
                 if(texture is null||pose is not {} draw||alpha<=0||trail.Scale<=0)continue;
                 if(!spend())break;
-                Main.spriteBatch.Draw(texture,sample.Position-Main.screenPosition+new Vector2(0,draw.GfxOffY),null,color,
-                    draw.Rotation,draw.Origin,draw.Scale,draw.Effects,0);
+                VfxTextureUv.Copy(trail.Texture!.Uv).Draw(Main.spriteBatch,texture,sample.Position-Main.screenPosition+new Vector2(0,draw.GfxOffY),color,
+                    draw.Rotation,draw.Origin,new Vector2(draw.Scale),draw.Effects);
             }
         }
     }

@@ -61,3 +61,32 @@ def test_persisted_native_cue_accepts_exact_float32_boundary_rounding():
     data["vfxManifest"]["slots"][0]["dust"]["spreadRadians"] = struct.unpack("f", struct.pack("f", math.tau))[0]
     report = vfx.validate_vfx_manifest_wire(data)
     assert report["ok"], report["errors"]
+
+
+def test_saved_native_dust_omitted_new_controls_remains_same_wire():
+    data = _data()
+    raw = cue(data)
+    for field in ("angularDistribution", "directionFrame", "angleOffsetRadians"):
+        raw["slots"][0]["dust"].pop(field)
+    assert not vfx.validate_vfx_director_output(raw, data)["ok"]
+    data["vfxManifest"] = vfx._compile_manifest(data, raw, "saved-native-dust")
+    before = copy.deepcopy(data["vfxManifest"])
+    report = vfx.validate_vfx_manifest_wire(data)
+    assert report["ok"], report["errors"]
+    assert data["vfxManifest"] == before
+
+
+def test_native_dust_repair_distribution_cannot_change_valid_frame_or_angle():
+    data = _data()
+    raw = cue(data)
+    raw["slots"][0]["dust"]["angularDistribution"] = "bad"
+    report = vfx.validate_vfx_director_output(raw, data)
+    scope = vfx._build_vfx_repair_scope(raw, report["errors"])
+    fixed = copy.deepcopy(raw["slots"][0])
+    fixed["dust"].update(angularDistribution="even", directionFrame="world", angleOffsetRadians=1)
+    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [fixed], "note": "distribution only"}
+    result = vfx._apply_vfx_repair_patch(data, raw, patch, scope)
+    expected = copy.deepcopy(raw)
+    expected["slots"][0]["dust"]["angularDistribution"] = "even"
+    assert result == expected
+    assert vfx.validate_vfx_director_output(result, data)["ok"]

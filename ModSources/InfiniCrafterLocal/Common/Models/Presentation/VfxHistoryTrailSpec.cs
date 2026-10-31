@@ -52,7 +52,7 @@ public sealed class VfxHistoryTrailSpec
             VfxMaterialValidation.Range(t.WidthPx.Value,0,1024,"trail width");
         } else {
             if(t.WidthPx is not null||t.Scale is null||t.Texture is null||t.Pose is null)throw new InvalidDataException("sprites require texture/scale/pose");
-            VfxMaterialValidation.Range(t.Scale.Value,0,4,"trail scale");t.Texture.Validate();
+            VfxMaterialValidation.Range(t.Scale.Value,0,5,"trail scale");t.Texture.Validate();
             VfxMaterialValidation.Choice(t.Pose,"trail pose","current","sampled");
         }
     }

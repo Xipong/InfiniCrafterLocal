@@ -43,14 +43,19 @@ public sealed partial class InfiniDetachedVfxSystem
         var d=design.Dust!;
         int count=Math.Min(64,InfiniVfxClientOptions.ScaleParticleCount(d.Count));
         var random=new Random(design.Seed^unchecked((int)emission.Due));
+        var positions=VfxSpawnGeometry.CreateRandom(d.Spawn,design.Seed,emission.Due);
         for(int i=0;i<count;i++) {
             if(design.MaxTotal<=0||emission.Allowance is {Remaining:<=0}
                 ||!TrySpendDetachedParticle(emission.SourceKey,design.MaxPerTick,design.Item?int.MaxValue:design.MaxTotal))break;
             if(emission.Allowance is { } allowance)allowance.Remaining--;
-            float angle=((float)random.NextDouble()-.5f)*d.SpreadRadians;
+            float angle=d.AngularDistribution=="even"
+                ? count<=1?0:-d.SpreadRadians*.5f+i*d.SpreadRadians/(d.SpreadRadians>=MathF.Tau?count:count-1)
+                :((float)random.NextDouble()-.5f)*d.SpreadRadians;
+            angle+=d.AngleOffsetRadians??0;
             float speed=MathHelper.Lerp(d.SpeedMinPxPerTick,d.SpeedMaxPxPerTick,(float)random.NextDouble());
-            Vector2 velocity=emission.Frame.Forward.RotatedBy(angle)*speed+emission.Frame.Velocity*d.InheritVelocity;
-            Dust dust=Dust.NewDustPerfect(emission.Frame.Position,VfxRendererRegistry.DustId(d.Type),velocity,d.NativeAlpha,design.Color,d.Size);
+            Vector2 velocity=(d.DirectionFrame=="world"?Vector2.UnitX:emission.Frame.Forward).RotatedBy(angle)*speed+emission.Frame.Velocity*d.InheritVelocity;
+            Vector2 position=emission.Frame.Position+VfxSpawnGeometry.SampleWorld(d.Spawn,emission.Frame.Forward,positions);
+            Dust dust=Dust.NewDustPerfect(position,VfxRendererRegistry.DustId(d.Type),velocity,d.NativeAlpha,design.Color,d.Size);
             dust.noGravity=d.NoGravity;
         }
     }

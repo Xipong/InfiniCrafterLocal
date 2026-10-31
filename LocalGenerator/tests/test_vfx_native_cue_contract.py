@@ -12,8 +12,9 @@ from infini_local.core.vfx_native_cue_contract import (
 
 
 def dust():
-    return {"type": "Smoke", "count": 5, "size": .75, "speedMinPxPerTick": 2,
+    return {"spawn": {"shape": "point"}, "type": "Smoke", "count": 5, "size": .75, "speedMinPxPerTick": 2,
             "speedMaxPxPerTick": 3, "spreadRadians": math.tau, "inheritVelocity": .25,
+            "angularDistribution": "random", "directionFrame": "source", "angleOffsetRadians": 0,
             "nativeAlpha": 100, "noGravity": False}
 
 
@@ -116,3 +117,34 @@ def test_errors_have_exact_repair_leaf_paths_and_native_bounds():
     errors = native_cue_errors({"rendererKind": "nativeDust", "dust": payload}, persisted_wire=True)
     assert all(set(error) == {"path", "message"} for error in errors)
     assert errors[0]["path"] == "$.dust.count"
+
+
+@pytest.mark.parametrize("distribution", ["random", "even"])
+@pytest.mark.parametrize("frame", ["world", "source"])
+def test_dust_distribution_and_frame_are_explicit_independent_choices(distribution, frame):
+    payload = dust()
+    payload.update(angularDistribution=distribution, directionFrame=frame, angleOffsetRadians=math.pi)
+    before = copy.deepcopy(payload)
+    assert not native_cue_errors({"rendererKind": "nativeDust", "dust": payload})
+    assert payload == before
+
+
+def test_saved_native_dust_missing_new_fields_remains_unchanged():
+    payload = dust()
+    for field in ("angularDistribution", "directionFrame", "angleOffsetRadians"):
+        payload.pop(field)
+    before = copy.deepcopy(payload)
+    slot = {"rendererKind": "nativeDust", "dust": payload}
+    assert native_cue_errors(slot)
+    assert not native_cue_errors(slot, persisted_wire=True)
+    assert payload == before
+
+
+@pytest.mark.parametrize("field,value", [("angularDistribution", "automatic"), ("directionFrame", "guessed"),
+                                         ("angleOffsetRadians", 7), ("angleOffsetRadians", float("nan"))])
+def test_invalid_new_dust_choices_never_fall_back_even_in_saved_wire(field, value):
+    payload = dust()
+    payload[field] = value
+    slot = {"rendererKind": "nativeDust", "dust": payload}
+    assert native_cue_errors(slot)
+    assert native_cue_errors(slot, persisted_wire=True)

@@ -195,7 +195,7 @@ def test_owner_link_delivery_preserves_explicit_strip_and_existing_paths(tmp_pat
                 sourceMode="offline_contract_fixture")
     raw = _owner_path(data, "mountedCenter")
     raw["assets"] = [_asset("Connector", "strip")]
-    raw["slots"][0]["path"]["texture"] = {"source": "asset", "assetId": "Connector"}
+    raw["slots"][0]["path"]["texture"] = {"source": "asset", "assetId": "Connector", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
     history = _path(data)["slots"][0]
     history["id"] = "unchanged_history"
     raw["slots"].append(history)

@@ -63,7 +63,7 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
     for entity in data["runtimeProgram"]["entities"]:
         entity["visual"]["assetMode"] = "baked_sprite" if entity["kind"] == "item_body" else "reuse_item_icon"
     raw = _sprite(data) if renderer == "spriteElement" else _path(data)
-    raw["slots"][0][payload]["texture"] = {"source": "item" if outcome == "valid" else "asset", "assetId": "" if outcome == "valid" else "missing"}
+    raw["slots"][0][payload]["texture"] = {"source": "item" if outcome == "valid" else "asset", "assetId": "" if outcome == "valid" else "missing", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
     if domain != "omitted":
         raw["assets"] = [_asset()] if domain == "nonempty" else []
     before, raw_before = copy.deepcopy(data), copy.deepcopy(raw)
@@ -74,7 +74,7 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
         initial_paths = [payload + ".texture.assetId", *([payload + ".texture.source"] if domain != "nonempty" else [])]
         assert initial_scope["fieldPermissions"] == {"globals": {}, "slots": [{"slotId": raw["slots"][0]["id"], "paths": initial_paths}], "assets": []}, "empty_domain_selector_permission"
     plan_before = build_visual_asset_plan(data)
-    texture = {"source": "item" if outcome == "asset" else outcome, "assetId": _asset()["id"] if outcome == "asset" else ""}
+    texture = {"source": "item" if outcome == "asset" else outcome, "assetId": _asset()["id"] if outcome == "asset" else "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
     correction = _patch()
     if outcome in {"item", "entity", "asset"}:
         candidate = copy.deepcopy(raw["slots"][0])
@@ -103,7 +103,7 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
     else:
         expected = copy.deepcopy(raw_before)
         if outcome != "valid":
-            expected["slots"][0][payload]["texture"] = ({"source": "asset", "assetId": _asset()["id"]} if domain == "nonempty" else texture)
+            expected["slots"][0][payload]["texture"] = ({"source": "asset", "assetId": _asset()["id"], "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}} if domain == "nonempty" else texture)
         expected_plan = build_visual_asset_plan({**before, "vfxManifest": vfx._compile_manifest(before, expected, case)}) if domain == "nonempty" else plan_before
         final = vfx.attach_vfx_manifest(data, case, llm_director=stage.call_llm_vfx_director)
         assert final["debug"]["vfxDirectorRaw"] == expected, "only_diagnosed_texture_leaves_change"
@@ -177,7 +177,7 @@ def test_vfx_exact_leaf_stage_contract(monkeypatch, case):
     if case == "profile-knot":
         raw["slots"][0]["element"]["widthProfile"]["middle"] = True
         candidate["element"]["widthProfile"].update(start=4.0, middle=1.0, end=4.0)
-        candidate["element"]["texture"] = {"source": "entity", "assetId": ""}
+        candidate["element"]["texture"] = {"source": "entity", "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
         leaf = "element.widthProfile.middle"
         patch = _patch(slotsUpsert=[candidate], assetsUpsert=[_asset()])
     elif case == "asset-canvas":
@@ -186,7 +186,7 @@ def test_vfx_exact_leaf_stage_contract(monkeypatch, case):
         patch = _patch(assetsUpsert=[{**_asset(), "prompt": "unrequested redesign", "negativePrompt": "rewrite", "layout": "strip"}])
     elif case == "asset-reference":
         raw["slots"][0]["element"]["texture"]["assetId"] = "missing"
-        candidate["element"]["texture"] = {"source": "item", "assetId": _asset()["id"]}
+        candidate["element"]["texture"] = {"source": "item", "assetId": _asset()["id"], "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
         leaf = "element.texture.assetId"
         patch = _patch(slotsUpsert=[candidate], assetsUpsert=[_asset("missing")], assetIdsDelete=[_asset()["id"]])
     elif case == "foreign-payload":

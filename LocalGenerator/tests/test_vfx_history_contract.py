@@ -14,7 +14,7 @@ def trail(draw="stroke"):
     if draw == "stroke":
         value["widthPx"] = 2.5
     else:
-        value.update(texture={"source": "entity", "assetId": ""}, scale=1.2, pose="sampled")
+        value.update(texture={"source": "entity", "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}, scale=1.2, pose="sampled")
     return value
 
 
@@ -106,7 +106,7 @@ def test_history_texture_requires_exact_bound_producer():
     entity["visual"]["assetMode"] = "no_asset"
     report = vfx.validate_vfx_director_output(raw, data)
     assert not report["ok"]
-    raw["slots"][0]["trail"]["texture"] = {"source": "asset", "assetId": "missing"}
+    raw["slots"][0]["trail"]["texture"] = {"source": "asset", "assetId": "missing", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
     assert not vfx.validate_vfx_director_output(raw, data)["ok"]
 
 
@@ -127,3 +127,11 @@ def test_history_leaf_repair_keeps_pose_sampling_and_width_frozen():
     expected["slots"][0]["trail"]["opacityProfile"]["middle"] = 0.3
     assert repaired == expected
     assert any(row["path"].endswith("trail.pose") for row in audit["ignoredChanges"])
+
+
+def test_history_retains_legacy_fivefold_sprite_multiplier():
+    value = trail("sprites")
+    value["scale"] = 5
+    assert not strict_schema_errors(value, history_schema())
+    value["scale"] = 5.01
+    assert strict_schema_errors(value, history_schema())

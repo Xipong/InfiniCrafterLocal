@@ -41,7 +41,7 @@ def history_schema() -> dict[str, Any]:
     fields = {
         "widthPx": _number(0, 1024, "Stroke width in world pixels; zero is silent, independent of projectile/slot scale."),
         "texture": texture_schema(),
-        "scale": _number(0, 4, "Multiplier on selected PNG's rendering size; zero is silent."),
+        "scale": _number(0, 5, "Multiplier on selected PNG's rendering size; zero is silent."),
         "pose": {"type": "string", "enum": ["current", "sampled"],
                  "description": "current reuses the live body's pose at all selected historical positions; sampled uses the actual pose captured at each selected world tick."},
     }

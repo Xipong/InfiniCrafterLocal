@@ -80,12 +80,13 @@ internal static partial class EngineRuntimeChecks
     {
         internal bool Live=true;
         internal Vector2 Position;
+        internal Vector2 Forward=Vector2.UnitX;
         internal int Age;
         private readonly object generation=new();
         internal override bool IsLive=>Live;
         internal override object Generation=>generation;
         internal override int WorldAge=>Age;
-        internal override bool TryFrame(string anchor,out VfxSourceFrame frame) {frame=new(Position,Vector2.UnitX,Vector2.Zero);return Live;}
+        internal override bool TryFrame(string anchor,out VfxSourceFrame frame) {frame=new(Position,Forward,Vector2.Zero);return Live;}
     }
     private static void ExplicitShapeEmissionLifecycleAndSharedBudget()
     {

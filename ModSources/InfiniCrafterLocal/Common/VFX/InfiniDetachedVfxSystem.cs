@@ -194,6 +194,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
         {
             DrawLibraryParticles(layer,batch.GraphicsDevice);
             if(MaterialPaths.Any(p=>p.Design.Layer==layer))DrawMaterialPaths(layer,batch.GraphicsDevice);
+            DrawMeshShapes(layer,TextureAssets.MagicPixel.Value,batch.GraphicsDevice);
             // Authored PNG elements preserve texels, independent of vanilla's
             // configurable sampler. This batch is owned and ends before simple-renderer draws.
             DrawMaterialSprites(layer,batch,()=>{

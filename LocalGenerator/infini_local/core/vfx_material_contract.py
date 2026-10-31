@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from infini_local.core.vfx_spawn_contract import spawn_schema
+
 MATERIAL_RENDERERS = ("spriteElement", "texturedPath")
 ASSET_ID_PATTERN = r"^[A-Za-z0-9_-]{1,48}$"
 CURVES = ("linear", "easeIn", "easeOut", "smoothStep")
@@ -42,12 +44,21 @@ def _asset_id_schema() -> dict[str, Any]:
 
 
 def texture_schema() -> dict[str, Any]:
-    schema = _object({
-        "source": {"type": "string", "enum": ["item", "entity", "impact", "asset"]},
-        "assetId": {"type": "string", "maxLength": 48},
+    uv = _object({
+        "quarterTurns": {"type": "integer", "minimum": 0, "maximum": 3},
+        "mirrorU": {"type": "boolean"}, "mirrorV": {"type": "boolean"},
     })
-    schema["description"] = "Explicit exact item/entity/impact image role or one declared asset ID. No paths/URLs; no cross-entity guesses. impact requires that entity's existing impactSprite producer."
+    uv["description"] = "Sampling coordinates only: first mirror U/V, then quarterTurns 1:(v,1-u), 2:(1-u,1-v), 3:(1-v,u). Preserves world geometry, size, history and original pivot; no inferred grip correction. Body flip precedes this transform. Repeat/scroll stay unbounded; no implicit UV wrapping/clamping. Saved omission is exact identity."
+    schema = _object({
+        "source": {"type": "string", "enum": ["item", "entity", "impact", "asset", "library"]},
+        "assetId": {"type": "string", "maxLength": 48},
+        "uv": uv,
+    })
+    schema["required"].remove("uv")
+    schema["description"] = "Explicit exact item/entity/impact image role or one declared asset ID. source=library selects one exact built-in texture ID, no asset declaration or PNG generation. Same literal UV/blend rules: bloomLine is long on texture Y, never auto-rotated. No paths/URLs; no cross-entity guesses. impact requires that entity's existing impactSprite producer."
     schema["allOf"] = [
+        {"if": {"properties": {"source": {"const": "library"}}, "required": ["source"]},
+         "then": {"properties": {"assetId": {"enum": list(LIBRARY_PARTICLE_TEXTURES)}}}},
         {"if": {"properties": {"source": {"const": "asset"}}, "required": ["source"]},
          "then": {"properties": {"assetId": _asset_id_schema()}}},
         {"if": {"properties": {"source": {"enum": ["item", "entity", "impact"]}}, "required": ["source"]},
@@ -110,8 +121,9 @@ def runtime_asset_schema() -> dict[str, Any]:
     return schema
 
 
-def element_schema() -> dict[str, Any]:
-    return _object({
+def element_schema(*, include_legacy: bool = False) -> dict[str, Any]:
+    schema = _object({
+        "spawn": spawn_schema(),
         "texture": texture_schema(),
         "attachment": {"type": "string", "enum": ["world", "source"], "description": "world freezes event-time frame; source follows that exact live source generation in its forward/normal frame, ends on retirement. World acceleration uses world X/Y; source acceleration uses local frame."},
         "count": _number(0, 64, "Integer elements per emission; zero is silence. Charged when emitted, never per Draw.", integer=True),
@@ -126,10 +138,13 @@ def element_schema() -> dict[str, Any]:
         "accelerationYPxPerTickSquared": _number(-2, 2, "Pixels per world tick squared, Y in selected attachment frame."),
         "rotationRadians": _number(-math.tau, math.tau, "Radians relative to captured forward; never inferred image/PCA axis."),
         "rotationSpeedRadiansPerTick": _number(-1, 1, "Radians per world tick."),
-        "widthPx": _number(0, 128, "World pixels along texture X axis, independent of height; zero stays zero."),
-        "heightPx": _number(0, 128, "World pixels along texture Y axis, independent of width; zero stays zero."),
+        "widthPx": _number(0, 1024, "World pixels along texture X axis, independent of height; zero stays zero."),
+        "heightPx": _number(0, 1024, "World pixels along texture Y axis, independent of width; zero stays zero."),
         "widthProfile": _profile(4), "heightProfile": _profile(4), "opacityProfile": _profile(1), "colorProfile": _profile(),
     })
+    if include_legacy:
+        schema["required"].remove("spawn")
+    return schema
 
 
 LIBRARY_PARTICLE_TEXTURES = {
@@ -144,12 +159,14 @@ LIBRARY_PARTICLE_TEXTURES = {
 
 
 def library_particle_schema(*, include_legacy: bool = False) -> dict[str, Any]:
-    return _object({
+    schema = _object({
+        "spawn": spawn_schema(),
         "textureId": {"type": "string", "enum": list(LIBRARY_PARTICLE_TEXTURES),
                       "description": "Exact existing library texture, no PNG generation or motion preset. "
                       + " ".join(key + "=" + value for key, value in LIBRARY_PARTICLE_TEXTURES.items())
                       + " All textures have opaque alpha. Glow/flare black RGB contributes zero in additive, recommended for luminous effects; alpha blend visibly includes the black rectangle. Both blends are literal choices, never auto-converted. Dimensions are authored world pixels, not native texture dimensions."
                       },
+        "sampling": {"type": "string", "enum": ["point", "linear"], "description": "Exact PointClamp (crisp texels) or LinearClamp (interpolated texels); no geometry/opacity changes. Old saved omission means point."},
         "count": _number(0, 64, "Integer particles per emission; zero is silence; shares existing instance budgets.", integer=True),
         "speedMinPxPerTick": _number(0, 24, "Minimum initial speed in world pixels/world tick."),
         "speedMaxPxPerTick": _number(0, 24, "Maximum initial speed in world pixels per world tick, must be >= speedMinPxPerTick."),
@@ -167,6 +184,10 @@ def library_particle_schema(*, include_legacy: bool = False) -> dict[str, Any]:
         "endScaleMultiplier": _number(0, 4, "Final width/height multiplier, linearly interpolated from 1; zero contracts to nothing."),
         "endOpacity": _number(0, 1, "Final opacity multiplier, linearly interpolated from 1 and multiplied by common alpha once."),
     })
+    if include_legacy:
+        schema["required"].remove("sampling")
+        schema["required"].remove("spawn")
+    return schema
 
 
 def screen_shake_schema() -> dict[str, Any]:

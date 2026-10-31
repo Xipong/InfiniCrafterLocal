@@ -207,7 +207,7 @@ def test_rgb_component_repair_is_exact_and_preserves_other_channels_profiles_and
     candidate["element"]["colorProfile"]["middle"].update(r=0, b=0)
     candidate["element"]["colorProfile"]["curve"] = "easeIn"
     candidate["element"]["opacityProfile"]["middle"] = 0
-    candidate["element"]["texture"] = {"source": "item", "assetId": ""}
+    candidate["element"]["texture"] = {"source": "item", "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
     patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [candidate],
              "assetsUpsert": [{**accepted["assets"][0], "prompt": "unrequested new artwork"}],
              "note": "only green channel is invalid"}

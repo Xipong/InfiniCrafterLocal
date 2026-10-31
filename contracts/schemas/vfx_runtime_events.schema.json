@@ -71,6 +71,34 @@
         "allOf": [
           {
             "if": {
+              "properties": {
+                "rendererKind": {
+                  "enum": [
+                    "soundCue",
+                    "screenShakeCue",
+                    "libraryParticle",
+                    "historyTrail",
+                    "nativeDust",
+                    "nativeLight",
+                    "spriteElement",
+                    "texturedPath"
+                  ]
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "duration": {
+                  "minimum": 3
+                }
+              }
+            }
+          },
+          {
+            "if": {
               "required": [
                 "placementBindingId"
               ]
@@ -1101,7 +1129,8 @@
                         "source": {
                           "enum": [
                             "item",
-                            "asset"
+                            "asset",
+                            "library"
                           ]
                         }
                       }
@@ -1135,7 +1164,8 @@
                         "source": {
                           "enum": [
                             "item",
-                            "asset"
+                            "asset",
+                            "library"
                           ]
                         }
                       }
@@ -1169,7 +1199,8 @@
                         "source": {
                           "enum": [
                             "item",
-                            "asset"
+                            "asset",
+                            "library"
                           ]
                         }
                       }
@@ -1439,7 +1470,8 @@
                         "source": {
                           "enum": [
                             "item",
-                            "asset"
+                            "asset",
+                            "library"
                           ]
                         }
                       }
@@ -1473,7 +1505,8 @@
                         "source": {
                           "enum": [
                             "item",
-                            "asset"
+                            "asset",
+                            "library"
                           ]
                         }
                       }
@@ -1507,7 +1540,8 @@
                         "source": {
                           "enum": [
                             "item",
-                            "asset"
+                            "asset",
+                            "library"
                           ]
                         }
                       }
@@ -1541,7 +1575,8 @@
                         "source": {
                           "enum": [
                             "item",
-                            "asset"
+                            "asset",
+                            "library"
                           ]
                         }
                       }
@@ -1575,7 +1610,8 @@
                         "source": {
                           "enum": [
                             "item",
-                            "asset"
+                            "asset",
+                            "library"
                           ]
                         }
                       }
@@ -1609,7 +1645,8 @@
                         "source": {
                           "enum": [
                             "item",
-                            "asset"
+                            "asset",
+                            "library"
                           ]
                         }
                       }
@@ -2179,20 +2216,40 @@
             "type": "object"
           },
           "duration": {
-            "description": "Individual detached lifetime in world ticks. shape uses explicit lifetime endpoints without extra fade; spriteElement uses opacityProfile; libraryParticle uses endOpacity. Live path/history owns its own lifetime and omits duration.",
+            "description": "Individual detached lifetime in world ticks: shape 1..120, other duration-owning renderers 3..120. shape uses explicit lifetime endpoints without extra fade; spriteElement uses opacityProfile; libraryParticle uses endOpacity. Live path/history owns its own lifetime and omits duration.",
             "maximum": 120,
-            "minimum": 3,
+            "minimum": 1,
             "type": "integer"
           },
           "dust": {
             "additionalProperties": false,
-            "description": "Explicit emission into Terraria native Dust, not a custom particle simulation. The selected native type owns subsequent animation, motion, tint and lifetime. Count, size, initial velocity, native alpha and gravity flag are independent. Angle is uniform within spreadRadians centered on source forward; speed is uniform between speedMinPxPerTick and speedMaxPxPerTick; source velocity is multiplied only by inheritVelocity. Identical emission math for item and projectile. Zero count or size emits nothing. Native alpha is Terraria's 0..255 parameter, not an opacity multiplier. No inferred Smoke gravity or inherited velocity.",
+            "description": "Explicit emission into Terraria native Dust, not a custom particle simulation. The selected native type owns subsequent animation, motion, tint and lifetime. Count, size, initial velocity, native alpha and gravity flag are independent. directionFrame selects world +X or captured source forward; angleOffsetRadians offsets the cone center. Angular distribution random samples uniformly; even spans partial-cone endpoints, or divides a full circle without duplicating its endpoint. Even distribution with count one uses the cone center. Speed is uniform between speedMinPxPerTick and speedMaxPxPerTick; source velocity is multiplied only by inheritVelocity. Identical emission math for item and projectile. Zero count or size emits nothing. Native alpha is Terraria's 0..255 parameter, not an opacity multiplier. No inferred Smoke gravity or inherited velocity.",
             "properties": {
+              "angleOffsetRadians": {
+                "description": "Cone center offset from world +X or captured source forward.",
+                "maximum": 6.283185307179586,
+                "minimum": -6.283185307179586,
+                "type": "number"
+              },
+              "angularDistribution": {
+                "enum": [
+                  "random",
+                  "even"
+                ],
+                "type": "string"
+              },
               "count": {
                 "description": "Integer emissions before shared/client budgets; zero is silent.",
                 "maximum": 64,
                 "minimum": 0,
                 "type": "integer"
+              },
+              "directionFrame": {
+                "enum": [
+                  "world",
+                  "source"
+                ],
+                "type": "string"
               },
               "inheritVelocity": {
                 "description": "Explicit source-velocity multiplier added to initial velocity.",
@@ -2216,6 +2273,207 @@
                 "minimum": 0,
                 "type": "number"
               },
+              "spawn": {
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "shape": {
+                          "const": "point"
+                        }
+                      },
+                      "required": [
+                        "shape"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "frame": {
+                          "enum": []
+                        },
+                        "heightPx": {
+                          "enum": []
+                        },
+                        "innerRadiusPx": {
+                          "enum": []
+                        },
+                        "lengthPx": {
+                          "enum": []
+                        },
+                        "outerRadiusPx": {
+                          "enum": []
+                        },
+                        "rotationRadians": {
+                          "enum": []
+                        },
+                        "widthPx": {
+                          "enum": []
+                        }
+                      },
+                      "required": []
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "shape": {
+                          "const": "line"
+                        }
+                      },
+                      "required": [
+                        "shape"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "heightPx": {
+                          "enum": []
+                        },
+                        "innerRadiusPx": {
+                          "enum": []
+                        },
+                        "outerRadiusPx": {
+                          "enum": []
+                        },
+                        "widthPx": {
+                          "enum": []
+                        }
+                      },
+                      "required": [
+                        "frame",
+                        "lengthPx",
+                        "rotationRadians"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "shape": {
+                          "const": "rectangle"
+                        }
+                      },
+                      "required": [
+                        "shape"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "innerRadiusPx": {
+                          "enum": []
+                        },
+                        "lengthPx": {
+                          "enum": []
+                        },
+                        "outerRadiusPx": {
+                          "enum": []
+                        }
+                      },
+                      "required": [
+                        "frame",
+                        "heightPx",
+                        "rotationRadians",
+                        "widthPx"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "shape": {
+                          "const": "annulus"
+                        }
+                      },
+                      "required": [
+                        "shape"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "frame": {
+                          "enum": []
+                        },
+                        "heightPx": {
+                          "enum": []
+                        },
+                        "lengthPx": {
+                          "enum": []
+                        },
+                        "rotationRadians": {
+                          "enum": []
+                        },
+                        "widthPx": {
+                          "enum": []
+                        }
+                      },
+                      "required": [
+                        "innerRadiusPx",
+                        "outerRadiusPx"
+                      ]
+                    }
+                  }
+                ],
+                "description": "Uniform birth positions around the existing emission origin, sampled once per particle. point has no extra controls; line/rectangle are centered, with world +X or source-forward frame and an explicit rotation. annulus samples uniformly by area; inner radius zero gives a disk, equal radii a ring. Zero extents remain literal. Existing element offsets add once. Source-attached elements capture sampled offsets locally and then follow the source, without resampling. Position sampling has a separate deterministic seed stream and does not change velocity sampling.",
+                "properties": {
+                  "frame": {
+                    "enum": [
+                      "world",
+                      "source"
+                    ],
+                    "type": "string"
+                  },
+                  "heightPx": {
+                    "description": "Centered rectangle Y extent in world pixels.",
+                    "maximum": 512,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "innerRadiusPx": {
+                    "description": "Inner radius; zero includes the center.",
+                    "maximum": 256,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "lengthPx": {
+                    "description": "Centered line length in world pixels.",
+                    "maximum": 512,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "outerRadiusPx": {
+                    "description": "Outer radius >= innerRadiusPx; equal radii form a ring.",
+                    "maximum": 256,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "rotationRadians": {
+                    "description": "Region rotation relative to selected frame.",
+                    "maximum": 6.283185307179586,
+                    "minimum": -6.283185307179586,
+                    "type": "number"
+                  },
+                  "shape": {
+                    "enum": [
+                      "point",
+                      "line",
+                      "rectangle",
+                      "annulus"
+                    ],
+                    "type": "string"
+                  },
+                  "widthPx": {
+                    "description": "Centered rectangle X extent in world pixels.",
+                    "maximum": 512,
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "shape"
+                ],
+                "type": "object"
+              },
               "speedMaxPxPerTick": {
                 "description": "Maximum initial speed, at least speedMinPxPerTick.",
                 "maximum": 24,
@@ -2229,7 +2487,7 @@
                 "type": "number"
               },
               "spreadRadians": {
-                "description": "Full angular width centered on source forward; tau is isotropic.",
+                "description": "Full cone width around selected frame plus offset; tau is full circle.",
                 "maximum": 6.283185307179586,
                 "minimum": 0,
                 "type": "number"
@@ -2246,11 +2504,15 @@
               }
             },
             "required": [
+              "spawn",
               "type",
               "count",
               "size",
               "speedMinPxPerTick",
               "speedMaxPxPerTick",
+              "angularDistribution",
+              "directionFrame",
+              "angleOffsetRadians",
               "spreadRadians",
               "inheritVelocity",
               "nativeAlpha",
@@ -2438,7 +2700,7 @@
               },
               "heightPx": {
                 "description": "World pixels along texture Y axis, independent of width; zero stays zero.",
-                "maximum": 128,
+                "maximum": 1024,
                 "minimum": 0,
                 "type": "number"
               },
@@ -2512,6 +2774,207 @@
                 "minimum": -1,
                 "type": "number"
               },
+              "spawn": {
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "shape": {
+                          "const": "point"
+                        }
+                      },
+                      "required": [
+                        "shape"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "frame": {
+                          "enum": []
+                        },
+                        "heightPx": {
+                          "enum": []
+                        },
+                        "innerRadiusPx": {
+                          "enum": []
+                        },
+                        "lengthPx": {
+                          "enum": []
+                        },
+                        "outerRadiusPx": {
+                          "enum": []
+                        },
+                        "rotationRadians": {
+                          "enum": []
+                        },
+                        "widthPx": {
+                          "enum": []
+                        }
+                      },
+                      "required": []
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "shape": {
+                          "const": "line"
+                        }
+                      },
+                      "required": [
+                        "shape"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "heightPx": {
+                          "enum": []
+                        },
+                        "innerRadiusPx": {
+                          "enum": []
+                        },
+                        "outerRadiusPx": {
+                          "enum": []
+                        },
+                        "widthPx": {
+                          "enum": []
+                        }
+                      },
+                      "required": [
+                        "frame",
+                        "lengthPx",
+                        "rotationRadians"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "shape": {
+                          "const": "rectangle"
+                        }
+                      },
+                      "required": [
+                        "shape"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "innerRadiusPx": {
+                          "enum": []
+                        },
+                        "lengthPx": {
+                          "enum": []
+                        },
+                        "outerRadiusPx": {
+                          "enum": []
+                        }
+                      },
+                      "required": [
+                        "frame",
+                        "heightPx",
+                        "rotationRadians",
+                        "widthPx"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "shape": {
+                          "const": "annulus"
+                        }
+                      },
+                      "required": [
+                        "shape"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "frame": {
+                          "enum": []
+                        },
+                        "heightPx": {
+                          "enum": []
+                        },
+                        "lengthPx": {
+                          "enum": []
+                        },
+                        "rotationRadians": {
+                          "enum": []
+                        },
+                        "widthPx": {
+                          "enum": []
+                        }
+                      },
+                      "required": [
+                        "innerRadiusPx",
+                        "outerRadiusPx"
+                      ]
+                    }
+                  }
+                ],
+                "description": "Uniform birth positions around the existing emission origin, sampled once per particle. point has no extra controls; line/rectangle are centered, with world +X or source-forward frame and an explicit rotation. annulus samples uniformly by area; inner radius zero gives a disk, equal radii a ring. Zero extents remain literal. Existing element offsets add once. Source-attached elements capture sampled offsets locally and then follow the source, without resampling. Position sampling has a separate deterministic seed stream and does not change velocity sampling.",
+                "properties": {
+                  "frame": {
+                    "enum": [
+                      "world",
+                      "source"
+                    ],
+                    "type": "string"
+                  },
+                  "heightPx": {
+                    "description": "Centered rectangle Y extent in world pixels.",
+                    "maximum": 512,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "innerRadiusPx": {
+                    "description": "Inner radius; zero includes the center.",
+                    "maximum": 256,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "lengthPx": {
+                    "description": "Centered line length in world pixels.",
+                    "maximum": 512,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "outerRadiusPx": {
+                    "description": "Outer radius >= innerRadiusPx; equal radii form a ring.",
+                    "maximum": 256,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "rotationRadians": {
+                    "description": "Region rotation relative to selected frame.",
+                    "maximum": 6.283185307179586,
+                    "minimum": -6.283185307179586,
+                    "type": "number"
+                  },
+                  "shape": {
+                    "enum": [
+                      "point",
+                      "line",
+                      "rectangle",
+                      "annulus"
+                    ],
+                    "type": "string"
+                  },
+                  "widthPx": {
+                    "description": "Centered rectangle X extent in world pixels.",
+                    "maximum": 512,
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "shape"
+                ],
+                "type": "object"
+              },
               "speedMaxPxPerTick": {
                 "description": "Pixels per world tick, uniform speed maximum >= speedMinPxPerTick.",
                 "maximum": 24,
@@ -2533,6 +2996,33 @@
               "texture": {
                 "additionalProperties": false,
                 "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "source": {
+                          "const": "library"
+                        }
+                      },
+                      "required": [
+                        "source"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "assetId": {
+                          "enum": [
+                            "star",
+                            "solidPixel",
+                            "bloomCircle",
+                            "bloomFlare",
+                            "bloomLine",
+                            "chromaticBurst",
+                            "shineFlare"
+                          ]
+                        }
+                      }
+                    }
+                  },
                   {
                     "if": {
                       "properties": {
@@ -2581,7 +3071,7 @@
                     }
                   }
                 ],
-                "description": "Exact accepted item/entity PNG or declared asset ID; no paths, URLs or cross-entity guesses.",
+                "description": "Exact accepted item/entity PNG, declared asset ID, or registered library texture ID (no PNG generation). No paths, URLs or cross-entity guesses; UV and blend remain literal.",
                 "properties": {
                   "assetId": {
                     "maxLength": 48,
@@ -2591,14 +3081,39 @@
                     "enum": [
                       "item",
                       "entity",
-                      "asset"
+                      "asset",
+                      "library"
                     ],
                     "type": "string"
+                  },
+                  "uv": {
+                    "additionalProperties": false,
+                    "description": "Sampling coordinates only: first mirror U/V, then quarterTurns 1:(v,1-u), 2:(1-u,1-v), 3:(1-v,u). Preserves world geometry, size, history and original pivot; no inferred grip correction. Body flip precedes this transform. Repeat/scroll stay unbounded; no implicit UV wrapping/clamping. Saved omission is exact identity.",
+                    "properties": {
+                      "mirrorU": {
+                        "type": "boolean"
+                      },
+                      "mirrorV": {
+                        "type": "boolean"
+                      },
+                      "quarterTurns": {
+                        "maximum": 3,
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "quarterTurns",
+                      "mirrorU",
+                      "mirrorV"
+                    ],
+                    "type": "object"
                   }
                 },
                 "required": [
                   "source",
-                  "assetId"
+                  "assetId",
+                  "uv"
                 ],
                 "type": "object"
               },
@@ -2644,12 +3159,13 @@
               },
               "widthPx": {
                 "description": "World pixels along texture X axis, independent of height; zero stays zero.",
-                "maximum": 128,
+                "maximum": 1024,
                 "minimum": 0,
                 "type": "number"
               }
             },
             "required": [
+              "spawn",
               "texture",
               "attachment",
               "count",
@@ -2838,6 +3354,215 @@
                 "minimum": -1,
                 "type": "number"
               },
+              "sampling": {
+                "description": "Exact PointClamp (crisp texels) or LinearClamp (interpolated texels); no geometry/opacity changes. Old saved omission means point.",
+                "enum": [
+                  "point",
+                  "linear"
+                ],
+                "type": "string"
+              },
+              "spawn": {
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "shape": {
+                          "const": "point"
+                        }
+                      },
+                      "required": [
+                        "shape"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "frame": {
+                          "enum": []
+                        },
+                        "heightPx": {
+                          "enum": []
+                        },
+                        "innerRadiusPx": {
+                          "enum": []
+                        },
+                        "lengthPx": {
+                          "enum": []
+                        },
+                        "outerRadiusPx": {
+                          "enum": []
+                        },
+                        "rotationRadians": {
+                          "enum": []
+                        },
+                        "widthPx": {
+                          "enum": []
+                        }
+                      },
+                      "required": []
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "shape": {
+                          "const": "line"
+                        }
+                      },
+                      "required": [
+                        "shape"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "heightPx": {
+                          "enum": []
+                        },
+                        "innerRadiusPx": {
+                          "enum": []
+                        },
+                        "outerRadiusPx": {
+                          "enum": []
+                        },
+                        "widthPx": {
+                          "enum": []
+                        }
+                      },
+                      "required": [
+                        "frame",
+                        "lengthPx",
+                        "rotationRadians"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "shape": {
+                          "const": "rectangle"
+                        }
+                      },
+                      "required": [
+                        "shape"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "innerRadiusPx": {
+                          "enum": []
+                        },
+                        "lengthPx": {
+                          "enum": []
+                        },
+                        "outerRadiusPx": {
+                          "enum": []
+                        }
+                      },
+                      "required": [
+                        "frame",
+                        "heightPx",
+                        "rotationRadians",
+                        "widthPx"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "shape": {
+                          "const": "annulus"
+                        }
+                      },
+                      "required": [
+                        "shape"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "frame": {
+                          "enum": []
+                        },
+                        "heightPx": {
+                          "enum": []
+                        },
+                        "lengthPx": {
+                          "enum": []
+                        },
+                        "rotationRadians": {
+                          "enum": []
+                        },
+                        "widthPx": {
+                          "enum": []
+                        }
+                      },
+                      "required": [
+                        "innerRadiusPx",
+                        "outerRadiusPx"
+                      ]
+                    }
+                  }
+                ],
+                "description": "Uniform birth positions around the existing emission origin, sampled once per particle. point has no extra controls; line/rectangle are centered, with world +X or source-forward frame and an explicit rotation. annulus samples uniformly by area; inner radius zero gives a disk, equal radii a ring. Zero extents remain literal. Existing element offsets add once. Source-attached elements capture sampled offsets locally and then follow the source, without resampling. Position sampling has a separate deterministic seed stream and does not change velocity sampling.",
+                "properties": {
+                  "frame": {
+                    "enum": [
+                      "world",
+                      "source"
+                    ],
+                    "type": "string"
+                  },
+                  "heightPx": {
+                    "description": "Centered rectangle Y extent in world pixels.",
+                    "maximum": 512,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "innerRadiusPx": {
+                    "description": "Inner radius; zero includes the center.",
+                    "maximum": 256,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "lengthPx": {
+                    "description": "Centered line length in world pixels.",
+                    "maximum": 512,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "outerRadiusPx": {
+                    "description": "Outer radius >= innerRadiusPx; equal radii form a ring.",
+                    "maximum": 256,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "rotationRadians": {
+                    "description": "Region rotation relative to selected frame.",
+                    "maximum": 6.283185307179586,
+                    "minimum": -6.283185307179586,
+                    "type": "number"
+                  },
+                  "shape": {
+                    "enum": [
+                      "point",
+                      "line",
+                      "rectangle",
+                      "annulus"
+                    ],
+                    "type": "string"
+                  },
+                  "widthPx": {
+                    "description": "Centered rectangle X extent in world pixels.",
+                    "maximum": 512,
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "shape"
+                ],
+                "type": "object"
+              },
               "speedMaxPxPerTick": {
                 "description": "Maximum initial speed in world pixels per world tick, must be >= speedMinPxPerTick.",
                 "maximum": 24,
@@ -2877,7 +3602,9 @@
               }
             },
             "required": [
+              "spawn",
               "textureId",
+              "sampling",
               "count",
               "speedMinPxPerTick",
               "speedMaxPxPerTick",
@@ -3218,6 +3945,33 @@
                     "if": {
                       "properties": {
                         "source": {
+                          "const": "library"
+                        }
+                      },
+                      "required": [
+                        "source"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "assetId": {
+                          "enum": [
+                            "star",
+                            "solidPixel",
+                            "bloomCircle",
+                            "bloomFlare",
+                            "bloomLine",
+                            "chromaticBurst",
+                            "shineFlare"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "source": {
                           "const": "asset"
                         }
                       },
@@ -3262,7 +4016,7 @@
                     }
                   }
                 ],
-                "description": "Exact accepted item/entity PNG or declared asset ID; no paths, URLs or cross-entity guesses.",
+                "description": "Exact accepted item/entity PNG, declared asset ID, or registered library texture ID (no PNG generation). No paths, URLs or cross-entity guesses; UV and blend remain literal.",
                 "properties": {
                   "assetId": {
                     "maxLength": 48,
@@ -3272,14 +4026,39 @@
                     "enum": [
                       "item",
                       "entity",
-                      "asset"
+                      "asset",
+                      "library"
                     ],
                     "type": "string"
+                  },
+                  "uv": {
+                    "additionalProperties": false,
+                    "description": "Sampling coordinates only: first mirror U/V, then quarterTurns 1:(v,1-u), 2:(1-u,1-v), 3:(1-v,u). Preserves world geometry, size, history and original pivot; no inferred grip correction. Body flip precedes this transform. Repeat/scroll stay unbounded; no implicit UV wrapping/clamping. Saved omission is exact identity.",
+                    "properties": {
+                      "mirrorU": {
+                        "type": "boolean"
+                      },
+                      "mirrorV": {
+                        "type": "boolean"
+                      },
+                      "quarterTurns": {
+                        "maximum": 3,
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "quarterTurns",
+                      "mirrorU",
+                      "mirrorV"
+                    ],
+                    "type": "object"
                   }
                 },
                 "required": [
                   "source",
-                  "assetId"
+                  "assetId",
+                  "uv"
                 ],
                 "type": "object"
               },
@@ -3457,7 +4236,25 @@
                     "cycles": {
                       "enum": []
                     },
+                    "innerRadiusEndPx": {
+                      "enum": []
+                    },
+                    "innerRadiusStartPx": {
+                      "enum": []
+                    },
+                    "moteOrientation": {
+                      "enum": []
+                    },
+                    "moteRotationRadians": {
+                      "enum": []
+                    },
                     "moteSizePx": {
+                      "enum": []
+                    },
+                    "outerRadiusEndPx": {
+                      "enum": []
+                    },
+                    "outerRadiusStartPx": {
                       "enum": []
                     },
                     "phaseRadians": {
@@ -3513,10 +4310,28 @@
                     "cycles": {
                       "enum": []
                     },
+                    "innerRadiusEndPx": {
+                      "enum": []
+                    },
+                    "innerRadiusStartPx": {
+                      "enum": []
+                    },
                     "lengthPx": {
                       "enum": []
                     },
+                    "moteOrientation": {
+                      "enum": []
+                    },
+                    "moteRotationRadians": {
+                      "enum": []
+                    },
                     "moteSizePx": {
+                      "enum": []
+                    },
+                    "outerRadiusEndPx": {
+                      "enum": []
+                    },
+                    "outerRadiusStartPx": {
                       "enum": []
                     },
                     "phaseRadians": {
@@ -3553,7 +4368,25 @@
                     "count": {
                       "enum": []
                     },
+                    "innerRadiusEndPx": {
+                      "enum": []
+                    },
+                    "innerRadiusStartPx": {
+                      "enum": []
+                    },
+                    "moteOrientation": {
+                      "enum": []
+                    },
+                    "moteRotationRadians": {
+                      "enum": []
+                    },
                     "moteSizePx": {
+                      "enum": []
+                    },
+                    "outerRadiusEndPx": {
+                      "enum": []
+                    },
+                    "outerRadiusStartPx": {
                       "enum": []
                     },
                     "radiusEndPx": {
@@ -3587,6 +4420,75 @@
                 "if": {
                   "properties": {
                     "kind": {
+                      "const": "sector"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "amplitudePx": {
+                      "enum": []
+                    },
+                    "count": {
+                      "enum": []
+                    },
+                    "cycles": {
+                      "enum": []
+                    },
+                    "lengthPx": {
+                      "enum": []
+                    },
+                    "moteOrientation": {
+                      "enum": []
+                    },
+                    "moteRotationRadians": {
+                      "enum": []
+                    },
+                    "moteSizePx": {
+                      "enum": []
+                    },
+                    "phaseRadians": {
+                      "enum": []
+                    },
+                    "phaseSpeedRadiansPerTick": {
+                      "enum": []
+                    },
+                    "radiusEndPx": {
+                      "enum": []
+                    },
+                    "radiusStartPx": {
+                      "enum": []
+                    },
+                    "segments": {
+                      "minimum": 3
+                    },
+                    "tailOpacityEnd": {
+                      "enum": []
+                    },
+                    "tailOpacityStart": {
+                      "enum": []
+                    },
+                    "widthPx": {
+                      "enum": []
+                    }
+                  },
+                  "required": [
+                    "innerRadiusEndPx",
+                    "innerRadiusStartPx",
+                    "outerRadiusEndPx",
+                    "outerRadiusStartPx",
+                    "segments",
+                    "sweepRadians"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
                       "const": "orbit"
                     }
                   },
@@ -3602,7 +4504,19 @@
                     "cycles": {
                       "enum": []
                     },
+                    "innerRadiusEndPx": {
+                      "enum": []
+                    },
+                    "innerRadiusStartPx": {
+                      "enum": []
+                    },
                     "lengthPx": {
+                      "enum": []
+                    },
+                    "outerRadiusEndPx": {
+                      "enum": []
+                    },
+                    "outerRadiusStartPx": {
                       "enum": []
                     },
                     "phaseRadians": {
@@ -3629,6 +4543,8 @@
                   },
                   "required": [
                     "count",
+                    "moteOrientation",
+                    "moteRotationRadians",
                     "moteSizePx",
                     "radiusEndPx",
                     "radiusStartPx"
@@ -3716,12 +4632,25 @@
                 "minimum": 0,
                 "type": "number"
               },
+              "innerRadiusEndPx": {
+                "description": "Inner radius at lifetime end, world pixels; inner must not exceed outer.",
+                "maximum": 256,
+                "minimum": 0,
+                "type": "number"
+              },
+              "innerRadiusStartPx": {
+                "description": "Inner radius at lifetime start, world pixels; inner must not exceed outer.",
+                "maximum": 256,
+                "minimum": 0,
+                "type": "number"
+              },
               "kind": {
                 "enum": [
                   "line",
                   "arc",
                   "wave",
-                  "orbit"
+                  "orbit",
+                  "sector"
                 ],
                 "type": "string"
               },
@@ -3729,6 +4658,20 @@
                 "description": "World-pixel forward length; zero remains invisible.",
                 "maximum": 512,
                 "minimum": 0,
+                "type": "number"
+              },
+              "moteOrientation": {
+                "description": "world fixes square orientation to world +X; orbit follows current orbit angle. Independent of mote position.",
+                "enum": [
+                  "world",
+                  "orbit"
+                ],
+                "type": "string"
+              },
+              "moteRotationRadians": {
+                "description": "Square angle relative to explicitly selected orientation frame.",
+                "maximum": 6.283185307179586,
+                "minimum": -6.283185307179586,
                 "type": "number"
               },
               "moteSizePx": {
@@ -3749,6 +4692,16 @@
                 "minimum": -128,
                 "type": "number"
               },
+              "opacityCurve": {
+                "description": "Easing applied once over complete normalized lifetime to opacity endpoints.",
+                "enum": [
+                  "linear",
+                  "easeIn",
+                  "easeOut",
+                  "smoothStep"
+                ],
+                "type": "string"
+              },
               "opacityEnd": {
                 "description": "Final opacity; no additional automatic fade.",
                 "maximum": 1,
@@ -3761,6 +4714,18 @@
                 "minimum": 0,
                 "type": "number"
               },
+              "outerRadiusEndPx": {
+                "description": "Outer radius at lifetime end, world pixels; inner must not exceed outer.",
+                "maximum": 256,
+                "minimum": 0,
+                "type": "number"
+              },
+              "outerRadiusStartPx": {
+                "description": "Outer radius at lifetime start, world pixels; inner must not exceed outer.",
+                "maximum": 256,
+                "minimum": 0,
+                "type": "number"
+              },
               "phaseRadians": {
                 "description": "Initial sine phase in radians.",
                 "maximum": 6.283185307179586,
@@ -3769,8 +4734,8 @@
               },
               "phaseSpeedRadiansPerTick": {
                 "description": "Sine phase radians per world tick, independent of rotation.",
-                "maximum": 1,
-                "minimum": -1,
+                "maximum": 6.283185307179586,
+                "minimum": -6.283185307179586,
                 "type": "number"
               },
               "radiusEndPx": {
@@ -3785,26 +4750,34 @@
                 "minimum": 0,
                 "type": "number"
               },
+              "rotationFrame": {
+                "description": "Angular basis: world +X or captured/live source forward. Offsets remain in source axes independently.",
+                "enum": [
+                  "world",
+                  "source"
+                ],
+                "type": "string"
+              },
               "rotationRadians": {
-                "description": "Initial radians relative to captured/source forward.",
+                "description": "Initial radians relative to the selected rotationFrame.",
                 "maximum": 6.283185307179586,
                 "minimum": -6.283185307179586,
                 "type": "number"
               },
               "rotationSpeedRadiansPerTick": {
                 "description": "Radians per world tick, independent of lifetime and cadence.",
-                "maximum": 1,
-                "minimum": -1,
+                "maximum": 6.283185307179586,
+                "minimum": -6.283185307179586,
                 "type": "number"
               },
               "segments": {
-                "description": "Integer geometric tessellation only, not particles/cadence.",
+                "description": "Integer geometric tessellation only: sector requires 3..64, arc/wave 1..64; not particles/cadence.",
                 "maximum": 64,
                 "minimum": 1,
                 "type": "integer"
               },
               "sweepRadians": {
-                "description": "Signed arc sweep from current rotation; tau gives full ring.",
+                "description": "Signed arc/sector sweep from current rotation; +/-tau makes a full turn.",
                 "maximum": 6.283185307179586,
                 "minimum": -6.283185307179586,
                 "type": "number"
@@ -3833,10 +4806,12 @@
               "attachment",
               "offsetForwardPx",
               "offsetSidePx",
+              "rotationFrame",
               "rotationRadians",
               "rotationSpeedRadiansPerTick",
               "colorStart",
               "colorEnd",
+              "opacityCurve",
               "opacityStart",
               "opacityEnd"
             ],
@@ -4126,7 +5101,7 @@
               },
               "scale": {
                 "description": "Multiplier on selected PNG's rendering size; zero is silent.",
-                "maximum": 4,
+                "maximum": 5,
                 "minimum": 0,
                 "type": "number"
               },
@@ -4140,6 +5115,33 @@
               "texture": {
                 "additionalProperties": false,
                 "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "source": {
+                          "const": "library"
+                        }
+                      },
+                      "required": [
+                        "source"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "assetId": {
+                          "enum": [
+                            "star",
+                            "solidPixel",
+                            "bloomCircle",
+                            "bloomFlare",
+                            "bloomLine",
+                            "chromaticBurst",
+                            "shineFlare"
+                          ]
+                        }
+                      }
+                    }
+                  },
                   {
                     "if": {
                       "properties": {
@@ -4188,7 +5190,7 @@
                     }
                   }
                 ],
-                "description": "Exact accepted item/entity PNG or declared asset ID; no paths, URLs or cross-entity guesses.",
+                "description": "Exact accepted item/entity PNG, declared asset ID, or registered library texture ID (no PNG generation). No paths, URLs or cross-entity guesses; UV and blend remain literal.",
                 "properties": {
                   "assetId": {
                     "maxLength": 48,
@@ -4198,14 +5200,39 @@
                     "enum": [
                       "item",
                       "entity",
-                      "asset"
+                      "asset",
+                      "library"
                     ],
                     "type": "string"
+                  },
+                  "uv": {
+                    "additionalProperties": false,
+                    "description": "Sampling coordinates only: first mirror U/V, then quarterTurns 1:(v,1-u), 2:(1-u,1-v), 3:(1-v,u). Preserves world geometry, size, history and original pivot; no inferred grip correction. Body flip precedes this transform. Repeat/scroll stay unbounded; no implicit UV wrapping/clamping. Saved omission is exact identity.",
+                    "properties": {
+                      "mirrorU": {
+                        "type": "boolean"
+                      },
+                      "mirrorV": {
+                        "type": "boolean"
+                      },
+                      "quarterTurns": {
+                        "maximum": 3,
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "quarterTurns",
+                      "mirrorU",
+                      "mirrorV"
+                    ],
+                    "type": "object"
                   }
                 },
                 "required": [
                   "source",
-                  "assetId"
+                  "assetId",
+                  "uv"
                 ],
                 "type": "object"
               },

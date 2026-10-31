@@ -59,7 +59,7 @@ def authored_vfx(renderer: str, texture: str = "entity") -> dict:
         return raw
     if renderer in {"spriteElement", "texturedPath"}:
         slot = _slot("selected", "", renderer=renderer)
-        slot["element" if renderer == "spriteElement" else "path"]["texture"] = {"source": texture, "assetId": ""}
+        slot["element" if renderer == "spriteElement" else "path"]["texture"] = {"source": texture, "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
     else:
         from tests.vfx_material_fixtures import _legacy
         slot = _legacy({"runtimeProgram": {"itemEntityId": "item"}})["slots"][0]
@@ -267,7 +267,7 @@ def test_storage_requires_ready_nested_existing_texture_even_without_new_request
     from infini_local.storage import world_storage
     data = _data([])
     slot = _slot("reuse", "")
-    slot["element"]["texture"] = {"source": "item", "assetId": ""}
+    slot["element"]["texture"] = {"source": "item", "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
     data["vfxManifest"]["slots"] = [slot]
     assert validate_vfx_manifest_wire(data)["ok"]
     assert world_storage.is_deliverable_recipe_payload(data) is False

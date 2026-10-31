@@ -19,8 +19,8 @@ public sealed partial class InfiniDetachedVfxSystem
 {
     private const int MaxLibraryRecords=128;
     private const int LibraryReadyWaitTicks=30;
-    private sealed record LibraryParticleDesign(string TexturePath,int Count,float SpeedMin,float SpeedMax,float Spread,float Inheritance,float Drag,
-        Vector2 Acceleration,float Width,float Height,float Rotation,float Spin,Vector3 ColorStart,Vector3 ColorEnd,float EndScale,float EndOpacity);
+    private sealed record LibraryParticleDesign(string TexturePath,string Sampling,int Count,float SpeedMin,float SpeedMax,float Spread,float Inheritance,float Drag,
+        Vector2 Acceleration,float Width,float Height,float Rotation,float Spin,Vector3 ColorStart,Vector3 ColorEnd,float EndScale,float EndOpacity,VfxSpawnSpec? Spawn);
     private sealed record LibraryShakeDesign(float Strength,float Variance,float Direction,float Dissipation,float TaperStart,float TaperEnd);
     private sealed record LibraryDesign(string? Layer,string? Blend,float? Alpha,int? Duration,int MaxDraw,int MaxPerTick,int MaxTotal,
         bool ItemBudget,int Seed,LibraryParticleDesign? Particle,LibraryShakeDesign? Shake);
@@ -64,9 +64,9 @@ public sealed partial class InfiniDetachedVfxSystem
         var budget=data.VfxManifest.Budget;
         var p=slot.Particle;var s=slot.ScreenShake;
         return new(slot.Layer,slot.Blend,slot.Alpha,slot.Duration,budget.MaxDrawCalls,budget.MaxParticlesPerTick,budget.MaxParticlesTotal,item,slot.SlotSeed,
-            p is null?null:new(VfxLibraryTextures.TryGetPath(p.TextureId,out var texturePath)?texturePath:throw new InvalidOperationException("Unvalidated particle texture"),p.Count,p.SpeedMinPxPerTick,p.SpeedMaxPxPerTick,p.SpreadRadians,p.InheritVelocity,p.Drag,
+            p is null?null:new(VfxLibraryTextures.TryGetPath(p.TextureId,out var texturePath)?texturePath:throw new InvalidOperationException("Unvalidated particle texture"),p.Sampling??"point",p.Count,p.SpeedMinPxPerTick,p.SpeedMaxPxPerTick,p.SpreadRadians,p.InheritVelocity,p.Drag,
                 new(p.AccelerationXPxPerTickSquared,p.AccelerationYPxPerTickSquared),p.WidthPx,p.HeightPx,p.RotationRadians,p.RotationSpeedRadiansPerTick,
-                p.ColorStart.ToColor().ToVector3(),p.ColorEnd.ToColor().ToVector3(),p.EndScaleMultiplier,p.EndOpacity),
+                p.ColorStart.ToColor().ToVector3(),p.ColorEnd.ToColor().ToVector3(),p.EndScaleMultiplier,p.EndOpacity,p.Spawn?.Copy()),
             s is null?null:new(s.StrengthPx,s.AngularVarianceRadians,s.DirectionRadians,s.DissipationPxPerFrame,s.TaperStartDistancePx,s.TaperEndDistancePx));
     }
     internal static bool EnqueueLibrary(GeneratedItemData data,VfxSlotSpec slot,string sourceKey,VfxSourceFrame frame,
@@ -117,10 +117,14 @@ public sealed partial class InfiniDetachedVfxSystem
             }
             int count=Math.Min(state.Count,MaxMaterialParticles-OwnedParticleCount);
             var particles=new List<ParticleInfo>(Math.Max(0,count));var random=new Random(d.Seed^unchecked((int)now));
+            var positions=VfxSpawnGeometry.CreateRandom(d.Particle!.Spawn,d.Seed,now);
             for(int i=0;i<count;i++) {
                 if(e.Allowance is{Remaining:<=0}||!TrySpendDetachedParticle(e.SourceKey,d.MaxPerTick,d.ItemBudget?int.MaxValue:d.MaxTotal))break;
                 if(e.Allowance is {} allowance)allowance.Remaining--;
-                particles.Add(CreateLibraryInfoCore(d,e.Frame,(float)random.NextDouble(),(float)random.NextDouble()));
+                var particle=CreateLibraryInfoCore(d,e.Frame,(float)random.NextDouble(),(float)random.NextDouble());
+                Vector2 offset=VfxSpawnGeometry.SampleWorld(d.Particle!.Spawn,e.Frame.Forward,positions);
+                particle.Position+=new System.Numerics.Vector2(offset.X,offset.Y);
+                particles.Add(particle);
             }
             state.Particles=particles.ToArray();
         }
@@ -200,12 +204,12 @@ public sealed partial class InfiniDetachedVfxSystem
         LibraryBuffer[]? buffers;KeyValuePair<string,Texture2D>[] textures;
         lock(LibraryResourceGate){buffers=LibraryBuffers;textures=LibraryTextures.ToArray();}
         if(!LibraryClient||!InfiniVfxClientOptions.EnableParticleLibraryBackend||buffers is null)return;
-        for(int blend=0;blend<2;blend++) foreach(var texture in textures) {
+        for(int blend=0;blend<2;blend++) foreach(var texture in textures) foreach(string sampling in new[]{"point","linear"}) {
             var buffer=buffers[(layer=="AfterProjectiles"?2:0)+blend];int count=0;
             string blendName=blend==0?"alpha":"additive";
             foreach(var e in MaterialEmissions) {
                 if(!e.Started||e.Library is not {Retired:false} state||state.Design.Particle is null
-                    ||state.Design.Layer!=layer||state.Design.Blend!=blendName||state.Design.Particle.TexturePath!=texture.Key)continue;
+                    ||state.Design.Layer!=layer||state.Design.Blend!=blendName||state.Design.Particle.TexturePath!=texture.Key||state.Design.Particle.Sampling!=sampling)continue;
                 foreach(var info in state.Particles) {
                     if(count>=buffer.Capacity)break;
                     if(info.Time<=0||info.Scale.X<=0||info.Scale.Y<=0)continue;
@@ -221,9 +225,13 @@ public sealed partial class InfiniDetachedVfxSystem
                         Rotation_Depth=new Vector2(info.Rotation,info.Depth),Color=color};
                 }
             }
-            if(count>0)buffer.RenderOwned(device,texture.Value,count,blend==0?BlendState.AlphaBlend:BlendState.Additive);
+            if(count>0)buffer.RenderOwned(device,texture.Value,count,blend==0?BlendState.AlphaBlend:BlendState.Additive,LibrarySampler(sampling));
         }
     }
+    internal static SamplerState LibrarySampler(string sampling)=>sampling switch {
+        "point"=>SamplerState.PointClamp,"linear"=>SamplerState.LinearClamp,
+        _=>throw new InvalidOperationException("Unvalidated particle sampling")
+    };
     private static void ClearLibrary(bool unload=false)
     {
         foreach(var e in MaterialEmissions)if(e.Library?.Shake is {} shake)shake.ShakeStrength=0;
@@ -275,7 +283,7 @@ public sealed partial class InfiniDetachedVfxSystem
             InstanceBuffer=new DynamicVertexBuffer(device,Declaration,Capacity,BufferUsage.WriteOnly);
             Bindings=new[]{new VertexBufferBinding(Vertices),new VertexBufferBinding(InstanceBuffer,0,1)};
         }
-        internal void RenderOwned(GraphicsDevice device,Texture2D texture,int count,BlendState blend)
+        internal void RenderOwned(GraphicsDevice device,Texture2D texture,int count,BlendState blend,SamplerState sampler)
         {
             if(count<=0||Bindings is null||InstanceBuffer is null)return;
             var oldBlend=device.BlendState;var oldDepth=device.DepthStencilState;var oldRaster=device.RasterizerState;
@@ -283,7 +291,7 @@ public sealed partial class InfiniDetachedVfxSystem
             try {
                 InstanceBuffer.SetData(Instances,0,count,SetDataOptions.Discard);
                 device.BlendState=blend;device.DepthStencilState=DepthStencilState.None;device.RasterizerState=Main.Rasterizer;
-                device.SamplerStates[0]=SamplerState.PointClamp;device.SetVertexBuffers(Bindings);device.Indices=Indices;device.Textures[0]=texture;
+                device.SamplerStates[0]=sampler;device.SetVertexBuffers(Bindings);device.Indices=Indices;device.Textures[0]=texture;
                 ApplyWorldSpaceLibraryEffect(ParticleManagerV3.InstancedParticleEffect);device.DrawInstancedPrimitives(PrimitiveType.TriangleList,0,0,4,0,2,count);
             }finally {
                 device.SetVertexBuffers(oldVertices);device.Indices=oldIndices;device.Textures[0]=oldTexture;device.SamplerStates[0]=oldSampler;

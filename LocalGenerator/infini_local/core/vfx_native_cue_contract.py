@@ -5,6 +5,7 @@ import math
 from typing import Any
 
 from infini_local.core.schema_validation import strict_schema_errors
+from infini_local.core.vfx_spawn_contract import spawn_schema
 from infini_local.core.vfx_material_contract import _number, _object
 
 NATIVE_CUE_RENDERERS = ("nativeDust", "nativeLight")
@@ -13,7 +14,9 @@ NATIVE_DUST_SEMANTICS = (
     "Explicit emission into Terraria native Dust, not a custom particle simulation. "
     "The selected native type owns subsequent animation, motion, tint and lifetime. "
     "Count, size, initial velocity, native alpha and gravity flag are independent. "
-    "Angle is uniform within spreadRadians centered on source forward; speed is uniform "
+    "directionFrame selects world +X or captured source forward; angleOffsetRadians offsets the cone center. "
+    "Angular distribution random samples uniformly; even spans partial-cone endpoints, or divides a full "
+    "circle without duplicating its endpoint. Even distribution with count one uses the cone center. Speed is uniform "
     "between speedMinPxPerTick and speedMaxPxPerTick; source velocity is multiplied "
     "only by inheritVelocity. Identical emission math for item and projectile. "
     "Zero count or size emits nothing. Native alpha is Terraria's 0..255 parameter, "
@@ -32,18 +35,25 @@ NATIVE_CUE_TIMING = (
 )
 
 
-def native_dust_schema() -> dict[str, Any]:
-    return {**_object({
+def native_dust_schema(*, persisted_wire: bool = False) -> dict[str, Any]:
+    schema = {**_object({
+        "spawn": spawn_schema(),
         "type": {"type": "string", "enum": list(NATIVE_DUST_TYPES)},
         "count": _number(0, 64, "Integer emissions before shared/client budgets; zero is silent.", integer=True),
         "size": _number(0, 3, "Native Dust size multiplier, independent of velocity/count; zero is silent."),
         "speedMinPxPerTick": _number(0, 24, "Minimum initial speed in world pixels/world tick."),
         "speedMaxPxPerTick": _number(0, 24, "Maximum initial speed, at least speedMinPxPerTick."),
-        "spreadRadians": _number(0, math.tau, "Full angular width centered on source forward; tau is isotropic."),
+        "angularDistribution": {"type": "string", "enum": ["random", "even"]},
+        "directionFrame": {"type": "string", "enum": ["world", "source"]},
+        "angleOffsetRadians": _number(-math.tau, math.tau, "Cone center offset from world +X or captured source forward."),
+        "spreadRadians": _number(0, math.tau, "Full cone width around selected frame plus offset; tau is full circle."),
         "inheritVelocity": _number(0, 1, "Explicit source-velocity multiplier added to initial velocity."),
         "nativeAlpha": _number(0, 255, "Terraria Dust alpha byte, not opacity; native type controls its use.", integer=True),
         "noGravity": {"type": "boolean", "description": "Exact native Dust noGravity flag; never inferred from type."},
     }), "description": NATIVE_DUST_SEMANTICS}
+    if persisted_wire:
+        schema["required"] = [name for name in schema["required"] if name not in {"angularDistribution", "directionFrame", "angleOffsetRadians", "spawn"}]
+    return schema
 
 
 def native_light_schema() -> dict[str, Any]:
@@ -84,7 +94,7 @@ def native_cue_errors(slot: Any, path: str = "$", *, persisted_wire: bool = Fals
     renderer = slot.get("rendererKind")
     if renderer not in NATIVE_CUE_RENDERERS:
         return []
-    key, schema = ("dust", native_dust_schema()) if renderer == "nativeDust" else ("light", native_light_schema())
+    key, schema = ("dust", native_dust_schema(persisted_wire=persisted_wire)) if renderer == "nativeDust" else ("light", native_light_schema())
     if persisted_wire:
         schema["x-nativeFloat32Bounds"] = True
     payload = slot.get(key)

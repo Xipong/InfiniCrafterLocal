@@ -9,7 +9,15 @@ namespace InfiniCrafterLocal.Common.Models;
 // Strict additive payloads, no recipe migration or library-motion presets.
 public sealed class VfxLibraryParticleSpec
 {
+    private VfxSpawnSpec? _spawn;
+    [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
+    public VfxSpawnSpec? Spawn {get=>_spawn;set=>_spawn=value??throw new InvalidDataException("spawn cannot be null");}
+
     [JsonRequired] public string TextureId { get; set; } = "";
+    // Saved wire before sampling always used PointClamp; fresh schema requires the choice.
+    private string? _sampling;
+    [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
+    public string? Sampling { get=>_sampling; set=>_sampling=value??throw new InvalidDataException("particle.sampling cannot be null"); }
     [JsonRequired] public int Count { get; set; }
     [JsonRequired] public float SpeedMinPxPerTick { get; set; }
     [JsonRequired] public float SpeedMaxPxPerTick { get; set; }
@@ -29,7 +37,9 @@ public sealed class VfxLibraryParticleSpec
 
     internal void Validate()
     {
+        Spawn?.Validate();
         if (!VfxLibraryTextures.TryGetPath(TextureId, out _)) throw new InvalidDataException("invalid VFX particle.textureId");
+        if(Sampling is not null)VfxMaterialValidation.Choice(Sampling,"particle.sampling","point","linear");
         if(Count is <0 or >64)throw new InvalidDataException("invalid VFX particle.count");
         VfxMaterialValidation.Range(SpeedMinPxPerTick,0,24,"particle.speedMinPxPerTick");
         VfxMaterialValidation.Range(SpeedMaxPxPerTick,0,24,"particle.speedMaxPxPerTick");

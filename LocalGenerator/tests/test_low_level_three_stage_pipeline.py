@@ -131,7 +131,7 @@ def _vfx_output(data: dict) -> dict:
             "duration": 20, "alpha": 0.8,
             "startTick": 0, "repeatEvery": 1 if pair["event"] == "periodic" else 0,
             "particle": {
-                "textureId": "star", "count": 1,
+                "spawn": {"shape": "point"}, "textureId": "star", "sampling": "point", "count": 1,
                 "speedMinPxPerTick": 0, "speedMaxPxPerTick": 0,
                 "spreadRadians": 0, "inheritVelocity": 0, "drag": 1,
                 "accelerationXPxPerTickSquared": 0, "accelerationYPxPerTickSquared": 0,

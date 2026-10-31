@@ -335,9 +335,10 @@ public sealed class VfxSlotSpec
         } else {
             if (Duration is null || RepeatEvery is null)
                 throw new InvalidDataException("VFX renderer requires duration and repeatEvery");
-            if (nestedBranch && (Duration is < 3 or > 120 || RepeatEvery is < 0 or > 120))
+            int minimumDuration=shape?1:3;
+            if (nestedBranch && (Duration < minimumDuration || Duration > 120 || RepeatEvery is < 0 or > 120))
                 throw new InvalidDataException("invalid VFX nested timing");
-            Duration = Math.Clamp(Duration.Value, 3, 120); RepeatEvery = Math.Clamp(RepeatEvery.Value, 0, 120);
+            Duration = Math.Clamp(Duration.Value, minimumDuration, 120); RepeatEvery = Math.Clamp(RepeatEvery.Value, 0, 120);
         }
         if (nestedBranch && StartTick is < 0 or > 120) throw new InvalidDataException("invalid VFX nested startTick");
         if (rendererKind == InfiniVfxRendererKind.ImpactSprite && TextureRole != "impact")

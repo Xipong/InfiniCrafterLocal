@@ -9,13 +9,13 @@ using Terraria;
 namespace InfiniCrafterLocal.Common.VFX;
 public sealed partial class InfiniDetachedVfxSystem
 {
-    private sealed record PathDesign(string TexturePath,string Layer,string Blend,float Alpha,string Source,string Anchor,int HistoryTicks,
+    private sealed record PathDesign(string TexturePath,string? LibraryTextureId,string Layer,string Blend,float Alpha,string Source,string Anchor,int HistoryTicks,
         float MinDistance,float MaxSegment,float Width,string Domain,string Uv,float Repeat,float Scroll,string GeometryKind,
-        VfxNumberRamp WidthRamp,VfxNumberRamp OpacityRamp,VfxColorRamp ColorRamp,int MaxDraw,int StartTick);
+        VfxNumberRamp WidthRamp,VfxNumberRamp OpacityRamp,VfxColorRamp ColorRamp,int MaxDraw,int StartTick,VfxTextureUv TextureUv);
     private static PathDesign CopyPath(VfxTexturedPathSpec p,float alpha,string blend,string path="",string layer="BeforeProjectiles",string anchor="self",int maxDraw=512,int startTick=0)
-        =>new(path,layer,blend,alpha,p.Source,anchor,p.HistoryTicks,p.MinDistancePx,p.MaxSegmentLengthPx,p.WidthPx,p.ProfileDomain,
+        =>new(path,p.Texture.Source=="library"?p.Texture.AssetId:null,layer,blend,alpha,p.Source,anchor,p.HistoryTicks,p.MinDistancePx,p.MaxSegmentLengthPx,p.WidthPx,p.ProfileDomain,
             p.UvMode,p.RepeatLengthPx,p.ScrollPxPerTick,PathGeometryKind(p),VfxNumberRamp.Copy(p.WidthProfile),VfxNumberRamp.Copy(p.OpacityProfile),
-            VfxColorRamp.Copy(p.ColorProfile),maxDraw,startTick);
+            VfxColorRamp.Copy(p.ColorProfile),maxDraw,startTick,VfxTextureUv.Copy(p.Texture.Uv));
     private static string PathGeometryKind(VfxTexturedPathSpec p) => p.Source=="ownerLink"
         ? p.OwnerAnchor switch { "mountedCenter" => "ownerLink", "frontHand" => "ownerLinkFrontHand", _ => throw new InvalidOperationException("ownerLink requires explicit ownerAnchor") }
         : p.Source;
@@ -109,7 +109,7 @@ public sealed partial class InfiniDetachedVfxSystem
             var tangent=before?direction[i-1]:direction[i];var normal=new Vector2(-tangent.Y,tangent.X);var section=normal*halfWidth[i];
             if(before&&after){var next=new Vector2(-direction[i].Y,direction[i].X);var sum=normal+next;
                 if(sum.LengthSquared()>0.0001f){var miter=Vector2.Normalize(sum);section=miter*(halfWidth[i]/Math.Max(0.5f,Vector2.Dot(miter,normal)));}}
-            left[i]=new(new Vector3(points[i]+section,0),color[i],new Vector2(u[i],0));right[i]=new(new Vector3(points[i]-section,0),color[i],new Vector2(u[i],1));
+            left[i]=new(new Vector3(points[i]+section,0),color[i],d.TextureUv.Map(new Vector2(u[i],0)));right[i]=new(new Vector3(points[i]-section,0),color[i],d.TextureUv.Map(new Vector2(u[i],1)));
         }
         var mesh=new VertexPositionColorTexture[segments*6];int v=0;
         for(int i=0;i<count-1;i++)if(connected[i]) {
@@ -124,7 +124,7 @@ public sealed partial class InfiniDetachedVfxSystem
             var d=p.Design;if(d.Layer!=layer)continue;
             var points=d.Source=="anchorHistory"?p.History.Select(s=>s.Position).ToArray():p.Geometry;
             if(points.Length<2)continue;
-            var texture=InfiniCrafterLocalMod.Sprites.TryGet(d.TexturePath);if(texture is null)continue;
+            var texture=MaterialTexture(d.TexturePath,d.LibraryTextureId);if(texture is null)continue;
             var ages=p.History.Select(s=>(p.SampleTick-s.Tick)/(float)d.HistoryTicks).ToArray();
             var mesh=BuildMaterialPathMesh(points,ages,d,p.SampleTick,()=>TrySpendSourceDraw(p.SourceKey,d.MaxDraw,1));if(mesh.Length==0)continue;
             DrawMaterialPathMesh(device,texture,mesh,d.Uv=="repeat");

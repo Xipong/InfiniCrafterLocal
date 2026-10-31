@@ -50,10 +50,10 @@ public sealed partial class InfiniDetachedVfxSystem
     internal static ulong NewMaterialOccurrence()=>MaterialEventStream.NewLocalOccurrence();
     internal static bool TryAdmitMaterialOccurrence(ulong occurrence,bool relay)
         =>relay?MaterialEventStream.AcceptRelay(occurrence):MaterialEventStream.AcceptLocal(occurrence);
-    private sealed record ElementDesign(string TexturePath,string Layer,string Blend,float Alpha,int Duration,int Count,
+    private sealed record ElementDesign(string TexturePath,string? LibraryTextureId,string Layer,string Blend,float Alpha,int Duration,int Count,
         bool Attached,Vector2 Offset,float SpeedMin,float SpeedMax,float Spread,float Inheritance,float Drag,Vector2 Acceleration,
         float Rotation,float Spin,float Width,float Height,VfxNumberRamp WidthRamp,VfxNumberRamp HeightRamp,VfxNumberRamp OpacityRamp,VfxColorRamp ColorRamp,
-        int MaxDraw,int MaxPerTick,int MaxTotal,bool ItemBudget,int Seed);
+        int MaxDraw,int MaxPerTick,int MaxTotal,bool ItemBudget,int Seed,VfxSpawnSpec? Spawn,VfxTextureUv Uv);
     private sealed class MaterialParticle {
         internal Vector2 Position,Velocity;
         internal float Rotation;
@@ -191,8 +191,12 @@ public sealed partial class InfiniDetachedVfxSystem
         }
     }
 
+    internal static Texture2D? MaterialTexture(string filePath,string? libraryId)
+        =>libraryId is null?InfiniCrafterLocalMod.Sprites.TryGet(filePath):VfxNativeTextureCache.TryGet(libraryId);
+
     internal static string ResolveMaterialTexture(GeneratedItemData data,string entityId,VfxTextureSpec texture)
     {
+        if(texture.Source=="library") return VfxLibraryTextures.TryGetPath(texture.AssetId,out var nativePath)?nativePath:"";
         if(texture.Source=="asset") return data.VfxManifest.Assets?.FirstOrDefault(a=>a.Id==texture.AssetId)?.SpritePath??"";
         return SpritePresentation.Resolve(data,entityId,texture.Source).Path;
     }
@@ -210,11 +214,11 @@ public sealed partial class InfiniDetachedVfxSystem
     {
         var e=slot.Element!;
         var budget=data.VfxManifest.Budget;
-        var design=new ElementDesign(texture,slot.Layer!,slot.Blend!,slot.Alpha!.Value,slot.Duration!.Value,e.Count,e.Attachment=="source",
+        var design=new ElementDesign(texture,e.Texture.Source=="library"?e.Texture.AssetId:null,slot.Layer!,slot.Blend!,slot.Alpha!.Value,slot.Duration!.Value,e.Count,e.Attachment=="source",
             new(e.OffsetForwardPx,e.OffsetSidePx),e.SpeedMinPxPerTick,e.SpeedMaxPxPerTick,e.SpreadRadians,e.InheritVelocity,e.Drag,
             new(e.AccelerationXPxPerTickSquared,e.AccelerationYPxPerTickSquared),e.RotationRadians,e.RotationSpeedRadiansPerTick,
             e.WidthPx,e.HeightPx,VfxNumberRamp.Copy(e.WidthProfile),VfxNumberRamp.Copy(e.HeightProfile),VfxNumberRamp.Copy(e.OpacityProfile),
-            VfxColorRamp.Copy(e.ColorProfile),budget.MaxDrawCalls,budget.MaxParticlesPerTick,budget.MaxParticlesTotal,itemBudget,slot.SlotSeed);
+            VfxColorRamp.Copy(e.ColorProfile),budget.MaxDrawCalls,budget.MaxParticlesPerTick,budget.MaxParticlesTotal,itemBudget,slot.SlotSeed,e.Spawn?.Copy(),VfxTextureUv.Copy(e.Texture.Uv));
         return design;
     }
     private static bool EnqueueCopiedElement(ElementDesign design,string sourceKey,VfxSourceFrame frame,VfxSourceBinding? binding,string anchor,int delay,MaterialEventAllowance? allowance=null)
@@ -241,6 +245,7 @@ public sealed partial class InfiniDetachedVfxSystem
         count=Math.Min(count,MaxMaterialParticles-OwnedParticleCount);
         var particles=new List<MaterialParticle>(Math.Max(0,count));
         var random=new Random(d.Seed ^ unchecked((int)emission.Start));
+        var positions=VfxSpawnGeometry.CreateRandom(d.Spawn,d.Seed,emission.Start);
         for(int i=0;i<count;i++) {
             // Items have no activation/lifetime clock: positive periodic totals
             // are not a per-group cap. Event totals use the shared allowance;
@@ -251,7 +256,8 @@ public sealed partial class InfiniDetachedVfxSystem
             float angle=((float)random.NextDouble()-0.5f)*d.Spread;
             var velocity=new Vector2(MathF.Cos(angle),MathF.Sin(angle))*MathHelper.Lerp(d.SpeedMin,d.SpeedMax,(float)random.NextDouble());
             velocity+=emission.InitialFrame.Inverse(emission.InitialFrame.Velocity)*d.Inheritance;
-            particles.Add(new MaterialParticle { Position=d.Attached?d.Offset+emission.SourceAnchorOffset:emission.Frame.Position+emission.Frame.Rotate(d.Offset),
+            Vector2 offset=VfxSpawnGeometry.SampleWorld(d.Spawn,emission.Frame.Forward,positions);
+            particles.Add(new MaterialParticle { Position=d.Attached?d.Offset+emission.SourceAnchorOffset+emission.Frame.Inverse(offset):emission.Frame.Position+emission.Frame.Rotate(d.Offset)+offset,
                 Velocity=d.Attached?velocity:emission.Frame.Rotate(velocity),Rotation=d.Attached?d.Rotation:emission.Frame.Forward.ToRotation()+d.Rotation });
         }
         emission.Particles=particles.ToArray();
@@ -291,7 +297,7 @@ public sealed partial class InfiniDetachedVfxSystem
             float age=e.IntegratedAge/(float)d.Duration;
             float width=d.Width*d.WidthRamp.At(age),height=d.Height*d.HeightRamp.At(age),opacity=d.Alpha*d.OpacityRamp.At(age);
             if(width<=0||height<=0||opacity<=0) continue;
-            Texture2D? texture=InfiniCrafterLocalMod.Sprites.TryGet(d.TexturePath);
+            Texture2D? texture=MaterialTexture(d.TexturePath,d.LibraryTextureId);
             if(texture is null) continue;
             var tint=d.ColorRamp.At(age,opacity,d.Blend);
             foreach(var p in e.Particles) {
@@ -299,8 +305,8 @@ public sealed partial class InfiniDetachedVfxSystem
                 ensureBegin();
                 Vector2 position=d.Attached?e.Frame.Position+e.Frame.Rotate(p.Position):p.Position;
                 float rotation=p.Rotation+(d.Attached?e.Frame.Forward.ToRotation():0);
-                batch.Draw(texture,position-Main.screenPosition,null,tint,rotation,new Vector2(texture.Width,texture.Height)*0.5f,
-                    new Vector2(width/texture.Width,height/texture.Height),SpriteEffects.None,0);
+                d.Uv.Draw(batch,texture,position-Main.screenPosition,tint,rotation,new Vector2(texture.Width,texture.Height)*0.5f,
+                    new Vector2(width/texture.Width,height/texture.Height),SpriteEffects.None);
             }
         }
     }
