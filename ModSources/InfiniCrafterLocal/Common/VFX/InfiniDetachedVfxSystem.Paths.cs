@@ -12,7 +12,7 @@ public sealed partial class InfiniDetachedVfxSystem
     private sealed record PathDesign(string TexturePath,string? LibraryTextureId,string Layer,string Blend,float Alpha,string Source,string Anchor,int HistoryTicks,
         float MinDistance,float MaxSegment,float Width,string Domain,string Uv,float Repeat,float Scroll,string GeometryKind,
         VfxNumberRamp WidthRamp,VfxNumberRamp OpacityRamp,VfxColorRamp ColorRamp,int MaxDraw,int StartTick,VfxTextureUv TextureUv);
-    private static PathDesign CopyPath(VfxTexturedPathSpec p,float alpha,string blend,string path="",string layer="BeforeProjectiles",string anchor="self",int maxDraw=512,int startTick=0)
+    private static PathDesign CopyPath(VfxTexturedPathSpec p,float alpha,string blend,string path="",string layer="BeforeProjectiles",string anchor="self",int maxDraw=2048,int startTick=0)
         =>new(path,p.Texture.Source=="library"?p.Texture.AssetId:null,layer,blend,alpha,p.Source,anchor,p.HistoryTicks,p.MinDistancePx,p.MaxSegmentLengthPx,p.WidthPx,p.ProfileDomain,
             p.UvMode,p.RepeatLengthPx,p.ScrollPxPerTick,PathGeometryKind(p),VfxNumberRamp.Copy(p.WidthProfile),VfxNumberRamp.Copy(p.OpacityProfile),
             VfxColorRamp.Copy(p.ColorProfile),maxDraw,startTick,VfxTextureUv.Copy(p.Texture.Uv));
@@ -130,7 +130,7 @@ public sealed partial class InfiniDetachedVfxSystem
             DrawMaterialPathMesh(device,texture,mesh,d.Uv=="repeat");
         }
     }
-    internal static void DrawMaterialPathMesh(GraphicsDevice device,Texture2D texture,VertexPositionColorTexture[] vertices,bool repeat)
+    internal static void DrawMaterialPathMesh(GraphicsDevice device,Texture2D texture,VertexPositionColorTexture[] vertices,bool repeat,bool linear=false)
     {
         var blend=device.BlendState;var depth=device.DepthStencilState;var rasterizer=device.RasterizerState;
         var sampler=device.SamplerStates[0];var previousTexture=device.Textures[0];var buffers=device.GetVertexBuffers();var indices=device.Indices;
@@ -140,7 +140,7 @@ public sealed partial class InfiniDetachedVfxSystem
             effect.World=Matrix.CreateTranslation(-Main.screenPosition.X,-Main.screenPosition.Y,0)*Main.GameViewMatrix.TransformationMatrix;
             effect.View=Matrix.Identity;effect.Projection=Matrix.CreateOrthographicOffCenter(0,device.Viewport.Width,device.Viewport.Height,0,0,1);
             device.BlendState=BlendState.AlphaBlend;device.DepthStencilState=DepthStencilState.None;device.RasterizerState=RasterizerState.CullNone;
-            device.SamplerStates[0]=repeat?SamplerState.PointWrap:SamplerState.PointClamp;
+            device.SamplerStates[0]=linear?(repeat?SamplerState.LinearWrap:SamplerState.LinearClamp):(repeat?SamplerState.PointWrap:SamplerState.PointClamp);
             foreach(var pass in effect.CurrentTechnique.Passes){pass.Apply();device.DrawUserPrimitives(PrimitiveType.TriangleList,vertices,0,vertices.Length/3);}
         }finally {
             device.BlendState=blend;device.DepthStencilState=depth;device.RasterizerState=rasterizer;device.SamplerStates[0]=sampler;device.Textures[0]=previousTexture;

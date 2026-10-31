@@ -77,6 +77,7 @@ public sealed partial class InfiniDetachedVfxSystem
         internal required VfxSourceBinding Binding;
         internal ElementDesign? Design;
         internal ShapeDesign? Shape;
+        internal ContourDesign? Contours;
         internal NativeCueDesign? NativeCue;
         internal ulong NativeLightAuthorizedTick;
         internal LibraryEmissionState? Library;
@@ -115,7 +116,7 @@ public sealed partial class InfiniDetachedVfxSystem
         VfxSourceFrame placedFrame = default;
         if(placementBindingId is not null && !binding.TryFrame("self",out placedFrame))return;
         foreach(var slot in data.VfxManifest.Slots) {
-            if(slot.PlacementBindingId!=placementBindingId||slot.EntityId!=entityId||slot.Event!=RuntimeEventKind.Periodic||(slot.Element is null&&slot.Particle is null&&slot.Shape is null&&slot.Dust is null&&slot.Light is null))continue;
+            if(slot.PlacementBindingId!=placementBindingId||slot.EntityId!=entityId||slot.Event!=RuntimeEventKind.Periodic||(slot.Element is null&&slot.Particle is null&&slot.Shape is null&&slot.Geometry is null&&slot.Dust is null&&slot.Light is null&&slot.NativeEffect is null))continue;
             if(slot.Light is not null&&!allowLightCue)continue;
             var key=(binding.Generation,slot.Id);
             if(PeriodicElements.TryGetValue(key,out var prior)) {
@@ -130,8 +131,13 @@ public sealed partial class InfiniDetachedVfxSystem
             double? placedReach=placementBindingId is null||slot.Light is not null?null:PlacedVfxReachRadius(slot);
             if(placedReach is double radius && !PlacedVfxInView(placedFrame.Position,radius))continue;
             if(PeriodicElements.Count>=MaxEmissions)return;
-            if(slot.Dust is not null||slot.Light is not null) {
+            if(slot.Dust is not null||slot.Light is not null||slot.NativeEffect is not null) {
                 PeriodicElements.Add(key,new PeriodicElement{Binding=binding,NativeCue=CopyNativeCue(data,slot,item),NativeLightAuthorizedTick=Main.GameUpdateCount,SourceKey=sourceKey,
+                    SlotId=slot.Id,Anchor=slot.Anchor,FirstTick=Main.GameUpdateCount,InitialAge=binding.WorldAge,StartTick=slot.StartTick!.Value,RepeatEvery=slot.RepeatEvery!.Value,Item=item,PlacedReachRadius=placedReach});
+                continue;
+            }
+            if(slot.Geometry is not null) {
+                PeriodicElements.Add(key,new PeriodicElement{Binding=binding,Contours=CopyContours(data,slot),SourceKey=sourceKey,
                     SlotId=slot.Id,Anchor=slot.Anchor,FirstTick=Main.GameUpdateCount,InitialAge=binding.WorldAge,StartTick=slot.StartTick!.Value,RepeatEvery=slot.RepeatEvery!.Value,Item=item,PlacedReachRadius=placedReach});
                 continue;
             }
@@ -184,6 +190,7 @@ public sealed partial class InfiniDetachedVfxSystem
                 && (e.PlacedReachRadius is not double radius || PlacedVfxInView(frame.Position,radius))) {
                 var allowance = e.BurstTotal is int total ? new MaterialEventAllowance(total) : null;
                 if(e.NativeCue is {} nativeCue)EnqueueCopiedNativeCue(nativeCue,e.SourceKey,frame,0,allowance);
+                else if(e.Contours is {} contours)EnqueueCopiedContours(contours,e.SourceKey,frame,e.Binding,e.Anchor,0);
                 else if(e.Shape is {} shape)EnqueueCopiedShape(shape,e.SourceKey,frame,e.Binding,e.Anchor,0);
                 else if(e.Library is {} library)EnqueueCopiedLibrary(library.Design,e.SourceKey,frame,0,allowance);
                 else EnqueueCopiedElement(e.Design!,e.SourceKey,frame,e.Binding,e.Anchor,0,allowance);
@@ -271,6 +278,7 @@ public sealed partial class InfiniDetachedVfxSystem
         UpdateMaterialPaths(now);
         UpdatePeriodicElements(now);
         UpdateShapes(now);
+        UpdateContours(now);
         UpdateNativeCues(now);
         foreach(var e in MaterialEmissions) {
             if(e.Library is not null){UpdateLibraryEmission(e,now);continue;}
@@ -317,9 +325,10 @@ public sealed partial class InfiniDetachedVfxSystem
         else if(MaterialEmissions.Count>0){if(MaterialEmissions[0].Library?.Shake is {} shake)shake.ShakeStrength=0;MaterialEmissions.RemoveAt(0);}
         else if(MaterialPaths.Count>0)MaterialPaths.RemoveAt(0);
         else if(ShapeEmissions.Count>0)ShapeEmissions.RemoveAt(0);
+        else if(ContourEmissions.Count>0)ContourEmissions.RemoveAt(0);
         else if(NativeCueEmissions.Count>0)NativeCueEmissions.RemoveAt(0);
     }
-    private static int OwnedRecordCount=>Emissions.Count+MaterialEmissions.Count+MaterialPaths.Count+ShapeEmissions.Count+NativeCueEmissions.Count;
+    private static int OwnedRecordCount=>Emissions.Count+MaterialEmissions.Count+MaterialPaths.Count+ShapeEmissions.Count+ContourEmissions.Count+NativeCueEmissions.Count;
     internal static bool TrySpendSourceDraw(string sourceKey,int maxDraw,int cost)
     {
         if(cost<=0) return true;

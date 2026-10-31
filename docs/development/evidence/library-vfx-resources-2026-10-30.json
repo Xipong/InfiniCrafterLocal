@@ -81,6 +81,39 @@
         255,
         255
       ]
+    },
+    {
+      "textureId": "branchingNoise",
+      "source": "https://raw.githubusercontent.com/LucilleKarma/Luminance/5b4095a5d59e901ac171208f67a1d1e934c69373/Assets/Noise/DendriticNoiseZoomedOut.png",
+      "sha256": "29afee7c8c30e8192033d3c86f56c4be015bcf4e64eeba8382a987abc621345b",
+      "width": 512,
+      "height": 512,
+      "alphaRange": [
+        255,
+        255
+      ]
+    },
+    {
+      "textureId": "turbulentNoise",
+      "source": "https://raw.githubusercontent.com/LucilleKarma/Luminance/5b4095a5d59e901ac171208f67a1d1e934c69373/Assets/Noise/TurbulentNoise.png",
+      "sha256": "41e15b90ced9474fff6a28731e0d2e8218b4f145489fab9c3100220370bb1b1a",
+      "width": 512,
+      "height": 512,
+      "alphaRange": [
+        255,
+        255
+      ]
+    },
+    {
+      "textureId": "blotchNoise",
+      "source": "https://raw.githubusercontent.com/LucilleKarma/Luminance/5b4095a5d59e901ac171208f67a1d1e934c69373/Assets/Noise/WavyBlotchNoise.png",
+      "sha256": "6922be365283107468a747ba6e3e1c76f066fc5af8d85636a131ac50f6b35b72",
+      "width": 512,
+      "height": 512,
+      "alphaRange": [
+        255,
+        255
+      ]
     }
   ]
 }

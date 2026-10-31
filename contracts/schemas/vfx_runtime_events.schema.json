@@ -80,6 +80,7 @@
                     "historyTrail",
                     "nativeDust",
                     "nativeLight",
+                    "nativeEffect",
                     "spriteElement",
                     "texturedPath"
                   ]
@@ -317,6 +318,47 @@
             "if": {
               "properties": {
                 "rendererKind": {
+                  "const": "contour"
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "alpha": {
+                  "enum": []
+                },
+                "density": {
+                  "enum": []
+                },
+                "particleSystemId": {
+                  "enum": []
+                },
+                "scale": {
+                  "enum": []
+                },
+                "spread": {
+                  "enum": []
+                },
+                "textureRole": {
+                  "enum": []
+                }
+              },
+              "required": [
+                "blend",
+                "duration",
+                "layer",
+                "repeatEvery",
+                "startTick"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
                   "const": "historyTrail"
                 }
               },
@@ -412,6 +454,53 @@
               "properties": {
                 "rendererKind": {
                   "const": "nativeLight"
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "alpha": {
+                  "enum": []
+                },
+                "blend": {
+                  "enum": []
+                },
+                "density": {
+                  "enum": []
+                },
+                "duration": {
+                  "enum": []
+                },
+                "layer": {
+                  "enum": []
+                },
+                "particleSystemId": {
+                  "enum": []
+                },
+                "scale": {
+                  "enum": []
+                },
+                "spread": {
+                  "enum": []
+                },
+                "textureRole": {
+                  "enum": []
+                }
+              },
+              "required": [
+                "repeatEvery",
+                "startTick"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "const": "nativeEffect"
                 }
               },
               "required": [
@@ -601,9 +690,11 @@
                     "screenShakeCue",
                     "libraryParticle",
                     "shape",
+                    "contour",
                     "historyTrail",
                     "nativeDust",
-                    "nativeLight"
+                    "nativeLight",
+                    "nativeEffect"
                   ]
                 }
               },
@@ -859,9 +950,11 @@
                     "soundCue",
                     "screenShakeCue",
                     "libraryParticle",
+                    "contour",
                     "historyTrail",
                     "nativeDust",
                     "nativeLight",
+                    "nativeEffect",
                     "spriteElement",
                     "texturedPath"
                   ]
@@ -996,6 +1089,306 @@
             "if": {
               "properties": {
                 "rendererKind": {
+                  "const": "contour"
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "phaseOffset": {
+                  "enum": []
+                }
+              },
+              "required": [
+                "geometry"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "enum": [
+                    "soundCue",
+                    "screenShakeCue",
+                    "libraryParticle",
+                    "shape",
+                    "historyTrail",
+                    "nativeDust",
+                    "nativeLight",
+                    "nativeEffect",
+                    "spriteElement",
+                    "texturedPath"
+                  ]
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "geometry": {
+                  "enum": []
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event": {
+                  "const": "periodic"
+                },
+                "rendererKind": {
+                  "const": "contour"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "event"
+              ]
+            },
+            "then": {
+              "properties": {
+                "repeatEvery": {
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event": {
+                  "enum": [
+                    "on_crit",
+                    "on_expire",
+                    "on_hit",
+                    "on_kill",
+                    "on_spawn",
+                    "on_tile_collision",
+                    "on_use"
+                  ]
+                },
+                "rendererKind": {
+                  "const": "contour"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "event"
+              ]
+            },
+            "then": {
+              "properties": {
+                "repeatEvery": {
+                  "const": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "entityId": {
+                  "enum": [
+                    "item"
+                  ]
+                },
+                "event": {
+                  "const": "periodic"
+                },
+                "rendererKind": {
+                  "const": "contour"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "event",
+                "entityId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "startTick": {
+                  "const": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event": {
+                  "enum": [
+                    "on_expire",
+                    "on_kill"
+                  ]
+                },
+                "rendererKind": {
+                  "const": "contour"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "event"
+              ]
+            },
+            "then": {
+              "properties": {
+                "geometry": {
+                  "properties": {
+                    "attachment": {
+                      "const": "world"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "entityId": {
+                  "const": "item"
+                },
+                "rendererKind": {
+                  "const": "contour"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "entityId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "geometry": {
+                  "properties": {
+                    "draws": {
+                      "items": {
+                        "properties": {
+                          "material": {
+                            "properties": {
+                              "texture": {
+                                "properties": {
+                                  "source": {
+                                    "enum": [
+                                      "item",
+                                      "asset",
+                                      "library"
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "entityId": {
+                  "const": "workbench_blade"
+                },
+                "rendererKind": {
+                  "const": "contour"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "entityId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "geometry": {
+                  "properties": {
+                    "draws": {
+                      "items": {
+                        "properties": {
+                          "material": {
+                            "properties": {
+                              "texture": {
+                                "properties": {
+                                  "source": {
+                                    "enum": [
+                                      "item",
+                                      "asset",
+                                      "library"
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "entityId": {
+                  "const": "nail"
+                },
+                "rendererKind": {
+                  "const": "contour"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "entityId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "geometry": {
+                  "properties": {
+                    "draws": {
+                      "items": {
+                        "properties": {
+                          "material": {
+                            "properties": {
+                              "texture": {
+                                "properties": {
+                                  "source": {
+                                    "enum": [
+                                      "item",
+                                      "asset",
+                                      "library"
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
                   "const": "historyTrail"
                 }
               },
@@ -1086,8 +1479,10 @@
                     "screenShakeCue",
                     "libraryParticle",
                     "shape",
+                    "contour",
                     "nativeDust",
                     "nativeLight",
+                    "nativeEffect",
                     "spriteElement",
                     "texturedPath"
                   ]
@@ -1214,6 +1609,138 @@
             "if": {
               "properties": {
                 "rendererKind": {
+                  "const": "nativeEffect"
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "required": [
+                "nativeEffect",
+                "startTick",
+                "repeatEvery"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
+                  "enum": [
+                    "soundCue",
+                    "screenShakeCue",
+                    "libraryParticle",
+                    "shape",
+                    "contour",
+                    "historyTrail",
+                    "nativeDust",
+                    "nativeLight",
+                    "spriteElement",
+                    "texturedPath"
+                  ]
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "nativeEffect": {
+                  "enum": []
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event": {
+                  "const": "periodic"
+                },
+                "rendererKind": {
+                  "const": "nativeEffect"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "event"
+              ]
+            },
+            "then": {
+              "properties": {
+                "repeatEvery": {
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "event": {
+                  "enum": [
+                    "on_crit",
+                    "on_expire",
+                    "on_hit",
+                    "on_kill",
+                    "on_spawn",
+                    "on_tile_collision",
+                    "on_use"
+                  ]
+                },
+                "rendererKind": {
+                  "const": "nativeEffect"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "event"
+              ]
+            },
+            "then": {
+              "properties": {
+                "repeatEvery": {
+                  "const": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "entityId": {
+                  "enum": [
+                    "item"
+                  ]
+                },
+                "event": {
+                  "const": "periodic"
+                },
+                "rendererKind": {
+                  "const": "nativeEffect"
+                }
+              },
+              "required": [
+                "rendererKind",
+                "event",
+                "entityId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "startTick": {
+                  "const": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rendererKind": {
                   "const": "nativeDust"
                 }
               },
@@ -1236,8 +1763,10 @@
                     "screenShakeCue",
                     "libraryParticle",
                     "shape",
+                    "contour",
                     "historyTrail",
                     "nativeLight",
+                    "nativeEffect",
                     "spriteElement",
                     "texturedPath"
                   ]
@@ -1281,8 +1810,10 @@
                     "screenShakeCue",
                     "libraryParticle",
                     "shape",
+                    "contour",
                     "historyTrail",
                     "nativeDust",
+                    "nativeEffect",
                     "spriteElement",
                     "texturedPath"
                   ]
@@ -1665,9 +2196,11 @@
                     "screenShakeCue",
                     "libraryParticle",
                     "shape",
+                    "contour",
                     "historyTrail",
                     "nativeDust",
                     "nativeLight",
+                    "nativeEffect",
                     "spriteElement",
                     "texturedPath"
                   ]
@@ -1735,10 +2268,12 @@
               "properties": {
                 "rendererKind": {
                   "enum": [
+                    "nativeEffect",
                     "soundCue",
                     "screenShakeCue",
                     "libraryParticle",
                     "shape",
+                    "contour",
                     "historyTrail",
                     "spriteElement",
                     "texturedPath"
@@ -1928,9 +2463,11 @@
                     "screenShakeCue",
                     "libraryParticle",
                     "shape",
+                    "contour",
                     "historyTrail",
                     "nativeDust",
                     "nativeLight",
+                    "nativeEffect",
                     "spriteElement",
                     "texturedPath"
                   ]
@@ -1976,9 +2513,11 @@
                     "soundCue",
                     "screenShakeCue",
                     "shape",
+                    "contour",
                     "historyTrail",
                     "nativeDust",
                     "nativeLight",
+                    "nativeEffect",
                     "spriteElement",
                     "texturedPath"
                   ]
@@ -2117,9 +2656,11 @@
                     "soundCue",
                     "libraryParticle",
                     "shape",
+                    "contour",
                     "historyTrail",
                     "nativeDust",
                     "nativeLight",
+                    "nativeEffect",
                     "spriteElement",
                     "texturedPath"
                   ]
@@ -3011,6 +3552,9 @@
                       "properties": {
                         "assetId": {
                           "enum": [
+                            "branchingNoise",
+                            "turbulentNoise",
+                            "blotchNoise",
                             "star",
                             "solidPixel",
                             "bloomCircle",
@@ -3210,6 +3754,1440 @@
             ],
             "type": "string"
           },
+          "geometry": {
+            "additionalProperties": false,
+            "properties": {
+              "attachment": {
+                "enum": [
+                  "world",
+                  "source"
+                ],
+                "type": "string"
+              },
+              "contours": {
+                "items": {
+                  "additionalProperties": false,
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "kind": {
+                            "const": "line"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "center": {
+                            "enum": []
+                          },
+                          "end": {
+                            "enum": []
+                          },
+                          "points": {
+                            "enum": []
+                          },
+                          "radiusX": {
+                            "enum": []
+                          },
+                          "radiusY": {
+                            "enum": []
+                          },
+                          "rotationRadians": {
+                            "enum": []
+                          },
+                          "scale": {
+                            "enum": []
+                          },
+                          "segments": {
+                            "enum": []
+                          },
+                          "source": {
+                            "enum": []
+                          },
+                          "sources": {
+                            "enum": []
+                          },
+                          "start": {
+                            "enum": []
+                          },
+                          "startRadians": {
+                            "enum": []
+                          },
+                          "sweepRadians": {
+                            "enum": []
+                          },
+                          "translate": {
+                            "enum": []
+                          },
+                          "via": {
+                            "enum": []
+                          }
+                        },
+                        "required": [
+                          "from",
+                          "to"
+                        ]
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "kind": {
+                            "const": "ellipseArc"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "end": {
+                            "enum": []
+                          },
+                          "from": {
+                            "enum": []
+                          },
+                          "points": {
+                            "enum": []
+                          },
+                          "rotationRadians": {
+                            "enum": []
+                          },
+                          "scale": {
+                            "enum": []
+                          },
+                          "source": {
+                            "enum": []
+                          },
+                          "sources": {
+                            "enum": []
+                          },
+                          "start": {
+                            "enum": []
+                          },
+                          "to": {
+                            "enum": []
+                          },
+                          "translate": {
+                            "enum": []
+                          },
+                          "via": {
+                            "enum": []
+                          }
+                        },
+                        "required": [
+                          "center",
+                          "radiusX",
+                          "radiusY",
+                          "startRadians",
+                          "sweepRadians",
+                          "segments"
+                        ]
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "kind": {
+                            "const": "concat"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "center": {
+                            "enum": []
+                          },
+                          "end": {
+                            "enum": []
+                          },
+                          "from": {
+                            "enum": []
+                          },
+                          "points": {
+                            "enum": []
+                          },
+                          "radiusX": {
+                            "enum": []
+                          },
+                          "radiusY": {
+                            "enum": []
+                          },
+                          "rotationRadians": {
+                            "enum": []
+                          },
+                          "scale": {
+                            "enum": []
+                          },
+                          "segments": {
+                            "enum": []
+                          },
+                          "source": {
+                            "enum": []
+                          },
+                          "start": {
+                            "enum": []
+                          },
+                          "startRadians": {
+                            "enum": []
+                          },
+                          "sweepRadians": {
+                            "enum": []
+                          },
+                          "to": {
+                            "enum": []
+                          },
+                          "translate": {
+                            "enum": []
+                          },
+                          "via": {
+                            "enum": []
+                          }
+                        },
+                        "required": [
+                          "sources"
+                        ]
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "kind": {
+                            "const": "trim"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "center": {
+                            "enum": []
+                          },
+                          "from": {
+                            "enum": []
+                          },
+                          "points": {
+                            "enum": []
+                          },
+                          "radiusX": {
+                            "enum": []
+                          },
+                          "radiusY": {
+                            "enum": []
+                          },
+                          "rotationRadians": {
+                            "enum": []
+                          },
+                          "scale": {
+                            "enum": []
+                          },
+                          "segments": {
+                            "enum": []
+                          },
+                          "sources": {
+                            "enum": []
+                          },
+                          "startRadians": {
+                            "enum": []
+                          },
+                          "sweepRadians": {
+                            "enum": []
+                          },
+                          "to": {
+                            "enum": []
+                          },
+                          "translate": {
+                            "enum": []
+                          },
+                          "via": {
+                            "enum": []
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "start",
+                          "end"
+                        ]
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "kind": {
+                            "const": "polyline"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "center": {
+                            "enum": []
+                          },
+                          "end": {
+                            "enum": []
+                          },
+                          "from": {
+                            "enum": []
+                          },
+                          "radiusX": {
+                            "enum": []
+                          },
+                          "radiusY": {
+                            "enum": []
+                          },
+                          "rotationRadians": {
+                            "enum": []
+                          },
+                          "scale": {
+                            "enum": []
+                          },
+                          "segments": {
+                            "enum": []
+                          },
+                          "source": {
+                            "enum": []
+                          },
+                          "sources": {
+                            "enum": []
+                          },
+                          "start": {
+                            "enum": []
+                          },
+                          "startRadians": {
+                            "enum": []
+                          },
+                          "sweepRadians": {
+                            "enum": []
+                          },
+                          "to": {
+                            "enum": []
+                          },
+                          "translate": {
+                            "enum": []
+                          },
+                          "via": {
+                            "enum": []
+                          }
+                        },
+                        "required": [
+                          "points"
+                        ]
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "kind": {
+                            "const": "transform"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "center": {
+                            "enum": []
+                          },
+                          "end": {
+                            "enum": []
+                          },
+                          "from": {
+                            "enum": []
+                          },
+                          "points": {
+                            "enum": []
+                          },
+                          "radiusX": {
+                            "enum": []
+                          },
+                          "radiusY": {
+                            "enum": []
+                          },
+                          "segments": {
+                            "enum": []
+                          },
+                          "sources": {
+                            "enum": []
+                          },
+                          "start": {
+                            "enum": []
+                          },
+                          "startRadians": {
+                            "enum": []
+                          },
+                          "sweepRadians": {
+                            "enum": []
+                          },
+                          "to": {
+                            "enum": []
+                          },
+                          "via": {
+                            "enum": []
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "translate",
+                          "scale",
+                          "rotationRadians"
+                        ]
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "kind": {
+                            "const": "close"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "center": {
+                            "enum": []
+                          },
+                          "end": {
+                            "enum": []
+                          },
+                          "from": {
+                            "enum": []
+                          },
+                          "points": {
+                            "enum": []
+                          },
+                          "radiusX": {
+                            "enum": []
+                          },
+                          "radiusY": {
+                            "enum": []
+                          },
+                          "rotationRadians": {
+                            "enum": []
+                          },
+                          "scale": {
+                            "enum": []
+                          },
+                          "segments": {
+                            "enum": []
+                          },
+                          "sources": {
+                            "enum": []
+                          },
+                          "start": {
+                            "enum": []
+                          },
+                          "startRadians": {
+                            "enum": []
+                          },
+                          "sweepRadians": {
+                            "enum": []
+                          },
+                          "to": {
+                            "enum": []
+                          },
+                          "translate": {
+                            "enum": []
+                          }
+                        },
+                        "required": [
+                          "source",
+                          "via"
+                        ]
+                      }
+                    }
+                  ],
+                  "properties": {
+                    "center": {
+                      "items": {
+                        "description": "World pixels.",
+                        "maximum": 512,
+                        "minimum": -512,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "end": {
+                      "description": "Normalized arclength end; equal start is one point, no wrap.",
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "from": {
+                      "items": {
+                        "description": "World pixels.",
+                        "maximum": 512,
+                        "minimum": -512,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "id": {
+                      "maxLength": 48,
+                      "minLength": 1,
+                      "not": {
+                        "pattern": "[^a-z0-9_]"
+                      },
+                      "pattern": "^[a-z][a-z0-9_]*$",
+                      "type": "string"
+                    },
+                    "kind": {
+                      "enum": [
+                        "line",
+                        "ellipseArc",
+                        "concat",
+                        "trim",
+                        "polyline",
+                        "transform",
+                        "close"
+                      ],
+                      "type": "string"
+                    },
+                    "points": {
+                      "items": {
+                        "items": {
+                          "description": "World pixels.",
+                          "maximum": 512,
+                          "minimum": -512,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "radiusX": {
+                      "description": "World-pixel radius.",
+                      "maximum": 256,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "radiusY": {
+                      "description": "World-pixel radius.",
+                      "maximum": 256,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "rotationRadians": {
+                      "description": "Rotation after scale, before translation.",
+                      "maximum": 6.283185307179586,
+                      "minimum": -6.283185307179586,
+                      "type": "number"
+                    },
+                    "scale": {
+                      "items": {
+                        "description": "Independent dimensionless axis scale; zero is silent.",
+                        "maximum": 4,
+                        "minimum": -4,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "segments": {
+                      "description": "Tessellation segments.",
+                      "maximum": 64,
+                      "minimum": 3,
+                      "type": "integer"
+                    },
+                    "source": {
+                      "maxLength": 48,
+                      "minLength": 1,
+                      "not": {
+                        "pattern": "[^a-z0-9_]"
+                      },
+                      "pattern": "^[a-z][a-z0-9_]*$",
+                      "type": "string"
+                    },
+                    "sources": {
+                      "items": {
+                        "maxLength": 48,
+                        "minLength": 1,
+                        "not": {
+                          "pattern": "[^a-z0-9_]"
+                        },
+                        "pattern": "^[a-z][a-z0-9_]*$",
+                        "type": "string"
+                      },
+                      "maxItems": 16,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "start": {
+                      "description": "Normalized arclength start; greater than end reverses explicitly.",
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "startRadians": {
+                      "description": "Authored seam angle.",
+                      "maximum": 6.283185307179586,
+                      "minimum": -6.283185307179586,
+                      "type": "number"
+                    },
+                    "sweepRadians": {
+                      "description": "Signed sweep; full turn closes.",
+                      "maximum": 6.283185307179586,
+                      "minimum": -6.283185307179586,
+                      "type": "number"
+                    },
+                    "to": {
+                      "items": {
+                        "description": "World pixels.",
+                        "maximum": 512,
+                        "minimum": -512,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "translate": {
+                      "items": {
+                        "description": "World pixels.",
+                        "maximum": 512,
+                        "minimum": -512,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "via": {
+                      "items": {
+                        "items": {
+                          "description": "World pixels.",
+                          "maximum": 512,
+                          "minimum": -512,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "maxItems": 8,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 16,
+                "minItems": 1,
+                "type": "array"
+              },
+              "draws": {
+                "items": {
+                  "additionalProperties": false,
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "op": {
+                            "const": "stroke"
+                          }
+                        },
+                        "required": [
+                          "op"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "first": {
+                            "enum": []
+                          },
+                          "mapping": {
+                            "additionalProperties": false,
+                            "allOf": [
+                              {
+                                "if": {
+                                  "properties": {
+                                    "mode": {
+                                      "const": "stretch"
+                                    }
+                                  },
+                                  "required": [
+                                    "mode"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "repeatLengthPx": {
+                                      "const": 1
+                                    },
+                                    "scrollPxPerTick": {
+                                      "const": 0
+                                    }
+                                  }
+                                }
+                              }
+                            ],
+                            "properties": {
+                              "mode": {
+                                "enum": [
+                                  "stretch",
+                                  "repeat"
+                                ],
+                                "type": "string"
+                              },
+                              "repeatLengthPx": {
+                                "description": "Pixels per texture repeat along contour.",
+                                "maximum": 512,
+                                "minimum": 1,
+                                "type": "number"
+                              },
+                              "scrollPxPerTick": {
+                                "description": "World-tick UV scroll; stretch requires zero.",
+                                "maximum": 32,
+                                "minimum": -32,
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "mode",
+                              "repeatLengthPx",
+                              "scrollPxPerTick"
+                            ],
+                            "type": "object"
+                          },
+                          "second": {
+                            "enum": []
+                          }
+                        },
+                        "required": [
+                          "contour",
+                          "widthPx",
+                          "join",
+                          "cap",
+                          "miterLimit",
+                          "mapping",
+                          "opacityProfile"
+                        ]
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "op": {
+                            "const": "fill"
+                          }
+                        },
+                        "required": [
+                          "op"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "cap": {
+                            "enum": []
+                          },
+                          "first": {
+                            "enum": []
+                          },
+                          "join": {
+                            "enum": []
+                          },
+                          "mapping": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "addressMode": {
+                                "enum": [
+                                  "clamp",
+                                  "repeat"
+                                ],
+                                "type": "string"
+                              },
+                              "origin": {
+                                "items": {
+                                  "description": "World pixels.",
+                                  "maximum": 512,
+                                  "minimum": -512,
+                                  "type": "number"
+                                },
+                                "maxItems": 2,
+                                "minItems": 2,
+                                "type": "array"
+                              },
+                              "size": {
+                                "items": {
+                                  "description": "Local-plane pixels per full texture repeat.",
+                                  "maximum": 4096,
+                                  "minimum": 0.001,
+                                  "type": "number"
+                                },
+                                "maxItems": 2,
+                                "minItems": 2,
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "origin",
+                              "addressMode",
+                              "size"
+                            ],
+                            "type": "object"
+                          },
+                          "miterLimit": {
+                            "enum": []
+                          },
+                          "opacityProfile": {
+                            "enum": []
+                          },
+                          "second": {
+                            "enum": []
+                          },
+                          "widthPx": {
+                            "enum": []
+                          }
+                        },
+                        "required": [
+                          "contour",
+                          "mapping"
+                        ]
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "op": {
+                            "const": "band"
+                          }
+                        },
+                        "required": [
+                          "op"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "cap": {
+                            "enum": []
+                          },
+                          "contour": {
+                            "enum": []
+                          },
+                          "join": {
+                            "enum": []
+                          },
+                          "mapping": {
+                            "additionalProperties": false,
+                            "allOf": [
+                              {
+                                "if": {
+                                  "properties": {
+                                    "mode": {
+                                      "const": "stretch"
+                                    }
+                                  },
+                                  "required": [
+                                    "mode"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "repeatLengthPx": {
+                                      "const": 1
+                                    },
+                                    "scrollPxPerTick": {
+                                      "const": 0
+                                    }
+                                  }
+                                }
+                              }
+                            ],
+                            "properties": {
+                              "mode": {
+                                "enum": [
+                                  "stretch",
+                                  "repeat"
+                                ],
+                                "type": "string"
+                              },
+                              "repeatLengthPx": {
+                                "description": "Pixels per texture repeat along contour.",
+                                "maximum": 512,
+                                "minimum": 1,
+                                "type": "number"
+                              },
+                              "scrollPxPerTick": {
+                                "description": "World-tick UV scroll; stretch requires zero.",
+                                "maximum": 32,
+                                "minimum": -32,
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "mode",
+                              "repeatLengthPx",
+                              "scrollPxPerTick"
+                            ],
+                            "type": "object"
+                          },
+                          "miterLimit": {
+                            "enum": []
+                          },
+                          "widthPx": {
+                            "enum": []
+                          }
+                        },
+                        "required": [
+                          "first",
+                          "second",
+                          "mapping",
+                          "opacityProfile"
+                        ]
+                      }
+                    }
+                  ],
+                  "properties": {
+                    "cap": {
+                      "enum": [
+                        "butt",
+                        "square"
+                      ],
+                      "type": "string"
+                    },
+                    "contour": {
+                      "maxLength": 48,
+                      "minLength": 1,
+                      "not": {
+                        "pattern": "[^a-z0-9_]"
+                      },
+                      "pattern": "^[a-z][a-z0-9_]*$",
+                      "type": "string"
+                    },
+                    "first": {
+                      "maxLength": 48,
+                      "minLength": 1,
+                      "not": {
+                        "pattern": "[^a-z0-9_]"
+                      },
+                      "pattern": "^[a-z][a-z0-9_]*$",
+                      "type": "string"
+                    },
+                    "join": {
+                      "enum": [
+                        "bevel",
+                        "miter"
+                      ],
+                      "type": "string"
+                    },
+                    "mapping": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "addressMode": {
+                              "enum": [
+                                "clamp",
+                                "repeat"
+                              ],
+                              "type": "string"
+                            },
+                            "origin": {
+                              "items": {
+                                "description": "World pixels.",
+                                "maximum": 512,
+                                "minimum": -512,
+                                "type": "number"
+                              },
+                              "maxItems": 2,
+                              "minItems": 2,
+                              "type": "array"
+                            },
+                            "size": {
+                              "items": {
+                                "description": "Local-plane pixels per full texture repeat.",
+                                "maximum": 4096,
+                                "minimum": 0.001,
+                                "type": "number"
+                              },
+                              "maxItems": 2,
+                              "minItems": 2,
+                              "type": "array"
+                            }
+                          },
+                          "required": [
+                            "origin",
+                            "addressMode",
+                            "size"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "allOf": [
+                            {
+                              "if": {
+                                "properties": {
+                                  "mode": {
+                                    "const": "stretch"
+                                  }
+                                },
+                                "required": [
+                                  "mode"
+                                ]
+                              },
+                              "then": {
+                                "properties": {
+                                  "repeatLengthPx": {
+                                    "const": 1
+                                  },
+                                  "scrollPxPerTick": {
+                                    "const": 0
+                                  }
+                                }
+                              }
+                            }
+                          ],
+                          "properties": {
+                            "mode": {
+                              "enum": [
+                                "stretch",
+                                "repeat"
+                              ],
+                              "type": "string"
+                            },
+                            "repeatLengthPx": {
+                              "description": "Pixels per texture repeat along contour.",
+                              "maximum": 512,
+                              "minimum": 1,
+                              "type": "number"
+                            },
+                            "scrollPxPerTick": {
+                              "description": "World-tick UV scroll; stretch requires zero.",
+                              "maximum": 32,
+                              "minimum": -32,
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "mode",
+                            "repeatLengthPx",
+                            "scrollPxPerTick"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    "material": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "colorEnd": {
+                          "additionalProperties": false,
+                          "description": "Explicit local RGB bytes; no named colors, global color references or alpha. White preserves texture RGB; opacity is separate.",
+                          "properties": {
+                            "b": {
+                              "maximum": 255,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "g": {
+                              "maximum": 255,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "r": {
+                              "maximum": 255,
+                              "minimum": 0,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "r",
+                            "g",
+                            "b"
+                          ],
+                          "type": "object"
+                        },
+                        "colorStart": {
+                          "additionalProperties": false,
+                          "description": "Explicit local RGB bytes; no named colors, global color references or alpha. White preserves texture RGB; opacity is separate.",
+                          "properties": {
+                            "b": {
+                              "maximum": 255,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "g": {
+                              "maximum": 255,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "r": {
+                              "maximum": 255,
+                              "minimum": 0,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "r",
+                            "g",
+                            "b"
+                          ],
+                          "type": "object"
+                        },
+                        "opacityEnd": {
+                          "description": "Final opacity; no additional fade.",
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        "opacityStart": {
+                          "description": "Initial opacity.",
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        "sampling": {
+                          "enum": [
+                            "point",
+                            "linear"
+                          ],
+                          "type": "string"
+                        },
+                        "texture": {
+                          "additionalProperties": false,
+                          "allOf": [
+                            {
+                              "if": {
+                                "properties": {
+                                  "source": {
+                                    "const": "library"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              },
+                              "then": {
+                                "properties": {
+                                  "assetId": {
+                                    "enum": [
+                                      "branchingNoise",
+                                      "turbulentNoise",
+                                      "blotchNoise",
+                                      "star",
+                                      "solidPixel",
+                                      "bloomCircle",
+                                      "bloomFlare",
+                                      "bloomLine",
+                                      "chromaticBurst",
+                                      "shineFlare"
+                                    ]
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "if": {
+                                "properties": {
+                                  "source": {
+                                    "const": "asset"
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              },
+                              "then": {
+                                "properties": {
+                                  "assetId": {
+                                    "maxLength": 48,
+                                    "minLength": 1,
+                                    "not": {
+                                      "pattern": "[^A-Za-z0-9_-]"
+                                    },
+                                    "pattern": "^[A-Za-z0-9_-]{1,48}$",
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "if": {
+                                "properties": {
+                                  "source": {
+                                    "enum": [
+                                      "item",
+                                      "entity",
+                                      "impact"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ]
+                              },
+                              "then": {
+                                "properties": {
+                                  "assetId": {
+                                    "const": ""
+                                  }
+                                }
+                              }
+                            }
+                          ],
+                          "description": "Explicit exact item/entity/impact image role or one declared asset ID. source=library selects one exact built-in texture ID, no asset declaration or PNG generation. Same literal UV/blend rules: bloomLine is long on texture Y, never auto-rotated. No paths/URLs; no cross-entity guesses. impact requires that entity's existing impactSprite producer.",
+                          "properties": {
+                            "assetId": {
+                              "maxLength": 48,
+                              "type": "string"
+                            },
+                            "source": {
+                              "enum": [
+                                "item",
+                                "entity",
+                                "asset",
+                                "library"
+                              ],
+                              "type": "string"
+                            },
+                            "uv": {
+                              "additionalProperties": false,
+                              "description": "Sampling coordinates only: first mirror U/V, then quarterTurns 1:(v,1-u), 2:(1-u,1-v), 3:(1-v,u). Preserves world geometry, size, history and original pivot; no inferred grip correction. Body flip precedes this transform. Repeat/scroll stay unbounded; no implicit UV wrapping/clamping. Saved omission is exact identity.",
+                              "properties": {
+                                "mirrorU": {
+                                  "type": "boolean"
+                                },
+                                "mirrorV": {
+                                  "type": "boolean"
+                                },
+                                "quarterTurns": {
+                                  "maximum": 3,
+                                  "minimum": 0,
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "quarterTurns",
+                                "mirrorU",
+                                "mirrorV"
+                              ],
+                              "type": "object"
+                            }
+                          },
+                          "required": [
+                            "source",
+                            "assetId",
+                            "uv"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "texture",
+                        "sampling",
+                        "colorStart",
+                        "colorEnd",
+                        "opacityStart",
+                        "opacityEnd"
+                      ],
+                      "type": "object"
+                    },
+                    "miterLimit": {
+                      "description": "Miter length divided by half width; exceeding joins bevel.",
+                      "maximum": 8,
+                      "minimum": 1,
+                      "type": "number"
+                    },
+                    "op": {
+                      "enum": [
+                        "stroke",
+                        "fill",
+                        "band"
+                      ],
+                      "type": "string"
+                    },
+                    "opacityProfile": {
+                      "additionalProperties": false,
+                      "description": "Knots at normalized profile coordinate 0, 0.5, 1: sprite lifetime age, or path profileDomain age/length. Curve per half interval: linear=t; easeIn=t*t; easeOut=1-(1-t)^2; smoothStep=t*t*(3-2*t). Captured immutably at emission.",
+                      "properties": {
+                        "curve": {
+                          "enum": [
+                            "linear",
+                            "easeIn",
+                            "easeOut",
+                            "smoothStep"
+                          ],
+                          "type": "string"
+                        },
+                        "end": {
+                          "description": "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.",
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        "middle": {
+                          "description": "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.",
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        "start": {
+                          "description": "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.",
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "start",
+                        "middle",
+                        "end",
+                        "curve"
+                      ],
+                      "type": "object"
+                    },
+                    "second": {
+                      "maxLength": 48,
+                      "minLength": 1,
+                      "not": {
+                        "pattern": "[^a-z0-9_]"
+                      },
+                      "pattern": "^[a-z][a-z0-9_]*$",
+                      "type": "string"
+                    },
+                    "widthPx": {
+                      "description": "World-pixel width after common scene transform.",
+                      "maximum": 128,
+                      "minimum": 0,
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "op",
+                    "material"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 16,
+                "minItems": 1,
+                "type": "array"
+              },
+              "rotationFrame": {
+                "enum": [
+                  "world",
+                  "source"
+                ],
+                "type": "string"
+              },
+              "transformEnd": {
+                "additionalProperties": false,
+                "properties": {
+                  "rotationRadians": {
+                    "description": "Rotation after scale, before translation.",
+                    "maximum": 6.283185307179586,
+                    "minimum": -6.283185307179586,
+                    "type": "number"
+                  },
+                  "scale": {
+                    "items": {
+                      "description": "Independent dimensionless axis scale; zero is silent.",
+                      "maximum": 4,
+                      "minimum": -4,
+                      "type": "number"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                  },
+                  "translate": {
+                    "items": {
+                      "description": "World pixels.",
+                      "maximum": 512,
+                      "minimum": -512,
+                      "type": "number"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "translate",
+                  "scale",
+                  "rotationRadians"
+                ],
+                "type": "object"
+              },
+              "transformStart": {
+                "additionalProperties": false,
+                "properties": {
+                  "rotationRadians": {
+                    "description": "Rotation after scale, before translation.",
+                    "maximum": 6.283185307179586,
+                    "minimum": -6.283185307179586,
+                    "type": "number"
+                  },
+                  "scale": {
+                    "items": {
+                      "description": "Independent dimensionless axis scale; zero is silent.",
+                      "maximum": 4,
+                      "minimum": -4,
+                      "type": "number"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                  },
+                  "translate": {
+                    "items": {
+                      "description": "World pixels.",
+                      "maximum": 512,
+                      "minimum": -512,
+                      "type": "number"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "translate",
+                  "scale",
+                  "rotationRadians"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "attachment",
+              "rotationFrame",
+              "transformStart",
+              "transformEnd",
+              "contours",
+              "draws"
+            ],
+            "type": "object"
+          },
           "id": {
             "pattern": "^[a-z][a-z0-9_]{0,63}$",
             "type": "string"
@@ -3234,6 +5212,92 @@
             },
             "required": [
               "intensity"
+            ],
+            "type": "object"
+          },
+          "nativeEffect": {
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "rainbowBurst",
+                        "shimmerStar"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "movement"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "goldCrossBurst",
+                        "darkLightningBurst"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "movement": {
+                      "enum": []
+                    }
+                  }
+                }
+              }
+            ],
+            "description": "Select one stock recipe from rendererSemantics.nativeEffect; movement exists only for rainbowBurst and shimmerStar.",
+            "properties": {
+              "movement": {
+                "additionalProperties": false,
+                "description": "Stock velocity input in world pixels/tick, not guaranteed speed of every particle; native recipe may scale/distribute/accelerate it. Zero is explicit, never inferred from source.",
+                "properties": {
+                  "x": {
+                    "description": "World X pixels per tick, positive right.",
+                    "maximum": 24,
+                    "minimum": -24,
+                    "type": "number"
+                  },
+                  "y": {
+                    "description": "World Y pixels per tick, positive down.",
+                    "maximum": 24,
+                    "minimum": -24,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "type": "object"
+              },
+              "type": {
+                "enum": [
+                  "goldCrossBurst",
+                  "rainbowBurst",
+                  "darkLightningBurst",
+                  "shimmerStar"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
             ],
             "type": "object"
           },
@@ -3582,8 +5646,11 @@
                 "type": "number"
               },
               "textureId": {
-                "description": "Exact existing library texture, no PNG generation or motion preset. star=ParticleLibrary/Assets/Textures/Star: 128x128 soft radial glow, NOT a star silhouette. solidPixel=ParticleLibrary/Assets/Textures/WhitePixel: solid white 1x1 pixel, stretched to the authored rectangle. bloomCircle=Luminance/Assets/GreyscaleTextures/BloomCircleSmall: 200x200 broad soft circular glow. bloomFlare=Luminance/Assets/GreyscaleTextures/BloomFlare: 972x976 radial many-ray light flare. bloomLine=Luminance/Assets/GreyscaleTextures/BloomLine: 64x1024 narrow vertical soft light streak; texture Y is the long axis. chromaticBurst=Luminance/Assets/GreyscaleTextures/ChromaticBurst: 1024x1024 colored spectral ring, NOT grayscale; authored RGB multiplies existing color. shineFlare=Luminance/Assets/GreyscaleTextures/ShineFlare: 512x512 four-point axial star flare. All textures have opaque alpha. Glow/flare black RGB contributes zero in additive, recommended for luminous effects; alpha blend visibly includes the black rectangle. Both blends are literal choices, never auto-converted. Dimensions are authored world pixels, not native texture dimensions.",
+                "description": "Exact existing library texture, no PNG generation or motion preset. branchingNoise=Luminance/Assets/Noise/DendriticNoiseZoomedOut: 512x512 grayscale branching bright veins around dark cells; opaque texture, not transparent particles. turbulentNoise=Luminance/Assets/Noise/TurbulentNoise: 512x512 near-grayscale turbulent cloud texture; opaque RGB, not a transparent smoke sprite. blotchNoise=Luminance/Assets/Noise/WavyBlotchNoise: 512x512 grayscale smooth rounded light/dark blotches; opaque texture. star=ParticleLibrary/Assets/Textures/Star: 128x128 soft radial glow, NOT a star silhouette. solidPixel=ParticleLibrary/Assets/Textures/WhitePixel: solid white 1x1 pixel, stretched to the authored rectangle. bloomCircle=Luminance/Assets/GreyscaleTextures/BloomCircleSmall: 200x200 broad soft circular glow. bloomFlare=Luminance/Assets/GreyscaleTextures/BloomFlare: 972x976 radial many-ray light flare. bloomLine=Luminance/Assets/GreyscaleTextures/BloomLine: 64x1024 narrow vertical soft light streak; texture Y is the long axis. chromaticBurst=Luminance/Assets/GreyscaleTextures/ChromaticBurst: 1024x1024 colored spectral ring, NOT grayscale; authored RGB multiplies existing color. shineFlare=Luminance/Assets/GreyscaleTextures/ShineFlare: 512x512 four-point axial star flare. All textures have opaque alpha. Glow/flare black RGB contributes zero in additive, recommended for luminous effects; alpha blend visibly includes the black rectangle. Both blends are literal choices, never auto-converted. Dimensions are authored world pixels, not native texture dimensions.",
                 "enum": [
+                  "branchingNoise",
+                  "turbulentNoise",
+                  "blotchNoise",
                   "star",
                   "solidPixel",
                   "bloomCircle",
@@ -3956,6 +6023,9 @@
                       "properties": {
                         "assetId": {
                           "enum": [
+                            "branchingNoise",
+                            "turbulentNoise",
+                            "blotchNoise",
                             "star",
                             "solidPixel",
                             "bloomCircle",
@@ -4147,9 +6217,11 @@
               "screenShakeCue",
               "libraryParticle",
               "shape",
+              "contour",
               "historyTrail",
               "nativeDust",
               "nativeLight",
+              "nativeEffect",
               "spriteElement",
               "texturedPath"
             ],
@@ -5130,6 +7202,9 @@
                       "properties": {
                         "assetId": {
                           "enum": [
+                            "branchingNoise",
+                            "turbulentNoise",
+                            "blotchNoise",
                             "star",
                             "solidPixel",
                             "bloomCircle",

@@ -381,13 +381,16 @@ def test_saved_shape_preset_keeps_wire_bytes_but_retired_material_snapshot_is_re
 ROUTE_SURFACE = vfx.vfx_director_surface(_accepted_visual_data("workbench_blade"))
 
 def _renderer_material(data, renderer):
+    from tests.test_vfx_contour_contract import authored as contour
+    from tests.test_vfx_native_effect_contract import effect
     from tests.test_vfx_sound_selection import _sound
     builders = {
-        "shape": _shape, "historyTrail": _history, "spriteElement": _sprite,
+        "contour": contour, "shape": _shape, "historyTrail": _history, "spriteElement": _sprite,
         "texturedPath": _path, "libraryParticle": _library_particle,
         "screenShakeCue": _screen_shake, "soundCue": _sound,
         "nativeDust": lambda value: _native(value, "nativeDust"),
         "nativeLight": lambda value: _native(value, "nativeLight"),
+        "nativeEffect": lambda value: effect(data=value),
     }
     return builders[renderer](data)
 

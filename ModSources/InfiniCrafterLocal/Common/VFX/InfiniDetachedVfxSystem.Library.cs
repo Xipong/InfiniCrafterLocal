@@ -48,14 +48,16 @@ public sealed partial class InfiniDetachedVfxSystem
 
     internal static bool EnqueueSnapshotVfx(GeneratedItemData data,string entityId,VfxSlotSpec slot,string sourceKey,VfxSourceFrame frame,
         VfxSourceBinding? binding=null,bool itemBudget=false,MaterialEventAllowance? allowance=null)
-        =>slot.Dust is not null||slot.Light is not null?EnqueueNativeCue(data,slot,sourceKey,frame,itemBudget,allowance)
+        =>slot.Dust is not null||slot.Light is not null||slot.NativeEffect is not null?EnqueueNativeCue(data,slot,sourceKey,frame,itemBudget,allowance)
+            :slot.Geometry is not null?EnqueueContours(data,slot,sourceKey,frame,binding)
             :slot.Shape is not null?EnqueueShape(data,slot,sourceKey,frame,binding)
             :VfxLibraryValidation.HasPayload(slot)?EnqueueLibrary(data,slot,sourceKey,frame,itemBudget,allowance)
             :EnqueueElement(data,entityId,slot,sourceKey,frame,binding,itemBudget,allowance);
-    internal static bool HasSnapshotVfx(VfxSlotSpec slot)=>slot.Dust is not null||slot.Light is not null||slot.Shape is not null||slot.Element is not null||VfxLibraryValidation.HasPayload(slot);
+    internal static bool HasSnapshotVfx(VfxSlotSpec slot)=>slot.Dust is not null||slot.Light is not null||slot.NativeEffect is not null||slot.Shape is not null||slot.Geometry is not null||slot.Element is not null||VfxLibraryValidation.HasPayload(slot);
     internal static bool HasOwnedVfx(VfxSlotSpec slot)=>HasSnapshotVfx(slot)||slot.Path is not null;
     private static int LibraryRecordCount=>MaterialEmissions.Count(e=>e.Library is not null);
-    private static int OwnedParticleCount=>MaterialEmissions.Sum(e=>e.Particles.Length+(e.Library?.Particles.Length??0));
+    private static int OwnedParticleCount => NativeWorldParticleCount
+        + MaterialEmissions.Sum(e => e.Particles.Length + (e.Library?.Particles.Length ?? 0));
     private static bool LibraryClient=>!Main.dedServ&&Main.netMode!=NetmodeID.Server;
     private static bool LibraryEnabled(LibraryDesign d)=>LibraryClient&&(d.Particle is not null
         ?InfiniVfxClientOptions.EnableParticleLibraryBackend:InfiniVfxClientOptions.EnableLuminanceScreenShakeBackend);

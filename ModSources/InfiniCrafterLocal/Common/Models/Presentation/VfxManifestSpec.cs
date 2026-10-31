@@ -93,6 +93,7 @@ public sealed class VfxManifestSpec
                 if (!declaredAssets.Add(asset.Id)) throw new InvalidDataException("duplicate VFX asset id");
             }
         }
+        int requiredContourDraws=0;
         var usedAssets = new HashSet<string>(StringComparer.Ordinal);
         var ids = new HashSet<string>(StringComparer.Ordinal);
         var impactEntityIds = new HashSet<string>(StringComparer.Ordinal);
@@ -100,15 +101,26 @@ public sealed class VfxManifestSpec
         {
             if (slot is null) throw new InvalidDataException("VFX manifest contains null slot");
             slot.NormalizeAndValidate();
+            if (slot.NativeEffect is { } nativeEffect)
+            {
+                int cost = VfxNativeEffects.Cost(nativeEffect.Type);
+                if (Budget.MaxParticlesPerTick < cost || Budget.MaxParticlesTotal < cost)
+                    throw new InvalidDataException("nativeEffect whole burst exceeds manifest particle budget");
+            }
             var texture = slot.Element?.Texture ?? slot.Path?.Texture ?? slot.Trail?.Texture;
             if (texture?.Source == "asset") {
                 if (!declaredAssets.Contains(texture.AssetId)) throw new InvalidDataException("dangling VFX asset reference");
                 usedAssets.Add(texture.AssetId);
             }
+            if(slot.Geometry is {} budgetGeometry)requiredContourDraws+=budgetGeometry.RequiredDrawBudget();
+            if(slot.Geometry is {} geometry)foreach(var draw in geometry.Draws)if(draw.Material.Texture.Source=="asset"){
+                string id=draw.Material.Texture.AssetId;if(!declaredAssets.Contains(id))throw new InvalidDataException("dangling contour asset reference");usedAssets.Add(id);
+            }
             if (!ids.Add(slot.Id)) throw new InvalidDataException($"duplicate VFX slot id '{slot.Id}'");
             if (slot.RendererKind == "impactSprite" && !impactEntityIds.Add(slot.EntityId))
                 throw new InvalidDataException($"duplicate impactSprite entity '{slot.EntityId}'");
         }
+        if(requiredContourDraws>2048||Budget.MaxDrawCalls<requiredContourDraws)throw new InvalidDataException("contour composition exceeds manifest draw budget");
         if (!declaredAssets.SetEquals(usedAssets)) throw new InvalidDataException("unused VFX asset request");
     }
 }
@@ -122,7 +134,7 @@ public sealed class VfxQualityBudgetSpec
     {
         MaxParticlesPerTick = Math.Clamp(MaxParticlesPerTick, 0, 256);
         MaxParticlesTotal = Math.Clamp(MaxParticlesTotal, 0, 12000);
-        MaxDrawCalls = Math.Clamp(MaxDrawCalls, 0, 512);
+        MaxDrawCalls = Math.Clamp(MaxDrawCalls, 0, 2048);
     }
 }
 
@@ -204,10 +216,19 @@ public sealed class VfxSlotSpec
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public VfxScreenShakeSpec? ScreenShake { get => _screenShake; set => _screenShake = value ?? throw new InvalidDataException("screenShake cannot be null"); }
 
+    private VfxContourSpec? _geometry;
+    [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)] public VfxContourSpec? Geometry {get=>_geometry;set=>_geometry=value??throw new InvalidDataException("geometry cannot be null");}
     private VfxShapeSpec? _shape;
     [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
     public VfxShapeSpec? Shape { get => _shape; set => _shape=value ?? throw new InvalidDataException("shape cannot be null"); }
 
+    private VfxNativeEffectSpec? _nativeEffect;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public VfxNativeEffectSpec? NativeEffect
+    {
+        get => _nativeEffect;
+        set => _nativeEffect = value ?? throw new InvalidDataException("nativeEffect cannot be null");
+    }
     private VfxNativeDustSpec? _dust;
     private VfxNativeLightSpec? _light;
     [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
@@ -237,6 +258,9 @@ public sealed class VfxSlotSpec
                 || rendererKind is not (InfiniVfxRendererKind.SpriteElement or InfiniVfxRendererKind.LibraryParticle or InfiniVfxRendererKind.LightCue or InfiniVfxRendererKind.NativeLight))
                 throw new InvalidDataException("placed VFX requires exact binding, periodic/self and spriteElement/libraryParticle/lightCue cadence");
         }
+        if(rendererKind!=InfiniVfxRendererKind.Contours&&Geometry is not null)throw new InvalidDataException("foreign geometry payload");
+        VfxNativeEffectSpec.ValidateSlot(this, _hasPhaseOffset);
+        if (rendererKind == InfiniVfxRendererKind.NativeEffect) return;
         VfxHistoryTrailSpec.ValidateSlot(this,_hasPhaseOffset);
         if(rendererKind==InfiniVfxRendererKind.HistoryTrail)return;
         VfxNativeCueValidation.Validate(this,_hasPhaseOffset);
@@ -257,9 +281,13 @@ public sealed class VfxSlotSpec
             if(Shape is null)throw new InvalidDataException("shape renderer requires shape");
             Shape.Validate(this);
         } else if(Shape is not null)throw new InvalidDataException("foreign shape payload");
+        if(rendererKind==InfiniVfxRendererKind.Contours){if(_hasPhaseOffset||Geometry is null)throw new InvalidDataException("contours requires geometry and forbids phaseOffset");Geometry.Validate();
+            if(Geometry.Attachment=="source"&&Event is "on_expire" or "on_kill")throw new InvalidDataException("terminal contour requires world attachment");
+            if(Event==RuntimeEventKind.Periodic?RepeatEvery is null or <1:RepeatEvery!=0)throw new InvalidDataException("invalid contour cadence");
+        }
         VfxLibraryValidation.Validate(this,rendererKind);
         bool ownsColor = rendererKind is not (InfiniVfxRendererKind.SoundCue or InfiniVfxRendererKind.ScreenShakeCue
-            or InfiniVfxRendererKind.SpriteElement or InfiniVfxRendererKind.TexturedPath or InfiniVfxRendererKind.LibraryParticle or InfiniVfxRendererKind.Shape);
+            or InfiniVfxRendererKind.SpriteElement or InfiniVfxRendererKind.TexturedPath or InfiniVfxRendererKind.LibraryParticle or InfiniVfxRendererKind.Shape or InfiniVfxRendererKind.Contours);
         if (ownsColor ? Color is null : Color is not null)
             throw new InvalidDataException(ownsColor ? "VFX renderer requires explicit local color" : "VFX renderer forbids common color");
         Color?.Validate();
@@ -271,7 +299,7 @@ public sealed class VfxSlotSpec
             if (Path is null || Element is not null) throw new InvalidDataException("texturedPath requires only path payload");
             Path.Validate(this);
         } else if (Element is not null || Path is not null) throw new InvalidDataException("foreign VFX material payload");
-        bool shape = rendererKind == InfiniVfxRendererKind.Shape;
+        bool shape = rendererKind is InfiniVfxRendererKind.Shape or InfiniVfxRendererKind.Contours;
         bool nestedBranch = shape || materialBranch || rendererKind is InfiniVfxRendererKind.LibraryParticle or InfiniVfxRendererKind.ScreenShakeCue;
         bool shake = rendererKind == InfiniVfxRendererKind.ScreenShakeCue;
         bool sound = rendererKind == InfiniVfxRendererKind.SoundCue;

@@ -63,7 +63,7 @@ managers. Сейчас открыты точные PNG выше и native `Scree
 ## Те же ресурсы как ингредиенты остальных renderers
 
 `spriteElement`, `texturedPath` и `historyTrail` (`draw=sprites`) принимают
-`texture: {"source":"library", "assetId":"shineFlare"}` — те же семь ID.
+`texture: {"source":"library", "assetId":"shineFlare"}` — тот же зарегистрированный набор ID.
 Это использует их существующие offset/attachment/lifetime profiles/history/UV,
 не добавляя вторую систему профилей для instanced particles. Native selector
 не требует `assets[]`, Image-вызова или готовности generated PNG.
@@ -102,3 +102,84 @@ U вдоль пути по существующему wire-контракту. B
 json_object и strict json_schema; nullable transport alias не используется.
 Старый saved wire без bundle сохраняет точную identity и отсутствие поля;
 явный null, неполный bundle и turns вне 0..3 не принимаются.
+
+## Три различные фактуры, а не дубли библиотек
+
+Общий selector дополнен тремя pinned Luminance noise-текстурами 512×512:
+
+| ID | Ресурс в `Luminance/Assets/Noise/` | Рисунок |
+|---|---|---|
+| `branchingNoise` | `DendriticNoiseZoomedOut` | Ветвящиеся светлые прожилки вокруг тёмных ячеек |
+| `turbulentNoise` | `TurbulentNoise` | Неоднородные облачные вихри, почти серый RGB |
+| `blotchNoise` | `WavyBlotchNoise` | Мягкие округлые светлые/тёмные пятна |
+
+Это **непрозрачные фактуры**, не готовые прозрачные облака/дым. Их можно
+использовать существующим texture selector в spriteElement, texturedPath,
+спрайтовом historyTrail и как libraryParticle: world-размер, UV и цвет
+по-прежнему выбираются отдельно. Additive подавляет чёрный фон; alpha его
+сохраняет. Никакой автоматической маски, erosion shader или новой анимации
+за именем noise не скрывается. Статическая фактура движется только уже
+явно выбранными UV/transform controls.
+
+Оставлен один coarse dendritic ресурс, без второго близкого варианта масштаба.
+Не добавлены Pixel из второй библиотеки или очередные GlowParticle: для них
+уже есть canonical solidPixel и glow-ресурсы. Старые saved ID не переназначены.
+
+## Отдельные оригинальные эффекты Terraria
+
+`rendererKind=nativeEffect` — явно выбранный **готовый native рецепт**, а не
+lowering универсальной формы. Payload `nativeEffect.type`:
+
+| ID | Terraria recipe | Что видно / доступный input |
+|---|---|---|
+| `goldCrossBurst` | Excalibur | Золотистые осевые искры: 8 sparkles на 30 ticks + 8 Dust; без movement |
+| `rainbowBurst` | RainbowRodHit | Радиальная многоцветная вспышка: 12 sparkles на 60 ticks + 24 Dust; обязательный movement |
+| `darkLightningBurst` | BlackLightningHit | Короткие чёрно-индиговые анимированные разряды на 24 ticks; без movement |
+| `shimmerStar` | ShimmerBlock | Одна случайно окрашенная звезда на 45 ticks с дрейфом/ускорением; обязательный movement |
+
+`movement={"x":0,"y":0}` задаётся только для двух читающих его native recipes,
+в world px/tick, каждая компонента −24..24. Он не наследуется от источника.
+Это input stock-рецепта, не обещание скорости каждой частицы: rainbow burst
+масштабирует/распределяет движение, shimmer star добавляет movement/45 как
+ускорение каждый tick.
+Позиция — зафиксированный anchor; эффект detached и может закончить native
+lifetime уже после исчезновения источника. Цвет, размер, длительность,
+over-player layer и части native motion принадлежат stock-коду. Поэтому
+color/scale/duration/blend/layer/count здесь **не принимаются**, а не молча
+игнорируются. Начало и cadence — существующие `startTick`/`repeatEvery`:
+для события repeatEvery=0, для periodic ≥1; у item periodic startTick=0.
+
+Резервирование целого burst: goldCrossBurst — 16, rainbowBurst — 36,
+darkLightningBurst — 8 (консервативная граница native float-loop), shimmerStar — 1.
+И maxParticlesPerTick, и maxParticlesTotal должны вмещать одну такую порцию:
+несовместимый persisted budget отклоняется при admission, не молча увеличивается.
+Compiler свежего manifest уже выдаёт минимум 56/2200 для одного slot.
+Временная конкуренция с другими эффектами может подавить отдельный burst.
+Один общий nativeEffect admission limit — 256 полных частиц за world tick
+по всем источникам. Дополнительно реальные записи публичного Terraria
+World_OverPlayers particle renderer учитываются вместе с IFC material/library
+частицами в общем live bound 2048; для нового burst проверяются sprite-порции
+8/12/8/1. Это read-only backpressure, не владение чужими эффектами: чужие
+частицы не удаляются, чужой код может превысить границу своими вызовами,
+но IFC при заполнении не добавляет новые. Native ParticlePool(200) — начальная
+ёмкость, **не hard cap**, поэтому на неё защита не полагается.
+Клиентская плотность частиц ниже 100% выбирает целые burst, не обрезает stock
+рецепт; при 0% они отключены.
+Весь burst должен поместиться в общий particle budget до вызова. Это не
+«один вызов = одна частица» и не дробление stock-рецепта ради бюджета.
+Нативные частицы обслуживает Terraria, не IFC detached draw-list; нет обещания
+изменять их attachment/layer или досрочно отзывать уже переданные частицы.
+
+Проверено по установленной tModLoader 1.4.4.9, SHA256
+`fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5`:
+выбранные четыре spawn-ветки и Update/Draw используемых native particles не
+вызывают gameplay projectile spawn, damage, network или sound. Используется
+только client-side `SpawnParticlesDirect`; Broadcast/Request не используются.
+BlackLightning загружает texture projectile 916, **не создаёт projectile**.
+Native Dust может давать освещение. Native randomness использует Main.rand,
+это не slot-seeded собственная симуляция и не обещание изоляции игрового RNG.
+
+Весь enum Orchestra намеренно не открыт: ItemTransfer вызывает
+`Chest.AskForChestToEatItem`, некоторые другие рецепты включают звук,
+зависят от игрока/его shader или дублируют имеющиеся sparkle-эффекты.
+Ни имя предмета, ни DamageClass не выбирают recipe автоматически.

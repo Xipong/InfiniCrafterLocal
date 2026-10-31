@@ -8,6 +8,9 @@ namespace InfiniCrafterLocal.Common.VFX;
 internal static class VfxLibraryTextures
 {
     private static readonly Dictionary<string,string> Paths = new(System.StringComparer.Ordinal) {
+        ["branchingNoise"]="Luminance/Assets/Noise/DendriticNoiseZoomedOut",
+        ["turbulentNoise"]="Luminance/Assets/Noise/TurbulentNoise",
+        ["blotchNoise"]="Luminance/Assets/Noise/WavyBlotchNoise",
         ["star"]="ParticleLibrary/Assets/Textures/Star",
         ["solidPixel"]="ParticleLibrary/Assets/Textures/WhitePixel",
         ["bloomCircle"]="Luminance/Assets/GreyscaleTextures/BloomCircleSmall",

@@ -148,6 +148,9 @@ def element_schema(*, include_legacy: bool = False) -> dict[str, Any]:
 
 
 LIBRARY_PARTICLE_TEXTURES = {
+    "branchingNoise": "Luminance/Assets/Noise/DendriticNoiseZoomedOut: 512x512 grayscale branching bright veins around dark cells; opaque texture, not transparent particles.",
+    "turbulentNoise": "Luminance/Assets/Noise/TurbulentNoise: 512x512 near-grayscale turbulent cloud texture; opaque RGB, not a transparent smoke sprite.",
+    "blotchNoise": "Luminance/Assets/Noise/WavyBlotchNoise: 512x512 grayscale smooth rounded light/dark blotches; opaque texture.",
     "star": "ParticleLibrary/Assets/Textures/Star: 128x128 soft radial glow, NOT a star silhouette.",
     "solidPixel": "ParticleLibrary/Assets/Textures/WhitePixel: solid white 1x1 pixel, stretched to the authored rectangle.",
     "bloomCircle": "Luminance/Assets/GreyscaleTextures/BloomCircleSmall: 200x200 broad soft circular glow.",

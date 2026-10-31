@@ -20,6 +20,7 @@ from infini_local.core.errors import PlannerUnavailable
 from infini_local.pipelines.parent_context_cards import parent_context_for_stage
 from infini_local.pipelines.parent_presentation_context import presentation_parent_card_for_llm
 from infini_local.core.llm_stage_messages import generation_system_suffix, stage_chat_message
+from infini_local.core.vfx_contour_contract import MAX_DRAW_WORK_UNITS, CONTOUR_SEMANTICS, contour_schema, contour_slot_clauses, contour_slot_errors, contour_texture_clauses, contour_budget_errors, required_contour_budget
 from infini_local.core.repair_merge import json_path_child, json_path_relative, json_values_equal, merge_frozen_subtree
 from infini_local.core.runtime_authoring.capability_registry import ENTITY_KIND_REGISTRY
 from infini_local.core.runtime_authoring.wire_views import runtime_event_inventory, runtime_visual_roles
@@ -52,6 +53,9 @@ from infini_local.core.vfx_manifest_config import (
 from infini_local.core.vfx_history_contract import (
     LEGACY_HISTORY_RENDERERS, HISTORY_RENDERERS, HISTORY_SEMANTICS,
     history_schema, history_slot_clauses, history_texture_clauses,
+)
+from infini_local.core.vfx_native_effect_contract import (
+    NATIVE_EFFECT_SEMANTICS, native_effect_schema, native_effect_slot_clauses, native_effect_budget_errors,
 )
 from infini_local.core.vfx_native_cue_contract import (
     NATIVE_CUE_RENDERERS, NATIVE_DUST_SEMANTICS, NATIVE_LIGHT_SEMANTICS, NATIVE_CUE_TIMING,
@@ -99,7 +103,7 @@ _RENDERERS = (
     "spriteStampTrail", "historyRibbon", "tipTrail",
     "ghostArc", "wavyStrip", "beamLine", "fieldPulse", "orbitingMotes",
     "impactRing", "impactSprite", "childMotes",
-    "lightCue", "soundCue", "screenShakeCue", "libraryParticle", "shape", *HISTORY_RENDERERS, *NATIVE_CUE_RENDERERS, *MATERIAL_RENDERERS,
+    "lightCue", "soundCue", "screenShakeCue", "libraryParticle", "shape", "contour", *HISTORY_RENDERERS, *NATIVE_CUE_RENDERERS, "nativeEffect", *MATERIAL_RENDERERS,
 )
 _FRESH_RENDERERS = tuple(r for r in _RENDERERS if r not in LEGACY_SHAPE_RENDERERS | LEGACY_HISTORY_RENDERERS | {"childMotes", "lightCue", "impactSprite"})
 SPRITE_TEXTURE_RENDERERS = frozenset({
@@ -110,7 +114,7 @@ SPRITE_TEXTURE_RENDERERS = frozenset({
 _RENDERER_REQUIREMENTS = {"impactSprite": {"textureRole": "impact"}}
 # These controls have no executor in the selected branch. They are forbidden,
 # not optional defaults, and neither validation nor compilation materializes them.
-_NESTED_RENDERERS = ("spriteElement", "texturedPath", "libraryParticle", "screenShakeCue", "shape")
+_NESTED_RENDERERS = ("spriteElement", "texturedPath", "libraryParticle", "screenShakeCue", "shape", "contour")
 _RENDERER_UNUSED_FIELDS = {
     renderer: frozenset({"scale", "density", "spread", "particleSystemId", "textureRole"})
     | ({"duration", "repeatEvery"} if renderer == "texturedPath" else set())
@@ -118,8 +122,9 @@ _RENDERER_UNUSED_FIELDS = {
     for renderer in _NESTED_RENDERERS
 }
 _RENDERER_UNUSED_FIELDS["shape"] |= {"alpha"}
+_RENDERER_UNUSED_FIELDS["contour"] |= {"alpha"}
 _RENDERER_UNUSED_FIELDS["historyTrail"] = frozenset({"startTick", "duration", "repeatEvery", "scale", "density", "spread", "alpha", "particleSystemId", "textureRole"})
-for _renderer in NATIVE_CUE_RENDERERS:
+for _renderer in (*NATIVE_CUE_RENDERERS, "nativeEffect"):
     _RENDERER_UNUSED_FIELDS[_renderer] = frozenset({"scale", "density", "spread", "alpha", "duration", "particleSystemId", "blend", "layer", "textureRole"})
 _RENDERER_UNUSED_FIELDS["soundCue"] = frozenset({
     "scale", "spread", "particleSystemId", "textureRole", "duration", "alpha", "blend", "layer",
@@ -133,7 +138,7 @@ for _renderer in _RENDERERS:
     if _renderer not in SPRITE_TEXTURE_RENDERERS:
         _RENDERER_UNUSED_FIELDS[_renderer] = _RENDERER_UNUSED_FIELDS.get(_renderer, frozenset()) | {"textureRole"}
 _CADENCE_ONLY_RENDERERS = ("soundCue", "lightCue", "impactSprite")
-_COLORLESS_RENDERERS = ("soundCue", "screenShakeCue", "libraryParticle", "shape", "historyTrail", *MATERIAL_RENDERERS)
+_COLORLESS_RENDERERS = ("nativeEffect", "soundCue", "screenShakeCue", "libraryParticle", "shape", "contour", "historyTrail", *MATERIAL_RENDERERS)
 _PLACED_VFX_RULE = "Optional placementBindingId selects only an exact runtimeSurface.placementBindings entry of this item_body: periodic/self spriteElement/libraryParticle/nativeLight. Omit selector for ordinary item/projectile effects; placed-selected slots never emit in hand/equipment. Bounds are read-only actual top-left native TileFrameY, not animation age. self is footprint center, forward=right, side=down, velocity=0. Offset separate flame ingredients with element.offsetForwardPx/offsetSidePx; reuse existing assets for live flames while root PNG stays stable physical furniture. Source attachment retires on off/removal; world particles finish bounded life. Only this placed-selected cohort uses maxParticlesTotal as a fresh allowance per due emission burst, not a cumulative lifetime cap; maxParticlesPerTick and global live-instance/draw caps remain. Light emits only on due world ticks: repeatEvery=1 means steady light; no automatic cadence rewrite. No new gameplay or automatic slot insertion."
 
 _READABILITY_RULE = (
@@ -155,7 +160,9 @@ _READABILITY_RULE = (
 
 _RENDERER_SEMANTICS = {
     "shape": SHAPE_SEMANTICS,
+    "contour": CONTOUR_SEMANTICS,
     "historyTrail": HISTORY_SEMANTICS,
+    "nativeEffect": NATIVE_EFFECT_SEMANTICS,
     "nativeDust": NATIVE_DUST_SEMANTICS + " " + NATIVE_CUE_TIMING,
     "nativeLight": NATIVE_LIGHT_SEMANTICS + " " + NATIVE_CUE_TIMING,
     "libraryParticle": "Real ParticleLibrary V3 instanced particles using the explicit textureId from the registered native palette, separate from Terraria Dust. Explicit particle controls choose count, motion, dimensions, spin, color and lifetime fade; world-only attachment captures event-time pose. duration is individual lifetime; event startTick is delay/repeatEvery=0, periodic repeatEvery>=1 and item startTick=0. Velocity updates once per world tick as velocity*drag+world acceleration, then position+=velocity. Common alpha multiplies linear endOpacity once; dimensions multiply linear endScaleMultiplier. Explicit alpha/additive blend and exact before/after projectile layer remain choices. Uses existing cadence/occurrence/source budgets; disabled library suppresses this lane with no Dust fallback. No damage, gameplay child, generated PNG or inferred direction.",
@@ -525,7 +532,9 @@ def _director_schema(data: Mapping[str, Any], *, include_legacy: bool = False) -
             "color": rgb_schema(),
             "element": element_schema(include_legacy=include_legacy),
             "shape": shape_schema(persisted_wire=include_legacy),
+            "geometry": contour_schema(),
             "trail": history_schema(),
+            "nativeEffect": native_effect_schema(),
             "dust": native_dust_schema(persisted_wire=include_legacy),
             "light": native_light_schema(),
             "path": path_schema(),
@@ -544,7 +553,7 @@ def _director_schema(data: Mapping[str, Any], *, include_legacy: bool = False) -
         for renderer, required in _RENDERER_REQUIREMENTS.items()
     ]
     slot["allOf"].append({
-        "if": {"properties": {"rendererKind": {"enum": [r for r in renderers if r != "shape"]}}, "required": ["rendererKind"]},
+        "if": {"properties": {"rendererKind": {"enum": [r for r in renderers if r not in {"shape", "contour"}]}}, "required": ["rendererKind"]},
         "then": {"properties": {"duration": {"minimum": 3}}},
     })
     slot["allOf"].append({
@@ -572,8 +581,11 @@ def _director_schema(data: Mapping[str, Any], *, include_legacy: bool = False) -
     item_ids = [row["id"] for row in entities or [] if isinstance(row, Mapping) and row.get("kind") == "item_body" and isinstance(row.get("id"), str)]
     slot["allOf"].extend(material_slot_clauses(item_ids, [r for r in renderers if r not in MATERIAL_RENDERERS], events, _textured_path_sources(data)))
     slot["allOf"].extend(shape_slot_clauses(item_ids, list(renderers), events))
+    slot["allOf"].extend(contour_slot_clauses(item_ids, list(renderers), events))
+    slot["allOf"].extend(contour_texture_clauses(_entity_texture_sources(data, include_legacy=include_legacy)))
     slot["allOf"].extend(history_slot_clauses(item_ids, list(renderers), events))
     slot["allOf"].extend(history_texture_clauses(_entity_texture_sources(data, include_legacy=include_legacy)))
+    slot["allOf"].extend(native_effect_slot_clauses(item_ids, list(renderers), events))
     slot["allOf"].extend(native_cue_slot_clauses(item_ids, list(renderers), events))
     slot["allOf"].extend(material_texture_clauses(_entity_texture_sources(data, include_legacy=include_legacy)))
     slot["allOf"].extend([
@@ -726,83 +738,87 @@ def vfx_png_dependencies(
         renderer = slot.get("rendererKind")
         if not isinstance(renderer, str):
             continue
-        selector = f"$.slots[{index}].textureRole"
-        asset_id = ""
-        if renderer in MATERIAL_RENDERERS or renderer == "historyTrail":
+        texture_refs=[]
+        if renderer == "contour":
+            geometry=slot.get("geometry")
+            draws=geometry.get("draws") if isinstance(geometry,Mapping) else []
+            for draw_index,draw in enumerate(draws if isinstance(draws,list) else []):
+                material=draw.get("material") if isinstance(draw,Mapping) else None
+                texture=material.get("texture") if isinstance(material,Mapping) else None
+                if isinstance(texture,Mapping):
+                    texture_refs.append((f"$.slots[{index}].geometry.draws[{draw_index}].material.texture.source",texture.get("source"),texture.get("assetId")))
+        elif renderer in MATERIAL_RENDERERS or renderer == "historyTrail":
             name = "trail" if renderer == "historyTrail" else "element" if renderer == "spriteElement" else "path"
             payload = slot.get(name)
             texture = payload.get("texture") if isinstance(payload, Mapping) else None
-            if not isinstance(texture, Mapping):
-                continue
-            source = texture.get("source")
-            asset_id = texture.get("assetId")
-            selector = f"$.slots[{index}].{name}.texture.source"
+            if isinstance(texture,Mapping):
+                texture_refs.append((f"$.slots[{index}].{name}.texture.source",texture.get("source"),texture.get("assetId")))
         elif renderer in SPRITE_TEXTURE_RENDERERS:
-            source = slot.get("textureRole")
-            if not isinstance(source, str) or source not in _TEXTURE_ROLES:
-                errors.append({"path": selector, "message": "exact textureRole enum required"})
+            source=slot.get("textureRole")
+            selector=f"$.slots[{index}].textureRole"
+            if not isinstance(source,str) or source not in _TEXTURE_ROLES:
+                errors.append({"path":selector,"message":"exact textureRole enum required"})
+            else:texture_refs.append((selector,source,""))
+        for selector,source,asset_id in texture_refs:
+            if not isinstance(source, str):
+                continue  # Scalar enum/type diagnostics belong to the shape gate.
+            entity_id = slot.get("entityId")
+            if not isinstance(entity_id, str):
                 continue
-        else:
-            continue
-        if not isinstance(source, str):
-            continue  # Scalar enum/type diagnostics belong to the shape gate.
-        entity_id = slot.get("entityId")
-        if not isinstance(entity_id, str):
-            continue
-        if entity_id not in entities and source in ("entity", "impact"):
-            # Pair validation owns the unresolved entity; it cannot diagnose
-            # that entity's mode or impact producer. Independent item/
-            # asset references still resolve below, including asset usage.
-            continue
-        entity = entities.get(entity_id, {})
-        raw_visual = entity.get("visual")
-        entity_visual = raw_visual if isinstance(raw_visual, Mapping) else {}
-        mode = entity_visual.get("assetMode")
-        role = ""
-        if source == "library" and (renderer in MATERIAL_RENDERERS or renderer == "historyTrail"):
-            if not isinstance(asset_id, str) or asset_id not in LIBRARY_PARTICLE_TEXTURES:
-                errors.append({"path": selector.removesuffix("source") + "assetId", "message": "exact registered library texture id required; no paths or generated artwork"})
-            # Native installed resource, never a generated PNG dependency/job.
-            continue
-        if source == "asset" and (renderer in MATERIAL_RENDERERS or renderer == "historyTrail"):
-            if not isinstance(asset_id, str) or re.fullmatch(ASSET_ID_PATTERN, asset_id) is None or asset_id not in known:
-                dangling = True
-                errors.append({"path": selector.removesuffix("source") + "assetId", "message": "exact declared VFX asset id required; repair the reference, never create compensating artwork"})
-                # Preserve empty-domain Repair: both selector leaves are broken,
-                # never permission to invent a request or redesign valid assets.
-                if not known:
-                    errors.append({"path": selector, "message": "asset texture source requires a declared VFX asset; repair the reference, never create compensating artwork"})
+            if entity_id not in entities and source in ("entity", "impact"):
+                # Pair validation owns the unresolved entity; it cannot diagnose
+                # that entity's mode or impact producer. Independent item/
+                # asset references still resolve below, including asset usage.
                 continue
-            used.add(asset_id)
-            role = "vfx:" + asset_id
-        elif source == "item":
-            role = "item"
-        elif source == "impact":
-            if entity_id not in impacts:
-                errors.append({"path": selector, "message": "impact texture requires a same-entity impactSprite image producer"})
+            entity = entities.get(entity_id, {})
+            raw_visual = entity.get("visual")
+            entity_visual = raw_visual if isinstance(raw_visual, Mapping) else {}
+            mode = entity_visual.get("assetMode")
+            role = ""
+            if source == "library" and (renderer in MATERIAL_RENDERERS or renderer in {"historyTrail", "contour"}):
+                if not isinstance(asset_id, str) or asset_id not in LIBRARY_PARTICLE_TEXTURES:
+                    errors.append({"path": selector.removesuffix("source") + "assetId", "message": "exact registered library texture id required; no paths or generated artwork"})
+                # Native installed resource, never a generated PNG dependency/job.
                 continue
-            role = "impact:" + entity_id
-        elif source == "entity":
-            if mode not in ("baked_sprite", "reuse_item_icon"):
-                errors.append({"path": selector, "message": "entity texture requires the exact entity baked_sprite/reuse_item_icon producer; no_asset/runtime_geometry provide no PNG"})
+            if source == "asset" and (renderer in MATERIAL_RENDERERS or renderer in {"historyTrail", "contour"}):
+                if not isinstance(asset_id, str) or re.fullmatch(ASSET_ID_PATTERN, asset_id) is None or asset_id not in known:
+                    dangling = True
+                    errors.append({"path": selector.removesuffix("source") + "assetId", "message": "exact declared VFX asset id required; repair the reference, never create compensating artwork"})
+                    # Preserve empty-domain Repair: both selector leaves are broken,
+                    # never permission to invent a request or redesign valid assets.
+                    if not known:
+                        errors.append({"path": selector, "message": "asset texture source requires a declared VFX asset; repair the reference, never create compensating artwork"})
+                    continue
+                used.add(asset_id)
+                role = "vfx:" + asset_id
+            elif source == "item":
+                role = "item"
+            elif source == "impact":
+                if entity_id not in impacts:
+                    errors.append({"path": selector, "message": "impact texture requires a same-entity impactSprite image producer"})
+                    continue
+                role = "impact:" + entity_id
+            elif source == "entity":
+                if mode not in ("baked_sprite", "reuse_item_icon"):
+                    errors.append({"path": selector, "message": "entity texture requires the exact entity baked_sprite/reuse_item_icon producer; no_asset/runtime_geometry provide no PNG"})
+                    continue
+                role = "item" if mode == "reuse_item_icon" or entity.get("kind") == "item_body" else "entity:" + entity_id
+            elif source == "none" and renderer in SPRITE_TEXTURE_RENDERERS:
+                errors.append({"path": selector, "message": "sprite renderer requires a non-none textureRole"})
                 continue
-            role = "item" if mode == "reuse_item_icon" or entity.get("kind") == "item_body" else "entity:" + entity_id
-        elif source == "none" and renderer in SPRITE_TEXTURE_RENDERERS:
-            errors.append({"path": selector, "message": "sprite renderer requires a non-none textureRole"})
-            continue
-        else:
-            continue  # Unsupported enum values already have exact shape errors.
-        if source == "asset":
-            producer = next(row for row in assets if isinstance(row, Mapping) and row.get("id") == asset_id)
-        elif source == "item" or (source == "entity" and mode == "reuse_item_icon"):
-            raw_visual = data.get("visual")
-            producer = raw_visual if isinstance(raw_visual, Mapping) else {}
-        else:
-            producer = entity_visual
-        prefix = "impactSprite" if source == "impact" else "sprite"
-        dependencies.append({"slotId": slot.get("id"), "entityId": entity_id,
-                             "source": source, "role": role, "selectorPath": selector,
-                             "spritePath": producer.get(prefix + "Path"), "spriteStatus": producer.get(prefix + "Status")})
+            else:
+                continue  # Unsupported enum values already have exact shape errors.
+            if source == "asset":
+                producer = next(row for row in assets if isinstance(row, Mapping) and row.get("id") == asset_id)
+            elif source == "item" or (source == "entity" and mode == "reuse_item_icon"):
+                raw_visual = data.get("visual")
+                producer = raw_visual if isinstance(raw_visual, Mapping) else {}
+            else:
+                producer = entity_visual
+            prefix = "impactSprite" if source == "impact" else "sprite"
+            dependencies.append({"slotId": slot.get("id"), "entityId": entity_id,
+                                 "source": source, "role": role, "selectorPath": selector,
+                                 "spritePath": producer.get(prefix + "Path"), "spriteStatus": producer.get(prefix + "Status")})
     # A dangling selector is not permission to delete/redesign a valid request.
     if require_used and not dangling:
         for index, row in enumerate(assets):
@@ -897,7 +913,7 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
                 errors.append({"path": f"{path}.{field}", "message": f"unsupported value {value!r}"})
             clean[field] = value
         for field, (low, high, integer) in number_fields.items():
-            if field == "duration" and slot.get("rendererKind") == "shape":
+            if field == "duration" and slot.get("rendererKind") in {"shape", "contour"}:
                 low = 1
             if field in slot:
                 clean[field] = _number(slot[field], low, high, f"{path}.{field}", errors, integer=integer)
@@ -917,7 +933,7 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
             clean["placementBindingId"] = slot["placementBindingId"]
         if "color" in slot:
             clean["color"] = copy.deepcopy(slot["color"])
-        for payload in ("dust", "light", "trail"):
+        for payload in ("dust", "light", "trail", "geometry", "nativeEffect"):
             if payload in slot:
                 clean[payload] = copy.deepcopy(slot[payload])
         if "shape" in slot:
@@ -938,8 +954,10 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
         errors.extend(_material_slot_errors(slot, path))
         errors.extend(spawn_slot_errors(slot, path))
         errors.extend(shape_slot_errors(slot, path))
+        errors.extend(contour_slot_errors(slot, path))
         errors.extend(native_cue_errors(slot, path))
         normalized_slots.append(clean)
+    errors.extend(contour_budget_errors(slots))
     errors.extend(vfx_png_dependencies(data, raw, require_used=True)["errors"])
     return {
         "ok": not errors,
@@ -995,7 +1013,7 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
             "recipeId": {"type": "string"},
             "budget": {"type": "object", "additionalProperties": False,
                        "properties": {field: {"type": "integer", "minimum": 0, "maximum": maximum}
-                                      for field, maximum in (("maxParticlesPerTick", 256), ("maxParticlesTotal", 12000), ("maxDrawCalls", 512))},
+                                      for field, maximum in (("maxParticlesPerTick", 256), ("maxParticlesTotal", 12000), ("maxDrawCalls", MAX_DRAW_WORK_UNITS))},
                        "required": ["maxParticlesPerTick", "maxParticlesTotal", "maxDrawCalls"]},
             "slots": {"type": "array", "maxItems": slots_schema["maxItems"], "items": slot_schema},
             "assets": {"type": "array", "maxItems": 16, "items": runtime_asset_schema()},
@@ -1035,8 +1053,13 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
         errors.extend(_material_slot_errors(slot, path))
         errors.extend(spawn_slot_errors(slot, path))
         errors.extend(shape_slot_errors(slot, path))
+        errors.extend(contour_slot_errors(slot, path))
+        errors.extend(native_effect_budget_errors(slot, manifest.get("budget")))
         errors.extend(native_cue_errors(slot, path, persisted_wire=True))
         errors.extend(_sound_slot_errors(slot, path, persisted_wire=True))
+    available = manifest.get("budget", {}).get("maxDrawCalls", 0) if isinstance(manifest.get("budget"), Mapping) else 0
+    if isinstance(available, int) and not isinstance(available, bool):
+        errors.extend(contour_budget_errors(slots, available, "$.vfxManifest"))
     for error in vfx_png_dependencies(data, manifest)["errors"]:
         errors.append({**error, "path": error["path"].replace("$.", "$.vfxManifest.", 1)})
     return {"ok": not errors, "errors": errors}
@@ -1093,7 +1116,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             "spriteElement and texturedPath use only their explicit nested texture and runtimeVocabulary.textureDependencyTuples; omit common scale/density/spread/particleSystemId/textureRole. Respect their own timing, opacity profiles and read-only geometry sources in runtimeVocabulary.rendererSemantics, runtimeSurface.texturedPathSources and outputSchema. Beam/whip/ownerLink current geometry owns placement and requires neutral anchor=self, historyTicks=0, minDistancePx=0 and profileDomain=length; anchorHistory keeps its authored anchor. ownerLink is an explicit optional cosmetic connector to projectile.Center, not automatic from movement, item names or categories. Require path.ownerAnchor=mountedCenter or frontHand only on ownerLink; omit it on all other sources. mountedCenter reads native owner.MountedCenter, not a hand. frontHand requires a currently enabled compositeFrontArm; when unavailable the connector is refused/retired, never guessed from body frames or changed to center.",
             "Compose a coherent visible body, motion and impact from acceptedVisualKit, including its advisory animationPlan. runtimeSurface.bodyPresentation states what is already drawn: solid_untextured is a plain line, not a shaded weapon or textured skin; VFX cannot remove it. no_body has no underlying image. A texturedPath can carry an explicitly authored material along the actual beam/whip curve using a generated strip, width/color/opacity profiles and UV choice. Do not stretch a full inventory icon into a rope or mistake an impact spark for body coverage. Keep these choices deliberate; restrained presentation may still use empty slots.",
             _PLACED_VFX_RULE,
-            "assets is optional: request at most sixteen isolated texture ingredients consistent with acceptedVisualKit, declare exact safe IDs once and reuse explicitly through element.texture, path.texture or trail.texture. No filesystem paths/URLs or execution metadata. Never request unused art. cutout fits soft-alpha subjects; strip preserves authored frame/UV through resize without crop/recenter/rotation. Either layout can serve either new renderer; no asset-name or weapon classifier.",
+            "assets is optional: request at most sixteen isolated texture ingredients consistent with acceptedVisualKit, declare exact safe IDs once and reuse explicitly through element.texture, path.texture, trail.texture or geometry.draws[].material.texture. No filesystem paths/URLs or execution metadata. Never request unused art. cutout fits soft-alpha subjects; strip preserves authored frame/UV through resize without crop/recenter/rotation. Either layout can serve either new renderer; no asset-name or weapon classifier.",
             "Return only one JSON object matching outputSchema.",
         ],
     }
@@ -1117,7 +1140,7 @@ def vfx_schema_instruction_paths(*, repair: bool, schema: Mapping[str, Any] | No
     )
     paths: dict[str, tuple[str | int, ...]] = {"slot_" + field: slot + ("properties", field) for field in fields}
     paths.update({field: slot + ("properties", field)
-                  for field in ("element", "path", "screenShake", "particle", "sound", "shape", "trail", "dust", "light")})
+                  for field in ("element", "path", "screenShake", "particle", "sound", "shape", "trail", "dust", "light", "nativeEffect")})
     paths["asset"] = ("properties", "assetsUpsert" if repair else "assets", "items")
     if schema is not None:
         present = {}
@@ -1301,6 +1324,9 @@ def _vfx_repair_structure(schema: Mapping[str, Any]) -> dict[str, Any]:
         out["properties"] = {name: _vfx_repair_structure(child) for name, child in out["properties"].items()}
     if isinstance(out.get("items"), Mapping):
         out["items"] = _vfx_repair_structure(out["items"])
+    for union in ("anyOf", "oneOf"):
+        if isinstance(out.get(union), list):
+            out[union] = [_vfx_repair_structure(branch) for branch in out[union]]
     return out
 
 
@@ -1384,7 +1410,7 @@ def _filter_vfx_repair_patch(
                 continue
             merged, row_ignored, row_accepted = merge_frozen_subtree(
                 original, candidate, mutable_paths=slot_permissions.get(slot_id, ()), audit_path=path, allow_additions=False,
-                delete_paths=slot_delete_permissions.get(slot_id, ()),
+                delete_paths=slot_delete_permissions.get(slot_id, ()), array_leaves=True,
             )
             ignored.extend(row_ignored)
             accepted.extend(row_accepted)
@@ -1614,7 +1640,7 @@ def _vfx_scoped_repair_vocabulary(vocabulary: Mapping[str, Any], previous: Any, 
     selected["rendererSemantics"] = {key: copy.deepcopy(value) for key, value in vocabulary.get("rendererSemantics", {}).items() if key in renderers}
     # These nested owners contain selectors and semantic relations not expressed
     # by their root name alone. Keep their canonical read-only dependency facts.
-    if roots & {"textureRole", "element", "path", "entityId", "event"}:
+    if roots & {"textureRole", "element", "path", "geometry", "entityId", "event"}:
         selected["textureDependencyTuples"] = copy.deepcopy(vocabulary.get("textureDependencyTuples") or {})
     if "color" in roots:
         selected["colorPolicy"] = copy.deepcopy(vocabulary.get("colorPolicy"))
@@ -1814,7 +1840,7 @@ def _compile_manifest(data: Mapping[str, Any], authored: Mapping[str, Any], reci
         "budget": {
             "maxParticlesPerTick": max(16, min(256, 32 + len(slots) * 24)),
             "maxParticlesTotal": max(256, min(12000, 1000 + len(slots) * 1200)),
-            "maxDrawCalls": max(32, min(512, 64 + len(slots) * 36)),
+            "maxDrawCalls": max(32, min(MAX_DRAW_WORK_UNITS, max(64 + len(slots) * 36, required_contour_budget(slots)))),
         },
         "slots": slots,
         **({"assets": [{**copy.deepcopy(row), "spritePath": "", "spriteUrl": "", "spriteStatus": "pending", "spriteTechnicalScore": 0.0} for row in authored["assets"]]} if "assets" in authored else {}),

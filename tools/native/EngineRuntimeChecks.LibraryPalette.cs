@@ -9,6 +9,9 @@ internal static partial class EngineRuntimeChecks
     private static void LibraryPaletteExactResourceSnapshot()
     {
         var palette = new[] {
+            ("branchingNoise","Luminance/Assets/Noise/DendriticNoiseZoomedOut"),
+            ("turbulentNoise","Luminance/Assets/Noise/TurbulentNoise"),
+            ("blotchNoise","Luminance/Assets/Noise/WavyBlotchNoise"),
             ("star","ParticleLibrary/Assets/Textures/Star"),
             ("solidPixel","ParticleLibrary/Assets/Textures/WhitePixel"),
             ("bloomCircle","Luminance/Assets/GreyscaleTextures/BloomCircleSmall"),

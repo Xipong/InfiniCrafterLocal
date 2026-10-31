@@ -219,7 +219,7 @@ def test_rgb_component_repair_is_exact_and_preserves_other_channels_profiles_and
 
 
 @pytest.mark.parametrize("renderer", [renderer for renderer in vfx.vfx_director_surface(_data())["rendererKind"]
-                                      if renderer not in {"spriteElement", "texturedPath", "libraryParticle", "screenShakeCue", "soundCue", "shape", "historyTrail"}])
+                                      if renderer not in {"spriteElement", "texturedPath", "libraryParticle", "screenShakeCue", "soundCue", "shape", "contour", "historyTrail", "nativeEffect"}])
 def test_every_simple_visible_renderer_requires_explicit_rgb(renderer):
     from tests.test_vfx_material_admission_contracts import _renderer_material
     from tests.test_low_level_three_stage_pipeline import _accepted_visual_data

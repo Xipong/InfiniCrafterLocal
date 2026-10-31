@@ -7,7 +7,7 @@ public enum InfiniVfxRendererKind
 {
     None, SpriteStampTrail, HistoryRibbon, TipTrail, GhostArc, WavyStrip,
     BeamLine, FieldPulse, OrbitingMotes, ImpactRing, ImpactSprite, ChildMotes,
-    NativeDust, NativeLight, HistoryTrail, Shape, LightCue, SoundCue, SpriteElement, TexturedPath, LibraryParticle, ScreenShakeCue
+    NativeDust, NativeLight, NativeEffect, HistoryTrail, Shape, Contours, LightCue, SoundCue, SpriteElement, TexturedPath, LibraryParticle, ScreenShakeCue
 }
 
 /// <summary>Exact renderer registry. Runtime never classifies prose or fuzzy renderer text.</summary>
@@ -34,10 +34,12 @@ public static class VfxRendererRegistry
     {
         return value switch
         {
+            "nativeEffect" => InfiniVfxRendererKind.NativeEffect,
             "nativeDust" => InfiniVfxRendererKind.NativeDust,
             "nativeLight" => InfiniVfxRendererKind.NativeLight,
             "historyTrail" => InfiniVfxRendererKind.HistoryTrail,
             "shape" => InfiniVfxRendererKind.Shape,
+            "contour" => InfiniVfxRendererKind.Contours,
             "libraryParticle" => InfiniVfxRendererKind.LibraryParticle,
             "screenShakeCue" => InfiniVfxRendererKind.ScreenShakeCue,
             "spriteElement" => InfiniVfxRendererKind.SpriteElement,
@@ -62,10 +64,12 @@ public static class VfxRendererRegistry
 
     public static string ToWireName(InfiniVfxRendererKind kind) => kind switch
     {
+        InfiniVfxRendererKind.NativeEffect => "nativeEffect",
         InfiniVfxRendererKind.NativeDust => "nativeDust",
         InfiniVfxRendererKind.NativeLight => "nativeLight",
         InfiniVfxRendererKind.HistoryTrail => "historyTrail",
         InfiniVfxRendererKind.Shape => "shape",
+        InfiniVfxRendererKind.Contours => "contour",
         InfiniVfxRendererKind.LibraryParticle => "libraryParticle",
         InfiniVfxRendererKind.ScreenShakeCue => "screenShakeCue",
         InfiniVfxRendererKind.SpriteElement => "spriteElement",

@@ -42,7 +42,7 @@ public static class InfiniVfxClientOptions
     internal static int EffectiveDrawBudget(int authoredBudget)
         // Client quality scales the allowance, not the serialized definition.
         // Floor fractional allowances and retain the normalized engine ceiling.
-        => Math.Min(512, (int)(Math.Clamp(authoredBudget, 0, 512) * DrawBudgetMultiplier));
+        => Math.Min(2048, (int)(Math.Clamp(authoredBudget, 0, 2048) * DrawBudgetMultiplier));
 
     public static float PresentationLightMultiplier
         => Math.Clamp(Config?.PresentationLightMultiplier ?? 1f, 0f, 1f);

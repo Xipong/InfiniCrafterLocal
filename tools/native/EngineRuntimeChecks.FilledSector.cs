@@ -72,10 +72,10 @@ internal static partial class EngineRuntimeChecks
             var oldPixel=Terraria.GameContent.TextureAssets.MagicPixel;var oldView=Terraria.Main.GameViewMatrix;bool oldServer=Terraria.Main.dedServ;
             int submissions=0;
             var began=typeof(SpriteBatch).GetField("beginCalled",BindingFlags.NonPublic|BindingFlags.Instance)!;
-            Action<GraphicsDevice,Texture2D,VertexPositionColorTexture[],bool> submit=(device,texture,mesh,repeat)=>{
+            Action<GraphicsDevice,Texture2D,VertexPositionColorTexture[],bool,bool> submit=(device,texture,mesh,repeat,linear)=>{
                 Equal(false,(bool)began.GetValue(batch)!,"native triangles submitted outside active SpriteBatch");
                 Equal(true,ReferenceEquals(pixel,texture),"native white texture reused");
-                Equal(48,mesh.Length,"actual submitted disk fan");Equal(false,repeat,"solid sampler clamps");submissions++;
+                Equal(48,mesh.Length,"actual submitted disk fan");Equal(false,repeat,"solid sampler clamps");Equal(false,linear,"sector retains point sampling");submissions++;
             };
             using var hook=new MonoMod.RuntimeDetour.Hook(type.GetMethod("DrawMaterialPathMesh",flags)!,submit);
             try {

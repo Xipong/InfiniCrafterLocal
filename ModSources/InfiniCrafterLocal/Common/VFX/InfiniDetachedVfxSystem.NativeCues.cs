@@ -9,17 +9,17 @@ namespace InfiniCrafterLocal.Common.VFX;
 
 public sealed partial class InfiniDetachedVfxSystem
 {
-    private sealed record NativeCueDesign(VfxNativeDustSpec? Dust,float? Light,Color Color,int Seed,int MaxPerTick,int MaxTotal,bool Item);
+    private sealed record NativeCueDesign(VfxNativeDustSpec? Dust,float? Light,VfxNativeEffectSpec? Effect,Color Color,int Seed,int MaxPerTick,int MaxTotal,bool Item);
     private sealed record NativeCueEmission(NativeCueDesign Design,string SourceKey,VfxSourceFrame Frame,ulong Due,MaterialEventAllowance? Allowance);
     private static readonly List<NativeCueEmission> NativeCueEmissions=new();
     private static NativeCueDesign CopyNativeCue(GeneratedItemData data,VfxSlotSpec slot,bool item)
-        =>new(slot.Dust?.Copy(),slot.Light?.Intensity,slot.Color!.ToColor(),slot.SlotSeed,
+        =>new(slot.Dust?.Copy(),slot.Light?.Intensity,slot.NativeEffect?.Copy(),slot.Color?.ToColor()??Color.Transparent,slot.SlotSeed,
             data.VfxManifest.Budget.MaxParticlesPerTick,data.VfxManifest.Budget.MaxParticlesTotal,item);
     private static bool EnqueueNativeCue(GeneratedItemData data,VfxSlotSpec slot,string sourceKey,VfxSourceFrame frame,bool item,MaterialEventAllowance? allowance)
         =>EnqueueCopiedNativeCue(CopyNativeCue(data,slot,item),sourceKey,frame,slot.Event==RuntimeEventKind.Periodic?0:slot.StartTick!.Value,allowance);
     private static bool EnqueueCopiedNativeCue(NativeCueDesign design,string sourceKey,VfxSourceFrame frame,int delay,MaterialEventAllowance? allowance)
     {
-        if(Main.dedServ||!frame.Valid||string.IsNullOrWhiteSpace(sourceKey)||OwnedRecordCount>=MaxEmissions)return false;
+        if(Main.dedServ||design.Effect is not null&&Main.netMode==2||!frame.Valid||string.IsNullOrWhiteSpace(sourceKey)||OwnedRecordCount>=MaxEmissions)return false;
         if(design.Dust is { } d&&(d.Count==0||d.Size==0)||design.Light==0)return false;
         var emission=new NativeCueEmission(design,sourceKey,frame,Main.GameUpdateCount+(ulong)delay,allowance);
         if(delay==0)EmitNativeCue(emission);else NativeCueEmissions.Add(emission);
@@ -35,6 +35,7 @@ public sealed partial class InfiniDetachedVfxSystem
     private static void EmitNativeCue(NativeCueEmission emission)
     {
         var design=emission.Design;
+        if(design.Effect is {} effect) { EmitNativeEffect(emission,effect); return; }
         if(design.Light is { } intensity) {
             float strength=intensity*InfiniVfxClientOptions.PresentationLightMultiplier;
             if(strength>0)Lighting.AddLight(emission.Frame.Position,design.Color.ToVector3()*strength);
