@@ -127,7 +127,7 @@ def main():
     # explicitly selected WhitePixel is absent in this owned negative fixture.
     source=Path(os.environ['INFINI_PARTICLE_ASSET_DIR'])
     missing_texture_root=missing_selected_texture_root(source,out/'missing-selected-texture')
-    cases.append(('current-selected-texture-missing',current_path,current_scene,2,'selected texture',
+    cases.append(('current-selected-texture-missing',current_path,current_scene,2,'Assets/Textures/WhitePixel',
                   {'INFINI_PARTICLE_ASSET_DIR':str(missing_texture_root)}))
     uncaptured=copy.deepcopy(scene);uncaptured['nativeRender']['capture']=False
     cases.append(('capture-disabled',item_path,uncaptured,0,'',{}))
