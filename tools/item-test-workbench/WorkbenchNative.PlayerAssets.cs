@@ -56,15 +56,7 @@ internal sealed class WNativePlayerAssets:IDisposable
   if(!File.Exists(shaderPath))throw new FileNotFoundException("Actual tModLoader PixelShader.xnb required; set INFINI_TML_CONTENT_DIR",shaderPath);
   string[] names=Enumerable.Range(0,14).Append(15).Select(i=>"Player_0_"+i).Concat(new[]{"Player_Hair_1","Player_HairAlt_1","MagicPixel","Dust"}).ToArray();
   var verifiedBytes=new Dictionary<string,byte[]>(StringComparer.Ordinal);
-  foreach(string name in names){
-   string path=Path.Combine(assetRoot,"Images",name+".png");
-   for(FileSystemInfo? component=new FileInfo(path);component is not null;component=component is FileInfo file?file.Directory:((DirectoryInfo)component).Parent)if(component.LinkTarget is not null)throw new InvalidDataException("Player asset symlink path is not admitted: "+path);
-   if(!File.Exists(path))throw new FileNotFoundException("Missing exact starter-player source PNG: "+name);
-   if(new FileInfo(path).Length>4*1024*1024)throw new InvalidDataException("Player PNG exceeds bounded asset size: "+name);
-   byte[] sourceBytes=File.ReadAllBytes(path);
-   if(Hash(sourceBytes)!=ExpectedHashes[name+".png"])throw new InvalidDataException("Player PNG does not match pinned community source bytes: "+name);
-   verifiedBytes.Add(name,sourceBytes);
-  }
+  foreach(string name in names)verifiedBytes.Add(name,VerifiedSourcePng(assetRoot,name));
   byte[] shaderBytes=File.ReadAllBytes(shaderPath);
   stagedRoot=Path.Combine(Path.GetTempPath(),"ifc-player-assets-"+Guid.NewGuid().ToString("N"));
   Directory.CreateDirectory(Path.Combine(stagedRoot,"Images"));
@@ -101,6 +93,42 @@ internal sealed class WNativePlayerAssets:IDisposable
    throw;
   }
  }
+ internal static byte[] VerifiedSourcePng(string assetRoot,string name)
+ {
+  string path=Path.Combine(Path.GetFullPath(assetRoot),"Images",name+".png");
+  for(FileSystemInfo? component=new FileInfo(path);component is not null;component=component is FileInfo file?file.Directory:((DirectoryInfo)component).Parent)if(component.LinkTarget is not null)throw new InvalidDataException("Player asset symlink path is not admitted: "+path);
+  if(!File.Exists(path))throw new FileNotFoundException("Missing exact starter-player source PNG: "+name);
+  if(new FileInfo(path).Length>4*1024*1024)throw new InvalidDataException("Player PNG exceeds bounded asset size: "+name);
+  byte[] sourceBytes=File.ReadAllBytes(path);
+  if(Hash(sourceBytes)!=ExpectedHashes[name+".png"])throw new InvalidDataException("Player PNG does not match pinned community source bytes: "+name);
+  return sourceBytes;
+ }
  static string Hash(byte[] data)=>Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
  public void Dispose(){Main.Assets=oldAssets;TextureAssets.Players=oldPlayers;TextureAssets.PlayerHair=oldHair;TextureAssets.PlayerHairAlt=oldHairAlt;TextureAssets.MagicPixel=oldPixel;TextureAssets.Dust=oldDust;Main.PixelShaderRef.Value=oldShader;shader.Dispose();assets.Dispose();if(Directory.Exists(stagedRoot))Directory.Delete(stagedRoot,true);}
+}
+
+// Current detached DrawLayer consumes genuine MagicPixel even in VFX-only mode.
+// Load only that verified resource; do not load/draw a player or synthesize texels.
+internal sealed class WNativeMagicPixelAssets:IDisposable
+{
+ readonly AssetRepository assets;
+ readonly Asset<Texture2D> pixel;
+ readonly Asset<Texture2D> previous;
+ public JsonObject Report {get;}
+ public WNativeMagicPixelAssets(WorkbenchGraphicsContext graphics,string assetRoot)
+ {
+  byte[] bytes=WNativePlayerAssets.VerifiedSourcePng(assetRoot,"MagicPixel");
+  previous=TextureAssets.MagicPixel;
+  var readers=new AssetReaderCollection();readers.RegisterReader(new PngReader(graphics.Device),".png");
+  assets=new AssetRepository(readers,Array.Empty<IContentSource>());
+  try {
+   using var stream=new MemoryStream(bytes,writable:false);
+   pixel=assets.CreateUntracked<Texture2D>(stream,"MagicPixel.png",AssetRequestMode.ImmediateLoad);
+   TextureAssets.MagicPixel=pixel;
+   Report=new JsonObject{["source"]="Pinned community MagicPixel PNG; original native PngReader, no synthetic texels",
+    ["sha256"]=Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),["width"]=pixel.Value.Width,["height"]=pixel.Value.Height,
+    ["playerArtworkLoaded"]=false,["officialByteIdentityVerified"]=false};
+  } catch {TextureAssets.MagicPixel=previous;pixel?.Dispose();assets.Dispose();throw;}
+ }
+ public void Dispose(){TextureAssets.MagicPixel=previous;pixel.Dispose();assets.Dispose();}
 }

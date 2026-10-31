@@ -1,9 +1,11 @@
 """Synthetic detector controls, not native execution or visual approval."""
 import copy
+from pathlib import Path
+import tempfile
 import unittest
 from typing import Any, Callable
 
-from verify_history_ribbon import current_vfx_checks, current_vfx_slots
+from verify_history_ribbon import current_vfx_checks, current_vfx_slots, missing_selected_texture_root
 
 
 def detector_trace() -> dict[str, Any]:
@@ -24,6 +26,21 @@ def detector_trace() -> dict[str, Any]:
 
 
 class CurrentVfxDetectorTests(unittest.TestCase):
+    def test_missing_texture_fixture_retains_bootstrap_and_source(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source=Path(temp)/'source'
+            files={'Assets/Textures/WhitePixel.png':b'selected',
+                   'Assets/Textures/EmptyPixel.png':b'bootstrap',
+                   'Assets/Textures/Star.png':b'star',
+                   'Assets/Effects/InstancedParticle.xnb':b'effect'}
+            for name,data in files.items():
+                path=source/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(data)
+            target=missing_selected_texture_root(source,Path(temp)/'negative')
+            self.assertFalse((target/'Assets/Textures/WhitePixel.png').exists())
+            for name,data in files.items():
+                self.assertEqual((source/name).read_bytes(),data)
+                if name!='Assets/Textures/WhitePixel.png':self.assertEqual((target/name).read_bytes(),data)
+
     def test_explicit_fixture_is_fresh_and_selects_both_resources(self):
         slots = current_vfx_slots()
         self.assertEqual([s['particle']['textureId'] for s in slots if 'particle' in s], ['solidPixel', 'star'])

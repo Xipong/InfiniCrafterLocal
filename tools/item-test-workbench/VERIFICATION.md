@@ -95,7 +95,11 @@ full native PreDraw, invisible hostile updates and client hits. The native matri
 requires player/dummy assets and ParticleLibrary resources from the documented
 setup. Preserve partial/procedural and missing-selected-texture refusals; do not
 remove VFX from an authored input to pass admission. Existing `verify_vfx.py`
-retains the legacy Star emission, blank/miss, timing and no-capture controls.
+retains the legacy Star emission, blank/miss, timing and no-capture controls,
+asserts the genuine MagicPixel receipt in VFX-only mode, and refuses a missing
+MagicPixel without substituting texels. The missing-selected-particle control
+copies the complete resource root and removes only WhitePixel, preserving
+ParticleLibrary's EmptyPixel and other required bootstrap resources.
 
 The linked native contour checks use explicit LINQ `Enumerable.Reverse` so newer
 SDK span extensions cannot bind to a void in-place reverse. Existing winding,

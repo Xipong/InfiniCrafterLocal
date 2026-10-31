@@ -403,7 +403,12 @@ the production texture registry and drains the native main-thread queue per
 distinct path. `nativeRender.readyLibraryTexturePaths` lists the paths actually
 prewarmed; no particle slots means no invented particle texture. Missing selected
 resources fail explicitly instead of substituting Star/WhitePixel. The existing
-Star/effect resource prerequisites and receipts remain in force. Only the existing
+Star/effect resource prerequisites and receipts remain in force. VFX-only scenes
+also require `Images/MagicPixel.png` through `playerAssetRoot` or
+`INFINI_PLAYER_ASSET_DIR`: only that pinned PNG is decoded by the original native
+PngReader, scoped and restored, without loading or drawing player artwork. Its
+receipt is `nativeRender.magicPixelResource`; no synthetic white texture is used.
+Only the existing
 ParticleLibrary resource mod is registered: a selected Luminance particle texture
 without its resource context is a refusal, not automatic dependency provisioning.
 

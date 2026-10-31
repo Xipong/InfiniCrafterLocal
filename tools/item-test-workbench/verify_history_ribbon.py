@@ -34,6 +34,13 @@ def current_vfx_slots() -> list[dict[str, Any]]:
     return slots
 
 
+def missing_selected_texture_root(source: Path, target: Path) -> Path:
+    """Retain every library bootstrap resource; omit only the selected texel source."""
+    shutil.copytree(source, target)
+    (target / 'Assets/Textures/WhitePixel.png').unlink()
+    return target
+
+
 def current_vfx_checks(trace: dict[str, Any]) -> dict[str, bool]:
     """Independent detectors: emission/admission alone cannot certify rendering or hits."""
     render=trace.get('nativeRender',{})
@@ -116,11 +123,10 @@ def main():
     partial=copy.deepcopy(artwork_scene);partial['nativeRender']['drawPlayer']=False;partial['nativeRender']['drawNativeDust']=False
     cases.append(('current-partial-predraw-refused',current_path,partial,2,'historyTrail requires',{}))
     cases.append(('current-procedural-only-refused',current_path,copy.deepcopy(scene),2,'historyTrail requires',{}))
-    # Keep the legacy Star/effect prerequisites intact, remove only the selected
-    # WhitePixel from a fresh two-file resource root. No existing resource is edited.
-    source=Path(os.environ['INFINI_PARTICLE_ASSET_DIR']);missing_texture_root=out/'missing-selected-texture'
-    for relative in ('Assets/Textures/Star.png','Assets/Effects/InstancedParticle.xnb'):
-        dest=missing_texture_root/relative;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(source/relative,dest)
+    # Preserve ParticleLibrary's EmptyPixel/other bootstrap resources: only the
+    # explicitly selected WhitePixel is absent in this owned negative fixture.
+    source=Path(os.environ['INFINI_PARTICLE_ASSET_DIR'])
+    missing_texture_root=missing_selected_texture_root(source,out/'missing-selected-texture')
     cases.append(('current-selected-texture-missing',current_path,current_scene,2,'selected texture',
                   {'INFINI_PARTICLE_ASSET_DIR':str(missing_texture_root)}))
     uncaptured=copy.deepcopy(scene);uncaptured['nativeRender']['capture']=False
