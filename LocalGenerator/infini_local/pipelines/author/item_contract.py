@@ -128,7 +128,7 @@ def _realization_prompt_shape_card() -> dict[str, str]:
     """Separate optional player-facing prose from implementation debug."""
     properties = _author_schema()["properties"]["realization"]["properties"]
     roles = {
-        "description": "Brief player-facing description of actual use, effects and conditions.",
+        "description": "Brief player-facing description of the actual use, effects and conditions supported by the authored runtimeProgram; distinguish active use from passive effects and do not promise unimplemented behavior.",
         "playerExperience": "Optional practical-use notes for the player.",
         "selfEvaluation": "Optional implementation/debug notes, including any mismatch with the idea. Not player text or an observed test result.",
     }
