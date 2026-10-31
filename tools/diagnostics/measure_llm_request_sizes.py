@@ -81,14 +81,14 @@ class OfflineCapture:
         from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
         from infini_local.services import codex_auth
         from test_low_level_three_stage_pipeline import _visual_kit
-        from vfx_material_fixtures import _legacy
+        from test_low_level_three_stage_pipeline import _vfx_output
         self.config, self.vfx = llm_config, vfx_manifest
         self.author, self.transport = llm_authoring_pipeline, llm_transport
         self.profiles, self.admission = llm_profiles, llm_admission
         self.visual, self.vfx_sender = visual_generation_pipeline, vfx_generation_pipeline
         self.compile, self.validate, self.fixture = compile_runtime_program, validate_runtime_program, build_runtime_fixture
         self.attach_parent, self.auth = attach_generated_parent_summary, codex_auth
-        self.visual_fixture, self.vfx_fixture = _visual_kit, _legacy
+        self.visual_fixture, self.vfx_fixture = _visual_kit, _vfx_output
         self.contexts = {
             route: {"provider": "openai_codex" if route == "codex_subscription" else "openai_compat",
                     "base_url": "https://chatgpt.com/backend-api/codex" if route == "codex_subscription" else "https://api.openai.com/v1",

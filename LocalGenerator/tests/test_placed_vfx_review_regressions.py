@@ -41,10 +41,5 @@ def test_placement_feedback_is_local_bounded_and_does_not_relax_guard():
     assert "HookPostPlaceEveryone.hook is null" in source
 
 
-def test_inactive_placed_source_filters_exact_selector_and_keeps_light_uncullable():
-    visibility = (VFX / "InfiniDetachedVfxSystem.PlacedVisibility.cs").read_text(encoding="utf-8")
-    predicate = visibility.split("internal static bool MayNeedPlacedVfxFrame", 1)[1].split("private static bool PlacedVfxInView", 1)[0]
-    assert 'slot.RendererKind == "lightCue"' in predicate  # unchanged, uncullable light consumer
-    assert "slot.PlacementBindingId != view.BindingId" in predicate
-    assert "slot.EntityId != view.EntityId" in predicate
-    assert "PlacedVfxInView(center,PlacedVfxReachRadius(slot))" in predicate
+# Offscreen exact-selector and uncullable light behavior is exercised by the
+# registered native check: placed vfx offscreen lights exact selectors.

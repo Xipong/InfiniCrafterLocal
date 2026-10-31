@@ -125,14 +125,22 @@ def _vfx_output(data: dict) -> dict:
     return {
         "schema": VFX_DIRECTOR_SCHEMA,
         "slots": [{
-            "color": {"r": 17, "g": 93, "b": 241},
             "id": "slot_0", "entityId": pair["entityId"], "event": pair["event"],
-            "rendererKind": "spriteStampTrail",
-            "textureRole": "entity", "anchor": "self",
+            "rendererKind": "libraryParticle", "anchor": "self",
             "blend": "alpha", "layer": "BeforeProjectiles",
-            "particleSystemId": "none", "scale": 1.0,
-            "density": 0.4, "duration": 20, "alpha": 0.8, "spread": 0.1,
-            "startTick": 0, "repeatEvery": 0,
+            "duration": 20, "alpha": 0.8,
+            "startTick": 0, "repeatEvery": 1 if pair["event"] == "periodic" else 0,
+            "particle": {
+                "spawn": {"shape": "point"}, "textureId": "star", "sampling": "point", "count": 1,
+                "speedMinPxPerTick": 0, "speedMaxPxPerTick": 0,
+                "spreadRadians": 0, "inheritVelocity": 0, "drag": 1,
+                "accelerationXPxPerTickSquared": 0, "accelerationYPxPerTickSquared": 0,
+                "widthPx": 4, "heightPx": 4, "rotationRadians": 0,
+                "rotationSpeedRadiansPerTick": 0,
+                "colorStart": {"r": 17, "g": 93, "b": 241},
+                "colorEnd": {"r": 17, "g": 93, "b": 241},
+                "endScaleMultiplier": 1, "endOpacity": 0,
+            },
         }],
     }
 

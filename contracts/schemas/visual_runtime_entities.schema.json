@@ -182,6 +182,98 @@
                 ],
                 "type": "string"
               },
+              "geometry": {
+                "description": "Explicit untextured solid body. body_segment is centered on the entity; collision_path follows only an existing accepted beam/lash centerline. Does not alter gameplay. No inferred dimensions, color, opacity or axis.",
+                "oneOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "axis": {
+                        "description": "Use velocity (initial direction at zero speed), literal runtime rotation, or accepted aim axis. aim requires an aim component; no movement-code routing.",
+                        "enum": [
+                          "velocity",
+                          "rotation",
+                          "aim"
+                        ],
+                        "type": "string"
+                      },
+                      "color": {
+                        "description": "Literal RGB color; not inherited from entity light.",
+                        "pattern": "^#[0-9A-Fa-f]{6}$",
+                        "type": "string"
+                      },
+                      "lengthPx": {
+                        "description": "Centered segment length in world pixels, independent of hitbox and projectile/visual scale.",
+                        "exclusiveMinimum": 0,
+                        "maximum": 4096,
+                        "type": "number"
+                      },
+                      "opacity": {
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      },
+                      "schema": {
+                        "const": "infini.body-geometry.v1"
+                      },
+                      "source": {
+                        "const": "body_segment"
+                      },
+                      "widthPx": {
+                        "description": "Solid strip width in world pixels, independent of collision width, projectile/visual scale and light.",
+                        "exclusiveMinimum": 0,
+                        "maximum": 1024,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "schema",
+                      "widthPx",
+                      "color",
+                      "opacity",
+                      "source",
+                      "lengthPx",
+                      "axis"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "color": {
+                        "description": "Literal RGB color; not inherited from entity light.",
+                        "pattern": "^#[0-9A-Fa-f]{6}$",
+                        "type": "string"
+                      },
+                      "opacity": {
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      },
+                      "schema": {
+                        "const": "infini.body-geometry.v1"
+                      },
+                      "source": {
+                        "const": "collision_path"
+                      },
+                      "widthPx": {
+                        "description": "Solid strip width in world pixels, independent of collision width, projectile/visual scale and light.",
+                        "exclusiveMinimum": 0,
+                        "maximum": 1024,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "schema",
+                      "widthPx",
+                      "color",
+                      "opacity",
+                      "source"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
               "scale": {
                 "description": "Engine-units multiplicative per-entity visual factor; 1 is neutral. Not the collision hitbox size or item.worldScale: projectile draw scale multiplies hitbox.drawScale separately. no_asset entities may have no visible sprite.",
                 "maximum": 4.0,
@@ -196,7 +288,8 @@
               "entityId",
               "assetMode",
               "visualProjectRef",
-              "scale"
+              "scale",
+              "geometry"
             ],
             "type": "object"
           },
@@ -390,7 +483,7 @@
       "type": "object"
     },
     "schema": {
-      "const": "infini.visual-kit.runtime-entities.v2"
+      "const": "infini.visual-kit.runtime-entities.v3"
     }
   },
   "required": [

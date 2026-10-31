@@ -73,7 +73,7 @@ public sealed partial class GeneratedProjectile
             _ => _initialDirection,
         };
         axis = axis.SafeNormalize(_initialDirection);
-        if (aim.TurnOwner) owner.ChangeDir(axis.X >= 0f ? 1 : -1);
+        if (publish && aim.TurnOwner) owner.ChangeDir(axis.X >= 0f ? 1 : -1);
         return axis;
     }
     private Vector2 MotionAnchor(Player owner, string anchor)

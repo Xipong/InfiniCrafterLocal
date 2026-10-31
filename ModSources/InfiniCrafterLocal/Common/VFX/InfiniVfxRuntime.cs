@@ -19,7 +19,7 @@ public readonly record struct InfiniVfxSlotEmissionKey(
     string SlotId);
 
 /// <summary>Per-projectile presentation state. It never contains gameplay state.</summary>
-public sealed class InfiniVfxState
+public sealed partial class InfiniVfxState
 {
     public int Tick;
     public int ParticlesThisTick;
@@ -131,7 +131,7 @@ public enum InfiniVfxDrawPass { All, UnderProjectile, OverProjectile }
 /// Bounded renderer for exact ``entityId + event`` slots.  It is presentation
 /// only and cannot mutate damage, velocity, collision, ownership, or lifecycle.
 /// </summary>
-public static class InfiniVfxRuntime
+public static partial class InfiniVfxRuntime
 {
     public static void OnTick(Projectile projectile, GeneratedItemData data, string entityId, VfxManifestSpec manifest, ref InfiniVfxState state)
     {
@@ -141,7 +141,7 @@ public static class InfiniVfxRuntime
         InfiniDetachedVfxSystem.RegisterMaterialPaths(data,entityId,state.SourceKey,VfxSourceBinding.Capture(projectile));
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
-            if (InfiniDetachedVfxSystem.HasOwnedVfx(slot)) continue;
+            if (InfiniDetachedVfxSystem.HasOwnedVfx(slot) || slot.Trail is not null) continue;
             if (!Matches(slot, entityId, RuntimeEventKind.Periodic) || !Cadence(slot, state.Tick)) continue;
             if (!TryAnchor(projectile, data, entityId, slot.Anchor, projectile.Center, out Vector2 anchor)) continue;
             if (!TryMarkSlotEmission(projectile, entityId, RuntimeEventKind.Periodic, slot, ref state)) continue;
@@ -160,7 +160,7 @@ public static class InfiniVfxRuntime
         bool emitted = false;
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
-            if (!Matches(slot, entityId, eventName)) continue;
+            if (!Matches(slot, entityId, eventName) || slot.Trail is not null) continue;
             if (!snapshot.TryAnchor(slot.Anchor, center, out Vector2 anchor)) continue;
             if(slot.Path is not null) {
                 InfiniDetachedVfxSystem.RegisterMaterialPaths(data,entityId,state.SourceKey,VfxSourceBinding.Capture(projectile));
@@ -198,6 +198,7 @@ public static class InfiniVfxRuntime
         BeginWorldTick(projectile, ref state);
         // Capture the actual world tip now, not center history with today's aim.
         state.PushTip(ForwardTip(projectile, data, entityId));
+        CaptureExplicitTrails(projectile,data,entityId,state);
     }
 
     private static void BeginWorldTick(Projectile projectile, ref InfiniVfxState state)
@@ -277,6 +278,11 @@ public static class InfiniVfxRuntime
         {
             if (!string.Equals(slot.EntityId, entityId, StringComparison.Ordinal)) continue;
             if (InfiniDetachedVfxSystem.HasOwnedVfx(slot) || slot.RendererKind is "soundCue" or "lightCue") continue;
+            if(slot.Trail is not null) {
+                bool trailOver=slot.Layer=="AfterProjectiles";
+                if(pass==InfiniVfxDrawPass.UnderProjectile&&trailOver||pass==InfiniVfxDrawPass.OverProjectile&&!trailOver)continue;
+                DrawExplicitTrail(pixel,projectile,data,entityId,slot,manifest,ref state);continue;
+            }
             // Nonperiodic procedural/sprite effects have detached event lifetimes.
             // History renderers need live samples; retain their on_spawn trail path.
             InfiniVfxRendererKind kind = VfxRendererRegistry.Resolve(slot);
@@ -342,7 +348,7 @@ public static class InfiniVfxRuntime
         bool emitted = false;
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
-            if (!Matches(slot, entityId, eventName)) continue;
+            if (!Matches(slot, entityId, eventName) || slot.Trail is not null) continue;
             Vector2 anchor = center;
             if (!snapshot.TryAnchor(slot.Anchor, center, out anchor)) continue;
             if (slot.Path is not null) continue; // live geometry requires its registered source binding

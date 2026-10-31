@@ -18,7 +18,7 @@ from infini_local.qa.live_no_image_fixture import (
     write_no_image_fixture_png,
 )
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-from test_low_level_three_stage_pipeline import _vfx_output
+from tests.vfx_material_fixtures import _shape, _sprite, _history, _legacy
 from pipeline_test_support import isolated_serving_roots, install_campaign_fault
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 
@@ -166,7 +166,7 @@ def test_campaign_fixture_uses_canonical_serving_root(tmp_path, monkeypatch, out
             entity["visual"]["preferredCanvasSize"] = 32
     # Selected baked history consumes real PNG execution metadata, not just a
     # hydrated filename. Exercise the actual harness-installed final observer.
-    authored = _vfx_output(data)
+    authored = _history(data, "entity")
     selected = next(entity for entity in data["runtimeProgram"]["entities"] if entity["kind"] != "item_body")
     authored["slots"][0].update(entityId=selected["id"], event="periodic")
     admitted = validate_vfx_director_output(authored, data)
@@ -336,8 +336,11 @@ def campaign_case(tmp_path):
             entity["visual"]["assetMode"] = "reuse_item_icon" if selection == "reuse_item_icon" else "baked_sprite"
             if selection == "reuse_item_icon":
                 entity["visual"].pop("preferredCanvasSize")
-            authored = _vfx_output(data)
-            authored["slots"][0].update(entityId=entity["id"], event="periodic", textureRole="entity")
+            authored = _history(data, "entity") if selection == "baked_history" else _sprite(data)
+            authored["slots"][0].update(entityId=entity["id"], event="periodic")
+            if selection != "baked_history":
+                authored["slots"][0]["repeatEvery"] = 4
+                authored["slots"][0]["element"]["texture"] = {"source": "entity", "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
             admitted = validate_vfx_director_output(authored, data)
             assert admitted["ok"], admitted["errors"]
             data["vfxManifest"] = _compile_manifest(data, admitted["normalized"], identity)
@@ -622,7 +625,7 @@ def test_no_image_fixture_hydrates_canonical_required_asset_plan_roles(tmp_path:
     assert "vfx_manifest_invalid" in problem_codes
 
 
-def test_primitive_impact_ring_does_not_require_a_texture_but_impact_sprite_does(tmp_path: Path) -> None:
+def test_explicit_shape_needs_no_texture_but_saved_impact_sprite_still_does(tmp_path: Path) -> None:
     fixture = write_no_image_fixture_png(tmp_path / "no-image.png")
     data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
     data["visual"] = {"preferredCanvasSize": 32}
@@ -630,10 +633,8 @@ def test_primitive_impact_ring_does_not_require_a_texture_but_impact_sprite_does
     for row in data["runtimeProgram"]["entities"]:
         if row["kind"] != "item_body":
             row.setdefault("visual", {}).update(assetMode="baked_sprite", preferredCanvasSize=32)
-    authored = _vfx_output(data)
-    authored["slots"][0].update(entityId=entity["id"], event="periodic",
-                                rendererKind="impactRing")
-    authored["slots"][0].pop("textureRole")
+    authored = _shape(data)
+    authored["slots"][0].update(entityId=entity["id"], event="periodic", repeatEvery=4)
     report = validate_vfx_director_output(authored, data)
     assert report["ok"], report["errors"]
     data["vfxManifest"] = _compile_manifest(data, report["normalized"], "no_image_impact_probe")
@@ -646,10 +647,15 @@ def test_primitive_impact_ring_does_not_require_a_texture_but_impact_sprite_does
     assert ring_report["ok"], ring_report["problems"]
     assert not any(slot["role"] == "impact:" + entity["id"] for slot in ring_report["slots"])
 
-    slot = data["vfxManifest"]["slots"][0]
-    slot.update(rendererKind="impactSprite", textureRole="impact")
-    for field in ("spread", "particleSystemId"):
-        slot.pop(field)  # no Dust accompaniment; repeatEvery=0 still consumes density
+    # Historical impact consumers remain valid persisted wire. This does not
+    # feed a retired renderer to the fresh Director.
+    saved = _legacy(data)
+    slot = saved["slots"][0]
+    slot.update(entityId=entity["id"], event="periodic", repeatEvery=4,
+                rendererKind="impactSprite", textureRole="impact")
+    for field in ("spread", "particleSystemId", "density"):
+        slot.pop(field)
+    data["vfxManifest"] = _compile_manifest(data, saved, "saved-impact-consumer")
     entity["visual"]["impactCanvasSize"] = 32
     sprite_report = visual_delivery_report(data, check_backend_config=False)
     assert "required_impact_sprite_missing" in {problem["code"] for problem in sprite_report["problems"]}

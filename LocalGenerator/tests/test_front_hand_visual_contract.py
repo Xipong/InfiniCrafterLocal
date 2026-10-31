@@ -5,6 +5,7 @@ import copy
 import json
 
 import pytest
+from tests.visual_geometry_fixtures import segment_geometry
 
 from prompt_packet_helpers import request_dossier
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
@@ -22,6 +23,8 @@ def _visual_input(mode="baked_sprite"):
     raw = _visual_kit(data)
     body = next(row for row in raw["entities"] if row["entityId"] == "witness_entity")
     body.update(assetMode=mode, visualProjectRef="entity" if mode == "baked_sprite" else "item" if mode == "reuse_item_icon" else "none")
+    if mode == "runtime_geometry":
+        body["geometry"] = segment_geometry()
     if mode == "baked_sprite":
         body.update(prompt="independent handle, brass rim and three oak panels", silhouette="three panels with rim and handle",
                     visualIdentity="brass rim, oak and red handle", preferredCanvasSize=64,

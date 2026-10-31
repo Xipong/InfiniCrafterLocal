@@ -172,7 +172,7 @@ def test_whole_roster_exact_byte_limits_include_inactive_members_and_cache(offli
     assert len(files) == 3
     report = visual_delivery_gate.visual_delivery_report(data, check_backend_config=False)
     assert not report["equipmentOverlayRequired"]
-    assert report["ok"], report["problems"]
+    assert report["ok"], json.dumps(report["problems"], ensure_ascii=False)
     for filename in files:
         response = _get_asset(filename)
         served = visual_delivery_gate._resolved_asset_path(filename)
@@ -331,6 +331,7 @@ def _equipment_data() -> dict:
 
 
 def _equipment_kit(*, include_overlay: bool) -> dict:
+    from infini_local.pipelines.visual_generation_pipeline import VISUAL_KIT_SCHEMA
     item = {
         "prompt": "literal inventory icon", "negativePrompt": "authored negative exact",
         "silhouette": "compact icon", "visualIdentity": "literal item", "palette": ["steel", "amber"],
@@ -338,7 +339,7 @@ def _equipment_kit(*, include_overlay: bool) -> dict:
         "inventoryScale": 1.0, "worldScale": 1.0,
     }
     kit = {
-        "schema": "infini.visual-kit.runtime-entities.v2", "item": item,
+        "schema": VISUAL_KIT_SCHEMA, "item": item,
         "entities": [
             {"entityId": "item", "assetMode": "baked_sprite", "visualProjectRef": "item",
              "scale": 1.0},
@@ -370,8 +371,14 @@ def _stub_image_generation(monkeypatch, tmp_path: Path) -> list[tuple[str, str, 
         })
         return candidate
 
-    def fake_asset(_data: dict, role: str, prompt: str, negative: str, asset_id: str, canvas: int, *, entity_id: str = "", publication_entity_id: str = ""):
+    def fake_asset(_data: dict, role: str, prompt: str, negative: str, asset_id: str, canvas: int, *, entity_id: str = "", processing_role: str = "", publication_entity_id: str = ""):
         path = write_no_image_fixture_png(tmp_path / f"{asset_id}.png", size=canvas)
+        if processing_role == "vfx_cutout":
+            from PIL import Image, ImageDraw
+            # Explicit offline provider pixels, not the no-image opaque marker.
+            image = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
+            ImageDraw.Draw(image).rectangle((canvas // 4, canvas // 4, canvas * 3 // 4, canvas * 3 // 4), fill=(220, 145, 40, 255))
+            image.save(path)
         calls.append((role, prompt, negative))
         return str(path), f"/sprite/{path.name}", 1.0, "generated"
 
@@ -413,24 +420,16 @@ def test_authored_asset_transaction_projects_generates_and_refuses_missing_bytes
     assert kit is not None, errors
     data = _apply_kit(_equipment_data(), kit)
     if impact:
-        _hydrate_vfx_asset_prompts(data, {"slots": [{
-            "entityId": "shot", "rendererKind": "impactSprite", "spriteCanvasSize": 32,
-            "spritePrompt": "authored amber shard impact burst",
-            "spriteNegativePrompt": "text, watermark, opaque square",
-        }]})
-        from test_low_level_three_stage_pipeline import _vfx_output
-        authored = _vfx_output(data)
-        authored["slots"][0].update(
-            id="shot_impact", entityId="shot", event="on_spawn",
-            rendererKind="impactSprite", textureRole="impact", spriteCanvasSize=32,
-            spritePrompt="authored amber shard impact burst",
-            spriteNegativePrompt="text, watermark, opaque square",
-        )
-        for field in ("spread", "particleSystemId", "startTick", "repeatEvery", "density"):
-            authored["slots"][0].pop(field)
+        from tests.vfx_material_fixtures import _with_asset
+        authored = _with_asset(data)
+        authored["assets"][0].update(id="shot_impact", prompt="authored amber shard impact burst",
+                                      negativePrompt="text, watermark, opaque square", canvasSize=32)
+        authored["slots"][0].update(id="shot_impact", entityId="shot", event="on_spawn")
+        authored["slots"][0]["element"]["texture"]["assetId"] = "shot_impact"
         data["vfxManifest"] = _compile_manifest(data, authored, "equipment-impact")
+        _hydrate_vfx_asset_prompts(data, authored)
         assert validate_vfx_manifest_wire(data)["ok"]
-        planned = next(row for row in build_visual_asset_plan(data) if row["role"] == "impact:shot")
+        planned = next(row for row in build_visual_asset_plan(data) if row["role"] == "vfx:shot_impact")
         assert planned["required"] is True and planned["prompt"] == "authored amber shard impact burst"
     calls = _stub_image_generation(monkeypatch, tmp_path)
     out = visual_sprite_generation.maybe_generate_visual_assets(data)
@@ -439,16 +438,16 @@ def test_authored_asset_transaction_projects_generates_and_refuses_missing_bytes
     assert by_role["equip_overlay"] == ("separate wearable amber brooch overlay", "authored negative exact")
     assert out["visual"]["equipOverlayStatus"] == "generated"
     assert out["visual"]["equipOverlayPath"].endswith("equipment_probe_equip_overlay.png")
-    owner = next(row for row in out["runtimeProgram"]["entities"] if row["id"] == "shot")["visual"] if impact else out["visual"]
-    prefix = "impactSprite" if impact else "equipOverlay"
+    owner = next(row for row in out["vfxManifest"]["assets"] if row["id"] == "shot_impact") if impact else out["visual"]
+    prefix = "sprite" if impact else "equipOverlay"
     if impact:
-        assert by_role["impact"] == ("authored amber shard impact burst", "text, watermark, opaque square")
-        assert owner[prefix + "Path"].endswith("equipment_probe_shot_impact.png")
+        assert by_role["vfx:shot_impact"] == ("authored amber shard impact burst", "text, watermark, opaque square")
+        assert owner[prefix + "Path"].endswith(".png")
         assert owner[prefix + "Status"] == "generated"
     report = visual_delivery_gate.visual_delivery_report(out, check_backend_config=False)
-    assert report["ok"], report["problems"]
-    assert {slot["role"] for slot in report["slots"] if slot["usable"]} == {"item", "equip_overlay", "entity:shot"} | ({"impact:shot"} if impact else set())
-    problem = "required_impact_sprite_missing" if impact else "required_equipment_overlay_missing"
+    assert report["ok"], json.dumps(report["problems"], ensure_ascii=False)
+    assert {slot["role"] for slot in report["slots"] if slot["usable"]} == {"item", "equip_overlay", "entity:shot"} | ({"vfx:shot_impact"} if impact else set())
+    problem = "required_vfx_sprite_missing_or_invalid" if impact else "required_equipment_overlay_missing"
     assert not any(row.get("code") == problem for row in report["problems"])
     path = Path(owner[prefix + "Path"])
     if impact:

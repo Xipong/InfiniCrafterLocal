@@ -53,6 +53,7 @@ def _observe(*, stages, repair, corrupt_budget):
     from infini_local.pipelines import visual_generation_pipeline as visual
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.core.vfx_manifest import attach_vfx_manifest, VFX_REPAIR_PATCH_SCHEMA
+    from infini_local.core.vfx_material_contract import vfx_model_payload
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     from test_low_level_three_stage_pipeline import _visual_kit, _visual_patch, _vfx_output
 
@@ -113,11 +114,11 @@ def _observe(*, stages, repair, corrupt_budget):
             if repair != "none":
                 broken_vfx = copy.deepcopy(vfx)
                 broken_vfx["slots"][0]["alpha"] = 2.0
-                replies.extend([broken_vfx, {
+                replies.extend([vfx_model_payload(broken_vfx), vfx_model_payload({
                     "schema": VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": vfx["slots"],
-                    "note": "restore only invalid alpha"}])
+                    "note": "restore only invalid alpha"})])
             else:
-                replies.append(vfx)
+                replies.append(vfx_model_payload(vfx))
             data = attach_vfx_manifest(data, "budget-observer", llm_director=vfx_transport.call_llm_vfx_director)
             assert data["vfxManifest"]["slots"][0]["id"] == vfx["slots"][0]["id"]
         assert not replies

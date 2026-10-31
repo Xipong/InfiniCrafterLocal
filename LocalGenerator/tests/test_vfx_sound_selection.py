@@ -13,7 +13,7 @@ from infini_local.core import llm_config
 from infini_local.core import vfx_manifest as vfx
 from infini_local.pipelines import vfx_generation_pipeline as stage
 from tests.test_repair_vfx_contract import _offline_transport
-from tests.vfx_material_fixtures import _data, _legacy
+from tests.vfx_material_fixtures import _data, _legacy, _shape, _native
 
 # Exact installed Terraria.ID.SoundID members; no weapon/archetype aliases.
 _INVENTORY = json.loads((Path(__file__).parent / "fixtures/vfx_sound_inventory.json").read_text())
@@ -68,17 +68,13 @@ def test_selected_sample_survives_director_compiler_and_wire(monkeypatch, sound_
                       ("unknown", "Item9999"), ("alias", "frozenRepair"), ("integer", 4),
                       ("boolean", True), ("object", {}), ("array", []))
 ] + [
-    pytest.param("Item4", "impactRing", "soundId", id="foreign-impactRing"),
-    pytest.param("Item4", "lightCue", "soundId", id="foreign-lightCue"),
+    pytest.param("Item4", "shape", "soundId", id="foreign-shape"),
+    pytest.param("Item4", "nativeLight", "soundId", id="foreign-nativeLight"),
     pytest.param({"soundId": "Item4"}, "soundCue", "frozenRepair", id="unknown-payload"),
 ])
 def test_invalid_present_sound_is_rejected_by_director_and_persisted_wire(bad, renderer, field):
     data = _data()
-    raw = _sound(data) if renderer == "soundCue" else _legacy(data)
-    raw["slots"][0].update(rendererKind=renderer)
-    if renderer == "lightCue":
-        for unused in ("alpha", "blend", "layer", "duration", "spread", "particleSystemId", "textureRole", "startTick", "repeatEvery", "density"):
-            raw["slots"][0].pop(unused, None)
+    raw = _sound(data) if renderer == "soundCue" else _shape(data) if renderer == "shape" else _native(data, renderer)
     raw["slots"][0][field] = bad
     before = copy.deepcopy(raw)
     report = vfx.validate_vfx_director_output(raw, data)
@@ -180,7 +176,7 @@ def test_real_repair_corrects_only_diagnosed_sound_leaf(monkeypatch, bad, mode):
     scope = vfx._build_vfx_repair_scope(raw, report["errors"])
     assert scope["fieldPermissions"] == {"globals": {}, "slots": [{"slotId": "explicit_sound", "paths": paths}], "assets": []}
     candidate = copy.deepcopy(accepted["slots"][0])
-    candidate.update(alpha=0.1, rendererKind="lightCue",  entityId=data["runtimeProgram"]["entities"][1]["id"], event="on_kill")
+    candidate.update(alpha=0.1, rendererKind="nativeLight",  entityId=data["runtimeProgram"]["entities"][1]["id"], event="on_kill")
     patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "sound only", "slotsUpsert": [candidate], "slotIdsDelete": ["explicit_sound"]}
     raw_before = copy.deepcopy(raw)
     sent = _offline_transport(monkeypatch, "sound_repair_" + str(bad) + mode, [raw, patch])
@@ -241,7 +237,7 @@ def test_sound_wire_survives_delivery_projection_and_real_cache_shape_admission(
 @pytest.mark.parametrize("silent", [False, True], ids=["non-sound-renderer", "empty-slots"])
 def test_non_sound_wire_omission_remains_valid_without_audio_materialization(silent):
     data = _data()
-    raw = _legacy(data)
+    raw = _shape(data)
     if silent:
         raw["slots"] = []
     assert vfx.validate_vfx_director_output(raw, data)["ok"]
@@ -270,15 +266,15 @@ def test_real_transport_never_strips_present_null_to_legacy_absence(monkeypatch,
 
 def test_foreign_sound_leaf_can_be_deleted_without_thawing_valid_renderer(monkeypatch):
     data = _data()
-    accepted = _legacy(data)
+    accepted = _shape(data)
     raw = copy.deepcopy(accepted)
     raw["slots"][0]["soundId"] = "Item4"
     report = vfx.validate_vfx_director_output(raw, data)
     assert {e["path"] for e in report["errors"]} == {"$.slots[0].soundId"}
     scope = vfx._build_vfx_repair_scope(raw, report["errors"])
-    assert scope["fieldPermissions"]["slots"] == [{"slotId": "old_slot", "paths": ["soundId"], "deletePaths": ["soundId"]}]
+    assert scope["fieldPermissions"]["slots"] == [{"slotId": "explicit_shape", "paths": ["soundId"], "deletePaths": ["soundId"]}]
     candidate = copy.deepcopy(accepted["slots"][0])
-    candidate.update(rendererKind="lightCue",  alpha=0.1)
+    candidate.update(rendererKind="nativeLight",  alpha=0.1)
     patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "delete only foreign sound field", "slotsUpsert": [candidate]}
     _offline_transport(monkeypatch, "foreign_sound_delete", [raw, patch])
     final = vfx.attach_vfx_manifest(data, "foreign-sound", llm_director=stage.call_llm_vfx_director)

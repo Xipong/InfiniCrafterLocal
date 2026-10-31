@@ -178,32 +178,6 @@ def test_vfx_gameplay_projection_never_invents_missing_state(offline_packets, so
     assert json.dumps(source, sort_keys=True) == before
 
 
-def test_actual_vfx_scale_descriptions_separate_frame_legacy_impact_and_material_units(offline_packets):
-    captured, _ = offline_packets
-    packets = _vfx_packets(_accepted_visual_data("workbench_blade"), captured)
-    descriptions = []
-    for packet, key in zip(packets, ("slots", "slotsUpsert")):
-        scale = packet["outputSchema"]["properties"][key]["items"]["properties"]["scale"]
-        assert {k: v for k, v in scale.items() if k != "description"} == {"type": "number", "minimum": 0.15, "maximum": 5.0}
-        descriptions.append(scale["description"])
-    assert descriptions[0] == descriptions[1]
-    for clause in (
-        "R=selected renderSizePx", "q_selected=R/max(actual final PNG frame width, height)",
-        "not canvas, alpha-bbox or hitbox", "reuse_item_icon selects root item R",
-        "P=projectile.scale", "initial P=D*E", "not another E or gameplay.itemScale",
-        "Periodic sprite trail: clamp(P,0.1,8)*scale*q_selected",
-        "Projectile event body copy: clamp(P,0.1,8)*scale*q_selected",
-        "Exception only for explicit move_front_hand (opcode 20)",
-        "hitboxCurve.mirrorToSprite=true or a present visualScaleCurve",
-        "Periodic sprite trail and projectile event body copy use P*scale*q_selected without clamping P",
-        "Other drivers and front-hand without either scale owner keep the formulas above",
-        "Directional item body stamp: clamp(scale,0.05,8)*q_selected",
-        "Dedicated impactSprite: clamp(scale,0.05,8), no main-PNG conversion",
-        "spriteElement/texturedPath use explicit world-pixel dimensions/profiles, not q_selected",
-    ):
-        assert clause in descriptions[0], clause
-
-
 def test_new_gameplay_context_does_not_widen_actual_vfx_repair_permissions(monkeypatch, offline_packets):
     captured, _ = offline_packets
     data = _accepted_visual_data("workbench_blade")
@@ -211,9 +185,10 @@ def test_new_gameplay_context_does_not_widen_actual_vfx_repair_permissions(monke
     accepted = _vfx_output(data)
     raw = copy.deepcopy(accepted)
     raw["slots"][0]["alpha"] = 2.0
-    candidate = {**accepted["slots"][0], "scale": 4.75}
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [candidate], "note": "alpha only, hostile valid scale rewrite"}
-    responses = iter([raw, patch])
+    candidate = {**accepted["slots"][0], "duration": 31}
+    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [candidate], "note": "alpha only, hostile valid lifetime rewrite"}
+    from infini_local.core.vfx_material_contract import vfx_model_payload
+    responses = iter([vfx_model_payload(raw), vfx_model_payload(patch)])
 
     def respond(request, **kwargs):
         captured.append(copy.deepcopy(request))
@@ -233,7 +208,7 @@ def test_new_gameplay_context_does_not_widen_actual_vfx_repair_permissions(monke
     assert final["gameplay"] == before["gameplay"]
     assert final["runtimeProgram"] == before["runtimeProgram"]
     assert vfx.validate_vfx_manifest_wire(final)["ok"]
-    assert raw["slots"][0]["alpha"] == 2.0 and candidate["scale"] == 4.75
+    assert raw["slots"][0]["alpha"] == 2.0 and candidate["duration"] == 31
 
 
 @pytest.mark.parametrize("mode", ["selected", "representative"])
