@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable><LangVersion>latest</LangVersion>
+  </PropertyGroup>
+  <ItemGroup><Reference Include="$(InfiniTmlReferenceDir)/*.dll" /></ItemGroup>
+  <Target Name="ValidateReferences" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(InfiniTmlReferenceDir)/tModLoader.dll')" Text="Set InfiniTmlReferenceDir to an existing tModLoader reference directory." />
+  </Target>
+</Project>

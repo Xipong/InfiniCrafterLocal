@@ -17,6 +17,32 @@ def trace():
             'snapshots':[{'tick':i,'player':actor,'dummy':dict(actor,x=80),'projectiles':[dict(actor,id=7,entityId='<unsafe>',vx=2,vy=0,active=True,x=20+i*2)]} for i in range(3)]}
 
 class WorkbenchTests(unittest.TestCase):
+    def test_server_fixture_verifier_requires_hooks_not_client_firing(self):
+        from unittest.mock import patch
+        verifier_spec=importlib.util.spec_from_file_location('verify_multi_mod_loader',Path(__file__).with_name('verify_multi_mod_loader.py'))
+        verifier=importlib.util.module_from_spec(verifier_spec);verifier_spec.loader.exec_module(verifier)
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);host=root/'host.dll';dep=root/'dep.dll';item=root/'item.dll'
+            for file in (host,dep,item):file.write_bytes(b'fixture')
+            arguments=['verify','--server-mode','--native-dll',str(host),'--dependency-dll',str(dep),
+                '--dependent-dll',str(item),'--dependency-root',str(root),'--dependent-root',str(root)]
+            def run(command,env,**kwargs):
+                self.assertEqual(command[command.index('--server-mode')+1],'true')
+                scenario=json.loads(Path(command[command.index('--scenario')+1]).read_text())
+                output=Path(command[command.index('--output')+1])
+                if scenario['actions']:
+                    output.write_text(json.dumps({'status':'error','error':'server-mode has no connected client'}))
+                    return subprocess.CompletedProcess(command,2,'','')
+                output.write_text(json.dumps({'status':'passed','execution':{'networkMode':2,'additionalMods':[
+                    {'name':'WorkbenchObserverFixture'},{'name':'WorkbenchDependentFixture'}]},
+                    'combat':{'spawns':0,'hits':0}}))
+                hooks=('GlobalNPC.SetDefaults.NpcSlotReady','GlobalNPC.OnSpawn','ModNPC.AI',
+                    'ModSystem.PostUpdateEverything','ModSystem.ServerPacketSerialized')
+                Path(env['IFC_WORKBENCH_OBSERVER_OUTPUT']).write_text(json.dumps({'counts':dict.fromkeys(hooks,1)}))
+                return subprocess.CompletedProcess(command,0,'','')
+            with patch.object(sys,'argv',arguments),patch.object(verifier.subprocess,'run',side_effect=run):
+                self.assertEqual(verifier.main(),0)
+
     def test_loader_run_requires_completed_assertions_and_agrees_with_exit(self):
         from types import SimpleNamespace
         from unittest.mock import patch
@@ -70,6 +96,59 @@ class WorkbenchTests(unittest.TestCase):
             mod.write_bytes(b'mod');before=w.native_binaries_state(host)
             mod.write_bytes(b'changed mod');self.assertNotEqual(before,w.native_binaries_state(host))
             mod.write_bytes(b'mod');host.write_bytes(b'changed host');self.assertNotEqual(before,w.native_binaries_state(host))
+
+    def test_loader_receipt_detects_changed_archive(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);host=root/'ItemTestWorkbench.dll';host.write_bytes(b'host')
+            scene=root/'scene.json';scene.write_text('{"ticks":1}')
+            archive=root/'fixture.tmod';archive.write_bytes(b'original')
+            args=SimpleNamespace(timeout=10,item=None,native_item='Example/Item',scenario=scene,
+                out=root/'run',no_build=True,item_boundary='fresh',probe_dll=None,probe_mod_root=None,tmods=[archive],server_mode=True)
+            def run(command,**kwargs):
+                self.assertEqual(command[command.index('--tmod')+1],str(archive))
+                self.assertEqual(command[command.index('--server-mode')+1],'true')
+                Path(command[command.index('--output')+1]).write_text(json.dumps({'status':'passed','snapshots':[{'tick':0}],'assertions':[{'status':'passed'}]}))
+                archive.write_bytes(b'changed')
+                return subprocess.CompletedProcess(command,0,'','')
+            with patch.object(w,'native_executable',return_value=(host,{})),patch.object(w,'build_state',return_value={}),patch.object(w.subprocess,'run',side_effect=run):
+                with self.assertRaisesRegex(RuntimeError,'changed during execution'):w.execute_loader_run(args)
+            receipt=json.loads((args.out/'receipt.json').read_text())
+            self.assertEqual(receipt['extraArchives'][str(archive)],w.hashlib.sha256(b'original').hexdigest())
+            self.assertFalse(receipt['binariesUnchanged'])
+
+    def test_loader_tracks_all_extra_mod_content_and_preserves_input_order(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);host=root/'ItemTestWorkbench.dll';host.write_bytes(b'host')
+            scene=root/'scene.json';scene.write_text('{"ticks":1}')
+            mods=[]
+            for name in ('dependent','dependency'):
+                dll=root/(name+'.dll');dll.write_bytes(name.encode())
+                content=root/name;(content/'Items').mkdir(parents=True)
+                (content/'build.txt').write_text('version=1')
+                (content/'Items'/'texture.png').write_bytes(b'original')
+                mods.append((dll,content))
+            report={'status':'passed','snapshots':[{'tick':0}],'assertions':[{'status':'passed'}]}
+            for mutate in (False,True):
+                texture=mods[0][1]/'Items'/'texture.png';texture.write_bytes(b'original')
+                args=SimpleNamespace(timeout=10,item=None,native_item='Example/Item',scenario=scene,
+                    out=root/str(mutate),no_build=True,item_boundary='fresh',probe_dll=None,probe_mod_root=None,mods=mods)
+                def run(command,**kwargs):
+                    pairs=[(command[i+1],command[i+3]) for i,x in enumerate(command) if x=='--mod-dll']
+                    self.assertEqual(pairs,[(str(dll),str(content)) for dll,content in mods])
+                    Path(command[command.index('--output')+1]).write_text(json.dumps(report))
+                    if mutate:texture.write_bytes(b'changed')
+                    return subprocess.CompletedProcess(command,0,'','')
+                with patch.object(w,'native_executable',return_value=(host,{})),patch.object(w,'build_state',return_value={}),patch.object(w.subprocess,'run',side_effect=run):
+                    if mutate:
+                        with self.assertRaisesRegex(RuntimeError,'changed during execution'):w.execute_loader_run(args)
+                    else:self.assertEqual(w.execute_loader_run(args),0)
+                receipt=json.loads((args.out/'receipt.json').read_text())
+                self.assertEqual(receipt['extraContent'][str(mods[0][1])]['Items/texture.png'],w.hashlib.sha256(b'original').hexdigest())
+                self.assertEqual(receipt['binariesUnchanged'],not mutate)
 
     def test_no_build_refuses_changed_index_or_separate_mod_build_inputs(self):
         from unittest.mock import patch

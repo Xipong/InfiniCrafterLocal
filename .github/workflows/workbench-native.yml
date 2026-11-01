@@ -61,7 +61,7 @@ jobs:
           dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj -p:TmlVersion=2026.08.3.0
           dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj -p:TmlVersion=2026.08.3.0
           python - <<'PY'
-          import json, os
+          import json, os, shutil
           from pathlib import Path
           data = json.loads(Path('ModSources/InfiniCrafterLocal/obj/project.assets.json').read_text())
           packages = [entry for name, entry in data['libraries'].items() if name.lower().startswith('tmodloader/')]
@@ -71,8 +71,18 @@ jobs:
           refs = [path.resolve() for path in refs if (path / 'tModLoader.dll').is_file()]
           if len(refs) != 1:
               raise SystemExit('Expected exactly one tModLoader reference directory')
+          # The NuGet package contains the Steamworks reference assembly. Native
+          # autoload reflects tML types and needs the real Linux implementation
+          # from the matching hash-verified tML distribution instead.
+          tml_root = Path(os.environ['RUNNER_TEMP']) / 'tml'
+          runtime = list(tml_root.glob('Libraries/**/runtimes/linux/lib/net8.0/Steamworks.NET.dll'))
+          if len(runtime) != 1:
+              raise SystemExit(f'Expected one official Linux Steamworks.NET runtime, found {runtime}')
+          runtime_refs = Path(os.environ['RUNNER_TEMP']) / 'tml-workbench-references'
+          shutil.copytree(refs[0], runtime_refs)
+          shutil.copyfile(runtime[0], runtime_refs / 'Steamworks.NET.dll')
           with open(os.environ['GITHUB_ENV'], 'a') as stream:
-              stream.write(f'INFINI_TML_REFERENCE_DIR={refs[0]}\n')
+              stream.write(f'INFINI_TML_REFERENCE_DIR={runtime_refs}\n')
           PY
       - name: Fetch community MagicPixel resources
         shell: bash
@@ -89,6 +99,39 @@ jobs:
           python tools/item-test-workbench/workbench.py build 2>&1 | tee artifacts/workbench-ci/build.log
           python tools/item-test-workbench/verify_vfx.py --no-build --out artifacts/workbench-ci/evidence \
             2>&1 | tee artifacts/workbench-ci/verify.log
+      - name: Verify independently loaded dependent tModLoader mods
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=tools/item-test-workbench
+          dotnet build "$base/fixture-mod/WorkbenchObserverFixture.Standalone.csproj" -c Release \
+            -p:InfiniTmlReferenceDir="$INFINI_TML_REFERENCE_DIR"
+          dotnet build "$base/fixture-mod/WorkbenchDependentFixture/WorkbenchDependentFixture.Standalone.csproj" -c Release \
+            -p:InfiniTmlReferenceDir="$INFINI_TML_REFERENCE_DIR"
+          host="$base/bin/Release/net8.0/ItemTestWorkbench.dll"
+          dependency="$base/fixture-mod/bin/Release/net8.0/WorkbenchObserverFixture.dll"
+          dependent="$base/fixture-mod/WorkbenchDependentFixture/bin/Release/net8.0/WorkbenchDependentFixture.dll"
+          python "$base/verify_native_loader.py" --native-dll "$host" --probe-dll "$dependency" \
+            --probe-mod-root "$base/fixtures/WorkbenchObserverFixture" \
+            2>&1 | tee artifacts/workbench-ci/loader-single.log
+          python "$base/verify_multi_mod_loader.py" --native-dll "$host" \
+            --dependency-dll "$dependency" --dependency-root "$base/fixtures/WorkbenchObserverFixture" \
+            --dependent-dll "$dependent" --dependent-root "$base/fixtures/WorkbenchDependentFixture" \
+            2>&1 | tee artifacts/workbench-ci/loader-multiple.log
+          python "$base/verify_multi_mod_loader.py" --server-mode --native-dll "$host" \
+            --dependency-dll "$dependency" --dependency-root "$base/fixtures/WorkbenchObserverFixture" \
+            --dependent-dll "$dependent" --dependent-root "$base/fixtures/WorkbenchDependentFixture" \
+            2>&1 | tee artifacts/workbench-ci/loader-server.log
+          packer="$base/fixture-mod/WorkbenchTmodFixture/WorkbenchTmodFixture.csproj"
+          dotnet build "$packer" -c Release -p:InfiniTmlReferenceDir="$INFINI_TML_REFERENCE_DIR"
+          dotnet run --no-build -c Release --project "$packer" -- "$dependency" \
+            "$base/fixtures/WorkbenchObserverFixture" "$RUNNER_TEMP/WorkbenchObserverFixture.tmod"
+          dotnet run --no-build -c Release --project "$packer" -- "$dependent" \
+            "$base/fixtures/WorkbenchDependentFixture" "$RUNNER_TEMP/WorkbenchDependentFixture.tmod"
+          python "$base/verify_tmod_loader.py" --native-dll "$host" \
+            --dependency-tmod "$RUNNER_TEMP/WorkbenchObserverFixture.tmod" \
+            --dependent-tmod "$RUNNER_TEMP/WorkbenchDependentFixture.tmod" \
+            2>&1 | tee artifacts/workbench-ci/loader-tmod.log
       - name: Render a Luminance on-hit particle using the real resource
         shell: bash
         run: |
