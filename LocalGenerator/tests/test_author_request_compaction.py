@@ -417,3 +417,111 @@ def test_author_card_compaction_keeps_every_constraint_and_consumer_description(
                               root_meaning=target.get("meaning"))
     assert checked_descriptions and omitted_root_copies
     assert checked_shared_types == set(shared_types)
+
+
+@pytest.mark.parametrize('required', [[], ['fixed']])
+def test_provider_object_presence_is_enforced_locally_after_nullable_transport(required):
+    from infini_local.core.schema_validation import strict_schema_errors
+    local = {'type': 'object', 'additionalProperties': False, 'minProperties': len(required) + 1,
+             'properties': {'left': {'type': 'number', 'minimum': 0}, 'right': {'type': 'number', 'minimum': 0}},
+             'required': required}
+    if required:
+        local['properties']['fixed'] = {'type': 'string'}
+    before = copy.deepcopy(local)
+    provider = contract_provider_schema._provider_strict_projection(local)
+    response_format = {'type': 'json_schema', 'json_schema': {'schema': provider}}
+    prefix = {'fixed': 'kept'} if required else {}
+    for authored, valid in [({}, False), ({'left': 0}, True), ({'right': 2}, True),
+                            ({'left': 0, 'right': 2}, True), ({'left': -1}, False)]:
+        authored = {**prefix, **authored}
+        encoded = {key: authored.get(key) for key in local['properties']}
+        assert Draft202012Validator(provider).is_valid(encoded) is (authored.get('left', 0) >= 0)
+        restored = contract_provider_schema.project_provider_nullable_optionals_to_local(encoded, local, response_format=response_format)
+        assert restored == authored
+        assert (not strict_schema_errors(restored, local)) is valid
+    if required:
+        assert not Draft202012Validator(provider).is_valid({'fixed': None, 'left': 1, 'right': None})
+    assert local == before
+
+
+def test_armor_set_bonus_nonempty_constraint_survives_full_provider_roundtrip():
+    item = build_capability_witness('armor')
+    call = next(row for row in item['runtimeProgram']['calls'] if row['id'] == 'witness_call')
+    local = contract.author_item_response_schema()
+    provider = contract.author_item_provider_response_schema()
+    response_format = {'type': 'json_schema', 'json_schema': {'schema': provider}}
+    for bonuses in ({'minionSlotsBonus': 2}, {'minionSlotsBonus': 2, 'sentrySlotsBonus': 1}, {}):
+        call['params']['setBonuses'] = bonuses or {'minionSlotsBonus': 2}
+        encoded = _encode_nullable_fixture(item, local)
+        if not bonuses:
+            encoded_call = next(row for row in encoded['runtimeProgram']['calls'] if row['id'] == 'witness_call')
+            encoded_call['params']['setBonuses'] = dict.fromkeys(encoded_call['params']['setBonuses'])
+        # Provider cannot express this presence constraint without large unions.
+        assert Draft202012Validator(provider).is_valid(encoded)
+        restored = contract.project_provider_author_item_to_local(encoded, response_format=response_format)
+        restored_call = next(row for row in restored['runtimeProgram']['calls'] if row['id'] == 'witness_call')
+        assert restored_call['params']['setBonuses'] == bonuses
+        assert validate_runtime_program(restored)['ok'] is bool(bonuses)
+
+
+def test_redundant_minimum_is_removed_without_changing_required_values():
+    local = {'type': 'object', 'additionalProperties': False, 'minProperties': 1,
+             'properties': {'value': {'type': 'number'}}, 'required': ['value']}
+    provider = contract_provider_schema._provider_strict_projection(local)
+    assert 'minProperties' not in provider and 'anyOf' not in provider
+    for value in ({}, {'value': 0}, {'value': None}):
+        assert Draft202012Validator(provider).is_valid(value) == Draft202012Validator(local).is_valid(value)
+
+
+def test_provider_projection_keeps_cardinality_owner_unchanged_and_literal_data_intact():
+    local = {'type': 'object', 'additionalProperties': False, 'minProperties': 1,
+             'properties': {'value': {'const': {'minProperties': 7}}}, 'required': []}
+    before = copy.deepcopy(local)
+    provider = contract_provider_schema._provider_strict_projection(local)
+    assert 'minProperties' not in provider
+    assert provider['properties']['value']['anyOf'][0]['const'] == {'minProperties': 7}
+    assert local == before
+    assert not Draft202012Validator(local).is_valid({})
+
+
+@pytest.mark.parametrize('pattern,valid,invalid', [
+    (r'^(?!Terraria/)[A-Za-z]+/[A-Za-z]+$', 'Example/Custom', 'Terraria/Melee'),
+    (r'^(?=ab)ab$', 'ab', 'ac'),
+    (r'^.(?<=a)b$', 'ab', 'cb'),
+    (r'^.(?<!a)b$', 'cb', 'ab'),
+    (r'^(a)\1$', 'aa', 'ab'),
+])
+def test_unsupported_regex_constraint_remains_local_not_rewritten(pattern, valid, invalid):
+    from infini_local.core.schema_validation import strict_schema_errors
+    local = {'type': 'string', 'pattern': pattern}
+    before = copy.deepcopy(local)
+    provider = contract_provider_schema._provider_strict_projection(local)
+    assert provider == {'type': 'string'}
+    assert Draft202012Validator(provider).is_valid(valid)
+    assert Draft202012Validator(provider).is_valid(invalid)
+    assert not strict_schema_errors(valid, local)
+    assert strict_schema_errors(invalid, local)
+    assert local == before
+
+
+@pytest.mark.parametrize('pattern', [r'^[a-z][a-z0-9_]{0,47}$', r'^[a-z0-9_]{0,48}$', r'^\(\?!literal$', r'^\\1$'])
+def test_simple_regex_and_escaped_literals_keep_provider_constraints(pattern):
+    local = {'type': 'string', 'pattern': pattern}
+    assert contract_provider_schema._provider_strict_projection(local) == local
+
+
+def test_damage_class_provider_gap_cannot_admit_reserved_or_unknown_local_values():
+    item = build_capability_witness('item_stats')
+    call = next(row for row in item['runtimeProgram']['calls'] if row['id'] == 'witness_call')
+    local = contract.author_item_response_schema()
+    provider = contract.author_item_provider_response_schema()
+    call['params']['damageClass'] = 'melee'
+    encoded = _encode_nullable_fixture(item, local)
+    encoded_call = next(row for row in encoded['runtimeProgram']['calls'] if row['id'] == 'witness_call')
+    for damage_class, valid in [('melee', True), ('Terraria/Melee', False), ('unknown_class', False)]:
+        encoded_call['params']['damageClass'] = damage_class
+        assert Draft202012Validator(provider).is_valid(encoded)
+        restored = contract.project_provider_author_item_to_local(encoded, response_format={'type': 'json_schema', 'json_schema': {'schema': provider}})
+        restored_call = next(row for row in restored['runtimeProgram']['calls'] if row['id'] == 'witness_call')
+        assert restored_call['params']['damageClass'] == damage_class
+        assert validate_runtime_program(restored)['ok'] is valid

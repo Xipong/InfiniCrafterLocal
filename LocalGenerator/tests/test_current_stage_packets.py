@@ -124,8 +124,15 @@ def test_actual_outgoing_packets_preserve_roles_schema_and_frozen_authority(capt
         schema = schema_from_wire(wire)
         if mode == "json_schema":
             assert schema == packet["response_format"]["json_schema"]["schema"]
+            from test_codex_subscription_contract import _assert_structured_outputs_subset
+            _assert_structured_outputs_subset(schema)
+            if stage.startswith("visual"):
+                assert schema == full["responseSchema"]
+            elif stage.startswith("vfx"):
+                from infini_local.core.provider_schema import _provider_strict_projection, defer_provider_cross_field_constraints
+                assert schema == _provider_strict_projection(defer_provider_cross_field_constraints(full["outputSchema"]), omit_annotations=True)
+                assert any("allOf" in node for node in dict_nodes(full["outputSchema"]))
             if stage.startswith(("visual", "vfx")):
-                assert schema == full["responseSchema" if stage.startswith("visual") else "outputSchema"]
                 assert not any("$ref" in node for node in dict_nodes(schema))
         else:
             assert schema is None
@@ -186,8 +193,10 @@ def test_captured_permissions_drive_real_frozen_merge_not_provider_schema_alone(
         patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [slot], "note": "one leaf"}
         valid = {"schema": patch["schema"], "slotsUpsert": inputs["vfxOutput"]["slots"], "note": "one leaf"}
         from infini_local.core.vfx.materials import vfx_model_payload
-        assert Draft202012Validator(provider_schema).is_valid(vfx_model_payload(valid))
-        assert not Draft202012Validator(provider_schema).is_valid(vfx_model_payload(patch))
+        from infini_local.core.provider_schema import defer_provider_cross_field_constraints
+        basis = defer_provider_cross_field_constraints(full["outputSchema"])
+        assert Draft202012Validator(provider_schema).is_valid(_encode_nullable_fixture(vfx_model_payload(valid), basis))
+        assert not Draft202012Validator(provider_schema).is_valid(_encode_nullable_fixture(vfx_model_payload(patch), basis))
         fixed, audit = vfx_repair._apply_vfx_repair_patch(inputs["visualData"], broken, patch, scope, return_audit=True)
         assert fixed == inputs["vfxOutput"]
         assert audit["ignoredChanges"]
@@ -304,7 +313,13 @@ def test_provider_schema_and_real_consumer_accept_same_control_refusals(capture,
         retired["item"]["effectColor"] = "gold"
     else:
         from infini_local.core.vfx.materials import vfx_model_payload
-        encode = vfx_model_payload
+        from infini_local.core.provider_schema import defer_provider_cross_field_constraints
+        basis = defer_provider_cross_field_constraints(dossier(packet)["outputSchema"])
+        def encode(value):
+            projected = _encode_nullable_fixture(vfx_model_payload(value), basis)
+            if "effectMagnitude" in value:
+                projected["effectMagnitude"] = value["effectMagnitude"]
+            return projected
         accepted = lambda value: vfx_validation.validate_vfx_director_output(value, inputs["visualData"])["ok"]
         invalid = copy.deepcopy(valid)
         invalid["slots"][0]["particle"]["colorStart"]["r"] = True
@@ -313,3 +328,81 @@ def test_provider_schema_and_real_consumer_accept_same_control_refusals(capture,
     for value, expected in ((valid, True), (invalid, False), (retired, False)):
         assert Draft202012Validator(schema).is_valid(encode(value)) is expected
         assert accepted(value) is expected
+
+
+@pytest.mark.parametrize('needs_repair', [False, True])
+def test_vfx_nullable_transport_roundtrip_and_local_conditional_repair(capture, monkeypatch, needs_repair):
+    from infini_local.core.provider_schema import defer_provider_cross_field_constraints
+    from infini_local.core.vfx.materials import vfx_model_payload
+    from infini_local.services.codex_text_backend import _request_payload
+    from test_codex_subscription_contract import _encode_nullable_fixture, _assert_structured_outputs_subset
+
+    packet, evidence = capture.builder('vfx', COHORT[0], 'json_schema')
+    data = evidence['inputs']['visualData']
+    accepted = evidence['inputs']['vfxOutput']
+    invalid = copy.deepcopy(accepted)
+    invalid['slots'][0]['repeatEvery'] = 1  # on_crit requires zero; scalar range alone allows one.
+    assert not vfx_validation.validate_vfx_director_output(invalid, data)['ok']
+    patch = {'schema': vfx_contract.VFX_REPAIR_PATCH_SCHEMA, 'slotsUpsert': accepted['slots'], 'note': 'exact cadence leaf'}
+    replies = iter([invalid, patch] if needs_repair else [accepted])
+    observed = []
+    def respond(request, **_kwargs):
+        original = dossier(request)['outputSchema']
+        before = copy.deepcopy(original)
+        basis = defer_provider_cross_field_constraints(original)
+        encoded = _encode_nullable_fixture(vfx_model_payload(next(replies)), basis)
+        wire = _request_payload(request)
+        schema = schema_from_wire(wire)
+        _assert_structured_outputs_subset(schema)
+        assert Draft202012Validator(schema).is_valid(encoded)
+        assert original == before
+        observed.append((copy.deepcopy(request), encoded))
+        return {'choices': [{'message': {'content': json.dumps(encoded)}}], '_debug': {'responseFormatType': 'json_schema'}}
+    monkeypatch.setattr(capture.vfx_sender, 'llm_chat_json', respond)
+    final = capture.vfx_stage.attach_vfx_manifest(data, 'vfx-nullable-conditional', llm_director=capture.vfx_sender.call_llm_vfx_director)
+    assert len(observed) == (2 if needs_repair else 1)
+    assert final['debug']['vfxDirectorRaw'] == accepted
+    assert final['runtimeProgram'] == data['runtimeProgram']
+    if needs_repair:
+        scope = dossier(observed[1][0])['repairScope']
+        assert scope['fieldPermissions']['slots'] == [{'slotId': accepted['slots'][0]['id'], 'paths': ['repeatEvery']}]
+    assert any(value is None for value in observed[0][1]['slots'][0].values())
+
+
+def test_cross_field_deferral_is_explicit_and_does_not_mutate_literals():
+    from infini_local.core.provider_schema import _provider_strict_projection, defer_provider_cross_field_constraints
+    local = {'type': 'object', 'additionalProperties': False, 'properties': {
+        'value': {'const': {'if': 1, 'then': {'not': 2}}}}, 'required': ['value'],
+        'allOf': [{'not': {'properties': {'value': {'const': None}}}}]}
+    before = copy.deepcopy(local)
+    with pytest.raises(ValueError, match='Unproved provider composition'):
+        _provider_strict_projection(local)
+    basis = defer_provider_cross_field_constraints(local)
+    assert 'allOf' not in basis
+    assert basis['properties']['value']['const'] == {'if': 1, 'then': {'not': 2}}
+    assert local == before
+
+
+@pytest.mark.parametrize('stage', ['vfx', 'vfx_repair'])
+def test_vfx_provider_annotation_compaction_retains_full_prompt_guidance(capture, stage):
+    from infini_local.core.provider_schema import _provider_strict_projection, defer_provider_cross_field_constraints
+    from infini_local.core.vfx.materials import vfx_model_payload
+    from test_codex_subscription_contract import _encode_nullable_fixture
+    packet, evidence = capture.builder(stage, COHORT[0], 'json_schema')
+    local = dossier(packet)['outputSchema']
+    basis = defer_provider_cross_field_constraints(local)
+    verbose = _provider_strict_projection(basis)
+    actual = schema_from_wire(capture.wire(packet, 'codex_subscription')['packet'])
+    assert any('description' in node for node in dict_nodes(local))
+    assert not any('description' in node for node in dict_nodes(actual))
+    assert len(json.dumps(actual)) < len(json.dumps(verbose))
+    value = evidence['inputs']['vfxOutput']
+    if stage == 'vfx_repair':
+        value = {'schema': vfx_contract.VFX_REPAIR_PATCH_SCHEMA, 'slotsUpsert': value['slots'], 'note': 'same acceptance'}
+    encoded = _encode_nullable_fixture(vfx_model_payload(value), basis)
+    assert Draft202012Validator(verbose).is_valid(encoded)
+    assert Draft202012Validator(actual).is_valid(encoded)
+    corrupted = copy.deepcopy(encoded)
+    corrupted['slotsUpsert' if stage == 'vfx_repair' else 'slots'][0]['alpha'] = 2
+    assert not Draft202012Validator(verbose).is_valid(corrupted)
+    assert not Draft202012Validator(actual).is_valid(corrupted)
