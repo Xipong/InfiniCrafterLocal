@@ -81,6 +81,7 @@ jobs:
           python tools/item-test-workbench/fetch_player_assets.py --include-dummy --out "$RUNNER_TEMP/player-assets"
           echo "INFINI_PLAYER_ASSET_DIR=$RUNNER_TEMP/player-assets" >> "$GITHUB_ENV"
       - name: Build and execute original native particle checks
+        id: native_build
         shell: bash
         run: |
           set -euo pipefail
@@ -149,6 +150,8 @@ jobs:
             echo 'Native capture did not complete; see previous step and logs.'
           fi
       - name: Capture the public lunar harpoon with probe --gif
+        id: lunar
+        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -190,20 +193,15 @@ jobs:
           print(f'Native lunar probe: {gif}; {len(render["frames"])} PNG frames')
           PY
       - name: Exercise native hit effects and miss controls
+        if: ${{ !cancelled() && steps.lunar.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
           python tools/item-test-workbench/verify_hit_feedback.py --no-build \
             --item artifacts/workbench-ci/lunar-item/item.json \
             --out artifacts/workbench-ci/hit-feedback
-      - name: Verify original NPC hit effects
-        shell: bash
-        run: |
-          set -euo pipefail
-          python tools/item-test-workbench/verify_hit_feedback.py \
-            --item artifacts/workbench-ci/lunar-item/item.json --no-build \
-            --out artifacts/workbench-ci/hit-feedback
       - name: Capture native vanilla weapon effects through probe
+        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
