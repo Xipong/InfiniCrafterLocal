@@ -230,8 +230,16 @@ jobs:
             --out artifacts/workbench-ci/vanilla-legacy-bullet
           python -m toolbox workbench probe --vanilla-item 368 --gif \
             --vanilla-assets "$legacy" --ticks 20 --hold 10 --gif-stride 2 --no-build \
-            --expect '{"status":"error","errorContains":"requires both Projectile_982.png and Extra_98.png"}' \
-            --out artifacts/workbench-ci/vanilla-legacy-excalibur
+            --prepare --out artifacts/workbench-ci/vanilla-legacy-excalibur
+          if python tools/item-test-workbench/workbench.py run --vanilla-item 368 --no-build \
+            --scenario artifacts/workbench-ci/vanilla-legacy-excalibur/inputs/001-primary.json \
+            --out artifacts/workbench-ci/vanilla-legacy-excalibur-run --review none; then
+            echo 'Excalibur unexpectedly rendered without its native texture pair' >&2
+            exit 1
+          else
+            status=$?
+            test "$status" -eq 2 || { echo "Expected native error exit 2; got $status" >&2; exit 1; }
+          fi
           python - <<'PY'
           import json
           from pathlib import Path
@@ -253,8 +261,8 @@ jobs:
                   if not any(e.get('kind') == 'spawn' and e.get('ammoItemIdUsed') == 97 for e in events):
                       raise SystemExit('Native musket ball source was not observed')
           legacy = json.loads((root / 'vanilla-legacy-bullet/probe-result.json').read_text())
-          refused = json.loads((root / 'vanilla-legacy-excalibur/probe-result.json').read_text())
-          if not legacy['passed'] or not refused['passed'] or refused['cases'][0]['nativeStatus'] != 'error':
+          refused = json.loads((root / 'vanilla-legacy-excalibur-run/native.json').read_text())
+          if not legacy['passed'] or refused['status'] != 'error' or 'requires both Projectile_982.png and Extra_98.png' not in refused['error']:
               raise SystemExit('Legacy assets did not preserve bullet rendering and explicitly refuse missing Excalibur textures')
           PY
       - name: Upload native evidence and diagnostics

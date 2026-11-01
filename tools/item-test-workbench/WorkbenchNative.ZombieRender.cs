@@ -37,6 +37,7 @@ internal sealed class WNativeZombieRender : IDisposable
         var readers = new AssetReaderCollection();
         readers.RegisterReader(new PngReader(graphics.Device), ".png");
         assets = new AssetRepository(readers);
+        bool restoredFrame = false;
         try {
             using var stream = new MemoryStream(bytes, writable: false);
             texture = assets.CreateUntracked<Texture2D>(stream, "NPC_3.png", AssetRequestMode.ImmediateLoad);
@@ -44,9 +45,30 @@ internal sealed class WNativeZombieRender : IDisposable
                 throw new InvalidDataException("Pinned zombie texture dimensions must be 38x144");
             previous = TextureAssets.Npc[NPCID.Zombie];
             TextureAssets.Npc[NPCID.Zombie] = texture;
+            try {
+                int count = Main.npcFrameCount[NPCID.Zombie];
+                if (count <= 0 || texture.Value.Height / count <= 0 || texture.Value.Height % count != 0)
+                    throw new InvalidDataException("Native zombie frame count is invalid for the selected texture");
+                if (npc.frame.Width <= 0 || npc.frame.Height <= 0) {
+                    // The isolated host created the controlled NPC while dedServ
+                    // was true. Terraria's server SetDefaults clears frame and
+                    // does not set the client deferred-init flag. Re-arm that
+                    // exact native flag and let Terraria choose the rectangle.
+                    bool oldDedicated = Main.dedServ;
+                    Main.dedServ = false;
+                    try { npc.setFrameSize = true; npc.SetFrameSize(); }
+                    finally { Main.dedServ = oldDedicated; }
+                    restoredFrame = true;
+                }
+                if (npc.frame.X != 0 || npc.frame.Y != 0 || npc.frame.Width != texture.Value.Width || npc.frame.Height != texture.Value.Height / count)
+                    throw new InvalidDataException("Native NPC.SetFrameSize did not initialize the selected zombie frame");
+            } catch { TextureAssets.Npc[NPCID.Zombie] = previous; texture.Dispose(); throw; }
         } catch { assets.Dispose(); throw; }
         Report = new JsonObject { ["entrypoint"] = "Main.DrawNPC -> Main.DrawNPCDirect -> NPCLoader.PreDraw/PostDraw (original)",
             ["animation"] = "NPC.FindFrame after controlled NPC.UpdateNPC", ["npcSlot"] = npc.whoAmI,
+            ["frameInitialization"] = restoredFrame ? "Server-created empty frame: native deferred setFrameSize flag re-armed, then original NPC.SetFrameSize" : "Native frame already initialized",
+            ["nativeFrameCount"] = Main.npcFrameCount[NPCID.Zombie], ["initialFrameX"] = npc.frame.X, ["initialFrameY"] = npc.frame.Y,
+            ["initialFrameWidth"] = npc.frame.Width, ["initialFrameHeight"] = npc.frame.Height,
             ["npcType"] = npc.type, ["controlledWidth"] = npc.width, ["controlledHeight"] = npc.height,
             ["initialLife"] = npc.life, ["aiStyle"] = npc.aiStyle,
             ["sourcePath"] = path, ["sourceCommit"] = "c835594415e31ed88734dc778661014b48ffb648",
