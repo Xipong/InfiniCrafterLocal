@@ -54,6 +54,37 @@ class NativeReviewTests(unittest.TestCase):
             m=json.loads((out/'native-review.json').read_text());self.assertEqual(len(m['frames']),5)
             self.assertEqual(m['gif']['sourceTicks'],[0,2,4]);self.assertEqual(m['gif']['omittedFrames'],2)
             with self.assertRaises(ValueError):n.export_native_review(t,tp,root/'bad',True,0)
+    def test_close_gif_uses_recorded_player_bounds_and_keeps_full_frame(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest('Optional Pillow is not installed')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            png_path = root / 'native-frames/0.png'
+            png_path.parent.mkdir()
+            source = Image.new('RGBA', (160, 128), (0, 0, 0, 255))
+            source.putpixel((35, 60), (255, 0, 0, 255))
+            source.putpixel((155, 5), (0, 255, 0, 255))
+            source.save(png_path)
+            frame = {'tick': 0, 'path': 'native-frames/0.png', 'sha256': hashlib.sha256(png_path.read_bytes()).hexdigest(),
+                     'width': 160, 'height': 128,
+                     'scene': {'player': {'screenLeft': 30, 'screenRight': 40, 'screenTop': 50, 'screenBottom': 70}}}
+            trace = {'status': 'passed', 'snapshots': [{'tick': 0, 'player': {'direction': 1}, 'events': []}],
+                     'timeline': {'completedTicks': 1}, 'nativeRender': {'backend': 'original_mod_draw_layers',
+                     'itemArtworkRendered': True, 'projectileArtworkRendered': False, 'worldRendered': False, 'frames': [frame]}}
+            trace_path = root / 'native.json'
+            trace_path.write_text(json.dumps(trace))
+            result = n.export_native_review(trace, trace_path, root / 'review', True)
+            metadata = json.loads((root / 'review/native-review.json').read_text())
+            self.assertEqual(metadata['closeGif']['crop'], [8, 28, 88, 92])
+            self.assertEqual(metadata['closeGif']['sourceTicks'], [0])
+            with Image.open(result['nativeCloseGif']) as close:
+                self.assertEqual(close.convert('RGB').getpixel((54, 64)), (255, 0, 0))
+            with Image.open(result['nativeGif']) as full:
+                self.assertEqual(full.convert('RGB').getpixel((155, 5)), (0, 255, 0))
+            self.assertEqual(source.size, (160, 128))
+
     def test_same_tick_dust_references_preserve_all_states_and_refuse_tampering(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);t,tp,p=self.fixture(root)

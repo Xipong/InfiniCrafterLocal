@@ -128,6 +128,12 @@ jobs:
           with Image.open(gif) as image:
               if getattr(image, 'n_frames', 1) < 2:
                   raise SystemExit('Lunar GIF does not contain an animation')
+          close_gif = Path(case.get('closeGif', ''))
+          if not close_gif.is_file():
+              raise SystemExit('Lunar probe did not produce the close view')
+          with Image.open(close_gif) as image:
+              if getattr(image, 'n_frames', 1) < 2:
+                  raise SystemExit('Lunar close GIF does not contain an animation')
           trace = json.loads((root / 'runs' / case['run'] / 'native.json').read_text())
           render = trace['nativeRender']
           if trace.get('status') != 'passed' or len(render.get('frames', [])) != 160:

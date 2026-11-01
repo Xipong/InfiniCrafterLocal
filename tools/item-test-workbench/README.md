@@ -111,7 +111,9 @@ python -m toolbox workbench probe --item /path/to/items/*/definition.json --gif 
 python -m toolbox workbench probe --item /path/item.json --gif --asset-dir /path/to/sprites
 ```
 
-The result prints each successful `gif` path; the original PNGs, native trace and
+The result prints each successful `gif` path and, when native player bounds are available,
+`closeGif`: a fixed 2× nearest-neighbor crop of the same recorded frames. The close
+view can omit distant action; the full GIF remains available. The original PNGs, native trace and
 HTML review are alongside it in `runs/<case>/`. Default capture uses a fixed
 side-view, up to 120 ticks of held input and 180 total ticks. Use `--hold`,
 `--ticks`, `--input`, `--action`, `--assert` and `--set` to express the desired

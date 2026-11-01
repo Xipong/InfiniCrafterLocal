@@ -324,7 +324,9 @@ def execute_probe(args):
     for row in data["cases"]:
         case = by_name[row["name"]]
         gif_path = output / "runs" / case["name"] / "review/native.gif"
+        close_path = output / "runs" / case["name"] / "review/native-close.gif"
         cases.append({**row, **({"gif": str(gif_path)} if args.gif and gif_path.is_file() else {}),
+                      **({"closeGif": str(close_path)} if args.gif and close_path.is_file() else {}),
                       "displayName": case["displayName"],
                       **{key: case[key] for key in ("item", "vanillaItem", "testWorldOverride") if key in case}})
     result = {**result, "status": "completed", "passed": data["passed"],
