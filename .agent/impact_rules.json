@@ -94,6 +94,7 @@
         "LocalGenerator/tests/test_repair_vfx_contract.py",
         "LocalGenerator/tests/test_vfx_dependency_delivery_contracts.py",
         "LocalGenerator/tests/test_docx_image_readiness.py",
+        "LocalGenerator/tests/test_image_checkpoint_reuse.py",
         "LocalGenerator/tests/test_visual_presentation_metadata.py"
       ],
       "entrypoints": [
@@ -118,6 +119,7 @@
       "area": "storage",
       "tests": [
         "LocalGenerator/tests/test_world_recipe_cache_admission.py",
+        "LocalGenerator/tests/test_generation_resume.py",
         "LocalGenerator/tests/test_asset_transfer_cache_contracts.py"
       ],
       "entrypoints": [

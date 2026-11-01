@@ -20,6 +20,19 @@ Parent context: `context/cards.py.raw_parent_card_for_llm` собирает Auth
 
 Orchestration owner — [combine_pipeline.combine](../../../LocalGenerator/infini_local/pipelines/combine_pipeline.py); assets — [image lifecycle](IMAGE_ASSET_LIFECYCLE_RU.md) / [VFX materials](../../reference/presentation/VFX_MATERIAL_ELEMENTS_RU.md). Cache/dev path отдельно от fresh LLM craft.
 
+<a id="resume"></a>
+## Продолжение принятого дизайна
+
+`combine` сохраняет отдельный checkpoint после принятого compiled Author wire, Visual kit и VFX manifest. Owner хранения — `storage/craft_progress.py`; файл `world_*/checkpoints/<recipeKey>.checkpoint` находится вне `recipes/` и не имеет расширения, разрешённого asset endpoint. Записи используют существующий `atomic_write_json`; ошибка записи останавливает следующую платную стадию, сохраняя предыдущий атомарный снимок.
+
+Resume привязан к полным фактам обоих родителей, world, identity version, multi-dev lane, режиму авторства и явным stamps Author/wire/Visual/VFX. При перестановке A/B проверяется точное равенство полной пары и восстанавливается исходный порядок для оставшихся стадий. Ключи доступа, URL, transport budgets и случайно выбранный round-robin lease не входят в эту идентичность. Новый lease нужен только для оставшихся текстовых стадий; старый response chain не восстанавливается.
+
+При чтении проверяются checksum принятого снимка, текущий runtime wire, Visual kit и его каноническая проекция, VFX wire и accounting уже принятых стадий. Compiler и Repair для них повторно не запускаются. Повреждение — явный отказ с сохранением файла; изменившиеся входы/контракты — новая генерация с записью причины в trace. Это сохранение и проверка уже принятого результата, без выбора или исправления authored дизайна.
+
+Общий image request сохраняет receipt каждого успешно опубликованного PNG сразу из worker. Существующий `copy_context()` переносит текущий `CraftProgress`; его lock объединяет receipts и stage snapshots без потери соседних записей. Полный image request и влияющие на рисунок настройки задают identity; reuse требует актуальной технической проверки, SHA256, размера и соответствующего content-addressed имени. Отсутствующий/доказанно повреждённый PNG создаётся заново; ошибки доступа/чтения проходят наружу без нового image call. Snapshot дизайна остаётся **до** image hydration, поэтому suffix исходного prompt не добавляется повторно.
+
+Полный committed cache имеет приоритет. Checkpoint удаляется только после успешного `cache_put`; ошибка уборки не превращает готовый крафт в ошибку. Delivery gates всегда выполняются перед commit. `llmStageAccounting` сохраняет происхождение принятых стадий; неудавшиеся попытки остаются в request/transport traces. Offline behavioral coverage: `test_generation_resume.py` и `test_image_checkpoint_reuse.py`, включая независимые процессы и параллельные image jobs.
+
 <a id="repairs-accounting"></a>
 ## Conditional repairs и accounting
 

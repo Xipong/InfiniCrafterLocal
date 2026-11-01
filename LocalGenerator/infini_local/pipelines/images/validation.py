@@ -106,6 +106,7 @@ def validate_processed_sprite(
     part_count_min: int = 0,
     part_count_max: int = 0,
     expected_canvas: int | None = None,
+    raise_io: bool = False,
 ) -> dict[str, Any]:
     """Technical validation only. No art taste, no tier judging, no VLM."""
     if Image is None:
@@ -114,8 +115,10 @@ def validate_processed_sprite(
     img: Any = None
     if expected_canvas is not None:
         final_size = final_sprite_canvas(expected_canvas)
+        envelope_options = {"raise_io": True} if raise_io else {}
+        envelope_ok = Path(path).suffix.lower() == ".png" and is_complete_png_file(path, **envelope_options)
         try:
-            if Path(path).suffix.lower() != ".png" or not is_complete_png_file(path):
+            if not envelope_ok:
                 envelope_reasons.append("invalid_png_envelope")
             if Path(path).stat().st_size > 8 * 1024 * 1024:
                 envelope_reasons.append("asset_png_byte_limit_exceeded")
@@ -129,6 +132,8 @@ def validate_processed_sprite(
                 img = source.convert("RGBA")
         except OSError as exc:
             if exc.errno is not None:
+                if raise_io:
+                    raise
                 raise ImageOutputIOError("final image filesystem read failed") from exc
             envelope_reasons.append("invalid_png_envelope")
         except ValueError:

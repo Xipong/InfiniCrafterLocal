@@ -616,13 +616,23 @@ def append_a1111_lora(prompt: str) -> str:
         parts.append(f"<lora:{A1111_LORA_NAME}:{weight}>")
     return ", ".join(p for p in parts if p)
 
+def a1111_generation_settings() -> dict[str, Any]:
+    """The effective producer options, also identifying a resumable image job."""
+    return {
+        "width": env_int("INFINI_A1111_WIDTH", A1111_WIDTH, lo=64, hi=2048),
+        "height": env_int("INFINI_A1111_HEIGHT", A1111_HEIGHT, lo=64, hi=2048),
+        "batch_size": env_int("INFINI_A1111_BATCH_SIZE", A1111_BATCH_SIZE, lo=1, hi=16),
+        "steps": env_int("INFINI_A1111_STEPS", 16),
+        "cfg_scale": env_float("INFINI_A1111_CFG", 5.5),
+        "sampler_name": env_str("INFINI_A1111_SAMPLER", "Euler a"),
+    }
+
+
 def generate_a1111(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> list[str]:
     # Low-VRAM safe by default: sequential requests, batch size 1, no hires fix.
-    width = env_int("INFINI_A1111_WIDTH", A1111_WIDTH, lo=64, hi=2048)
-    height = env_int("INFINI_A1111_HEIGHT", A1111_HEIGHT, lo=64, hi=2048)
+    settings = a1111_generation_settings()
     variants = max(1, int(GENERATE_VARIANTS))
-    batch_size = env_int("INFINI_A1111_BATCH_SIZE", A1111_BATCH_SIZE, lo=1, hi=16)
-    batch_size = min(batch_size, variants)
+    batch_size = min(settings["batch_size"], variants)
     out: list[str] = []
     prompt = append_a1111_lora(prompt)
     negative = str(negative or "")
@@ -631,15 +641,11 @@ def generate_a1111(prompt: str, negative: str, sprite_id: str, preferred_canvas:
     while remaining > 0:
         this_batch = min(batch_size, remaining)
         payload = {
+            **settings,
             "prompt": prompt,
             "negative_prompt": negative,
-            "steps": env_int("INFINI_A1111_STEPS", 16),
-            "cfg_scale": env_float("INFINI_A1111_CFG", 5.5),
-            "width": width,
-            "height": height,
             "batch_size": this_batch,
             "n_iter": 1,
-            "sampler_name": env_str("INFINI_A1111_SAMPLER", "Euler a"),
             "enable_hr": False,
             "do_not_save_samples": True,
             "do_not_save_grid": True,
@@ -654,7 +660,7 @@ def generate_a1111(prompt: str, negative: str, sprite_id: str, preferred_canvas:
             out.append(str(p))
         remaining -= this_batch
         request_i += 1
-    log_event("info", "a1111 images generated", {"spriteId": sprite_id, "count": len(out), "width": width, "height": height, "variants": variants, "batchSize": batch_size, "removeBg": REMOVE_BG,
+    log_event("info", "a1111 images generated", {"spriteId": sprite_id, "count": len(out), "width": settings["width"], "height": settings["height"], "variants": variants, "batchSize": batch_size, "removeBg": REMOVE_BG,
                         "requirePillow": REQUIRE_PILLOW,
                         "pillowAvailable": Image is not None, "bgMode": BG_REMOVE_MODE})
     return out
