@@ -29,7 +29,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libegl1 libgl1 libgl1-mesa-dri libopenal1
-          python -m pip install pillow
+          python -m pip install -r LocalGenerator/requirements-dev.lock
       - name: Install pinned tModLoader native libraries
         shell: bash
         run: |
@@ -44,6 +44,8 @@ jobs:
             test -f "$native/$file" || { echo "Missing tModLoader native library: $native/$file" >&2; exit 1; }
           done
           echo "INFINI_TML_NATIVE_DIR=$native" >> "$GITHUB_ENV"
+          test -f "$RUNNER_TEMP/tml/Content/PixelShader.xnb" || { echo 'Missing tModLoader Content/PixelShader.xnb' >&2; exit 1; }
+          echo "INFINI_TML_CONTENT_DIR=$RUNNER_TEMP/tml/Content" >> "$GITHUB_ENV"
       - name: Install ParticleLibrary and Luminance references
         shell: bash
         run: |
@@ -79,7 +81,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python tools/item-test-workbench/fetch_player_assets.py --out "$RUNNER_TEMP/player-assets"
+          python tools/item-test-workbench/fetch_player_assets.py --include-dummy --out "$RUNNER_TEMP/player-assets"
           echo "INFINI_PLAYER_ASSET_DIR=$RUNNER_TEMP/player-assets" >> "$GITHUB_ENV"
       - name: Build and execute original native particle checks
         shell: bash
@@ -101,6 +103,41 @@ jobs:
           else
             echo 'Native capture did not complete; see previous step and logs.'
           fi
+      - name: Capture the public lunar harpoon with probe --gif
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/item-test-workbench/examples/lunar-harpoon/build.py \
+            --player-assets "$INFINI_PLAYER_ASSET_DIR" --out artifacts/workbench-ci/lunar-item
+          python -m toolbox workbench probe \
+            --item artifacts/workbench-ci/lunar-item/item.json --gif --no-build \
+            --hold 35 --ticks 160 --assert '{"kind":"spawn_count","value":1}' \
+            --out artifacts/workbench-ci/lunar-probe 2>&1 | tee artifacts/workbench-ci/lunar-probe.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from PIL import Image
+          root = Path('artifacts/workbench-ci/lunar-probe')
+          result = json.loads((root / 'probe-result.json').read_text())
+          if result.get('passed') is not True or len(result['cases']) != 1:
+              raise SystemExit('Lunar probe failed; inspect its result and native logs')
+          case = result['cases'][0]
+          gif = Path(case.get('gif', ''))
+          if not gif.is_file():
+              raise SystemExit('Successful lunar probe did not produce a GIF')
+          with Image.open(gif) as image:
+              if getattr(image, 'n_frames', 1) < 2:
+                  raise SystemExit('Lunar GIF does not contain an animation')
+          trace = json.loads((root / 'runs' / case['run'] / 'native.json').read_text())
+          render = trace['nativeRender']
+          if trace.get('status') != 'passed' or len(render.get('frames', [])) != 160:
+              raise SystemExit('Lunar trace is incomplete or failed')
+          if render.get('playerArtworkRendered') is not True or render.get('projectileArtworkRendered') is not True:
+              raise SystemExit('Native player or authored projectile was not rendered')
+          if not any(snapshot.get('particleCount', 0) > 0 for snapshot in render.get('snapshots', [])):
+              raise SystemExit('No actual ParticleLibrary particles were observed')
+          print(f'Native lunar probe: {gif}; {len(render["frames"])} PNG frames')
+          PY
       - name: Upload native evidence and diagnostics
         if: always()
         uses: actions/upload-artifact@v4

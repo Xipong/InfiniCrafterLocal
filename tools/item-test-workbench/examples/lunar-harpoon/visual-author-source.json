@@ -1,5 +1,5 @@
 {
-  "schema": "infini.visual-kit.runtime-entities.v2",
+  "schema": "infini.visual-kit.runtime-entities.v3",
   "item": {
     "prompt": "Vertical upward-pointing silver crescent harpoon with cyan lunar core and brown shaft grip, transparent background.",
     "negativePrompt": "text, background, hands",
