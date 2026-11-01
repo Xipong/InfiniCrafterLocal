@@ -9,6 +9,11 @@ objects, including the historical v6 source and original receipt identifiers.
 v7 canonical names. No native game execution or model inference produced this
 fixture. Gzip is storage-only; it is never a model-input codec.
 
+Coverage is fixed to this historical 69-capability cohort, with each original
+identifier present exactly once. Later capabilities belong to the current
+vertical-slice witnesses and their own behavioral tests; they have no original
+pre-migration wire or receipts to add to this capture.
+
 The regression independently compares the complete executable compiled DTO,
 excluding only `runtimeContract` provenance (which must record the new source
 names). It also validates untouched old wire/receipts, rejects old names as new
