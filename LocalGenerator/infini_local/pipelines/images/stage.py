@@ -6,16 +6,19 @@ from contextlib import contextmanager
 from contextvars import copy_context
 import hashlib
 import json
+import math
 import os
+import stat
 import tempfile
 import traceback
 import uuid
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from infini_local.core.http_io import HttpDeadlineExceeded
+from infini_local.core.images import config as image_config
 from infini_local.core.item_identity_tools import safe_file_part
 from infini_local.core.config_bootstrap import SPRITE_DIR, WORLD_RECIPES_DIR
 from infini_local.core.runtime_authoring.capability_registry import VISUAL_ROLE_BY_ENTITY_KIND
@@ -33,19 +36,23 @@ from infini_local.core.images.config import (
     VISUAL_ASSET_MODE,
     VISUAL_STRICT_AI_AUTHORSHIP,
 )
-from infini_local.services import codex_auth, visual_asset_pipeline
+from infini_local.services import asset_sync_service, codex_auth, visual_asset_pipeline
 from infini_local.services.codex_auth import CodexError
 from infini_local.services.visual_asset_pipeline import ImageOutputIOError, load_image_input, save_image_output, sprite_status_from_raw_path, truncate_prompt_at_boundary
 from infini_local.storage.trace_runtime import (
     log_event,
     trace_event,
 )
+from infini_local.storage.craft_progress import find_image_result, image_progress_active, save_image_result
+from infini_local.storage.trace_tools import _redact_diagnostic
 from infini_local.pipelines.images.backends import (
+    a1111_generation_settings,
     generate_a1111,
     generate_comfyui,
     generate_image_api,
     generate_openai_codex,
     generate_sdcpp,
+    resolve_comfyui_workflow_path,
 )
 from infini_local.pipelines.images.retry import build_retry_prompt_from_validation
 from infini_local.pipelines.images.pixels import cleanup_alpha, bake_sprite_from_master, resize_rgba_premultiplied
@@ -384,7 +391,162 @@ def _finish_image_request(data: dict[str, Any], request: _ImageRequest, result: 
     return result
 
 
+def _image_request_identity(data: dict[str, Any], request: _ImageRequest) -> dict[str, Any]:
+    """Exact authored job and pixel settings; no credentials or transport budgets."""
+    identity = asdict(request)
+    identity["policy"] = request.policy.value
+    identity["publication_identity"] = request.publication_identity.hex()
+    if request.policy is _PublicationPolicy.REQUIRED_VFX:
+        identity["vfxRecipeId"] = data["vfxManifest"]["recipeId"]
+    settings = (
+        "GENERATE_VARIANTS", "REMOVE_BG", "BG_REMOVE_MODE", "BG_COLOR", "CHROMA_TOLERANCE",
+        "ALPHA_THRESHOLD", "SPRITE_KEYER_SPILL_RADIUS", "SPRITE_KEYER_RESIDUE_STEPS",
+        "SPRITE_PADDING", "PIXEL_POSTERIZE", "MAX_COLORS", "SPRITE_PROCESSING_PROFILE",
+        "SPRITE_MASTER_CANVAS", "SPRITE_DOWNSCALE_FILTER", "SPRITE_CHROMA_DEFRINGE",
+        "SPRITE_PREMULTIPLIED_RESIZE", "DENOISE_STRAY_PIXELS", "SPRITE_ITEM_CORE_ALPHA_THRESHOLD",
+        "SPRITE_EFFECT_CORE_ALPHA_THRESHOLD", "ITEM_ICON_TARGET_FILL", "PROJECTILE_ICON_TARGET_FILL",
+        "IMPACT_ICON_TARGET_FILL", "CHILD_ICON_TARGET_FILL", "FIELD_ICON_TARGET_FILL",
+        "SPRITE_MIN_OPAQUE_PCT", "SPRITE_MAX_OPAQUE_PCT", "SPRITE_MAX_EDGE_TOUCH_PCT",
+    )
+    backend_settings = {
+        "sdcpp": ("SDCPP_MODEL", "SDCPP_VAE", "SDCPP_LLM", "SDCPP_LORA_DIR", "SDCPP_LORA_FILE", "SDCPP_LORA_WEIGHT",
+                  "SDCPP_LORA_PROMPT_TAGS", "SDCPP_WIDTH", "SDCPP_HEIGHT", "SDCPP_STEPS", "SDCPP_CFG",
+                  "SDCPP_SAMPLER", "SDCPP_SEED", "ZIMAGE_POSITIVE_ONLY", "ZIMAGE_PROMPT_CONTRACT"),
+        "comfyui": ("COMFYUI_CHECKPOINT", "COMFYUI_LORA_NAME", "COMFYUI_LORA_WEIGHT", "COMFYUI_TRIGGER",
+                    "COMFYUI_WIDTH", "COMFYUI_HEIGHT", "COMFYUI_STEPS", "COMFYUI_CFG", "COMFYUI_SAMPLER",
+                    "COMFYUI_SCHEDULER", "COMFYUI_DENOISE"),
+        "image_api": ("IMAGE_API_MODEL", "IMAGE_API_SIZE"),
+        "openai_codex": ("CODEX_IMAGE_MODEL", "CODEX_IMAGE_QUALITY", "CODEX_IMAGE_SIZE"),
+        "a1111": ("A1111_LORA_NAME", "A1111_LORA_WEIGHT", "A1111_TRIGGER"),
+    }.get(IMAGE_BACKEND, ())
+    identity["settings"] = {name: getattr(image_config, name) for name in (*settings, *backend_settings)}
+    if IMAGE_BACKEND == "a1111":
+        identity["settings"]["a1111Generation"] = a1111_generation_settings()
+    if IMAGE_BACKEND == "comfyui":
+        workflow = resolve_comfyui_workflow_path()
+        identity["settings"]["workflowSha256"] = hashlib.sha256(workflow.read_bytes()).hexdigest() if workflow else None
+    identity.update(
+        schema="infini.image-request-checkpoint.v1", backend=IMAGE_BACKEND,
+        strictAiAuthorship=VISUAL_STRICT_AI_AUTHORSHIP,
+        allowProceduralFallback=VISUAL_ALLOW_PROCEDURAL_FALLBACK,
+        contracts=image_config.contract_versions_payload(),
+    )
+    return identity
+
+
+def _image_file_receipt(data: dict[str, Any], request: _ImageRequest, filename: str) -> dict[str, Any]:
+    """Bind stable bytes to the existing content-addressed publication identity."""
+    if (not filename or Path(filename).name != filename or "\\" in filename
+            or asset_sync_service.asset_filename_from_path(filename) != filename):
+        raise ValueError("invalid checkpoint PNG filename")
+    # Fresh image receipts come only from _publish_image_png in SPRITE_DIR.
+    # The serving owner's best-effort finder swallows errors; an inaccessible
+    # accepted file must not become a new paid image request here.
+    path = SPRITE_DIR / filename
+    before = path.stat()
+    if not stat.S_ISREG(before.st_mode):
+        raise ImageOutputIOError("checkpoint publication path is not a regular file")
+    if not path.resolve(strict=True).is_relative_to(SPRITE_DIR.resolve(strict=True)):
+        raise ValueError("checkpoint PNG is outside its publication root")
+    validation = validate_processed_sprite(str(path), request.processing_role,
+        topology=request.topology, part_count_min=request.part_count_min,
+        part_count_max=request.part_count_max, expected_canvas=request.canvas, raise_io=True)
+    if sprite_validation_fatal(validation):
+        raise ValueError("checkpoint PNG failed technical validation")
+    publication_identity = request.publication_identity
+    prefix = "infini_asset_png_"
+    if request.policy is _PublicationPolicy.REQUIRED_VFX:
+        publication_identity = json.dumps(
+            [data["vfxManifest"]["recipeId"], request.audit_role.removeprefix("vfx:")],
+            ensure_ascii=True, separators=(",", ":"), allow_nan=False,
+        ).encode("ascii")
+        prefix = "infini_vfx_png_"
+    content_hash = hashlib.sha256()
+    publication_hash = hashlib.sha256(publication_identity + b"\0")
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(65536), b""):
+            content_hash.update(chunk)
+            publication_hash.update(chunk)
+    after = path.stat()
+    fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
+    if any(getattr(before, field) != getattr(after, field) for field in fields):
+        raise ValueError("checkpoint PNG changed during validation")
+    if filename != prefix + publication_hash.hexdigest() + ".png":
+        raise ValueError("checkpoint PNG publication identity differs")
+    return {"sha256": content_hash.hexdigest(), "sizeBytes": after.st_size,
+            "path": str(path.resolve()), "validation": validation}
+
+
+def _restore_image_result(data: dict[str, Any], request: _ImageRequest, identity: dict[str, Any]) -> _ImageResult | None:
+    saved = find_image_result(identity)
+    if saved is None:
+        return None
+    try:
+        if not isinstance(saved, Mapping) or saved.get("schema") != "infini.image-result-checkpoint.v1":
+            raise ValueError("unknown image checkpoint schema")
+        raw = saved.get("result")
+        if not isinstance(raw, dict) or raw.keys() != asdict(_ImageResult()).keys():
+            raise ValueError("incomplete image checkpoint result")
+        strings = ("public_path", "raw_path", "status", "final_prompt", "error", "failure_phase", "private_dir", "discarded_path")
+        if any(type(raw.get(key)) is not str for key in strings):
+            raise ValueError("invalid image checkpoint text")
+        if raw["status"] not in {"generated", "generated_warn_invalid"} or raw["failure_phase"]:
+            raise ValueError("image checkpoint has no accepted authored PNG")
+        if any(type(raw.get(key)) not in (int, float) or not math.isfinite(raw[key]) for key in ("technical_score", "candidate_score")):
+            raise ValueError("invalid image checkpoint score")
+        if (type(raw.get("final_prompt_attempt")) is not int or not 0 <= raw["final_prompt_attempt"] <= 8
+                or type(raw.get("late_warning")) is not bool or not isinstance(raw.get("validation"), dict)
+                or (raw.get("refit") is not None and not isinstance(raw["refit"], dict))
+                or not isinstance(raw.get("attempts"), list) or not all(isinstance(row, dict) for row in raw["attempts"])):
+            raise ValueError("invalid image checkpoint diagnostics")
+        facts = _image_file_receipt(data, request, raw["public_path"])
+        if facts["sha256"] != saved.get("sha256") or facts["sizeBytes"] != saved.get("sizeBytes"):
+            raise ValueError("checkpoint PNG digest differs")
+        result = _ImageResult(**{**raw, "public_path": facts["path"], "validation": facts["validation"], "attempts": tuple(raw["attempts"])})
+    except (KeyError, TypeError, ValueError, FileNotFoundError) as exc:
+        trace_event("step", f"IMAGE:{request.audit_role}", "saved PNG requires regeneration", {
+            "assetId": request.logical_asset_id, "reason": type(exc).__name__,
+        })
+        return None
+    _finish_image_request(data, request, result, list(result.attempts))
+    prefix = "item" if request.policy is _PublicationPolicy.ITEM else request.audit_role
+    data.setdefault("debug", {})[prefix + "SpriteCheckpoint"] = {
+        "reused": True, "file": raw["public_path"], "sha256": facts["sha256"],
+    }
+    trace_event("step", f"IMAGE:{request.audit_role}", "accepted PNG resumed from craft checkpoint", {
+        "assetId": request.logical_asset_id, "file": raw["public_path"], "sha256": facts["sha256"],
+    })
+    return result
+
+
 def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _ImageResult:
+    prefix = "item" if request.policy is _PublicationPolicy.ITEM else request.audit_role
+    data.setdefault("debug", {}).pop(prefix + "SpriteCheckpoint", None)
+    # Preserve explicit off/configuration errors. A stored path never supplies a
+    # missing producer, and procedural outputs are not authored image receipts.
+    if not image_progress_active() or IMAGE_BACKEND in {"off", "procedural"} or _backend_configuration_error():
+        return _generate_image_request(data, request)
+    identity = _image_request_identity(data, request)
+    restored = _restore_image_result(data, request, identity)
+    if restored is not None:
+        return restored
+    result = _generate_image_request(data, request)
+    if result.public_path and result.status in {"generated", "generated_warn_invalid"} and not result.failure_phase:
+        facts = _image_file_receipt(data, request, Path(result.public_path).name)
+        saved = asdict(result)
+        saved["public_path"] = Path(result.public_path).name
+        saved["attempts"] = _redact_diagnostic(saved["attempts"])
+        saved["error"] = _redact_diagnostic(saved["error"])
+        # Outside the provider retry handler: a disk failure must remain a
+        # storage failure, not consume another image attempt or lose its cause.
+        save_image_result(identity, {
+            "schema": "infini.image-result-checkpoint.v1", "result": saved,
+            "sha256": facts["sha256"], "sizeBytes": facts["sizeBytes"],
+        })
+    return result
+
+
+def _generate_image_request(data: dict[str, Any], request: _ImageRequest) -> _ImageResult:
     """The sole budget → generate → process → validate/refit → commit lifecycle."""
     result = _ImageResult(final_prompt=request.prompt if request.final_frame_clause else truncate_prompt_at_boundary(request.prompt, 1800))
     attempts: list[dict[str, Any]] = []

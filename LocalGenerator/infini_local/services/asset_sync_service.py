@@ -33,8 +33,8 @@ def _png_expected_scanline_bytes(width: int, height: int, bits_per_pixel: int, i
     return total, passes
 
 
-def is_complete_png_file(path: Path | str) -> bool:
-    """Validate the complete gameplay PNG envelope before delivery or sync."""
+def is_complete_png_file(path: Path | str, *, raise_io: bool = False) -> bool:
+    """Validate the PNG envelope; strict callers distinguish I/O from corruption."""
 
     try:
         # Enforce the ceiling during I/O, before allocating a complete file.
@@ -104,6 +104,10 @@ def is_complete_png_file(path: Path | str) -> bool:
                     return False
                 if seen_idat:
                     idat_ended = True
+        return False
+    except OSError as exc:
+        if raise_io and not isinstance(exc, FileNotFoundError):
+            raise
         return False
     except Exception:
         return False
