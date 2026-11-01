@@ -1,0 +1,33 @@
+name: Official Terraria server content diagnostic
+on:
+  push:
+    branches:
+      - 'codex/terraria-server-content-diagnostic'
+permissions:
+  contents: read
+jobs:
+  content-inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inspect official 1.4.4.9 dedicated server archive in runner temp
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/terraria-server-1449.zip"
+          curl --fail --location --retry 3 --output "$archive" https://terraria.org/api/download/pc-dedicated-server/terraria-server-1449.zip
+          sha256sum "$archive"
+          python - "$archive" <<'PY'
+          import collections, pathlib, sys, zipfile
+          with zipfile.ZipFile(sys.argv[1]) as z:
+              all_files = [i.filename for i in z.infolist() if not i.is_dir()]
+          for system in ('Windows', 'Linux', 'Mac'):
+              files = [p for p in all_files if f'/{system}/Content/Images/' in p]
+              print(f'{system} Content/Images file count: {len(files)}')
+              print(f'{system} extension counts: {dict(collections.Counter(pathlib.PurePosixPath(p).suffix for p in files))}')
+              print(f'{system} first 30: {[p.split("/Content/Images/",1)[-1] for p in sorted(files)[:30]]}')
+              for name in ('Item_1.xnb', 'Item_757.xnb', 'Projectile_1.xnb', 'NPC_1.xnb',
+                           'Player_0_0.xnb', 'Mount_0.xnb', 'Tiles_1.xnb', 'MagicPixel.xnb'):
+                  print(f'{system} {name}: {any(p.endswith("/Content/Images/" + name) for p in files)}')
+          print('All archive files:', len(all_files))
+          PY
