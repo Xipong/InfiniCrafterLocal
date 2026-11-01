@@ -55,7 +55,7 @@ internal static partial class EngineRuntimeChecks
 
     // Narrow opt-in scene over the actual autoloaded IFC assembly. It deliberately
     // refuses assertions and scripted actions for phases it cannot yet model.
-    internal static JsonObject RunWorkbenchNativeLoaderScene(string? itemPath, string? nativeItem, string scenarioPath, string sandbox, string itemBoundary, IReadOnlyList<WNativeLoader.ModInput> extraMods)
+    internal static JsonObject RunWorkbenchNativeLoaderScene(string? itemPath, string? nativeItem, string scenarioPath, string sandbox, string itemBoundary, IReadOnlyList<WNativeLoader.ModInput> extraMods, bool serverMode = false)
     {
         if(itemBoundary is not ("fresh" or "local_cache")) throw new ArgumentException("item-boundary must be fresh or local_cache");
         if((itemPath is null)==(nativeItem is null))throw new ArgumentException("Specify exactly one generated JSON or native item identifier");
@@ -100,9 +100,15 @@ internal static partial class EngineRuntimeChecks
         }
         string? configured=Environment.GetEnvironmentVariable("INFINI_MOD_SOURCE_ROOT");
         string sourceRoot=!string.IsNullOrWhiteSpace(configured)?Path.GetFullPath(configured):Path.Combine(AppContext.BaseDirectory,"native-mod");
-        using var loader=WNativeLoader.Bootstrap(sandbox,sourceRoot,extraMods);
+        using var loader=WNativeLoader.Bootstrap(sandbox,sourceRoot,extraMods,serverMode);
+        int expectedNetworkMode=serverMode?Terraria.ID.NetmodeID.Server:Terraria.ID.NetmodeID.SinglePlayer;
+        void CheckNetworkMode() {
+            if(Terraria.Main.netMode!=expectedNetworkMode)
+                throw new InvalidOperationException($"Native scene network mode changed: expected {expectedNetworkMode}, observed {Terraria.Main.netMode}");
+        }
+        CheckNetworkMode();
         WPrepareFullWorld();
-        Terraria.Main.myPlayer=0; Terraria.Main.netMode=0; Terraria.Main.gameMenu=false;
+        Terraria.Main.myPlayer=0; Terraria.Main.gameMenu=false;
         Terraria.Main.worldID=WInt(scenario,"worldId",12);
         Terraria.Main.rand=new Terraria.Utilities.UnifiedRandom(WInt(scenario,"seed",1));
         Terraria.Main.GameViewMatrix=new Terraria.Graphics.SpriteViewMatrix(null);
@@ -184,6 +190,7 @@ internal static partial class EngineRuntimeChecks
                 (WLoaderHitObserver)((WLoaderHitOriginal orig,Projectile projectile,NPC npc,in NPC.HitInfo hit,int damage)=>{orig(projectile,npc,in hit,damage);if(ReferenceEquals(npc,dummy)&&tracked.Contains((projectile.whoAmI,projectile.identity,projectile.owner)))hits++;}));
             MaterialClock(0);bool altHeld=false;string[] omitted=Array.Empty<string>();
             for(int tick=0;tick<ticks;tick++) {
+                CheckNetworkMode();
                 foreach(var a in actions.Where(a=>WInt(a,"tick",-1)==tick)) {
                     string kind=a!["kind"]!.GetValue<string>();
                     if(kind=="aim"){Terraria.Main.mouseX=(int)(WFloat(a,"x",owner.Center.X+200)-Terraria.Main.screenPosition.X);Terraria.Main.mouseY=(int)(WFloat(a,"y",owner.Center.Y)-Terraria.Main.screenPosition.Y);}
@@ -192,6 +199,7 @@ internal static partial class EngineRuntimeChecks
                 }
                 if(altHeld && owner.controlUseItem)owner.altFunctionUse=1;
                 omitted=WLoaderTick(new WLoaderTickOps(()=>owner.Update(0),()=>{if(dummy.active)dummy.UpdateNPC(id);},()=>{for(int slot=0;slot<Terraria.Main.maxProjectiles;slot++)if(Terraria.Main.projectile[slot].active)Terraria.Main.projectile[slot].Update(slot);},null,null,null,null,null));
+                CheckNetworkMode();
                 var effect=RuntimeNpcEffects.GetTotals(dummy);
                 frames.Add(new JsonObject{["tick"]=tick,["phase"]="post_update",["npcLife"]=dummy.life,["lifeRegen"]=dummy.lifeRegen,["vx"]=WFinite(dummy.velocity.X),["vy"]=WFinite(dummy.velocity.Y),["effectCount"]=effect.Count,["defenseDelta"]=effect.Defense,["lifeRegenPenalty"]=effect.Regen,["contactMultiplier"]=effect.Contact,["velocityRetentionPerTick"]=effect.Retention,["activeProjectiles"]=Terraria.Main.projectile.Count(p=>p.active),["playerFinite"]=WEntityFinite(owner),["npcFinite"]=WEntityFinite(dummy),["projectilesFinite"]=Terraria.Main.projectile.Where(p=>p.active).All(WEntityFinite)});
             }
@@ -205,7 +213,7 @@ internal static partial class EngineRuntimeChecks
                 } else ok=kind switch {"spawned"=>spawns>0,"dummy_damaged"=>hits>0&&dummy.life<initialLife,"all_inactive"=>!Terraria.Main.projectile.Any(p=>p.active),"no_nonfinite"=>frames.All(f=>f!["playerFinite"]!.GetValue<bool>()&&f["npcFinite"]!.GetValue<bool>()&&f["projectilesFinite"]!.GetValue<bool>()),_=>false};
                 assertions.Add(new JsonObject{["name"]=kind,["request"]=a.DeepClone(),["status"]=ok?"passed":"failed"});
             }
-            return new JsonObject{["schemaVersion"]=1,["status"]=assertions.Any(a=>a!["status"]!.GetValue<string>()=="failed")?"failed":"passed",["execution"]=new JsonObject{["backend"]="standalone-tml-loader",["fullGameParity"]=false,["contentCount"]=loader.ContentCount,["productionAssembly"]=loader.Mod.Code.Location,["additionalMod"]=loader.AdditionalMod?.Name,["additionalAssembly"]=loader.AdditionalMod?.Code.Location,["additionalMods"]=new JsonArray(loader.AdditionalMods.Select(m=>(JsonNode?)new JsonObject{["name"]=m.Name,["assembly"]=m.Code.Location}).ToArray()),["missingIfcModDependencies"]=new JsonArray(loader.MissingIfcDependencies.Select(x=>(JsonNode?)JsonValue.Create(x)).ToArray()),["limitations"]=new JsonArray("Dependency versions are not validated", "Source-root mods use reconstructed Mod.File; archive inputs retain original Mod.File", "Asset readers and client lifecycle are incomplete"),["scope"]=targetName is null?"Native IFC/tML autoload and real Player/NPC/Projectile updates with scripted input; controlled stationary NPC; not Main.Update or full game":"Native IFC/tML autoload and real Player/NPC/Projectile updates with scripted input; target uses native mod NPC defaults and AI; not Main.Update or full game",["omittedEnginePhases"]=new JsonArray(omitted.Select(x=>(JsonNode?)JsonValue.Create(x)).ToArray()),["worldRegistered"]=currentWorld},["input"]=new JsonObject{["itemPath"]=itemPath is null?null:Path.GetFullPath(itemPath),["nativeItem"]=nativeItem,["nativeItemType"]=itemType,["nativeNpc"]=targetName,["nativeNpcType"]=targetType,["scenarioPath"]=Path.GetFullPath(scenarioPath),["itemBoundary"]=itemBoundary},["snapshots"]=frames,["assertions"]=assertions,["combat"]=new JsonObject{["spawns"]=spawns,["hits"]=hits,["initialLife"]=initialLife,["finalLife"]=dummy.life}};
-        } finally {SystemLoader.OnWorldUnload();}
+            return new JsonObject{["schemaVersion"]=1,["status"]=assertions.Any(a=>a!["status"]!.GetValue<string>()=="failed")?"failed":"passed",["execution"]=new JsonObject{["backend"]="standalone-tml-loader",["fullGameParity"]=false,["networkMode"]=Terraria.Main.netMode,["requestedServerMode"]=serverMode,["playerInputScope"]="controlled local player; no network session",["contentCount"]=loader.ContentCount,["productionAssembly"]=loader.Mod.Code.Location,["additionalMod"]=loader.AdditionalMod?.Name,["additionalAssembly"]=loader.AdditionalMod?.Code.Location,["additionalMods"]=new JsonArray(loader.AdditionalMods.Select(m=>(JsonNode?)new JsonObject{["name"]=m.Name,["assembly"]=m.Code.Location}).ToArray()),["missingIfcModDependencies"]=new JsonArray(loader.MissingIfcDependencies.Select(x=>(JsonNode?)JsonValue.Create(x)).ToArray()),["limitations"]=new JsonArray("Dependency versions are not validated", "Source-root mods use reconstructed Mod.File; archive inputs retain original Mod.File", "Asset readers and client lifecycle are incomplete"),["scope"]=targetName is null?"Native IFC/tML autoload and real Player/NPC/Projectile updates with scripted input; controlled stationary NPC; not Main.Update or full game":"Native IFC/tML autoload and real Player/NPC/Projectile updates with scripted input; target uses native mod NPC defaults and AI; not Main.Update or full game",["omittedEnginePhases"]=new JsonArray(omitted.Select(x=>(JsonNode?)JsonValue.Create(x)).ToArray()),["worldRegistered"]=currentWorld},["input"]=new JsonObject{["itemPath"]=itemPath is null?null:Path.GetFullPath(itemPath),["nativeItem"]=nativeItem,["nativeItemType"]=itemType,["nativeNpc"]=targetName,["nativeNpcType"]=targetType,["scenarioPath"]=Path.GetFullPath(scenarioPath),["itemBoundary"]=itemBoundary},["snapshots"]=frames,["assertions"]=assertions,["combat"]=new JsonObject{["spawns"]=spawns,["hits"]=hits,["initialLife"]=initialLife,["finalLife"]=dummy.life}};
+        } finally {SystemLoader.OnWorldUnload(); CheckNetworkMode();}
     }
 }

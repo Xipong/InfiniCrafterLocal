@@ -118,6 +118,10 @@ jobs:
             --dependency-dll "$dependency" --dependency-root "$base/fixtures/WorkbenchObserverFixture" \
             --dependent-dll "$dependent" --dependent-root "$base/fixtures/WorkbenchDependentFixture" \
             2>&1 | tee artifacts/workbench-ci/loader-multiple.log
+          python "$base/verify_multi_mod_loader.py" --server-mode --native-dll "$host" \
+            --dependency-dll "$dependency" --dependency-root "$base/fixtures/WorkbenchObserverFixture" \
+            --dependent-dll "$dependent" --dependent-root "$base/fixtures/WorkbenchDependentFixture" \
+            2>&1 | tee artifacts/workbench-ci/loader-server.log
           packer="$base/fixture-mod/WorkbenchTmodFixture/WorkbenchTmodFixture.csproj"
           dotnet build "$packer" -c Release -p:InfiniTmlReferenceDir="$INFINI_TML_REFERENCE_DIR"
           dotnet run --no-build -c Release --project "$packer" -- "$dependency" \

@@ -32,7 +32,7 @@ internal sealed class WNativeLoader : IDisposable
     private readonly IReadOnlyList<IDisposable> archiveHandles;
     private WNativeLoader(Mod mod, IReadOnlyList<Mod> additional, string[] missing, IReadOnlyList<IDisposable> handles) { Mod = mod; AdditionalMods = additional; ContentCount = mod.GetContent().Count(); MissingIfcDependencies = missing; archiveHandles = handles; }
 
-    internal static WNativeLoader Bootstrap(string sandbox, string sourceRoot, IReadOnlyList<ModInput>? extraMods = null)
+    internal static WNativeLoader Bootstrap(string sandbox, string sourceRoot, IReadOnlyList<ModInput>? extraMods = null, bool serverMode = false)
     {
         string buildFile = Path.Combine(sourceRoot, "build.txt");
         string translations = Path.Combine(sourceRoot, "Localization");
@@ -45,7 +45,12 @@ internal sealed class WNativeLoader : IDisposable
 
         Terraria.Program.SavePath = sandbox;
         Main.dedServ = true;
-        Main.netMode = 0;
+        Main.netMode = serverMode ? NetmodeID.Server : NetmodeID.SinglePlayer;
+        int expectedNetworkMode = Main.netMode;
+        void CheckNetworkMode() {
+            if (Main.netMode != expectedNetworkMode)
+                throw new InvalidOperationException($"Native loader network mode changed: expected {expectedNetworkMode}, observed {Main.netMode}");
+        }
         Main.rand = new Terraria.Utilities.UnifiedRandom(1);
         // LocalizationLoader.Autoload adds mod GameTips to this real engine
         // collection. Main's normal initialization is absent in this process.
@@ -186,6 +191,7 @@ internal sealed class WNativeLoader : IDisposable
         foreach (Mod loaded in mods) registry.Add(loaded.Name, loaded);
         typeof(ModLoader).GetProperty("Mods", Any)!.SetValue(null, mods);
         foreach (Mod loading in mods) {
+            CheckNetworkMode();
             ContentInstance.Register(loading);
             modType.GetField("loading", Any)!.SetValue(loading, true);
             modType.GetMethod("AutoloadConfig", Any)!.Invoke(loading, null);
@@ -194,6 +200,7 @@ internal sealed class WNativeLoader : IDisposable
             typeof(SystemLoader).GetMethod("OnModLoad", Any)!.Invoke(null, new object[] { loading });
             typeof(SystemLoader).GetMethod("EnsureResizeArraysAttributeStaticCtorsRun", Any)!.Invoke(null, new object[] { loading });
             modType.GetField("loading", Any)!.SetValue(loading, false);
+            CheckNetworkMode();
         }
         typeof(Mod).Assembly.GetType("Terraria.ModLoader.ContentCache", throwOnError: true)!
             .GetField("contentLoadingFinished", Any)!.SetValue(null, true);
@@ -227,6 +234,7 @@ internal sealed class WNativeLoader : IDisposable
         }
         foreach (Type loader in new[] { typeof(NPCLoader), typeof(ItemLoader), typeof(ProjectileLoader), typeof(BuffLoader) })
             loader.GetMethod("FinishSetup", Any)!.Invoke(null, null);
+        CheckNetworkMode();
         return new WNativeLoader(mod, sorted.Where(m => !ReferenceEquals(m, mod)).ToArray(), missingIfcDependencies, archiveHandles);
         } catch {
             foreach (var handle in archiveHandles.AsEnumerable().Reverse()) handle.Dispose();
@@ -298,11 +306,11 @@ internal sealed class WNativeLoader : IDisposable
 
 internal static partial class EngineRuntimeChecks
 {
-    internal static void CheckWorkbenchNativeLoader(string sandbox, IReadOnlyList<WNativeLoader.ModInput> mods, string? probeNpc = null)
+    internal static void CheckWorkbenchNativeLoader(string sandbox, IReadOnlyList<WNativeLoader.ModInput> mods, string? probeNpc = null, bool serverMode = false)
     {
         string? configured = Environment.GetEnvironmentVariable("INFINI_MOD_SOURCE_ROOT");
         string root = !string.IsNullOrWhiteSpace(configured) ? Path.GetFullPath(configured) : Path.Combine(AppContext.BaseDirectory, "native-mod");
-        using var loader = WNativeLoader.Bootstrap(sandbox, root, mods);
+        using var loader = WNativeLoader.Bootstrap(sandbox, root, mods, serverMode);
         var player = new Player();
         if (player.GetModPlayer<InfiniCraftPlayer>() is null) throw new InvalidOperationException("Native PlayerLoader did not attach InfiniCraftPlayer");
         Terraria.Main.npc = Enumerable.Range(0, Terraria.Main.maxNPCs + 1).Select(_ => new NPC()).ToArray();
@@ -318,7 +326,7 @@ internal static partial class EngineRuntimeChecks
         typeof(SystemLoader).GetMethod("PostUpdateEverything", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, null);
         Console.WriteLine(JsonSerializer.Serialize(new { status = "passed", loader.ContentCount,
             productionAssembly = loader.Mod.Code.Location, nativePlayerAttached = true, npcSpawnHook = true,
-            missingIfcModDependencies = loader.MissingIfcDependencies,
+            missingIfcModDependencies = loader.MissingIfcDependencies, networkMode = Main.netMode, requestedServerMode = serverMode,
             additionalMods = loader.AdditionalMods.Select(m => new { name = m.Name, assembly = m.Code.Location }).ToArray(),
             additionalMod = loader.AdditionalMod is null ? null : new { name = loader.AdditionalMod.Name,
                 assembly = loader.AdditionalMod.Code.Location,

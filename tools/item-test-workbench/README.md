@@ -55,6 +55,13 @@ Therefore a passing CPU scenario is not evidence that arbitrary mod content,
 resources or graphics will load correctly in the client.
 For a native mod NPC set `dummy.nativeType` to its exact `ModName/NpcName`.
 
+Pass `--server-mode` to keep tML's server network mode throughout mod loading
+and the CPU scene. This enables native server initialization for mods that
+register mounts without requiring client textures. The workbench still drives
+a controlled local test player and does not simulate a network session; its
+report identifies the mode and this limitation. The default remains the earlier
+single-player network mode.
+
 This path currently supports CPU scenes with aim/primary/alt/release, a bounded
 tile layout, a controlled vanilla target or a mod NPC with its native defaults
 and AI, plus the explicitly admitted assertions. Generated JSON must match the

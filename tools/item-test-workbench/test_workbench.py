@@ -79,9 +79,10 @@ class WorkbenchTests(unittest.TestCase):
             scene=root/'scene.json';scene.write_text('{"ticks":1}')
             archive=root/'fixture.tmod';archive.write_bytes(b'original')
             args=SimpleNamespace(timeout=10,item=None,native_item='Example/Item',scenario=scene,
-                out=root/'run',no_build=True,item_boundary='fresh',probe_dll=None,probe_mod_root=None,tmods=[archive])
+                out=root/'run',no_build=True,item_boundary='fresh',probe_dll=None,probe_mod_root=None,tmods=[archive],server_mode=True)
             def run(command,**kwargs):
                 self.assertEqual(command[command.index('--tmod')+1],str(archive))
+                self.assertEqual(command[command.index('--server-mode')+1],'true')
                 Path(command[command.index('--output')+1]).write_text(json.dumps({'status':'passed','snapshots':[{'tick':0}],'assertions':[{'status':'passed'}]}))
                 archive.write_bytes(b'changed')
                 return subprocess.CompletedProcess(command,0,'','')

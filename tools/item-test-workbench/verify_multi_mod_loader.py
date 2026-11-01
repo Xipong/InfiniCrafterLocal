@@ -15,6 +15,7 @@ def main():
     parser.add_argument('--dependent-dll', type=Path, required=True)
     parser.add_argument('--dependency-root', type=Path, required=True)
     parser.add_argument('--dependent-root', type=Path, required=True)
+    parser.add_argument('--server-mode', action='store_true')
     args = parser.parse_args()
     host = args.native_dll.resolve(strict=True)
     dependency = args.dependency_dll.resolve(strict=True)
@@ -40,10 +41,14 @@ def main():
             command = [dotnet, str(host), '--native-loader-scene',
                        '--native-item', 'WorkbenchDependentFixture/DependentItem',
                        '--scenario', str(scene), '--output', str(trace_path)]
+            if args.server_mode:
+                command += ['--server-mode', 'true']
             for dll, root in mods:
                 command += ['--mod-dll', str(dll), '--mod-root', str(root)]
             env = os.environ.copy()
             env['IFC_WORKBENCH_OBSERVER_OUTPUT'] = str(observer)
+            if args.server_mode:
+                env['IFC_FIXTURE_EXPECT_SERVER'] = '1'
             for variable in ('IFC_FIXTURE_DISABLE_DEPENDENT_DAMAGE', 'IFC_FIXTURE_DISABLE_DAMAGE_MODIFIERS'):
                 env.pop(variable, None)
             if disabled:
@@ -62,6 +67,8 @@ def main():
             (dependent, dependent_root), (dependency, dependency_root)])
         if result.returncode != 0 or trace.get('status') != 'passed':
             raise AssertionError(f'Cross-mod native scene failed: {trace.get("error")}; {result.stderr[-3000:]}')
+        if trace['execution']['networkMode'] != (2 if args.server_mode else 0):
+            raise AssertionError(f'Unexpected network mode: {trace["execution"]}')
         order = [item['name'] for item in trace['execution']['additionalMods']]
         if order != ['WorkbenchObserverFixture', 'WorkbenchDependentFixture']:
             raise AssertionError(f'Dependency load order incorrect: {order}')

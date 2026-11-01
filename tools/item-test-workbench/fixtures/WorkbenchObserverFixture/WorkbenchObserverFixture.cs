@@ -18,6 +18,10 @@ public sealed class WorkbenchObserverFixture : Mod
     public static bool Loaded { get; private set; }
     public override void Load()
     {
+        if (Environment.GetEnvironmentVariable("IFC_FIXTURE_EXPECT_SERVER") == "1" && Main.netMode != NetmodeID.Server)
+            throw new InvalidOperationException("Fixture expected server network mode during Load");
+        if (Environment.GetEnvironmentVariable("IFC_FIXTURE_EXPECT_SERVER") == "1")
+            AddContent(new ProbeMount());
         if (!Terraria.Localization.Language.Exists("Mods.WorkbenchObserverFixture.GameTips.Test"))
             throw new InvalidOperationException("Native mod game tip localization was not registered");
         if (Environment.GetEnvironmentVariable("IFC_FIXTURE_REQUIRE_ARCHIVE") == "1" &&
@@ -27,6 +31,11 @@ public sealed class WorkbenchObserverFixture : Mod
     }
     public override void Unload() => Loaded = false;
 }
+
+// Only the explicit server-mode control registers this native ModMount. Its
+// Register path must initialize vanilla mount data without client textures.
+[Autoload(false)]
+public sealed class ProbeMount : ModMount { }
 
 internal static class Observation
 {
@@ -204,6 +213,8 @@ public sealed class ProbeSystem : ModSystem
     public override void OnWorldLoad() => Observation.Reset();
     public override void PostUpdateEverything()
     {
+        if (Environment.GetEnvironmentVariable("IFC_FIXTURE_EXPECT_SERVER") == "1" && Main.netMode != NetmodeID.Server)
+            throw new InvalidOperationException("Fixture expected server network mode during the scene");
         Observation.Hit("ModSystem.PostUpdateEverything");
         if (Main.GameUpdateCount % 10 == 0) Observation.Flush();
     }

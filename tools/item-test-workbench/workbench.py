@@ -525,6 +525,7 @@ def execute_loader_run(args):
     command += ["--item",str(output/"item.json")] if item is not None else ["--native-item",native_item]
     command += ["--scenario", str(output / "scenario.json"),
                "--output", str(output / "native.json"), "--item-boundary", args.item_boundary]
+    if getattr(args, "server_mode", False): command += ["--server-mode", "true"]
     external = {}
     external_content = {}
     def mod_content_state(root, external=False):
@@ -720,6 +721,7 @@ def main():
     r.add_argument("--no-build",action="store_true");r.add_argument("--item-boundary",choices=("fresh","local_cache"),default="fresh")
     r.add_argument("--timeout",type=int,default=180);r.add_argument("--probe-dll",type=Path);r.add_argument("--probe-mod-root",type=Path)
     r.add_argument("--mod", dest="mods", type=Path, nargs=2, action="append", default=[], metavar=("DLL", "SOURCE_ROOT"), help="Additional original mod and source root; repeat for each dependency")
+    r.add_argument("--server-mode", action="store_true", help="Use native server network mode for loading and the controlled CPU scene")
     r.add_argument("--tmod", dest="tmods", type=Path, action="append", default=[], metavar="PATH", help="Additional original .tmod archive; repeat for dependencies")
     r=sub.add_parser("report",help="Audit a saved run and emit compact agent evidence; no execution");r.add_argument("run",type=Path);r.add_argument("--out",type=Path);r.add_argument("--contact-sheet",action="store_true")
     r=sub.add_parser("suite",help="Execute an explicit scenario matrix, preserving expected native failures");r.add_argument("manifest",type=Path);r.add_argument("--out",type=Path,required=True);r.add_argument("--no-build",action="store_true");r.add_argument("--plan",action="store_true",help="Read-only input validation and case listing; not a run")
