@@ -2304,6 +2304,22 @@ _CAPS.extend([
         events=("on_hit", "on_crit"),
         budget="at most 12 planned physical children; one shared activation reservation each; acyclic entity graph, depth <= 3 and aggregate event spawn count <= 32", persisted_name='select_targets_and_emit_on_event'),
     _cap(
+        "end_projectiles",
+        "End every live copy of one explicit projectile entity owned by this player and generated item. Normal on_kill actions and VFX run at each projectile's position; no blast is added. Snapshot matching instances at execution, after any delay; replacements created during their deaths survive this action. Inventory copies with the same generated item ID share this selection. No live matches is a no-op.",
+        "event", ("item_body",),
+        {
+            "when": _event_when_param(("on_use",)),
+            "entity": _p("string", "Exact projectile entity ID in this program; it needs its own spawn producer. This action controls existing instances and never spawns one.",
+                pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="entityId", semantic_type="runtime_entity_id",
+                reference=ReferenceSpec("entity", PROJECTILE_ENTITY_KIND_ORDER, False, False)),
+        },
+        component_slot="event_action", authority="owner_execute_sync",
+        multiplicity="many_per_target", py=_COMPILER_OWNER,
+        cs="Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction/EndProjectiles",
+        events=("on_use",),
+        budget="one bounded native projectile snapshot; killed instances retain their existing terminal-action spawn budgets",
+    ),
+    _cap(
         "generated_buff_on_event",
         "Apply the selected generated_buff_on_use group to the owner after an equipment reaction, without an active-use binding. The group contains only this generated buff. Identical effects refresh duration; item exhaustion and shared reaction cooldowns apply.",
         "event", ("item_body",),
@@ -3009,6 +3025,7 @@ EVENT_ACTION_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
     "generated_buff_on_event": 9,
     "damage_nearby_on_event": 10,
     "npc_effect_on_event": 11,
+    "end_projectiles": 12,
 })
 
 

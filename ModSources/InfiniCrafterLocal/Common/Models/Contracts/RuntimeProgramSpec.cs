@@ -254,6 +254,7 @@ public sealed class RuntimeProgramSpec
             throw new InvalidDataException("active primary/alternate binding requires explicit configure_item_use");
 
         var graph = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        var endTargets = new HashSet<string>(StringComparer.Ordinal);
         int eventSpawnBudget = 0, primaryUseSpawnBudget = 0, alternateUseSpawnBudget = 0;
         foreach (RuntimeEntitySpec entity in Entities)
         {
@@ -268,6 +269,12 @@ public sealed class RuntimeProgramSpec
                 if (action.UseInput is not null && !Bindings.Any(b => RuntimeUseInputScope.Matches(action.UseInput, b.Input)
                     && b.UsePolicy.Action.Kind != RuntimeBindingAction.PlaceItem))
                     throw new InvalidDataException("useInput requires a matching non-placement active binding");
+                if (action.ActionCode == RuntimeEventActionCode.EndProjectiles)
+                {
+                    if (entity.Kind != RuntimeEntityKind.ItemBody || TryGetEntity(action.EntityId)?.IsProjectileEntity != true)
+                        throw new InvalidDataException("end_projectiles requires an item-body source and exact projectile entity reference");
+                    endTargets.Add(action.EntityId);
+                }
                 if (action.ActionCode is RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.SelectTargetsAndEmit)
                 {
                     if (!entity.IsProjectileEntity
@@ -320,6 +327,19 @@ public sealed class RuntimeProgramSpec
         if (eventSpawnBudget + Math.Max(primaryUseSpawnBudget, alternateUseSpawnBudget) > Limits.MaxEventSpawnsPerActivation)
             throw new InvalidDataException("runtime event spawn budget exceeded");
         ValidateAcyclicBoundedGraph(graph, Limits.MaxChildDepth);
+        if (endTargets.Count > 0)
+        {
+            // Controlling existing instances does not create a spawn edge or
+            // make an otherwise unreachable projectile definition executable.
+            var reachable = new HashSet<string>(Bindings.Select(b => b.UsePolicy.Action.TargetId), StringComparer.Ordinal);
+            if (hasEmittingItemUse) reachable.Add(ItemEntityId);
+            var pending = new Stack<string>(reachable);
+            while (pending.TryPop(out string? id))
+                foreach (string child in graph[id])
+                    if (reachable.Add(child)) pending.Push(child);
+            if (!endTargets.IsSubsetOf(reachable))
+                throw new InvalidDataException("end_projectiles target requires an actual reachable spawn producer");
+        }
     }
 
     private static void ValidateAcyclicBoundedGraph(Dictionary<string, HashSet<string>> graph, int maxDepth)
@@ -1868,6 +1888,7 @@ public static class RuntimeEventActionCode
     public const int ApplyGeneratedBuff = 9;
     public const int DamageNearby = 10;
     public const int ApplyNpcEffect = 11;
+    public const int EndProjectiles = 12;
 }
 
 public sealed class RuntimeHitTargetSpawnSpec
@@ -2151,6 +2172,14 @@ public sealed class RuntimeEventActionSpec
 
     public void NormalizeAndValidate()
     {
+        if (ActionCode == RuntimeEventActionCode.EndProjectiles
+            && (Action != "end_projectiles" || Event != RuntimeEventKind.OnUse
+                || EntityId != RuntimeText.Id(EntityId) || DelayTicks is < 0 or > 600
+                || Count != 1 || SpreadRadians != 0f || DamageMultiplier != 1f || PeriodTicks != 0
+                || BuffId != -1 || DurationTicks != 0 || RadiusPx != 0 || RangeTiles != 0f || Mode != ""
+                || Strength != 0f || RadiusTiles != 0f || DamageFraction != 0f || MaxHeal != 0
+                || CooldownTicks != 0 || !SafeTileOnly))
+            throw new InvalidDataException("end_projectiles requires exact on_use/reference/delay and neutral foreign action fields");
         if (ActionCode == RuntimeEventActionCode.ApplyNpcEffect)
         {
             if (Action != "apply_npc_effect_on_event" || Event is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
@@ -2184,7 +2213,7 @@ public sealed class RuntimeEventActionSpec
         EntityId = RuntimeText.IdOptional(EntityId);
         if (!RuntimeEventKind.IsKnown(Event))
             throw new InvalidDataException($"unknown runtime event '{Event}'");
-        if (ActionCode < RuntimeEventActionCode.SpawnEntity || ActionCode > RuntimeEventActionCode.ApplyNpcEffect)
+        if (ActionCode < RuntimeEventActionCode.SpawnEntity || ActionCode > RuntimeEventActionCode.EndProjectiles)
             throw new InvalidDataException($"unsupported event action opcode {ActionCode}");
         if (!string.Equals(Action, RuntimeOpcodeNames.EventActionName(ActionCode), StringComparison.Ordinal))
             throw new InvalidDataException($"event action name/opcode mismatch '{Action}'/{ActionCode}");
@@ -2332,7 +2361,7 @@ internal static class RuntimeOpcodeNames
     {
         "", "spawn_entity_on_event", "apply_status_on_event", "damage_area_on_event",
         "chain_damage_on_event", "pull_on_event", "heal_owner_on_event", "move_owner_on_event",
-        "select_targets_and_emit_on_event", "apply_generated_buff_on_event", "damage_nearby_on_event", "apply_npc_effect_on_event",
+        "select_targets_and_emit_on_event", "apply_generated_buff_on_event", "damage_nearby_on_event", "apply_npc_effect_on_event", "end_projectiles",
     };
     public static string MovementName(int code) => code >= 0 && code < MovementNames.Length ? MovementNames[code] : "";
     public static string ControllerName(int code) => code >= 0 && code < ControllerNames.Length ? ControllerNames[code] : "";

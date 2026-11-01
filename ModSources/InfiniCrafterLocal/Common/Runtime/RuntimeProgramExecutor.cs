@@ -33,7 +33,7 @@ internal static class RuntimeProgramExecutor
     internal static bool HasActionAuthority(RuntimeEventActionSpec action, Player owner)
         => action.ActionCode switch
         {
-            RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.HealOwner or RuntimeEventActionCode.MoveOwner
+            RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.HealOwner or RuntimeEventActionCode.MoveOwner or RuntimeEventActionCode.EndProjectiles
                 => InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner),
             RuntimeEventActionCode.ApplyNpcEffect => InfiniRuntimeAuthority.ShouldRunNpcGameplay(),
             RuntimeEventActionCode.ApplyGeneratedBuff => InfiniRuntimeAuthority.ShouldRunPlayerGameplay(owner),
@@ -110,6 +110,11 @@ internal static class RuntimeProgramExecutor
         }
         switch (action.ActionCode)
         {
+            case RuntimeEventActionCode.EndProjectiles:
+                if (sourceEntity.Kind == RuntimeEntityKind.ItemBody && action.Event == RuntimeEventKind.OnUse
+                    && data.RuntimeProgram.TryGetEntity(action.EntityId)?.IsProjectileEntity == true)
+                    EndProjectiles(data, action, owner);
+                break;
             case RuntimeEventActionCode.SpawnEntity:
                 if (action.HitTargetSpawn is not null && (!sourceEntity.IsProjectileEntity
                     || action.Event is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)))
@@ -164,6 +169,32 @@ internal static class RuntimeProgramExecutor
 
     internal static float EventSpawnDamageMultiplier(RuntimeEventActionSpec action)
         => Math.Clamp(action.DamageMultiplier, 0f, 10f);
+
+    private static void EndProjectiles(GeneratedItemData data, RuntimeEventActionSpec action, Player owner)
+    {
+        // A terminal hook can spawn children, kill another selected projectile,
+        // or recycle its native slot. Capture exact live incarnations first;
+        // none created during this dispatch belong to the command.
+        var selected = new List<(int Slot, int Identity, Projectile Projectile, GeneratedProjectile Generated)>();
+        for (int slot = 0; slot < Main.maxProjectiles; slot++)
+        {
+            Projectile projectile = Main.projectile[slot];
+            if (projectile is { active: true } && projectile.owner == owner.whoAmI
+                && projectile.ModProjectile is GeneratedProjectile generated && generated.Matches(data.Id, action.EntityId))
+                selected.Add((slot, projectile.identity, projectile, generated));
+        }
+        foreach (var entry in selected)
+        {
+            Projectile projectile = Main.projectile[entry.Slot];
+            if (ReferenceEquals(projectile, entry.Projectile) && projectile.active
+                && projectile.identity == entry.Identity && projectile.owner == owner.whoAmI
+                && ReferenceEquals(projectile.ModProjectile, entry.Generated)
+                && entry.Generated.Matches(data.Id, action.EntityId))
+                // Native Kill owns networking and the existing on_kill/VFX
+                // lifecycle. Keep its actual timeLeft and each source's budget.
+                projectile.Kill();
+        }
+    }
 
     internal readonly record struct TargetEmissionStep(
         int TargetNpcSlot, RuntimeSpawnTransform Transform, RuntimeInitialNpcExclusion Exclusion);

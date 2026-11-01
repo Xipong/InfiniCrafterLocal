@@ -1,4 +1,5 @@
 """Canonical gameplay names keep old wire and provenance readable, not Author aliases."""
+from collections import Counter
 from copy import deepcopy
 import gzip
 import json
@@ -13,6 +14,26 @@ from infini_local.core.runtime_authoring.validator import validate_runtime_progr
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 
 _CAPTURE = json.loads(gzip.decompress((Path(__file__).parent / "fixtures" / "gameplay_vocabulary_wire_baseline.json.gz").read_bytes()))
+# Public capability cohort at the documented df29f582 capture boundary. New
+# operations have no pre-migration wire and must not be backfilled into it.
+_MIGRATION_CAPABILITIES = frozenset("""
+accelerate_projectile_vertical accumulate_projectile_charge add_equipment_damage_bonus
+add_hold_light add_placed_light add_projectile_visual_scale apply_generated_buff_on_event
+apply_generated_buff_on_use apply_npc_effect_on_event apply_status_on_event apply_vanilla_buff_on_use
+attach_projectile attract_npcs_while_active collect_seeds_from_grass configure_accessory configure_armor
+configure_item_contact_hitbox configure_item_stats configure_item_use configure_spawn configure_tile_placement
+configure_tool configure_vanilla_ammo_item configure_wall_placement configure_weapon_ammo damage_nearby_on_event
+emit_light_while_active enable_placed_vfx gate_projectile_contact heal_owner_on_event move_owner_on_event
+move_player_on_use move_straight orbit_projectile oscillate_projectile_velocity present_placed_item_sprite
+pull_on_event recall_home_on_use refresh_generated_effect_group_while_held require_use_condition
+restore_resources_on_use scale_projectile_velocity seek_projectile select_targets_and_emit_on_event
+set_descendant_concurrency set_front_arm_pose set_projectile_aim set_projectile_arrival set_projectile_beam_geometry
+set_projectile_collision set_projectile_concurrency set_projectile_damage set_projectile_hitbox set_projectile_hitbox_curve
+set_projectile_homing_modifier set_projectile_lash_geometry set_projectile_lifetime set_projectile_opacity
+set_projectile_owner_control set_projectile_proximity_action set_projectile_return_trigger set_projectile_rotation
+set_projectile_sentry set_projectile_turn_modifier set_projectile_visual_scale_curve spawn_entity_from_hit_target
+spawn_entity_on_event sustain_projectile_mana target_and_fire
+""".split())
 
 
 def executable_wire(document):
@@ -47,11 +68,11 @@ def test_canonical_choices_preserve_prechange_execution_and_old_wire_still_loads
     assert case == before
 
 
-def test_capture_covers_every_visible_capability_and_old_identity_is_not_an_author_alias():
-    covered = {capability_for_saved_receipt(row["previousFn"]).name for row in _CAPTURE["cases"]}
-    assert covered == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible}
+def test_capture_preserves_migration_cohort_and_old_identity_is_not_an_author_alias():
+    assert Counter(row["previousFn"] for row in _CAPTURE["cases"]) == Counter(_MIGRATION_CAPABILITIES)
     for row in _CAPTURE["cases"]:
         cap = capability_for_saved_receipt(row["previousFn"])
+        assert cap is not None and cap.author_visible
         if cap.name == row["previousFn"]:
             continue
         source = deepcopy(row["author"])
