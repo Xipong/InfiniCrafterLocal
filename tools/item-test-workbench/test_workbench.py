@@ -71,6 +71,26 @@ class WorkbenchTests(unittest.TestCase):
             mod.write_bytes(b'changed mod');self.assertNotEqual(before,w.native_binaries_state(host))
             mod.write_bytes(b'mod');host.write_bytes(b'changed host');self.assertNotEqual(before,w.native_binaries_state(host))
 
+    def test_loader_receipt_detects_changed_archive(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);host=root/'ItemTestWorkbench.dll';host.write_bytes(b'host')
+            scene=root/'scene.json';scene.write_text('{"ticks":1}')
+            archive=root/'fixture.tmod';archive.write_bytes(b'original')
+            args=SimpleNamespace(timeout=10,item=None,native_item='Example/Item',scenario=scene,
+                out=root/'run',no_build=True,item_boundary='fresh',probe_dll=None,probe_mod_root=None,tmods=[archive])
+            def run(command,**kwargs):
+                self.assertEqual(command[command.index('--tmod')+1],str(archive))
+                Path(command[command.index('--output')+1]).write_text(json.dumps({'status':'passed','snapshots':[{'tick':0}],'assertions':[{'status':'passed'}]}))
+                archive.write_bytes(b'changed')
+                return subprocess.CompletedProcess(command,0,'','')
+            with patch.object(w,'native_executable',return_value=(host,{})),patch.object(w,'build_state',return_value={}),patch.object(w.subprocess,'run',side_effect=run):
+                with self.assertRaisesRegex(RuntimeError,'changed during execution'):w.execute_loader_run(args)
+            receipt=json.loads((args.out/'receipt.json').read_text())
+            self.assertEqual(receipt['extraArchives'][str(archive)],w.hashlib.sha256(b'original').hexdigest())
+            self.assertFalse(receipt['binariesUnchanged'])
+
     def test_loader_tracks_all_extra_mod_content_and_preserves_input_order(self):
         from types import SimpleNamespace
         from unittest.mock import patch

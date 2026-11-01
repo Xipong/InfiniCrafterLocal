@@ -3,7 +3,7 @@
 ## Standalone native loader
 
 `loader-run` is the new CPU path for native tModLoader autoload from separate
-DLLs. It needs no `.tmod` packaging, installation, game client or saved world:
+DLLs or supplied `.tmod` archives. It needs no game client or saved world:
 
 ```bash
 python tools/item-test-workbench/workbench.py loader-run \
@@ -39,9 +39,18 @@ match load order. The previous `--probe-dll PATH --probe-mod-root PATH` pair
 remains supported. Declared dependencies, including weak references, must be loaded;
 unavailable ones are refused because this host does not emulate tML's separate
 mod assembly contexts and weak-dependency type filtering.
-This name-based check does not validate dependency versions. The in-memory
-`Mod.File` contains metadata and localization rather than a complete original
-`.tmod`, and its file API and asset readers do not reproduce the game client.
+Alternatively use repeatable `--tmod /path/to/mod.tmod` for original archives,
+including their dependencies. The loader keeps the original `TmodFile` open,
+uses its original `Info`, verifies its payload hash, and stages its unmodified
+managed DLL for the process. It refuses archives with embedded DLL references:
+the separate assembly contexts needed to resolve those correctly are not implemented.
+Source-root and archive inputs may be combined. The receipt hashes every archive
+before and after the run.
+
+This name-based dependency check does not validate dependency versions. For a
+source-root mod, the in-memory `Mod.File` contains metadata and localization
+rather than a complete original `.tmod`. Even with a genuine archive, asset
+readers and the client lifecycle are not initialized by this headless mode.
 Therefore a passing CPU scenario is not evidence that arbitrary mod content,
 resources or graphics will load correctly in the client.
 For a native mod NPC set `dummy.nativeType` to its exact `ModName/NpcName`.

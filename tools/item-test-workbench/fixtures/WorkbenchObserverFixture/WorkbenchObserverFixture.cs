@@ -16,7 +16,13 @@ namespace WorkbenchObserverFixture;
 public sealed class WorkbenchObserverFixture : Mod
 {
     public static bool Loaded { get; private set; }
-    public override void Load() => Loaded = true;
+    public override void Load()
+    {
+        if (Environment.GetEnvironmentVariable("IFC_FIXTURE_REQUIRE_ARCHIVE") == "1" &&
+            System.Text.Encoding.UTF8.GetString(GetFileBytes("workbench-original.txt") ?? Array.Empty<byte>()) != "fixture archive bytes")
+            throw new InvalidOperationException("Original archive content is unavailable through Mod.GetFileBytes");
+        Loaded = true;
+    }
     public override void Unload() => Loaded = false;
 }
 
