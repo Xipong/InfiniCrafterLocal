@@ -57,7 +57,7 @@ def test_frozen_native_inputs_survive_windows_checkout_without_normalizing_corru
     repo.mkdir()
     def git(*args):
         return subprocess.run(['git', '-C', str(repo), *args], check=True,
-                              capture_output=True, text=True)
+                              capture_output=True, text=True, timeout=20)
     git('init', '-q')
     git('config', 'core.autocrlf', 'false')
     (repo / '.gitattributes').write_bytes((root / '.gitattributes').read_bytes())
