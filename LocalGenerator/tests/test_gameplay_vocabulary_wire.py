@@ -47,9 +47,9 @@ def test_canonical_choices_preserve_prechange_execution_and_old_wire_still_loads
     assert case == before
 
 
-def test_capture_covers_every_visible_capability_and_old_identity_is_not_an_author_alias():
-    covered = {capability_for_saved_receipt(row["previousFn"]).name for row in _CAPTURE["cases"]}
-    assert covered == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible}
+def test_captured_old_identity_is_not_an_author_alias():
+    # This immutable capture covers the historical rename cohort. New capabilities
+    # have no pre-rename wire; current inventory coverage belongs to the registry audit.
     for row in _CAPTURE["cases"]:
         cap = capability_for_saved_receipt(row["previousFn"])
         if cap.name == row["previousFn"]:
