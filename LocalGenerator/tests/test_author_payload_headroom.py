@@ -101,8 +101,10 @@ def test_shared_parameter_reference_never_hides_a_different_fact(field, value):
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 
     cap = CAPABILITY_REGISTRY["apply_status_on_event"]
-    assert cap.author_prompt_card()["params"]["delay"] == {
-        "paramRef": "generated_buff_on_event.delay"}
+    reference = cap.author_prompt_card()["params"]["delay"]["paramRef"]
+    owner, leaf = reference.split(".")
+    assert CAPABILITY_REGISTRY[owner].params[leaf] == cap.params["delay"]
+    assert "paramRef" not in CAPABILITY_REGISTRY[owner].author_prompt_card()["params"][leaf]
     changed = replace(cap, params={**cap.params, "delay": replace(cap.params["delay"], **{field: value})})
     row = changed.author_prompt_card()["params"]["delay"]
     assert "paramRef" not in row

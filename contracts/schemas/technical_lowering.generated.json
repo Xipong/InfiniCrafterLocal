@@ -1460,6 +1460,21 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "end_projectiles",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction/EndProjectiles",
+      "outputs": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].useInput",
+        "runtimeProgram.entities[].events[].entityId",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "generated_buff_on_event",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",

@@ -2359,6 +2359,7 @@
                           "spawn_on_event",
                           "spawn_at_hit",
                           "emit_to_targets_on_event",
+                          "end_projectiles",
                           "generated_buff_on_event",
                           "npc_effect_on_event",
                           "apply_status_on_event",

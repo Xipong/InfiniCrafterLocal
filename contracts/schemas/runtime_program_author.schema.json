@@ -9596,6 +9596,120 @@
             "additionalProperties": false,
             "properties": {
               "fn": {
+                "const": "end_projectiles"
+              },
+              "id": {
+                "description": "Stable unique call id.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "delay": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Delay this exact action after the chosen event; 0 executes immediately",
+                    "maximum": 10.0,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "entity": {
+                    "description": "Exact projectile entity ID in this program; it needs its own spawn producer. This action controls existing instances and never spawns one.",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-reference": {
+                      "allowSelf": false,
+                      "graphEdge": false,
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ]
+                    },
+                    "x-infini-semanticType": "runtime_entity_id"
+                  },
+                  "when": {
+                    "description": "Explicit event trigger",
+                    "oneOf": [
+                      {
+                        "description": "Exact emitted event",
+                        "enum": [
+                          "on_use"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "description": "Accepted item use from the selected input; both matches each use once.",
+                        "properties": {
+                          "on": {
+                            "description": "Accepted item-use event",
+                            "enum": [
+                              "on_use"
+                            ],
+                            "type": "string"
+                          },
+                          "useInput": {
+                            "description": "Input that caused this use, captured before any delay; both selects either input, not two executions.",
+                            "enum": [
+                              "primary_use",
+                              "alternate_use",
+                              "both"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "on",
+                          "useInput"
+                        ],
+                        "type": "object"
+                      }
+                    ],
+                    "x-infini-semanticType": "runtime_event_trigger"
+                  }
+                },
+                "required": [
+                  "when",
+                  "entity"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
                 "const": "generated_buff_on_event"
               },
               "id": {

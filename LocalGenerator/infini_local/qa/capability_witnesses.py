@@ -167,6 +167,17 @@ def _binding(
 def build_capability_witness(fn: str) -> dict[str, Any]:
     if fn not in CAPABILITY_REGISTRY or not CAPABILITY_REGISTRY[fn].author_visible:
         raise KeyError(fn)
+    if fn == "end_projectiles":
+        doc = build_capability_witness("move_straight")
+        next(row for row in doc["runtimeProgram"]["calls"] if row["id"] == "witness_call")["id"] = "base_motion"
+        doc["runtimeProgram"]["bindings"].append(_binding("remote_use", "alternate_use", "use_item_body", "item"))
+        doc["runtimeProgram"]["calls"].append(_call("witness_call", fn, "item", {
+            "when": {"on": "on_use", "useInput": "alternate_use"}, "entity": "witness_entity",
+        }))
+        doc["name"] = f"Capability Witness {fn}"
+        doc["concept"]["coreMechanic"] = "Primary use launches a projectile; alternate use ends its live copies."
+        doc["realization"]["description"] = "A projectile with explicit remote termination through an independent input."
+        return doc
     if fn == "weapon_ammo":
         doc = build_capability_witness("move_straight")
         next(row for row in doc["runtimeProgram"]["calls"] if row["id"] == "witness_call")["id"] = "base_motion"

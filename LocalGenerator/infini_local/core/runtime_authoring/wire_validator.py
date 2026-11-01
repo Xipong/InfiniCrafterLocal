@@ -55,7 +55,7 @@ _EMISSION_UNUSED_EVENT_DEFAULTS = {
 }
 def _retained_event_neutral_matches(key: str, value: Any, neutral: Any) -> bool:
     """Native event DTO integers/bools are not interchangeable JSON numbers."""
-    if key in {"count", "periodTicks", "buffId", "durationTicks", "radiusPx", "maxHeal", "cooldownTicks"}:
+    if key in {"count", "periodTicks", "buffId", "durationTicks", "radiusPx", "maxHeal", "cooldownTicks", "reactionCooldownTicks"}:
         return type(value) is int and value == neutral
     if type(neutral) in (bool, str):
         return type(value) is type(neutral) and value == neutral
@@ -241,6 +241,61 @@ def _validate_hit_target_spawn(event: Mapping[str, Any], source_kind: str, entit
             or child_spawn["offsetPx"] != 0 or over.get("heightTiles", 0) != 0 or over.get("delayTicks", 0) != 0):
         errors.append({"path": path + ".entityId", "code": "reference_requirements_unsatisfied",
                        "message": "Target-relative child must be moving with exact event-origin/velocity/zero-offset spawn and no over-target transform."})
+
+
+def _validate_end_projectiles(event: Mapping[str, Any], entity: Mapping[str, Any], runtime: Mapping[str, Any],
+                              entities: list[Mapping[str, Any]], path: str, errors: list[dict[str, Any]]) -> None:
+    cap = CAPABILITY_REGISTRY["end_projectiles"]
+    if event.get("actionCode") != EVENT_ACTION_OPCODE[cap.name] and event.get("action") != cap.persisted_name:
+        return
+    if entity.get("kind") not in cap.target_kinds:
+        errors.append({"path": path, "code": "invalid_event_action", "message": "Remote termination is an item-body use action."})
+    # Native DTOs may serialize the shared action's unrelated neutral leaves.
+    # They do not grant this operation damage, counts, status or targeting knobs.
+    neutral_fields = {**_EMISSION_UNUSED_EVENT_DEFAULTS, "reactionCooldownTicks": 0}
+    for key, neutral in neutral_fields.items():
+        if key in event and not _retained_event_neutral_matches(key, event[key], neutral):
+            errors.append({"path": path + "." + key, "code": "wrong_event_parameter_owner",
+                           "message": "Remote termination cannot consume another action's parameters."})
+    projected = {key: value for key, value in event.items() if key not in neutral_fields and key != "id"}
+    errors.extend(strict_schema_errors(projected, cap.flat_wire_params_schema(), path=path))
+    selected = event.get("entityId")
+    target = next((row for row in entities if row.get("id") == selected), None)
+    if target is None or target.get("kind") not in PROJECTILE_ENTITY_KINDS:
+        errors.append({"path": path + ".entityId", "code": "wrong_reference_target_kind",
+                       "message": "Remote termination requires an exact projectile entity in this program."})
+        return
+    raw_bindings = runtime.get("bindings")
+    bindings = [row for row in raw_bindings if isinstance(row, Mapping)] if isinstance(raw_bindings, list) else []
+    emitting = [row for row in bindings if row.get("input") in ACTIVE_USE_INPUTS
+                and action_kind(row) in ("spawn_entity", "use_item_body", "apply_item_effects")]
+    if not any(event.get("useInput", "both") in ("both", row.get("input")) for row in emitting):
+        errors.append({"path": path + ".event", "code": "event_not_produced",
+                       "message": "Remote termination needs an accepted use from its selected input."})
+    reachable = {binding_target_id(row) for row in bindings if action_kind(row) == "spawn_entity"}
+    if emitting:
+        reachable.update(str(row.get("id") or "") for row in entities if row.get("kind") == "item_body")
+    graph: dict[str, set[str]] = {}
+    for producer in entities:
+        descendants: set[str] = set()
+        targeting = producer.get("targeting")
+        if isinstance(targeting, Mapping) and isinstance(targeting.get("shotEntityId"), str):
+            descendants.add(targeting["shotEntityId"])
+        actions = producer.get("events")
+        if isinstance(actions, list):
+            descendants.update(row["entityId"] for row in actions if isinstance(row, Mapping)
+                and isinstance(row.get("entityId"), str)
+                and row.get("actionCode") in (EVENT_ACTION_OPCODE["spawn_on_event"], EVENT_ACTION_OPCODE[_TARGET_EMISSION]))
+        graph[str(producer.get("id") or "")] = descendants
+    pending = list(reachable)
+    while pending:
+        for child in graph.get(pending.pop(), ()):
+            if child not in reachable:
+                reachable.add(child)
+                pending.append(child)
+    if selected not in reachable:
+        errors.append({"path": path + ".entityId", "code": "unreachable_entity",
+                       "message": "Ending existing projectiles is not a producer; the selected entity needs its own spawn binding or action."})
 
 
 def _validate_npc_effect(event: Mapping[str, Any], entity: Mapping[str, Any], runtime: Mapping[str, Any],
@@ -1055,6 +1110,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                                    "code": "event_not_produced", "message": "Target emission requires the actual item-contact or projectile-damage hit producer."})
             action_code = event.get("actionCode")
             event_path = f"$.runtimeProgram.entities[{index}].events[{event_index}]"
+            _validate_end_projectiles(event, entity, runtime, entities, event_path, errors)
             _validate_npc_effect(event, entity, runtime, event_path, errors)
             if action_code == EVENT_ACTION_OPCODE["damage_nearby_on_event"]:
                 cap = CAPABILITY_REGISTRY["damage_nearby_on_event"]

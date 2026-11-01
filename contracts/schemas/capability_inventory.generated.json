@@ -8937,6 +8937,90 @@
     },
     {
       "authorityByEffect": {},
+      "capability": "end_projectiles",
+      "componentSlot": "event_action",
+      "conflicts": [],
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction/EndProjectiles",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [
+        "on_use"
+      ],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].useInput",
+        "runtimeProgram.entities[].events[].entityId",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "delay": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 10.0,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "entity": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": {
+            "allowSelf": false,
+            "graphEdge": false,
+            "namespace": "entity",
+            "targetKinds": [
+              "owner_attached_projectile",
+              "free_projectile",
+              "stationary_projectile",
+              "temporary_helper",
+              "field",
+              "child_projectile"
+            ]
+          },
+          "required": true,
+          "semanticType": "runtime_entity_id",
+          "units": ""
+        },
+        "when": {
+          "enum": [],
+          "kind": "union",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_trigger",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "purpose": "End every live copy of one explicit projectile entity owned by this player and generated item. Normal on_kill actions and VFX run at each projectile's position; no blast is added. Snapshot matching instances at execution, after any delay; replacements created during their deaths survive this action. Inventory copies with the same generated item ID share this selection. No live matches is a no-op.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "event_available",
+          "message": "target entity must actually emit the selected event",
+          "param": "when",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "one bounded native projectile snapshot; killed instances retain their existing terminal-action spawn budgets",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
       "capability": "generated_buff_on_event",
       "componentSlot": "event_action",
       "conflicts": [],

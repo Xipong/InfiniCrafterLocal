@@ -157,6 +157,8 @@ Exact-repetition policy: `{'kind': 'exact_repetition', 'minimumRepeatedPlacement
 | spawn_at_hit | runtimeProgram.entities[].events[].actionCode | 1 |
 | emit_to_targets_on_event | runtimeProgram.entities[].events[].action | 'select_targets_and_emit_on_event' |
 | emit_to_targets_on_event | runtimeProgram.entities[].events[].actionCode | 8 |
+| end_projectiles | runtimeProgram.entities[].events[].action | 'end_projectiles' |
+| end_projectiles | runtimeProgram.entities[].events[].actionCode | 12 |
 | generated_buff_on_event | runtimeProgram.entities[].events[].action | 'apply_generated_buff_on_event' |
 | generated_buff_on_event | runtimeProgram.entities[].events[].actionCode | 9 |
 | npc_effect_on_event | runtimeProgram.entities[].events[].action | 'apply_npc_effect_on_event' |
@@ -230,6 +232,7 @@ Typed structured choices и конечные enum-отображения так�
 | projectile_collision.immunity | (('immunity', 'npcImmunityMode', True), ('immunity', 'localNpcHitCooldownTicks', True), ('immunity.localCooldown', 'localNpcHitCooldownTicks', False)) |
 | spawn_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.useInput', 'useInput', False), ('when', 'event', True), ('when.everySeconds', 'periodTicks', False), ('when.cooldown', 'reactionCooldownTicks', False)) |
 | spawn_at_hit.geometry | (('geometry', 'spreadRadians', True), ('geometry.beforeProbability', 'hitTargetSpawn.beforeProbability', False), ('geometry.hitboxMaxSideFactor', 'hitTargetSpawn.hitboxMaxSideFactor', False), ('geometry.clearanceBlocks', 'hitTargetSpawn.clearancePx', False), ('geometry.beforeJitterRadius', 'hitTargetSpawn.beforePositionJitterRadiusPx', False), ('geometry.beforeAngleJitter', 'hitTargetSpawn.beforeDirectionJitterRadians', False), ('geometry.afterFanSpread', 'hitTargetSpawn.afterFanSpreadRadians', False), ('geometry.ignoreTargetUpdates', 'hitTargetSpawn.initialIgnoreCountdownUpdates', False)) |
+| end_projectiles.when | (('when', 'event', False), ('when.on', 'event', False), ('when.useInput', 'useInput', False)) |
 | generated_buff_on_event.when | (('when.on', 'event', False), ('when.cooldown', 'reactionCooldownTicks', False)) |
 | damage_nearby_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.cooldown', 'reactionCooldownTicks', False)) |
 | damage_area_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.cooldown', 'reactionCooldownTicks', False)) |
@@ -450,6 +453,7 @@ Event actions:
 | generated_buff_on_event | 9 |
 | damage_nearby_on_event | 10 |
 | npc_effect_on_event | 11 |
+| end_projectiles | 12 |
 
 ### Entity kind → visual role
 

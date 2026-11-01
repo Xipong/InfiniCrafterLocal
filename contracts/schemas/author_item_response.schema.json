@@ -9752,6 +9752,120 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
+                    "const": "end_projectiles"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "when": {
+                        "oneOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "on_use"
+                            ],
+                            "description": "Exact emitted event"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "on": {
+                                "type": "string",
+                                "enum": [
+                                  "on_use"
+                                ],
+                                "description": "Accepted item-use event"
+                              },
+                              "useInput": {
+                                "type": "string",
+                                "enum": [
+                                  "primary_use",
+                                  "alternate_use",
+                                  "both"
+                                ],
+                                "description": "Input that caused this use, captured before any delay; both selects either input, not two executions."
+                              }
+                            },
+                            "required": [
+                              "on",
+                              "useInput"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Accepted item use from the selected input; both matches each use once."
+                          }
+                        ],
+                        "description": "Explicit event trigger",
+                        "x-infini-semanticType": "runtime_event_trigger"
+                      },
+                      "entity": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "description": "Exact projectile entity ID in this program; it needs its own spawn producer. This action controls existing instances and never spawns one.",
+                        "x-infini-semanticType": "runtime_entity_id",
+                        "x-infini-reference": {
+                          "namespace": "entity",
+                          "targetKinds": [
+                            "owner_attached_projectile",
+                            "free_projectile",
+                            "stationary_projectile",
+                            "temporary_helper",
+                            "field",
+                            "child_projectile"
+                          ],
+                          "allowSelf": false,
+                          "graphEdge": false
+                        }
+                      },
+                      "delay": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 10.0,
+                        "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Delay this exact action after the chosen event; 0 executes immediately",
+                        "x-infini-units": "seconds",
+                        "x-infini-semanticType": "seconds",
+                        "x-infini-neutral": 0.0,
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true,
+                          "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                        }
+                      }
+                    },
+                    "required": [
+                      "when",
+                      "entity"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable unique call id."
+                  },
+                  "fn": {
                     "const": "generated_buff_on_event"
                   },
                   "target": {
