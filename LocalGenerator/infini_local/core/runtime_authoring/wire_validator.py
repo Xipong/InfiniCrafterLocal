@@ -540,6 +540,83 @@ def _wire_updates(entity: Mapping[str, Any]) -> int | None:
     return extra + 1 if type(extra) is int and 0 <= extra <= 5 else None
 
 
+def _validate_projectile_commands(runtime: Mapping[str, Any], entities: list[Mapping[str, Any]],
+                                  errors: list[dict[str, Any]]) -> None:
+    cap = CAPABILITY_REGISTRY["end_projectiles"]
+    commands = [(ei, entity, ai, event) for ei, entity in enumerate(entities)
+                for ai, event in enumerate(entity.get("events", []) if isinstance(entity.get("events"), list) else [])
+                if isinstance(event, Mapping) and (event.get("action") == cap.persisted_name
+                    or event.get("actionCode") == EVENT_ACTION_OPCODE[cap.name])]
+    if not commands:
+        return
+    by_id = {entity.get("id"): entity for entity in entities if isinstance(entity.get("id"), str)}
+    bindings = runtime.get("bindings")
+    bindings = [b for b in bindings if isinstance(b, Mapping)] if isinstance(bindings, list) else []
+
+    def spawnable(entity_id: Any) -> bool:
+        target = by_id.get(entity_id) if isinstance(entity_id, str) else None
+        spawn = target.get("spawn") if target is not None else None
+        return (target is not None and target.get("kind") in PROJECTILE_ENTITY_KINDS
+                and isinstance(spawn, Mapping) and spawn.get("enabled") is True)
+
+    # A command selects existing instances; it must never add a spawn edge or
+    # make an otherwise unreachable entity executable. Follow only real spawn
+    # producers from item bodies and explicit spawn bindings.
+    reachable = {key for key, entity in by_id.items() if entity.get("kind") == "item_body"}
+    reachable.update(binding_target_id(b) for b in bindings
+                     if action_kind(b) == "spawn_entity" and spawnable(binding_target_id(b)))
+    pending = list(reachable)
+    while pending:
+        entity = by_id[pending.pop()]
+        children: list[Any] = []
+        for event in entity.get("events", []) if isinstance(entity.get("events"), list) else []:
+            if not isinstance(event, Mapping):
+                continue
+            if any(event.get("actionCode") == EVENT_ACTION_OPCODE[name]
+                   and event.get("action") == CAPABILITY_REGISTRY[name].persisted_name
+                   for name in ("spawn_on_event", _TARGET_EMISSION)):
+                children.append(event.get("entityId"))
+        controller, targeting = entity.get("controller"), entity.get("targeting")
+        if (isinstance(controller, Mapping) and controller.get("code") == CONTROLLER_OPCODE["target_and_fire"]
+                and isinstance(targeting, Mapping)):
+            children.append(targeting.get("shotEntityId"))
+        for child in children:
+            if spawnable(child) and child not in reachable:
+                reachable.add(child)
+                pending.append(child)
+
+    fields = {"id", "event", "action", "actionCode", "entityId", "useInput", "delayTicks"}
+    for ei, entity, ai, event in commands:
+        path = f"$.runtimeProgram.entities[{ei}].events[{ai}]"
+        if (event.get("action") != cap.persisted_name or type(event.get("actionCode")) is not int
+                or event.get("actionCode") != EVENT_ACTION_OPCODE[cap.name]
+                or entity.get("kind") not in cap.target_kinds or event.get("event") not in cap.allowed_events):
+            errors.append({"path": path, "code": "invalid_event_action",
+                           "message": "end_projectiles executes only from item_body.on_use with its exact action and opcode."})
+        if type(event.get("delayTicks", 0)) is not int or event.get("delayTicks", 0) != 0:
+            errors.append({"path": path + ".delayTicks", "code": "invalid_event_parameter",
+                           "message": "end_projectiles is immediate; delayTicks must be zero."})
+        target = event.get("entityId")
+        if (not isinstance(target, str) or target not in reachable or not spawnable(target)):
+            errors.append({"path": path + ".entityId", "code": "reference_requirements_unsatisfied",
+                           "message": "end_projectiles requires an exact projectile entity reached by an actual spawn producer."})
+        selected_input = event.get("useInput")
+        if not any(b.get("input") in ACTIVE_USE_INPUTS
+                   and (selected_input in (None, "both") or b.get("input") == selected_input)
+                   and action_kind(b) in ("spawn_entity", "use_item_body", "apply_item_effects")
+                   and (action_kind(b) == "spawn_entity" or binding_target_id(b) == entity.get("id"))
+                   for b in bindings):
+            errors.append({"path": path + ".event", "code": "event_not_produced",
+                           "message": "end_projectiles requires an accepted use from its selected input."})
+        for key, value in event.items():
+            if key in fields:
+                continue
+            if (key not in _EMISSION_UNUSED_EVENT_DEFAULTS
+                    or not _retained_event_neutral_matches(key, value, _EMISSION_UNUSED_EVENT_DEFAULTS[key])):
+                errors.append({"path": path + "." + key, "code": "wrong_event_parameter_owner",
+                               "message": "end_projectiles cannot consume another action's parameters."})
+
+
 def _validate_target_emission_graph(runtime: Mapping[str, Any], entities: list[Mapping[str, Any]],
                                      errors: list[dict[str, Any]]) -> None:
     """Validate new emission graphs without reinterpreting retained old-only wire."""
@@ -1118,6 +1195,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             if child and child not in {str(row.get("id") or "") for row in entities}:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}].entityId", "code": "missing_entity_reference", "message": f"Unknown event target entity {child!r}."})
 
+    _validate_projectile_commands(runtime, entities, errors)
     _validate_target_emission_graph(runtime, entities, errors)
     item_bodies = [row for row in entities if row.get("kind") == "item_body"]
     if len(item_bodies) != 1:

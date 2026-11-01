@@ -8969,6 +8969,107 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
+                    "const": "end_projectiles"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "when": {
+                        "oneOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "on_use"
+                            ],
+                            "description": "Exact emitted event"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "on": {
+                                "type": "string",
+                                "enum": [
+                                  "on_use"
+                                ],
+                                "description": "Accepted item-use event"
+                              },
+                              "useInput": {
+                                "type": "string",
+                                "enum": [
+                                  "primary_use",
+                                  "alternate_use",
+                                  "both"
+                                ],
+                                "description": "Input that caused this use, captured before any delay; both selects either input, not two executions."
+                              }
+                            },
+                            "required": [
+                              "on",
+                              "useInput"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Accepted item use from the selected input; both matches each use once."
+                          }
+                        ],
+                        "description": "Explicit event trigger",
+                        "x-infini-semanticType": "runtime_event_trigger"
+                      },
+                      "entity": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "description": "Exact projectile entity id from this item's spawn graph; copies of this same item definition share the command",
+                        "x-infini-semanticType": "runtime_entity_id",
+                        "x-infini-reference": {
+                          "namespace": "entity",
+                          "targetKinds": [
+                            "owner_attached_projectile",
+                            "free_projectile",
+                            "stationary_projectile",
+                            "temporary_helper",
+                            "field",
+                            "child_projectile"
+                          ],
+                          "allowSelf": false,
+                          "graphEdge": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "when",
+                      "entity"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable unique call id."
+                  },
+                  "fn": {
                     "const": "target_and_fire"
                   },
                   "target": {

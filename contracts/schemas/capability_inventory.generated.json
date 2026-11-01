@@ -7930,6 +7930,80 @@
       ]
     },
     {
+      "authorityByEffect": {},
+      "capability": "end_projectiles",
+      "componentSlot": "event_action",
+      "conflicts": [],
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::EndProjectiles",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [
+        "on_use"
+      ],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].useInput",
+        "runtimeProgram.entities[].events[].entityId",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "entity": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": {
+            "allowSelf": false,
+            "graphEdge": false,
+            "namespace": "entity",
+            "targetKinds": [
+              "owner_attached_projectile",
+              "free_projectile",
+              "stationary_projectile",
+              "temporary_helper",
+              "field",
+              "child_projectile"
+            ]
+          },
+          "required": true,
+          "semanticType": "runtime_entity_id",
+          "units": ""
+        },
+        "when": {
+          "enum": [],
+          "kind": "union",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_trigger",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "purpose": "End every currently live copy of one authored projectile entity owned by this player and item definition. Existing on_kill actions run normally; damage or explosions must be authored separately. Selection is captured before the first termination, so newly spawned replacements survive this command.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "event_available",
+          "message": "target entity must actually emit the selected event",
+          "param": "when",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "one snapshot of the finite native projectile pool; existing per-owner live cap and each projectile's terminal-action budgets remain in force",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
       "authorityByEffect": {
         "NPC_source_damage": "native_projectile_hit_authority",
         "beam_geometry": "native_local_collision_and_visual",

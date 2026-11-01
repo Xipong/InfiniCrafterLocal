@@ -2154,6 +2154,22 @@ _CAPS.extend([
 
 _CAPS.extend([
     _cap(
+        "end_projectiles",
+        "End every currently live copy of one authored projectile entity owned by this player and item definition. Existing on_kill actions run normally; damage or explosions must be authored separately. Selection is captured before the first termination, so newly spawned replacements survive this command.",
+        "event",
+        ("item_body",),
+        {
+            "when": _event_when_param(("on_use",)),
+            "entity": _p("string", "Exact projectile entity id from this item's spawn graph; copies of this same item definition share the command", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="entityId", semantic_type="runtime_entity_id",
+                         reference=ReferenceSpec("entity", PROJECTILE_ENTITY_KIND_ORDER, allow_self=False, graph_edge=False)),
+        },
+        component_slot="event_action", multiplicity="many_per_target",
+        authority="owner_execute_sync", fixed_wire_literals={"delayTicks": 0},
+        py=_COMPILER_OWNER, cs="Common/Runtime/RuntimeProgramExecutor.cs::EndProjectiles",
+        events=("on_use",),
+        budget="one snapshot of the finite native projectile pool; existing per-owner live cap and each projectile's terminal-action budgets remain in force",
+    ),
+    _cap(
         "channel_beam",
         "Keep an owner-attached line entity aimed at the cursor; collision is the explicit beam segment, taking precedence over movement collision. Sustain mana, warmup ramps and tile raycast are independent explicit params. ownerHitCheck remains a separate native owner-to-target hit check, not beam clipping. A baked/reused PNG draws once at Projectile.Center, not over the full segment. runtime_geometry and VFX texturedPath source=beam share the exact clipped collision line; no automatic representation selection.",
         "controller",
@@ -3009,6 +3025,7 @@ EVENT_ACTION_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
     "generated_buff_on_event": 9,
     "damage_nearby_on_event": 10,
     "npc_effect_on_event": 11,
+    "end_projectiles": 12,
 })
 
 
@@ -3044,7 +3061,7 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
         cap = replace(cap, fixed_wire_literals=MappingProxyType({
             **cap.fixed_wire_literals, "action": wire_action, "actionCode": WIRE_EVENT_ACTION_OPCODE[wire_action],
         }))
-    if cap.category == "event" and "delay" not in cap.params:
+    if cap.category == "event" and "delay" not in cap.params and "delayTicks" not in cap.fixed_wire_literals:
         cap = replace(cap, params=MappingProxyType({
             **cap.params,
             "delay": _previous_param_name('delaySeconds', _seconds(_p("integer", "Delay this exact action after the chosen event; 0 executes immediately", required=False,

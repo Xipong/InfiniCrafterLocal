@@ -44,6 +44,11 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("end_projectiles strict native admission", EndProjectilesStrictAdmission),
+            ("end_projectiles exact instances and native terminal events", EndProjectilesRetiresExactInstancesThroughNativeKill),
+            ("end_projectiles alternate input and owner authority", EndProjectilesUsesAlternateInputAndOwnerAuthority),
+            ("end_projectiles snapshot incarnation safety", EndProjectilesSnapshotPreservesNewIncarnations),
+            ("end_projectiles occupancy and lifetime accounting", EndProjectilesReleasesOccupancyWithoutRefillingLifetime),
             ("parent source graph unresolved identity alternatives", ParentSourceGraphKeepsUnresolvedIdentityAlternatives),
             ("parent source graph native projectile windows", ParentSourceGraphFollowsNativeProjectileWindows),
             ("parent source graph conditional native buff consumers", ParentSourceGraphKeepsConditionalNativeBuffConsumers),
