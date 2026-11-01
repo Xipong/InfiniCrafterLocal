@@ -22,8 +22,8 @@ using InfiniCrafterLocal.Common.Models;
 internal sealed partial class WNativeVfxRenderer : IDisposable
 {
     const BindingFlags All=BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Instance|BindingFlags.Static;
-    sealed class ResourceMod(string root):Mod {
-        public override string Name=>"ParticleLibrary";
+    sealed class ResourceMod(string root,string name="ParticleLibrary"):Mod {
+        public override string Name=>name;
         public override IContentSource CreateDefaultContentSource()=>new FileSystemContentSource(root);
     }
     readonly WorkbenchGraphicsContext graphics;
@@ -51,6 +51,7 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
     readonly Vector2 oldCamera;
     readonly IDictionary<string,Mod> registry;
     readonly ResourceMod mod;
+    ResourceMod? luminanceResources;
     readonly ParticleLibrary.ParticleLibrary actualMod;
     readonly ParticleManagerV3 particleManager;
     readonly InfiniDetachedVfxSystem system=new();
@@ -90,6 +91,9 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
     public WNativeVfxRenderer(WorkbenchGraphicsContext graphics,JsonObject settings,string absoluteFramesDir,GeneratedItemData? data)
     {
         string[] libraryTexturePaths=SelectedLibraryTexturePaths(data);
+        string[] luminancePaths=libraryTexturePaths.Where(p=>p.StartsWith("Luminance/",StringComparison.Ordinal)).ToArray();
+        string? luminanceRoot=Environment.GetEnvironmentVariable("INFINI_LUMINANCE_ASSET_DIR");
+        var luminanceHashes=InspectLuminanceResources(luminancePaths,luminanceRoot);
         this.graphics=graphics;framesDir=Path.GetFullPath(absoluteFramesDir);
         foreach(string key in settings.Select(x=>x.Key)) if(key is not ("capture" or "width" or "height" or "cameraX" or "cameraY" or "zoom" or "drawArtwork" or "artworkFiles" or "drawPlayer" or "playerAssetRoot" or "dummyAssetRoot" or "drawNativeDust" or "lightingMode" or "drawPlacedBodies" or "drawDroppedItems" or "drawVanillaProjectiles" or "drawProjectileVfx"))throw new ArgumentException("Unknown nativeRender setting: "+key);
         ConfigureScene(settings);drawVanillaProjectiles=settings["drawVanillaProjectiles"]?.GetValue<bool>()??false;drawDroppedItems=settings["drawDroppedItems"]?.GetValue<bool>()??false; if(drawDroppedItems && !(settings["drawArtwork"]?.GetValue<bool>()??false))throw new ArgumentException("drawDroppedItems requires drawArtwork");
@@ -105,6 +109,21 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
         foreach(string file in Directory.EnumerateFiles(Path.Combine(source,"Assets"),"*",SearchOption.AllDirectories).Where(p=>p.EndsWith(".png",StringComparison.OrdinalIgnoreCase)||p.EndsWith(".xnb",StringComparison.OrdinalIgnoreCase))) {
             string destination=Path.Combine(contentRoot,Path.GetRelativePath(source,file));Directory.CreateDirectory(Path.GetDirectoryName(destination)!);File.Copy(file,destination);
         }
+        if(luminancePaths.Length>0) {
+            // Freeze the exact selected bytes for the native resource loader;
+            // the source can otherwise change between receipt and GPU load.
+            string root=Path.Combine(contentRoot,"Luminance");
+            foreach(string path in luminancePaths) {
+                string relative=path.Substring("Luminance/".Length).Replace('/',Path.DirectorySeparatorChar)+".png";
+                byte[] bytes=File.ReadAllBytes(Path.Combine(luminanceRoot!,relative));
+                if(Hash(bytes)!=luminanceHashes[path])throw new InvalidOperationException("Luminance texture changed during preparation: "+path);
+                string targetPath=Path.Combine(root,relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);File.WriteAllBytes(targetPath,bytes);
+            }
+        }
+        registry=(IDictionary<string,Mod>)typeof(ModLoader).GetField("modsByName",All)!.GetValue(null)!;
+        if(registry.ContainsKey("ParticleLibrary"))throw new InvalidOperationException("ParticleLibrary already registered; isolated renderer refuses to overwrite an existing mod");
+        if(luminancePaths.Length>0 && registry.ContainsKey("Luminance"))throw new InvalidOperationException("Luminance already registered; isolated renderer refuses to overwrite an existing mod");
         game=(Game)typeof(WorkbenchGraphicsContext).GetField("game",All)!.GetValue(graphics)!;
         oldServices=typeof(Game).GetField("<Services>k__BackingField",All)!.GetValue(Main.instance);
         oldGraphics=Main.graphics;oldBatch=Main.spriteBatch;oldView=Main.GameViewMatrix;
@@ -113,10 +132,18 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
         typeof(Game).GetField("<Services>k__BackingField",All)!.SetValue(Main.instance,game.Services);
         readers=new AssetReaderCollection();readers.RegisterReader(new PngReader(graphics.Device),".png");readers.RegisterReader(new XnbReader(game.Services),".xnb");
         oldReaders=game.Services.GetService(typeof(AssetReaderCollection));if(oldReaders is not null)game.Services.RemoveService(typeof(AssetReaderCollection));game.Services.AddService(typeof(AssetReaderCollection),readers);
-        registry=(IDictionary<string,Mod>)typeof(ModLoader).GetField("modsByName",All)!.GetValue(null)!;
-        if(registry.ContainsKey("ParticleLibrary"))throw new InvalidOperationException("ParticleLibrary already registered; isolated renderer refuses to overwrite an existing mod");
         mod=new ResourceMod(contentRoot);typeof(Mod).GetProperty("Logger",All)!.SetValue(mod,log4net.LogManager.GetLogger("WorkbenchParticleLibrary"));
         typeof(Mod).GetMethod("PrepareAssets",All)!.Invoke(mod,null);registry.Add(mod.Name,mod);
+        // Only register a resource source when the authored item selects a
+        // Luminance texture. This is not Luminance's mod lifecycle or gameplay.
+        if(luminancePaths.Length>0) {
+            string root=Path.Combine(contentRoot,"Luminance");
+            luminanceResources=new ResourceMod(root,"Luminance");
+            typeof(Mod).GetProperty("Logger",All)!.SetValue(luminanceResources,log4net.LogManager.GetLogger("WorkbenchLuminanceResources"));
+            typeof(Mod).GetMethod("PrepareAssets",All)!.Invoke(luminanceResources,null);
+            try {registry.Add(luminanceResources.Name,luminanceResources);}
+            catch {luminanceResources.Assets.Dispose();luminanceResources=null;throw;}
+        }
         bool oldDedicated=Main.dedServ;Main.dedServ=false;
         try {
             var config=new ParticleLibrary.ParticleLibraryConfig();typeof(Terraria.ModLoader.Config.ModConfig).GetProperty("Mod",All)!.SetValue(config,mod);typeof(Terraria.ModLoader.Config.ConfigManager).GetMethod("Add",All)!.Invoke(null,new object[]{config});
@@ -129,11 +156,18 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
             if(ParticleManagerV3.InstancedParticleEffect is null)throw new InvalidOperationException("Original ParticleLibrary effect did not load after native main-thread queue");
             PrewarmLibraryTextures(libraryTexturePaths,path=>(bool)Invoke("EnsureLibraryReady",path)!,
                 ()=>typeof(Main).GetMethod("ConsumeAllMainThreadActions",All)!.Invoke(null,null));
+        } catch {
+            if(luminanceResources is not null){registry.Remove(luminanceResources.Name);luminanceResources.Assets.Dispose();luminanceResources=null;}
+            throw;
         } finally {Main.dedServ=oldDedicated;}
         batch=new SpriteBatch(graphics.Device);Main.spriteBatch=batch;target=new RenderTarget2D(graphics.Device,width,height);
         if(capture)Directory.CreateDirectory(framesDir);
         Report=new JsonObject{["backend"]="original_mod_draw_layers",["backendDescription"]="Original InfiniDetachedVfxSystem draw layers / FNA3D software OpenGL",["scope"]="VFX-only original mod layers on neutral black background; no Terraria scene artwork",["capture"]=capture,["pngExportEnabled"]=capture,["gpuRenderLifecycleEnabled"]=capture||drawNativeDust||drawVanillaProjectiles,["gpuRenderLifecycleExecuted"]=false,["nativeDustDrawEnabled"]=drawNativeDust,["nativeDustDrawExecuted"]=false,["soundValidated"]=false,["itemArtworkRendered"]=false,["projectileArtworkRendered"]=false,["worldRendered"]=false,["unrenderedArtwork"]=new JsonArray("item artwork","projectile artwork","Terraria world/player/NPC artwork"),["missingVfxAssets"]=new JsonArray(),["resourceReady"]=true,["originalParticleLibraryEffect"]=ParticleManagerV3.InstancedParticleEffect is not null,["libraryBuffers"]=(GetStatic("LibraryBuffers") as Array)?.Length??0,["starSha256"]=Hash(File.ReadAllBytes(Path.Combine(contentRoot,"Assets/Textures/Star.png"))),["effectSha256"]=Hash(File.ReadAllBytes(Path.Combine(contentRoot,"Assets/Effects/InstancedParticle.xnb"))),["loadedAssetSha256"]=JsonSerializer.SerializeToNode(Directory.EnumerateFiles(contentRoot,"*",SearchOption.AllDirectories).OrderBy(p=>p).ToDictionary(p=>Path.GetRelativePath(contentRoot,p),p=>Hash(File.ReadAllBytes(p)))),["particleLibraryAssemblySha256"]=Hash(File.ReadAllBytes(typeof(ParticleManagerV3).Assembly.Location)),["graphics"]=graphics.Provenance.DeepClone(),["width"]=width,["height"]=height,["cameraX"]=camera.X,["cameraY"]=camera.Y,["zoom"]=zoom,["frames"]=frames,["snapshots"]=snapshots};
         Report["readyLibraryTexturePaths"]=JsonSerializer.SerializeToNode(libraryTexturePaths);
+        if(luminanceResources is not null)Report["luminanceResources"]=new JsonObject {
+            ["scope"]="Resource-only registration; Luminance Load hooks and gameplay are not executed",
+            ["selectedTextureSha256"]=JsonSerializer.SerializeToNode(luminanceHashes)
+        };
     }
     // Resolve exactly the particle textures selected by this item, through the
     // production registry. No synthetic Star selection for empty/vanilla scenes.
@@ -146,6 +180,22 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
                 if(!(bool)resolve.Invoke(null,args)!)throw new NotSupportedException("Unknown selected particle texture: "+s.Particle.TextureId);
                 return (string)args[1]!;
             }).Distinct(StringComparer.Ordinal).ToArray();
+    }
+    // The paths come only from the production texture registry. Check each
+    // selected file up front and record its bytes; do not infer a replacement.
+    internal static Dictionary<string,string> InspectLuminanceResources(string[] paths,string? root)
+    {
+        var hashes=new Dictionary<string,string>(StringComparer.Ordinal);
+        if(paths.Length>0 && string.IsNullOrWhiteSpace(root))
+            throw new InvalidOperationException("Selected Luminance particle textures require INFINI_LUMINANCE_ASSET_DIR pointing to the Luminance source root");
+        foreach(string path in paths) {
+            if(!path.StartsWith("Luminance/Assets/",StringComparison.Ordinal) || path.Contains("..",StringComparison.Ordinal) || path.Contains('\\'))
+                throw new InvalidOperationException("Invalid Luminance texture path: "+path);
+            string file=Path.Combine(root!,path.Substring("Luminance/".Length).Replace('/',Path.DirectorySeparatorChar)+".png");
+            if(!File.Exists(file))throw new FileNotFoundException("Selected Luminance particle texture is missing: "+path,file);
+            hashes[path]=Hash(File.ReadAllBytes(file));
+        }
+        return hashes;
     }
     internal static void PrewarmLibraryTextures(string[] paths,Func<string,bool> ensure,Action drain)
     {
@@ -252,6 +302,7 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
     {
         if(disposed)return;disposed=true;bool oldDedicated=Main.dedServ;Main.dedServ=false;
         try {system.Unload();particleManager.Unload();actualMod.Unload();mod.Assets.Dispose();registry.Remove(mod.Name);
+            if(luminanceResources is not null){luminanceResources.Assets.Dispose();registry.Remove(luminanceResources.Name);}
             foreach(var field in typeof(Terraria.ModLoader.Config.ConfigManager).GetFields(All))if(field.IsStatic&&field.GetValue(null) is IDictionary dictionary&&dictionary.Contains(mod))dictionary.Remove(mod);
         } finally {
             target.Dispose();batch.Dispose();game.Services.RemoveService(typeof(AssetReaderCollection));if(oldReaders is not null)game.Services.AddService(typeof(AssetReaderCollection),oldReaders);

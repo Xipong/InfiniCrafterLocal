@@ -373,14 +373,31 @@ document.getElementById('play').onclick=()=>{if(timer){stop();return}if(+seek.va
     return {"replay":str(output/"replay.html"),"frames":frame_count,"sourceSha256":digest(trace_path)}
 
 
+def native_environment():
+    from native_environment import discover
+    return discover(ROOT)
+
+
 def doctor():
-    dotnet = os.environ.get("DOTNET", "dotnet")
-    tml = Path(os.environ.get("INFINI_TML_REFERENCE_DIR", "/nonexistent")).expanduser()
-    deps = Path(os.environ.get("INFINI_TML_DEPS_SRC", "/nonexistent")).expanduser()
+    env, sources = native_environment()
+    dotnet = env.get("DOTNET", "dotnet")
+    tml = Path(env.get("INFINI_TML_REFERENCE_DIR", "/nonexistent")).expanduser()
+    deps = Path(env.get("INFINI_TML_DEPS_SRC", "/nonexistent")).expanduser()
     checks = {"dotnet":shutil.which(dotnet),"tModLoader":(tml/"tModLoader.dll").is_file(),
               "ParticleLibrary":(deps/"ParticleLibrary/ParticleLibrary.dll").is_file(),
               "Luminance":(deps/"Luminance/bin/Debug/net8.0/Luminance.dll").is_file()}
-    return {"ready":all(checks.values()),"checks":checks,"note":"Dependency readiness is not a native execution or parity result."}
+    graphics = {
+        "nativeLibraries": all((Path(env.get("INFINI_TML_NATIVE_DIR", "/nonexistent")) / name).is_file()
+                               for name in ("libSDL2-2.0.so.0", "libFNA3D.so.0", "libFAudio.so.0", "libtheorafile.so")),
+        "tModLoaderContent": (Path(env.get("INFINI_TML_CONTENT_DIR", "/nonexistent")) / "PixelShader.xnb").is_file(),
+        "playerAssets": (Path(env.get("INFINI_PLAYER_ASSET_DIR", "/nonexistent")) / "Images/MagicPixel.png").is_file(),
+        "particleAssets": all((Path(env.get("INFINI_PARTICLE_ASSET_DIR", "/nonexistent")) / name).is_file()
+                              for name in ("Assets/Textures/Star.png", "Assets/Effects/InstancedParticle.xnb")),
+    }
+    return {"ready":all(checks.values()), "checks":checks,
+            "graphicsFilesPresent": graphics, "paths": {name:env[name] for name in sources if name in env},
+            "discovery": sources,
+            "note":"Basic file checks only: neither graphics initialization, matching versions, complete assets nor native execution are verified."}
 
 
 def source_fingerprint():
@@ -401,8 +418,9 @@ def source_fingerprint():
 
 def configured_reference_paths():
     paths = {}
-    tml = os.environ.get("INFINI_TML_REFERENCE_DIR")
-    deps = os.environ.get("INFINI_TML_DEPS_SRC")
+    env, _ = native_environment()
+    tml = env.get("INFINI_TML_REFERENCE_DIR")
+    deps = env.get("INFINI_TML_DEPS_SRC")
     if tml:
         paths["tModLoader"] = Path(tml).expanduser().resolve() / "tModLoader.dll"
     if deps:
@@ -436,10 +454,11 @@ def build():
     state=doctor()
     if not state["ready"]:
         raise RuntimeError("Native prerequisites unavailable: "+json.dumps(state))
-    command=[os.environ.get("DOTNET","dotnet"),"build",str(HERE/"ItemTestWorkbench.csproj"),"-c","Release",
-             "-p:InfiniTmlReferenceDir="+str(Path(os.environ["INFINI_TML_REFERENCE_DIR"]).expanduser().resolve()),
-             "-p:InfiniExternalDepsRoot="+str(Path(os.environ["INFINI_TML_DEPS_SRC"]).expanduser().resolve())]
-    subprocess.run(command,cwd=ROOT,check=True,stdout=sys.stderr)
+    env, _ = native_environment()
+    command=[env.get("DOTNET","dotnet"),"build",str(HERE/"ItemTestWorkbench.csproj"),"-c","Release",
+             "-p:InfiniTmlReferenceDir="+str(Path(env["INFINI_TML_REFERENCE_DIR"]).expanduser().resolve()),
+             "-p:InfiniExternalDepsRoot="+str(Path(env["INFINI_TML_DEPS_SRC"]).expanduser().resolve())]
+    subprocess.run(command,cwd=ROOT,env=env,check=True,stdout=sys.stderr)
     dll=HERE/"bin/Release/net8.0/ItemTestWorkbench.dll"
     (dll.parent/"build-provenance.json").write_text(json.dumps(build_state(dll)))
 
@@ -514,7 +533,7 @@ def execute_loader_run(args):
         return {str(p.relative_to(root)):digest(p) if p.is_file() else None for p in sorted(paths)}
     # The native host permits a source-root override. Bind evidence to the
     # effective metadata/assets, not just the default copied build content.
-    env = os.environ.copy()
+    env, _ = native_environment()
     configured_root = env.get("INFINI_MOD_SOURCE_ROOT", "")
     production_root = (Path(configured_root) if configured_root.strip() else dll.parent / "native-mod").resolve()
     env["INFINI_MOD_SOURCE_ROOT"] = str(production_root)
@@ -586,7 +605,7 @@ def execute_run(args):
     if args.item_boundary != "fresh":
         cmd.extend(["--item-boundary", args.item_boundary])
     try:
-        proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=args.timeout)
+        proc = subprocess.run(cmd, cwd=ROOT, env=native_environment()[0], capture_output=True, text=True, timeout=args.timeout)
     except subprocess.TimeoutExpired as exc:
         decode = lambda v: v.decode(errors="replace") if isinstance(v, bytes) else v or ""
         proc = subprocess.CompletedProcess(cmd, 124, decode(exc.stdout),
