@@ -88,6 +88,11 @@ public sealed class ProbeItem : ModItem
     public override string Texture => "Terraria/Images/Item_98";
     public override void SetDefaults()
     {
+        // A real mod can first touch this vanilla factory during SetupContent.
+        // It must already have been initialized and resized for modded IDs.
+        var prefixes = Terraria.GameContent.Prefixes.PrefixLegacy.ItemSets.ItemsThatCanHaveLegendary2;
+        if (Type >= prefixes.Length) throw new InvalidOperationException("Native item prefix sets were not resized");
+        prefixes[Type] = true;
         Item.width = 20;
         Item.height = 20;
         Item.damage = 20;

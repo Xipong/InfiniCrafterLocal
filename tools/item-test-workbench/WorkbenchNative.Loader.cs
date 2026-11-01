@@ -213,6 +213,9 @@ internal sealed class WNativeLoader : IDisposable
             .Where(t => t.FullName?.StartsWith("Terraria.ID.", StringComparison.Ordinal) == true && t.Name == "Sets")
             .OrderBy(t => t.FullName, StringComparer.Ordinal))
             RuntimeHelpers.RunClassConstructor(nested.TypeHandle);
+        // PrefixLegacy.ItemSets is outside Terraria.ID and would otherwise
+        // register its factory too late, after the native resize phase.
+        RuntimeHelpers.RunClassConstructor(typeof(Terraria.GameContent.Prefixes.PrefixLegacy.ItemSets).TypeHandle);
         Main.SceneMetrics = new SceneMetrics();
         FieldInfo pylonField = typeof(Main).GetField("PylonSystem", Any)!;
         if (pylonField.GetValue(null) is null) pylonField.SetValue(null, Activator.CreateInstance(pylonField.FieldType));
