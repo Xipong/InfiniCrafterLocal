@@ -30,4 +30,7 @@ jobs:
                            'Player_0_0.xnb', 'Mount_0.xnb', 'Tiles_1.xnb', 'MagicPixel.xnb'):
                   print(f'{system} {name}: {any(p.endswith("/Content/Images/" + name) for p in files)}')
           print('All archive files:', len(all_files))
+          print('Full file list:', all_files)
+          print('Case-insensitive content image matches:', [p for p in all_files if '/content/images/' in p.lower()])
+          print('Image extensions anywhere:', [p for p in all_files if p.lower().endswith(('.xnb','.png','.jpg','.jpeg','.rawimg'))])
           PY
