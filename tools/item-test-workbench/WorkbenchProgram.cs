@@ -17,7 +17,7 @@ internal static class WorkbenchProgram
             Terraria.Program.SavePath = sandbox;
             Terraria.Main.dedServ = true;
             if (args.Length > 0 && args[0] == "--check-native-loader") {
-                string? dll = null, root = null, npc = null; bool serverMode = false;
+                string? dll = null, root = null, npc = null; bool probeServerMode = false;
                 var modDlls = new List<string>(); var modRoots = new List<string>(); var tmods = new List<string>();
                 for (int i = 1; i < args.Length; i += 2) {
                     if (i + 1 >= args.Length) throw new ArgumentException("Native loader probe options require a value");
@@ -25,14 +25,14 @@ internal static class WorkbenchProgram
                         case "--probe-dll": dll = args[i + 1]; break;
                         case "--probe-mod-root": root = args[i + 1]; break;
                         case "--probe-npc": npc = args[i + 1]; break;
-                        case "--server-mode": serverMode = bool.Parse(args[i + 1]); break;
+                        case "--server-mode": probeServerMode = bool.Parse(args[i + 1]); break;
                         case "--mod-dll": modDlls.Add(args[i + 1]); break;
                         case "--mod-root": modRoots.Add(args[i + 1]); break;
                         case "--tmod": tmods.Add(args[i + 1]); break;
                         default: throw new ArgumentException("Unknown native loader probe option: " + args[i]);
                     }
                 }
-                EngineRuntimeChecks.CheckWorkbenchNativeLoader(sandbox, ModInputs(dll, root, modDlls, modRoots, tmods), npc, serverMode); return 0;
+                EngineRuntimeChecks.CheckWorkbenchNativeLoader(sandbox, ModInputs(dll, root, modDlls, modRoots, tmods), npc, probeServerMode); return 0;
             }
             if (args.Length == 1 && args[0] == "--check-assertions") { EngineRuntimeChecks.CheckWorkbenchAssertions(); return 0; }
             if (args.Length == 2 && args[0] == "--write-fixtures") { EngineRuntimeChecks.WriteWorkbenchFixtures(args[1]); return 0; }
