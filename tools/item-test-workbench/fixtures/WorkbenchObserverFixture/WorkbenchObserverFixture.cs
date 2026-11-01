@@ -190,6 +190,11 @@ public sealed class ProbeNpc : ModNPC
 
 public sealed class ProbeGlobalNpc : GlobalNPC
 {
+    public override void SetDefaults(NPC npc)
+    {
+        if (Main.npc[0] is null) throw new InvalidOperationException("Native NPC slots were not initialized before SetDefaults");
+        Observation.Hit("GlobalNPC.SetDefaults.NpcSlotReady");
+    }
     public override void OnSpawn(NPC npc, IEntitySource source)
     {
         if (npc.type == ModContent.NPCType<ProbeNpc>()) Observation.Hit("GlobalNPC.OnSpawn");

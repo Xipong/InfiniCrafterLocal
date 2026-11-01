@@ -58,6 +58,9 @@ internal sealed class WNativeLoader : IDisposable
         FieldInfo gameTips = typeof(Main).GetField("gameTips", Any)!;
         if (gameTips.GetValue(null) is null) gameTips.SetValue(null, Activator.CreateInstance(gameTips.FieldType));
         for (int i = 0; i < Main.player.Length; i++) Main.player[i] ??= new Player();
+        // The game initializes NPC slots before mod content samples execute
+        // GlobalNPC.SetDefaults, where mods may inspect other NPC slots.
+        for (int i = 0; i < Main.npc.Length; i++) Main.npc[i] ??= new NPC { whoAmI = i };
         ContentSamples.Initialize(); // vanilla samples before mod registration
         typeof(Main).GetMethod("Initialize_TileAndNPCData1", Any)!.Invoke(null, null);
         Terraria.ObjectData.TileObjectData.Initialize();
