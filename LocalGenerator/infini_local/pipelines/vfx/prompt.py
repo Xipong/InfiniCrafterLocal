@@ -172,7 +172,8 @@ def build_vfx_repair_packet(
         "acceptedRuntimeProgramReadOnly": copy.deepcopy(packet.get("acceptedRuntimeProgramReadOnly") or {}),
         "runtimeVocabularyReadOnly": copy.deepcopy(packet.get("runtimeVocabulary") or {}),
         "runtimeSurfaceReadOnly": copy.deepcopy(packet.get("runtimeSurface") or {}),
-        "exactErrors": copy.deepcopy(repair_errors[:24]),
+        # The single Repair must see every diagnosis behind its permissions.
+        "exactErrors": copy.deepcopy(repair_errors),
         "repairScope": copy.deepcopy(dict(repair_scope or {})),
         "brokenFragments": context["broken"],
         "malformedRawText": context["malformedRawText"],

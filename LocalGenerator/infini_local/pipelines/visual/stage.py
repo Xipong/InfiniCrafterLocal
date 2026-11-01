@@ -10,12 +10,14 @@ from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_stage_messages import stage_accounting
 from infini_local.core.llm_json_tools import recover_object_with_syntax_only_repairs
+from infini_local.core.provider_schema import project_provider_nullable_optionals_to_local
 from infini_local.core.runtime_authoring.wire_views import runtime_visual_roles
 from infini_local.core.images.config import VISUAL_DIRECTOR_LLM
 from infini_local.pipelines.visual.assets import equipment_overlay_requirement
 from infini_local.pipelines.visual.contract import (
     MalformedVisualDirectorOutput,
     VISUAL_KIT_SCHEMA,
+    _response_schema,
     _validate_kit,
 )
 from infini_local.pipelines.visual.repair_scope import _build_visual_repair_scope
@@ -196,6 +198,13 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             source = recover_object_with_syntax_only_repairs(raw.raw_text)
             if source is None:
                 raise PlannerUnavailable("Visual format Repair cannot prove recoverable visual fields")
+            # Compare local designs on both sides of syntax Repair. Strict
+            # transport's optional nulls mean absence only under the schema
+            # actually used for the original response, never a downgraded one.
+            source = project_provider_nullable_optionals_to_local(
+                source, _response_schema(entity_ids, equipment_overlay_required, item_body_id),
+                response_format=raw.response_format,
+            )
             recovered_kit, _ = _validate_kit(
                 source, entity_ids, item_body_id,
                 equipment_overlay_required=equipment_overlay_required,
