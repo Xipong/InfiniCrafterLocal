@@ -43,6 +43,9 @@ Initial Director schemas/public exports и полная post-merge admission н�
   рекламируются. Renderer/entity/event discriminator и create/whole-response
   scopes сохраняют полный необходимый domain; unrelated renderer/material/sound
   grammar и vocabulary не отправляются для независимого scalar Repair.
+- VFX `exactErrors` содержит весь отчёт той же проверки, из которой построен
+  scope, включая ошибки после первых 24. Сокращение grammar/context не обрезает
+  диагностику единственной попытки Repair и не расширяет разрешения.
 - Case-specific constants и IDs остаются USER. Static grammar extraction не
   обязана существовать для каждого scoped packet: неизменная полная schema
   ради cache hit не нужна. Provider schema остаётся inline/self-contained.
@@ -63,6 +66,16 @@ local schema. Первоначальный Author packet и Gameplay semantic Re
 Equality с синтаксически восстановимым исходным Author object продолжает отвергать
 любое добавление, удаление или изменение gameplay; невозможность доказать источник
 остаётся отказом. Никакие values, strings или массивы source не обрезаются.
+
+Visual Format Repair сравнивает восстановленный исходник и исправленный ответ
+после перевода каждого из его фактического provider-формата в local shape.
+Optional `null` исходного strict response означает отсутствие; при `json_object`
+или transport downgrade он остаётся authored value. Синтаксическое исправление
+не разрешает менять внешность или удалять невалидные authored поля.
+
+VFX передаёт `malformedRawText` целиком, включая хвост после 12 000 символов:
+это источник исправляемого ответа, а не preview для логов. Общий лимит одной
+попытки, frozen-first merge и post-merge validator не меняются.
 
 Классификация — **Normalization request representation** по существующему
 контракту, без gameplay/compiler transformation. Request-local schema — его

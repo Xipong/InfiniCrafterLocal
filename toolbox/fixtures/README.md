@@ -94,3 +94,21 @@ pipeline проекта; старые model/provider настройки и ст�
 ```bash
 python -m pytest -q toolbox/tests/test_builtin_panels.py toolbox/tests/test_campaign.py
 ```
+
+## Частная панель из 40 случаев
+
+В checkout включены только перечисленные выше исторические пакеты. Частная
+панель Live40, её свежие snapshots 76 родителей и provenance не поставляются.
+Собственные входы можно передать через существующий custom-selection маршрут:
+
+```bash
+python -m toolbox live20 --cases-file /path/to/cases.json --runtime-dump /path/to/parents.jsonl --expected-case-count 40
+```
+
+Здесь `live20` выбирает общий runner, а не ограничивает число custom cases.
+`cases.json` содержит список `{ "case", "itemA", "itemB" }` либо объект с таким
+списком в `cases`; `parents.jsonl` содержит соответствующие объекты родителей с
+`internalName`. Файлы предоставляет оператор. Это preflight без вызовов моделей;
+для фактического запуска нужны отдельные настройки и явный `--run` по
+[инструкции](../live/README.md). Не называйте custom selection историческим Live20
+и не смешивайте разные snapshots под видом одного неизменного входного cohort.

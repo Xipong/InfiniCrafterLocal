@@ -57,7 +57,7 @@ Reuse гарантирует одинаковые pixels и **base** frame exten
 
 Оба actual packets передают exact accepted `gameplay.itemScale/width/height`, `itemUse`, `itemContact` when present, bindings, item/primary IDs/owner и полные movement/controller params, hitbox D/hitboxScale. Formulas и bake-fill/padding берутся в том же packet; fill facts проецируются из `sprite_contract_for` для eligible canvas/processing roles, не выбирают world size и не меняют image pipeline.
 
-Held-root visibility привязана к existing accepted `itemUse` и presence root R: `hideUseGraphic=true` с empty/omitted `releaseTiming` скрывает custom root только в declared-size presentation; без R сохраняется legacy keep. `immediate` hides; explicit `on_release/after_charge` keep while use is active, **не новая scheduling/release mechanics**. Packet reuse-ит exact canonical registry descriptions; Visual не переписывает эти hint/flag.
+Held-root visibility имеет одного владельца: accepted `itemUse.hideUseGraphic` проецируется в native `Item.noUseGraphic`. Никакого отдельного custom-root visibility override или второго held renderer нет. Hidden projectile/floating bodies сохраняют собственные accepted visual/motion owners.
 
 <a id="metadata"></a>
 ## Optional metadata
@@ -110,24 +110,38 @@ Visual Repair root использует partial `itemPatch|null`, условно
 
 `test_visual_presentation_metadata.py`: strict values, refusal of foreign color metadata, schema transport/downgrade behavior, Director dispatch/conditional Repair, frozen absences/siblings, delivery. Existing held/equipment fixture extensions in `EngineRuntimeChecks`: real DTO full/cache/network/save/registry routes, facing/gravity grip DrawData and FNA CPU submission, all fixed mounts/orbit through real player transforms. Texture shells and intercepted GPU flushes are headless seams, not in-game rendering.
 
-Условные проекты/actual packets/pixels защищают `test_vfx_packet_contracts.py`, `test_vfx_frozen_boundary_contracts.py`, `test_sprite_render_contracts.py`, `test_visual_vfx_prompt_prefix.py`. C# consumers — [VisualSpec](../../../ModSources/InfiniCrafterLocal/Common/Models/Contracts/GeneratedItemData.Model.cs), [held layer](../../../ModSources/InfiniCrafterLocal/Common/Players/GeneratedHeldItemDrawLayer.cs), [equip layer](../../../ModSources/InfiniCrafterLocal/Common/Players/GeneratedEquipOverlayDrawLayer.cs). Результаты старых проходов — [history](../../archive/VISUAL_AUDIT_HISTORY_RU.md#presentation); актуальные команды/границы — [test owners](../../development/TESTING_RU.md).
+Условные проекты/actual packets/pixels защищают `test_vfx_packet_contracts.py`, `test_vfx_frozen_boundary_contracts.py`, `test_sprite_render_contracts.py`, `test_visual_vfx_prompt_prefix.py`. C# consumers — [VisualSpec](../../../ModSources/InfiniCrafterLocal/Common/Models/Contracts/GeneratedItemData.Model.cs), [held layer](../../../ModSources/InfiniCrafterLocal/Common/Players/GeneratedHeldItemPresentation.cs), [equip layer](../../../ModSources/InfiniCrafterLocal/Common/Players/GeneratedEquipOverlayDrawLayer.cs). Результаты старых проходов — [history](../../archive/VISUAL_AUDIT_HISTORY_RU.md#presentation); актуальные команды/границы — [test owners](../../development/TESTING_RU.md).
 
-### Native held contact and dropped support
+### Single native held owner
 
-The held root renderer projects the native use-style pose into the authored grip's
-contact space. An enabled composite front arm uses the engine's front-hand getter;
-ordinary shoot uses the native proxy frame's center translation; swing/thrust retain
-their native item anchor. Draw-set translation, native layer/full-player transforms,
-explicit holdout offsets, facing and gravity remain independent. This is a technical
-pose correction, not a new arm pose or a reinterpretation of projectile `reach`.
-The held-presentation packet is version **6**: its location pair carries resolved
-contact relative to `player.position`. The remote renderer reconstructs it from the
-owner's current position, so movement/interpolation between packets does not leave
-the PNG at an old world coordinate. Producer and local draw use the same native
-contact projection; subsequent draw-set/player transforms remain unchanged.
-Versions 4 (raw item anchor) and 5 (absolute resolved contact) are rejected rather
-than reinterpreted; server and clients must run the same mod version. This
-presentation packet never controls gameplay.
+Ordinary visible `item_body` is rendered by Terraria `HeldItem` through the existing
+`GeneratedItem.ModifyItemDraw` hook. The hook replaces only per-instance artwork
+and its centered canvas calibration. Native position, rotation, facing/gravity,
+arm pose, draw ordering and `noUseGraphic` gate remain authoritative. There is no
+separate grip-contact renderer, `heldAlignment` choice or visibility alias.
+
+For native frame F and actual artwork A, let k=max(A)/max(F). The artwork origin is
+`(nativeOrigin - F/2)*k + A/2`; its scale is the native scale times
+`renderSizePx/max(A)`. Source rectangles identify frame-local coordinates; their
+atlas offset is not an additional origin. This uniform mapping does not stretch
+non-square artwork or infer its handle. Draw the art for the accepted native pose:
+PNG `grip` and `forwardAngleDegrees` remain truthful metadata for composable
+projectile/reuse adapters, not an instruction to reposition this ordinary body.
+No hidden axis rotation, per-weapon table or anatomical contact guarantee exists.
+
+`hideUseGraphic` is the only authored item-body visibility flag. Hidden spear,
+rapier and independently posed projectile bodies are not resurrected by a second
+layer. Explicit arm gestures remain native gameplay intent. The discarded
+`customHeldSprite`/`releaseTiming` and `heldAlignment` choices are not accepted by
+the new strict contract; old item migration is not provided by this API reset.
+
+Held history observes an unambiguous actual native body entry before coordinate
+transforms and samples that entry after native transforms. A missing or duplicate
+witness is skipped, never replaced with a guessed hand point. Image readiness and
+canonical definition identity still fail closed. Native player use-state, not a
+custom pose cache, owns local and remote animation.
+
+### Dropped support
 
 Dropped sprites retain their complete PNG, declared frame size, caller rotation and
 scale, native collider and authored draw offsets. The selected texture cache measures

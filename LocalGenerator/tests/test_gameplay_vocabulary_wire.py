@@ -1,4 +1,4 @@
-"""Canonical gameplay names keep old wire and provenance readable, not Author aliases."""
+"""Canonical gameplay choices preserve captured mechanics, not retired item envelopes."""
 from copy import deepcopy
 import gzip
 import json
@@ -17,18 +17,46 @@ _CAPTURE = json.loads(gzip.decompress((Path(__file__).parent / "fixtures" / "gam
 
 def executable_wire(document):
     result = deepcopy(document)
-    result.pop("runtimeContract")  # Source names change; executable DTO does not.
+    result.pop("runtimeContract")
     return result
 
 
+def current_vocabulary_source(captured):
+    """Named test control: retain every choice except the retired visibility alias."""
+    source = deepcopy(captured)
+    for call in source["runtimeProgram"]["calls"]:
+        if call["fn"] == "item_use" and "customHeldSprite" in call["params"]:
+            assert call["params"].pop("customHeldSprite") == "hidden"
+            call["params"]["hideUseGraphic"] = True
+    return source
+
+
+def current_vocabulary_wire_control(captured):
+    wire = executable_wire(captured)
+    if "releaseTiming" in wire.get("gameplay", {}):
+        assert wire["gameplay"].pop("releaseTiming") == "immediate"
+        assert wire["runtimeProgram"]["itemUse"].pop("releaseTiming") == "immediate"
+        wire["runtimeProgram"]["itemUse"]["hideUseGraphic"] = True
+    return wire
+
+
+def assert_archived_vocabulary_boundary(wire):
+    retired = "releaseTiming" in wire.get("runtimeProgram", {}).get("itemUse", {})
+    report = validate_runtime_wire(wire)
+    assert report["ok"] is not retired
+    if retired:
+        assert any(e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
+    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)["ok"] is not retired
+
+
 @pytest.mark.parametrize("case", _CAPTURE["cases"], ids=lambda row: row["previousFn"])
-def test_canonical_choices_preserve_prechange_execution_and_old_wire_still_loads(case):
+def test_canonical_choices_preserve_captured_execution_in_current_visibility_envelope(case):
     before = deepcopy(case)
-    source = case["author"]
+    source = current_vocabulary_source(case["author"])
     assert validate_runtime_program(source)["ok"]
     wire = compile_runtime_program(source)
     actual = executable_wire(wire)
-    expected = executable_wire(case["wire"])
+    expected = current_vocabulary_wire_control(case["wire"])
     if case["previousFn"] == "set_projectile_beam_geometry":
         # New fresh compilation declares one neutral origin leaf. Keep the
         # frozen old capture byte-for-byte; compare every retained field exactly.
@@ -41,8 +69,7 @@ def test_canonical_choices_preserve_prechange_execution_and_old_wire_still_loads
         assert type(neutral) in (int, float) and neutral == 0
     assert actual == expected
     assert validate_runtime_wire(wire)["ok"]
-    assert validate_runtime_wire(case["wire"])["ok"]
-    assert audit_compiler_receipts(case["wire"]["runtimeContract"]["finalWireReceipts"], final_document=case["wire"])["ok"]
+    assert_archived_vocabulary_boundary(case["wire"])
     assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=source, final_document=wire)["ok"]
     assert case == before
 
@@ -54,7 +81,7 @@ def test_capture_covers_every_visible_capability_and_old_identity_is_not_an_auth
         cap = capability_for_saved_receipt(row["previousFn"])
         if cap.name == row["previousFn"]:
             continue
-        source = deepcopy(row["author"])
+        source = current_vocabulary_source(row["author"])
         call = next(call for call in source["runtimeProgram"]["calls"] if call["fn"] == cap.name)
         call["fn"] = row["previousFn"]
         assert not validate_runtime_program(source)["ok"]
@@ -64,7 +91,7 @@ def test_capture_covers_every_visible_capability_and_old_identity_is_not_an_auth
 @pytest.mark.parametrize("value", [0, 1, 128, 255])
 def test_transparency_byte_is_exact_existing_native_domain(value):
     case = next(row for row in _CAPTURE["cases"] if row["previousFn"] == "set_projectile_opacity")
-    source = deepcopy(case["author"])
+    source = current_vocabulary_source(case["author"])
     call = next(call for call in source["runtimeProgram"]["calls"] if call["fn"] == "set_opacity")
     call["params"]["transparencyByte"] = value
     wire = compile_runtime_program(source)
@@ -99,14 +126,13 @@ def test_saved_generated_parent_keeps_old_wire_in_next_craft_with_current_unit_g
 
 
 @pytest.mark.parametrize("case", _CAPTURE["combatCases"], ids=lambda row: row["activation"])
-def test_equipment_aligned_combat_names_keep_scoped_wire_and_old_receipts(case):
+def test_equipment_aligned_combat_names_keep_scoped_mechanics_and_archive_boundary(case):
     before = deepcopy(case)
-    source = case["author"]
+    source = current_vocabulary_source(case["author"])
     assert validate_runtime_program(source)["ok"]
     wire = compile_runtime_program(source)
-    assert executable_wire(wire) == executable_wire(case["wire"])
-    assert validate_runtime_wire(case["wire"])["ok"]
-    assert audit_compiler_receipts(case["wire"]["runtimeContract"]["finalWireReceipts"], final_document=case["wire"])["ok"]
+    assert executable_wire(wire) == current_vocabulary_wire_control(case["wire"])
+    assert_archived_vocabulary_boundary(case["wire"])
     assert not validate_runtime_program(case["previousAuthor"])["ok"]
     assert not audit_compiler_receipts(case["wire"]["runtimeContract"]["finalWireReceipts"], authored_document=source, final_document=case["wire"])["ok"]
     assert case == before

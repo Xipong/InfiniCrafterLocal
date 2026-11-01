@@ -119,6 +119,9 @@ def test_repair_can_offer_contact_on_item_effects_root_without_replacing_it() ->
 
 def test_spawn_item_hit_repair_names_projectile_action_target_not_event_source() -> None:
     authored = build_runtime_fixture("workbench_blade")
+    # Isolate the missing contact event producer from hidden-primary admission.
+    next(call for call in authored["runtimeProgram"]["calls"]
+         if call["fn"] == "item_use")["params"]["hideUseGraphic"] = False
     binding = authored["runtimeProgram"]["bindings"][0]
     binding["contactDamage"] = False
     _body_event(authored, "on_hit")

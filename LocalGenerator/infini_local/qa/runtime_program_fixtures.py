@@ -39,18 +39,17 @@ def _item_stats(*, damage: int = 30, damage_class: str = "generic", use_time: fl
     }
 
 
-def _item_use(*, style: str = "shoot", channel: bool = False, hide: bool = False, disable_melee_hitbox: bool = True) -> dict[str, Any]:
+def _item_use(*, style: str = "shoot", channel: bool = False, disable_melee_hitbox: bool = True) -> dict[str, Any]:
     return {
         "useStyle": style,
         "autoReuse": True,
         "useTurn": True,
-        "hideUseGraphic": hide,
+        "hideUseGraphic": not channel,
         "disableMeleeHitbox": disable_melee_hitbox,
         "channel": channel,
         "holdoutOffsetX": 0,
         "holdoutOffsetY": 0,
         "handPose": "one_handed",
-        "customHeldSprite": "visible" if channel else "hidden",
     }
 
 

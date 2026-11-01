@@ -17,7 +17,7 @@ from infini_local.core.provider_schema import _provider_strict_projection, proje
 
 AUTHOR_DESIGN_QUALITY_RULE = (
     "Create a new Terraria item based on the combination of these parents. Freely choose how they influence the result. Aim for a coherent concept and interesting gameplay use. "
-    "Choose mechanics and controls that reinforce each other, with readable strengths, limitations and costs. "
+    "Choose a worthwhile gameplay use, considering the functions and resources the player gives up in this craft and the effort, resources and opportunities its use costs. Strengths and tradeoffs should make sense together; a different role need not retain every parental function. "
     "Design the actual play sequence: where the player and targets are, how effects reach them, and what visible motion communicates the action. "
     "Make the relationship between the player and the visible item or effect intentional: a held body, an independently moving object or a detached effect should read as that choice throughout its motion. "
     "Choose geometry for its executed motion and contact shape; later art and VFX dress that motion rather than replace it."
@@ -42,6 +42,10 @@ RUNTIME_ROW_SHAPE_RULE = (
     "where absence selects ungrouped effects."
     " Physical composition: owner_mounted is owner.MountedCenter, not the hand. "
     "attach reads an anchor; front_arm_pose independently writes the front arm, whose native stretch length is only 4 to 10px. "
+    "Aim, attachment, arm pose and sprite rotation are separate. "
+    "set_aim, attach and front_arm_pose do not themselves turn the body PNG. "
+    "Without rotate_sprite, orientation comes from the movement driver; aim and attachment do not supply it. "
+    "Independent poses remain valid. "
     "There is no automatic arm follow of body motion. front_hand reads the native hand but does not cancel "
     "physical axis/normal offsets or reachCurve: they translate actual body center and collision geometry. "
     "The selected PNG grip adapter compensates attachment offsets only, not reachCurve. "

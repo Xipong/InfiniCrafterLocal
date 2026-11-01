@@ -42,6 +42,9 @@ def test_native_tool_stats_are_identical_across_independent_primary_contact(root
         next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "tool_stats")["params"] = {
             "pickPower": 190, "axePower": 45, "hammerPower": 20, "miningSpeedMultiplier": 0.75}
     doc["runtimeProgram"]["bindings"][0]["contactDamage"] = contact_damage
+    # Keep a visible native primary while varying only contact damage. Hidden
+    # projectile-only use has a different primary-owner invariant.
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "item_use")["params"]["hideUseGraphic"] = False
     final = _assert_delivery(doc)
     assert {key: final["gameplay"][key] for key in ("pickPower", "axePower", "hammerPower", "miningSpeedScale")} == {
         "pickPower": 190, "axePower": 9, "hammerPower": 20, "miningSpeedScale": 0.75}

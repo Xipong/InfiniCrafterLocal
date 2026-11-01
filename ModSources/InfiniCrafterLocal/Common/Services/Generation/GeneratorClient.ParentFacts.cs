@@ -2,6 +2,7 @@
 using InfiniCrafterLocal.Common;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Content.Items;
+using InfiniCrafterLocal.Content.Projectiles;
 using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
@@ -727,6 +728,30 @@ public sealed partial class GeneratorClient
         };
     }
 
+    private sealed record ProjectileSpriteReference(string Source, int TextureWidthPx, int TextureHeightPx,
+        string FrameLayout);
+
+    private static ProjectileSpriteReference? TryCaptureProjectileSpriteReference(Projectile projectile)
+    {
+        // Atlas pixels only: projFrames and projectile.frame do not describe arbitrary
+        // PreDraw/native draw slices. Never infer a current rectangle or world extent.
+        if (projectile.ModProjectile is GeneratedProjectile || Main.dedServ || Main.netMode == NetmodeID.Server)
+            return null;
+        try
+        {
+            var assets = Terraria.GameContent.TextureAssets.Projectile;
+            if (assets is null || projectile.type <= ProjectileID.None || projectile.type >= assets.Length)
+                return null;
+            var asset = assets[projectile.type];
+            if (asset is null || asset.IsDisposed || !asset.IsLoaded) return null;
+            var texture = asset.Value;
+            if (texture is null || texture.IsDisposed || texture.Width <= 0 || texture.Height <= 0) return null;
+            return new ProjectileSpriteReference("TextureAssets.Projectile", texture.Width, texture.Height,
+                "unknown_custom_draw_possible");
+        }
+        catch { return null; } // Optional request-local observation; never force asset loading.
+    }
+
     internal static object? ProjectileRawSnapshot(int projectileType, float itemShootSpeed, string source, Item? sourceItem, int inventorySlot)
     {
         if (projectileType <= ProjectileID.None)
@@ -753,7 +778,7 @@ public sealed partial class GeneratorClient
             }
             catch { }
 
-            return new
+            var snapshot = new
             {
                 source,
                 inventorySlot,
@@ -812,6 +837,11 @@ public sealed partial class GeneratorClient
                 motionReference = VerifiedSourceMotionReference(p),
                 onHitStatusReference = CaptureNativeHitStatusReference(p)
             };
+            var sprite = TryCaptureProjectileSpriteReference(p);
+            if (sprite is null) return snapshot;
+            var observed = JsonSerializer.SerializeToNode(snapshot, WireJsonOptions)!.AsObject();
+            observed["spriteReferenceRaw"] = JsonSerializer.SerializeToNode(sprite, WireJsonOptions);
+            return observed;
         }
         catch
         {

@@ -170,7 +170,6 @@ def _compile_item_call(
             "holdoutOffsetX": "holdoutOffsetX",
             "holdoutOffsetY": "holdoutOffsetY",
             "handPose": "handPose",
-            "releaseTiming": "releaseTiming",
         })
         project(item_use, "runtimeProgram.itemUse", {
             "useStyle": "useStyle",
@@ -178,7 +177,6 @@ def _compile_item_call(
             "disableMeleeHitbox": "disableMeleeHitbox",
             "channel": "channel",
             "handPose": "handPose",
-            "releaseTiming": "releaseTiming",
             "holdoutOffsetX": "holdoutOffsetX",
             "holdoutOffsetY": "holdoutOffsetY",
         })

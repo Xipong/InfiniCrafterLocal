@@ -113,7 +113,7 @@ _USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage", "stackCons
 _BINDING_ACTION_KEYS = frozenset({"kind", "targetId", "placement", "effectGroupId"})
 _PLACEMENT_KEYS = frozenset({"tileId", "wallId", "placeStyle", "placedBody", "placedLight", "placedVfx"})
 _PLACED_BODY_KEYS = frozenset(name for name in CAPABILITY_REGISTRY["placed_sprite"].params if name != "placementCallId")
-_ITEM_USE_KEYS = frozenset({"configured", "useStyle", "hideUseGraphic", "disableMeleeHitbox", "channel", "handPose", "releaseTiming", "holdoutOffsetX", "holdoutOffsetY"})
+_ITEM_USE_KEYS = frozenset({"configured", "useStyle", "hideUseGraphic", "disableMeleeHitbox", "channel", "handPose", "holdoutOffsetX", "holdoutOffsetY"})
 _ITEM_CONTACT_KEYS = frozenset({"hitboxScale", "contactForgivenessPx"})
 
 

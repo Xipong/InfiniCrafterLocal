@@ -61,6 +61,7 @@ public static partial class InfiniItemVfxRuntime
     public static void ClearUseEventCaches()
     {
         MaterialItemEventStream.Clear();
+        Array.Clear(ItemHistories);
         Array.Clear(HeldEventWitnesses);
         Array.Clear(ServerEvents);
         Array.Clear(ClientEvents);
@@ -96,6 +97,7 @@ public static partial class InfiniItemVfxRuntime
     {
         if (player is null || !player.active || data is null || !HasExactSlot(data, entityId, eventName)) return;
         if (eventPosition.HasValue && !Finite(eventPosition.Value)) return;
+        if(eventName=="on_use")BeginHeldHistory(player,data,entityId);
         EmitLocal(player, data, entityId, eventName, eventPosition: eventPosition);
         if (player.whoAmI != Main.myPlayer || Main.netMode != NetmodeID.MultiplayerClient || global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance is null) return;
         // Hit producers must supply their captured point; never relay an invented owner-center hit.
@@ -151,6 +153,7 @@ public static partial class InfiniItemVfxRuntime
         foreach (VfxSlotSpec slot in data.VfxManifest.Slots)
         {
             if (slot.PlacementBindingId is not null || !string.Equals(slot.EntityId, entityId, StringComparison.Ordinal) || !string.Equals(slot.Event, eventName, StringComparison.Ordinal)) continue;
+            if(slot.Trail is not null)continue; // exact-use history is drawn with the native held body
             if(InfiniDetachedVfxSystem.HasSnapshotVfx(slot)) {
                 if(!cadence&&includeMaterials)InfiniDetachedVfxSystem.EnqueueSnapshotVfx(data,entityId,slot,$"item:{player.whoAmI}:{data.Id}:{entityId}",
                     VfxSourceBinding.ItemFrame(player,slot.Anchor,eventPosition),VfxSourceBinding.Capture(player,EventSourceItem(player,data.Id,eventName)?.Item,data),itemBudget:true,allowance:eventAllowance);

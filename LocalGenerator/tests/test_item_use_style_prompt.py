@@ -20,8 +20,8 @@ from infini_local.pipelines.author.request import build_initial_author_request
 
 
 @pytest.mark.parametrize("format_mode", ["json_schema", "json_object"])
-@pytest.mark.parametrize("hidden,hint", [(False, "inherit"), (True, "inherit"), (True, "visible")])
-def test_visibility_advisory_reaches_real_packets_without_changing_choices(wire_transport, monkeypatch, format_mode, hidden, hint):
+@pytest.mark.parametrize("hidden", [False, True])
+def test_visibility_advisory_reaches_real_packets_without_changing_choices(wire_transport, monkeypatch, format_mode, hidden):
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', format_mode)
     responses, requests = wire_transport
     parent = {"id": "literal", "name": "Literal object", "damage": 7, "useTime": 20}
@@ -30,13 +30,13 @@ def test_visibility_advisory_reaches_real_packets_without_changing_choices(wire_
     author_card = next(c for c in author_packet["runtimeCapabilityContract"]["catalog"]["capabilities"] if c["fn"] == "item_use")
     good = build_runtime_fixture("returning_potion")  # Free projectile, not a replacement held body.
     use = next(c for c in good["runtimeProgram"]["calls"] if c["fn"] == "item_use")
-    use["params"].update(hideUseGraphic=hidden, customHeldSprite=hint)
+    use["params"].update(hideUseGraphic=hidden)
     baseline = compile_runtime_program(good)
     broken = copy.deepcopy(good)
     next(c for c in broken["runtimeProgram"]["calls"] if c["id"] == use["id"])["params"]["useStyle"] = "invalid"
     report = validate_runtime_program(broken)
     hostile_use = copy.deepcopy(use)
-    hostile_use["params"].update(hideUseGraphic=not hidden, customHeldSprite="visible")
+    hostile_use["params"].update(hideUseGraphic=not hidden)
     responses.append({"callsUpsert": [hostile_use], "realizationReplacement": good["realization"], "note": "repair useStyle only"})
     fixed = gameplay.repair_author_item_after_failure(broken, parent, parent, "visibility", failure_report={"stage": "validation", "errors": report["errors"]})
     repaired_packet = request_dossier(requests[0])

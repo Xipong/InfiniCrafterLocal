@@ -211,7 +211,7 @@ def test_frozen_leaf_repair_preserves_basis_and_absence(old):
     assert validate_runtime_wire(compile_runtime_program(result))["ok"]
 
 
-def test_immutable_old_delivery_keeps_absence_through_current_sanitizer(tmp_path, monkeypatch):
+def test_frozen_body_absence_survives_current_visibility_control_sanitizer(tmp_path, monkeypatch):
     import hashlib
     from pathlib import Path
 
@@ -223,13 +223,21 @@ def test_immutable_old_delivery_keeps_absence_through_current_sanitizer(tmp_path
     assert hashlib.sha256(raw).hexdigest() == "90d1d3c16b4d6b0b5cf5ce69eaa25731bb3a9518b80bd8c8c896f09a585e7fa7"
     old = json.loads(raw)
     assert "pivotSpace" not in placement(old)["placedBody"]
-    assert validate_runtime_wire(old)["ok"]
+    report = validate_runtime_wire(old)
+    assert not report["ok"] and any(e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
+    control = copy.deepcopy(old)
+    assert control["gameplay"].pop("releaseTiming") == "immediate"
+    assert control["runtimeProgram"]["itemUse"].pop("releaseTiming") == "immediate"
+    control["runtimeProgram"]["itemUse"]["hideUseGraphic"] = True
+    assert validate_runtime_wire(control)["ok"]
+    assert placement(control) == placement(old)
     png = tmp_path / "placed.png"
     Image.new("RGBA", (32,32), (240,90,20,255)).save(png)
     monkeypatch.setattr(gate, "_resolved_asset_path", lambda p: png if p and Path(str(p)).name == "placed.png" else None)
-    before = copy.deepcopy(old)
-    final = sanitize_recipe_for_delivery(old)
-    assert final == old == before
+    before = copy.deepcopy(control)
+    final = sanitize_recipe_for_delivery(control)
+    assert final == control == before
+    assert json.loads(raw) == old and path.read_bytes() == raw
     assert "pivotSpace" not in placement(json.loads(json.dumps(final)))["placedBody"]
 
 
@@ -260,7 +268,9 @@ def test_real_final_delivery_sanitizer_keeps_alpha_choice_and_refuses_foreign_le
     expected = json.loads((Path(__file__).resolve().parents[2] / "tools/fixtures/placed-alpha-pivot-delivered.json").read_text())
     # The retained native observer consumes placement/rendering, not unrelated
     # future item-stat defaults. Keep its bytes and validate both deliveries.
-    assert validate_runtime_wire(expected)["ok"]
+    report = validate_runtime_wire(expected)
+    assert not report["ok"] and any(e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
+    assert validate_runtime_wire(final_wire)["ok"]
     assert placement(final_wire) == placement(expected)
     # Fresh motion composition is independent of the retained native placement
     # witness. Keep complete sanitizer identity against the current input and

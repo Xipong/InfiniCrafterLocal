@@ -156,11 +156,29 @@ def test_pose_axis_requirement_cannot_consume_support_from_another_exact_entity(
 def test_frozen_wrong_primary_pose_target_does_not_offer_owner_reselection():
     doc, _ = fixture()
     doc["runtimeProgram"]["primaryEntityId"] = "item"
+    # Isolate the frozen pose-target error: a hidden item with only a spawn
+    # binding would independently make the primary selection invalid.
+    _call(doc, "item_use")["params"]["hideUseGraphic"] = False
     report = validate_runtime_program(doc)
-    assert not report["ok"]
+    assert {row["code"] for row in report["errors"]} == {"wrong_target_kind"}
     scope = build_runtime_repair_scope(doc, report["errors"])
     assert scope["repairTransactions"]["primaryEntitySelection"]["allowed"] is False
     assert scope["retarget"]["callTargetIds"] == []
+
+
+
+def test_hidden_item_primary_has_its_own_explicit_reselection_error():
+    doc, pose = fixture()
+    doc["runtimeProgram"]["primaryEntityId"] = "item"
+    _call(doc, "item_use")["params"]["hideUseGraphic"] = True
+    before = deepcopy(doc)
+    report = validate_runtime_program(doc)
+    assert {row["code"] for row in report["errors"]} == {
+        "hidden_item_primary_requires_spawn_target", "wrong_target_kind"}
+    selection = build_runtime_repair_scope(doc, report["errors"])["repairTransactions"]["primaryEntitySelection"]
+    assert selection["allowed"] is True
+    assert selection["candidateEntityIds"] == [pose["target"]]
+    assert doc == before
 
 
 def test_bad_attachment_offset_repair_changes_only_exact_leaf_not_other_motion_choices():

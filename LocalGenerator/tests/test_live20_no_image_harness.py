@@ -92,7 +92,7 @@ def test_campaign_normalizes_prompts_only_for_image_jobs(tmp_path, mode):
         assert entity["visual"]["assetMode"] == mode
 
 
-def _campaign_observers(fixture):
+def _campaign_observers(fixture, *, real_images=False):
     """Execute only the campaign's real observer installation, without inference."""
     from types import SimpleNamespace
 
@@ -117,14 +117,48 @@ def _campaign_observers(fixture):
                    }) for target in node.targets
         ):
             nodes.append(node)
+        elif (isinstance(node, ast.If)
+              and isinstance(node.test, ast.UnaryOp) and isinstance(node.test.op, ast.Not)
+              and isinstance(node.test.operand, ast.Name) and node.test.operand.id == "REAL_IMAGES"
+              and any(isinstance(child, ast.Assign) and any(
+                  isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name)
+                  and target.value.id == "combine" and target.attr == "assert_visual_delivery_ready"
+                  for target in child.targets) for child in node.body)):
+            # Execute the actual conditional installation rather than bypassing
+            # the new real/no-image split or replacing its delivery owners.
+            nodes.append(node)
     observer = SimpleNamespace(
         _cached_payload_report=combine_pipeline._cached_payload_report,
         assert_visual_delivery_ready=combine_pipeline.assert_visual_delivery_ready,
     )
-    namespace = {"combine": observer, "NO_IMAGE_FIXTURE": fixture, "Any": object, "copy": copy}
+    namespace = {"combine": observer, "NO_IMAGE_FIXTURE": fixture, "Any": object, "copy": copy, "REAL_IMAGES": real_images}
     namespace.update(vars(live_no_image_fixture))
     exec(compile(ast.Module(body=nodes, type_ignores=[]), str(harness), "exec"), namespace)
     return observer
+
+
+def test_real_image_campaign_does_not_install_synthetic_readiness_observers(tmp_path, monkeypatch):
+    import runpy
+    import sys
+    from infini_local.pipelines import combine_pipeline
+    from infini_local.services import asset_sync_service
+    from toolbox.live import preflight, real_run
+
+    owners = (combine_pipeline._cached_payload_report, combine_pipeline.assert_visual_delivery_ready,
+              asset_sync_service.attach_asset_sync_meta)
+    called = []
+    monkeypatch.setattr(preflight, "prepare", lambda args: ({"realImageGeneration": True}, {}))
+    def admitted_run(args, report, environment):
+        called.append(args.real_images)
+        assert (combine_pipeline._cached_payload_report, combine_pipeline.assert_visual_delivery_ready,
+                asset_sync_service.attach_asset_sync_meta) == owners
+        return 0
+    monkeypatch.setattr(real_run, "run", admitted_run)
+    monkeypatch.setattr(sys, "argv", ["runner", "--real-images", "--run", "--output", str(tmp_path / "output")])
+    with pytest.raises(SystemExit) as stopped:
+        runpy.run_module("toolbox.live.runner", run_name="__main__")
+    assert stopped.value.code == 0 and called == [True]
+    assert not (tmp_path / "output").exists()
 
 
 @pytest.mark.parametrize("output_depth", ["short", "long"])
@@ -153,7 +187,7 @@ def test_campaign_fixture_uses_canonical_serving_root(tmp_path, monkeypatch, out
         ))
     ]
     assert sum(isinstance(node, ast.Assign) for node in nodes) == 1
-    namespace = {"OUT": output, "write_no_image_fixture_png": write_no_image_fixture_png}
+    namespace = {"OUT": output, "write_no_image_fixture_png": write_no_image_fixture_png, "REAL_IMAGES": False}
     exec(compile(ast.Module(body=nodes, type_ignores=[]), str(harness), "exec"), namespace)
     fixture = namespace["NO_IMAGE_FIXTURE"]
     if output_depth == "long":

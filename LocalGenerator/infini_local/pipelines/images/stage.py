@@ -246,6 +246,8 @@ def refit_processed_sprite_to_contract(path: str, asset_id: str, canvas: int, ro
         out = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
         out.alpha_composite(resized, ((canvas - new_w) // 2, (canvas - new_h) // 2))
         out = bake_sprite_from_master(out, canvas, role) if master_path is not None else cleanup_alpha(out, role)
+        if "infini.chroma-key" in img.info:
+            out.info["infini.chroma-key"] = img.info["infini.chroma-key"]
         out_path = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(asset_id, 'sprite')}_refit.png"
         save_image_output(out, out_path)
         return str(out_path)
@@ -465,14 +467,15 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
                     trace_event("step", "IMAGE:item", "no raw image returned", {"assetId": request.logical_asset_id, "attempt": attempt, "backend": IMAGE_BACKEND})
                 continue
             phase = "selection"
-            best, score = pick_best_sprite(variants, request.processing_role, request.canvas)
+            selection = pick_best_sprite(variants, request.processing_role, request.canvas)
+            best, score = selection.path, selection.score
             phase = "processing"
             # Keep retained sampling inputs outside the logical filename
             # namespace: an asset named "refit-master" must not overwrite its
             # own high-resolution source when postprocess saves the final bake.
             master_path = output_dir / "refit-source" / "master.png" if request.processing_role != "vfx_strip" else None
             final = postprocess_sprite(best, attempt_id, request.canvas, request.processing_role,
-                output_dir=output_dir, master_output=master_path, **process_kwargs)
+                output_dir=output_dir, master_output=master_path, prepared=selection.prepared, **process_kwargs)
             phase = "validation"
             validation = validate_processed_sprite(final, request.processing_role, **validation_kwargs)
             refit_path = ""

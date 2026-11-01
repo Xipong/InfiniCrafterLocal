@@ -8,7 +8,7 @@ from infini_local.core.vfx.materials import _number, _profile, rgb_schema, textu
 LEGACY_HISTORY_RENDERERS = frozenset({"historyRibbon", "tipTrail", "spriteStampTrail"})
 HISTORY_RENDERERS = ("historyTrail",)
 HISTORY_SEMANTICS = (
-    "Live captured projectile history, never a guessed or relocated trajectory. One sample per world tick; "
+    "Live captured projectile or visible held-item history, never a guessed or relocated trajectory. One sample per world tick; "
     "historyTicks selects at most 32 retained samples, not a duration or emission cadence. "
     "Read samples firstSampleAgeTicks, then +sampleStepTicks while age<historyTicks and a real sample exists. "
     "Unavailable samples are omitted, never repeated or interpolated into new history. "
@@ -22,7 +22,12 @@ HISTORY_SEMANTICS = (
     "Opacity profile uses sample age/historyTicks and is applied once; each stroke segment uses its older endpoint opacity. "
     "Missing scheduled samples break the stroke rather than bridging the gap. No additional linear age fade. "
     "Zero width/scale/opacity remains silent. One quad per segment/stamp shares the normal draw budget. "
-    "Only periodic/on_spawn live projectile slots; ends with source, no detached event stamp, Dust or lighting. "
+    "Projectile slots use periodic/on_spawn with BeforeProjectiles/AfterProjectiles. Held item_body slots use on_use "
+    "with BeforePlayer/AfterPlayer, resetting on each exact use occurrence. Held history comes from final native DrawData: "
+    "center is the rendered PNG frame center; tip is the declared forward-axis intersection with the PNG frame rectangle, not its opaque alpha-silhouette edge. "
+    "Held sprite stamps use final native rotation/flip and texel scale with a centered selected texture; no new aim law. "
+    "It ends when that exact visible held source ends, changes, dies or teleports; unavailable draws add no samples. "
+    "No detached event stamp, Dust or lighting. "
     "slot blend/layer remain explicit; anchor=self only because trail.source owns the path. "
     "For event-local individual texture elements use spriteElement explicitly."
 )
@@ -64,17 +69,24 @@ def history_slot_clauses(item_ids: list[str], renderers: list[str], events: list
     selected = {"rendererKind": {"const": "historyTrail"}}
     unused = {"startTick", "duration", "repeatEvery", "phaseOffset", "scale", "density", "spread",
               "alpha", "particleSystemId", "textureRole"}
+    item = {"entityId": {"enum": item_ids}}
     return [
         {"if": {"properties": selected, "required": ["rendererKind"]},
          "then": {"required": ["trail", "blend", "layer"], "properties": {
-             "event": {"enum": ["periodic", "on_spawn"]},
              "anchor": {"const": "self"},
              **{field: {"enum": []} for field in unused},
          }}},
-        {"if": {"properties": {**selected, "entityId": {"enum": item_ids}}, "required": ["rendererKind", "entityId"]},
-         "then": {"properties": {"rendererKind": {"enum": []}}}},
+        {"if": {"properties": selected, "required": ["rendererKind"]},
+         "then": {"anyOf": [
+             {"properties": {"entityId": {"enum": item_ids}, "event": {"const": "on_use"},
+                             "layer": {"enum": ["BeforePlayer", "AfterPlayer"]}}},
+             {"properties": {"event": {"enum": ["periodic", "on_spawn"]},
+                             "layer": {"enum": ["BeforeProjectiles", "AfterProjectiles"]}}},
+         ]}},
+        {"if": {"properties": {**selected, **item}, "required": ["rendererKind", "entityId"]},
+         "then": {"properties": {"event": {"const": "on_use"}}}},
         {"if": {"properties": {"rendererKind": {"enum": [r for r in renderers if r != "historyTrail"]}}, "required": ["rendererKind"]},
-         "then": {"properties": {"trail": {"enum": []}}}},
+         "then": {"properties": {"trail": {"enum": []}, "layer": {"enum": ["BeforeProjectiles", "AfterProjectiles"]}}}},
     ]
 
 

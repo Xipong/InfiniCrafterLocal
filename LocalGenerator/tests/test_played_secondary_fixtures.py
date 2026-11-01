@@ -1,4 +1,5 @@
 """Retained native input contracts; behavior lives in EngineRuntimeChecks.TooltipSecondaries."""
+import copy
 import json
 from pathlib import Path
 
@@ -10,8 +11,16 @@ def test_played_secondary_native_inputs_preserve_exact_typed_events():
     rows = json.loads((root / "tools/fixtures/played-secondaries-delivered.json").read_text(encoding="utf-8"))
     by_id = {row["id"]: row for row in rows}
     assert set(by_id) == {"g_4a1c8253fd834bff", "g_232a7838dccbe91d"}
+    before = copy.deepcopy(rows)
     for row in rows:
-        assert validate_runtime_wire(row)["ok"]
+        report = validate_runtime_wire(row)
+        assert not report["ok"] and any(e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
+        control = copy.deepcopy(row)
+        assert control["gameplay"].pop("releaseTiming") == "immediate"
+        assert control["runtimeProgram"]["itemUse"].pop("releaseTiming") == "immediate"
+        assert control["runtimeProgram"]["itemUse"]["hideUseGraphic"] is True
+        assert validate_runtime_wire(control)["ok"]
+        assert control["runtimeProgram"]["entities"] == row["runtimeProgram"]["entities"]
     stone = by_id["g_4a1c8253fd834bff"]["runtimeProgram"]
     source = next(e for e in stone["entities"] if e["id"] == stone["primaryEntityId"])
     assert source["damage"]["damage"] == 10
@@ -27,3 +36,5 @@ def test_played_secondary_native_inputs_preserve_exact_typed_events():
     assert child["spawn"]["speedPxPerTick"] == 4
     assert child["movement"]["params"]["gravityPerTick"] == .18
     assert child["lifetimeTicks"] == 40
+
+    assert rows == before

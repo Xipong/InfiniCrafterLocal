@@ -100,11 +100,6 @@ public sealed class InfiniCrafterLocalMod : Mod
             GeneratedItems?.HandlePacket(packetType, reader, whoAmI);
             return;
         }
-        if (packetType == InfiniNetPacketIds.SyncGeneratedHeldItemPresentation)
-        {
-            GeneratedHeldItemDrawLayer.HandleHeldItemPresentationSyncPacket(reader, whoAmI);
-            return;
-        }
         if (packetType == InfiniNetPacketIds.SyncGeneratedItemVfxEvent)
         {
             InfiniItemVfxRuntime.HandleUseEventPacket(reader, whoAmI);
@@ -166,7 +161,7 @@ public sealed class InfiniCrafterLocalMod : Mod
 
     public override void Unload()
     {
-        GeneratedHeldItemDrawLayer.ClearNetCaches();
+        GeneratedHeldItemPresentation.ClearAssetRequests();
         GeneratedEquipOverlayDrawLayerBase.ClearNetCaches();
         InfiniItemVfxRuntime.ClearUseEventCaches();
         GeneratedProjectile.ClearVfxEventSyncCaches();

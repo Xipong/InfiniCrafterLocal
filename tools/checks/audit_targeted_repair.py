@@ -117,13 +117,13 @@ def _frozen_merge_probe() -> dict[str, Any]:
     old_damage = item_stats["params"]["damage"]
     old_hand_pose = item_use["params"]["handPose"]
     item_use["params"].pop("useStyle", None)
-    item_use["params"].pop("customHeldSprite", None)  # optional, deliberately not reported as required
+    item_use["params"].pop("holdoutOffsetX", None)  # optional, deliberately not reported as required
     validation = validate_runtime_program(current)
     scope = build_runtime_repair_scope(current, validation["errors"])
 
     fixed = copy.deepcopy(item_use)
     fixed["params"]["useStyle"] = "shoot"
-    fixed["params"]["customHeldSprite"] = "visible"
+    fixed["params"]["holdoutOffsetX"] = 7
     fixed["params"]["handPose"] = "two_handed"
     rewrite = copy.deepcopy(item_stats)
     rewrite["params"]["damage"] = 999
@@ -138,7 +138,7 @@ def _frozen_merge_probe() -> dict[str, Any]:
         "exactRequiredFixApplied": repaired_use["params"].get("useStyle") == "shoot",
         "frozenExistingValuePreserved": repaired_use["params"].get("handPose") == old_hand_pose,
         "independentDamagePreserved": repaired_stats["params"].get("damage") == old_damage,
-        "optionalUnreportedAdditionIgnored": "customHeldSprite" not in repaired_use["params"],
+        "optionalUnreportedAdditionIgnored": "holdoutOffsetX" not in repaired_use["params"],
         "ignoredChangeCount": len(audit.get("ignoredChanges") or []),
         "acceptedPaths": list(audit.get("acceptedPaths") or []),
         "ok": bool(
@@ -146,7 +146,7 @@ def _frozen_merge_probe() -> dict[str, Any]:
             and repaired_use["params"].get("useStyle") == "shoot"
             and repaired_use["params"].get("handPose") == old_hand_pose
             and repaired_stats["params"].get("damage") == old_damage
-            and "customHeldSprite" not in repaired_use["params"]
+            and "holdoutOffsetX" not in repaired_use["params"]
         ),
     }
 

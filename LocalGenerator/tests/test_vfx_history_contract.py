@@ -59,7 +59,7 @@ def test_zero_opacity_width_scale_remain_literal_not_defaults():
         assert value["opacityProfile"]["middle"] == 0
 
 
-def test_live_history_forbids_item_and_instant_event_and_orphan_controls():
+def test_live_projectile_history_forbids_item_without_exact_use_and_orphan_controls():
     schema = {"type": "object", "allOf": history_slot_clauses(["item"], ["historyTrail", "shape"], ["periodic", "on_hit"])}
     base = {"rendererKind": "historyTrail", "entityId": "projectile", "event": "periodic",
             "trail": trail(), "blend": "alpha", "layer": "AfterProjectiles", "anchor": "self"}
@@ -140,3 +140,34 @@ def test_history_retains_legacy_fivefold_sprite_multiplier():
     assert not strict_schema_errors(value, history_schema())
     value["scale"] = 5.01
     assert strict_schema_errors(value, history_schema())
+
+
+def test_item_history_owns_exact_use_and_player_layers_only():
+    schema = {"type": "object", "allOf": history_slot_clauses(["item"], ["historyTrail", "shape"], ["on_use", "periodic"])}
+    slot = {"rendererKind": "historyTrail", "entityId": "item", "event": "on_use", "trail": trail(),
+            "blend": "alpha", "layer": "BeforePlayer", "anchor": "self"}
+    assert not strict_schema_errors(slot, schema)
+    assert not strict_schema_errors({**slot, "layer": "AfterPlayer"}, schema)
+    for change in ({"event": "periodic"}, {"event": "on_spawn"}, {"layer": "AfterProjectiles"},
+                   {"entityId": "projectile"}, {"duration": 12}, {"anchor": "tip"}):
+        assert strict_schema_errors({**slot, **change}, schema)
+    assert strict_schema_errors({"rendererKind": "shape", "layer": "BeforePlayer"}, schema)
+
+@pytest.mark.parametrize("draw", ["stroke", "sprites"])
+def test_held_history_actual_director_wire_and_hidden_refusal(draw):
+    data, raw = history_case(draw)
+    use = data["runtimeProgram"]["itemUse"]
+    use["hideUseGraphic"] = False
+    slot = raw["slots"][0]
+    slot.update(entityId=data["runtimeProgram"]["itemEntityId"], event="on_use", layer="AfterPlayer")
+    if draw == "sprites":
+        slot["trail"]["texture"]["source"] = "item"
+    report = vfx_validation.validate_vfx_director_output(raw, data)
+    assert report["ok"], report["errors"]
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "held-history-contract-test")
+    assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
+    assert data["vfxManifest"]["slots"][0]["trail"] == slot["trail"]
+    hidden = copy.deepcopy(data)
+    hidden["runtimeProgram"]["itemUse"]["hideUseGraphic"] = True
+    assert not vfx_validation.validate_vfx_director_output(raw, hidden)["ok"]
+    assert not vfx_validation.validate_vfx_manifest_wire(hidden)["ok"]

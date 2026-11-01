@@ -16,7 +16,7 @@ from infini_local.core.runtime_authoring.capability_registry import PROJECTILE_M
 from infini_local.core.visual_contract_schema import front_hand_sprite_requirement
 
 from infini_local.core.images import config as visual_config
-from infini_local.core.images.contracts import chroma_rgb, uses_key_background, final_sprite_canvas, sprite_uses_soft_alpha
+from infini_local.core.images.contracts import chroma_rgb, uses_key_background, final_sprite_canvas, sprite_uses_soft_alpha, native_held_frame_facts
 from infini_local.pipelines.visual.assets import equipment_overlay_requirement
 
 
@@ -183,6 +183,9 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
             facts[field] = owner[field]
     multipliers: dict[str, Any] = {}
     if root_project:
+        native_frame = native_held_frame_facts(data, canvas)
+        if native_frame:
+            facts["nativeHeldCanvas"] = native_frame
         raw_gameplay = data.get("gameplay")
         gameplay: Mapping[str, Any] = raw_gameplay if isinstance(raw_gameplay, Mapping) else {}
         if "itemScale" in gameplay:
@@ -226,7 +229,7 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
     if multipliers:
         facts["multipliers"] = multipliers
     grip_instruction = (
-        " The visible handle/hand-contact region must contain the declared final-space grip, not the guard, blade or empty space. "
+        " The visible handle region must contain the declared final-space grip, not the guard, blade or empty space. "
         "It is a normalized final-canvas point after framing/padding, not a RAW-image coordinate; keep that contact region there before facing flips."
         if "grip" in facts else ""
     )
@@ -237,7 +240,7 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
         + ("This same item sprite is also used for the listed in-use bodies; keep its design readable in both uses. "
            if facts.get("sharedEntityMultipliers") else "")
         + "forwardAngleDegrees describes the final PNG local forward axis: 0=+X, positive clockwise in y-down coordinates, before facing/gravity flips. "
-        "Draw that declared local PNG axis literally; do not pre-rotate the artwork to compensate for runtime rotation.offsetRadians. The accepted rotation component and renderer own the world pose. "
+        "Draw that declared local PNG axis literally. Native item bodies keep the native frame pose without PNG-axis correction or grip-to-hand binding; independent bodies retain their accepted rotation and attachment rules. "
         "Retain the literal authored silhouette, component count, spatial arrangement and distinctive elements from the art description and read-only facts. "
         "Do not omit or merge authored parts to simplify the sprite."
         + grip_instruction
@@ -256,7 +259,7 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
         # do not infer the contact point or truncate art to make room for metadata.
         grip = json.dumps(visual["grip"], separators=(",", ":"), allow_nan=False)
         text += (
-            f". Place the handle/hand-contact point at normalized final canvas coordinates {grip}; "
+            f". Place the artwork handle point at normalized final canvas coordinates {grip}; "
             "upper-left=(0,0), lower-right=(1,1), after framing/padding and before facing flips."
         )
     # Append after the authored-art bound: style must not displace

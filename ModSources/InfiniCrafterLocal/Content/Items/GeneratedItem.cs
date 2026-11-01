@@ -27,6 +27,8 @@ public partial class GeneratedItem : ModItem
     public override string Texture => "InfiniCrafterLocal/Assets/GeneratedItem";
     protected override bool CloneNewInstances => true;
     public GeneratedItemData Data { get; private set; } = GeneratedItemData.Placeholder();
+    // Immediate native-clone provenance only; not a network identity or ancestor chain.
+    internal GeneratedItemData? NativeHeldSourceData { get; private set; }
     private static int _warningCount;
     private int _lastHydrationTick = -9999;
     private bool _nativeToolPowersSuppressed;
@@ -52,6 +54,7 @@ public partial class GeneratedItem : ModItem
     public override ModItem Clone(Item newEntity)
     {
         var clone = (GeneratedItem)base.Clone(newEntity);
+        clone.NativeHeldSourceData = Data;
         try { clone.Data = (Data ?? GeneratedItemData.Placeholder()).CloneForItemInstance(); }
         catch { clone.Data = GeneratedItemData.Placeholder(); }
         clone._itemPresentationToken=0;clone._itemPresentationGeneration=new object();
@@ -66,6 +69,7 @@ public partial class GeneratedItem : ModItem
 
     private void SetData(GeneratedItemData data, bool ensureAssets, bool registerLocal, bool notifyNetState = true)
     {
+        NativeHeldSourceData = null;
         ResetPureMobilityUseOutcome();
         _itemEventBudget = new RuntimeSpawnBudget(0);
         _periodicItemEvents = default;
@@ -100,6 +104,7 @@ public partial class GeneratedItem : ModItem
 
     public override void SetDefaults()
     {
+        NativeHeldSourceData = null;
         ResetPureMobilityUseOutcome();
         _nativeToolPowersSuppressed = false;
         ResetNativePrefixLifecycle();
@@ -230,8 +235,8 @@ public partial class GeneratedItem : ModItem
 
     public override bool CanStackInWorld(Item source) => SameGeneratedStack(this, source);
 
-    // Technical native-proxy suppression only. Leave Item.noUseGraphic and the
-    // authored visibility/hint untouched; the AfterParent child owns the PNG.
+    // Native HeldItem owns pose and visibility. Replace only this instance
+    // artwork; never mutate the type-wide TextureAssets or gameplay Item here.
     public override bool ModifyItemDraw(ref PlayerDrawSet drawInfo, ref DrawData drawData,
         ref DrawData? coloredDrawData, ref DrawData? glowMaskDrawData)
     {
@@ -250,17 +255,36 @@ public partial class GeneratedItem : ModItem
             return true;
         // Missing generated art never lends the type-wide cross. Explicit inert
         // diagnostics retain their historical native path when no custom PNG draws.
-        if (AllowsDiagnosticProxy(PresentationData()) && !GeneratedHeldItemDrawLayer.HasReadyHeldSprite(drawInfo))
+        if (AllowsDiagnosticProxy(PresentationData()) && !GeneratedHeldItemPresentation.HasReadyHeldSprite(drawInfo))
             return true;
 
-        // The native veto covers its base/color/glow bundle. Keep optional draws
-        // using OTHER textures rather than clearing unrelated cache entries.
+        if (!GeneratedHeldItemPresentation.TryGetVisibleHeldSpriteData(drawInfo, out var accepted)
+            || accepted is null) return false;
+        var artwork = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites?.TryGet(accepted.Visual.SpritePath);
+        if (artwork is null) return false;
         Texture2D nativeTexture = nativeAsset.Value;
-        if (coloredDrawData is DrawData colored && !ReferenceEquals(colored.texture, nativeTexture))
-            drawInfo.DrawDataCache.Add(colored);
-        if (glowMaskDrawData is DrawData glow && !ReferenceEquals(glow.texture, nativeTexture))
-            drawInfo.DrawDataCache.Add(glow);
-        return false;
+        ReplaceHeldCanvas(ref drawData, artwork, accepted.Visual.RenderSizePx);
+        if (coloredDrawData is DrawData colored && ReferenceEquals(colored.texture, nativeTexture)) {
+            ReplaceHeldCanvas(ref colored, artwork, accepted.Visual.RenderSizePx); coloredDrawData = colored;
+        }
+        if (glowMaskDrawData is DrawData glow && ReferenceEquals(glow.texture, nativeTexture)) {
+            ReplaceHeldCanvas(ref glow, artwork, accepted.Visual.RenderSizePx); glowMaskDrawData = glow;
+        }
+        Common.VFX.InfiniItemVfxRuntime.RegisterHeldHistoryDraw(ref drawInfo, drawData);
+        return true;
+    }
+
+    // Uniform centered canvas calibration; native pose/origin semantics remain authoritative.
+    // PNG metadata describes its artwork, never a second ordinary-held arm pivot.
+    internal static void ReplaceHeldCanvas(ref DrawData draw, Texture2D artwork, int? renderSize)
+    {
+        Rectangle frame = draw.sourceRect ?? draw.texture.Bounds;
+        float ratio = Math.Max(artwork.Width, artwork.Height) / (float)Math.Max(frame.Width, frame.Height);
+        draw.origin = (draw.origin - new Vector2(frame.Width, frame.Height) * .5f) * ratio
+            + new Vector2(artwork.Width, artwork.Height) * .5f;
+        draw.scale *= SpritePresentation.FrameScale(renderSize, artwork.Width, artwork.Height);
+        draw.texture = artwork;
+        draw.sourceRect = artwork.Bounds;
     }
 
     // Cursor source correction requires the same exact inventory asset as this hook.

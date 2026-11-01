@@ -12,10 +12,25 @@ using Terraria.ModLoader;
 
 internal static partial class EngineRuntimeChecks
 {
+    // Explicit current test counterpart; the captured delivery stays immutable
+    // and is refused by the strict reader. This is not a production importer.
+    private static string InventorySeedCurrentVisibilityControlJson()
+    {
+        string raw = File.ReadAllText("tools/fixtures/inventory-seed-collection.json");
+        Equal(true, GeneratedItemData.FromJson(raw) is null, "retired visibility envelope is refused");
+        var node = System.Text.Json.Nodes.JsonNode.Parse(raw)!;
+        Equal("immediate", node["gameplay"]!["releaseTiming"]!.GetValue<string>(), "exact archived gameplay visibility");
+        Equal("immediate", node["runtimeProgram"]!["itemUse"]!["releaseTiming"]!.GetValue<string>(), "exact archived item visibility");
+        node["gameplay"]!.AsObject().Remove("releaseTiming");
+        node["runtimeProgram"]!["itemUse"]!.AsObject().Remove("releaseTiming");
+        node["runtimeProgram"]!["itemUse"]!["hideUseGraphic"] = true; // Preserve the explicit old hidden override.
+        return node.ToJsonString();
+    }
+
     // Reflection is test-only: this file compiles against the frozen pre-product
     // source, so missing capability/system gives native RED rather than a build error.
     private static GeneratedItemData InventorySeedData()
-        => GeneratedItemData.FromJson(File.ReadAllText("tools/fixtures/inventory-seed-collection.json"))
+        => GeneratedItemData.FromJson(InventorySeedCurrentVisibilityControlJson())
             ?? throw new Exception("seed delivery DTO refused: " + ContractJsonDiagnostics.LastError?.Message);
 
     private static PropertyInfo SeedFlag() => typeof(GameplaySpec).GetProperty("CollectSeedsFromGrass")
@@ -45,7 +60,7 @@ internal static partial class EngineRuntimeChecks
         SeedFlag().SetValue(data.Gameplay, false);
         Equal(false, (bool)SeedFlag().GetValue(GeneratedItemData.FromJson(data.ToNetworkJson())!.Gameplay)!, "explicit false remains declared inactive, not coerced to true");
         Equal<object?>(null, SeedFlag().GetValue(GeneratedItemData.Placeholder().Gameplay), "absent storage stays null, semantically inactive");
-        var node = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText("tools/fixtures/inventory-seed-collection.json"))!;
+        var node = System.Text.Json.Nodes.JsonNode.Parse(InventorySeedCurrentVisibilityControlJson())!;
         node["gameplay"]!.AsObject().Remove("collectSeedsFromGrass");
         var absent = GeneratedItemData.FromJson(node.ToJsonString())!;
         Equal<object?>(null, SeedFlag().GetValue(absent.Gameplay), "historical absence is not materialized");
@@ -77,10 +92,9 @@ internal static partial class EngineRuntimeChecks
 
     private static void InventorySeedAbsentDefinitionPreservesBytes()
     {
-        // This row also passes on pre-product source, so parent can compare its
-        // actual baseline/current serialization hashes and bytes, without
-        // rewriting any frozen fixtures or asserting an invented baseline hash.
-        var node = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText("tools/fixtures/inventory-seed-collection.json"))!;
+        // Current-envelope seed absence keeps native identity/roundtrip checks.
+        // Frozen pre-reset items separately prove strict refusal without rewrite.
+        var node = System.Text.Json.Nodes.JsonNode.Parse(InventorySeedCurrentVisibilityControlJson())!;
         node["gameplay"]!.AsObject().Remove("collectSeedsFromGrass");
         var data = GeneratedItemData.FromJson(node.ToJsonString())
             ?? throw new Exception("absent historical v5 definition refused");
@@ -88,9 +102,10 @@ internal static partial class EngineRuntimeChecks
         var frozen = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText("LocalGenerator/tests/fixtures/persisted_v5_baseline.json"))!;
         foreach (var entry in frozen["cases"]!.AsArray())
         {
-            var restored = ReadPersistedDefinition(entry!["definition"]!.ToJsonString())
-                ?? throw new Exception("frozen historical v5 definition refused: " + entry["case"]);
-            Observe(restored, "frozen_" + entry["case"]);
+            string archived = entry!["definition"]!.ToJsonString();
+            Equal(true, ReadPersistedDefinition(archived) is null,
+                "retired presentation envelope is not a seed-absence compatibility path");
+            Equal(archived, entry["definition"]!.ToJsonString(), "rejection preserves frozen definition bytes");
         }
         static void Observe(GeneratedItemData value, string label)
         {

@@ -256,11 +256,12 @@ FORMAT_CASES = [
     pytest.param("visual", "absent", "recoverable", id="visual-cannot-invent-design"),
     pytest.param("visual", "empty", "entity-complete visual kit", id="visual-one-repair-no-substitution"),
     pytest.param("vfx", "recoverable", None, id="vfx-conditional-expression-to-strict-json"),
+    pytest.param("vfx", "long", None, id="vfx-complete-malformed-source"),
 ]
 
 
 @pytest.mark.parametrize("stage,scenario,rejection", FORMAT_CASES)
-def test_single_format_repair_preserves_recoverable_design(wire_transport, stage, scenario, rejection):
+def test_single_format_repair_preserves_recoverable_design(wire_transport, monkeypatch, stage, scenario, rejection):
     responses, requests = wire_transport
     authored = build_runtime_fixture("workbench_blade")
     data = compile_runtime_program(authored)
@@ -296,7 +297,12 @@ def test_single_format_repair_preserves_recoverable_design(wire_transport, stage
     else:
         data = visual_stage_stage._apply_kit(data, _visual_kit(data))
         valid = _vfx_output(data)
-        raw = json.dumps(valid).replace('"layer": "BeforeProjectiles"', '"layer": "Projectiles" if false else "BeforeProjectiles"', 1)
+        if scenario == "long":
+            monkeypatch.setattr(vfx_stage_config, "VFX_LLM_DIRECTOR_MAX_SLOTS", 12)
+            valid["slots"] = [{**copy.deepcopy(valid["slots"][0]), "id": f"slot_{i}"} for i in range(12)]
+        raw = json.dumps(valid, indent=2).replace('"layer": "BeforeProjectiles"', '"layer": "Projectiles" if false else "BeforeProjectiles"', 1)
+        if scenario == "long":
+            assert len(raw) > 12000 and raw.rfind('"endOpacity"') > 12000
         patch = {"schema": VFX_REPAIR_PATCH_SCHEMA,
                  "slotsUpsert": valid["slots"], "slotIdsDelete": [], "slotIndicesDelete": [], "note": "strict JSON"}
     responses.extend([raw, patch])
@@ -338,8 +344,78 @@ def test_single_format_repair_preserves_recoverable_design(wire_transport, stage
             assert result["visualKit"]["animationPlan"] == kit["animationPlan"]
         else:
             assert result["vfxManifest"]["slots"][0]["layer"] == "BeforeProjectiles"
+            assert result["debug"]["vfxDirectorRaw"] == valid
     if stage == "visual" and scenario == "empty":
         assert data["debug"]["llmStageAccounting"]["visualRepairCalls"] == 1
+
+
+@pytest.mark.parametrize("mode", ["json_schema", "json_object", "downgraded"])
+@pytest.mark.parametrize("rewrite", [False, True], ids=["same-design", "changed-design"])
+def test_visual_format_repair_uses_source_transport_semantics(wire_transport, monkeypatch, mode, rewrite):
+    responses, requests = wire_transport
+    monkeypatch.setattr("infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE",
+                        "json_object" if mode == "json_object" else "json_schema")
+    reply = visual_request.llm_chat_json
+
+    def with_transport_metadata(request, **kwargs):
+        result = reply(request, **kwargs)
+        if mode == "downgraded" and request["_infini_stage"] == "visual_director":
+            result["_debug"] = {"strictSchemaDowngraded": True, "responseFormatType": "json_object"}
+        return result
+
+    monkeypatch.setattr(visual_request, "llm_chat_json", with_transport_metadata)
+    data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    kit = _visual_kit(data)
+    # Strict provider optionals encode absence as null. In schema-free replies
+    # the same null is an invalid authored value and cannot be silently erased.
+    source = copy.deepcopy(kit)
+    source["item"]["grip"] = None
+    source["animationPlan"] = None
+    patch = _visual_patch(data)
+    if rewrite:
+        patch["itemPatch"]["visualIdentity"] = "a different visual design"
+    raw = json.dumps(source)[:-1] + ",}"
+    responses.extend([raw, patch])
+    if mode == "json_schema" and not rewrite:
+        result = visual_stage_stage.apply_visual_director(data, {}, {})
+        expected = copy.deepcopy(kit)
+        expected.pop("animationPlan")
+        assert result["visualKit"] == expected
+    else:
+        with pytest.raises(PlannerUnavailable, match="recoverable visual fields"):
+            visual_stage_stage.apply_visual_director(data, {}, {})
+    assert [request["_infini_stage"] for request in requests] == ["visual_director", "visual_repair"]
+    assert request_dossier(requests[1])["malformedRawText"] == raw
+    assert not responses
+
+
+def test_vfx_repair_receives_every_diagnosis_and_preserves_valid_leaves(wire_transport, monkeypatch):
+    from infini_local.core.vfx.materials import vfx_model_context
+    from infini_local.core.vfx.validation import validate_vfx_director_output
+
+    responses, requests = wire_transport
+    monkeypatch.setattr(vfx_stage_config, "VFX_LLM_DIRECTOR_MAX_SLOTS", 12)
+    data = _accepted_visual_data("workbench_blade")
+    valid = _vfx_output(data)
+    valid["slots"] = [{**copy.deepcopy(valid["slots"][0]), "id": f"slot_{i}"} for i in range(12)]
+    assert validate_vfx_director_output(valid, data)["ok"]
+    broken = copy.deepcopy(valid)
+    for slot in broken["slots"]:
+        slot.update(duration=-1, startTick=-1, repeatEvery=-1)
+    report = validate_vfx_director_output(broken, data)
+    assert len(report["errors"]) > 24
+    repaired_slots = copy.deepcopy(valid["slots"])
+    for slot in repaired_slots:
+        slot["alpha"] = 0.1  # Unrelated valid leaves must remain frozen.
+    responses.extend([broken, {"schema": VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": repaired_slots,
+                              "note": "Repair timing only; ignore the unrelated alpha rewrite"}])
+    result = attach_vfx_manifest(data, "all-vfx-errors", llm_director=vfx_transport.call_llm_vfx_director)
+    expected_errors = vfx_model_context({"exactErrors": report["errors"]})["exactErrors"]
+    assert request_dossier(requests[1])["exactErrors"] == expected_errors
+    assert result["debug"]["vfxDirectorRaw"] == valid
+    assert result["debug"]["vfxRepairFilterAudit"]["ignoredChanges"]
+    assert result["debug"]["llmStageAccounting"]["vfxRepairCalls"] == 1
+    assert not responses
 
 
 @pytest.mark.parametrize("scenario", ["complete-delete", "sparse-delete", "name-only", "use-style-frozen", "echo-read-only", "registry-defect"])
@@ -366,7 +442,7 @@ def test_author_repair_wire_admission_and_frozen_results(wire_transport, scenari
         stats = next(c for c in current["runtimeProgram"]["calls"] if c["id"] == "item_stats")
         stats["params"]["damage"] = 1999
         fixed = copy.deepcopy(use)
-        fixed["params"].update(useStyle="shoot", customHeldSprite="visible")
+        fixed["params"].update(useStyle="shoot", hideUseGraphic=False)
         frozen_stats = copy.deepcopy(stats)
         frozen_stats["params"]["damage"] = 999
         patch["callsUpsert"] = [fixed, frozen_stats]
@@ -407,7 +483,7 @@ def test_author_repair_wire_admission_and_frozen_results(wire_transport, scenari
         assert context["acceptedItemContext"]["runtimeProgram"] == current["runtimeProgram"]
         calls = {c["id"]: c for c in repaired["runtimeProgram"]["calls"]}
         assert calls["item_use"]["params"]["useStyle"] == "shoot"
-        assert calls["item_use"]["params"]["customHeldSprite"] == "hidden"
+        assert calls["item_use"]["params"]["hideUseGraphic"] is True
         assert calls["item_stats"]["params"]["damage"] == 1999
         assert any(row["reason"] == "independent_valid_node_frozen" for row in repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"])
 

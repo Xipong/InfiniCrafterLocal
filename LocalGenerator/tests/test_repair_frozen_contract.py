@@ -125,8 +125,7 @@ def _current_grammar_scenario(document):
     # or production migration. Preserve the original artifact for refusal checks.
     from infini_local.core.runtime_authoring.capability_registry import capability_for_saved_receipt
     projected = captured_parent_combat_author(copy.deepcopy(document))
-    renames = {"item_use": ("releaseTiming", "customHeldSprite"),
-               "spawn": ("speedPxPerTick", "speedPxPerUpdate"),
+    renames = {"spawn": ("speedPxPerTick", "speedPxPerUpdate"),
                "projectile_collision": ("localNpcHitCooldownTicks", "localNpcHitCooldownEngineUnits")}
     for row in projected.get("runtimeProgram", {}).get("calls", []) + projected.get("callsUpsert", []):
         cap = capability_for_saved_receipt(row.get("fn"))
@@ -137,11 +136,16 @@ def _current_grammar_scenario(document):
             assert pair[1] not in row["params"]
             row["params"][pair[1]] = row["params"].pop(pair[0])
         params = row.get("params", {})
-        if row.get("fn") == "item_use" and "customHeldSprite" in params:
-            value = params["customHeldSprite"]
-            mapping = {"": "inherit", "immediate": "hidden", "on_release": "visible", "after_charge": "visible"}
-            if isinstance(value, str) and value in mapping:
-                params["customHeldSprite"] = mapping[value]
+        if row.get("fn") == "item_use":
+            # Explicit test-only current visibility counterpart. The frozen
+            # capture keeps its obsolete notation and still fails admission.
+            visibility = params.pop("releaseTiming", params.pop("customHeldSprite", None))
+            if visibility in ("immediate", "hidden"):
+                params["hideUseGraphic"] = True
+            elif visibility in ("on_release", "after_charge", "visible"):
+                params["hideUseGraphic"] = False
+            else:
+                assert visibility in (None, "", "inherit")
         if row.get("fn") == "configure_placeable" and params.get("wallId") == -1:
             row["fn"] = "place_tile"
             del params["wallId"]

@@ -134,7 +134,7 @@ def test_missing_call_leaves_freeze_valid_siblings(scenario):
     use = next(c for c in current["runtimeProgram"]["calls"] if c["id"] == "item_use")
     original = copy.deepcopy(use)
     use["params"].pop("useStyle")
-    use["params"].pop("autoReuse" if scenario == "required-pair" else "customHeldSprite")
+    use["params"].pop("autoReuse" if scenario == "required-pair" else "holdoutOffsetY")
     transaction = RepairTransaction(current)
     scope = transaction.scope
     assert strict_schema_errors(scope, runtime_repair_scope_schema()) == []
@@ -146,7 +146,7 @@ def test_missing_call_leaves_freeze_valid_siblings(scenario):
     if scenario == "optional-absence":
         assert next(e["paths"] for e in scope["fieldPermissions"]["calls"] if e["id"] == "item_use") == ["params.useStyle"]
     fixed = copy.deepcopy(use)
-    fixed["params"].update(useStyle="shoot", autoReuse=True, handPose="two_handed", customHeldSprite="visible")
+    fixed["params"].update(useStyle="shoot", autoReuse=True, handPose="two_handed", holdoutOffsetY=17)
     fixed["params"]["channel"] = True  # hostile frozen sibling
     unrelated = copy.deepcopy(next(c for c in current["runtimeProgram"]["calls"] if c["id"] == "item_stats"))
     unrelated["params"]["damage"] = 999
@@ -160,11 +160,11 @@ def test_missing_call_leaves_freeze_valid_siblings(scenario):
     assert "target" not in calls["item_use"]
     assert calls["item_stats"]["params"]["damage"] != 999
     if scenario == "required-pair":
-        assert calls["item_use"]["params"]["customHeldSprite"] == "hidden"
+        assert calls["item_use"]["params"]["holdoutOffsetY"] == original["params"]["holdoutOffsetY"]
     else:
-        assert "customHeldSprite" not in calls["item_use"]["params"]
+        assert "holdoutOffsetY" not in calls["item_use"]["params"]
         assert any(e["path"].endswith("params.handPose") for e in audit["ignoredChanges"])
-        assert any(e["path"].endswith("params.customHeldSprite") and e["reason"] == "addition_not_permitted" for e in audit["ignoredChanges"])
+        assert any(e["path"].endswith("params.holdoutOffsetY") and e["reason"] == "addition_not_permitted" for e in audit["ignoredChanges"])
 
 
 @pytest.mark.parametrize("scenario", ["call-property", "param-extra", "renamed-value", "nested-extra"])
@@ -249,7 +249,7 @@ def test_missing_dependency_creation(scenario, ok):
         candidate["id"] = "item"
     patch = dict(_empty_gameplay_patch(), callsUpsert=[candidate])
     if scenario == "delete-new-param":
-        patch["callParamKeysDelete"] = [{"callId": "repair_item_use", "key": "customHeldSprite"}]
+        patch["callParamKeysDelete"] = [{"callId": "repair_item_use", "key": "handPose"}]
     if scenario == "global-collision":
         audit = validate_repair_patch_scope(current, patch, scope)
         assert not audit["ok"]

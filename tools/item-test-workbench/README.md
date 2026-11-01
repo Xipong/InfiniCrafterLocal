@@ -3,7 +3,7 @@
 ## Standalone native loader
 
 `loader-run` is the new CPU path for native tModLoader autoload from separate
-DLLs. It needs no `.tmod` packaging, installation, game client or saved world:
+DLLs or supplied `.tmod` archives. It needs no game client or saved world:
 
 ```bash
 python tools/item-test-workbench/workbench.py loader-run \
@@ -22,13 +22,49 @@ including an `INFINI_MOD_SOURCE_ROOT` override, and refuses evidence if those
 inputs change during the run.
 
 For a registered item use `--native-item WoodenBoomerang`, a native ID, or
-`--native-item ModName/ItemName` instead of generated JSON. An additional mod
-can be autoloaded from its separately built DLL using `--probe-dll PATH` and
-`--probe-mod-root PATH` (directory containing its build.txt, localization and
-assets). Its declared dependencies, including weak references, must be loaded;
+`--native-item ModName/ItemName` instead of generated JSON. Supply additional
+separately built mod DLLs and their source/content roots with repeatable `--mod`
+options, for example:
+
+```bash
+python tools/item-test-workbench/workbench.py loader-run \
+  --native-item ExampleMod/ExampleItem --scenario /path/to/scenario.json \
+  --mod /path/to/ExampleMod.dll /path/to/ExampleMod \
+  --mod /path/to/Dependency.dll /path/to/Dependency --out /path/to/run
+```
+
+Each root must contain `build.txt` and the original content files. The loader
+orders supplied mods by their declared dependency names; CLI order need not
+match load order. The previous `--probe-dll PATH --probe-mod-root PATH` pair
+remains supported. Declared dependencies, including weak references, must be loaded;
 unavailable ones are refused because this host does not emulate tML's separate
 mod assembly contexts and weak-dependency type filtering.
+Alternatively use repeatable `--tmod /path/to/mod.tmod` for original archives,
+including their dependencies. The loader keeps the original `TmodFile` open,
+uses its original `Info`, verifies its payload hash, and stages its unmodified
+managed DLL for the process. It refuses archives with embedded DLL references:
+the separate assembly contexts needed to resolve those correctly are not implemented.
+Source-root and archive inputs may be combined. The receipt hashes every archive
+before and after the run.
+
+This name-based dependency check does not validate dependency versions. For a
+source-root mod, the in-memory `Mod.File` contains metadata and localization
+rather than a complete original `.tmod`. Even with a genuine archive, asset
+readers and the client lifecycle are not initialized by this headless mode.
+Therefore a passing CPU scenario is not evidence that arbitrary mod content,
+resources or graphics will load correctly in the client.
 For a native mod NPC set `dummy.nativeType` to its exact `ModName/NpcName`.
+
+Pass `--server-mode` to keep tML's server network mode throughout mod loading
+and the CPU scene. This enables native server initialization for mods that
+register mounts without requiring client textures. The server uses the native dedicated-server local player index (255); the
+scene has no connected client and does not simulate a network session or
+client-side item firing. Primary and alternate use actions fail explicitly in
+this mode. Its report identifies the mode and these limitations. For a
+no-input server check of a registered item, use
+`tools/item-test-workbench/scenarios/server-native-item.json`; this tests
+loading and finite state, not an attack. The default remains the earlier
+single-player network mode.
 
 This path currently supports CPU scenes with aim/primary/alt/release, a bounded
 tile layout, a controlled vanilla target or a mod NPC with its native defaults
@@ -45,6 +81,9 @@ older runner. The existing `run` and rendering tools retain their earlier scope.
 `verify_loader_scene.py` checks real combat and effects plus independent hooks
 from `fixture-mod/WorkbenchObserverFixture.Standalone.csproj`. These are
 standalone child processes, without launching `Terraria.Main` or a server.
+`verify_multi_mod_loader.py` exercises separate dependent fixture assemblies,
+dependency ordering, missing/cyclic dependencies and the effects of each mod's
+hooks on combat.
 
 A separate local utility for exercising an **already generated InfiniCrafterLocal
 item JSON**, then inspecting its behavior with code and vision. Runs do not call an
@@ -379,6 +418,29 @@ falls. Ordinary fixture targets intentionally override NPC geometry/AI. The sepa
 `dummy.mode: "native_training_dummy"` uses genuine tile placement, tile entity and
 NPC defaults instead. It requires the explicit player/artwork mode and dummy assets.
 
+Client hybrid/VFX admission also covers `on_hit` native status and pull actions
+on item bodies and generated projectiles. `verify_hit_status_pull.py` exercises
+actual native contact, NPC buff presence/expiry, miss and no-callback controls,
+and native pull versus an otherwise identical target. This is not a multiplayer
+or arbitrary event-timing claim; other unproven callback combinations still refuse.
+Controlled targets default to `knockBackResist: 0` (immune to knockback/pull).
+A scenario may explicitly set `dummy.knockBackResist` in `0..1` to test a
+susceptible target; the value is assigned to the native NPC, not simulated motion.
+Genuine training-dummy mode does not accept this override.
+
+Rendered `hurt_player` stimuli require native player and native dust drawing.
+The stimulus runs original `Player.Hurt` in a scoped client phase, restoring
+`Main.dedServ` afterward, so real equipment `PostHurt` VFX are not suppressed by
+the stand's CPU phase. Rendered hostile-death stimuli remain unadmitted.
+Native item `ExtraBuffs` rendering is restricted to proven `Gravitation` and
+`Sonar`: native `Player.Update` owns their flags, expiry and gravity controls.
+Pets and other unproven buff presentation still refuse; sonar's fishing UI is
+not certified by the controlled no-fishing scene.
+`verify_rendered_player_effects.py --item ITEM --scenario SCENE --kind hurt|buff`
+(with `--buff-id 18|122` for buffs) retains original inputs and compares native
+positive/no-use or no-hurt/vanity controls, plus explicit refusal controls.
+The short-expiry buff counterpart is synthetic test data, not a changed craft.
+
 ## Actual pixels versus schematic replay
 
 `render`, `frame` and the run's `review/replay.html` visualize recorded positions and
@@ -461,15 +523,21 @@ export only. Recorded `activeProjectileVfx.historyRibbonDraws` contain actual na
 history samples, submitted SpriteBatch segments and geometry. A stationary history
 can correctly submit zero segments. These observations are not whole-artwork approval.
 
-The separate current `historyTrail` renderer is admitted only for `trail.draw:
-"stroke"`, `trail.source: "center"` with **`drawPlayer:true`** (and therefore
-`drawArtwork:true`, exact publication PNGs and verified native player resources).
-It executes the original full `GeneratedProjectile.PreDraw` and its live trail
-samples. Partial authored draw-core and procedural-only scenes still refuse this
-renderer; sprite/tip trail variants are not admitted by this bounded lane. No
-new texture is synthesized for the stroke. `activeProjectileVfx.historyTrailDraws`
-records original SpriteBatch submission counts per slot; admission alone, a
-stationary zero-segment history or a PNG hash is not visual approval.
+The current projectile `historyTrail` lane requires **`drawPlayer:true`**
+(and therefore `drawArtwork:true`, exact publication PNGs and native player resources).
+It admits `stroke`/`center`, plus `sprites`/`center` with `pose:"sampled"` and
+`texture.source:"entity"`. The latter uses the actual published entity texture and
+recorded native sprite pose, not a stand substitute. Other texture selectors,
+current-pose sprite trails and projectile tip trails remain unadmitted by this
+bounded lane. Partial authored draw-core and procedural-only scenes refuse it.
+`activeProjectileVfx.historyTrailDraws` records original SpriteBatch submission
+counts and geometry per slot. Admission or a PNG hash alone is not visual approval.
+
+`verify_projectile_sprite_history.py --no-build --out <new-directory>` exercises
+native sampled rotations, exact texture dimensions, pixel difference against the
+same no-trail item, gameplay/capture parity, expiry, deterministic fresh-process
+reset, missing-publication refusal and unsupported-pose/no-draw controls. This is
+synthetic capability evidence, not a generated item's gameplay verdict.
 
 Particle resource readiness uses each selected `slot.particle.textureId` through
 the production texture registry and drains the native main-thread queue per
@@ -645,7 +713,11 @@ map UI and full world ecology are not simulated.
 
 `itemStack` provisions the actual generated item instance (default 1, bounded by
 its native `maxStack`). Native `ItemCheck` owns consumption; the bench does not
-subtract stacks. Arrow, bullet, flare and fallen star inventory go through native ammo selection.
+subtract stacks. Arrow, bullet, flare, fallen star and solution inventory go through native ammo selection.
+`verify_solution_ammo.py` checks native Green Solution payment/source identity,
+no-ammo and wrong-category refusals, with an existing bullet control. It may also
+exercise an intact authored solution item via `--item`; this does not certify
+terrain conversion, other ammunition categories or generated ammo items.
 Headless scenarios accept up to 14,400 ticks; rendered captures remain bounded to
 600. This permits full multi-minute field expiry without increasing image budgets.
 
@@ -1001,3 +1073,32 @@ Native GIF export rounds cumulative native tick timestamps to centiseconds, so
 an explicit final 800ms pause remain; no intermediate game frame is invented.
 
 Complete before/after native dust states live once in `nativeRender.snapshots`; PNG frame receipts refer to the same tick with `nativeDustStateTick` and counts. Compact JSON preserves every observation without duplicating particle arrays, keeping trail-heavy bow traces within the portable reader budget.
+
+#### Bounded native shape rendering
+
+The client lane admits world-attached, world-rotation `shape` arcs in full native
+player/procedural draw contexts. They execute the production detached renderer
+with the verified MagicPixel; no substitute geometry is rendered by the stand.
+Read-only shape records include their due tick, duration and world position.
+Other kinds, source-attached/source-rotation shapes and partial draw contexts
+remain unverified and refused. See `verify_shapes.py` and VERIFICATION.md for
+actual pixel, lifetime, replay and negative controls.
+
+### Explicit recall destination
+
+A binding that actually applies `recall_home` requires an explicit scenario:
+`--set 'recallSpawn={"worldTileX":43,"worldTileY":47}'`.
+Optional `playerTileX`/`playerTileY` override the world spawn, exactly as the
+production owner chooses them. Both coordinates are required for each pair;
+zero world coordinates express a missing destination for refusal controls.
+The scope saves/restores these native fields and never moves the player itself.
+The canonical implementation uses `TryRecallHome` → `Player.Teleport`, **not**
+`Player.Spawn`; this stand does not add bed validation or destination safety.
+Coordinates inside the initialized tile world can still be constrained by the
+native player's edge margins, so inspect both teleport events and later position.
+
+`verify_recall_home.py --native-dll <built DLL> --item <authored recall item>
+--out <fresh-directory>` proves ready return, cooldown/expiry, no-use, missing
+spawn, player override, invalid scene refusal and unaffected primary firing.
+Only the test world's identity changes in the copied item. Rendered gallery
+capture is separate from these CPU controls; multiplayer remains unproven.

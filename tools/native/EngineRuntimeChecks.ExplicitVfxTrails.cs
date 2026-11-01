@@ -29,6 +29,9 @@ internal static partial class EngineRuntimeChecks
                 Equal(false,VfxManifestSpec.FromJson(root.ToJsonString()).HasSlots,label);
             }
             Reject((slot,t)=>slot["startTick"]=0,"unconsumed start gate rejected");
+            Reject((slot,t)=>slot["duration"]=1,"unconsumed duration rejected");
+            Reject((slot,t)=>slot["repeatEvery"]=1,"unconsumed cadence rejected");
+            Reject((slot,t)=>slot["phaseOffset"]=0,"even explicit zero phase is not a history timing law");
             Reject((slot,t)=>slot["event"]="on_hit","instantaneous historical path rejected");
             Reject((slot,t)=>slot["anchor"]="tip","source owns trajectory not ambiguous anchor");
             Reject((slot,t)=>t.Remove("firstSampleAgeTicks"),"sampling origin must be authored");
@@ -65,7 +68,7 @@ internal static partial class EngineRuntimeChecks
             AssertVfxNear(new Vector2(0,6),VfxVertexCenter(vertices(first)),"new pose uses new gfx offset");
             AssertVfxNear(new Vector2(20,2),VfxVertexCenter(vertices(first+1)),"older pose retains old gfx offset");
             Equal(SpriteEffects.None,old.Effects,"captured old flip remains immutable");Equal(SpriteEffects.FlipHorizontally,current.Effects,"current flip captured");
-            Equal(1f,old.Scale,"old scale retained");Equal(2f,current.Scale,"new scale captured");
+            Equal(Vector2.One,old.Scale,"old scale retained");Equal(new Vector2(2),current.Scale,"new scale captured");
             stamp.Pose="current";first=count();Draw(stamp,h,current);
             AssertVfxNear(new Vector2(20,6),VfxVertexCenter(vertices(first+1)),"current mode intentionally uses live pose for old center");
             stamp.OpacityProfile.Start=stamp.OpacityProfile.Middle=stamp.OpacityProfile.End=0;Draw(stamp,h,current);Equal(first+2,count(),"zero opacity does not consume a draw");

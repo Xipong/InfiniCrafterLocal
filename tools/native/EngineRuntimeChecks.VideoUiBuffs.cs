@@ -33,8 +33,18 @@ internal static partial class EngineRuntimeChecks
     private static MethodInfo VideoUiMethod(string method) => VideoUiView.GetMethod(method,
         BindingFlags.Static | BindingFlags.NonPublic) ?? throw new InvalidOperationException("missing status helper: " + method);
     private static GeneratedItemData VideoUiFixture(string id)
-        => GeneratedItemData.FromJson(File.ReadAllText("tools/fixtures/video-ui-buffs/" + id + ".json"))
-            ?? throw new InvalidOperationException("native reader refused exact captured item " + id);
+    {
+        string raw = File.ReadAllText("tools/fixtures/video-ui-buffs/" + id + ".json");
+        Equal(true, GeneratedItemData.FromJson(raw) is null, "captured retired visibility is refused");
+        var control = System.Text.Json.Nodes.JsonNode.Parse(raw)!;
+        Equal("", control["gameplay"]!["releaseTiming"]!.GetValue<string>(), "captured inherited gameplay visibility");
+        Equal("", control["runtimeProgram"]!["itemUse"]!["releaseTiming"]!.GetValue<string>(), "captured inherited item visibility");
+        // Named test counterpart: remove only obsolete empty presentation leaves.
+        control["gameplay"]!.AsObject().Remove("releaseTiming");
+        control["runtimeProgram"]!["itemUse"]!.AsObject().Remove("releaseTiming");
+        return GeneratedItemData.FromJson(control.ToJsonString())
+            ?? throw new InvalidOperationException("native reader refused current UI-buff control " + id);
+    }
     private static string VideoUiSnapshot(GeneratedItemData data) => JsonSerializer.Serialize(data);
 
     public static void VFUI03StatusHoverWrapsWholeBlockForNativeClamp()

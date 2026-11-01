@@ -14,6 +14,24 @@ from test_front_hand_movement import fixture, entity, saved_hand_wire
 from test_low_level_three_stage_pipeline import _visual_kit, wire_transport
 
 
+def _current_hand_control():
+    """Explicit test envelope, not an importer for the retired saved contract."""
+    saved = saved_hand_wire()
+    report = validate_runtime_wire(saved)
+    assert [(e["path"], e["code"]) for e in report["errors"]] == [
+        ("$.runtimeProgram.itemUse.releaseTiming", "unknown_final_wire_field")]
+    control = deepcopy(saved)
+    assert control["gameplay"].pop("releaseTiming") == "immediate"
+    assert control["runtimeProgram"]["itemUse"].pop("releaseTiming") == "immediate"
+    assert control["runtimeProgram"]["itemUse"]["hideUseGraphic"] is True
+    assert validate_runtime_wire(control)["ok"]
+    restored = deepcopy(control)
+    restored["gameplay"]["releaseTiming"] = "immediate"
+    restored["runtimeProgram"]["itemUse"]["releaseTiming"] = "immediate"
+    assert restored == saved
+    return control
+
+
 def test_real_author_visual_frozen_grip_repair_survives_strict_delivery(wire_transport):
     from infini_local.pipelines.author import request as llm_authoring_pipeline
 
@@ -88,7 +106,7 @@ def test_item_body_entity_does_not_duplicate_root_grip():
 def test_saved_hand_driver_spawn_dependency_requires_actual_enabled_component(enabled):
     # The retained opcode keeps its historical strict admission rules; fresh
     # independent components do not inherit the old bundle's support bag.
-    wire = saved_hand_wire()
+    wire = _current_hand_control()
     if enabled is None:
         entity(wire)["spawn"].pop("enabled")
     else:
@@ -112,8 +130,8 @@ def test_omitted_optional_grip_controller_bag_and_disabled_plain_spawn_remain_re
         assert wire == before
 
 
-def test_immutable_saved_compound_hand_wire_remains_admitted_without_new_components():
-    wire = saved_hand_wire()
+def test_captured_hand_body_survives_current_envelope_without_new_components():
+    wire = _current_hand_control()
     before = deepcopy(wire)
     assert entity(wire)["movement"] == {"name": "move_front_hand", "code": 20, "params": {
         "aimMode": "initial", "durationTicks": 12, "startStretch": "quarter", "peakStretch": "full",
@@ -130,8 +148,8 @@ def test_immutable_saved_compound_hand_wire_remains_admitted_without_new_compone
 @pytest.mark.parametrize("mutation", ["missing_params", "name", "code", "foreign_driver", "order", "cap", "count",
     "spread", "speed", "tile", "handPose", "controller", "over_target", "secondary", "hold", "axis_none"])
 def test_saved_hand_wire_keeps_its_exact_historical_geometry_and_dependency_guards(mutation):
-    wire = saved_hand_wire()
-    # The admitted archive is the valid control, not freshly compiled legacy source.
+    wire = _current_hand_control()
+    # The explicit current envelope is valid before the mechanical mutation.
     assert validate_runtime_wire(wire)["ok"]
     body = entity(wire)
     movement = body["movement"]

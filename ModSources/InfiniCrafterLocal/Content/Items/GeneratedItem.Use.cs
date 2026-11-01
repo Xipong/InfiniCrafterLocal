@@ -161,6 +161,16 @@ public partial class GeneratedItem
             player.GetModPlayer<InfiniCraftPlayer>().NotifyGeneratedUseRefusal(blocked);
             return false;
         }
+        // A known cooldown leaves a pure mobility binding with no executable effect.
+        // Refuse paid admission before native PayMana; retain free-attempt timing,
+        // mixed companion effects and the existing post-admission outcome policy.
+        if (Item.mana > 0 && IsPureMobilityUse(binding)
+            && player.GetModPlayer<InfiniCraftPlayer>() is { GeneratedMobilityCooldownTicks: > 0 } mobilityOwner)
+        {
+            mobilityOwner.NotifyGeneratedUseRefusal(InfiniCraftPlayer.GeneratedUseFeedbackText(
+                "MobilityCooldown", mobilityOwner.GeneratedMobilityCooldownSeconds));
+            return false;
+        }
         if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity)
         {
             RuntimeEntitySpec? entity = Data.RuntimeProgram.TryGetEntity(binding.UsePolicy.Action.TargetId);
@@ -179,6 +189,12 @@ public partial class GeneratedItem
             if (placement is null || !GeneratedPlacementLedgerSystem.PreparePlacement(player, Data, placement))
                 return false;
         }
+        // Native ItemCheck_CheckCanUse pays mana before its final HasAmmo check.
+        // Preflight mixed-cost uses through the same native predicate: no PickAmmo,
+        // conservation roll or debit here; NeedsAmmo exceptions remain native.
+        // Leave ordinary ammo-only hook timing unchanged.
+        if (Item.mana > 0 && Item.useAmmo != AmmoID.None && !player.HasAmmo(Item))
+            return false;
         _itemEventBudget = new RuntimeSpawnBudget(Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
         return true;
     }

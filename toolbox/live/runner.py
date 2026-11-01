@@ -28,6 +28,10 @@ if not args.run:
     print(json.dumps(preflight, ensure_ascii=False, indent=2))
     raise SystemExit(0)
 
+if args.real_images:
+    from toolbox.live.real_run import run
+    raise SystemExit(run(args, preflight, environment))
+
 # Only a deliberate admitted --run enters production imports or creates outputs.
 os.environ.update(environment)
 os.environ['INFINI_SKIP_CONFIG_FILE'] = '1'

@@ -600,7 +600,6 @@ public sealed partial class InfiniCraftPlayer
         TickPendingStationEscrow();
         if (Main.netMode != NetmodeID.Server) RestoreDeferredExitRefunds();
         TickMultiDevCrafts();
-        GeneratedHeldItemDrawLayer.MaybeBroadcastLocalHeldItem(Player, ref _heldItemPresentationSyncTick, ref _heldItemPresentationSyncKey);
 
         if (Main.netMode != NetmodeID.Server && !Main.playerInventory && HasAnyInput)
             ReturnIdleStationInputs();

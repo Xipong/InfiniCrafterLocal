@@ -13,6 +13,18 @@ using Terraria.ID;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static void HeldNativeOwnerRejectsRemovedPoseControls()
+    {
+        var data=RootCombatFixture(20,2,"ranged");
+        var baseline=System.Text.Json.Nodes.JsonNode.Parse(data.ToJson())!;
+        foreach(string field in new[]{"heldAlignment","releaseTiming"})
+        foreach(string value in new[]{"null","false","1","{}","[]","\"grip\"","\"native_frame\""}) {
+            var wire=baseline.DeepClone();wire["runtimeProgram"]!["itemUse"]![field]=System.Text.Json.Nodes.JsonNode.Parse(value);
+            Equal(true,GeneratedItemData.FromJson(wire.ToJsonString()) is null,"removed pose control cannot silently select a native pose: "+field);
+        }
+        Equal(true,GeneratedItemData.FromJson(baseline.ToJsonString()) is not null,"ordinary native-owner DTO remains accepted");
+    }
+
     private static void DroppedAlphaSupportTracksActualRotatedPixels()
     {
         const int width = 19, height = 23;
@@ -68,64 +80,7 @@ internal static partial class EngineRuntimeChecks
             Vector2 origin=GeneratedProjectile.MotionSpriteOrigin(entity,selected,64,64,1,SpriteEffects.None,0,Vector2.UnitX);
             Vector2 displayedGrip=body.Center+new Vector2(12,32)-origin;
             AssertVfxNear(hand+new Vector2(32,0),displayedGrip,"sprite projection cancels static offset only, never author's reach");
-            AssertVfxNear(hand,GeneratedHeldItemDrawLayer.NativeGripLocation(owner,null,owner.itemLocation),
-                "root native contact correction does not move projectile body or redefine reach");
         });
     }
 
-    private static void HeldContactProjectionAndPacketAgree()
-    {
-        WithPlayer((player, _) => {
-            var item = new Item { type = ItemID.WoodenSword, stack = 1, useStyle = ItemUseStyleID.Swing };
-            var data = GeneratedItemData.Placeholder(); data.Id = "synthetic-contact";
-            player.position = new Vector2(121,239); player.itemLocation = new Vector2(130,244);
-            player.selectedItem = 0; player.inventory[0] = item;
-            const BindingFlags flags = BindingFlags.Static | BindingFlags.NonPublic;
-            var build = typeof(GeneratedHeldItemDrawLayer).GetMethod("BuildLocalPayload",flags)!;
-            var write = typeof(GeneratedHeldItemDrawLayer).GetMethod("WriteHeldItemPresentationPayload",flags)!;
-            var read = typeof(GeneratedHeldItemDrawLayer).GetMethod("ReadHeldItemPresentationPayload",flags)!;
-            foreach (int direction in new[] { -1, 1 }) foreach (float gravity in new[] { -1f, 1f })
-            foreach (float rotation in new[] { -.9f, 0f, .8f })
-            {
-                player.direction = direction; player.gravDir = gravity;
-                player.SetCompositeArmFront(true, Player.CompositeArmStretchAmount.Full, rotation);
-                Vector2 hand = player.GetFrontHandPosition(player.compositeFrontArm.stretch,player.compositeFrontArm.rotation);
-                Vector2 shift = new(7,-11);
-                AssertVfxNear(hand+shift,GeneratedHeldItemDrawLayer.NativeGripLocation(player,item,player.itemLocation+shift),
-                    "composite native hand keeps facing/gravity and draw-set shift");
-                foreach (float fullRotation in new[] { -.6f, .4f })
-                {
-                    player.fullRotation=fullRotation;
-                    // Match the installed native RotatedRelativePoint mount pivot:
-                    // bottom minus half native mount offset and the four-pixel foot inset.
-                    player.fullRotationOrigin=new Vector2(player.width*.5f,player.height-player.mount.PlayerOffset/2-4);
-                    var draw=new PlayerDrawSet { drawPlayer=player, Position=player.position+shift,
-                        rotation=fullRotation, rotationOrigin=player.fullRotationOrigin,
-                        DustCache=new List<int>(), GoreCache=new List<int>(), DrawDataCache=new List<DrawData> {
-                            new DrawData(null!,hand+shift-Terraria.Main.screenPosition,null,Color.White,0,Vector2.Zero,1,SpriteEffects.None,0)
-                        }};
-                    PlayerDrawLayers.DrawPlayer_TransformDrawData(ref draw);
-                    AssertVfxNear(player.RotatedRelativePoint(hand,addGfxOffY:false)+shift-Terraria.Main.screenPosition,
-                        draw.DrawDataCache[0].position,"native later transform applies full player rotation exactly once");
-                }
-                player.fullRotation=0;
-                object payload = build.Invoke(null,new object[] {player,item,data,true})!;
-                using var stream = new MemoryStream(); using var writer = new BinaryWriter(stream);
-                write.Invoke(null,new object[] {writer,payload}); stream.Position=0;
-                using var reader = new BinaryReader(stream);
-                object decoded = read.Invoke(null,new object[] {reader})!;
-                float Field(string name) => (float)decoded.GetType().GetField(name)!.GetValue(decoded)!;
-                AssertVfxNear(hand,player.position+new Vector2(Field("ItemLocationX"),Field("ItemLocationY")),
-                    "remote contact is owner-relative, preserving native facing/gravity without world pinning");
-                stream.Position=0; writer.Write(5); stream.Position=0;
-                bool rejected=false;
-                try { read.Invoke(null,new object[] {reader}); }
-                catch(TargetInvocationException e) when(e.InnerException is InvalidDataException) { rejected=true; }
-                Equal(true,rejected,"old world-contact packet cannot be interpreted as owner-relative data");
-            }
-            player.compositeFrontArm.enabled=false;
-            AssertVfxNear(player.itemLocation,GeneratedHeldItemDrawLayer.NativeGripLocation(player,item,player.itemLocation),
-                "ordinary swing/mining native pivot is unchanged");
-        });
-    }
 }

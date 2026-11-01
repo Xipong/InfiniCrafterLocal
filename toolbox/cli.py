@@ -16,7 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     values = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(
         description='Утилиты QA: безопасный offline-вход; live только с --run.',
-        epilog='live10/live20: исторические входы, preflight или явная text-кампания; panels: каталог запросов; summary: saved ledgers; doctor: read-only prerequisites; replay: saved wire; verify: canonical affected checks; workbench: native item tests and recorded frames.',
+        epilog='live10/live20: versioned inputs, preflight или явная text/image-кампания; panels: каталог запросов; summary: saved ledgers; doctor: read-only prerequisites; replay: saved wire; verify: canonical affected checks; workbench: native item tests and recorded frames.',
     )
     parser.add_argument('command', choices=('live10', 'live20', 'panels', 'summary', 'doctor', 'verify', 'replay', 'workbench'))
     if not values or values[0] in ('-h', '--help'):
@@ -79,7 +79,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.run:
             # The child runs at BASE_ROOT; preserve the caller's selected files.
             forwarded = list(values[1:])
-            for name in ('project', 'output', 'config', 'cases_file', 'runtime_dump'):
+            for name in ('project', 'output', 'config', 'cases_file', 'runtime_dump', 'attempt_budget',
+                         'reuse_images_from', 'vfx_only_from'):
                 path = getattr(args, name)
                 if path is not None:
                     forwarded += ['--' + name.replace('_', '-'), str(path.expanduser().resolve())]
@@ -89,6 +90,6 @@ def main(argv: list[str] | None = None) -> int:
             ).returncode
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0
-    except (ValueError, OSError) as exc:
+    except (ValueError, OSError, EOFError) as exc:
         options.error(str(exc))
     return 2

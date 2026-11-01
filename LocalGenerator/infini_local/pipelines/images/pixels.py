@@ -113,7 +113,7 @@ def defringe_chroma_edges(img: Any) -> Any:
             r, g, b, a = px[x, y]
             if a <= 0:
                 continue
-            magentaish = chroma_like_rgb((r, g, b), tolerance=tol, strict=True)
+            magentaish = chroma_like_rgb((r, g, b), tolerance=tol)
             if not magentaish:
                 continue
             has_transparent_neighbor = False

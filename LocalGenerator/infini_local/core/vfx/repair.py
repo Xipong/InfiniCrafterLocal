@@ -156,7 +156,8 @@ def _vfx_repair_context(raw: Any, scope: Mapping[str, Any]) -> dict[str, Any]:
     mutable_asset_ids = set(scope.get("mutableAssetIds") or [])
     assets = _rows(source, "assets")
     return {
-        "malformedRawText": raw.raw_text[:12000] if isinstance(raw, MalformedVfxDirectorOutput) else "",
+        # This is Repair's design source, not a bounded diagnostic preview.
+        "malformedRawText": raw.raw_text if isinstance(raw, MalformedVfxDirectorOutput) else "",
         "broken": {
             "globals": {},
             "slots": [copy.deepcopy(row) for row in slots if isinstance(row, Mapping) and str(row.get("id") or "") in mutable_slot_ids],

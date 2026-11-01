@@ -154,7 +154,6 @@ public sealed partial class GeneratedItemData
         Gameplay.ItemScale = ClampFloat(Gameplay.ItemScale, 0.25f, 4f);
         Gameplay.HoldoutOffsetX = ClampInt(Gameplay.HoldoutOffsetX, -96, 96);
         Gameplay.HoldoutOffsetY = ClampInt(Gameplay.HoldoutOffsetY, -96, 96);
-        Gameplay.ReleaseTiming = SafeText(Gameplay.ReleaseTiming, 32).ToLowerInvariant();
         Gameplay.HandPose = SafeText(Gameplay.HandPose, 32).ToLowerInvariant();
         Gameplay.HealLife = ClampInt(Gameplay.HealLife, 0, 500);
         Gameplay.HealMana = ClampInt(Gameplay.HealMana, 0, 500);
@@ -306,7 +305,15 @@ public sealed partial class GeneratedItemData
                 throw new InvalidDataException("item native cue periodic requires startTick=0");
             if(slot.Shape is not null && entity.Kind==RuntimeEntityKind.ItemBody && slot.Event==RuntimeEventKind.Periodic && slot.StartTick!=0)
                 throw new InvalidDataException("item shape periodic requires startTick=0");
-            if(slot.Trail is not null&&!entity.IsProjectileEntity)throw new InvalidDataException("historyTrail is live projectile only");
+            if(slot.Trail is not null) {
+                if(entity.Kind==RuntimeEntityKind.ItemBody) {
+                    if(slot.Event!="on_use"||slot.Layer is not ("BeforePlayer" or "AfterPlayer"))
+                        throw new InvalidDataException("held item history requires on_use and player layer");
+                    if(RuntimeProgram.ItemUse.HideUseGraphic)
+                        throw new InvalidDataException("held item history requires a visible held body");
+                } else if(!entity.IsProjectileEntity||slot.Event is not ("on_spawn" or "periodic")||slot.Layer is not ("BeforeProjectiles" or "AfterProjectiles"))
+                    throw new InvalidDataException("projectile history requires live projectile event and projectile layer");
+            }
             var texture = slot.Element?.Texture ?? slot.Path?.Texture ?? slot.Trail?.Texture;
             if (slot.Element is not null && entity.Kind == RuntimeEntityKind.ItemBody && slot.Event == RuntimeEventKind.Periodic && slot.StartTick != 0)
                 throw new InvalidDataException("item spriteElement periodic requires startTick=0");

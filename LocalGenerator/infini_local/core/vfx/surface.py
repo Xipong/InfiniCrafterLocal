@@ -138,7 +138,7 @@ def _body_presentation(data: Mapping[str, Any]) -> list[dict[str, Any]]:
                 use = runtime.get("itemUse") if isinstance(runtime, Mapping) else None
                 if isinstance(use, Mapping):
                     row["itemUse"] = {key: copy.deepcopy(use[key]) for key in
-                        ("hideUseGraphic", "releaseTiming", "customHeldSprite") if key in use}
+                        ("hideUseGraphic",) if key in use}
             elif geometry == "whip":
                 row["coverage"] = "single_sprite_at_curve_tip"
         elif mode == "no_asset":
@@ -199,7 +199,7 @@ def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
         "sound": _sound_schema(),
         "heldRootVisibility": {
             field: CAPABILITY_REGISTRY["item_use"].params[field].description
-            for field in ("hideUseGraphic", "customHeldSprite")
+            for field in ("hideUseGraphic",)
         },
         "colorPolicy": "Local RGB bytes, opacity separate. nativeDust/nativeLight own common color; spriteElement/texturedPath own colorProfile, shape/libraryParticle own colorStart/colorEnd, historyTrail owns trail.color. Sound/camera and nested-color renderers forbid common color. No prose-based palette selection.",
         "anchor": list(_ANCHORS),

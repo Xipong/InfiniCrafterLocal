@@ -167,7 +167,7 @@ _ANCHORS = ("self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field
 _BLENDS = ("alpha", "additive")
 
 
-_LAYERS = ("BeforeProjectiles", "AfterProjectiles")
+_LAYERS = ("BeforeProjectiles", "AfterProjectiles", "BeforePlayer", "AfterPlayer")
 
 
 _PARTICLES = ("GemDiamond", "TintableDustLighted", "Glass", "Smoke", "Electric", "none")

@@ -330,14 +330,16 @@ def test_nearby_delivery_strict_native_domain_without_diagnostics(field, value):
     assert not validate_runtime_wire(wire)["ok"]
 
 
-def test_saved_pre_simplification_events_and_receipts_keep_their_original_contract():
+def test_saved_event_facts_survive_in_current_envelope_without_accepting_retired_item_fields():
     corpus = json.loads(FIXTURE.with_name("event_api_pre_simplification.json").read_text())
     assert corpus["sourceHead"] == "723f0e1b07a79b3621f40e61c4d9ee30690ced8a"
     for case in corpus["cases"]:
         wire = case["wire"]
         before = deepcopy(wire)
-        assert validate_runtime_wire(wire)["ok"], case["fn"]
-        assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+        report = validate_runtime_wire(wire)
+        assert not report["ok"] and any(
+            e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
+        assert not audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
             final_document=wire)["ok"], case["fn"]
         # Saved receipts remain readable; historical Author syntax is not a
         # second authenticated input grammar for new v7 compilation.
@@ -345,8 +347,15 @@ def test_saved_pre_simplification_events_and_receipts_keep_their_original_contra
             authored_document=case["source"], final_document=wire)["ok"], case["fn"]
         assert not validate_runtime_program(case["source"])["ok"]
         assert wire == before
-        delivery = deepcopy(wire); delivery.pop("runtimeContract")
+        # Current envelope; only the archived event is transplanted, with no
+        # old item presentation or authentication receipts silently migrated.
+        delivery = compile_runtime_program(build_capability_witness(NEW))
+        delivery.pop("runtimeContract")
+        target = next(e for e in delivery["runtimeProgram"]["entities"] if e.get("events"))
+        saved_events = next(e["events"] for e in wire["runtimeProgram"]["entities"] if e.get("events"))
+        target["events"] = deepcopy(saved_events)
         assert validate_runtime_wire(delivery)["ok"]
+        assert target["events"] == saved_events
         if case["fn"] != "pull_on_event":
             assert not validate_runtime_program(case["source"])["ok"]
             assert not CAPABILITY_REGISTRY[case["fn"]].author_visible

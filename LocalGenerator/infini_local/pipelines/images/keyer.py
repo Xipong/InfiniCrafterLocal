@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import json
 from typing import Any
 
 try:
@@ -25,37 +26,37 @@ from infini_local.storage.trace_runtime import log_event
 def color_distance(a: tuple[int, int, int], b: tuple[int, int, int]) -> float:
     return math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2)
 
-def chroma_like_rgb(rgb: tuple[int, int, int], *, tolerance: int | None = None, strict: bool = False) -> bool:
-    """Classify chroma-key contamination while protecting whites/grays.
+def chroma_like_rgb(rgb: tuple[int, int, int], *, tolerance: int | None = None,
+                    key: tuple[int, int, int] | None = None) -> bool:
+    """Match a concrete key color, not a broad hue/material family.
 
-    This is a technical key-color test, not material/palette inference.  The old
-    broad rule could eat pale blade/highlight pixels if Z-Image mixed magenta into
-    a white edge.  Here neutral whites and low-saturation grays are protected, and
-    only genuinely magenta-like leftovers are treated as key contamination.
+    Matching authored pixels are intrinsically ambiguous under chroma transport;
+    distant pink pixels are not background evidence. Edge residue requires its
+    separate connected-background selection, never this global classifier.
     """
-    r, g, b = [max(0, min(255, int(v))) for v in rgb]
-    target = chroma_rgb()
+    target = chroma_rgb() if key is None else key
     tol = max(0, int(CHROMA_TOLERANCE if tolerance is None else tolerance))
+    return color_distance(tuple(max(0, min(255, int(v))) for v in rgb), target) <= tol
 
-    spread = max(r, g, b) - min(r, g, b)
-    # Protect common foreground whites / grays / steel highlights.
-    if min(r, g, b) >= 170 and spread <= 72:
-        return False
-    if spread <= 34 and max(r, g, b) >= 92:
-        return False
 
-    if color_distance((r, g, b), target) <= tol:
-        return True
-
-    # These spill heuristics describe magenta, not all configured key colors.
-    if target != (255, 0, 255):
-        return False
-    rb_min = min(r, b)
-    rb_max = max(r, b)
-    green_gap = rb_min - g
-    if strict:
-        return rb_min >= 150 and rb_max >= 180 and g <= 78 and green_gap >= 82 and abs(r - b) <= 96
-    return rb_min >= 150 and rb_max >= 175 and g <= 105 and green_gap >= 58 and abs(r - b) <= 112
+def recorded_key_profile(img: Any) -> dict[str, Any] | None:
+    """Read the processor's sampled-key receipt retained in published PNGs."""
+    encoded = img.info.get("infini.chroma-key")
+    if encoded is None:
+        return None
+    if not isinstance(encoded, str) or len(encoded) > 1024:
+        raise ValueError("invalid sampled chroma-key PNG receipt")
+    profile = json.loads(encoded)
+    key = profile.get("key") if isinstance(profile, dict) else None
+    if (not isinstance(profile, dict) or profile.get("schema") != "infini.sampled-chroma-key.v1"
+            or set(profile) != {"schema", "key", "tolerance", "samples", "source"}
+            or type(profile.get("tolerance")) is not int or not 0 <= profile["tolerance"] <= 441
+            or type(profile.get("samples")) is not int or profile["samples"] < 0
+            or profile.get("source") not in {"border_profile", "uniform_saturated_border", "configured_key"}
+            or not isinstance(key, list) or len(key) != 3
+            or any(type(v) is not int or not 0 <= v <= 255 for v in key)):
+        raise ValueError("invalid sampled chroma-key PNG receipt")
+    return profile
 
 def magenta_key_pixel_ratio(img: Any, tolerance: int | None = None) -> float:
     """How much of the opaque image still looks like the magenta key.
@@ -66,7 +67,8 @@ def magenta_key_pixel_ratio(img: Any, tolerance: int | None = None) -> float:
     if Image is None:
         return 0.0
     img = img.convert("RGBA")
-    target = chroma_rgb()
+    profile = recorded_key_profile(img)
+    target = tuple(profile["key"]) if profile else chroma_rgb()
     tol = max(int(CHROMA_TOLERANCE), 58) if tolerance is None else max(0, int(tolerance))
     px = img.load()
     w, h = img.size
@@ -78,7 +80,8 @@ def magenta_key_pixel_ratio(img: Any, tolerance: int | None = None) -> float:
             if a <= max(0, int(ALPHA_THRESHOLD)):
                 continue
             opaque += 1
-            if chroma_like_rgb((r, g, b), tolerance=tol):
+            if (chroma_like_rgb((r, g, b), tolerance=tol, key=target)
+                    or chroma_like_rgb((r, g, b), tolerance=tol)):
                 keyed += 1
     return keyed / max(1, opaque)
 
@@ -205,8 +208,6 @@ def magic_wand_bg_candidate_rgb(rgb: tuple[int, int, int], key: tuple[int, int, 
         return False
     if color_distance(rgb, key) <= tolerance:
         return True
-    if chroma_like_rgb(rgb, tolerance=max(tolerance, int(CHROMA_TOLERANCE) + 52)):
-        return True
     if include_residue and is_dark_key_residue_rgb(rgb):
         return True
     return False
@@ -276,7 +277,7 @@ def floodfill_keylike_background(img: Any, *, tolerance: int = 76, key_profile: 
                     continue
                 # If the neighbor is not confidently key-like and there is a hard edge,
                 # stop like Quick Selection would stop on an object edge.
-                confident_key = color_distance(n_rgb, key) <= max(42, tol * 0.72) or chroma_like_rgb(n_rgb, tolerance=max(72, tol))
+                confident_key = color_distance(n_rgb, key) <= max(42, tol * 0.72) or chroma_like_rgb(n_rgb, tolerance=max(72, tol), key=key)
                 if not confident_key and local_edge_contrast(base_rgb, n_rgb) > edge_stop:
                     continue
             if is_bg_candidate(nx, ny):
@@ -333,7 +334,7 @@ def remove_key_colored_holes(img: Any, key_profile: dict[str, Any] | None = None
             if a <= 0:
                 continue
             rgb = (int(r), int(g), int(b))
-            if magic_wand_bg_candidate_rgb(rgb, key, tol, include_residue=True):
+            if chroma_like_rgb(rgb, key=key, tolerance=tol):
                 px[x, y] = (0, 0, 0, 0)
                 killed += 1
     try:

@@ -488,7 +488,12 @@ def _scalar_name_current_source(case):
     assert case["canonicalParameter"] not in params
     params[case["canonicalParameter"]] = params.pop(case["oldParameter"])
     from captured_projectile_author import project_captured_world_units
-    return project_captured_world_units(source)
+    current = project_captured_world_units(source)
+    for call in current["runtimeProgram"]["calls"]:
+        if call["fn"] == "item_use" and "customHeldSprite" in call["params"]:
+            assert call["params"].pop("customHeldSprite") == "hidden"
+            call["params"]["hideUseGraphic"] = True
+    return current
 
 
 def _current_scalar_name(case):

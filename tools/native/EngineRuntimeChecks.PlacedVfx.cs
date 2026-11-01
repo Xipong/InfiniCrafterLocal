@@ -17,6 +17,21 @@ using Terraria.ID;
 internal static partial class EngineRuntimeChecks
 {
     // Uses only baseline APIs so test-only archived source builds and fails behaviorally.
+    // Explicit current test counterpart; the captured delivery stays immutable
+    // and is refused by the strict reader. This is not a production importer.
+    private static string PlacedVfxCurrentVisibilityControlJson()
+    {
+        string raw = File.ReadAllText("LocalGenerator/tests/fixtures/placed_vfx_final_wire.json");
+        Equal(true, GeneratedItemData.FromJson(raw) is null, "retired visibility envelope is refused");
+        var node = System.Text.Json.Nodes.JsonNode.Parse(raw)!;
+        Equal("immediate", node["gameplay"]!["releaseTiming"]!.GetValue<string>(), "exact archived gameplay visibility");
+        Equal("immediate", node["runtimeProgram"]!["itemUse"]!["releaseTiming"]!.GetValue<string>(), "exact archived item visibility");
+        node["gameplay"]!.AsObject().Remove("releaseTiming");
+        node["runtimeProgram"]!["itemUse"]!.AsObject().Remove("releaseTiming");
+        node["runtimeProgram"]!["itemUse"]!["hideUseGraphic"] = true; // Preserve the explicit old hidden override.
+        return node.ToJsonString();
+    }
+
     private static JsonObject PlacedVfxWire(bool library = false)
     {
         var data = PersistencePlacementData("placed-vfx-cpu-fixture");
@@ -107,16 +122,16 @@ internal static partial class EngineRuntimeChecks
             ulong tick=Terraria.Main.GameUpdateCount;var system=new InfiniDetachedVfxSystem();using var cache=new BorrowedSpriteCache();
             try {
                 system.OnWorldUnload();config.ParticleSpawnMultiplier=1;config.PresentationLightMultiplier=1;
-                var data=GeneratedItemData.FromJson(File.ReadAllText("LocalGenerator/tests/fixtures/placed_vfx_final_wire.json"));
-                if(data is null){ContractJsonDiagnostics.TryGet("GeneratedItemData.FromJson",out var error);throw new InvalidOperationException("actual Python final delivery rejected: "+error?.Message);}
+                var data=GeneratedItemData.FromJson(PlacedVfxCurrentVisibilityControlJson());
+                if(data is null){ContractJsonDiagnostics.TryGet("GeneratedItemData.FromJson",out var error);throw new InvalidOperationException("current placed-VFX control rejected: "+error?.Message);}
                 GeneratedItemRegistryService.StampCurrentWorld(data);
                 var placement=data.RuntimeProgram.Bindings.Single(b=>b.Id=="alternate_install").UsePolicy.Action.Placement!;
                 cache.Textures.Add(Path.GetFullPath(data.VfxManifest.Assets![0].SpritePath),Activator.CreateInstance(cache.Record,texture,0f,0L)!);
                 player.inventory[player.selectedItem]=ReviewItem(data).Item;
                 var tile=Terraria.Main.tile[40,40];tile.HasTile=false;
-                Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,data,placement,40,40),"actual final Python wire authorizes unchanged native placement");
+                Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,data,placement,40,40),"current envelope with captured placement authorizes unchanged native placement");
                 tile.HasTile=true;tile.TileType=TileID.Stone;tile.TileFrameY=0;
-                Equal(true,GeneratedPlacementLedgerSystem.TryCommitAuthorizedPlacement(player),"actual final wire uses sole existing material commit");
+                Equal(true,GeneratedPlacementLedgerSystem.TryCommitAuthorizedPlacement(player),"placement control uses sole existing material commit");
                 // Item/placed periodic material cadence uses world ticks, not PNG frames.
                 MaterialClock(600);ledger.PostUpdateEverything();system.PostUpdateEverything();
                 Equal(3,OwnedMaterialQueue().Count,"both authored independent flame assets and library burst registered from final delivery");

@@ -25,6 +25,7 @@ from infini_local.pipelines.images.keyer import (
     magenta_key_pixel_ratio,
 )
 from infini_local.core.images.contracts import (
+    SPRITE_MIN_TRANSPARENT_PCT,
     final_sprite_canvas,
     sprite_contract_for,
     sprite_uses_soft_alpha,
@@ -181,7 +182,7 @@ def validate_processed_sprite(
         key_ratio = magenta_key_pixel_ratio(img) if uses_key_background() else 0.0
         if key_ratio > 0.025:
             reasons.append(f"magenta_key_background_left:{key_ratio:.3f}")
-        if (role == "vfx_strip" and not stats.get("hasAlpha")) or (role != "vfx_strip" and stats.get("transparentPct", 0) < 0.03):
+        if (role == "vfx_strip" and not stats.get("hasAlpha")) or (role != "vfx_strip" and stats.get("transparentPct", 0) < SPRITE_MIN_TRANSPARENT_PCT):
             reasons.append("almost_no_transparency_after_bg_removal")
         area_ratio = float(bb.get("core_area_ratio") or 0.0)
         if role == "item" and area_ratio < 0.18:

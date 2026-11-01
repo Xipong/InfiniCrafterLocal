@@ -73,13 +73,24 @@ def test_invalid_choices_never_default(params):
 
 
 @pytest.mark.parametrize('fn',['multiply_projectile_velocity','set_projectile_speed_modifier'])
-def test_frozen_historical_wire_and_receipts_remain_valid_but_names_are_not_fresh(fn):
+def test_retired_item_envelope_refuses_but_saved_velocity_component_stays_readable(fn):
     wire=json.loads((Path(__file__).parent/'fixtures'/'velocity_compat'/f'{fn}.json').read_text())
-    assert validate_runtime_wire(wire)['ok']
+    before = deepcopy(wire)
+    report = validate_runtime_wire(wire)
+    assert not report['ok']
+    assert any(e['path'] == '$.runtimeProgram.itemUse.releaseTiming' for e in report['errors'])
     assert not CAPABILITY_REGISTRY[fn].author_visible
     doc,row=document({"scalePerUpdate":1}); row["fn"]=fn
     assert not validate_runtime_program(doc)['ok']
-    wire.pop('runtimeContract'); assert validate_runtime_wire(wire)['ok']
+    component = 'velocityRetention' if fn == 'multiply_projectile_velocity' else 'speedModifier'
+    saved = next(e[component] for e in wire['runtimeProgram']['entities'] if component in e)
+    current = compile_runtime_program(document({'scalePerUpdate': 1})[0])
+    current.pop('runtimeContract')
+    entity = next(e for e in current['runtimeProgram']['entities'] if 'velocityScale' in e)
+    del entity['velocityScale']
+    entity[component] = deepcopy(saved)
+    assert validate_runtime_wire(current)['ok']
+    assert entity[component] == saved and wire == before
 
 
 def test_repair_bad_multiplier_does_not_insert_frozen_absent_cap_or_change_window():
@@ -111,9 +122,13 @@ def test_new_scaler_preserves_strict_numeric_and_non_neutral_consumer_domain(bad
 
 @pytest.mark.parametrize('form', ['pair','window','intersection'])
 def test_saved_speed_timing_forms_remain_strict(form):
-    wire=json.loads((Path(__file__).parent/'fixtures'/'velocity_compat'/'set_projectile_speed_modifier.json').read_text())
+    archived=json.loads((Path(__file__).parent/'fixtures'/'velocity_compat'/'set_projectile_speed_modifier.json').read_text())
+    saved=next(e['speedModifier'] for e in archived['runtimeProgram']['entities'] if 'speedModifier' in e)
+    wire=compile_runtime_program(document({'scalePerUpdate': 1})[0])
     wire.pop('runtimeContract')
-    speed=next(e['speedModifier'] for e in wire['runtimeProgram']['entities'] if 'speedModifier' in e)
+    entity=next(e for e in wire['runtimeProgram']['entities'] if 'velocityScale' in e)
+    del entity['velocityScale']
+    speed=entity['speedModifier']=deepcopy(saved)
     speed.update(startDelayTicks=30,durationTicks=60)
     speed.pop('window',None)
     if form != 'pair': speed['window']={'phase':'always','clock':'active','startDelayTicks':15,'durationTicks':120}
@@ -146,9 +161,11 @@ def test_new_storage_guard_is_declared_without_tightening_historical_collision()
     assert not old.consumer_preserve_nonzero
     assert old.consumer_value_error(1e-60, wire_value=True) is None
     wire = json.loads((Path(__file__).parent / 'fixtures' / 'velocity_compat' / 'collision_tiny_retention.json').read_text())
-    assert validate_runtime_wire(wire)['ok']
+    before = deepcopy(wire)
+    assert not validate_runtime_wire(wire)['ok']
     wire.pop('runtimeContract')
-    assert validate_runtime_wire(wire)['ok']
+    assert not validate_runtime_wire(wire)['ok']
+    assert wire == {k: v for k, v in before.items() if k != 'runtimeContract'}
     doc = build_capability_witness('projectile_collision')
     row = next(c for c in doc['runtimeProgram']['calls'] if c['fn'] == 'projectile_collision')
     row['params'].update(bounceCount=1, bounceSpeedRetention=1e-60)

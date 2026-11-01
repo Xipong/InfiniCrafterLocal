@@ -15,6 +15,7 @@ internal static partial class EngineRuntimeChecks
     {
         if(settings is null)return;
         if(settings["nativeType"]?.GetValue<string>() is string type && type is not ("zombie" or "target_dummy"))throw new ArgumentException("Controlled target nativeType must be zombie or target_dummy");
+        if(WFloat(settings,"knockBackResist",0) is <0 or >1)throw new ArgumentException("Controlled target knockBackResist must be0..1");
         if(WInt(settings,"defense",0) is <0 or >1000)throw new ArgumentException("Controlled target defense must be0..1000");
         foreach(string axis in new[]{"vx","vy"})if(Math.Abs(WFloat(settings,axis,0))>8)throw new ArgumentException("Controlled target velocity must be within8px/tick");
         foreach(string dimension in new[]{"width","height"})if(WInt(settings,dimension,32) is <1 or >512)throw new ArgumentException("Controlled target dimensions must be1..512");
@@ -22,12 +23,13 @@ internal static partial class EngineRuntimeChecks
     private static void WConfigureTarget(NPC npc,JsonNode? settings)
     {
         npc.defense=WInt(settings,"defense",0);npc.damage=0;
+        npc.knockBackResist=WFloat(settings,"knockBackResist",0);
         npc.velocity=new Microsoft.Xna.Framework.Vector2(WFloat(settings,"vx",0),WFloat(settings,"vy",0));
     }
     private static JsonObject WTargetState(NPC npc)
     {
         var effects=RuntimeNpcEffects.GetTotals(npc);
-        return new(){["defense"]=npc.defense,["lifeMax"]=npc.lifeMax,["lifeRegen"]=npc.lifeRegen,
+        return new(){["defense"]=npc.defense,["knockBackResist"]=npc.knockBackResist,["lifeMax"]=npc.lifeMax,["lifeRegen"]=npc.lifeRegen,
         ["generatedEffects"]=new JsonObject{["count"]=effects.Count,["lifeRegenPenalty"]=effects.Regen,["defenseDelta"]=effects.Defense,["contactMultiplier"]=effects.Contact,["velocityRetentionPerTick"]=effects.Retention},
         ["vx"]=WFinite(npc.velocity.X),["vy"]=WFinite(npc.velocity.Y),
         ["nativeBuffs"]=new JsonArray(Enumerable.Range(0,npc.buffType.Length).Where(i=>npc.buffType[i]>0&&npc.buffTime[i]>0).Select(i=>(JsonNode?)new JsonObject{["id"]=npc.buffType[i],["ticks"]=npc.buffTime[i]}).ToArray()),

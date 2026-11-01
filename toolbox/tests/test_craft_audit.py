@@ -211,7 +211,12 @@ def test_saved_v6_receipt_names_keep_documentation_without_rewriting_evidence():
     assert row["authorUnits"] == "seconds" and "Time to full charge" in row["description"]
     assert row["schema"].endswith("/properties/duration")
     assert row["wireValue"] == 1 and not row["authorValuePresent"] and row["authorValue"] is None
-    assert row["trust"] == "checked" and not report["authorAvailable"]
+    # Documentation is still available, but this retired visibility envelope
+    # cannot authenticate its historical receipt as a current runtime PASS.
+    assert row["trust"] == "unverified" and not report["authorAvailable"]
+    assert next(c for c in report["checks"] if c["name"] == "Текущий wire validator")["status"] == "failed"
+    assert any(r["path"] == "$.runtimeProgram.itemUse.releaseTiming" and r["value"] == "immediate"
+               for r in report["unknownFields"])
     assert json.dumps(saved, sort_keys=True) == before
     assert "Time to full charge" in audit.render(report)
 
@@ -248,7 +253,7 @@ def test_supplied_v6_author_gets_display_docs_but_never_current_authentication()
     assert link["trust"] == "unverified"
     statuses = {row["name"]: row["status"] for row in report["checks"]}
     assert statuses["Текущий Author validator"] == statuses["Текущий compiler receipt audit"] == "failed"
-    assert statuses["Текущий wire validator"] == "passed"
+    assert statuses["Текущий wire validator"] == "failed"
     assert json.dumps([saved, source], sort_keys=True) == before
 
     # Unknown versions and old engine-unit spellings must not be dressed up as

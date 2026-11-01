@@ -223,3 +223,31 @@ def test_public_panel_name_cannot_be_overridden(monkeypatch, capsys):
     code, output = cli(monkeypatch, capsys, 'live10', '--panel', 'live20')
     assert code == 2
     assert 'unrecognized' in output.err
+
+
+def test_unshipped_live40_shortcut_refuses_without_traceback(monkeypatch, capsys):
+    code, captured = cli(monkeypatch, capsys, 'live40')
+    assert code == 2
+    assert not captured.out
+    assert 'Traceback' not in captured.err
+
+
+def test_custom_forty_case_cli_preflight_uses_explicit_inputs(monkeypatch, capsys, tmp_path):
+    cases = tmp_path / 'cases.json'
+    parents = tmp_path / 'parents.jsonl'
+    cases.write_text(json.dumps([
+        {'case': f'case_{i}', 'itemA': 'ParentA', 'itemB': 'ParentB'}
+        for i in range(40)
+    ]))
+    parents.write_text('\n'.join(json.dumps({'internalName': name})
+                                 for name in ('ParentA', 'ParentB')))
+    before = set(tmp_path.rglob('*'))
+    code, captured = cli(monkeypatch, capsys, 'live20', '--cases-file', cases,
+                         '--runtime-dump', parents, '--expected-case-count', '40')
+    assert code == 0, captured
+    report = json.loads(captured.out)
+    assert report['preflightOnly'] is True
+    assert report['caseCount'] == 40
+    assert report['historicalPreset'] is False
+    assert len({row['case'] for row in report['cases']}) == 40
+    assert set(tmp_path.rglob('*')) == before

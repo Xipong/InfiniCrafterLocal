@@ -17,6 +17,19 @@ internal static partial class EngineRuntimeChecks
 {
     // Reflection deliberately keeps the SAME observer compilable on pre-product
     // source. Missing capability reaches a behavioral assertion, not a compile error.
+    // Only these placement tests use this explicit current-envelope counterpart.
+    private static string PlacedAlphaCurrentVisibilityControlJson(string archived)
+    {
+        Equal(true, GeneratedItemData.FromJson(archived) is null, "retired placement envelope refused");
+        var control = System.Text.Json.Nodes.JsonNode.Parse(archived)!;
+        Equal("immediate", control["gameplay"]!["releaseTiming"]!.GetValue<string>(), "exact saved placement visibility");
+        Equal("immediate", control["runtimeProgram"]!["itemUse"]!["releaseTiming"]!.GetValue<string>(), "exact saved item visibility");
+        control["gameplay"]!.AsObject().Remove("releaseTiming");
+        control["runtimeProgram"]!["itemUse"]!.AsObject().Remove("releaseTiming");
+        control["runtimeProgram"]!["itemUse"]!["hideUseGraphic"] = true;
+        return control.ToJsonString();
+    }
+
     private static RuntimePlacedBodySpec AlphaBody(string? space, double px = .5, double py = 1,
         bool flipX = false, bool flipY = false, double rotation = 0)
     {
@@ -174,11 +187,11 @@ internal static partial class EngineRuntimeChecks
         try { var body=JsonSerializer.Deserialize<RuntimePlacedBodySpec>(valid.Replace("\"frame\"","null"),new JsonSerializerOptions{PropertyNamingPolicy=JsonNamingPolicy.CamelCase});body!.Validate(); }
         catch(JsonException){nullRefused=true;} catch(InvalidDataException){nullRefused=true;}
         Equal(true,nullRefused,"explicit null is not omission");
-        // This repository fixture is actual Python Author -> compile -> Visual/VFX
-        // projection -> delivery sanitizer output, not an intermediate DTO mirror.
-        string delivered=File.ReadAllText(Path.Combine("tools","fixtures","placed-alpha-pivot-delivered.json"));
+        // The captured Python delivery remains frozen; its narrowly projected
+        // current visibility envelope retains the exact placement/visual payload.
+        string delivered=PlacedAlphaCurrentVisibilityControlJson(File.ReadAllText(Path.Combine("tools","fixtures","placed-alpha-pivot-delivered.json")));
         var data=GeneratedItemData.FromJson(delivered);
-        Equal(true,data is not null,"real final Python delivery accepted by native reader");
+        Equal(true,data is not null,"current placement control accepted by native reader");
         var selected=data!.RuntimeProgram.Bindings.Single(b=>b.Id=="alternate_install").UsePolicy.Action.Placement!.PlacedBody!;
         Equal("alpha_bounds",(string)property!.GetValue(selected)!,"final Python selector reaches real DTO");
         var historical=System.Text.Json.Nodes.JsonNode.Parse(delivered)!;
@@ -195,8 +208,8 @@ internal static partial class EngineRuntimeChecks
         byte[] source=File.ReadAllBytes(path);
         static string Hash(byte[] bytes)=>Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();
         Equal("90d1d3c16b4d6b0b5cf5ce69eaa25731bb3a9518b80bd8c8c896f09a585e7fa7",Hash(source),"frozen pre-product Python final wire was not refreshed");
-        var data=GeneratedItemData.FromJson(System.Text.Encoding.UTF8.GetString(source));
-        Equal(true,data is not null,"real old admitted body remains accepted");
+        var data=GeneratedItemData.FromJson(PlacedAlphaCurrentVisibilityControlJson(System.Text.Encoding.UTF8.GetString(source)));
+        Equal(true,data is not null,"current-envelope control preserves captured placed body");
         var body=data!.RuntimeProgram.Bindings.Single(b=>b.Id=="alternate_install").UsePolicy.Action.Placement!.PlacedBody!;
         var property=typeof(RuntimePlacedBodySpec).GetProperty("PivotSpace");
         if(property is not null)Equal(null,property.GetValue(body),"old absence not materialized during read/Normalize");
@@ -208,8 +221,8 @@ internal static partial class EngineRuntimeChecks
         Equal(identity,GeneratedItemRegistryService.DefinitionIdentity(GeneratedItemData.FromJson(network)!),"definition identity stable through network roundtrip");
         Equal(identity,GeneratedItemRegistryService.DefinitionIdentity(GeneratedItemData.FromJson(saved)!),"definition identity stable through saved roundtrip");
         Equal(bodyJson,JsonSerializer.Serialize(data.RuntimeProgram.Bindings.Single(b=>b.Id=="alternate_install").UsePolicy.Action.Placement!.PlacedBody),"hash/network serialization did not mutate old DTO");
-        // Parent compares this SAME receipt on baseline and candidate, rather than
-        // refreshing expected native hashes before the baseline is executed.
+        // These hashes describe the named current-envelope control, not a claim
+        // that the retired original still has network/read compatibility.
         Console.WriteLine("PLACED_ALPHA_LEGACY_IDENTITY definition="+identity+" networkSha256="+Hash(System.Text.Encoding.UTF8.GetBytes(network))+" bodySha256="+Hash(System.Text.Encoding.UTF8.GetBytes(bodyJson)));
     }
 

@@ -1410,12 +1410,6 @@
                 "duration": {
                   "enum": []
                 },
-                "event": {
-                  "enum": [
-                    "periodic",
-                    "on_spawn"
-                  ]
-                },
                 "particleSystemId": {
                   "enum": []
                 },
@@ -1448,6 +1442,56 @@
           {
             "if": {
               "properties": {
+                "rendererKind": {
+                  "const": "historyTrail"
+                }
+              },
+              "required": [
+                "rendererKind"
+              ]
+            },
+            "then": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "entityId": {
+                      "enum": [
+                        "item"
+                      ]
+                    },
+                    "event": {
+                      "const": "on_use"
+                    },
+                    "layer": {
+                      "enum": [
+                        "BeforePlayer",
+                        "AfterPlayer"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "event": {
+                      "enum": [
+                        "periodic",
+                        "on_spawn"
+                      ]
+                    },
+                    "layer": {
+                      "enum": [
+                        "BeforeProjectiles",
+                        "AfterProjectiles"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
                 "entityId": {
                   "enum": [
                     "item"
@@ -1464,8 +1508,8 @@
             },
             "then": {
               "properties": {
-                "rendererKind": {
-                  "enum": []
+                "event": {
+                  "const": "on_use"
                 }
               }
             }
@@ -1494,8 +1538,46 @@
             },
             "then": {
               "properties": {
+                "layer": {
+                  "enum": [
+                    "BeforeProjectiles",
+                    "AfterProjectiles"
+                  ]
+                },
                 "trail": {
                   "enum": []
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "entityId": {
+                  "enum": [
+                    "item"
+                  ]
+                }
+              },
+              "required": [
+                "entityId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "rendererKind": {
+                  "enum": [
+                    "soundCue",
+                    "screenShakeCue",
+                    "libraryParticle",
+                    "shape",
+                    "contour",
+                    "nativeDust",
+                    "nativeLight",
+                    "nativeEffect",
+                    "spriteElement",
+                    "texturedPath"
+                  ]
                 }
               }
             }
@@ -5195,7 +5277,9 @@
           "layer": {
             "enum": [
               "BeforeProjectiles",
-              "AfterProjectiles"
+              "AfterProjectiles",
+              "BeforePlayer",
+              "AfterPlayer"
             ],
             "type": "string"
           },
@@ -7339,7 +7423,7 @@
         ],
         "type": "object"
       },
-      "maxItems": 5,
+      "maxItems": 12,
       "minItems": 0,
       "type": "array"
     }

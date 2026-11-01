@@ -20,40 +20,17 @@ def _source(fn):
     return document, call
 
 
-@pytest.mark.parametrize("value,wire_value", [("hidden", "immediate"), ("visible", "on_release"), ("inherit", "")])
-@pytest.mark.parametrize("native_hidden", [False, True])
-def test_custom_held_sprite_enum_is_exact_and_native_visibility_independent(value, wire_value, native_hidden):
+@pytest.mark.parametrize("hidden", [False, True])
+def test_native_visibility_has_one_exact_receipt(hidden):
     source, call = _source("item_use")
-    call["params"].update(customHeldSprite=value, hideUseGraphic=native_hidden)
+    call["params"]["hideUseGraphic"] = hidden
     wire = compile_runtime_program(source)
-    assert wire["gameplay"]["releaseTiming"] == wire_value
-    assert wire["runtimeProgram"]["itemUse"]["releaseTiming"] == wire_value
-    assert wire["runtimeProgram"]["itemUse"]["hideUseGraphic"] is native_hidden
-    assert validate_runtime_wire(wire)["ok"]
-
-
-@pytest.mark.parametrize("bad", ["", "immediate", "on_release", "after_charge", "Visible", None])
-def test_old_or_invalid_visibility_tokens_are_not_new_author_values(bad):
-    source, call = _source("item_use")
-    call["params"]["customHeldSprite"] = bad
-    assert not validate_runtime_program(source)["ok"]
-
-
-@pytest.mark.parametrize("old", ["", "immediate", "on_release", "after_charge"])
-def test_retired_visibility_receipts_are_refused_without_rewriting_tokens(old):
-    source, call = _source("item_use")
-    call["params"]["customHeldSprite"] = "inherit"
-    wire = compile_runtime_program(source)
-    wire["gameplay"]["releaseTiming"] = old
-    wire["runtimeProgram"]["itemUse"]["releaseTiming"] = old
+    assert wire["runtimeProgram"]["itemUse"]["hideUseGraphic"] is hidden
     rows = wire["runtimeContract"]["finalWireReceipts"]
-    for row in rows:
-        if row.get("fn") == "item_use" and row["authoredPath"].endswith(".customHeldSprite"):
-            row["authoredPath"] = row["authoredPath"].removesuffix("customHeldSprite") + "heldSpriteVisibilityHint"
-            row["value"] = old
+    assert audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
+    receipt = next(row for row in rows if row["finalPath"] == "runtimeProgram.itemUse.hideUseGraphic")
+    receipt["value"] = not hidden
     assert not audit_compiler_receipts(rows, final_document=wire)["ok"]
-    assert not audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
-    assert not validate_runtime_wire(wire)["ok"]
 
 
 @pytest.mark.parametrize("layer,inactive", [("tile", "wall"), ("wall", "tile")])

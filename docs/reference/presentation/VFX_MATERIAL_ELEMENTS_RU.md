@@ -3,6 +3,8 @@
 Контракт расширяет существующие `vfxManifest.slots`, а не вводит weapon presets, classifier, VM, shader generation, второй effect graph или четвёртую текстовую LLM-роль. Художественное качество реальной генерации не следует из DTO/CPU/native fixtures. Явный `ownerLink` и persisted-v5 readback ниже входят в исходники 0.5.1; наличие их в установленной сборке проверяется по фактической паре мод + генератор, commit и release notes.
 
 <a id="owners"></a>
+По умолчанию Director может выбрать до 12 VFX-слотов (`INFINI_VFX_LLM_DIRECTOR_MAX_SLOTS`); это потолок, а не обязательное число эффектов. Меньшие композиции остаются допустимыми. Настройка меняет лимит новых генераций, не дополняет сохранённые предметы.
+
 ## Владельцы и handoff
 
 `Gameplay Author → Visual Director → VFX Director → image generation → strict delivery → C#`.

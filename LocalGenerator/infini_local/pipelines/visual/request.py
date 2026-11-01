@@ -158,7 +158,7 @@ def _request_visual_kit(
             "rules": [
                 "appearance only; runtime program is immutable",
                 "item.literalSynthesis, when present, is advisory authored appearance intent. Develop it into a coherent visual identity compatible with the accepted runtime. Parent visual references inform the design; they do not require copying whole objects. Visual Director owns appearance and asset choices; accepted mechanics remain authoritative.",
-                "For a newly designed held item choose item.grip explicitly at its actual handle/contact point on the final item PNG canvas after crop/fit/padding, before facing/gravity flips. Both normalized coordinates are required together. Describe that same contact point in item.prompt; do not infer coordinates from an entityId or request image analysis.",
+                "Ordinary visible item_body uses Terraria native use-style framing on a centered canvas, not a PNG grip-to-hand binding. Draw the artwork in its intended native pose; forwardAngleDegrees describes the PNG and does not rotate this held body toward aim. Grip metadata still identifies the physical handle for composable entities reusing this image: both normalized coordinates refer to the final canvas after crop/fit/padding, before facing/gravity flips. Do not infer coordinates from entityId or request image analysis.",
                 "For a newly designed accessory choose equipOverlay.accessoryMount explicitly from chest/back/waist/shoulder/orbit to suit its authored appearance. It attaches the existing single PNG badge to the body pivot; it is not a full armor sheet or a behind-body occlusion guarantee. Optional omission selects the existing orbit presentation; never fill optional metadata during Repair unless its exact path is permitted.",
                 "literal furniture, tools and materials may remain literal",
                 "movement/controller names describe motion, not a weapon taxonomy",
@@ -202,6 +202,8 @@ def _request_visual_kit(
             selected.update({"ownership", "geometryCoverage", "axis", "rotation"})
         if sizing:
             selected.update({"units", "formulas", "ownership", "sourceCalibration"})
+        if not (permissions.get("itemPaths") and (design or sizing)):
+            presentation.pop("nativeHeldCanvasReadOnly")
         if roots & {"", "forwardAngleDegrees", "grip"}:
             selected.update({"axis", "rotation"})
         mechanics = presentation["acceptedPresentationMechanicsReadOnly"]
@@ -297,9 +299,9 @@ def _request_visual_kit(
     raw = llm_chat_json(with_llm_stage(request, "visual_repair" if repair else "visual_director"), timeout=env_int("INFINI_LLM_TIMEOUT", int(GENERATION_DEFAULTS["INFINI_LLM_TIMEOUT"])))
     content = raw["choices"][0]["message"]["content"]
     trace_event("response", "LLM:" + stage_name, "Visual stage response", {"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")}, response=content)
+    effective_format = effective_response_format(request, raw)
     try:
         parsed = parse_first_valid_llm_json(content)
-        effective_format = effective_response_format(request, raw)
         # Repair's object-or-null blocks have no semantic discriminator. Select the
         # object branch by container type, not by whether invalid authored leaves
         # happen to validate; those leaves must still reach exact-scope Repair.
@@ -316,4 +318,7 @@ def _request_visual_kit(
     except (ValueError, TypeError) as exc:
         if repair:
             raise PlannerUnavailable(f"Visual Repair returned malformed JSON: {type(exc).__name__}: {exc}") from exc
-        return MalformedVisualDirectorOutput(raw_text=str(content), error=f"{type(exc).__name__}: {exc}")
+        return MalformedVisualDirectorOutput(
+            raw_text=str(content), error=f"{type(exc).__name__}: {exc}",
+            response_format=copy.deepcopy(effective_format),
+        )
