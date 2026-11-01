@@ -1,5 +1,6 @@
 """Model spelling is lossless; canonical material wire and clocks remain unchanged."""
 
+from infini_local.core import llm_config, provider_schema
 from infini_local.core.vfx import contract as vfx_contract
 from infini_local.pipelines.vfx import stage as vfx_stage
 from infini_local.core.vfx import validation as vfx_validation
@@ -105,9 +106,7 @@ def test_actual_provider_short_response_repairs_exact_field_and_preserves_wire(m
     monkeypatch.setattr(stage, "USE_LLM", True)
     monkeypatch.setattr(stage, "resolve_llm_model", lambda: "explicit-offline-model")
     monkeypatch.setattr(stage, "llm_chat_json", reply)
-    monkeypatch.setattr(stage, "llm_json_response_format", lambda name, **kw:
-                        {"type": "json_schema", "json_schema": {"name": name, "schema": kw["schema"], "strict": True}}
-                        if mode == "json_schema" else {"type": "json_object"})
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     result = vfx_stage.attach_vfx_manifest(data, "short-vfx-repair", llm_director=stage.call_llm_vfx_director)
     assert result["debug"]["vfxDirectorRaw"] == native
     assert vfx_validation.validate_vfx_manifest_wire(result)["ok"]
@@ -123,7 +122,9 @@ def test_actual_provider_short_response_repairs_exact_field_and_preserves_wire(m
     assert repaired_element["properties"]["width"]["const"] == 12.0
     assert result["debug"]["vfxRepairFilterAudit"]["acceptedPaths"] == ["$.slotsUpsert[0].element.speedMaxPxPerTick"]
     if mode == "json_schema":
-        assert sent[1]["response_format"]["json_schema"]["schema"] == repair["outputSchema"]
+        assert sent[1]["response_format"]["json_schema"]["schema"] == provider_schema._provider_strict_projection(
+            provider_schema.defer_provider_cross_field_constraints(repair["outputSchema"]), omit_annotations=True,
+        )
 
 
 def test_fresh_provider_does_not_accept_old_wire_spelling(monkeypatch):

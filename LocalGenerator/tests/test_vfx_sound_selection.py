@@ -198,7 +198,14 @@ def test_real_repair_corrects_only_diagnosed_sound_leaf(monkeypatch, bad, mode):
     director, repair = [request_dossier(r) for r in sent]
     assert repair["runtimeVocabularyReadOnly"]["soundId"] == director["runtimeVocabulary"]["soundId"] == list(SOUND_IDS)
     assert "soundCue requires an explicit soundId" in director["runtimeVocabulary"]["rendererSemantics"]["soundCue"]
-    assert repair["repairScope"] == scope
+    expected_scope = copy.deepcopy(scope)
+    if mode == "json_schema" and bad is None:
+        # Strict transport null is the declared optional-absence sentinel. The
+        # local validator therefore diagnoses one missing field, not both the
+        # raw null type and semantic errors. Preserve exact multiplicity here.
+        assert scope["errorPaths"] == ["$.slots[0].soundId", "$.slots[0].soundId"]
+        expected_scope["errorPaths"] = ["$.slots[0].soundId"]
+    assert repair["repairScope"] == expected_scope
     for request in sent:
         assert request["response_format"]["type"] == mode
         if mode == "json_schema":

@@ -169,7 +169,12 @@ def _assert_vfx_alpha_repair_packet(packet, data, mode):
                     dict(valid, slotsUpsert=[dict(source["slots"][0], scale=4)])):
         assert not Draft202012Validator(schema).is_valid(hostile)
     if mode == "json_schema":
-        assert packet["response_format"]["json_schema"]["schema"] == schema
+        wire_schema = packet["response_format"]["json_schema"]["schema"]
+        assert wire_schema == provider_schema._provider_strict_projection(
+            provider_schema.defer_provider_cross_field_constraints(schema), omit_annotations=True,
+        )
+        assert Draft202012Validator(wire_schema).is_valid(valid)
+        assert not Draft202012Validator(wire_schema).is_valid(dict(valid, slotIdsDelete=[]))
 
 
 @pytest.mark.parametrize("stage", ["visual", "visual_repair"])
@@ -276,7 +281,9 @@ def test_vfx_caches_owned_slot_grammar_not_dynamic_compatibility(monkeypatch, st
         canonical = vfx_model_schema((vfx_repair.vfx_repair_schema if repair else vfx_schema._director_schema)(data))
         assert request_dossier(packet)["outputSchema"] == canonical
         if mode == "json_schema":
-            assert packet["response_format"]["json_schema"]["schema"] == canonical
+            assert packet["response_format"]["json_schema"]["schema"] == provider_schema._provider_strict_projection(
+                provider_schema.defer_provider_cross_field_constraints(canonical), omit_annotations=True,
+            )
         original_slot = canonical["properties"][key]["items"]
         for field in ("entityId", "event"):
             assert slot["properties"][field] == original_slot["properties"][field]
@@ -407,7 +414,10 @@ def test_reference_schema_reconstructs_owner_admission_and_refusal(monkeypatch, 
         assert '"$ref"' not in json.dumps(compact)
     inline = request_dossier(packet)[key]
     if mode == "json_schema":
-        assert inline == packet["response_format"]["json_schema"]["schema"]
+        expected_wire = inline if visual_stage else provider_schema._provider_strict_projection(
+            provider_schema.defer_provider_cross_field_constraints(inline), omit_annotations=True,
+        )
+        assert expected_wire == packet["response_format"]["json_schema"]["schema"]
     if visual_stage:
         valid = ({"schema": visual_contract.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": {"renderSizePx": 48},
                   "note": "one leaf"} if repair else _visual_kit(data))
