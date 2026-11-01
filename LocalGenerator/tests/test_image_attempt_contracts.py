@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+from dataclasses import replace
 import hashlib
 import io
 import json
@@ -18,6 +19,7 @@ from infini_local.core.images import config
 from infini_local.pipelines.visual.assets import build_visual_asset_plan
 from infini_local.services import asset_sync_service as sync
 from infini_local.services.sdcpp_service import ImageRequestGate
+from infini_local.storage.generation_checkpoint import GenerationCheckpoint, use_generation_checkpoint
 from infini_local.web.server_utility_routes import ServerUtilityRoutes
 from tests.vfx_image_fixtures import HttpCapture, _data, _request, _existing_texture_data
 
@@ -103,6 +105,179 @@ def invoke(kind, asset_id, data=None):
         return generation.generate_visual_asset(data, 'vfx:grain', job['prompt'], job['negativePrompt'], job['assetId'], 32, processing_role=kind)
     role = 'runtime:projectile' if kind == 'entity' else kind
     return generation.generate_visual_asset(data, role, 'one isolated amber round fixture with distinct core', 'UI, text, atlas', asset_id, 32, entity_id='orb' if kind == 'entity' else '')
+
+
+@pytest.fixture
+def image_checkpoint(offline):
+    root, _ = offline
+
+    def reopen():
+        return GenerationCheckpoint(root.parent / 'world', 'r_image_resume', {'worldId': '42', 'recipeKey': 'r_image_resume'})
+
+    checkpoint = reopen()
+    checkpoint.save_stage('visual', _data([]))
+    return checkpoint, reopen
+
+
+@pytest.mark.parametrize('kind', ['item', 'entity', 'vfx_strip'])
+def test_accepted_image_resumes_after_restart_and_provider_switch(offline, image_checkpoint, monkeypatch, kind):
+    root, requests = offline
+    checkpoint, reopen = image_checkpoint
+    source = _data([_request('grain', layout='strip' if kind == 'vfx_strip' else 'cutout')])
+    original = copy.deepcopy(source)
+    with use_generation_checkpoint(checkpoint):
+        expected = invoke(kind, 'accepted_resume', original)
+    expected_bytes = Path(expected[0]).read_bytes()
+    monkeypatch.setattr(generation, 'IMAGE_BACKEND', 'off')
+    monkeypatch.setattr(generation, 'IMAGE_BACKEND_CONFIG_ERROR', 'replacement provider not configured yet')
+    resumed = copy.deepcopy(source)
+    with use_generation_checkpoint(reopen()):
+        actual = invoke(kind, 'accepted_resume', resumed)
+
+    assert actual == expected and len(requests) == 1
+    assert serve(root, actual[0])['raw'] == expected_bytes
+    prefix = 'item' if kind == 'item' else 'runtime:projectile' if kind == 'entity' else 'vfx:grain'
+    for suffix in ('FinalPrompt', 'FinalPromptAttempt'):
+        assert resumed['debug'][prefix + suffix] == original['debug'][prefix + suffix]
+    for suffix in ('SpriteValidation', 'SpriteDiagnostics'):
+        assert json.loads(resumed['debug'][prefix + suffix]) == json.loads(original['debug'][prefix + suffix])
+    receipt = json.loads(resumed['debug'][prefix + 'SpriteCheckpointReuse'])
+    assert receipt['sha256'] == sha(expected_bytes) and receipt['newProviderCalls'] == 0
+    assert not generation.sprite_validation_fatal(receipt['validation'])
+
+
+@pytest.mark.parametrize('change', [
+    {'prompt': 'a distinct authored sapphire fixture'},
+    {'canvas': 48},
+    {'topology': 'multipart_separated', 'part_count_min': 2, 'part_count_max': 3},
+    {'publication_identity': b'another item or entity'},
+])
+def test_image_checkpoint_requires_the_exact_authored_request(offline, image_checkpoint, change):
+    _, requests = offline
+    checkpoint, reopen = image_checkpoint
+    request = generation._ImageRequest(
+        logical_asset_id='exact_request', audit_role='impact', processing_role='impact',
+        prompt='one isolated amber fixture', negative='UI, text', canvas=32,
+        topology='connected', part_count_min=1, part_count_max=1,
+        policy=generation._PublicationPolicy.RUNTIME_ASSET, publication_identity=b'original item and entity',
+    )
+    with use_generation_checkpoint(checkpoint):
+        first = generation._execute_image_request(_data([]), request)
+    with use_generation_checkpoint(reopen()):
+        second = generation._execute_image_request(_data([]), replace(request, **change))
+    assert first.public_path and second.public_path and len(requests) == 2
+    with Image.open(second.public_path) as final:
+        assert final.size == (change.get('canvas', 32),) * 2
+
+
+@pytest.mark.parametrize('fault', ['missing', 'bytes_changed', 'outside_root', 'wrong_canvas'])
+def test_reused_image_requires_owned_unchanged_technically_valid_png(offline, image_checkpoint, fault):
+    root, requests = offline
+    checkpoint, reopen = image_checkpoint
+    with use_generation_checkpoint(checkpoint):
+        first = invoke('item', 'image_integrity')
+    images = json.loads(checkpoint.path.read_text(encoding='utf-8'))['images']
+    key, receipt = next(iter(images.items()))
+    path = Path(first[0])
+    if fault == 'missing':
+        path.unlink()
+    elif fault == 'bytes_changed':
+        path.write_bytes(png((20, 90, 180)))
+    elif fault == 'outside_root':
+        outside = root.parent / 'outside.png'
+        outside.write_bytes(path.read_bytes())
+        receipt['result']['public_path'] = str(outside)
+        checkpoint.image_put(key, receipt)
+    else:
+        with Image.open(path) as original:
+            original.resize((64, 64), Image.Resampling.NEAREST).save(path)
+        receipt['sha256'] = sha(path.read_bytes())
+        checkpoint.image_put(key, receipt)
+    resumed = _data([])
+    with use_generation_checkpoint(reopen()):
+        second = invoke('item', 'image_integrity', resumed)
+    assert len(requests) == 2 and second[3] == 'generated'
+    assert Path(second[0]).is_relative_to(root)
+    assert 'itemSpriteCheckpointReuse' not in resumed['debug']
+    with Image.open(second[0]) as final:
+        assert final.size == (32, 32)
+
+
+@pytest.mark.parametrize('fault', ['png_read', 'checkpoint_write'])
+def test_image_checkpoint_io_fault_does_not_spend_quality_retries(offline, image_checkpoint, monkeypatch, fault):
+    _, requests = offline
+    checkpoint, _ = image_checkpoint
+    monkeypatch.setattr(generation, 'SPRITE_RETRIES', 2)
+    if fault == 'png_read':
+        with use_generation_checkpoint(checkpoint):
+            first = invoke('item', 'io_resume')
+        requests.clear()
+        original_open = Path.open
+
+        def open_file(path, *args, **kwargs):
+            if path == Path(first[0]):
+                raise PermissionError(13, 'accepted PNG read denied')
+            return original_open(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, 'open', open_file)
+    else:
+        original_replace = generation.os.replace
+
+        def replace_file(source, destination, *args, **kwargs):
+            if Path(destination) == checkpoint.path:
+                raise PermissionError(13, 'image checkpoint write denied')
+            return original_replace(source, destination, *args, **kwargs)
+
+        monkeypatch.setattr(generation.os, 'replace', replace_file)
+    with use_generation_checkpoint(checkpoint), pytest.raises(PermissionError):
+        invoke('item', 'io_resume')
+    assert len(requests) == (0 if fault == 'png_read' else 1)
+
+
+def test_parallel_image_join_does_not_claim_fresh_sibling_was_reused(offline, image_checkpoint, monkeypatch):
+    _, requests = offline
+    checkpoint, reopen = image_checkpoint
+    source = _data([])
+    orb = next(row for row in source['runtimeProgram']['entities'] if row['id'] == 'orb')
+    orb['visual'].update(assetMode='baked_sprite', prompt='one isolated reused amber orb',
+                         preferredCanvasSize=32, renderSizePx=24, forwardAngleDegrees=0)
+    sibling = copy.deepcopy(orb)
+    sibling['id'] = 'orb_fresh'
+    sibling['visual']['prompt'] = 'one isolated fresh sapphire orb'
+    source['runtimeProgram']['entities'].append(sibling)
+    source['runtimeProgram']['bindings'].append({'id': 'secondary', 'input': 'alternate_use',
+        'role': 'secondary', 'usePolicy': {'action': {'kind': 'spawn_entity', 'targetId': 'orb_fresh'},
+                                         'stackCost': 0, 'contactDamage': False}})
+    checkpoint.save_stage('visual', source)
+    backend_call = generation.generate_sdcpp
+
+    def fail_sibling(prompt, negative, asset_id, canvas, **kwargs):
+        if asset_id == source['id'] + '_orb_fresh':
+            return []
+        return backend_call(prompt, negative, asset_id, canvas, **kwargs)
+
+    monkeypatch.setattr(generation, 'generate_sdcpp', fail_sibling)
+    with use_generation_checkpoint(checkpoint):
+        first = generation.maybe_generate_visual_assets(copy.deepcopy(source))
+    initial_orb = next(row for row in first['runtimeProgram']['entities'] if row['id'] == 'orb')['visual']
+    initial_sibling = next(row for row in first['runtimeProgram']['entities'] if row['id'] == 'orb_fresh')['visual']
+    assert initial_orb['spriteStatus'] == 'generated' and initial_sibling['spriteStatus'] == 'failed'
+    accepted_bytes = Path(initial_orb['spritePath']).read_bytes()
+    before = len(requests)
+    monkeypatch.setattr(generation, 'generate_sdcpp', backend_call)
+    monkeypatch.setattr(generation, 'IMAGE_GENERATION_GATE', ImageRequestGate(2))
+    with use_generation_checkpoint(reopen()):
+        resumed = generation.maybe_generate_visual_assets(copy.deepcopy(source))
+    actual_orb = next(row for row in resumed['runtimeProgram']['entities'] if row['id'] == 'orb')['visual']
+    actual_sibling = next(row for row in resumed['runtimeProgram']['entities'] if row['id'] == 'orb_fresh')['visual']
+    assert len(requests) == before + 1
+    assert actual_orb['spritePath'] == initial_orb['spritePath']
+    assert Path(actual_orb['spritePath']).read_bytes() == accepted_bytes
+    assert actual_sibling['spriteStatus'] == 'generated' and Path(actual_sibling['spritePath']).is_file()
+    assert 'fresh sapphire orb' in resumed['debug']['runtime:projectileFinalPrompt']
+    assert 'runtime:projectileSpriteCheckpointReuse' not in resumed['debug']
+    assert resumed['debug']['itemSpriteCheckpointReuse']
+
 
 @pytest.mark.parametrize('kind,distinct_ids', [
     ('item', False), ('entity', False), ('impact', False), ('equip_overlay', False),
@@ -257,8 +432,9 @@ def test_raw_provider_canvas_above_client_limit_still_processes_to_final_png(off
     assert serve(root, result[0])['raw'] == Path(result[0]).read_bytes()
 
 
-def test_legacy_non_io_projection_tail_still_recovers_warn_without_a_placeholder(offline, monkeypatch):
+def test_legacy_non_io_projection_tail_still_recovers_warn_without_a_placeholder(offline, image_checkpoint, monkeypatch):
     root, requests = offline
+    checkpoint, reopen = image_checkpoint
     original_trace = generation.trace_event
     data = _data([])
 
@@ -268,13 +444,20 @@ def test_legacy_non_io_projection_tail_still_recovers_warn_without_a_placeholder
         return original_trace(*args, **kwargs)
 
     monkeypatch.setattr(generation, 'trace_event', failed_accepted_trace)
-    result = invoke('entity', 'trace_control', data)
+    with use_generation_checkpoint(checkpoint):
+        result = invoke('entity', 'trace_control', data)
     assert result[3] == 'generated_warn_invalid'
     assert len(requests) == 1
     assert sync.is_complete_png_file(result[0])
     attempts = json.loads(data['debug']['runtime:projectileSpriteValidation'])
     assert attempts[0]['validation']['ok'] and attempts[1]['phase'] == 'projection'
     assert data['debug']['runtime:projectileInvalidGeneratedUsedAsWarn']
+    monkeypatch.setattr(generation, 'IMAGE_BACKEND', 'off')
+    resumed = _data([])
+    with use_generation_checkpoint(reopen()):
+        assert invoke('entity', 'trace_control', resumed) == result
+    assert len(requests) == 1
+    assert json.loads(resumed['debug']['runtime:projectileSpriteValidation']) == attempts
 
 
 def test_private_retained_raw_and_stages_are_not_served_or_rostered(offline, monkeypatch):
@@ -621,9 +804,10 @@ def test_procedural_fallback_does_not_publish_unprocessed_raw_png(offline, monke
     assert not list(root.glob('infini_asset_png_*.png')), 'invalid fallback leaked into public PNG roster'
 
 
-def test_procedural_recovery_also_delivers_compact_png(offline, monkeypatch):
+def test_procedural_recovery_also_delivers_compact_png(offline, image_checkpoint, monkeypatch):
     """Explicit procedural policy still produces a baked final PNG after stage failure."""
     root, _ = offline
+    checkpoint, _ = image_checkpoint
     monkeypatch.setattr(generation, '_generate_backend_variants', lambda *args, **kwargs: [])
     monkeypatch.setattr(generation, 'VISUAL_STRICT_AI_AUTHORSHIP', False)
     monkeypatch.setattr(generation, 'VISUAL_ALLOW_PROCEDURAL_FALLBACK', True)
@@ -638,9 +822,11 @@ def test_procedural_recovery_also_delivers_compact_png(offline, monkeypatch):
     monkeypatch.setattr(post, 'prepare_sprite_master',
                         lambda *args, **kwargs: (_ for _ in ()).throw(ValueError('master broken')))
     data = _data([])
-    path, url, _score, status = invoke('item', 'fallback_compact', data)
+    with use_generation_checkpoint(checkpoint):
+        path, url, _score, status = invoke('item', 'fallback_compact', data)
     assert status == 'fallback_after_failed_generation' and path and url
     with Image.open(path) as delivered:
         assert delivered.size == (32, 32)
     assert sync.is_complete_png_file(path)
     assert serve(root, path)['raw'] == Path(path).read_bytes()
+    assert json.loads(checkpoint.path.read_text(encoding='utf-8'))['images'] == {}

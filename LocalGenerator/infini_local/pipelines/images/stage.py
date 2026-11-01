@@ -10,7 +10,7 @@ import os
 import tempfile
 import traceback
 import uuid
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -36,6 +36,7 @@ from infini_local.core.images.config import (
 from infini_local.services import codex_auth, visual_asset_pipeline
 from infini_local.services.codex_auth import CodexError
 from infini_local.services.visual_asset_pipeline import ImageOutputIOError, load_image_input, save_image_output, sprite_status_from_raw_path, truncate_prompt_at_boundary
+from infini_local.storage.generation_checkpoint import GenerationCheckpoint, current_generation_checkpoint
 from infini_local.storage.trace_runtime import (
     log_event,
     trace_event,
@@ -384,8 +385,81 @@ def _finish_image_request(data: dict[str, Any], request: _ImageRequest, result: 
     return result
 
 
+def _image_checkpoint_request(request: _ImageRequest) -> tuple[str, dict[str, Any]]:
+    # Every authored/technical request field participates. Provider selection
+    # does not: switching a failed provider must not throw away accepted artwork.
+    identity = asdict(request)
+    identity.update(policy=request.policy.value, publication_identity=request.publication_identity.hex())
+    encoded = json.dumps(identity, sort_keys=True, ensure_ascii=True, separators=(",", ":"), allow_nan=False).encode("ascii")
+    return hashlib.sha256(encoded).hexdigest(), identity
+
+
+def _restore_checkpoint_image(data: dict[str, Any], request: _ImageRequest,
+                              checkpoint: GenerationCheckpoint, key: str,
+                              identity: dict[str, Any]) -> _ImageResult | None:
+    receipt = checkpoint.image_get(key)
+    if not isinstance(receipt, dict) or receipt.get("request") != identity:
+        return None
+    saved = receipt.get("result")
+    if not isinstance(saved, dict) or saved.get("status") not in {"generated", "generated_warn_invalid"}:
+        return None
+    attempts = saved.get("attempts")
+    if (not isinstance(saved.get("public_path"), str) or not isinstance(attempts, (list, tuple))
+            or any(not isinstance(row, dict) for row in attempts)):
+        return None
+    try:
+        result = _ImageResult(**{**saved, "attempts": tuple(attempts)})
+    except TypeError:
+        return None
+    path = Path(result.public_path)
+    if not path.is_absolute() or path.suffix.lower() != ".png" or not path.resolve().is_relative_to(SPRITE_DIR.resolve()):
+        return None
+    try:
+        with path.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    except FileNotFoundError:
+        return None
+    # Permission/read failures propagate rather than purchasing another image.
+    if digest != receipt.get("sha256"):
+        return None
+    validation = validate_processed_sprite(str(path), request.processing_role,
+        topology=request.topology, part_count_min=request.part_count_min,
+        part_count_max=request.part_count_max, expected_canvas=request.canvas)
+    if sprite_validation_fatal(validation):
+        return None
+    result = _finish_image_request(data, request, result, list(result.attempts))
+    prefix = "item" if request.policy is _PublicationPolicy.ITEM else request.audit_role
+    reused = {"requestKey": key, "sha256": digest, "newProviderCalls": 0, "validation": validation}
+    data["debug"][prefix + "SpriteCheckpointReuse"] = json.dumps(reused, ensure_ascii=False)
+    trace_event("step", f"IMAGE:{request.audit_role}", "accepted sprite restored from generation checkpoint", {
+        "assetId": request.logical_asset_id, "path": str(path), **reused,
+    })
+    return result
+
+
+def _save_checkpoint_image(checkpoint: GenerationCheckpoint | None, key: str,
+                           identity: dict[str, Any], result: _ImageResult) -> None:
+    if (checkpoint is None or IMAGE_BACKEND == "procedural"
+            or result.status not in {"generated", "generated_warn_invalid"} or not result.public_path):
+        return
+    path = Path(result.public_path)
+    if not path.resolve().is_relative_to(SPRITE_DIR.resolve()):
+        raise ValueError("accepted image checkpoint must remain inside the sprite directory")
+    with path.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    checkpoint.image_put(key, {"request": identity, "sha256": digest, "result": asdict(result)})
+
+
 def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _ImageResult:
     """The sole budget → generate → process → validate/refit → commit lifecycle."""
+    checkpoint = current_generation_checkpoint()
+    checkpoint_key, checkpoint_identity = _image_checkpoint_request(request) if checkpoint is not None else ("", {})
+    if checkpoint is not None:
+        prefix = "item" if request.policy is _PublicationPolicy.ITEM else request.audit_role
+        data.setdefault("debug", {}).pop(prefix + "SpriteCheckpointReuse", None)
+        restored = _restore_checkpoint_image(data, request, checkpoint, checkpoint_key, checkpoint_identity)
+        if restored is not None:
+            return restored
     result = _ImageResult(final_prompt=request.prompt if request.final_frame_clause else truncate_prompt_at_boundary(request.prompt, 1800))
     attempts: list[dict[str, Any]] = []
     if IMAGE_BACKEND == "off":
@@ -509,7 +583,8 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
                     "score": result.technical_score, "candidateScore": result.candidate_score, "status": status, "validation": validation,
                 })
                 result = replace(result, public_path=published, status=status, failure_phase="")
-                return _finish_image_request(data, request, result, attempts)
+                result = _finish_image_request(data, request, result, attempts)
+                break
         except Exception as exc:
             # The Codex adapter wraps OSError, including TimeoutError.
             # Restore transport deadline attribution without retrying the image
@@ -524,6 +599,12 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
                     or (isinstance(exc, OSError) and phase in {"processing", "projection"})):
                 terminal = True
                 break
+    if result.public_path:
+        # Persist immediately, including inside an overlapping image worker.
+        # This remains outside quality retry/fallback handling: a failed local
+        # checkpoint write cannot trigger another paid provider request.
+        _save_checkpoint_image(checkpoint, checkpoint_key, checkpoint_identity, result)
+        return result
     if last_path:
         result = replace(result, discarded_path=str(Path(last_path).resolve()))
         # Retain a technically usable processed PNG after a nonterminal tail fault;
@@ -532,10 +613,13 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
             try:
                 published = _publish_image_png(request.publication_identity, last_path)
                 result = replace(result, public_path=published, status="generated_warn_invalid", failure_phase="", late_warning=True)
-                return _finish_image_request(data, request, result, attempts)
+                result = _finish_image_request(data, request, result, attempts)
             except OSError as exc:
                 terminal = True
                 result = replace(result, error=repr(exc), failure_phase="publication")
+            else:
+                _save_checkpoint_image(checkpoint, checkpoint_key, checkpoint_identity, result)
+                return result
     if not terminal and not required_vfx and IMAGE_BACKEND != "openai_codex" and VISUAL_ALLOW_PROCEDURAL_FALLBACK and not VISUAL_STRICT_AI_AUTHORSHIP:
         phase = "processing"
         try:
@@ -705,6 +789,7 @@ def _join_image_result(data, completed, role):
     # _finish_image_request explicitly clears this key after a successful job.
     if prefix + "SpriteValidation" in diagnostics:
         debug.pop(prefix + "SpriteFailurePhase", None)
+        debug.pop(prefix + "SpriteCheckpointReuse", None)
     debug.update(diagnostics)
     return result
 

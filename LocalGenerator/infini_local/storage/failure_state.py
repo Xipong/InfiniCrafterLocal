@@ -89,6 +89,13 @@ def _project_transport_fields(value: Any, fields: dict[str, str]) -> dict[str, A
     return out
 
 
+def _resume_status(value: Any) -> dict[str, Any]:
+    if (isinstance(value, dict) and value.get("available") is True
+            and isinstance(value.get("stage"), str) and value["stage"] in {"gameplay", "visual", "vfx"}):
+        return {"available": True, "stage": value["stage"]}
+    return {}
+
+
 def summarize_failure(failure: dict[str, Any]) -> dict[str, Any]:
     if not failure:
         return {}
@@ -96,6 +103,9 @@ def summarize_failure(failure: dict[str, Any]) -> dict[str, Any]:
     supplement = _project_transport_fields(failure.get("transportDebug"), _TRANSPORT_SUMMARY_FIELDS)
     if supplement:
         summary["transportDebug"] = supplement
+    resume = _resume_status(failure.get("generationResume"))
+    if resume:
+        summary["generationResume"] = resume
     return summary
 
 
@@ -155,6 +165,10 @@ def build_combine_failure(
     supplement = _transport_debug(error)
     if supplement:
         failure["transportDebug"] = supplement
+    debug = partial_data.get("debug") if isinstance(partial_data, dict) else None
+    resume = debug.get("generationResume") if isinstance(debug, dict) else None
+    if projected := _resume_status(resume):
+        failure["generationResume"] = projected
     return failure
 
 

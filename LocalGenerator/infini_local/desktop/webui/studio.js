@@ -802,10 +802,16 @@
       }
       if (text(data.version)) rows.push(readout(t('Версия генератора'), text(data.version)));
       const parents = object(data.parents) ? [text(data.parents.a), text(data.parents.b)].filter(Boolean) : [];
+      const resume = object(data.generationResume) ? data.generationResume : {};
+      const savedStages = {gameplay:t('Механика'),visual:t('Механика и внешний вид'),vfx:t('Механика, внешний вид и VFX')};
+      const canResume = resume.available === true && Object.hasOwn(savedStages, resume.stage);
       return '<section class="trace-inspector" data-trace-kind="failure">' +
         head('alert', t('Сохранённый отчёт'), t('Последний сбой крафта')) +
         (parents.length ? `<p class="trace-inspector-context">${t("Крафт:")} ` + esc(shorten(parents.join(' + '))) + '</p>' : '') +
         '<p class="trace-inspector-message">' + esc(shorten(error) || t('Текст ошибки не сохранён.')) + '</p>' +
+        (canResume ? '<p class="trace-inspector-message" data-generation-resume><strong>' + t('Прогресс сохранён:') +
+          ' ' + savedStages[resume.stage] + '.</strong> ' +
+          t('Повтори крафт с теми же ингредиентами в тех же слотах и в том же мире. Генерация продолжится с сохранённого этапа, в том числе после перезапуска генератора.') + '</p>' : '') +
         (rows.length ? '<dl class="trace-readouts">' + rows.join('') + '</dl>' : '') +
         rawDetails + '</section>';
     } catch {
