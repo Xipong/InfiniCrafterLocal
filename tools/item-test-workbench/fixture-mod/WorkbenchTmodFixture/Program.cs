@@ -18,4 +18,7 @@ MethodInfo add = typeof(TmodFile).GetMethod("AddFile", all)!;
 add.Invoke(file, new object[] { "Info", info });
 add.Invoke(file, new object[] { name + ".dll", File.ReadAllBytes(args[0]) });
 add.Invoke(file, new object[] { "workbench-original.txt", Encoding.UTF8.GetBytes("fixture archive bytes") });
+string localization = Path.Combine(args[1], "Localization");
+if (Directory.Exists(localization)) foreach (string path in Directory.EnumerateFiles(localization, "*", SearchOption.AllDirectories))
+    add.Invoke(file, new object[] { "Localization/" + Path.GetRelativePath(localization, path).Replace('\\', '/'), File.ReadAllBytes(path) });
 typeof(TmodFile).GetMethod("Save", all)!.Invoke(file, null);

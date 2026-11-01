@@ -47,6 +47,10 @@ internal sealed class WNativeLoader : IDisposable
         Main.dedServ = true;
         Main.netMode = 0;
         Main.rand = new Terraria.Utilities.UnifiedRandom(1);
+        // LocalizationLoader.Autoload adds mod GameTips to this real engine
+        // collection. Main's normal initialization is absent in this process.
+        FieldInfo gameTips = typeof(Main).GetField("gameTips", Any)!;
+        if (gameTips.GetValue(null) is null) gameTips.SetValue(null, Activator.CreateInstance(gameTips.FieldType));
         for (int i = 0; i < Main.player.Length; i++) Main.player[i] ??= new Player();
         ContentSamples.Initialize(); // vanilla samples before mod registration
         typeof(Main).GetMethod("Initialize_TileAndNPCData1", Any)!.Invoke(null, null);
