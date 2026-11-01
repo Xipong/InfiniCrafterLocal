@@ -1,0 +1,54 @@
+name: Calamity Workshop availability diagnostic
+on:
+  push:
+    branches:
+      - 'codex/calamity-workshop-diagnostic'
+  pull_request:
+    paths:
+      - '.github/workflows/calamity-workshop-diagnostic.yml'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Prepare official SteamCMD
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y lib32gcc-s1 lib32stdc++6
+          mkdir -p "$RUNNER_TEMP/steamcmd" "$RUNNER_TEMP/tml-workshop"
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/steamcmd.tar.gz" \
+            https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz
+          tar -xzf "$RUNNER_TEMP/steamcmd.tar.gz" -C "$RUNNER_TEMP/steamcmd"
+      - name: Download official public Workshop items anonymously
+        shell: bash
+        run: |
+          set -uo pipefail
+          status=0
+          for item in 2824688072 2824688266; do
+            printf '\nRequesting app 1281930, Workshop item %s\n' "$item"
+            timeout 700 "$RUNNER_TEMP/steamcmd/steamcmd.sh" \
+              +force_install_dir "$RUNNER_TEMP/tml-workshop" \
+              +login anonymous \
+              +workshop_download_item 1281930 "$item" validate \
+              +quit > "$RUNNER_TEMP/steamcmd-$item.log" 2>&1
+            code=$?
+            tail -n 35 "$RUNNER_TEMP/steamcmd-$item.log"
+            printf 'SteamCMD exit code for %s: %s\n' "$item" "$code"
+            mapfile -d '' files < <(find "$RUNNER_TEMP" -path "*/workshop/content/1281930/$item/*" -type f -iname '*.tmod' -print0)
+            if (( ${#files[@]} == 0 )); then
+              printf 'No .tmod file found for item %s\n' "$item" >&2
+              status=1
+            else
+              for file in "${files[@]}"; do
+                printf 'Downloaded: %s bytes: ' "$file"
+                stat -c '%s' "$file"
+                sha256sum "$file"
+              done
+            fi
+            if (( code != 0 )); then status=1; fi
+          done
+          exit "$status"
