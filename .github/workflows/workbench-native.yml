@@ -1,0 +1,110 @@
+name: Workbench native particle smoke
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/workbench-native.yml'
+      - 'tools/item-test-workbench/**'
+      - 'tools/native/**'
+      - 'tools/fixtures/video-ui-buffs/**'
+      - 'ModSources/InfiniCrafterLocal/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  particle-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install graphics and review dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libgl1-mesa-dri libopenal1
+          python -m pip install pillow
+      - name: Install pinned tModLoader native libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/tml.zip" \
+            https://github.com/tModLoader/tModLoader/releases/download/v2026.08.3.0/tModLoader.zip
+          echo '61e865f3702b12ce4a26c5a90b9de99a12c65ffc228455eb3390ce54af1eab15  '"$RUNNER_TEMP/tml.zip" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/tml"
+          unzip -q "$RUNNER_TEMP/tml.zip" -d "$RUNNER_TEMP/tml"
+          native="$RUNNER_TEMP/tml/Libraries/Native/Linux"
+          for file in libSDL2-2.0.so.0 libFNA3D.so.0 libFAudio.so.0 libtheorafile.so; do
+            test -f "$native/$file" || { echo "Missing tModLoader native library: $native/$file" >&2; exit 1; }
+          done
+          echo "INFINI_TML_NATIVE_DIR=$native" >> "$GITHUB_ENV"
+      - name: Install ParticleLibrary and Luminance references
+        shell: bash
+        run: |
+          set -euo pipefail
+          deps="$RUNNER_TEMP/ifc-deps"
+          python -m toolbox workbench setup-particle --deps-root "$deps"
+          mkdir -p "$deps/Luminance/bin/Debug/net8.0"
+          curl --fail --location --retry 3 --output "$deps/Luminance/bin/Debug/net8.0/Luminance.dll" \
+            https://github.com/LucilleKarma/Luminance/releases/download/v1.0.12/Luminance.dll
+          echo "INFINI_TML_DEPS_SRC=$deps" >> "$GITHUB_ENV"
+          echo "INFINI_PARTICLE_ASSET_DIR=$deps/particle-assets" >> "$GITHUB_ENV"
+      - name: Restore matching managed tModLoader references
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj -p:TmlVersion=2026.08.3.0
+          dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj -p:TmlVersion=2026.08.3.0
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          data = json.loads(Path('ModSources/InfiniCrafterLocal/obj/project.assets.json').read_text())
+          packages = [entry for name, entry in data['libraries'].items() if name.lower().startswith('tmodloader/')]
+          if len(packages) != 1:
+              raise SystemExit('Expected exactly one restored tModLoader reference package')
+          refs = [Path(root) / packages[0]['path'] / 'lib/net8.0' for root in data['packageFolders']]
+          refs = [path.resolve() for path in refs if (path / 'tModLoader.dll').is_file()]
+          if len(refs) != 1:
+              raise SystemExit('Expected exactly one tModLoader reference directory')
+          with open(os.environ['GITHUB_ENV'], 'a') as stream:
+              stream.write(f'INFINI_TML_REFERENCE_DIR={refs[0]}\n')
+          PY
+      - name: Fetch community MagicPixel resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/item-test-workbench/fetch_player_assets.py --out "$RUNNER_TEMP/player-assets"
+          echo "INFINI_PLAYER_ASSET_DIR=$RUNNER_TEMP/player-assets" >> "$GITHUB_ENV"
+      - name: Build and execute original native particle checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/workbench-ci
+          python tools/item-test-workbench/workbench.py build 2>&1 | tee artifacts/workbench-ci/build.log
+          python tools/item-test-workbench/verify_vfx.py --no-build --out artifacts/workbench-ci/evidence \
+            2>&1 | tee artifacts/workbench-ci/verify.log
+      - name: Export captured native frames as GIF
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          trace=artifacts/workbench-ci/evidence/captured-hit/native.json
+          if test -f "$trace"; then
+            python tools/item-test-workbench/workbench.py native-review "$trace" \
+              --out artifacts/workbench-ci/native-review --gif --gif-stride 2
+          else
+            echo 'Native capture did not complete; see previous step and logs.'
+          fi
+      - name: Upload native evidence and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-native-particle-evidence
+          path: artifacts/workbench-ci/
+          if-no-files-found: warn

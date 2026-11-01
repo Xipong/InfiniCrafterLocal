@@ -8,6 +8,20 @@ from native_environment import discover
 
 
 class NativeEnvironmentTests(unittest.TestCase):
+    def test_single_dll_and_assets_under_explicit_dependency_root_are_discovered(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); deps = root / 'custom-deps'
+            dll = deps / 'ParticleLibrary/ParticleLibrary.dll'
+            art = deps / 'particle-assets/Assets/Textures/Star.png'
+            for path in (dll, art):
+                path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b'fixture')
+            env, _ = discover(root, {'INFINI_TML_DEPS_SRC': str(deps)}, root)
+            self.assertEqual(env['INFINI_PARTICLE_ASSET_DIR'], str(deps / 'particle-assets'))
+            conventional = root / 'artifacts/dependencies/ParticleLibrary/ParticleLibrary.dll'
+            conventional.parent.mkdir(parents=True); conventional.write_bytes(b'fixture')
+            env, _ = discover(root, {}, root)
+            self.assertEqual(env['INFINI_TML_DEPS_SRC'], str(root / 'artifacts/dependencies'))
+
     def test_restored_references_and_conventional_assets_are_discovered(self):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp); repo = base / 'repo'; home = base / 'home'; packages = base / 'packages'

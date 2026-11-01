@@ -4687,22 +4687,6 @@
       "visibility": "internal"
     },
     {
-      "declarations": [],
-      "default": [],
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_TML_REFERENCE_DIR",
-      "owners": [
-        "tools/item-test-workbench/workbench.py"
-      ],
-      "secret": false,
-      "type": "unknown",
-      "visibility": "internal"
-    },
-    {
       "declarations": [
         {
           "default": 120,
@@ -5451,8 +5435,8 @@
     }
   ],
   "errors": [],
-  "fieldCount": 222,
-  "fingerprint": "3b49a1850afd9b9b784544c445540a6a7eb93f03b916d7f11f83d15a1e74e0d0",
+  "fieldCount": 221,
+  "fingerprint": "2c58f680bdb43d1c8162a602fc787ab300ff18aef6660ebacd8b8c9487704b91",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

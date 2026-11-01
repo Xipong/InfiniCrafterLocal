@@ -67,11 +67,11 @@ Run commands below from the repository root.
 - Matching [official tModLoader assemblies](https://github.com/tModLoader/tModLoader/releases)
   and their managed dependencies. Local development exercised tML `v2026.08.3.0`
   (Terraria 1.4.4.9); a different release requires revalidation.
-- ParticleLibrary and Luminance reference DLLs, using the layout below. The existing
-  [repository CI setup](../../.github/workflows/ci.yml) documents dependency download
-  and tModLoader reference discovery after restoring the mod project. Use reputable
-  upstream releases, not an arbitrary assembly pack. VFX asset setup additionally
-  requires the exact ParticleLibrary DLL hash recorded in its manifest.
+- ParticleLibrary and Luminance reference DLLs, using the layout below. Install the
+  pinned ParticleLibrary DLL and its original resources together with
+  `python -m toolbox workbench setup-particle`. The existing
+  [repository CI setup](../../.github/workflows/ci.yml) documents the Luminance DLL
+  and tModLoader reference discovery after restoring the mod project.
 
 Set these to your own existing dependency directories:
 
@@ -390,17 +390,20 @@ OpenGL/Mesa stack and expose the official tML native libraries and content:
 ```sh
 export INFINI_TML_NATIVE_DIR="/path/to/tModLoader/Libraries/Native/Linux"
 export INFINI_TML_CONTENT_DIR="/path/to/tModLoader/Content"
-python tools/item-test-workbench/fetch_vfx_assets.py \
-  --particle-dll "$INFINI_TML_DEPS_SRC/ParticleLibrary/ParticleLibrary.dll" \
-  --out artifacts/dependencies/particle-assets
-export INFINI_PARTICLE_ASSET_DIR="$PWD/artifacts/dependencies/particle-assets"
+python -m toolbox workbench setup-particle
 python tools/item-test-workbench/fetch_player_assets.py \
   --out artifacts/dependencies/player-assets --include-dummy
 export INFINI_PLAYER_ASSET_DIR="$PWD/artifacts/dependencies/player-assets"
 ```
 
-The VFX fetcher checks the installed DLL and downloads pinned upstream resources;
-it does not replace the DLL. The player fetcher downloads 20 pinned **community
+The ParticleLibrary setup downloads the pinned official DLL and upstream resources,
+verifies their exact SHA-256 hashes and refuses to overwrite mismatched existing
+files. Its default location is `artifacts/dependencies`, or `INFINI_TML_DEPS_SRC`
+when set; `--deps-root` selects another root. Set `INFINI_TML_DEPS_SRC` to that
+custom root for subsequent commands. The setup does not install .NET, tML or
+Luminance, and does not establish that the renderer initialized successfully.
+To use an existing matching DLL, the separate `fetch_vfx_assets.py --particle-dll
+DLL --out DIR` remains available. The player fetcher downloads 20 pinned **community
 source PNGs**, or 22 with `--include-dummy`, not HD upscales. These are labelled
 1.4.4.9 upstream but are not certified against official game XNB bytes. Both fetchers
 verify hashes/sizes and refuse mismatches/symlinks instead of silently overwriting.

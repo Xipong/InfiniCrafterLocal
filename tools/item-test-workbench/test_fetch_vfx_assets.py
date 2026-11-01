@@ -20,7 +20,9 @@ class FetchVfxAssetsTests(unittest.TestCase):
         self.dll.write_bytes(b"existing DLL")
         self.contents = {"LICENSE": b"test license", "Assets/Textures/Star.png": b"test image bytes"}
         self.manifest = {"package": "ParticleLibrary", "version": "test", "commit": "a" * 40,
-            "installedDll": {"bytes": self.dll.stat().st_size, "sha256": setup.digest(self.dll.read_bytes())},
+            "installedDll": {"relativePath": "ParticleLibrary/ParticleLibrary.dll",
+                "sourceURL": setup.OFFICIAL_PREFIX + "a" * 40 + "/ParticleLibrary.dll",
+                "bytes": self.dll.stat().st_size, "sha256": setup.digest(self.dll.read_bytes())},
             "files": [{"path": path, "sourceURL": setup.OFFICIAL_PREFIX + "a" * 40 + "/" + path,
                        "bytes": len(data), "sha256": setup.digest(data)} for path, data in self.contents.items()]}
         self.calls = []
@@ -42,6 +44,54 @@ class FetchVfxAssetsTests(unittest.TestCase):
         self.assertEqual(result["reused"], 2)
         self.assertEqual(self.calls, [])
         self.assertEqual(list(self.out.rglob(".asset-*")), [])
+
+    def test_setup_installs_dll_and_assets_and_reuses_verified_files(self):
+        deps = self.root / "dependencies"
+        original = self.dll.read_bytes()
+        self.contents["ParticleLibrary/ParticleLibrary.dll"] = original
+        result = setup.setup_particle(deps, self.manifest, self.fetch)
+        self.assertEqual((deps / "ParticleLibrary/ParticleLibrary.dll").read_bytes(), original)
+        self.assertEqual((deps / "particle-assets/LICENSE").read_bytes(), self.contents["LICENSE"])
+        self.assertTrue(result["dll"]["downloaded"])
+        self.assertEqual(result["environment"]["INFINI_TML_DEPS_SRC"], str(deps))
+        self.assertFalse(result["runtimeReady"])
+        self.calls.clear()
+        again = setup.setup_particle(deps, self.manifest, self.fetch)
+        self.assertFalse(again["dll"]["downloaded"])
+        self.assertEqual(self.calls, [])
+
+    def test_setup_rejects_corrupt_or_untrusted_dll_without_replacement(self):
+        deps = self.root / "dependencies"
+        bad = deps / "ParticleLibrary/ParticleLibrary.dll"
+        bad.parent.mkdir(parents=True)
+        bad.write_bytes(b"existing unrelated bytes")
+        with self.assertRaisesRegex(ValueError, "Integrity mismatch"):
+            setup.setup_particle(deps, self.manifest, self.fetch)
+        self.assertEqual(bad.read_bytes(), b"existing unrelated bytes")
+        self.assertEqual(self.calls, [])
+        bad.unlink()
+        with self.assertRaisesRegex(ValueError, "Integrity mismatch"):
+            setup.setup_particle(deps, self.manifest, lambda entry: b"bad download")
+        self.assertFalse(bad.exists())
+        manifest = copy.deepcopy(self.manifest)
+        manifest["installedDll"]["sourceURL"] = "https://example.com/ParticleLibrary.dll"
+        with self.assertRaisesRegex(ValueError, "pinned official source"):
+            setup.setup_particle(deps, manifest, self.fetch)
+
+    def test_workbench_setup_command_routes_to_particle_installer(self):
+        import sys
+        from contextlib import redirect_stdout
+        from io import StringIO
+        from unittest.mock import patch
+        import fetch_vfx_assets
+        import workbench
+        deps = self.root / "cli-dependencies"
+        with patch.object(sys, "argv", ["workbench", "setup-particle", "--deps-root", str(deps)]), \
+             patch.object(fetch_vfx_assets, "setup_particle", return_value={"status": "verified"}) as install, \
+             redirect_stdout(StringIO()):
+            self.assertEqual(workbench.main(), 0)
+        self.assertEqual(install.call_args.args[0], deps)
+        self.assertEqual(install.call_args.args[1]["package"], "ParticleLibrary")
 
     def test_wrong_dll_refuses_before_download(self):
         self.dll.write_bytes(b"wrong DLL")

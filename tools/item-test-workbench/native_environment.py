@@ -52,16 +52,17 @@ def discover(root: Path, environ=None, home=None):
         notes['referenceDiscovery'] = error
 
     deps = root / 'artifacts/dependencies'
-    if (deps / 'ParticleLibrary/ParticleLibrary.dll').is_file() and (deps / 'Luminance/bin/Debug/net8.0/Luminance.dll').is_file():
+    if (deps / 'ParticleLibrary/ParticleLibrary.dll').is_file() or (deps / 'Luminance/bin/Debug/net8.0/Luminance.dll').is_file():
         choose('INFINI_TML_DEPS_SRC', deps, 'artifacts/dependencies')
     else:
         choose('INFINI_TML_DEPS_SRC', None, '')
+    effective_deps = Path(env.get('INFINI_TML_DEPS_SRC', str(deps))).expanduser()
     for var, directory, marker in [
         ('INFINI_PLAYER_ASSET_DIR', 'player-assets', 'Images/MagicPixel.png'),
         ('INFINI_PARTICLE_ASSET_DIR', 'particle-assets', 'Assets/Textures/Star.png'),
     ]:
-        candidate = deps / directory
-        choose(var, candidate if (candidate / marker).is_file() else None, 'artifacts/dependencies/' + directory)
+        candidate = effective_deps / directory
+        choose(var, candidate if (candidate / marker).is_file() else None, str(candidate))
 
     # An explicit installation root is useful for non-Steam installs. If not
     # provided, only the standard Linux Steam path is considered.
