@@ -71,6 +71,38 @@ class WorkbenchTests(unittest.TestCase):
             mod.write_bytes(b'changed mod');self.assertNotEqual(before,w.native_binaries_state(host))
             mod.write_bytes(b'mod');host.write_bytes(b'changed host');self.assertNotEqual(before,w.native_binaries_state(host))
 
+    def test_loader_tracks_all_extra_mod_content_and_preserves_input_order(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);host=root/'ItemTestWorkbench.dll';host.write_bytes(b'host')
+            scene=root/'scene.json';scene.write_text('{"ticks":1}')
+            mods=[]
+            for name in ('dependent','dependency'):
+                dll=root/(name+'.dll');dll.write_bytes(name.encode())
+                content=root/name;(content/'Items').mkdir(parents=True)
+                (content/'build.txt').write_text('version=1')
+                (content/'Items'/'texture.png').write_bytes(b'original')
+                mods.append((dll,content))
+            report={'status':'passed','snapshots':[{'tick':0}],'assertions':[{'status':'passed'}]}
+            for mutate in (False,True):
+                texture=mods[0][1]/'Items'/'texture.png';texture.write_bytes(b'original')
+                args=SimpleNamespace(timeout=10,item=None,native_item='Example/Item',scenario=scene,
+                    out=root/str(mutate),no_build=True,item_boundary='fresh',probe_dll=None,probe_mod_root=None,mods=mods)
+                def run(command,**kwargs):
+                    pairs=[(command[i+1],command[i+3]) for i,x in enumerate(command) if x=='--mod-dll']
+                    self.assertEqual(pairs,[(str(dll),str(content)) for dll,content in mods])
+                    Path(command[command.index('--output')+1]).write_text(json.dumps(report))
+                    if mutate:texture.write_bytes(b'changed')
+                    return subprocess.CompletedProcess(command,0,'','')
+                with patch.object(w,'native_executable',return_value=(host,{})),patch.object(w,'build_state',return_value={}),patch.object(w.subprocess,'run',side_effect=run):
+                    if mutate:
+                        with self.assertRaisesRegex(RuntimeError,'changed during execution'):w.execute_loader_run(args)
+                    else:self.assertEqual(w.execute_loader_run(args),0)
+                receipt=json.loads((args.out/'receipt.json').read_text())
+                self.assertEqual(receipt['extraContent'][str(mods[0][1])]['Items/texture.png'],w.hashlib.sha256(b'original').hexdigest())
+                self.assertEqual(receipt['binariesUnchanged'],not mutate)
+
     def test_no_build_refuses_changed_index_or_separate_mod_build_inputs(self):
         from unittest.mock import patch
         with tempfile.TemporaryDirectory() as d:

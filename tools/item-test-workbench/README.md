@@ -22,12 +22,28 @@ including an `INFINI_MOD_SOURCE_ROOT` override, and refuses evidence if those
 inputs change during the run.
 
 For a registered item use `--native-item WoodenBoomerang`, a native ID, or
-`--native-item ModName/ItemName` instead of generated JSON. An additional mod
-can be autoloaded from its separately built DLL using `--probe-dll PATH` and
-`--probe-mod-root PATH` (directory containing its build.txt, localization and
-assets). Its declared dependencies, including weak references, must be loaded;
+`--native-item ModName/ItemName` instead of generated JSON. Supply additional
+separately built mod DLLs and their source/content roots with repeatable `--mod`
+options, for example:
+
+```bash
+python tools/item-test-workbench/workbench.py loader-run \
+  --native-item ExampleMod/ExampleItem --scenario /path/to/scenario.json \
+  --mod /path/to/ExampleMod.dll /path/to/ExampleMod \
+  --mod /path/to/Dependency.dll /path/to/Dependency --out /path/to/run
+```
+
+Each root must contain `build.txt` and the original content files. The loader
+orders supplied mods by their declared dependency names; CLI order need not
+match load order. The previous `--probe-dll PATH --probe-mod-root PATH` pair
+remains supported. Declared dependencies, including weak references, must be loaded;
 unavailable ones are refused because this host does not emulate tML's separate
 mod assembly contexts and weak-dependency type filtering.
+This name-based check does not validate dependency versions. The in-memory
+`Mod.File` contains metadata and localization rather than a complete original
+`.tmod`, and its file API and asset readers do not reproduce the game client.
+Therefore a passing CPU scenario is not evidence that arbitrary mod content,
+resources or graphics will load correctly in the client.
 For a native mod NPC set `dummy.nativeType` to its exact `ModName/NpcName`.
 
 This path currently supports CPU scenes with aim/primary/alt/release, a bounded
@@ -45,6 +61,9 @@ older runner. The existing `run` and rendering tools retain their earlier scope.
 `verify_loader_scene.py` checks real combat and effects plus independent hooks
 from `fixture-mod/WorkbenchObserverFixture.Standalone.csproj`. These are
 standalone child processes, without launching `Terraria.Main` or a server.
+`verify_multi_mod_loader.py` exercises separate dependent fixture assemblies,
+dependency ordering, missing/cyclic dependencies and the effects of each mod's
+hooks on combat.
 
 A separate local utility for exercising an **already generated InfiniCrafterLocal
 item JSON**, then inspecting its behavior with code and vision. Runs do not call an

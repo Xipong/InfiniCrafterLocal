@@ -55,7 +55,7 @@ internal static partial class EngineRuntimeChecks
 
     // Narrow opt-in scene over the actual autoloaded IFC assembly. It deliberately
     // refuses assertions and scripted actions for phases it cannot yet model.
-    internal static JsonObject RunWorkbenchNativeLoaderScene(string? itemPath, string? nativeItem, string scenarioPath, string sandbox, string itemBoundary, string? extraAssembly=null, string? extraRoot=null)
+    internal static JsonObject RunWorkbenchNativeLoaderScene(string? itemPath, string? nativeItem, string scenarioPath, string sandbox, string itemBoundary, IReadOnlyList<WNativeLoader.ModInput> extraMods)
     {
         if(itemBoundary is not ("fresh" or "local_cache")) throw new ArgumentException("item-boundary must be fresh or local_cache");
         if((itemPath is null)==(nativeItem is null))throw new ArgumentException("Specify exactly one generated JSON or native item identifier");
@@ -100,8 +100,7 @@ internal static partial class EngineRuntimeChecks
         }
         string? configured=Environment.GetEnvironmentVariable("INFINI_MOD_SOURCE_ROOT");
         string sourceRoot=!string.IsNullOrWhiteSpace(configured)?Path.GetFullPath(configured):Path.Combine(AppContext.BaseDirectory,"native-mod");
-        if((extraAssembly is null)!=(extraRoot is null))throw new ArgumentException("An additional mod requires both assembly and source root");
-        using var loader=WNativeLoader.Bootstrap(sandbox,sourceRoot,extraAssembly,extraRoot);
+        using var loader=WNativeLoader.Bootstrap(sandbox,sourceRoot,extraMods);
         WPrepareFullWorld();
         Terraria.Main.myPlayer=0; Terraria.Main.netMode=0; Terraria.Main.gameMenu=false;
         Terraria.Main.worldID=WInt(scenario,"worldId",12);
@@ -206,7 +205,7 @@ internal static partial class EngineRuntimeChecks
                 } else ok=kind switch {"spawned"=>spawns>0,"dummy_damaged"=>hits>0&&dummy.life<initialLife,"all_inactive"=>!Terraria.Main.projectile.Any(p=>p.active),"no_nonfinite"=>frames.All(f=>f!["playerFinite"]!.GetValue<bool>()&&f["npcFinite"]!.GetValue<bool>()&&f["projectilesFinite"]!.GetValue<bool>()),_=>false};
                 assertions.Add(new JsonObject{["name"]=kind,["request"]=a.DeepClone(),["status"]=ok?"passed":"failed"});
             }
-            return new JsonObject{["schemaVersion"]=1,["status"]=assertions.Any(a=>a!["status"]!.GetValue<string>()=="failed")?"failed":"passed",["execution"]=new JsonObject{["backend"]="standalone-tml-loader",["fullGameParity"]=false,["contentCount"]=loader.ContentCount,["productionAssembly"]=loader.Mod.Code.Location,["additionalMod"]=loader.AdditionalMod?.Name,["additionalAssembly"]=loader.AdditionalMod?.Code.Location,["missingIfcModDependencies"]=new JsonArray(loader.MissingIfcDependencies.Select(x=>(JsonNode?)JsonValue.Create(x)).ToArray()),["scope"]=targetName is null?"Native IFC/tML autoload and real Player/NPC/Projectile updates with scripted input; controlled stationary NPC; not Main.Update or full game":"Native IFC/tML autoload and real Player/NPC/Projectile updates with scripted input; target uses native mod NPC defaults and AI; not Main.Update or full game",["omittedEnginePhases"]=new JsonArray(omitted.Select(x=>(JsonNode?)JsonValue.Create(x)).ToArray()),["worldRegistered"]=currentWorld},["input"]=new JsonObject{["itemPath"]=itemPath is null?null:Path.GetFullPath(itemPath),["nativeItem"]=nativeItem,["nativeItemType"]=itemType,["nativeNpc"]=targetName,["nativeNpcType"]=targetType,["scenarioPath"]=Path.GetFullPath(scenarioPath),["itemBoundary"]=itemBoundary},["snapshots"]=frames,["assertions"]=assertions,["combat"]=new JsonObject{["spawns"]=spawns,["hits"]=hits,["initialLife"]=initialLife,["finalLife"]=dummy.life}};
+            return new JsonObject{["schemaVersion"]=1,["status"]=assertions.Any(a=>a!["status"]!.GetValue<string>()=="failed")?"failed":"passed",["execution"]=new JsonObject{["backend"]="standalone-tml-loader",["fullGameParity"]=false,["contentCount"]=loader.ContentCount,["productionAssembly"]=loader.Mod.Code.Location,["additionalMod"]=loader.AdditionalMod?.Name,["additionalAssembly"]=loader.AdditionalMod?.Code.Location,["additionalMods"]=new JsonArray(loader.AdditionalMods.Select(m=>(JsonNode?)new JsonObject{["name"]=m.Name,["assembly"]=m.Code.Location}).ToArray()),["missingIfcModDependencies"]=new JsonArray(loader.MissingIfcDependencies.Select(x=>(JsonNode?)JsonValue.Create(x)).ToArray()),["limitations"]=new JsonArray("Dependency versions are not validated", "Mod.File does not contain the original full tmod", "Asset readers and client lifecycle are incomplete"),["scope"]=targetName is null?"Native IFC/tML autoload and real Player/NPC/Projectile updates with scripted input; controlled stationary NPC; not Main.Update or full game":"Native IFC/tML autoload and real Player/NPC/Projectile updates with scripted input; target uses native mod NPC defaults and AI; not Main.Update or full game",["omittedEnginePhases"]=new JsonArray(omitted.Select(x=>(JsonNode?)JsonValue.Create(x)).ToArray()),["worldRegistered"]=currentWorld},["input"]=new JsonObject{["itemPath"]=itemPath is null?null:Path.GetFullPath(itemPath),["nativeItem"]=nativeItem,["nativeItemType"]=itemType,["nativeNpc"]=targetName,["nativeNpcType"]=targetType,["scenarioPath"]=Path.GetFullPath(scenarioPath),["itemBoundary"]=itemBoundary},["snapshots"]=frames,["assertions"]=assertions,["combat"]=new JsonObject{["spawns"]=spawns,["hits"]=hits,["initialLife"]=initialLife,["finalLife"]=dummy.life}};
         } finally {SystemLoader.OnWorldUnload();}
     }
 }

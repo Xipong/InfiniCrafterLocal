@@ -24,11 +24,14 @@ internal sealed class WNativeLoader : IDisposable
     private const BindingFlags Any = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
     internal Mod Mod { get; }
     internal int ContentCount { get; }
-    internal Mod? AdditionalMod { get; }
+    internal IReadOnlyList<Mod> AdditionalMods { get; }
+    internal Mod? AdditionalMod => AdditionalMods.LastOrDefault();
     internal string[] MissingIfcDependencies { get; }
-    private WNativeLoader(Mod mod, Mod? additional, string[] missing) { Mod = mod; AdditionalMod = additional; ContentCount = mod.GetContent().Count(); MissingIfcDependencies = missing; }
+    internal sealed record ModInput(string AssemblyPath, string SourceRoot);
+    private sealed record Source(Mod Mod, string[] Dependencies, bool IsIfc);
+    private WNativeLoader(Mod mod, IReadOnlyList<Mod> additional, string[] missing) { Mod = mod; AdditionalMods = additional; ContentCount = mod.GetContent().Count(); MissingIfcDependencies = missing; }
 
-    internal static WNativeLoader Bootstrap(string sandbox, string sourceRoot, string? extraAssembly = null, string? extraRoot = null)
+    internal static WNativeLoader Bootstrap(string sandbox, string sourceRoot, IReadOnlyList<ModInput>? extraMods = null)
     {
         string buildFile = Path.Combine(sourceRoot, "build.txt");
         string translations = Path.Combine(sourceRoot, "Localization");
@@ -52,45 +55,82 @@ internal sealed class WNativeLoader : IDisposable
         Type modType = typeof(Mod);
         var mod = new InfiniCrafterLocalMod();
         PrepareSourceMod(mod, typeof(InfiniCrafterLocalMod).Assembly, sourceRoot, sandbox, requireAssets: true);
-        Mod? additional = null;
-        if ((extraAssembly is null) != (extraRoot is null))
-            throw new ArgumentException("Extra mod assembly and source root must be supplied together");
-        if (extraAssembly is not null) {
-            string path = Path.GetFullPath(extraAssembly);
+        // Load every supplied assembly before reflecting its types so CLR
+        // references among different source directories resolve to the exact
+        // explicitly supplied assemblies. tML's conditional type filtering is
+        // not emulated: missing declared/conditional dependencies still refuse.
+        var extra = new List<(ModInput Input, Assembly Assembly)>();
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var assemblyNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var input in extraMods ?? Array.Empty<ModInput>()) {
+            string path = Path.GetFullPath(input.AssemblyPath);
+            if (!File.Exists(path)) throw new FileNotFoundException("Extra mod assembly missing", path);
+            if (!paths.Add(path)) throw new InvalidDataException("Duplicate extra mod assembly: " + path);
+            string name = AssemblyName.GetAssemblyName(path).Name ?? throw new InvalidDataException("Extra assembly has no name");
+            if (!assemblyNames.Add(name)) throw new InvalidDataException("Duplicate extra mod assembly name: " + name);
+        }
+        foreach (var input in extraMods ?? Array.Empty<ModInput>()) {
+            string path = Path.GetFullPath(input.AssemblyPath);
             var assembly = Assembly.LoadFrom(path);
             if (assembly == typeof(EngineRuntimeChecks).Assembly || assembly == typeof(InfiniCrafterLocalMod).Assembly || assembly == typeof(Mod).Assembly)
                 throw new InvalidOperationException("Extra content must come from a distinct mod assembly");
+            if (!string.Equals(Path.GetFullPath(assembly.Location), path, StringComparison.Ordinal))
+                throw new InvalidOperationException("CLR resolved a different assembly than supplied: " + path);
+            extra.Add((input, assembly));
+        }
+        var additional = new List<Mod>();
+        foreach (var (input, assembly) in extra) {
             var candidates = assembly.GetTypes().Where(t => !t.IsAbstract && !t.ContainsGenericParameters && typeof(Mod).IsAssignableFrom(t)).ToArray();
-            if (candidates.Length != 1) throw new InvalidDataException("Extra assembly must define exactly one concrete Mod class");
-            additional = (Mod)Activator.CreateInstance(candidates[0], nonPublic: true)!;
-            PrepareSourceMod(additional, assembly, Path.GetFullPath(extraRoot!), sandbox, requireAssets: false);
+            if (candidates.Length != 1) throw new InvalidDataException("Extra assembly must define exactly one concrete Mod class: " + assembly.GetName().Name);
+            var instance = (Mod)Activator.CreateInstance(candidates[0], nonPublic: true)!;
+            PrepareSourceMod(instance, assembly, Path.GetFullPath(input.SourceRoot), sandbox, requireAssets: false);
+            additional.Add(instance);
         }
 
-        // Match tML's built-in first-mod ordering. Do not hand-pick any global,
-        // system, projectile, player or item classes from a production mod.
+        // Register every actual mod before calling any Load hook, then run
+        // hooks in dependency order. This avoids substituting missing mods.
         Type coreType = typeof(Mod).Assembly.GetType("Terraria.ModLoader.Default.ModLoaderMod", throwOnError: true)!;
         var core = (Mod)Activator.CreateInstance(coreType, nonPublic: true)!;
         modType.GetProperty("Assets", Any)!.SetValue(core, new AssetRepository(new AssetReaderCollection(), new[] { core.CreateDefaultContentSource() }));
         var registry = (IDictionary<string, Mod>)typeof(ModLoader).GetField("modsByName", Any)!.GetValue(null)!;
-        var mods = additional is null ? new[] { core, mod } : new[] { core, mod, additional };
-        foreach (Mod loaded in mods) registry.Add(loaded.Name, loaded);
         Type buildPropertiesType = typeof(TmodFile).Assembly.GetType("Terraria.ModLoader.Core.BuildProperties", throwOnError: true)!;
-        object ifcProperties = buildPropertiesType.GetMethod("ReadBuildFile", Any)!.Invoke(null, new object[] { sourceRoot })!;
-        var ifcDependencies = (IEnumerable<string>)buildPropertiesType.GetMethod("RefNames", Any)!.Invoke(ifcProperties, new object[] { false })!;
-        string[] missingIfcDependencies = ifcDependencies.Where(name => !registry.ContainsKey(name)).ToArray();
-        if (additional is not null) {
-            object properties = buildPropertiesType.GetMethod("ReadBuildFile", Any)!.Invoke(null, new object[] { Path.GetFullPath(extraRoot!) })!;
-            // CLR-loaded assemblies do not receive tML ModLoadContext's
-            // conditional type filtering. Refuse missing weak references and
-            // ExtendsFromMod requirements instead of silently loading types
-            // which tML would have omitted.
-            var dependencies = (IEnumerable<string>)buildPropertiesType.GetMethod("RefNames", Any)!.Invoke(properties, new object[] { true })!;
-            var conditional = additional.Code.GetTypes()
+        string[] Dependencies(string root, bool includeWeak) {
+            object properties = buildPropertiesType.GetMethod("ReadBuildFile", Any)!.Invoke(null, new object[] { root })!;
+            return ((IEnumerable<string>)buildPropertiesType.GetMethod("RefNames", Any)!.Invoke(properties, new object[] { includeWeak })!).ToArray();
+        }
+        var all = new List<Source> { new(mod, Dependencies(sourceRoot, false), true) };
+        for (int i = 0; i < additional.Count; i++) {
+            Mod current = additional[i];
+            var conditional = current.Code.GetTypes()
                 .SelectMany(type => type.GetCustomAttributes<ExtendsFromModAttribute>(inherit: true))
                 .SelectMany(attribute => attribute.Names);
-            string[] missing = dependencies.Concat(conditional).Where(name => !registry.ContainsKey(name)).Distinct(StringComparer.Ordinal).ToArray();
+            all.Add(new Source(current,
+                Dependencies(Path.GetFullPath(extra[i].Input.SourceRoot), true).Concat(conditional).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(), false));
+        }
+        var byName = new Dictionary<string, Source>(StringComparer.OrdinalIgnoreCase);
+        foreach (Source source in all) {
+            if (string.Equals(source.Mod.Name, core.Name, StringComparison.OrdinalIgnoreCase) || !byName.TryAdd(source.Mod.Name, source))
+                throw new InvalidDataException("Duplicate native mod name: " + source.Mod.Name);
+        }
+        string[] missingIfcDependencies = all[0].Dependencies.Where(name => !byName.ContainsKey(name) && !string.Equals(name, core.Name, StringComparison.OrdinalIgnoreCase)).ToArray();
+        foreach (Source source in all.Where(s => !s.IsIfc)) {
+            string[] missing = source.Dependencies.Where(name => !byName.ContainsKey(name) && !string.Equals(name, core.Name, StringComparison.OrdinalIgnoreCase)).ToArray();
             if (missing.Length != 0) throw new NotSupportedException("Extra mod dependencies not loaded: " + string.Join(", ", missing));
         }
+        var sorted = new List<Mod>(); var state = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        void Visit(Source source) {
+            if (state.TryGetValue(source.Mod.Name, out int mark)) {
+                if (mark == 1) throw new InvalidDataException("Cyclic native mod dependencies: " + source.Mod.Name);
+                return;
+            }
+            state[source.Mod.Name] = 1;
+            foreach (string name in source.Dependencies)
+                if (byName.TryGetValue(name, out Source? dependency)) Visit(dependency);
+            state[source.Mod.Name] = 2; sorted.Add(source.Mod);
+        }
+        foreach (Source source in all) Visit(source);
+        var mods = new[] { core }.Concat(sorted).ToArray();
+        foreach (Mod loaded in mods) registry.Add(loaded.Name, loaded);
         typeof(ModLoader).GetProperty("Mods", Any)!.SetValue(null, mods);
         foreach (Mod loading in mods) {
             ContentInstance.Register(loading);
@@ -134,7 +174,7 @@ internal sealed class WNativeLoader : IDisposable
         }
         foreach (Type loader in new[] { typeof(NPCLoader), typeof(ItemLoader), typeof(ProjectileLoader), typeof(BuffLoader) })
             loader.GetMethod("FinishSetup", Any)!.Invoke(null, null);
-        return new WNativeLoader(mod, additional, missingIfcDependencies);
+        return new WNativeLoader(mod, sorted.Where(m => !ReferenceEquals(m, mod)).ToArray(), missingIfcDependencies);
     }
 
     private static void PrepareSourceMod(Mod mod, Assembly assembly, string root, string sandbox, bool requireAssets)
@@ -164,8 +204,11 @@ internal sealed class WNativeLoader : IDisposable
         modType.GetProperty("DisplayName", Any)!.SetValue(mod, string.IsNullOrWhiteSpace(displayName) ? name : displayName);
         modType.GetProperty("Side", Any)!.SetValue(mod, propertiesType.GetField("side", Any)!.GetValue(properties));
         modType.GetProperty("TModLoaderVersion", Any)!.SetValue(mod, typeof(ModLoader).Assembly.GetType("Terraria.ModLoader.BuildInfo", true)!.GetField("tMLVersion", Any)!.GetValue(null));
-        string assetSource = Path.Combine(root, "asset-content");
-        if (!Directory.Exists(Path.Combine(assetSource, "Assets"))) {
+        // External mods keep their original content paths (e.g. Items/,
+        // Projectiles/, Effects/), not just a copied Assets/ subtree. This is a
+        // source repository, not a claim that tML's .tmod packing is replicated.
+        string assetSource = requireAssets ? Path.Combine(root, "asset-content") : root;
+        if (requireAssets && !Directory.Exists(Path.Combine(assetSource, "Assets"))) {
             string original = Path.Combine(root, "Assets");
             if (requireAssets && !Directory.Exists(original)) throw new DirectoryNotFoundException("IFC Assets directory missing");
             assetSource = Path.Combine(sandbox, "asset-content", name);
@@ -185,11 +228,11 @@ internal sealed class WNativeLoader : IDisposable
 
 internal static partial class EngineRuntimeChecks
 {
-    internal static void CheckWorkbenchNativeLoader(string sandbox, string? probeDll = null, string? probeRoot = null, string? probeNpc = null)
+    internal static void CheckWorkbenchNativeLoader(string sandbox, IReadOnlyList<WNativeLoader.ModInput> mods, string? probeNpc = null)
     {
         string? configured = Environment.GetEnvironmentVariable("INFINI_MOD_SOURCE_ROOT");
         string root = !string.IsNullOrWhiteSpace(configured) ? Path.GetFullPath(configured) : Path.Combine(AppContext.BaseDirectory, "native-mod");
-        using var loader = WNativeLoader.Bootstrap(sandbox, root, probeDll, probeRoot);
+        using var loader = WNativeLoader.Bootstrap(sandbox, root, mods);
         var player = new Player();
         if (player.GetModPlayer<InfiniCraftPlayer>() is null) throw new InvalidOperationException("Native PlayerLoader did not attach InfiniCraftPlayer");
         Terraria.Main.npc = Enumerable.Range(0, Terraria.Main.maxNPCs + 1).Select(_ => new NPC()).ToArray();
@@ -206,10 +249,12 @@ internal static partial class EngineRuntimeChecks
         Console.WriteLine(JsonSerializer.Serialize(new { status = "passed", loader.ContentCount,
             productionAssembly = loader.Mod.Code.Location, nativePlayerAttached = true, npcSpawnHook = true,
             missingIfcModDependencies = loader.MissingIfcDependencies,
+            additionalMods = loader.AdditionalMods.Select(m => new { name = m.Name, assembly = m.Code.Location }).ToArray(),
             additionalMod = loader.AdditionalMod is null ? null : new { name = loader.AdditionalMod.Name,
                 assembly = loader.AdditionalMod.Code.Location,
                 sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(loader.AdditionalMod.Code.Location))).ToLowerInvariant(),
                 content = loader.AdditionalMod.GetContent().Select(x => x.GetType().FullName).ToArray() },
+            limitations = new[] { "Dependency versions are not validated", "Mod.File does not contain the original full tmod", "Asset readers and client lifecycle are incomplete" },
             scope = "headless tML autoload and explicit NPC spawn; not full game or graphical coverage" }));
     }
 }

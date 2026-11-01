@@ -526,10 +526,16 @@ def execute_loader_run(args):
                "--output", str(output / "native.json"), "--item-boundary", args.item_boundary]
     external = {}
     external_content = {}
-    def mod_content_state(root):
+    def mod_content_state(root, external=False):
         paths={root/"build.txt"}
-        for name in ("Localization","Assets","asset-content"):
-            paths.update(p for p in (root/name).rglob("*") if p.is_file())
+        if external:
+            # External source mods may load Items/, Projectiles/, Effects/,
+            # Sounds/, or any other content path. Do not treat Assets/ as the
+            # complete resource tree. Git bookkeeping is not runtime content.
+            paths.update(p for p in root.rglob("*") if p.is_file() and ".git" not in p.relative_to(root).parts)
+        else:
+            for name in ("Localization","Assets","asset-content"):
+                paths.update(p for p in (root/name).rglob("*") if p.is_file())
         return {str(p.relative_to(root)):digest(p) if p.is_file() else None for p in sorted(paths)}
     # The native host permits a source-root override. Bind evidence to the
     # effective metadata/assets, not just the default copied build content.
@@ -538,12 +544,19 @@ def execute_loader_run(args):
     production_root = (Path(configured_root) if configured_root.strip() else dll.parent / "native-mod").resolve()
     env["INFINI_MOD_SOURCE_ROOT"] = str(production_root)
     production_content = {"root": str(production_root), "files": mod_content_state(production_root)}
+    pairs = []
     if args.probe_dll:
-        probe = args.probe_dll.resolve(strict=True)
-        probe_root = args.probe_mod_root.resolve(strict=True)
-        command.extend(["--probe-dll", str(probe), "--probe-mod-root", str(probe_root)])
+        pairs.append((args.probe_dll, args.probe_mod_root, True))
+    pairs.extend((Path(dll), Path(root), False) for dll, root in getattr(args, "mods", []))
+    for mod_dll, mod_root, legacy in pairs:
+        probe = mod_dll.expanduser().resolve(strict=True)
+        probe_root = mod_root.expanduser().resolve(strict=True)
+        if not probe.is_file() or not probe_root.is_dir():
+            raise ValueError("Each extra mod requires an existing DLL and source directory")
+        command.extend((["--probe-dll", str(probe), "--probe-mod-root", str(probe_root)] if legacy else
+                        ["--mod-dll", str(probe), "--mod-root", str(probe_root)]))
         external[str(probe)] = digest(probe)
-        external_content[str(probe_root)] = mod_content_state(probe_root)
+        external_content[str(probe_root)] = mod_content_state(probe_root, external=True)
     try:
         proc = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True, timeout=args.timeout)
     except subprocess.TimeoutExpired as exc:
@@ -552,7 +565,7 @@ def execute_loader_run(args):
     (output / "stdout.log").write_text(proc.stdout, encoding="utf-8")
     (output / "stderr.log").write_text(proc.stderr, encoding="utf-8")
     unchanged = build_state(dll) == provenance and all(Path(p).is_file() and digest(Path(p)) == h for p,h in external.items())
-    unchanged = unchanged and all(mod_content_state(Path(p)) == h for p,h in external_content.items())
+    unchanged = unchanged and all(mod_content_state(Path(p), external=True) == h for p,h in external_content.items())
     unchanged = unchanged and mod_content_state(production_root) == production_content["files"]
     unchanged = unchanged and (item is None or digest(output / "item.json") == item_sha) and digest(output / "scenario.json") == scenario_sha
     receipt = {"command": command, "exitCode": proc.returncode, "build": provenance,
@@ -698,6 +711,7 @@ def main():
     r.add_argument("--scenario",type=Path,required=True);r.add_argument("--out",type=Path,required=True)
     r.add_argument("--no-build",action="store_true");r.add_argument("--item-boundary",choices=("fresh","local_cache"),default="fresh")
     r.add_argument("--timeout",type=int,default=180);r.add_argument("--probe-dll",type=Path);r.add_argument("--probe-mod-root",type=Path)
+    r.add_argument("--mod", dest="mods", type=Path, nargs=2, action="append", default=[], metavar=("DLL", "SOURCE_ROOT"), help="Additional original mod and source root; repeat for each dependency")
     r=sub.add_parser("report",help="Audit a saved run and emit compact agent evidence; no execution");r.add_argument("run",type=Path);r.add_argument("--out",type=Path);r.add_argument("--contact-sheet",action="store_true")
     r=sub.add_parser("suite",help="Execute an explicit scenario matrix, preserving expected native failures");r.add_argument("manifest",type=Path);r.add_argument("--out",type=Path,required=True);r.add_argument("--no-build",action="store_true");r.add_argument("--plan",action="store_true",help="Read-only input validation and case listing; not a run")
     r=sub.add_parser("inspect");r.add_argument("trace",type=Path);r.add_argument("--tick",type=int);r.add_argument("--events",action="store_true");r.add_argument("--kind");r.add_argument("--summary",action="store_true",help="Compact read-only resource/hit/event aggregates")

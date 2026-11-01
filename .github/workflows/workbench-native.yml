@@ -89,6 +89,25 @@ jobs:
           python tools/item-test-workbench/workbench.py build 2>&1 | tee artifacts/workbench-ci/build.log
           python tools/item-test-workbench/verify_vfx.py --no-build --out artifacts/workbench-ci/evidence \
             2>&1 | tee artifacts/workbench-ci/verify.log
+      - name: Verify independently loaded dependent tModLoader mods
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=tools/item-test-workbench
+          dotnet build "$base/fixture-mod/WorkbenchObserverFixture.Standalone.csproj" -c Release \
+            -p:InfiniTmlReferenceDir="$INFINI_TML_REFERENCE_DIR"
+          dotnet build "$base/fixture-mod/WorkbenchDependentFixture/WorkbenchDependentFixture.Standalone.csproj" -c Release \
+            -p:InfiniTmlReferenceDir="$INFINI_TML_REFERENCE_DIR"
+          host="$base/bin/Release/net8.0/ItemTestWorkbench.dll"
+          dependency="$base/fixture-mod/bin/Release/net8.0/WorkbenchObserverFixture.dll"
+          dependent="$base/fixture-mod/WorkbenchDependentFixture/bin/Release/net8.0/WorkbenchDependentFixture.dll"
+          python "$base/verify_native_loader.py" --native-dll "$host" --probe-dll "$dependency" \
+            --probe-mod-root "$base/fixtures/WorkbenchObserverFixture" \
+            2>&1 | tee artifacts/workbench-ci/loader-single.log
+          python "$base/verify_multi_mod_loader.py" --native-dll "$host" \
+            --dependency-dll "$dependency" --dependency-root "$base/fixtures/WorkbenchObserverFixture" \
+            --dependent-dll "$dependent" --dependent-root "$base/fixtures/WorkbenchDependentFixture" \
+            2>&1 | tee artifacts/workbench-ci/loader-multiple.log
       - name: Render a Luminance on-hit particle using the real resource
         shell: bash
         run: |

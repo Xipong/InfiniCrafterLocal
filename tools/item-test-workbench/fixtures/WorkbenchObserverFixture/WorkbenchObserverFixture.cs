@@ -13,7 +13,12 @@ using Terraria.ModLoader;
 // workbench does not refer to these types: the fixture owns its observations.
 namespace WorkbenchObserverFixture;
 
-public sealed class WorkbenchObserverFixture : Mod { }
+public sealed class WorkbenchObserverFixture : Mod
+{
+    public static bool Loaded { get; private set; }
+    public override void Load() => Loaded = true;
+    public override void Unload() => Loaded = false;
+}
 
 internal static class Observation
 {
