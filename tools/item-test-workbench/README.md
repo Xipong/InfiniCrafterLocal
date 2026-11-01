@@ -59,7 +59,11 @@ Pass `--server-mode` to keep tML's server network mode throughout mod loading
 and the CPU scene. This enables native server initialization for mods that
 register mounts without requiring client textures. The server uses the native dedicated-server local player index (255); the
 scene has no connected client and does not simulate a network session or
-client-side item firing. Its report identifies the mode and these limitations. The default remains the earlier
+client-side item firing. Primary and alternate use actions fail explicitly in
+this mode. Its report identifies the mode and these limitations. For a
+no-input server check of a registered item, use
+`tools/item-test-workbench/scenarios/server-native-item.json`; this tests
+loading and finite state, not an attack. The default remains the earlier
 single-player network mode.
 
 This path currently supports CPU scenes with aim/primary/alt/release, a bounded

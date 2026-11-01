@@ -87,6 +87,8 @@ internal static partial class EngineRuntimeChecks
         foreach(var a in actions) {
             string kind=a?["kind"]?.GetValue<string>() ?? throw new ArgumentException("Action kind is required");
             if(kind is not ("aim" or "primary" or "alt" or "release"))throw new NotSupportedException("Native loader scene does not yet support action: "+kind);
+            if(serverMode && kind is ("primary" or "alt"))
+                throw new NotSupportedException("server-mode has no connected client for primary or alternate item use");
             if(WInt(a,"tick",-1)<0 || WInt(a,"tick",-1)>=ticks)throw new ArgumentException("Action tick outside scenario");
             WKeys(a!,"loader scene action",kind=="aim"?new[]{"kind","tick","x","y"}:new[]{"kind","tick"});
             if(data is not null && kind is ("primary" or "alt")) WRequireBinding(data,kind=="primary"?RuntimeInputKind.PrimaryUse:RuntimeInputKind.AlternateUse,true,false,false);

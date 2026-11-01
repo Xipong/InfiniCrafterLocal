@@ -78,15 +78,23 @@ def main():
         order = [item['name'] for item in trace['execution']['additionalMods']]
         if order != ['WorkbenchObserverFixture', 'WorkbenchDependentFixture']:
             raise AssertionError(f'Dependency load order incorrect: {order}')
-        if trace['combat']['spawns'] < 1 or trace['combat']['hits'] < 1:
-            raise AssertionError(f'Dependent item did not hit using dependency projectile: {trace["combat"]}')
         counts = (observation or {}).get('counts', {})
         if args.server_mode:
             for hook in ('GlobalNPC.SetDefaults.NpcSlotReady', 'GlobalNPC.OnSpawn', 'ModNPC.AI', 'ModSystem.PostUpdateEverything', 'ModSystem.ServerPacketSerialized'):
                 if counts.get(hook, 0) < 1:
                     raise AssertionError(f'Server hook {hook} did not run: {counts}')
+            for kind in ('primary', 'alt'):
+                scenario['actions'] = [{'tick': 0, 'kind': kind}]
+                scene.write_text(json.dumps(scenario), encoding='utf-8')
+                proc, refused, observed = run('server-refuses-' + kind, [(dependent, dependent_root), (dependency, dependency_root)])
+                if proc.returncode != 2 or refused.get('status') != 'error' or 'server-mode has no connected client' not in refused.get('error', ''):
+                    raise AssertionError(f'Server accepted client-only {kind}: {refused}')
+                if observed is not None:
+                    raise AssertionError('Refused server input ran mod hooks')
             print('Native server mode and player index retained during actual mount, NPC and system hooks: PASS')
             return 0
+        if trace['combat']['spawns'] < 1 or trace['combat']['hits'] < 1:
+            raise AssertionError(f'Dependent item did not hit using dependency projectile: {trace["combat"]}')
         for hook in ('ModProjectile.AI', 'ModProjectile.OnHitNPC', 'GlobalProjectile.OnSpawn', 'GlobalNPC.OnSpawn'):
             if counts.get(hook, 0) < 1:
                 raise AssertionError(f'Dependency gameplay hook {hook} did not run: {counts}')
