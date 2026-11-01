@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import io
 from pathlib import Path, PurePosixPath
 import struct
@@ -148,8 +149,13 @@ def inspect(path, output, expected_name):
             raise ValueError('TMOD file table does not span payload')
         output.mkdir(parents=True, exist_ok=False)
         files = []
-        if sum(length for _, length, _ in entries.values()) > 2_000_000_000:
-            raise ValueError('TMOD expanded size exceeds diagnostic limit')
+        expanded = sum(length for _, length, _ in entries.values())
+        print(f'{name} expanded bytes: {expanded}; largest entries: ' +
+              repr(sorted(((length, key) for key, (_, length, _) in entries.items()), reverse=True)[:5]), flush=True)
+        if expanded > 8_000_000_000:
+            raise ValueError('TMOD expanded size exceeds diagnostic limit (8 GB)')
+        if shutil.disk_usage(output).free < expanded + 1_000_000_000:
+            raise ValueError('insufficient temporary runner disk space for extraction plus 1 GB reserve')
         for required in (name + '.dll', 'Info'):
             if required not in entries: raise ValueError(f'missing required TMOD entry: {required}')
         for entry, (offset, length, compressed) in entries.items():
