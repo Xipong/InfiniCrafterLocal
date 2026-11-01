@@ -47,6 +47,9 @@ internal sealed class WNativeLoader : IDisposable
         Main.dedServ = true;
         Main.netMode = serverMode ? NetmodeID.Server : NetmodeID.SinglePlayer;
         Main.myPlayer = serverMode ? 255 : 0;
+        if (serverMode)
+            for (int i = 0; i < NetMessage.buffer.Length; i++)
+                NetMessage.buffer[i] ??= new MessageBuffer { whoAmI = i };
         int expectedNetworkMode = Main.netMode;
         void CheckNetworkMode() {
             if (Main.netMode != expectedNetworkMode || Main.myPlayer != (serverMode ? 255 : 0))

@@ -82,7 +82,7 @@ def main():
             raise AssertionError(f'Dependent item did not hit using dependency projectile: {trace["combat"]}')
         counts = (observation or {}).get('counts', {})
         if args.server_mode:
-            for hook in ('GlobalNPC.SetDefaults.NpcSlotReady', 'GlobalNPC.OnSpawn', 'ModNPC.AI', 'ModSystem.PostUpdateEverything'):
+            for hook in ('GlobalNPC.SetDefaults.NpcSlotReady', 'GlobalNPC.OnSpawn', 'ModNPC.AI', 'ModSystem.PostUpdateEverything', 'ModSystem.ServerPacketSerialized'):
                 if counts.get(hook, 0) < 1:
                     raise AssertionError(f'Server hook {hook} did not run: {counts}')
             print('Native server mode and player index retained during actual mount, NPC and system hooks: PASS')

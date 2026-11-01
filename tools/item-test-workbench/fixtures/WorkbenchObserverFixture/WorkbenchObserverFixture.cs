@@ -231,6 +231,14 @@ public sealed class ProbeSystem : ModSystem
     {
         if (Environment.GetEnvironmentVariable("IFC_FIXTURE_EXPECT_SERVER") == "1" && (Main.netMode != NetmodeID.Server || Main.myPlayer != 255))
             throw new InvalidOperationException("Fixture expected server network mode during the scene");
+        if (Environment.GetEnvironmentVariable("IFC_FIXTURE_EXPECT_SERVER") == "1") {
+            int npc = Array.FindIndex(Main.npc, value => value.active && value.type == ModContent.NPCType<ProbeNpc>());
+            if (npc >= 0) {
+                NetMessage.SendData(MessageID.SyncNPC, number: npc);
+                if (NetMessage.buffer[256].writer is null) throw new InvalidOperationException("Native server packet was not serialized");
+                Observation.Hit("ModSystem.ServerPacketSerialized");
+            }
+        }
         Observation.Hit("ModSystem.PostUpdateEverything");
         if (Main.GameUpdateCount % 10 == 0) Observation.Flush();
     }
