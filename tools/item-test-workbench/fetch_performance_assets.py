@@ -17,7 +17,8 @@ from fetch_vfx_assets import destination, download
 MANIFEST = Path(__file__).with_name('performance-assets-manifest.json')
 ITEM_INDEX = Path(__file__).with_name('vanilla-item-assets.json')
 IDS = {46, 96, 98, 162, 168, 190, 930, 964, 2223, 3019, 3029, 3485}
-PROJECTILE_IDS = {1, 14, 91, 92, 357, 485}
+PROJECTILE_IDS = {1, 14, 91, 92, 357, 485, 982}
+PROJECTILE_EXTRAS = {'Images/Extra_98.png'}
 
 
 def item_entries(ids, index):
@@ -62,7 +63,8 @@ def provision(out, manifest, fetch=download, *, include_projectiles=False, items
         entries = item_entries(items, index if index is not None else json.loads(ITEM_INDEX.read_text()))
     if include_projectiles:
         projectiles = manifest.get('projectileFiles', [])
-        if len(projectiles) != len(PROJECTILE_IDS) or {e['path'] for e in projectiles} != {f'Images/Projectile_{i}.png' for i in PROJECTILE_IDS}:
+        expected = {f'Images/Projectile_{i}.png' for i in PROJECTILE_IDS} | PROJECTILE_EXTRAS
+        if len(projectiles) != len(expected) or {e['path'] for e in projectiles} != expected:
             raise ValueError('Exact pinned vanilla projectile manifest required')
         entries += projectiles
     rows = []
@@ -88,7 +90,7 @@ def provision(out, manifest, fetch=download, *, include_projectiles=False, items
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
-    parser.add_argument('--include-projectiles', action='store_true', help='Also fetch the six pinned vanilla projectile sprites admitted by original Main.DrawProj')
+    parser.add_argument('--include-projectiles', action='store_true', help='Also fetch pinned native projectile sprites and their required effect textures')
     parser.add_argument('--items', type=int, nargs='+', help='Fetch any native item IDs from the complete pinned source index; default is the original control set')
     args = parser.parse_args()
     try: print(json.dumps(provision(args.out, json.loads(MANIFEST.read_text()), include_projectiles=args.include_projectiles, items=args.items), indent=2))

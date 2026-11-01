@@ -27,7 +27,12 @@ def digest(data: bytes) -> str:
 
 
 def verify(data: bytes, entry: dict, label: str) -> None:
-    if len(data) != entry["bytes"] or digest(data) != entry["sha256"]:
+    blob_id = entry.get("gitBlobSha1")
+    actual_blob = hashlib.sha1(b"blob " + str(len(data)).encode("ascii") + b"\0" + data).hexdigest() if blob_id else None
+    if (len(data) != entry["bytes"] or
+        (entry.get("sha256") is not None and digest(data) != entry["sha256"]) or
+        (blob_id is not None and actual_blob != blob_id) or
+        (entry.get("sha256") is None and blob_id is None)):
         raise ValueError(f"Integrity mismatch: {label}; refusing to install/overwrite")
 
 

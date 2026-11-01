@@ -689,6 +689,8 @@ def main():
     add_parser(sub)
     sub.add_parser("doctor");sub.add_parser("build");sub.add_parser("test",help="Run offline utility tests; not native gameplay verification")
     r=sub.add_parser("setup-particle",help="Install the pinned ParticleLibrary DLL and resources");r.add_argument("--deps-root",type=Path,help="Dependency root (default: INFINI_TML_DEPS_SRC or artifacts/dependencies)")
+    for name,help_text in (("setup-luminance","Install the pinned Luminance DLL and textures"),("setup-vfx","Install both ParticleLibrary and Luminance")):
+        r=sub.add_parser(name,help=help_text);r.add_argument("--deps-root",type=Path,help="Dependency root (default: INFINI_TML_DEPS_SRC or artifacts/dependencies)")
     sub.add_parser("catalog",help="Read-only inventory of supplied scenarios, actions and assertions")
     r=sub.add_parser("fixtures",help="Write synthetic fixtures through the native owner");r.add_argument("--out",type=Path,required=True);r.add_argument("--no-build",action="store_true")
     r=sub.add_parser("loader-run",help="Standalone native tML DLL autoload and controlled combat scene; no .tmod or game launch")
@@ -708,10 +710,15 @@ def main():
     r.add_argument("--gif-stride",type=int,default=1);r.add_argument("--timeout",type=int,default=180)
     args=parser.parse_args()
     try:
-        if args.command=="setup-particle":
+        if args.command in ("setup-particle","setup-luminance","setup-vfx"):
             from fetch_vfx_assets import MANIFEST,setup_particle
             root=args.deps_root or Path(os.environ.get("INFINI_TML_DEPS_SRC",ROOT/"artifacts/dependencies"))
-            print(json.dumps(setup_particle(root,read_json(MANIFEST)),indent=2));return 0
+            if args.command=="setup-particle":result=setup_particle(root,read_json(MANIFEST))
+            else:
+                from fetch_luminance import setup_luminance
+                result=setup_luminance(root) if args.command=="setup-luminance" else {
+                    "particle":setup_particle(root,read_json(MANIFEST)),"luminance":setup_luminance(root)}
+            print(json.dumps(result,indent=2));return 0
         if args.command=="test":
             import unittest
             suite=unittest.defaultTestLoader.discover(str(HERE),pattern="test_*.py")

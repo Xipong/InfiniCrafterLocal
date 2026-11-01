@@ -68,10 +68,10 @@ Run commands below from the repository root.
   and their managed dependencies. Local development exercised tML `v2026.08.3.0`
   (Terraria 1.4.4.9); a different release requires revalidation.
 - ParticleLibrary and Luminance reference DLLs, using the layout below. Install the
-  pinned ParticleLibrary DLL and its original resources together with
-  `python -m toolbox workbench setup-particle`. The existing
-  [repository CI setup](../../.github/workflows/ci.yml) documents the Luminance DLL
-  and tModLoader reference discovery after restoring the mod project.
+  pinned DLLs and original VFX resources together with
+  `python -m toolbox workbench setup-vfx`. The existing
+  [repository CI setup](../../.github/workflows/ci.yml) documents tModLoader
+  reference discovery after restoring the mod project.
 
 Set these to your own existing dependency directories:
 
@@ -106,9 +106,12 @@ native-frame GIF in one command:
 python -m toolbox workbench probe --item /path/to/definition.json --gif
 # Multiple items, both buttons, explicit aim/hold/ammo if relevant:
 python -m toolbox workbench probe --item /path/to/items/*/definition.json --gif \
-  --input primary alt --hold 120 --set 'inventory=[{"slot":54,"itemId":40,"stack":999}]'
+  --input primary alt --hold 120 --ammo 40:200 --aim 864 732
 # Published art outside the usual nearby directories:
 python -m toolbox workbench probe --item /path/item.json --gif --asset-dir /path/to/sprites
+# Vanilla controls need the verified vanilla item/projectile asset bundle:
+python tools/item-test-workbench/fetch_performance_assets.py --out artifacts/dependencies/vanilla-assets --items 98 368 --include-projectiles
+python -m toolbox workbench probe --vanilla-item Minishark --gif --ammo 97:200 --aim 930 730
 ```
 
 The result prints each successful `gif` path and, when native player bounds are available,
@@ -118,6 +121,13 @@ HTML review are alongside it in `runs/<case>/`. Default capture uses a fixed
 side-view, up to 120 ticks of held input and 180 total ticks. Use `--hold`,
 `--ticks`, `--input`, `--action`, `--assert` and `--set` to express the desired
 interaction; ammunition is never guessed. `--gif-stride` samples only the GIF; by default it is selected to fit the GIF pixel budget and recorded in the plan and receipt.
+`--ammo ITEM_ID[:STACK]` puts explicitly selected vanilla ammo into slots 54–57
+(repeat for up to four types; default stack 100). Native admission checks the
+item type and maximum stack. `--aim X Y` sets the initial cursor in world pixels;
+later explicit aim actions can change it.
+When no `--input` is given, an item whose authored bindings exclusively specify
+`equipped` / `equip_passive` uses `equip`; other items use `primary`. The selected
+input is shown in the plan. Explicit `--input` always takes precedence.
 `--plan` shows the actual scene and resolved art without running or writing;
 `--prepare` creates a suite without running, but art paths remain external and
 must still exist at execution. Check the native results and event counts: default
@@ -136,14 +146,15 @@ A world-scoped item with a nonnumeric world ID cannot match Terraria's integer
 world ID. For a deliberate isolated test, `--test-world-id 12` saves the original
 input beside a test copy and changes only that copy's `recipeMeta.worldId`; the
 plan records old and new values. This is not required for normal numeric world IDs.
-The `--gif` shortcut currently accepts generated items; vanilla pose rendering
-requires its separately documented pinned assets and explicit scenario.
+Vanilla GIFs use pinned assets, including only the seven admitted vanilla projectile
+types; unsupported assets or projectile types fail explicitly. Excalibur is ItemID 368.
 
 `doctor` shows dependency and graphics readiness and selected paths. It can discover
 standard Steam/tML paths and `artifacts/dependencies` assets; explicit environment
 variables override discovery. Set `INFINI_TML_DIR` to a tModLoader install for
-native/content discovery, or set the documented individual paths. For selected
-Luminance textures, supply a verified resource tree via `INFINI_LUMINANCE_ASSET_DIR`. Rendering still requires Linux OpenGL and the actual
+native/content discovery, or set the documented individual paths. `setup-vfx` supplies
+Luminance textures in the discovered dependency root; an explicit
+`INFINI_LUMINANCE_ASSET_DIR` takes precedence. Rendering still requires Linux OpenGL and the actual
 resources in the native graphics section. A missing dependency or unsupported
 render is an error, not a successful capture.
 
@@ -392,18 +403,20 @@ OpenGL/Mesa stack and expose the official tML native libraries and content:
 ```sh
 export INFINI_TML_NATIVE_DIR="/path/to/tModLoader/Libraries/Native/Linux"
 export INFINI_TML_CONTENT_DIR="/path/to/tModLoader/Content"
-python -m toolbox workbench setup-particle
+python -m toolbox workbench setup-vfx
 python tools/item-test-workbench/fetch_player_assets.py \
   --out artifacts/dependencies/player-assets --include-dummy
 export INFINI_PLAYER_ASSET_DIR="$PWD/artifacts/dependencies/player-assets"
 ```
 
-The ParticleLibrary setup downloads the pinned official DLL and upstream resources,
-verifies their exact SHA-256 hashes and refuses to overwrite mismatched existing
-files. Its default location is `artifacts/dependencies`, or `INFINI_TML_DEPS_SRC`
+The VFX setup downloads pinned original DLLs and upstream resources, verifies the
+DLL and ParticleLibrary SHA-256 hashes and the Luminance texture Git blob identities,
+and refuses to overwrite mismatched existing files. Its default location is
+`artifacts/dependencies`, or `INFINI_TML_DEPS_SRC`
 when set; `--deps-root` selects another root. Set `INFINI_TML_DEPS_SRC` to that
-custom root for subsequent commands. The setup does not install .NET, tML or
-Luminance, and does not establish that the renderer initialized successfully.
+custom root for subsequent commands. The setup does not install .NET or tML and
+does not establish that the renderer initialized successfully.
+`setup-particle` and `setup-luminance` can also install the two packages separately.
 To use an existing matching DLL, the separate `fetch_vfx_assets.py --particle-dll
 DLL --out DIR` remains available. The player fetcher downloads 20 pinned **community
 source PNGs**, or 22 with `--include-dummy`, not HD upscales. These are labelled
@@ -461,9 +474,8 @@ also require `Images/MagicPixel.png` through `playerAssetRoot` or
 `INFINI_PLAYER_ASSET_DIR`: only that pinned PNG is decoded by the original native
 PngReader, scoped and restored, without loading or drawing player artwork. Its
 receipt is `nativeRender.magicPixelResource`; no synthetic white texture is used.
-Only the existing
-ParticleLibrary resource mod is registered: a selected Luminance particle texture
-without its resource context is a refusal, not automatic dependency provisioning.
+When a Luminance texture is selected, the renderer registers its original resource
+tree without running Luminance gameplay hooks. Missing resources cause a refusal.
 
 Reusable native controls, optionally including an unchanged historyRibbon item:
 
@@ -545,6 +557,13 @@ required, not reconstructed rings. Native snapshots now expose original material
 path histories/geometries and detached impact records as well as particles. A
 record proves state exists, not that it was drawn or visually approved; inspect
 the corresponding original PNG frames and renderer coverage separately.
+
+In `client_vfx` with `drawNativeDust=true`, `native_npc_hit_effect` events observe the original
+`NPC.HitEffect` call, including its vanilla and NPCLoader hooks. They record
+the target and the dust slots newly active during that call; the observer does
+not create dust. A training dummy can legitimately produce no such dust, while
+the controlled `dummy.nativeType: "zombie"` exercises native NPC hit effects.
+The controlled zombie currently has no NPC artwork unless separately rendered.
 
 ### Equipment reactions and secondary targets
 
@@ -918,7 +937,8 @@ Opt in with `nativeRender.drawVanillaProjectiles: true` alongside `drawArtwork`
 and `drawPlayer`. Gameplay continues through original `Player.Update` / ItemCheck,
 `Projectile.Update` and native hit hooks; the sprite pass calls original
 `Main.DrawProj`. This admits only the pinned wooden arrow (1), ordinary bullet
-(14), Holy Arrow (91), Hallow Star (92), Pulse Bolt (357) and Hellwing (485).
+(14), Holy Arrow (91), Hallow Star (92), Pulse Bolt (357), Hellwing (485), and
+Excalibur's sword effect (982, using its native `Extra_98` texture).
 Other active types, hidden/special draw passes, missing PNGs and hash mismatches
 refuse; no generated projectile or schematic sprite substitutes for them.
 The default vanilla pose mode still omits projectile sprites explicitly.

@@ -51,10 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           deps="$RUNNER_TEMP/ifc-deps"
-          python -m toolbox workbench setup-particle --deps-root "$deps"
-          mkdir -p "$deps/Luminance/bin/Debug/net8.0"
-          curl --fail --location --retry 3 --output "$deps/Luminance/bin/Debug/net8.0/Luminance.dll" \
-            https://github.com/LucilleKarma/Luminance/releases/download/v1.0.12/Luminance.dll
+          python -m toolbox workbench setup-vfx --deps-root "$deps"
           echo "INFINI_TML_DEPS_SRC=$deps" >> "$GITHUB_ENV"
           echo "INFINI_PARTICLE_ASSET_DIR=$deps/particle-assets" >> "$GITHUB_ENV"
       - name: Restore matching managed tModLoader references
@@ -91,6 +88,54 @@ jobs:
           python tools/item-test-workbench/workbench.py build 2>&1 | tee artifacts/workbench-ci/build.log
           python tools/item-test-workbench/verify_vfx.py --no-build --out artifacts/workbench-ci/evidence \
             2>&1 | tee artifacts/workbench-ci/verify.log
+      - name: Render a Luminance on-hit particle using the real resource
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          item = json.loads(Path('tools/fixtures/video-ui-buffs/g_17d5099f992a900b.json').read_text())
+          for slot in item['vfxManifest']['slots']:
+              if slot.get('rendererKind') == 'libraryParticle' and slot.get('event') == 'on_hit':
+                  slot['particle']['textureId'] = 'shineFlare'
+          Path('artifacts/workbench-ci/luminance-item.json').write_text(json.dumps(item))
+          PY
+          python tools/item-test-workbench/workbench.py run --no-build \
+            --item artifacts/workbench-ci/luminance-item.json \
+            --scenario tools/item-test-workbench/scenarios/client-vfx-captured.json \
+            --review native --gif --out artifacts/workbench-ci/luminance-hit
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          trace = json.loads(Path('artifacts/workbench-ci/luminance-hit/native.json').read_text())
+          render = trace['nativeRender']
+          hashes = render.get('luminanceResources', {}).get('selectedTextureSha256', {})
+          key = 'Luminance/Assets/GreyscaleTextures/ShineFlare'
+          if trace.get('status') != 'passed' or hashes.get(key) != '0d0445abd56981effdb50e045694ebd3312959eaa3a21c64618a345d5b9351e6':
+              raise SystemExit('Original Luminance on-hit texture was not loaded')
+          if not any(s.get('particleCount', 0) > 0 for s in render.get('snapshots', [])):
+              raise SystemExit('No native on-hit particles observed')
+          if not any(f.get('nonblackPixels', 0) > 0 for f in render.get('frames', [])):
+              raise SystemExit('No native pixels were rendered')
+          PY
+      - name: Exercise automatic equipment input
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m toolbox workbench probe --no-build \
+            --item tools/item-test-workbench/fixtures/synthetic-reaction-accessory.json \
+            --assert '{"kind":"player_stat_at","tick":5,"stat":"defense","value":2}' \
+            --out artifacts/workbench-ci/equip-probe
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('artifacts/workbench-ci/equip-probe')
+          plan = json.loads((root / 'probe-plan.json').read_text())
+          result = json.loads((root / 'probe-result.json').read_text())
+          if plan['cases'][0]['input'] != 'equip' or not result['passed']:
+              raise SystemExit('Authored equip input did not execute with the expected defense')
+          PY
       - name: Export captured native frames as GIF
         if: always()
         shell: bash
@@ -143,6 +188,58 @@ jobs:
           if not any(snapshot.get('particleCount', 0) > 0 for snapshot in render.get('snapshots', [])):
               raise SystemExit('No actual ParticleLibrary particles were observed')
           print(f'Native lunar probe: {gif}; {len(render["frames"])} PNG frames')
+          PY
+      - name: Exercise native hit effects and miss controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/item-test-workbench/verify_hit_feedback.py --no-build \
+            --item artifacts/workbench-ci/lunar-item/item.json \
+            --out artifacts/workbench-ci/hit-feedback
+      - name: Verify original NPC hit effects
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/item-test-workbench/verify_hit_feedback.py \
+            --item artifacts/workbench-ci/lunar-item/item.json --no-build \
+            --out artifacts/workbench-ci/hit-feedback
+      - name: Capture native vanilla weapon effects through probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets="$RUNNER_TEMP/vanilla-assets"
+          python tools/item-test-workbench/fetch_performance_assets.py \
+            --out "$assets" --items 98 368 --include-projectiles
+          python -m toolbox workbench probe --vanilla-item Minishark --gif \
+            --vanilla-assets "$assets" --ammo 97:200 --aim 1056 728 --set dummy.tileX=65 \
+            --ticks 100 --hold 65 --gif-stride 2 --no-build \
+            --assert '{"kind":"native_projectile_seen","id":14}' \
+            --assert '{"kind":"hit_count_at_least","minimum":1}' \
+            --out artifacts/workbench-ci/vanilla-bullet
+          python -m toolbox workbench probe --vanilla-item 368 --gif \
+            --vanilla-assets "$assets" --ticks 60 --hold 30 --gif-stride 2 --no-build \
+            --assert '{"kind":"native_projectile_seen","id":982}' \
+            --out artifacts/workbench-ci/vanilla-excalibur
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('artifacts/workbench-ci')
+          for label in ('vanilla-bullet', 'vanilla-excalibur'):
+              result = json.loads((root / label / 'probe-result.json').read_text())
+              case = result['cases'][0]
+              if not result['passed'] or not Path(case.get('gif', '')).is_file():
+                  raise SystemExit(f'{label}: native capture or GIF failed')
+              trace = json.loads((root / label / 'runs' / case['run'] / 'native.json').read_text())
+              frames = trace['nativeRender']['frames']
+              if not any(f.get('heldItemDrawCount', 0) > 0 for f in frames):
+                  raise SystemExit(f'{label}: native item was not actually drawn')
+              expected_type = 14 if label == 'vanilla-bullet' else 982
+              if not any(any(g.get('nativeType') == expected_type for g in f.get('projectileGeometry', [])) for f in frames):
+                  raise SystemExit(f'{label}: original projectile sprite was not submitted through Main.DrawProj')
+              if label == 'vanilla-bullet':
+                  events = [e for s in trace['snapshots'] for e in s.get('events', [])]
+                  if not any(e.get('kind') == 'spawn' and e.get('ammoItemIdUsed') == 97 for e in events):
+                      raise SystemExit('Native musket ball source was not observed')
           PY
       - name: Upload native evidence and diagnostics
         if: always()

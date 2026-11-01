@@ -21,6 +21,35 @@ def arguments(*values):
 
 
 class ProbeTests(unittest.TestCase):
+    def test_equipped_only_bindings_select_equip_for_each_item(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            accessory, weapon = root / "accessory.json", root / "weapon.json"
+            accessory.write_text(json.dumps({"runtimeProgram": {"bindings": [{"input": "equipped", "usePolicy": {"action": {"kind": "equip_passive"}}}]}}))
+            weapon.write_text(json.dumps({"runtimeProgram": {"bindings": [{"input": "primary"}]}}))
+            plan = probe.plan_probe(arguments("--item", accessory, weapon))
+            self.assertEqual([case["input"] for case in plan["cases"]], ["equip", "primary"])
+            self.assertEqual(plan["scenes"]["equip"]["actions"], [{"tick": 0, "kind": "equip"}])
+            self.assertEqual(plan["cases"][0]["inputSelection"], "authored equipped-only bindings")
+            explicit = probe.plan_probe(arguments("--item", accessory, "--input", "primary"))
+            self.assertEqual(explicit["cases"][0]["input"], "primary")
+            mixed = {"runtimeProgram": {"bindings": [{"input": "equipped", "usePolicy": {"action": {"kind": "equip_passive"}}}, {"input": "primary"}]}}
+            accessory.write_text(json.dumps(mixed))
+            self.assertEqual(probe.plan_probe(arguments("--item", accessory))["cases"][0]["input"], "primary")
+
+    def test_explicit_ammo_and_aim_produce_native_scene(self):
+        plan = probe.plan_probe(arguments("--vanilla-item", "WoodenBow", "--ammo", "40:200", "--ammo", "41", "--aim", "865", "700"))
+        scene = plan["scenes"]["primary"]
+        self.assertEqual(scene["inventory"], [{"slot": 54, "itemId": 40, "stack": 200}, {"slot": 55, "itemId": 41, "stack": 100}])
+        self.assertEqual(scene["actions"][0], {"tick": 0, "kind": "aim", "x": 865.0, "y": 700.0})
+        with self.assertRaisesRegex(ValueError, "overwrite"):
+            probe.plan_probe(arguments("--vanilla-item", "WoodenBow", "--ammo", "40", "--set", 'inventory=[{"slot":54,"itemId":41,"stack":1}]'))
+        for value in ("40:0", "40:10000", "bad", "0"):
+            with self.subTest(ammo=value), self.assertRaises(ValueError):
+                probe.plan_probe(arguments("--vanilla-item", "WoodenBow", "--ammo", value))
+        with self.assertRaises(ValueError):
+            probe.plan_probe(arguments("--vanilla-item", "WoodenBow", "--aim", "nan", "1"))
+
     def test_public_cli_plans_matrix_without_installation_or_outputs(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

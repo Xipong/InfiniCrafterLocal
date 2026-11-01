@@ -32,6 +32,7 @@ class NativeEnvironmentTests(unittest.TestCase):
                      deps / 'Luminance/bin/Debug/net8.0/Luminance.dll',
                      deps / 'player-assets/Images/MagicPixel.png',
                      deps / 'particle-assets/Assets/Textures/Star.png',
+                     deps / 'luminance-assets/Assets/GreyscaleTextures/ShineFlare.png',
                      installation / 'Libraries/Native/Linux/libFNA3D.so.0',
                      installation / 'Content/PixelShader.xnb']
             for path in paths:
@@ -47,6 +48,7 @@ class NativeEnvironmentTests(unittest.TestCase):
             self.assertEqual(env['INFINI_TML_DEPS_SRC'], str(deps))
             self.assertEqual(env['INFINI_PLAYER_ASSET_DIR'], str(deps / 'player-assets'))
             self.assertEqual(env['INFINI_PARTICLE_ASSET_DIR'], str(deps / 'particle-assets'))
+            self.assertEqual(env['INFINI_LUMINANCE_ASSET_DIR'], str(deps / 'luminance-assets'))
             self.assertEqual(env['INFINI_TML_NATIVE_DIR'], str(installation / 'Libraries/Native/Linux'))
             self.assertEqual(env['INFINI_TML_CONTENT_DIR'], str(installation / 'Content'))
             self.assertEqual(notes['INFINI_TML_REFERENCE_DIR'], 'restored project.assets.json')

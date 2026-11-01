@@ -175,6 +175,31 @@ class FetchVfxAssetsTests(unittest.TestCase):
         self.assertEqual((self.out / "LICENSE").read_bytes(), self.contents["LICENSE"])
         self.assertFalse((self.out / "Assets").exists())
 
+    def test_luminance_setup_verifies_and_reuses_original_resources(self):
+        import hashlib
+        from unittest.mock import patch
+        import fetch_luminance
+        dll, image = b"actual dll", b"actual png"
+        path = "Assets/GreyscaleTextures/ShineFlare.png"
+        blob = hashlib.sha1(b"blob " + str(len(image)).encode() + b"\0" + image).hexdigest()
+        calls = []
+        def fetch(entry):
+            calls.append(entry["path"])
+            return dll if entry["path"].endswith(".dll") else image
+        deps = self.root / "deps"
+        with patch.object(fetch_luminance, "DLL_SHA256", setup.digest(dll)), \
+             patch.object(fetch_luminance, "FILES", {path: (len(image), blob)}), \
+             patch.object(fetch_luminance, "DLL_BYTES", len(dll)):
+            result = fetch_luminance.setup_luminance(deps, fetch)
+            self.assertEqual((deps / "luminance-assets" / path).read_bytes(), image)
+            self.assertEqual(result["environment"]["INFINI_LUMINANCE_ASSET_DIR"], str(deps / "luminance-assets"))
+            calls.clear()
+            fetch_luminance.setup_luminance(deps, fetch)
+            self.assertEqual(calls, [])
+            (deps / "luminance-assets" / path).write_bytes(b"wrong bytes")
+            with self.assertRaisesRegex(ValueError, "Integrity mismatch"):
+                fetch_luminance.setup_luminance(deps, fetch)
+
 
 if __name__ == "__main__":
     unittest.main()

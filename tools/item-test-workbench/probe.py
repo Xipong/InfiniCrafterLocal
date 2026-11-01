@@ -4,8 +4,8 @@ from __future__ import annotations
 import copy
 from datetime import datetime, timezone
 import hashlib
-import itertools
 import json
+import math
 from pathlib import Path
 import re
 
@@ -140,8 +140,6 @@ def plan_probe(args):
     if args.seed is not None:
         scene["seed"] = args.seed
     if args.gif:
-        if args.vanilla_item:
-            raise ValueError("--gif currently supports generated items only; native vanilla rendering has separate asset requirements")
         if args.mode != "full" or args.review != "none":
             raise ValueError("--gif selects client_vfx and native review; do not also set --mode or --review")
         scene["playerUpdate"] = "client_vfx"
@@ -152,6 +150,25 @@ def plan_probe(args):
                                  "drawPlayer": True, "drawNativeDust": True}
     for assignment in args.set:
         set_field(scene, assignment)
+    if args.ammo:
+        if len(args.ammo) > 4:
+            raise ValueError("--ammo supports at most four native ammo slots")
+        inventory = scene.setdefault("inventory", [])
+        if not isinstance(inventory, list) or any(not isinstance(row, dict) for row in inventory):
+            raise ValueError("scene inventory must be an array of objects")
+        occupied = {row.get("slot") for row in inventory}
+        for index, spec in enumerate(args.ammo):
+            parts = spec.split(":")
+            if len(parts) not in (1, 2) or any(not p.isdecimal() for p in parts):
+                raise ValueError("--ammo requires ITEM_ID or ITEM_ID:STACK, e.g. 40:200")
+            item_id = bounded_integer(int(parts[0]), 1, 2147483647, "--ammo item ID")
+            stack = bounded_integer(int(parts[1]) if len(parts) == 2 else 100, 1, 9999, "--ammo stack")
+            slot = 54 + index
+            if slot in occupied:
+                raise ValueError(f"--ammo would overwrite occupied inventory slot {slot}")
+            inventory.append({"slot": slot, "itemId": item_id, "stack": stack})
+    if args.aim is not None and any(not math.isfinite(v) or abs(v) > 1_000_000 for v in args.aim):
+        raise ValueError("--aim coordinates must be finite and within +/-1000000 pixels")
     ticks = bounded_integer(scene.get("ticks"), 1, 14400, "ticks")
     bounded_integer(args.start, 0, ticks - 1, "--start")
     hold = bounded_integer(args.hold if args.hold is not None else (min(120, ticks - args.start - 1) if args.gif and args.repeat is None else 1), 1, 14399, "--hold")
@@ -182,6 +199,8 @@ def plan_probe(args):
             raise ValueError("Requested GIF exceeds the 100 million pixel budget; increase --gif-stride")
     if args.test_world_id is not None and not args.gif:
         raise ValueError("--test-world-id currently requires --gif")
+    if args.test_world_id is not None and args.vanilla_item:
+        raise ValueError("--test-world-id applies only to generated items")
     if args.test_world_id is not None:
         bounded_integer(args.test_world_id, 0, 2147483647, "--test-world-id")
     inputs = args.input or ["primary"]
@@ -205,6 +224,14 @@ def plan_probe(args):
         display = definition.get("name")
         source = {"item": str(path), "itemSha256": w.digest(path), "label": path.stem,
                   "displayName": display if isinstance(display, str) and display.strip() else path.name}
+        bindings = (definition.get("runtimeProgram") or {}).get("bindings")
+        if not args.input and isinstance(bindings, list) and bindings and all(
+            isinstance(b, dict) and b.get("input") == "equipped"
+            and isinstance(b.get("usePolicy"), dict) and isinstance(b["usePolicy"].get("action"), dict)
+            and b["usePolicy"]["action"].get("kind") == "equip_passive" for b in bindings
+        ):
+            source["defaultInput"] = "equip"
+            source["inputSelection"] = "authored equipped-only bindings"
         if args.gif:
             source["artworkFiles"] = artwork_files(path, definition, args.asset_dir)
             world = (definition.get("recipeMeta") or {}).get("worldId")
@@ -227,26 +254,37 @@ def plan_probe(args):
         if args.item_boundary != "fresh":
             raise ValueError("Vanilla items cannot use the local_cache boundary")
         sources.append({"vanillaItem": name, "label": name, "displayName": name})
-    if not sources or len(sources) * len(inputs) > 128:
+    case_inputs = [(index, source, kind) for index, source in enumerate(sources, 1)
+                   for kind in (args.input or [source.get("defaultInput", "primary")])]
+    if not sources or len(case_inputs) > 128:
         raise ValueError("Probe requires items/vanilla items and at most 128 item × input cases")
+    inputs = list(dict.fromkeys(kind for _, _, kind in case_inputs))
+    if any(k in ("idle", "equip") for k in inputs) and (args.hold is not None or args.repeat is not None):
+        raise ValueError("--hold/--repeat apply only to primary/alt; probe idle/equip separately")
     scenes = {}
     for kind in inputs:
         value = copy.deepcopy(scene)
-        default_aim = [{"tick": 0, "kind": "aim", "x": 864, "y": 732}] if args.gif else []
+        aim = args.aim if args.aim is not None else ((864, 732) if args.gif else None)
+        default_aim = [{"tick": 0, "kind": "aim", "x": aim[0], "y": aim[1]}] if aim else []
         value["actions"] = sorted(default_aim + input_actions(kind, ticks, args.start, hold, args.repeat) + extra_actions,
                                   key=lambda a: a["tick"])
         if len(value["actions"]) > 256:
             raise ValueError("Probe exceeds the native limit of 256 scripted actions")
         scenes[kind] = value
     cases = []
-    for (index, source), kind in itertools.product(enumerate(sources, 1), inputs):
+    for index, source, kind in case_inputs:
         # Numeric prefix preserves duplicate basenames and prevents path traversal.
         label = re.sub(r"[^a-zA-Z0-9_-]+", "-", source["label"]).strip("-_")[:36] or "item"
         scene_key = kind
         if args.gif:
             scene_key = f"{index:03d}-{kind}"
             scenes[scene_key] = copy.deepcopy(scenes[kind])
-            scenes[scene_key]["nativeRender"]["artworkFiles"] = source["artworkFiles"]
+            if "vanillaItem" in source:
+                scenes[scene_key]["vanillaAssetRoot"] = str(args.vanilla_assets.expanduser().resolve())
+                scenes[scene_key]["nativeRender"]["artworkFiles"] = []
+                scenes[scene_key]["nativeRender"]["drawVanillaProjectiles"] = True
+            else:
+                scenes[scene_key]["nativeRender"]["artworkFiles"] = source["artworkFiles"]
             if "worldId" in source:
                 scenes[scene_key]["worldId"] = source["worldId"]
         cases.append({"name": f"{index:03d}-{label}-{kind}", "sourceIndex": index, "input": kind, "sceneKey": scene_key,
@@ -339,6 +377,7 @@ def add_parser(subparsers):
     parser = subparsers.add_parser("probe", help="Test items without writing Python, scenario JSON or a suite manifest")
     parser.add_argument("--item", type=Path, nargs="+", action="extend", default=[], help="One or more generated item JSONs; shell globs work")
     parser.add_argument("--vanilla-item", nargs="+", action="extend", default=[], help="Explicit native ItemID names/IDs for controls")
+    parser.add_argument("--vanilla-assets", type=Path, default=w.ROOT / "artifacts/dependencies/vanilla-assets", help="Pinned native item/projectile PNG root for vanilla GIF captures")
     parser.add_argument("--input", nargs="+", action="extend", choices=("primary", "alt", "idle", "equip"), help="Item × input matrix; default primary")
     parser.add_argument("--mode", choices=("item_check", "full", "client", "client_hybrid", "client_vfx"), default="full")
     parser.add_argument("--ticks", type=int, help="Observed native ticks; default 180")
@@ -346,6 +385,8 @@ def add_parser(subparsers):
     parser.add_argument("--start", type=int, default=0, help="First input tick; default 0")
     parser.add_argument("--hold", type=int, help="Ticks between press and release; default 1")
     parser.add_argument("--repeat", type=int, help="Ticks between explicit presses; must exceed hold")
+    parser.add_argument("--ammo", action="append", default=[], metavar="ITEM_ID[:STACK]", help="Place explicit vanilla ammunition in slots 54..57 (repeatable, default stack 100)")
+    parser.add_argument("--aim", type=float, nargs=2, metavar=("X", "Y"), help="Aim at world pixel coordinates from tick 0")
     parser.add_argument("--set", action="append", default=[], metavar="PATH=JSON", help="Set a scene field, e.g. dummy.x=840 or tiles.0.tileY=44")
     parser.add_argument("--action", action="append", default=[], metavar="JSON", help="Append native actions; same-tick order follows generated input")
     parser.add_argument("--assert", dest="assertions", action="append", default=[], metavar="KIND_OR_JSON", help="Append a native assertion; default only no_nonfinite")

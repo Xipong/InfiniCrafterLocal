@@ -60,6 +60,7 @@ def discover(root: Path, environ=None, home=None):
     for var, directory, marker in [
         ('INFINI_PLAYER_ASSET_DIR', 'player-assets', 'Images/MagicPixel.png'),
         ('INFINI_PARTICLE_ASSET_DIR', 'particle-assets', 'Assets/Textures/Star.png'),
+        ('INFINI_LUMINANCE_ASSET_DIR', 'luminance-assets', 'Assets/GreyscaleTextures/ShineFlare.png'),
     ]:
         candidate = effective_deps / directory
         choose(var, candidate if (candidate / marker).is_file() else None, str(candidate))

@@ -359,6 +359,7 @@ internal static partial class EngineRuntimeChecks
                 using var useObserver=WObserveUseCadence(owner,e=>events.Add(e));
                 using var configureObserver=WObserveConfiguration(e=>events.Add(e));
                 using var directDamageObserver=WObserveDirectNpcDamage(e=>events.Add(e));
+                using var hitFeedbackObserver=renderClient && (scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false)?new WNativeHitFeedback(e=>events.Add(e)):null;
                 using var hitObserver = new Hook(typeof(CombinedHooks).GetMethod(nameof(CombinedHooks.OnHitNPCWithProj))!,
                     (WorkbenchHitObserver)((WorkbenchHitOriginal orig,Projectile projectile,NPC target,in NPC.HitInfo hit,int damageDone) => {
                         hitCount++; events.Add(new JsonObject { ["kind"]="hit", ["projectileId"]=WProjectileId(projectile),["entityId"]=WProjectileEntity(projectile),["childDepth"]=WProjectileDepth(projectile),["npcId"]=target.whoAmI,["damageDone"]=damageDone,["lifeAfterDamage"]=target.life,["crit"]=hit.Crit,["hitKnockback"]=hit.Knockback,["targetOwnerImmunity"]=target.immune[projectile.owner],["projectileLocalImmunity"]=projectile.localNPCImmunity[target.whoAmI],["playerMeleeCooldown"]=Terraria.Main.player[projectile.owner].meleeNPCHitCooldown[target.whoAmI],["nativeDamage"]=projectile.damage,["dedServ"]=Terraria.Main.dedServ,["netMode"]=Terraria.Main.netMode,["observationStage"]="after_native_damage_before_mod_hit_callbacks" });
