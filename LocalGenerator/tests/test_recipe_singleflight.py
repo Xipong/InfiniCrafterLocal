@@ -5,45 +5,16 @@ import threading
 
 import pytest
 
+from infini_local.core.errors import PlannerUnavailable
 from infini_local.pipelines import combine_pipeline as pipeline
+from infini_local.pipelines.author import request as author_request
 from infini_local.storage import world_storage
-
-
-@pytest.fixture
-def pipeline_harness(tmp_path, monkeypatch):
-    def identity(data, *args, **kwargs):
-        return data
-
-    def ok(*args, **kwargs):
-        return {"ok": True}
-
-    def get(key, world, *args, **kwargs):
-        return world_storage.read_json_file(world_storage.world_recipe_file(tmp_path, world, key))
-
-    def put(key, a, b, data, world, *args):
-        world_storage.atomic_write_json(world_storage.world_recipe_file(tmp_path, world, key), data)
-
-    overrides = {
-        "USE_LLM": True, "begin_llm_item_lease": lambda *a, **kw: (None, None),
-        "cache_get": get, "cache_put": put,
-        "world_recipe_dir": lambda world: world_storage.world_recipe_dir(tmp_path, world),
-        "sanitize_recipe_for_delivery": lambda data: copy.deepcopy(data),
-    }
-    for name in ("compile_and_validate_authored_runtime", "attach_visual", "apply_visual_director",
-                 "attach_vfx_manifest", "finalize_visual_asset_runtime_gates", "maybe_generate_visual_assets",
-                 "assert_visual_delivery_ready", "attach_generated_parent_summary", "final_normalize"):
-        overrides[name] = identity
-    for name in ("validate_final_runtime_wire_boundary", "validate_vfx_manifest_wire", "visual_delivery_report", "_cached_payload_report"):
-        overrides[name] = ok
-    for name, value in overrides.items():
-        monkeypatch.setattr(pipeline, name, value)
-    monkeypatch.setattr(pipeline.asset_sync_service, "attach_asset_sync_meta", identity)
-    monkeypatch.setattr(world_storage, "attach_recipe_health", identity)
-    return {"worldId": "123", "itemA": {"id": 1, "name": "A"}, "itemB": {"id": 2, "name": "B"}}
+from tests.test_generation_resume import craft  # noqa: F401
+from tests.vfx_image_fixtures import offline_backend  # noqa: F401
 
 
 @pytest.mark.parametrize("first_fails", [False, True])
-def test_same_recipe_rechecks_cache_and_releases_failed_flight(pipeline_harness, monkeypatch, first_fails):
+def test_same_recipe_rechecks_cache_and_releases_failed_flight(craft, monkeypatch, first_fails):
     entered, release, second_key = threading.Event(), threading.Event(), threading.Event()
     calls = []
     real_key = pipeline.recipe_key
@@ -55,51 +26,62 @@ def test_same_recipe_rechecks_cache_and_releases_failed_flight(pipeline_harness,
             second_key.set()
         return real_key(*args)
 
-    def author(a, b, recipe_key):
-        calls.append(recipe_key)
+    def author(request, **kwargs):
+        calls.append(copy.deepcopy(request))
         if len(calls) == 1:
             entered.set()
-            assert release.wait(5)
-            if first_fails:
-                raise RuntimeError("first flight failed")
-        return {"id": f"winner-{len(calls)}", "name": "result", "debug": {}}
+            assert release.wait(15)
+        return craft.text(request, **kwargs)
 
+    craft.fail = "planner" if first_fails else ""
     monkeypatch.setattr(pipeline, "recipe_key", key)
-    monkeypatch.setattr(pipeline, "try_llm_plan", author)
+    monkeypatch.setattr(author_request, "llm_chat_json", author)
     with ThreadPoolExecutor(2) as pool:
-        first = pool.submit(pipeline.combine, copy.deepcopy(pipeline_harness))
-        assert entered.wait(5)
-        second = pool.submit(pipeline.combine, copy.deepcopy(pipeline_harness))
+        first = pool.submit(pipeline.combine, copy.deepcopy(craft.request))
         try:
-            assert second_key.wait(5)
+            assert entered.wait(15)
+            second = pool.submit(pipeline.combine, copy.deepcopy(craft.request))
+            assert second_key.wait(15)
         finally:
             release.set()
         if first_fails:
-            with pytest.raises(RuntimeError, match="first flight failed"):
-                first.result(5)
-            assert second.result(5)["id"] == "winner-2"
+            with pytest.raises(PlannerUnavailable, match="Gameplay Author failed") as failure:
+                first.result(30)
+            assert isinstance(failure.value.__cause__, OSError)
+            assert "offline provider interrupted planner" in str(failure.value.__cause__)
+            result = second.result(30)
+            assert result["name"] == "Wooden Blade 2"
         else:
-            assert first.result(5)["id"] == second.result(5)["id"] == "winner-1"
+            result = first.result(30)
+            assert second.result(30)["id"] == result["id"]
+            assert result["name"] == "Wooden Blade 1"
+    assert pipeline._cached_payload_report(result)["ok"]
     assert len(calls) == (2 if first_fails else 1)
+    assert craft.text_calls.count("visual_director") == craft.text_calls.count("vfx_director") == 1
+    assert len(craft.image_calls) == 1
     assert not world_storage._GENERATION_LOCKS
 
 
 @pytest.mark.parametrize("different_world", [False, True])
-def test_unrelated_recipes_generate_concurrently(pipeline_harness, monkeypatch, different_world):
+def test_unrelated_recipes_generate_concurrently(craft, monkeypatch, different_world):
     both_authors = threading.Barrier(2)
 
-    def author(a, b, key):
-        both_authors.wait(5)
-        return {"id": key, "name": "result", "debug": {}}
+    def author(request, **kwargs):
+        both_authors.wait(15)
+        return craft.text(request, **kwargs)
 
-    monkeypatch.setattr(pipeline, "try_llm_plan", author)
-    other = copy.deepcopy(pipeline_harness)
+    monkeypatch.setattr(author_request, "llm_chat_json", author)
+    other = copy.deepcopy(craft.request)
     if different_world:
         other["worldId"] = "456"
     else:
-        other["itemB"] = {"id": 3, "name": "C"}
+        other["itemB"] = {"id": 8, "name": "Torch", "fullName": "Terraria/Torch"}
     with ThreadPoolExecutor(2) as pool:
-        first = pool.submit(pipeline.combine, pipeline_harness)
+        first = pool.submit(pipeline.combine, copy.deepcopy(craft.request))
         second = pool.submit(pipeline.combine, other)
-        assert first.result(5)["id"] != second.result(5)["id"]
+        results = [first.result(30), second.result(30)]
+        assert results[0]["id"] != results[1]["id"]
+    assert all(pipeline._cached_payload_report(result)["ok"] for result in results)
+    assert craft.text_calls.count("planner") == 2
+    assert len(craft.image_calls) == 2
     assert not world_storage._GENERATION_LOCKS

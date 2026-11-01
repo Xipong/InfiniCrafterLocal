@@ -2,6 +2,11 @@
 'use strict';
 (() => {
   const en = {
+  "Механика": "Gameplay",
+  "Механика и внешний вид": "Gameplay and visual design",
+  "Механика, внешний вид и VFX": "Gameplay, visual design and VFX",
+  "Прогресс сохранён:": "Progress saved:",
+  "Повтори крафт с теми же ингредиентами в тех же слотах и в том же мире. Генерация продолжится с сохранённого этапа, в том числе после перезапуска генератора.": "Retry the craft with the same ingredients in the same slots and world. Generation resumes from the saved stages, even after restarting the generator.",
   "Язык": "Language",
   "Язык интерфейса и текста новых предметов. Для генерации сохрани настройки и перезапусти сервер.": "Language of the interface and new item text. Save and restart the server to apply it to generation.",
   "Адрес сервера": "Server address",

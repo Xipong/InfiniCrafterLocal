@@ -9,11 +9,13 @@ and commit a world-scoped recipe.
 """
 
 import copy
+from contextlib import ExitStack
+import hashlib
 import json
 import time
 from typing import Any, Callable, Mapping
 
-from infini_local.core import dev_fallback
+from infini_local.core import dev_fallback, llm_config, strict_json
 from infini_local.core.config_bootstrap import (
     APP_VERSION,
     ASSET_PUBLIC_BASE_URL,
@@ -25,24 +27,29 @@ from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROG
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.pipelines.vfx.stage import attach_vfx_manifest
 from infini_local.core.vfx.validation import validate_vfx_manifest_wire
+from infini_local.core.vfx.contract import VFX_MANIFEST_SCHEMA
 from infini_local.pipelines import generation_debug
 from infini_local.pipelines.author.stage import compile_and_validate_authored_runtime, validate_final_runtime_wire_boundary
 from infini_local.pipelines.vfx.request import call_llm_vfx_director
 from infini_local.pipelines.final_normalize import final_normalize
 from infini_local.pipelines.context.generated_summary import attach_generated_parent_summary
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 from infini_local.pipelines.author.request import try_llm_plan
 from infini_local.pipelines.transport.profiles import (
     begin_llm_item_lease,
     end_llm_item_lease,
 )
 from infini_local.core.images.config import VISUAL_PIPELINE_PROFILE, contract_versions_payload
-from infini_local.pipelines.visual.assets import finalize_visual_asset_runtime_gates
+from infini_local.pipelines.visual.assets import equipment_overlay_requirement, finalize_visual_asset_runtime_gates
+from infini_local.pipelines.visual.contract import VISUAL_KIT_SCHEMA, _validate_kit
 from infini_local.pipelines.visual.delivery import assert_visual_delivery_ready, visual_delivery_report
 from infini_local.pipelines.visual.stage import apply_visual_director, attach_visual
 from infini_local.pipelines.images.stage import maybe_generate_visual_assets, overlap_visual_images
 from infini_local.services import asset_sync_service
 from infini_local.services.combine_endpoint import generation_stage
 from infini_local.storage import world_storage
+from infini_local.storage.generation_checkpoint import GenerationCheckpoint, use_generation_checkpoint
+from infini_local.storage.trace_runtime import trace_event
 from infini_local.storage.world_storage import is_deliverable_recipe_payload, sanitize_recipe_for_delivery
 from infini_local.core.item_identity_tools import item_identity
 from infini_local.storage.world_recipe_runtime import (
@@ -62,6 +69,77 @@ _STAGE_KEYS = (
     "vfxDirectorCalls",
     "vfxRepairCalls",
 )
+
+_CHECKPOINT_STAGES = ("gameplay", "visual", "vfx")
+
+
+def _checkpoint_identity(a: dict[str, Any], b: dict[str, Any], key: str,
+                         world_id: str, identity_version: str, profile_id: str) -> dict[str, Any]:
+    # Recipe identity alone omits parent facts/definitions. Reuse the same
+    # canonical source cards the three stages read, including appearance and the
+    # original A/B order, without generated-parent cache/debug/PNG-path noise. Providers
+    # are deliberately excluded: changing a failed downstream service must not
+    # erase already accepted work. No credentials enter this record.
+    sources = []
+    for parent in (a, b):
+        card = raw_parent_card_for_llm(parent, include_visual_reference=True)
+        frame = card.get("raw", {}).get("spriteReference", {}).get("currentFrame")
+        if isinstance(frame, dict) and frame.get("source") == "draw_animation":
+            # The current animation position changes between manual retries.
+            # Frame/texture dimensions remain identity; requests keep all facts.
+            frame.pop("xPx", None)
+            frame.pop("yPx", None)
+        sources.append({"identity": item_identity(parent), "context": card})
+    parents = strict_json.dumps(sources, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return {
+        "worldId": world_id, "recipeKey": key, "recipeIdentityVersion": identity_version,
+        "profileId": profile_id, "sourceFingerprint": hashlib.sha256(parents.encode("utf-8")).hexdigest(),
+        "contractVersions": contract_versions_payload(), "runtimeWireSchema": RUNTIME_WIRE_SCHEMA,
+        "visualKitSchema": VISUAL_KIT_SCHEMA, "vfxManifestSchema": VFX_MANIFEST_SCHEMA,
+        "language": llm_config.LANGUAGE, "promptStyle": llm_config.PROMPT_STYLE,
+    }
+
+
+def _checkpoint_errors(data: dict[str, Any], completed: int) -> list[dict[str, Any]]:
+    """Validate accepted outputs through their owners without compile or Repair."""
+    errors = list(validate_runtime_wire(data).get("errors") or [])
+    debug = data.get("debug") if isinstance(data.get("debug"), dict) else {}
+    accounting = debug.get("llmStageAccounting")
+    accounting = accounting if isinstance(accounting, dict) else {}
+    for index, name in enumerate(("gameplay", "visual", "vfx")):
+        director = name + ("AuthorCalls" if name == "gameplay" else "DirectorCalls")
+        calls, repairs = accounting.get(director), accounting.get(name + "RepairCalls", 0)
+        if (type(calls) is not int or calls != int(index < completed)
+                or type(repairs) is not int or repairs not in ({0, 1} if index < completed else {0})):
+            errors.append({"path": "$.debug.llmStageAccounting", "message": "checkpoint stage provenance mismatch"})
+    if not errors and completed >= 2:
+        runtime = data["runtimeProgram"]
+        kit, problems = _validate_kit(
+            data.get("visualKit"), [row["id"] for row in runtime["entities"]], runtime["itemEntityId"],
+            equipment_overlay_required=bool(equipment_overlay_requirement(data)["required"]), accepted_data=data,
+        )
+        errors.extend(problems)
+        if kit != data.get("visualKit"):
+            errors.append({"path": "$.visualKit", "message": "checkpoint requires a changed Visual design"})
+    if not errors and completed >= 3:
+        errors.extend(validate_vfx_manifest_wire(data).get("errors") or [])
+    return errors
+
+
+def _restore_checkpoint(checkpoint: GenerationCheckpoint) -> tuple[dict[str, Any] | None, int]:
+    data, stage = checkpoint.data, checkpoint.stage
+    if data is None or stage not in _CHECKPOINT_STAGES:
+        return None, 0
+    completed = _CHECKPOINT_STAGES.index(stage) + 1
+    errors = _checkpoint_errors(data, completed)
+    if errors:
+        trace_event("warn", "COMBINE:resume", "saved generation rejected by current contracts; starting a new design",
+                    {"checkpointId": checkpoint.checkpoint_id, "stage": stage, "errors": errors[:12]})
+        checkpoint.clear()
+        return None, 0
+    trace_event("step", "COMBINE:resume", "continuing accepted generation stages",
+                {"checkpointId": checkpoint.checkpoint_id, "reusedStages": list(_CHECKPOINT_STAGES[:completed])})
+    return data, completed
 
 
 def _stage_accounting(data: Mapping[str, Any]) -> dict[str, int]:
@@ -139,6 +217,42 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
     data: dict[str, Any] | None = None
     lease = token = None
     key = None
+    checkpoint: GenerationCheckpoint | None = None
+    restored = 0
+    previous_log: list[dict[str, Any]] = []
+    previous_calls = {name: 0 for name in _STAGE_KEYS}
+
+    def resume_diagnostics(candidate: dict[str, Any], *, available: bool = True) -> None:
+        if checkpoint is None or checkpoint.stage is None:
+            return
+        current = _stage_accounting(candidate)
+        candidate.setdefault("debug", {})["generationResume"] = {
+            "available": available,
+            "checkpointId": checkpoint.checkpoint_id,
+            "stage": checkpoint.stage,
+            "savedAt": checkpoint.saved_at,
+            "resumedFrom": _CHECKPOINT_STAGES[restored - 1] if restored else None,
+            "reusedStages": list(_CHECKPOINT_STAGES[:restored]),
+            # Existing stage accounting describes the accepted item's provenance.
+            # Only this separate delta describes calls in the current attempt.
+            "currentAttemptCalls": {name: current[name] - previous_calls[name] for name in _STAGE_KEYS},
+        }
+        if previous_log:
+            candidate["debug"]["resumedPipelineLog"] = previous_log
+
+    def save_progress(stage: str) -> None:
+        if checkpoint is None or data is None:
+            return
+        data.setdefault("debug", {})["pipelineLog"] = copy.deepcopy(pipeline_log)
+        try:
+            errors = _checkpoint_errors(data, _CHECKPOINT_STAGES.index(stage) + 1)
+            if errors:
+                raise PlannerUnavailable("generation checkpoint rejected: " + json.dumps(errors[:12], ensure_ascii=False))
+            checkpoint.save_stage(stage, data)
+        except Exception as exc:
+            resume_diagnostics(data)
+            generation_debug.record_combine_failure("checkpoint_" + stage, exc, payload, data, pipeline_log)
+            raise
 
     def failure_data(args=()):
         if data is None:
@@ -146,7 +260,9 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
             # source inputs and the computed join, not just fn's first argument.
             # generation_debug owns the existing full snapshot/redaction/toggle.
             return {"itemA": payload.get("itemA"), "itemB": payload.get("itemB"), "recipeKey": key}
-        return args[0] if args and isinstance(args[0], dict) else data
+        candidate = args[0] if args and isinstance(args[0], dict) else data
+        resume_diagnostics(candidate)
+        return candidate
 
     def step(label: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         started = time.monotonic()
@@ -169,27 +285,49 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         profile_id = _multi_dev_profile_id(payload)
         key = recipe_key(a, b, world_id, identity_version, profile_id)
         # Recheck inside singleflight: a waiter delivers the committed winner.
-        with world_storage.recipe_generation_lock(world_recipe_dir(world_id), key):
+        with world_storage.recipe_generation_lock(world_recipe_dir(world_id), key), ExitStack() as contexts:
             cached = cache_get(key, world_id, world_name, validate_payload=_cached_payload_report)
             if isinstance(cached, dict):
                 generation_debug.clear_combine_failure("cache_hit_delivered")
                 return sanitize_recipe_for_delivery(cached)
-            if USE_LLM:
+            if USE_LLM and not ALLOW_DETERMINISTIC_DEV_FALLBACK:
+                checkpoint = GenerationCheckpoint(
+                    world_recipe_dir(world_id), key,
+                    _checkpoint_identity(a, b, key, world_id, identity_version, profile_id),
+                )
+                data, restored = _restore_checkpoint(checkpoint)
+                if data is not None:
+                    previous_calls = _stage_accounting(data)
+                    previous_log = copy.deepcopy((data.get("debug") or {}).get("pipelineLog") or [])
+            contexts.enter_context(use_generation_checkpoint(checkpoint))
+            if USE_LLM and restored < 3:
                 lease, token = step("00_llm_lease", begin_llm_item_lease, key, preferred_profile_id=profile_id)
+            if USE_LLM and data is None:
                 data = step("01_gameplay_author", try_llm_plan, a, b, key)
             if data is None:
                 if not ALLOW_DETERMINISTIC_DEV_FALLBACK:
                     raise PlannerUnavailable("Gameplay Author unavailable; craft failed and ingredients must be refunded")
                 data = step("01_dev_only_low_level_fixture", dev_fallback.deterministic_low_level_plan, a, b, key)
 
-            data = compile_and_validate_authored_runtime(data, a, b, key, run_stage=step)
-            data = step("04_visual_technical_init", attach_visual, data)
-            data = step("05_visual_director", apply_visual_director, data, a, b)
-            with overlap_visual_images(data) as pending_images:
-                data = step("06_vfx_director", attach_vfx_manifest, data, key, a, b, call_llm_vfx_director if USE_LLM else None)
+            if restored < 1:
+                data = compile_and_validate_authored_runtime(data, a, b, key, run_stage=step)
+                save_progress("gameplay")
+            if restored < 2:
+                data = step("04_visual_technical_init", attach_visual, data)
+                data = step("05_visual_director", apply_visual_director, data, a, b)
+                save_progress("visual")
+            if restored < 3:
+                with overlap_visual_images(data) as pending_images:
+                    data = step("06_vfx_director", attach_vfx_manifest, data, key, a, b, call_llm_vfx_director if USE_LLM else None)
+                    save_progress("vfx")
+                    data = step("07_visual_asset_runtime_gates", finalize_visual_asset_runtime_gates, data)
+                    image_kwargs = {"pending": pending_images} if pending_images is not None else {}
+                    data = step("08_visual_asset_generation", maybe_generate_visual_assets, data, **image_kwargs)
+            else:
+                # Rebuild from the unhydrated accepted VFX snapshot. Exact image
+                # receipts reuse healthy PNGs; missing/corrupt ones regenerate.
                 data = step("07_visual_asset_runtime_gates", finalize_visual_asset_runtime_gates, data)
-                image_kwargs = {"pending": pending_images} if pending_images is not None else {}
-                data = step("08_visual_asset_generation", maybe_generate_visual_assets, data, **image_kwargs)
+                data = step("08_visual_asset_generation", maybe_generate_visual_assets, data)
             data = step("09_visual_delivery_gate", assert_visual_delivery_ready, data)
             data = step("10_generated_parent_summary", attach_generated_parent_summary, data)
             data = step("11_final_normalize", final_normalize, data)
@@ -201,6 +339,7 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
             if not vfx_report["ok"]:
                 raise PlannerUnavailable("final VFX wire rejected: " + json.dumps(vfx_report["errors"][:12], ensure_ascii=False))
             data = step("13_stage_accounting", _assert_stage_topology, data)
+            resume_diagnostics(data, available=False)
 
             recipe_meta = data.setdefault("recipeMeta", {})
             recipe_meta.update({
@@ -230,13 +369,21 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
                 contract_versions=data.get("contractVersions") if isinstance(data.get("contractVersions"), dict) else {},
                 visual_report=visual_delivery_report(data),
             )
-            data = sanitize_recipe_for_delivery(data)
-            final_report = _cached_payload_report(data)
+            delivered = sanitize_recipe_for_delivery(data)
+            final_report = _cached_payload_report(delivered)
             if not final_report["ok"]:
                 raise PlannerUnavailable("delivery payload failed low-level runtime boundary: " + json.dumps(final_report["errors"][:12], ensure_ascii=False))
-            cache_put(key, a, b, data, world_id, world_name)
+            cache_put(key, a, b, delivered, world_id, world_name)
+            if checkpoint is not None:
+                try:
+                    checkpoint.clear()
+                except OSError as exc:
+                    # The committed recipe is already authoritative. A cleanup
+                    # failure cannot turn that success into a refunded craft.
+                    trace_event("warn", "COMBINE:resume", "recipe committed; checkpoint cleanup deferred",
+                                {"recipeKey": key, "error": repr(exc)})
             generation_debug.clear_combine_failure("fresh_combine_success")
-            return data
+            return delivered
     except Exception as exc:
         if not isinstance(getattr(exc, "_infini_failure_snapshot", None), dict):
             generation_debug.record_combine_failure("unknown", exc, payload, failure_data(), pipeline_log)

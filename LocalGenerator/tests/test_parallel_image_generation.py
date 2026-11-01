@@ -2,6 +2,7 @@
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 import copy
+import json
 import os
 import subprocess
 import sys
@@ -183,44 +184,71 @@ def test_vfx_failure_joins_image_workers_without_mutating_input(offline_backend,
     assert data == frozen
 
 
-# Reuse the endpoint/cache harness, not the scheduling implementation.
-from tests.test_recipe_singleflight import pipeline_harness  # noqa: E402,F401
+# Real stage/cache owners; only the external text and image services are inert.
+from tests.test_generation_resume import craft  # noqa: E402,F401
 
 
-def test_combine_overlaps_visual_calls_with_vfx_director(pipeline_harness, offline_backend, monkeypatch):
+def test_combine_overlaps_visual_calls_with_vfx_director(craft, offline_backend, monkeypatch):
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+    from infini_local.core.vfx.contract import VFX_DIRECTOR_SCHEMA
+    from infini_local.core.vfx.materials import vfx_model_payload
     from infini_local.pipelines import combine_pipeline as pipeline
-    data = _existing_texture_data("entity")
-    data.pop("vfxManifest")
+    from infini_local.pipelines.visual import request as visual_request
+    from infini_local.pipelines.vfx import request as vfx_request
+    from tests.prompt_packet_helpers import request_dossier
+    from tests.vfx_image_fixtures import _slot
+
     monkeypatch.setattr(generation, "IMAGE_GENERATION_GATE", ImageRequestGate(4))
     backend = generation.generate_sdcpp
     item_started, entity_started, vfx_started = (threading.Event() for _ in range(3))
     calls, vfx_attempts = [], []
-    item_id, entity_id = data["id"], data["id"] + "_orb"
+    authored_kit = None
+    expected_runtime = compile_runtime_program(craft.authored)["runtimeProgram"]
+    for entity in expected_runtime["entities"]:
+        entity.pop("visual", None)
+
     def transport(prompt, negative, asset_id, *args, **kwargs):
         calls.append(asset_id)
-        if asset_id in {item_id, entity_id}:
-            (item_started if asset_id == item_id else entity_started).set()
-            assert vfx_started.wait(5), "Visual calls must stay in flight until the new VFX job starts"
-        else:
+        if asset_id.startswith("infini_vfx_job_"):
             vfx_attempts.append(asset_id)
             vfx_started.set()
+        else:
+            (entity_started if asset_id.endswith("_workbench_blade") else item_started).set()
+            assert vfx_started.wait(15), "Visual calls must stay in flight until the new VFX job starts"
         return backend(prompt, negative, asset_id, *args, **kwargs)
-    def director(candidate, *args):
-        assert item_started.wait(5) and entity_started.wait(5), "all accepted Visual jobs must start before VFX returns"
-        assert candidate["visual"] == data["visual"]
-        assert candidate["runtimeProgram"] == data["runtimeProgram"]
-        assert "vfxManifest" not in candidate
-        assert Counter(calls) == Counter([item_id, entity_id])
-        candidate["vfxManifest"] = _data([_request()])["vfxManifest"]
-        return candidate
+
+    def visual(request, **kwargs):
+        nonlocal authored_kit
+        response = craft.text(request, **kwargs)
+        authored_kit = json.loads(response["choices"][0]["message"]["content"])
+        entity = next(row for row in authored_kit["entities"] if row["entityId"] == "workbench_blade")
+        entity.update(assetMode="baked_sprite", visualProjectRef="entity", prompt="one isolated amber blade",
+                      silhouette="one blade", visualIdentity="amber blade", preferredCanvasSize=32,
+                      renderSizePx=40, forwardAngleDegrees=45)
+        response["choices"][0]["message"]["content"] = json.dumps(authored_kit)
+        return response
+
+    def director(request, **kwargs):
+        assert item_started.wait(15) and entity_started.wait(15), "all accepted Visual jobs must start before VFX returns"
+        packet = request_dossier(request)
+        assert packet["acceptedVisualKit"] == authored_kit
+        assert packet["acceptedRuntimeProgramReadOnly"] == expected_runtime
+        item_id = packet["item"]["id"]
+        assert Counter(calls) == Counter([item_id, item_id + "_workbench_blade"])
+        response = craft.text(request, **kwargs)
+        slot = _slot("first", "grain")
+        slot["entityId"] = "workbench_blade"
+        authored_vfx = {"schema": VFX_DIRECTOR_SCHEMA, "slots": [slot], "assets": [_request()]}
+        response["choices"][0]["message"]["content"] = json.dumps(vfx_model_payload(authored_vfx))
+        return response
+
     monkeypatch.setattr(generation, "generate_sdcpp", transport)
-    monkeypatch.setattr(pipeline, "try_llm_plan", lambda *args: copy.deepcopy(data))
-    monkeypatch.setattr(pipeline, "attach_vfx_manifest", director)
-    monkeypatch.setattr(pipeline, "maybe_generate_visual_assets", generation.maybe_generate_visual_assets)
-    out = pipeline.combine(pipeline_harness)
+    monkeypatch.setattr(visual_request, "llm_chat_json", visual)
+    monkeypatch.setattr(vfx_request, "llm_chat_json", director)
+    out = pipeline.combine(craft.request)
     assert out["visual"]["spriteStatus"] == "generated"
     assert out["vfxManifest"]["assets"][0]["spriteStatus"] == "generated"
     assert len(vfx_attempts) == 1
-    expected = Counter([item_id, entity_id, *vfx_attempts])
+    expected = Counter([out["id"], out["id"] + "_workbench_blade", *vfx_attempts])
     assert Counter(calls) == expected, "Visual jobs must not be resubmitted when the VFX batch arrives"
     assert Counter(call["id"] for call in offline_backend[0]) == expected

@@ -140,7 +140,7 @@ def _image_equipment_frame_prompt_clause(data: Mapping[str, Any], canvas: int) -
         facts["accessoryMount"] = visual["accessoryMount"]
     mount_placement = "; its authored accessoryMount selects body-local placement" if "accessoryMount" in facts else ""
     return (
-        ". Read-only equipment overlay facts: " + json.dumps(facts, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+        ". Read-only equipment overlay facts: " + json.dumps(facts, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
         + f". One static centered PNG badge attached to the player's {body_part}{mount_placement}. "
         "The renderer fits the whole final PNG within wholeTextureFitMaxPx world pixels on its longest side; "
         "padding makes the visible silhouette smaller, so keep the authored silhouette, parts, arrangement and identity readable at that size."
@@ -231,7 +231,7 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
         if "grip" in facts else ""
     )
     return (
-        ". Read-only final-frame facts: " + json.dumps(facts, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+        ". Read-only final-frame facts: " + json.dumps(facts, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
         + ". renderSizePx is the base in-game size of the whole frame, not the hitbox or the visible object's length; "
         "other scales can change its displayed size. Keep major pixel clusters readable at the selected in-game size. "
         + ("This same item sprite is also used for the listed in-use bodies; keep its design readable in both uses. "
@@ -254,7 +254,7 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
     if role == "item" and isinstance(visual, Mapping) and "grip" in visual:
         # The Visual stage validates this atomic object. Forward it literally;
         # do not infer the contact point or truncate art to make room for metadata.
-        grip = json.dumps(visual["grip"], separators=(",", ":"), allow_nan=False)
+        grip = json.dumps(visual["grip"], sort_keys=True, separators=(",", ":"), allow_nan=False)
         text += (
             f". Place the handle/hand-contact point at normalized final canvas coordinates {grip}; "
             "upper-left=(0,0), lower-right=(1,1), after framing/padding and before facing flips."
