@@ -273,7 +273,7 @@ def test_vfx_caches_owned_slot_grammar_not_dynamic_compatibility(monkeypatch, st
         assert schema["properties"]["assetsUpsert" if repair else "assets"]["items"] == {"$ref": "#/$defs/asset"}
         for field in ("element", "path", "screenShake", "particle", "sound"):
             assert slot["properties"][field] == {"$ref": "#/$defs/" + field}
-        canonical = vfx_model_schema((vfx_repair._vfx_repair_schema if repair else vfx_schema._director_schema)(data))
+        canonical = vfx_model_schema((vfx_repair.vfx_repair_schema if repair else vfx_schema._director_schema)(data))
         assert request_dossier(packet)["outputSchema"] == canonical
         if mode == "json_schema":
             assert packet["response_format"]["json_schema"]["schema"] == canonical

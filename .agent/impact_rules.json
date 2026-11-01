@@ -126,6 +126,20 @@
       ]
     },
     {
+      "id": "finite-llm-stages",
+      "patterns": [
+        "LocalGenerator/infini_local/core/llm_stage_messages.py"
+      ],
+      "checks": ["project_hygiene"],
+      "context": ["docs/development/pipeline/THREE_STAGE_LLM_PIPELINE_RU.md"],
+      "area": "transport",
+      "tests": [
+        "LocalGenerator/tests/test_low_level_three_stage_pipeline.py",
+        "LocalGenerator/tests/test_visual_vfx_prompt_prefix.py"
+      ],
+      "entrypoints": ["LocalGenerator/infini_local/core/llm_stage_messages.py"]
+    },
+    {
       "id": "shared-llm-boundaries",
       "patterns": [
         "LocalGenerator/infini_local/core/llm_json_tools.py",

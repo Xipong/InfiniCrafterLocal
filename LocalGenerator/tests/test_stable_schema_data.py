@@ -1,6 +1,7 @@
 """Canonical grammar is application instructions; case constraints stay USER."""
 import copy
 import json
+import time
 
 import infini_local.pipelines.transport.http as transport_http
 import pytest
@@ -28,7 +29,10 @@ def capture_wire(monkeypatch, packet, context):
     monkeypatch.setattr(transport_http, "http_json", stop)
     monkeypatch.setattr(auth, "get_credentials", lambda: SimpleNamespace(access_token="offline", account_id="offline"))
     monkeypatch.setattr(auth, "post_sse", stop)
-    with pytest.raises(Captured):
+    # This fixture proves serialization, not wall-clock CPU speed. Captured is a
+    # BaseException, so the first fake send exits without entering retry logic.
+    with monkeypatch.context() as clock, pytest.raises(Captured):
+        clock.setattr(time, "monotonic", lambda: 100.0)
         transport._llm_json_single_context(packet, 3, context)
     assert len(wires) == 1
     return wires[0]

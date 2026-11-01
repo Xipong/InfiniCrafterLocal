@@ -16,6 +16,7 @@ from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover
 from infini_local.core.llm_prompt_cache import with_instruction_segments
 from infini_local.core.llm_stage_messages import (
     generation_system_suffix,
+    stage_accounting,
     stage_chat_message,
 )
 from infini_local.core.provider_schema import project_provider_nullable_optionals_to_local, provider_nullable_transport_rule
@@ -88,22 +89,6 @@ _AUTHOR_SYSTEM = (
 
 def _item_language_instruction() -> str:
     return "\nНазвание и описание предмета пиши на русском языке." if llm_config.LANGUAGE == "ru" else ""
-
-
-def _stage_accounting(data: dict[str, Any]) -> dict[str, int]:
-    debug = data.setdefault("debug", {})
-    accounting = debug.setdefault("llmStageAccounting", {})
-    defaults = {
-        "gameplayAuthorCalls": 0,
-        "gameplayRepairCalls": 0,
-        "visualDirectorCalls": 0,
-        "visualRepairCalls": 0,
-        "vfxDirectorCalls": 0,
-        "vfxRepairCalls": 0,
-    }
-    for key, value in defaults.items():
-        accounting.setdefault(key, value)
-    return accounting
 
 
 def _prepare_parsed_author_item(
@@ -355,7 +340,7 @@ def try_llm_plan(
         })
         if format_repaired:
             debug["gameplayFormatRepairRawOutput"] = format_repair_content[:12000]
-        accounting = _stage_accounting(item)
+        accounting = stage_accounting(item)
         accounting["gameplayAuthorCalls"] = 1
         accounting["gameplayRepairCalls"] = 1 if format_repaired else 0
         return item
@@ -620,7 +605,7 @@ def repair_author_item_after_failure(
         repaired["debug"]["gameplayRepairStructureValidation"] = copy.deepcopy(report)
         repaired["debug"]["gameplayRepairFilterAudit"] = copy.deepcopy(filter_report)
         repaired["debug"]["gameplayRepairScope"] = copy.deepcopy(scope)
-        accounting = _stage_accounting(repaired)
+        accounting = stage_accounting(repaired)
         accounting["gameplayAuthorCalls"] = max(1, int(accounting.get("gameplayAuthorCalls", 0)))
         accounting["gameplayRepairCalls"] = 1
         return repaired

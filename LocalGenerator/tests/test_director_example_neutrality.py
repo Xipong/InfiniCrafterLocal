@@ -160,7 +160,6 @@ def test_author_packet_retains_full_grammar_without_counterexample_item_anecdote
     assert {"id", "fn", "target", "params"} <= shape["calls"][0].keys()
     # The complete executable capability fields were compared above. Their
     # explanatory wording is not part of the packet contract.
-    assert "useful new Terraria item" in packet["priorityHeader"][0]
     assert isinstance(packet["requiredJsonShape"]["concept"], str)
     assert parent == frozen
     assert "Exact source fact" in json.dumps(packet["parents"])

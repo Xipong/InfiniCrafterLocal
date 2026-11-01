@@ -160,18 +160,13 @@ def _call_target(call: Mapping[str, Any], rows: Mapping[str, list[dict[str, Any]
     return explicit or (_body_id(rows) if cap is not None and cap.target_kinds == ("item_body",) else "")
 
 
-def _source_transaction(row: Mapping[str, Any], *, item_body_id: str) -> dict[str, Any]:
-    """Project offered alternatives only, never frozen authored presence."""
-    return canonical_transaction(row, item_body_id=item_body_id)
-
-
 def _source_scope_transactions(value: Any, *, item_body_id: str) -> Any:
     if isinstance(value, list):
         return [_source_scope_transactions(row, item_body_id=item_body_id) for row in value]
     if isinstance(value, Mapping):
         result = {key: _source_scope_transactions(row, item_body_id=item_body_id) for key, row in value.items()}
         if "input" in result and isinstance(result.get("action"), Mapping):
-            return _source_transaction(result, item_body_id=item_body_id)
+            return canonical_transaction(result, item_body_id=item_body_id)
         return result
     return value
 

@@ -6,7 +6,7 @@ import json
 from typing import Any, Callable, Mapping
 
 from infini_local.core.errors import PlannerUnavailable
-from infini_local.core.llm_stage_messages import stage_chat_message
+from infini_local.core.llm_stage_messages import stage_accounting, stage_chat_message
 from infini_local.core.vfx import config
 from infini_local.core.vfx.projection import (
     _compile_manifest,
@@ -26,17 +26,6 @@ from infini_local.pipelines.vfx.prompt import (
     _prompt_packet,
     build_vfx_repair_packet,
 )
-
-
-def _stage_accounting(data: dict[str, Any]) -> dict[str, int]:
-    debug = data.setdefault("debug", {})
-    accounting = debug.setdefault("llmStageAccounting", {})
-    for key in (
-        "gameplayAuthorCalls", "gameplayRepairCalls", "visualDirectorCalls",
-        "visualRepairCalls", "vfxDirectorCalls", "vfxRepairCalls",
-    ):
-        accounting.setdefault(key, 0)
-    return accounting
 
 
 def _request(
@@ -79,7 +68,7 @@ def attach_vfx_manifest(
         return data
 
     packet = _prompt_packet(data, parent_a, parent_b)
-    accounting = _stage_accounting(data)
+    accounting = stage_accounting(data)
     accounting["vfxDirectorCalls"] += 1
     raw = _request(llm_director, packet)
     report = validate_vfx_director_output(raw, data)

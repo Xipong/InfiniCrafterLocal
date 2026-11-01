@@ -1,4 +1,4 @@
-"""Attributed chat messages for the finite LLM pipeline.
+"""Attributed chat messages and call accounting for the finite LLM pipeline.
 
 ``role`` preserves Chat Completions authority, stage-specific system content and the
 latest user packet define model-visible authority/current truth, and ``name`` is a
@@ -7,7 +7,21 @@ finite trace/provider hint.
 
 from __future__ import annotations
 
+from typing import Any
+
 from infini_local.core import llm_config
+
+
+def stage_accounting(data: dict[str, Any]) -> dict[str, int]:
+    """Initialize missing counters without resetting accepted calls or other debug data."""
+    debug = data.setdefault("debug", {})
+    accounting = debug.setdefault("llmStageAccounting", {})
+    for key in (
+        "gameplayAuthorCalls", "gameplayRepairCalls", "visualDirectorCalls",
+        "visualRepairCalls", "vfxDirectorCalls", "vfxRepairCalls",
+    ):
+        accounting.setdefault(key, 0)
+    return accounting
 
 
 def generation_art_direction() -> str:
@@ -74,4 +88,5 @@ __all__ = [
     "generation_system_suffix",
     "generation_art_direction",
     "stage_chat_message",
+    "stage_accounting",
 ]
