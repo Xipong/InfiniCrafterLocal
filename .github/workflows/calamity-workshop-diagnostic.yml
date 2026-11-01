@@ -75,7 +75,7 @@ jobs:
       - name: Checkout native loader at reviewed commit
         uses: actions/checkout@v4
         with:
-          ref: 9bafb04c361b29dd0f94c76af4cbe55d3b0e3e43
+          ref: f7d2d48b78015b4e8b241ba512cceaa86235cdc8
           path: ifc
       - uses: actions/setup-dotnet@v4
         with:
@@ -127,20 +127,13 @@ jobs:
         run: |
           set -uo pipefail
           echo 'Diagnostic only: actual TMOD archives; no full tML game/client emulation.'
-          python - <<'PY'
-          import json, os
-          from pathlib import Path
-          scenario = json.loads(Path('tools/item-test-workbench/scenarios/primary.json').read_text())
-          scenario['assertions'] = [{'kind': 'no_nonfinite'}]
-          Path(os.environ['RUNNER_TEMP'], 'terratomere-scenario.json').write_text(json.dumps(scenario))
-          PY
           mods="$RUNNER_TEMP/tml-workshop/steamapps/workshop/content/1281930"
           output="$RUNNER_TEMP/terratomere-diagnostic"
           set +e
           python tools/item-test-workbench/workbench.py loader-run \
             --server-mode \
             --native-item CalamityMod/Terratomere \
-            --scenario "$RUNNER_TEMP/terratomere-scenario.json" \
+            --scenario tools/item-test-workbench/scenarios/server-native-item.json \
             --tmod "$mods/2824688266/2025.12/CalamityModMusic.tmod" \
             --tmod "$mods/2824688072/2026.6/CalamityMod.tmod" \
             --out "$output" --no-build --timeout 600
