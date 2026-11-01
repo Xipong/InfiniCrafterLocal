@@ -105,8 +105,9 @@ public sealed partial class GeneratorClient
             try
             {
                 var code = AttackCode(method);
-                var windows = ProjectileIdentityWindows(code, type, style).ToArray();
-                if (windows.Length == 0) { gaps.Add(root + "_identity_dispatch_outside_supported_source_shape"); continue; }
+                bool windowRefused = false;
+                var windows = ProjectileIdentityWindows(code, type, style, reason => { windowRefused = true; gaps.Add(root + "_" + reason); }).ToArray();
+                if (windows.Length == 0) { if (!windowRefused) gaps.Add(root + "_identity_dispatch_outside_supported_source_shape"); continue; }
                 var slice = windows.SelectMany(w => w.Code).GroupBy(i => i.Offset).Select(g => g.First()).OrderBy(i => i.Offset).ToList();
                 var dispatch = Observe(method, root == "VanillaAI" ? "dispatch" : "collision", slice);
                 dispatch["identityWindows"] = new JsonArray(windows.Select(w => (JsonNode?)new JsonObject

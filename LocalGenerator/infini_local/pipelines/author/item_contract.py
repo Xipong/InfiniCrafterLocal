@@ -44,7 +44,7 @@ RUNTIME_ROW_SHAPE_RULE = (
     "attach reads an anchor; front_arm_pose independently writes the front arm, whose native stretch length is only 4 to 10px. "
     "Aim, attachment, arm pose and sprite rotation are separate. "
     "set_aim, attach and front_arm_pose do not themselves turn the body PNG. "
-    "Without rotate_sprite, orientation comes from the movement driver; aim and attachment do not supply it. "
+    "Without rotate_sprite, body-forward starts at world angle 0 (right) and follows the movement driver; a stationary body retains its last orientation. Aim and attachment do not supply rotation. "
     "Independent poses remain valid. "
     "There is no automatic arm follow of body motion. front_hand reads the native hand but does not cancel "
     "physical axis/normal offsets or reachCurve: they translate actual body center and collision geometry. "

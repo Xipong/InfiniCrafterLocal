@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text.Json;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Content.Projectiles;
+using InfiniCrafterLocal.Common.VFX;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Terraria;
@@ -54,7 +55,7 @@ internal static partial class EngineRuntimeChecks
             string bodyPath = Path.Combine(Terraria.Program.SavePath, "body.png"), rootPath = Path.Combine(Terraria.Program.SavePath, "root.png");
             cache.Textures.Add(bodyPath, Activator.CreateInstance(cache.Record, body, 0f, 0L)!);
             cache.Textures.Add(rootPath, Activator.CreateInstance(cache.Record, root, 0f, 0L)!);
-            owner.active = true; owner.whoAmI = 0; owner.position = new Vector2(300, 300); owner.channel = true;
+            owner.active = true; owner.whoAmI = 0; owner.position = new Vector2(300, 300); owner.channel = true; owner.itemAnimationMax = 24; owner.itemAnimation = 12;
             Terraria.Main.player[0] = owner; Terraria.Main.myPlayer = 1;
             Terraria.Main.netMode = Terraria.ID.NetmodeID.SinglePlayer;
             var cases = new[] {
@@ -64,7 +65,12 @@ internal static partial class EngineRuntimeChecks
                 (Name: "glaive-14/native-spin", Move: 14, Facing: -1, Reuse: false, Modern: true, Scale: 1.7f, Offset: (float?)null, Axis: 45f),
                 (Name: "reuse-root/independent-selector-and-clamp", Move: 0, Facing: -1, Reuse: true, Modern: true, Scale: 0.01f, Offset: (float?)null, Axis: 45f),
                 (Name: "legacy-absence/raw-native-pose", Move: 0, Facing: 1, Reuse: false, Modern: false, Scale: 1.7f, Offset: (float?)null, Axis: 45f),
-            }.Concat(from axis in new[] { 0f, -90f }
+            }.Concat(from move in new[] { 14, 16, 17, 18 }
+                from facing in new[] { -1, 1 }
+                from axis in new[] { 0f, -90f, 37f }
+                select (Name: $"legacy-driver={move}/axis={axis}/facing={facing}", Move: move, Facing: facing,
+                    Reuse: false, Modern: true, Scale: 1.7f, Offset: (float?)null, Axis: axis))
+            .Concat(from axis in new[] { 0f, -90f }
                 from facing in new[] { -1, 1 }
                 from offset in new[] { 0f, 1.57f }
                 select (Name: $"explicit-velocity/axis={axis}/facing={facing}/offset={offset}",
@@ -77,11 +83,12 @@ internal static partial class EngineRuntimeChecks
                 data.VfxManifest = VfxManifestSpec.Empty();
                 data.Visual.SpritePath = rootPath;
                 data.RuntimeProgram.PrimaryEntityId = "body"; data.RuntimeProgram.PrimaryOwner = RuntimeProgramSpec.ProjectileOwner;
-                var entity = new RuntimeEntitySpec { Id = "body", Kind = c.Move == 19 ? RuntimeEntityKind.OwnerAttachedProjectile : RuntimeEntityKind.FreeProjectile };
+                var entity = new RuntimeEntitySpec { Id = "body", Kind = c.Move is 16 or 17 or 18 or 19 ? RuntimeEntityKind.OwnerAttachedProjectile : RuntimeEntityKind.FreeProjectile };
                 entity.Visual.AssetMode = c.Reuse ? "reuse_item_icon" : "baked_sprite";
                 entity.Visual.SpritePath = bodyPath; entity.Visual.SpriteStatus = "generated";
                 entity.Movement.Code = c.Move;
-                entity.Movement.Name = c.Move == 19 ? "move_forward_then_retract" : c.Move == 14 ? "move_returning_glaive" : "move_straight";
+                entity.Movement.Name = RuntimeOpcodeNames.MovementName(c.Move);
+                entity.Movement.Params.Segments = 8; entity.Movement.Params.ReturnSpeed = 8; entity.Movement.Params.MaxSpeed = 8;
                 entity.Movement.Params.RangeTiles = 5; entity.Movement.Params.DurationTicks = 30; entity.Movement.Params.ReturnAfterTicks = 60;
                 entity.Hitbox.WidthPx = entity.Hitbox.HeightPx = 24; entity.LifetimeTicks = 120;
                 data.RuntimeProgram.Entities = new[] { entity };
@@ -113,7 +120,9 @@ internal static partial class EngineRuntimeChecks
                 Vector2 actual = BodyForwardFromCpuQueue(batch, index, degrees, label);
                 float radians = degrees * MathF.PI / 180;
                 Vector2 native = new Vector2(MathF.Cos(radians) * c.Facing, MathF.Sin(radians)).RotatedBy(rotation);
-                Vector2 expected = c.Offset is { } offset ? aim.RotatedBy(offset) : c.Modern && c.Move != 14 ? aim : native;
+                Vector2 expected = c.Offset is { } offset ? aim.RotatedBy(offset)
+                    : c.Move is 14 or 16 or 17 ? rotation.ToRotationVector2()
+                    : c.Move == 18 ? velocity.SafeNormalize(aim) : aim;
                 AssertVfxNear(expected, actual, label + "UV-derived declared forward");
                 Equal(rotation, projectile.rotation, label + "draw preserves native rotation");
                 Equal(scale, projectile.scale, label + "draw preserves physics scale");
@@ -131,6 +140,17 @@ internal static partial class EngineRuntimeChecks
                 var queued = (Array)typeof(SpriteBatch).GetField("textureInfo", TestInstance)!.GetValue(batch)!;
                 Equal(true, ReferenceEquals(c.Reuse ? root : body, queued.GetValue(index)), label + "actual root/entity texture selected");
                 if (c.Move == 19) Equal(7, owner.heldProj, label + "real thrust claims held projectile");
+                if (c.Move == 18) {
+                    entity.Visual.ImpactSpritePath = bodyPath;
+                    var selectedImpact = SpritePresentation.Resolve(data, entity.Id, "impact");
+                    var manifest = MotionImpactManifest(entity.Id, RuntimeEventKind.Periodic);
+                    var history = new InfiniVfxState(); for (int n = 0; n < 4; n++) history.Push(projectile.Center);
+                    int impactIndex = count();
+                    typeof(InfiniVfxRuntime).GetMethod("DrawSelectedSpriteTrail", TestInstance | BindingFlags.Static)!
+                        .Invoke(null, new object?[] { body, projectile, entity, selectedImpact, manifest, history, Color.White, 1f });
+                    Equal(impactIndex + 1, count(), label + "whip impact is a separate raw-angle quad");
+                    MotionImpactQuad(batch, impactIndex, positions(impactIndex), projectile, body, 1f, label);
+                }
                 Console.WriteLine($"PASS textured body scenario: {c.Name}");
             }
         }));

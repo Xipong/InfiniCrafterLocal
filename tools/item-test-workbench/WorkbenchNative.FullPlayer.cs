@@ -11,15 +11,16 @@ internal static partial class EngineRuntimeChecks
 {
     // Native CPU world/player initialization. No update, buff, movement, resource,
     // or collision implementation is replaced. Rendering objects have no GPU.
-    private static void WPrepareFullWorld()
+    private static void WPrepareFullWorld(int widthTiles=100)
     {
+        Terraria.Main.maxTilesX = widthTiles;
         Terraria.Main.maxTilesY = 600;
         Terraria.Main.tile = (Tilemap)Activator.CreateInstance(typeof(Tilemap), PersistenceInstance,
-            null, new object[] { (ushort)100, (ushort)600 }, null)!;
+            null, new object[] { (ushort)widthTiles, (ushort)600 }, null)!;
         Terraria.Main.worldSurface = 80;
         Terraria.Main.rockLayer = 200;
         Terraria.Main.leftWorld = Terraria.Main.topWorld = 0;
-        Terraria.Main.rightWorld = 1600;
+        Terraria.Main.rightWorld = widthTiles*16;
         Terraria.Main.bottomWorld = 9600;
     }
 

@@ -27,7 +27,7 @@ public sealed partial class GeneratorClient
 
     // Shared native identity-window recognizer. It selects source syntax only;
     // entry, hooks and any opaque/non-identity predicates remain unresolved.
-    private static IEnumerable<(string Field, int Literal, int Guard, AmmoIl[] Code)> ProjectileIdentityWindows(List<AmmoIl> code, int type, int style)
+    private static IEnumerable<(string Field, int Literal, int Guard, AmmoIl[] Code)> ProjectileIdentityWindows(List<AmmoIl> code, int type, int style, Action<string>? gap = null)
     {
         for (int n = 0; n + 4 < code.Count; n++)
         {
@@ -35,7 +35,10 @@ public sealed partial class GeneratorClient
                 || code[n + 1].Op != "ldfld" || code[n + 1].Arg is not FieldInfo field || field.DeclaringType != typeof(Projectile)
                 || code[n + 2].Op != "const" || code[n + 2].Arg is not int literal
                 || !(field.Name == "type" && literal == type || field.Name == "aiStyle" && literal == style)
-                || code[n + 3].Arg is not int destination || destination <= code[n + 3].Offset) continue;
+                || code[n + 3].Op is not ("bne.un" or "bne.un.s" or "beq" or "beq.s")
+                || code[n + 3].Arg is not int destination) continue;
+            if (destination <= code[n + 3].Offset)
+            { gap?.Invoke("identity_window_nonforward_branch_unsupported"); continue; }
             int start = n + 4, end;
             if (code[n + 3].Op is "bne.un" or "bne.un.s") end = destination;
             else if (code[n + 3].Op is "beq" or "beq.s")
@@ -46,8 +49,12 @@ public sealed partial class GeneratorClient
                 end = boundary;
             }
             else continue;
+            // Keep the existing raw-instruction admission budget unchanged;
+            // distinguish its refusal from an unsupported identity selector.
             var window = code.Skip(n).Take(4).Concat(code.Skip(start).TakeWhile(i => i.Offset < end)).Take(1025).ToArray();
-            if (window.Length <= 1024) yield return (field.Name, literal, code[n + 3].Offset, window);
+            if (window.Length > 1024)
+            { gap?.Invoke("identity_window_raw_instruction_bound"); continue; }
+            yield return (field.Name, literal, code[n + 3].Offset, window);
         }
     }
 
@@ -302,10 +309,11 @@ public sealed partial class GeneratorClient
                     // Exact type/AI-style equality fallthrough windows. Entry,
                     // missing predecessors and exits stay explicitly unresolved.
                     // No other branch arm is executed, selected or assumed true.
-                    foreach (var window in ProjectileIdentityWindows(code, projectile.type, projectile.aiStyle))
+                    bool windowRefused = false;
+                    foreach (var window in ProjectileIdentityWindows(code, projectile.type, projectile.aiStyle, reason => { windowRefused = true; Gap(reason); }))
                         foreach (var instruction in window.Code) selected[instruction.Offset] = instruction;
                     if (selected.Count == 0)
-                    { Edge(from, null, "native_projectile_source", at, JsonValue.Create(projectile.type), "no_supported_type_or_aiStyle_equality_window_in_" + name); continue; }
+                    { Edge(from, null, "native_projectile_source", at, JsonValue.Create(projectile.type), windowRefused ? "native_identity_window_refused_in_" + name : "no_supported_type_or_aiStyle_equality_window_in_" + name); continue; }
                     if (nativeSlices.TryGetValue(method, out var prior)) foreach (var instruction in prior) selected[instruction.Offset] = instruction;
                     if (selected.Count > 4096) { Gap("native_projectile_source_window_limit"); continue; }
                     bool changed = prior is null || prior.Count != selected.Count;

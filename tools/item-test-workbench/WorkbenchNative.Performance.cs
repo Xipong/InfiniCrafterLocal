@@ -35,9 +35,10 @@ internal static partial class EngineRuntimeChecks
         ["nativeBuffs"]=new JsonArray(Enumerable.Range(0,npc.buffType.Length).Where(i=>npc.buffType[i]>0&&npc.buffTime[i]>0).Select(i=>(JsonNode?)new JsonObject{["id"]=npc.buffType[i],["ticks"]=npc.buffTime[i]}).ToArray()),
         ["scope"]="Native state at snapshot boundary. Generated effect totals are active modifiers, not proof of a hit, damage, or contact; defenseDelta is applied via ModifyIncomingHit, not npc.defense. Buff presence is sampled uptime; read aiStyle/noTileCollide and scene intervention receipts for controlled versus genuine training-dummy behavior."};
     }
-    private static void WValidateVanillaPerformance(Item item,GeneratedItemData? data,bool client)
+    private static void WValidateVanillaPerformance(Item item,GeneratedItemData? data,bool client,bool passiveEquipmentScene=false)
     {
         if(data is not null)return;
+        if(item.accessory && passiveEquipmentScene && !client)return;
         if(item.damage<=0 || item.accessory || item.createTile>=0 || item.createWall>=0)throw new NotSupportedException("Vanilla parent is not an admitted damage weapon; noncombat parents are not zero-damage benchmarks");
         if(!item.noMelee&&!client)throw new NotSupportedException("Vanilla parent requires native client melee contact; dedicated full/item_check cannot fairly measure its complete damage");
         if(item.useAmmo!=0 && item.useAmmo!=AmmoID.Arrow && item.useAmmo!=AmmoID.Bullet && item.useAmmo!=AmmoID.Flare && item.useAmmo!=AmmoID.FallenStar)throw new NotSupportedException("Vanilla parent ammo category is outside admitted arrow/bullet/flare/fallen-star provisioning");

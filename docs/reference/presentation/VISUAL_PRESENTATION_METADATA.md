@@ -53,6 +53,37 @@ Snapshot/network `Pose.Scale`, Item.scale, Projectile.scale, collision, hitbox/t
 
 Reuse гарантирует одинаковые pixels и **base** frame extent, не принудительное равенство final held/world/body: с нейтральными caller hooks equality held/body требует `G == clamp(D*E,.1,8)` либо `G == D*E*curveScale(active age)` при явном mirror. W не переносится на held, G не дописывается в projectile. Accepted G/D/gameplay не менять ради арта. Mirror относится к базовому body; VFX body copies сохраняют собственные опубликованные scale rules.
 
+### Projectile body-forward и native angle boundary
+
+`SpritePresentation.ProjectileNativeRotation/ProjectileBodyAngle` — единственный
+владелец преобразования угла между native storage и смысловым body-forward.
+Обычные generated movement drivers сохраняют native `body + π/2`; explicit
+`rotation` и legacy spin 14/16/17 хранят body-forward непосредственно. Для любого
+main PNG, включая spin/whip, renderer вычитает declared PNG forward axis с учётом
+flip. Эта ось описывает пиксели, не меняет полёт, aim или collider.
+
+Новый initial contract: body-forward каждого нового physical source равен world
+angle 0 (вправо), до первого AI/callback. Дальше его меняет принятый driver или
+явный rotation component; неподвижность не означает автоматическое слежение за
+aim. Native entity state инициализируется один раз, в том числе при первой remote
+hydration. Повторная metadata hydration того же source не сбрасывает угол или
+потраченный pierce; новый source token снова получает initial pose.
+
+Это намеренное изменение presentation, не обещание pixel-совместимости старых
+предметов. В частности, stationary main PNG больше не получает скрытые −90°.
+Dedicated impact/asset stamps и `body_segment.axis=rotation` сохраняют свой
+**literal raw native angle** contract: у обычного source начальный raw angle теперь
+π/2, поэтому их начальная поза тоже меняется. У движущегося ordinary body после AI
+raw convention прежняя; explicit spin также не переопределён. `body_segment` —
+только draw geometry: gameplay collision по-прежнему читает AABB либо реальные
+beam/lash points, а направления event-spawn — gameplay aim/velocity/initial axis.
+
+Native SyncProjectile и текущий ExtraAI не передают rotation. First stationary
+remote pose теперь инициализируется правильно; это **не** доставка произвольного
+исторического угла late-joining peer: например, последний угол уже остановившегося
+body из payload восстановить нельзя. Сетевой формат не менялся; полноценная
+multiplayer-сессия и произвольные сторонние GlobalProjectile hooks здесь не доказаны.
+
 ### Read-only Director/Repair context и visibility
 
 Оба actual packets передают exact accepted `gameplay.itemScale/width/height`, `itemUse`, `itemContact` when present, bindings, item/primary IDs/owner и полные movement/controller params, hitbox D/hitboxScale. Formulas и bake-fill/padding берутся в том же packet; fill facts проецируются из `sprite_contract_for` для eligible canvas/processing roles, не выбирают world size и не меняют image pipeline.

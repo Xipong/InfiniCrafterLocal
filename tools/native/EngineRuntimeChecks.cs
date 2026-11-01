@@ -44,6 +44,9 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("projectile angle fresh remote hydration", ProjectileAngleFreshRemoteHydration),
+            ("projectile raw impact native pose witness", ProjectileRawImpactKeepsLiteralNativePose),
+            ("projectile angle boundary native storage and authored forward", ProjectileAngleBoundaryPreservesNativeStorage),
             ("parent source graph unresolved identity alternatives", ParentSourceGraphKeepsUnresolvedIdentityAlternatives),
             ("parent source graph native projectile windows", ParentSourceGraphFollowsNativeProjectileWindows),
             ("parent source graph conditional native buff consumers", ParentSourceGraphKeepsConditionalNativeBuffConsumers),
@@ -71,6 +74,7 @@ internal static partial class EngineRuntimeChecks
             ("projectile attack discarded identity alternatives disclosure", ProjectileDiscardedIdentityAlternativesAreDisclosed),
             ("projectile attack identity specialization receiver and mutation safety", ProjectileAttackIdentitySelectionKeepsUnknownConditions),
             ("projectile attack native dispatch and source sibling controls", ProjectileAttackNativeDispatchAndSiblingWitnesses),
+            ("parent identity window refusal diagnostics", ParentIdentityWindowRefusalDiagnostics),
             ("parent native geometry helper semantic equivalence", ParentNativeGeometryHelperRulesMatchSource),
             ("parent native arrow motion source execution oracle", ParentNativeArrowMotionMatchesSelectedSource),
             ("parent native position integration execution oracle", ParentNativePositionIntegrationMatchesLiveGuards),

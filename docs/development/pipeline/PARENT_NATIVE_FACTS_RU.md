@@ -89,6 +89,15 @@ input на 357; Hellwing меняет только current projectile 1 на 485
 Нет нового progression solver, recommended damage corridor или скрытого
 перебаланса сохранённого ребёнка при смене патронов.
 
+## Причины неполного identity window
+
+Native equality windows сохраняют прежний предел 1024 сырых IL инструкций,
+включая `nop`. Отказ `identity_window_raw_instruction_bound` означает найденное,
+но слишком большое окно; он не подменяется отсутствием поддержанного dispatch.
+Неподдержанный non-forward переход отмечается отдельно. Эти diagnostics не
+расширяют source admission, не меняют character budget 16000 общего графа и
+не добавляют отсутствующие cadence/механические факты.
+
 ## Неопределённость не запрещает новый дизайн
 
 Заявление «родитель накладывает X» требует подходящего source-наблюдения с

@@ -55,7 +55,7 @@
                 "type": "string"
               },
               "forwardAngleDegrees": {
-                "description": "Finite local forward-axis angle of the final PNG after crop/fit/padding, before facing/gravity flips. Degrees: 0=+X (right), positive clockwise in y-down image coordinates. Describes the authored pixels, not AI movement or a gameplay rotation override. With an accepted rotation component the renderer subtracts this PNG axis automatically: changing it cannot cancel rotation.offsetRadians. Draw the declared axis literally; no image/prose inference.",
+                "description": "Finite local forward-axis angle of the final PNG after crop/fit/padding, before facing/gravity flips. Degrees: 0=+X (right), positive clockwise in y-down image coordinates. Describes the authored pixels, not AI movement or a gameplay rotation override. The main-PNG renderer subtracts this local axis from body-forward automatically: changing it cannot cancel rotation.offsetRadians. Draw the declared axis literally; no image/prose inference.",
                 "maximum": 180,
                 "minimum": -180,
                 "type": "number"
@@ -382,7 +382,7 @@
       "additionalProperties": false,
       "properties": {
         "forwardAngleDegrees": {
-          "description": "Finite local forward-axis angle of the final PNG after crop/fit/padding, before facing/gravity flips. Degrees: 0=+X (right), positive clockwise in y-down image coordinates. Describes the authored pixels, not AI movement or a gameplay rotation override. With an accepted rotation component the renderer subtracts this PNG axis automatically: changing it cannot cancel rotation.offsetRadians. Draw the declared axis literally; no image/prose inference.",
+          "description": "Finite local forward-axis angle of the final PNG after crop/fit/padding, before facing/gravity flips. Degrees: 0=+X (right), positive clockwise in y-down image coordinates. Describes the authored pixels, not AI movement or a gameplay rotation override. The main-PNG renderer subtracts this local axis from body-forward automatically: changing it cannot cancel rotation.offsetRadians. Draw the declared axis literally; no image/prose inference.",
           "maximum": 180,
           "minimum": -180,
           "type": "number"

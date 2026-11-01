@@ -14,8 +14,12 @@ internal static partial class EngineRuntimeChecks
     // Player.Update alone applies and resets equipment effects; no stat patching.
     private static void WPlaceEquipment(Player owner, Item item, string placement)
     {
-        if (item.ModItem is not GeneratedItem generated || item.IsAir || (!generated.Data.Accessory.Enabled && !generated.Data.Armor.Enabled)) throw new NotSupportedException("Equipment commands require live generated equipment");
-        int functionalSlot=generated.Data.Armor.Enabled ? WArmorSlot(generated.Data.Armor.Slot) : 3;
+        if (item.IsAir) throw new NotSupportedException("Equipment commands require a live item");
+        int functionalSlot;
+        if (item.ModItem is GeneratedItem generated && (generated.Data.Accessory.Enabled || generated.Data.Armor.Enabled))
+            functionalSlot=generated.Data.Armor.Enabled ? WArmorSlot(generated.Data.Armor.Slot) : 3;
+        else if (item.ModItem is null && item.accessory) functionalSlot=3;
+        else throw new NotSupportedException("Equipment commands require generated equipment or a native passive accessory");
         int owned=owner.inventory.Count(i=>ReferenceEquals(i,item))+owner.armor.Count(i=>ReferenceEquals(i,item));
         if(owned!=1) throw new InvalidOperationException("Equipment instance must have exactly one inventory/equipment owner");
         int slot=placement=="equip"?functionalSlot:placement=="vanity"?functionalSlot+10:0;
