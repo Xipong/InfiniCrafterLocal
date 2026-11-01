@@ -296,6 +296,14 @@ Items: {
 // Projectiles.GeneratedProjectile.DisplayName: Generated Projectile
 
 Configs: {
+	InfiniStudioConfig: {
+		DisplayName: Studio и настройка генератора
+		OpenStudio: {
+			Label: Открыть Infinicraft Studio
+			Tooltip: Открывает Studio в браузере по умолчанию. При первом запуске встроенная среда распакуется в папку сохранений tModLoader. Настройки и созданные предметы хранятся отдельно и сохраняются при обновлении мода. Внешняя открывалка тоже работает.
+		}
+	}
+
 	InfiniGameplayQolConfig: {
 		DisplayName: Настройки игры и спрайтов
 
@@ -385,4 +393,11 @@ Configs: {
 			Tooltip: Включает тряску камеры, предусмотренную созданными эффектами. Настройки Luminance также учитываются.
 		}
 	}
+}
+
+Studio: {
+	Starting: Подготовка Studio…
+	Opened: Studio открыта в браузере. Нажми ещё раз, чтобы открыть её повторно. Запущенная из мода Studio закрывается при выгрузке мода.
+	UnsupportedPlatform: Встроенная Studio пока поддерживает Windows x64. На этой платформе используй внешнюю открывалку Studio.
+	Failed: "Не удалось открыть Studio: {0}"
 }

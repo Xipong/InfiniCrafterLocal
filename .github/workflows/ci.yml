@@ -218,7 +218,7 @@ jobs:
             artifacts/validation/
           if-no-files-found: warn
 
-      - name: Package Release mod with official tModLoader
+      - name: Package Release mod and self-contained Studio with official tModLoader
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -226,6 +226,9 @@ jobs:
           python tools/testing/test_tmod_package.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ./tools/build/package_tmod.ps1
+      - name: Studio extraction and C# to bundled Python lifecycle smoke
+        shell: pwsh
+        run: dotnet run --project tools/native/StudioBundleChecks/StudioBundleChecks.csproj -- --bundle-root ModSources/InfiniCrafterLocal
       - name: Upload verified playable mod package
         uses: actions/upload-artifact@v4
         with:

@@ -17,6 +17,7 @@ from test_settings_gui_contract import _GuiWorkflowHarness, held_gui_call
 def studio(tmp_path, monkeypatch):
     config = tmp_path / 'config.env'
     monkeypatch.setattr(controls, 'ROOT', tmp_path)
+    monkeypatch.setattr(controls, 'STATE_ROOT', tmp_path)
     app = _GuiWorkflowHarness(config)
     server = StudioServer(tmp_path)
     controller = StudioController(app, server)
