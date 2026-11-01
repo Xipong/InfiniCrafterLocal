@@ -65,19 +65,17 @@ jobs:
           test -f "$RUNNER_TEMP/tml/tModLoader.dll"
           printf 'Official tModLoader DLL: '
           sha256sum "$RUNNER_TEMP/tml/tModLoader.dll"
-      - name: Verify and unpack packages inside runner temp
+      - name: Verify original Workshop archives
         shell: bash
         run: |
           set -euo pipefail
           workshop="$RUNNER_TEMP/tml-workshop/steamapps/workshop/content/1281930"
-          python .github/scripts/inspect_tmod.py "$workshop/2824688072/2026.6/CalamityMod.tmod" \
-            --name CalamityMod --out "$RUNNER_TEMP/calamity-inspection/CalamityMod"
-          python .github/scripts/inspect_tmod.py "$workshop/2824688266/2025.12/CalamityModMusic.tmod" \
-            --name CalamityModMusic --out "$RUNNER_TEMP/calamity-inspection/CalamityModMusic"
+          echo 'd50fea9025f88ee2073c00e3482976ca1e6ea54d0b8770eb7810bb7b280397d6  '"$workshop/2824688072/2026.6/CalamityMod.tmod" | sha256sum --check
+          echo 'ca202bc18ae690d5ea7267b42c9ec8162241a19aafc9efdf40eff0a59eada9e5  '"$workshop/2824688266/2025.12/CalamityModMusic.tmod" | sha256sum --check
       - name: Checkout native loader at reviewed commit
         uses: actions/checkout@v4
         with:
-          ref: 110c13f0d2533b38f335031180f787c20cbc7149
+          ref: 0aa6651ee249e2061a69fd2c617c93189b213740
           path: ifc
       - uses: actions/setup-dotnet@v4
         with:
@@ -123,7 +121,7 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
-          echo 'Diagnostic only: extracted Info reconstructed into build.txt; assets are original packed rawimg, no full tML game/client emulation.'
+          echo 'Diagnostic only: actual TMOD archives; no full tML game/client emulation.'
           python - <<'PY'
           import json, os
           from pathlib import Path
@@ -131,13 +129,14 @@ jobs:
           scenario['assertions'] = [{'kind': 'no_nonfinite'}]
           Path(os.environ['RUNNER_TEMP'], 'terratomere-scenario.json').write_text(json.dumps(scenario))
           PY
-          mods="$RUNNER_TEMP/calamity-inspection"
+          mods="$RUNNER_TEMP/tml-workshop/steamapps/workshop/content/1281930"
           output="$RUNNER_TEMP/terratomere-diagnostic"
+          set +e
           python tools/item-test-workbench/workbench.py loader-run \
             --native-item CalamityMod/Terratomere \
             --scenario "$RUNNER_TEMP/terratomere-scenario.json" \
-            --mod "$mods/CalamityModMusic/CalamityModMusic.dll" "$mods/CalamityModMusic" \
-            --mod "$mods/CalamityMod/CalamityMod.dll" "$mods/CalamityMod" \
+            --tmod "$mods/2824688266/2025.12/CalamityModMusic.tmod" \
+            --tmod "$mods/2824688072/2026.6/CalamityMod.tmod" \
             --out "$output" --no-build --timeout 600
           status=$?
           for log in stdout.log stderr.log native.json; do
