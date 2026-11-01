@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using ReLogic.Content;
 using Terraria;
 using Terraria.DataStructures;
 using Terraria.ID;
@@ -18,6 +20,10 @@ public sealed class WorkbenchObserverFixture : Mod
     public static bool Loaded { get; private set; }
     public override void Load()
     {
+        // tML dedicated servers accept requests without decoding assets; the
+        // returned Asset must remain unloaded even with ImmediateLoad.
+        var deferred = ModContent.Request<Texture2D>("WorkbenchObserverFixture/ServerAssetRequest", AssetRequestMode.ImmediateLoad);
+        if (deferred.IsLoaded) throw new InvalidOperationException("Server unexpectedly loaded a client texture");
         if (Environment.GetEnvironmentVariable("IFC_FIXTURE_EXPECT_SERVER") == "1" && Main.netMode != NetmodeID.Server)
             throw new InvalidOperationException("Fixture expected server network mode during Load");
         if (Environment.GetEnvironmentVariable("IFC_FIXTURE_EXPECT_SERVER") == "1")

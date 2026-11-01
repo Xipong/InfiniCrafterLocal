@@ -147,7 +147,7 @@ internal sealed class WNativeLoader : IDisposable
         // hooks in dependency order. This avoids substituting missing mods.
         Type coreType = typeof(Mod).Assembly.GetType("Terraria.ModLoader.Default.ModLoaderMod", throwOnError: true)!;
         var core = (Mod)Activator.CreateInstance(coreType, nonPublic: true)!;
-        modType.GetProperty("Assets", Any)!.SetValue(core, new AssetRepository(new AssetReaderCollection(), new[] { core.CreateDefaultContentSource() }));
+        PrepareHeadlessAssets(core, core.CreateDefaultContentSource());
         var registry = (IDictionary<string, Mod>)typeof(ModLoader).GetField("modsByName", Any)!.GetValue(null)!;
         Type buildPropertiesType = typeof(TmodFile).Assembly.GetType("Terraria.ModLoader.Core.BuildProperties", throwOnError: true)!;
         string[] Dependencies(string root, bool includeWeak) {
@@ -251,8 +251,7 @@ internal sealed class WNativeLoader : IDisposable
         modType.GetProperty("DisplayName", Any)!.SetValue(mod, string.IsNullOrWhiteSpace(displayName) ? file.Name : displayName);
         modType.GetProperty("Side", Any)!.SetValue(mod, propertiesType.GetField("side", Any)!.GetValue(properties));
         modType.GetProperty("TModLoaderVersion", Any)!.SetValue(mod, propertiesType.GetField("buildVersion", Any)!.GetValue(properties));
-        // In headless mode tML's source deliberately exposes no client assets.
-        modType.GetProperty("Assets", Any)!.SetValue(mod, new AssetRepository(new AssetReaderCollection(), new[] { mod.CreateDefaultContentSource() }));
+        PrepareHeadlessAssets(mod, mod.CreateDefaultContentSource());
     }
 
     private static void PrepareSourceMod(Mod mod, Assembly assembly, string root, string sandbox, bool requireAssets)
@@ -296,7 +295,17 @@ internal sealed class WNativeLoader : IDisposable
                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!); File.Copy(file, destination);
             }
         }
-        modType.GetProperty("Assets", Any)!.SetValue(mod, new AssetRepository(new AssetReaderCollection(), new[] { new FileSystemContentSource(assetSource) }));
+        PrepareHeadlessAssets(mod, new FileSystemContentSource(assetSource));
+    }
+
+    private static void PrepareHeadlessAssets(Mod mod, IContentSource source)
+    {
+        // tML uses null readers on a dedicated server: Request returns the
+        // real uninitialized Asset<T> in DoNotLoad mode, without trying to
+        // decode graphics or claiming the asset was rendered.
+        Type modType = typeof(Mod);
+        modType.GetProperty("RootContentSource", Any)!.SetValue(mod, source);
+        modType.GetProperty("Assets", Any)!.SetValue(mod, new AssetRepository(null, new[] { source }));
     }
 
     // Registries are process-global. The CLI runs exactly one scene per child
