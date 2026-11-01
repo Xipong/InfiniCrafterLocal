@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - uses: actions/checkout@v4
       - name: Prepare official SteamCMD
         shell: bash
         run: |
@@ -52,3 +53,24 @@ jobs:
             if (( code != 0 )); then status=1; fi
           done
           exit "$status"
+      - name: Install pinned official tModLoader
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/tml.zip" \
+            https://github.com/tModLoader/tModLoader/releases/download/v2026.08.3.0/tModLoader.zip
+          echo '61e865f3702b12ce4a26c5a90b9de99a12c65ffc228455eb3390ce54af1eab15  '"$RUNNER_TEMP/tml.zip" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/tml"
+          unzip -q "$RUNNER_TEMP/tml.zip" -d "$RUNNER_TEMP/tml"
+          test -f "$RUNNER_TEMP/tml/tModLoader.dll"
+          printf 'Official tModLoader DLL: '
+          sha256sum "$RUNNER_TEMP/tml/tModLoader.dll"
+      - name: Verify packages and inspect embedded assembly and metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          workshop="$RUNNER_TEMP/tml-workshop/steamapps/workshop/content/1281930"
+          python .github/scripts/inspect_tmod.py "$workshop/2824688072/2026.6/CalamityMod.tmod" \
+            --name CalamityMod --out "$RUNNER_TEMP/calamity-inspection/CalamityMod"
+          python .github/scripts/inspect_tmod.py "$workshop/2824688266/2025.12/CalamityModMusic.tmod" \
+            --name CalamityModMusic --out "$RUNNER_TEMP/calamity-inspection/CalamityModMusic"
