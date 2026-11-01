@@ -24,7 +24,7 @@ from infini_local.core.vfx.materials import ASSET_ID_PATTERN
 from infini_local.core.vfx.schema import _director_schema
 
 
-def _vfx_repair_schema(data: Mapping[str, Any]) -> dict[str, Any]:
+def vfx_repair_schema(data: Mapping[str, Any]) -> dict[str, Any]:
     return _vfx_repair_schema_from_packet({"outputSchema": _director_schema(data)})
 
 
@@ -201,7 +201,7 @@ def _filter_vfx_repair_patch(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     from infini_local.core.schema_validation import strict_schema_errors
 
-    shape_schema = _vfx_repair_schema(data)
+    shape_schema = vfx_repair_schema(data)
     # Renderer compatibility applies to the merged slot. Before frozen-first
     # filtering, an unrelated rewrite may contradict a valid frozen companion;
     # it must be ignored, not cancel an otherwise useful repair. Keep structural
@@ -548,9 +548,3 @@ def _vfx_repair_schema_from_packet(packet: Mapping[str, Any]) -> dict[str, Any]:
         },
         "required": ["schema", "note"],
     }
-
-
-def vfx_repair_schema(data: Mapping[str, Any]) -> dict[str, Any]:
-    """Public generated schema for the bounded VFX Repair patch."""
-
-    return _vfx_repair_schema(data)

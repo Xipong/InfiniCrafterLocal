@@ -760,6 +760,8 @@ def test_agentctl_imported_check_dispatch_uses_the_public_release_owner(monkeypa
 @pytest.mark.parametrize("path,check,test", [
     ("pipelines/author/prompt.py", "schema_check", "test_registry_vertical_contract.py"),
     ("pipelines/author/request.py", "delivery_contract", "test_repair_frozen_contract.py"),
+    ("core/llm_stage_messages.py", "project_hygiene", "test_low_level_three_stage_pipeline.py"),
+    ("core/llm_stage_messages.py", "project_hygiene", "test_visual_vfx_prompt_prefix.py"),
     ("pipelines/transport/diagnostics.py", "project_hygiene", "test_provider_transport_contract.py"),
     ("pipelines/transport/http.py", "project_hygiene", "test_llm_auth_diagnostics_contract.py"),
     ("pipelines/transport/rejections.py", "project_hygiene", "test_transport_retry_redaction.py"),
@@ -768,6 +770,7 @@ def test_moved_generation_owners_retain_required_checks_and_tests(monkeypatch, p
     _git_status(monkeypatch, " M LocalGenerator/infini_local/" + path + "\n")
     files = agentctl.changed_files()
     plan = agentctl.verification_plan(files)
+    assert plan["mode"] == "iteration" and not plan["releaseScope"]
     assert check in plan["checks"]
     selected = changed.build_plan()
     assert "LocalGenerator/tests/" + test in selected["selected"]

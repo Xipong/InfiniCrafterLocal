@@ -672,3 +672,42 @@ def test_wire_rejection_preserves_exact_repair_targets(monkeypatch):
     assert validate(result)["ok"]
     assert count == 2 and len(reports) == 1
     assert reports[0]["errors"] == [target]
+
+
+@pytest.mark.parametrize("existing", [None, {}, {
+    "gameplayAuthorCalls": 1, "visualRepairCalls": 1, "futureCounter": 7,
+}])
+def test_stage_accounting_initialization_preserves_spent_budgets_and_debug(existing):
+    from infini_local.core.llm_stage_messages import stage_accounting
+
+    debug = {"unrelated": {"retained": True}}
+    if existing is not None:
+        debug["llmStageAccounting"] = copy.deepcopy(existing)
+    data = {"debug": debug}
+    original = debug.get("llmStageAccounting")
+    counters = stage_accounting(data)
+    assert data["debug"] is debug
+    assert counters is debug["llmStageAccounting"]
+    if original is not None:
+        assert counters is original
+    expected = {
+        "gameplayAuthorCalls": 0, "gameplayRepairCalls": 0,
+        "visualDirectorCalls": 0, "visualRepairCalls": 0,
+        "vfxDirectorCalls": 0, "vfxRepairCalls": 0,
+    }
+    expected.update(existing or {})
+    assert counters == expected
+    counters["vfxRepairCalls"] += 1
+    assert stage_accounting(data) is counters
+    assert counters == {**expected, "vfxRepairCalls": 1}
+    assert debug["unrelated"] == {"retained": True}
+
+
+def test_stage_accounting_initializes_missing_debug_without_changing_item():
+    from infini_local.core.llm_stage_messages import stage_accounting
+
+    data = {"name": "accepted item"}
+    counters = stage_accounting(data)
+    assert data == {"name": "accepted item", "debug": {"llmStageAccounting": counters}}
+    assert len(counters) == 6
+    assert all(value == 0 for value in counters.values())

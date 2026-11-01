@@ -191,12 +191,6 @@ def _transport_footprint(payload: dict[str, Any], mode: str) -> dict[str, Any]:
 
 
 
-def transport_footprint(payload: dict[str, Any], mode: str) -> dict[str, Any]:
-    """Return internal request-size telemetry without mutating or sending the payload."""
-    return _transport_footprint(payload, mode)
-
-
-
 def _with_transport_footprint(result: dict[str, Any], payload: dict[str, Any], mode: str) -> dict[str, Any]:
     out = dict(result)
     raw_debug = out.get("_debug")

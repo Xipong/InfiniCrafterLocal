@@ -8,6 +8,7 @@ from typing import Any, Mapping
 
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.llm_config import USE_LLM
+from infini_local.core.llm_stage_messages import stage_accounting
 from infini_local.core.llm_json_tools import recover_object_with_syntax_only_repairs
 from infini_local.core.runtime_authoring.wire_views import runtime_visual_roles
 from infini_local.core.images.config import VISUAL_DIRECTOR_LLM
@@ -20,17 +21,6 @@ from infini_local.pipelines.visual.contract import (
 from infini_local.pipelines.visual.repair_scope import _build_visual_repair_scope
 from infini_local.pipelines.visual.repair import _apply_visual_repair_patch
 from infini_local.pipelines.visual.request import _request_visual_kit
-
-
-def _stage_accounting(data: dict[str, Any]) -> dict[str, int]:
-    debug = data.setdefault("debug", {})
-    accounting = debug.setdefault("llmStageAccounting", {})
-    for key in (
-        "gameplayAuthorCalls", "gameplayRepairCalls", "visualDirectorCalls",
-        "visualRepairCalls", "vfxDirectorCalls", "vfxRepairCalls",
-    ):
-        accounting.setdefault(key, 0)
-    return accounting
 
 
 def attach_visual(data: dict[str, Any]) -> dict[str, Any]:
@@ -170,7 +160,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         data.setdefault("debug", {})["visualDirectorStatus"] = "development_fixture"
         return _apply_kit(data, kit)
 
-    accounting = _stage_accounting(data)
+    accounting = stage_accounting(data)
     accounting["visualDirectorCalls"] += 1
     raw = _request_visual_kit(data, a, b)
     kit, errors = _validate_kit(
