@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using InfiniCrafterLocal.Common.Models;
 
 internal static partial class EngineRuntimeChecks
@@ -33,6 +34,25 @@ internal static partial class EngineRuntimeChecks
         data.VfxManifest.Slots=new[]{Particle("bloomCircle")};
         if(WNativeVfxRenderer.SelectedLibraryTexturePaths(data).Single()!="Luminance/Assets/GreyscaleTextures/BloomCircleSmall")
             throw new Exception("Production registry mapping was replaced by ParticleLibrary-only guessing");
+        // Luminance is optional until the item selects it; the actual selected
+        // file must exist and its bytes are recorded for the render receipt.
+        string[] luminance={"Luminance/Assets/GreyscaleTextures/BloomCircleSmall"};
+        if(WNativeVfxRenderer.InspectLuminanceResources(Array.Empty<string>(),null).Count!=0)
+            throw new Exception("Empty selection required Luminance resources");
+        bool missingRoot=false;
+        try{WNativeVfxRenderer.InspectLuminanceResources(luminance,null);}catch(InvalidOperationException){missingRoot=true;}
+        if(!missingRoot)throw new Exception("Missing Luminance root silently passed");
+        string root=Path.Combine(Path.GetTempPath(),"icl-vfx-contract-"+Guid.NewGuid().ToString("N"));
+        try {
+            Directory.CreateDirectory(Path.Combine(root,"Assets","GreyscaleTextures"));
+            bool missingFile=false;
+            try{WNativeVfxRenderer.InspectLuminanceResources(luminance,root);}catch(FileNotFoundException){missingFile=true;}
+            if(!missingFile)throw new Exception("Missing selected Luminance texture silently passed");
+            File.WriteAllText(Path.Combine(root,"Assets","GreyscaleTextures","BloomCircleSmall.png"),"abc");
+            var hashes=WNativeVfxRenderer.InspectLuminanceResources(luminance,root);
+            if(hashes[luminance[0]]!="ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+                throw new Exception("Luminance receipt did not preserve selected bytes");
+        } finally {if(Directory.Exists(root))Directory.Delete(root,true);}
         data.VfxManifest.Slots=new[]{Particle("unknown")};
         Refused(()=>WNativeVfxRenderer.SelectedLibraryTexturePaths(data),"Unknown particle texture silently substituted");
 

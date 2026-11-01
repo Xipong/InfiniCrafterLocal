@@ -86,7 +86,8 @@ def main():
         for name in ('missing-texture', 'tampered-texture'):
             root = out/name/'assets/Images'; root.mkdir(parents=True)
             for file in ('Item_3029.png', 'Projectile_1.png', 'Projectile_14.png',
-                         'Projectile_91.png', 'Projectile_92.png', 'Projectile_357.png', 'Projectile_485.png'):
+                         'Projectile_91.png', 'Projectile_92.png', 'Projectile_357.png', 'Projectile_485.png',
+                         'Projectile_982.png', 'Extra_98.png'):
                 if name == 'missing-texture' and file == 'Projectile_1.png': continue
                 shutil.copyfile(a.vanilla_assets.resolve()/'Images'/file, root/file)
             if name == 'tampered-texture':

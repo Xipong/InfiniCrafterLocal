@@ -28,9 +28,11 @@ internal sealed partial class WNativeArtwork:IDisposable {
  public bool NativePlayerEnabled=>nativePlayer;
  public bool NativeVanillaEnabled=>reviewData is null;
  bool drawVanillaProjectiles;
+ WNativeVanillaProjectileAssets? vanillaProjectileAssets;
  public bool NativeVanillaProjectilesEnabled=>drawVanillaProjectiles;
- public void EnableNativeVanillaProjectiles(){
+ public void EnableNativeVanillaProjectiles(WNativeVanillaProjectileAssets assets){
   if(!NativeVanillaEnabled||!nativePlayer)throw new NotSupportedException("Native projectile sprites require a vanilla item and full native player artwork");
+  vanillaProjectileAssets=assets;
   drawVanillaProjectiles=true;
   Report["vanillaProjectileRendering"]="Original Main.DrawProj with pinned native projectile textures; other types refuse";
   Report["entrypoints"]=Entrypoints();
@@ -169,6 +171,11 @@ internal sealed partial class WNativeArtwork:IDisposable {
  public void DrawHeld() {
   if(nativePlayer){
    if(owner.isLockedToATile)throw new NotSupportedException("Locked-to-tile player draw ordering is outside the ordinary player render pass");
+   if(drawVanillaProjectiles && owner.heldProj>=0 && owner.heldProj<Main.projectile.Length){
+    var held=Main.projectile[owner.heldProj];
+    if(held.active && held.ModProjectile is not GeneratedProjectile)
+     (vanillaProjectileAssets??throw new InvalidOperationException("Native projectile resources are not initialized")).RequireReady(held.type);
+   }
    var active=Main.projectile.Where(p=>p.active).ToArray();Exception? drawError=null;
    EventHandler<System.Runtime.ExceptionServices.FirstChanceExceptionEventArgs> observe=(_,args)=>{drawError=args.Exception;};
    AppDomain.CurrentDomain.FirstChanceException+=observe;
@@ -191,7 +198,7 @@ internal sealed partial class WNativeArtwork:IDisposable {
    if(p.ModProjectile is not GeneratedProjectile){
     if(!NativeVanillaEnabled)throw new NotSupportedException("Only generated projectile authored core is supported");
     if(drawVanillaProjectiles){
-     if(!WNativeVanillaProjectileAssets.Supports(p.type))throw new NotSupportedException("Native projectile draw type not admitted: "+p.type);
+     (vanillaProjectileAssets??throw new InvalidOperationException("Native projectile resources are not initialized")).RequireReady(p.type);
      var draws=WNativeVisualGeometry.Capture(()=>Main.instance.DrawProj(p.whoAmI));
      if(!p.active)throw new InvalidOperationException("Native projectile rendering deactivated a projectile; swallowed draw errors cannot certify a successful run");
      Increment("vanillaProjectileDrawAttemptCount");

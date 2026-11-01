@@ -20,7 +20,8 @@ class PerformanceAssetsTests(unittest.TestCase):
                         sha256=hashlib.sha256(self.raw).hexdigest(), bytes=len(self.raw), width=1, height=1)
         self.manifest = dict(commit=f.COMMIT,
             files=[row(f'Item_{i}.png') for i in sorted(f.IDS)],
-            projectileFiles=[row(f'Projectile_{i}.png') for i in sorted(f.PROJECTILE_IDS)])
+            projectileFiles=[row(f'Projectile_{i}.png') for i in sorted(f.PROJECTILE_IDS)]
+                + [row(Path(path).name) for path in sorted(f.PROJECTILE_EXTRAS)])
         self.calls = []
     def fetch(self, row):
         self.calls.append(row['path'])
@@ -29,11 +30,12 @@ class PerformanceAssetsTests(unittest.TestCase):
         self.assertEqual(f.provision(self.root, self.manifest, self.fetch)['verifiedFiles'], 12)
         self.assertEqual(len(self.calls), 12)
         result = f.provision(self.root, self.manifest, self.fetch, include_projectiles=True)
-        self.assertEqual((result['verifiedFiles'], len(self.calls)), (18, 18))
+        total = len(f.IDS) + len(f.PROJECTILE_IDS) + len(f.PROJECTILE_EXTRAS)
+        self.assertEqual((result['verifiedFiles'], len(self.calls)), (total, total))
         self.assertTrue(result['includesProjectiles'])
         self.assertFalse(result['officialByteIdentityVerified'])
         f.provision(self.root, self.manifest, self.fetch, include_projectiles=True)
-        self.assertEqual(len(self.calls), 18)
+        self.assertEqual(len(self.calls), total)
     def test_corrupt_existing_projectile_refuses_before_any_download(self):
         path = self.root / self.manifest['projectileFiles'][-1]['path']
         path.parent.mkdir(parents=True)

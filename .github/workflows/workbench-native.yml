@@ -1,0 +1,274 @@
+name: Workbench native particle smoke
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/workbench-native.yml'
+      - 'tools/item-test-workbench/**'
+      - 'tools/native/**'
+      - 'tools/fixtures/video-ui-buffs/**'
+      - 'ModSources/InfiniCrafterLocal/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  particle-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install graphics and review dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libgl1-mesa-dri libopenal1
+          python -m pip install pillow==12.3.0
+      - name: Install pinned tModLoader native libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/tml.zip" \
+            https://github.com/tModLoader/tModLoader/releases/download/v2026.08.3.0/tModLoader.zip
+          echo '61e865f3702b12ce4a26c5a90b9de99a12c65ffc228455eb3390ce54af1eab15  '"$RUNNER_TEMP/tml.zip" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/tml"
+          unzip -q "$RUNNER_TEMP/tml.zip" -d "$RUNNER_TEMP/tml"
+          native="$RUNNER_TEMP/tml/Libraries/Native/Linux"
+          for file in libSDL2-2.0.so.0 libFNA3D.so.0 libFAudio.so.0 libtheorafile.so; do
+            test -f "$native/$file" || { echo "Missing tModLoader native library: $native/$file" >&2; exit 1; }
+          done
+          echo "INFINI_TML_NATIVE_DIR=$native" >> "$GITHUB_ENV"
+          test -f "$RUNNER_TEMP/tml/Content/PixelShader.xnb" || { echo 'Missing tModLoader Content/PixelShader.xnb' >&2; exit 1; }
+          echo "INFINI_TML_CONTENT_DIR=$RUNNER_TEMP/tml/Content" >> "$GITHUB_ENV"
+      - name: Install ParticleLibrary and Luminance references
+        shell: bash
+        run: |
+          set -euo pipefail
+          deps="$RUNNER_TEMP/ifc-deps"
+          python -m toolbox workbench setup-vfx --deps-root "$deps"
+          echo "INFINI_TML_DEPS_SRC=$deps" >> "$GITHUB_ENV"
+          echo "INFINI_PARTICLE_ASSET_DIR=$deps/particle-assets" >> "$GITHUB_ENV"
+      - name: Restore matching managed tModLoader references
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj -p:TmlVersion=2026.08.3.0
+          dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj -p:TmlVersion=2026.08.3.0
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          data = json.loads(Path('ModSources/InfiniCrafterLocal/obj/project.assets.json').read_text())
+          packages = [entry for name, entry in data['libraries'].items() if name.lower().startswith('tmodloader/')]
+          if len(packages) != 1:
+              raise SystemExit('Expected exactly one restored tModLoader reference package')
+          refs = [Path(root) / packages[0]['path'] / 'lib/net8.0' for root in data['packageFolders']]
+          refs = [path.resolve() for path in refs if (path / 'tModLoader.dll').is_file()]
+          if len(refs) != 1:
+              raise SystemExit('Expected exactly one tModLoader reference directory')
+          with open(os.environ['GITHUB_ENV'], 'a') as stream:
+              stream.write(f'INFINI_TML_REFERENCE_DIR={refs[0]}\n')
+          PY
+      - name: Fetch community MagicPixel resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/item-test-workbench/fetch_player_assets.py --include-dummy --include-zombie --out "$RUNNER_TEMP/player-assets"
+          echo "INFINI_PLAYER_ASSET_DIR=$RUNNER_TEMP/player-assets" >> "$GITHUB_ENV"
+      - name: Build and execute original native particle checks
+        id: native_build
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/workbench-ci
+          python tools/item-test-workbench/workbench.py build 2>&1 | tee artifacts/workbench-ci/build.log
+          python tools/item-test-workbench/verify_vfx.py --no-build --out artifacts/workbench-ci/evidence \
+            2>&1 | tee artifacts/workbench-ci/verify.log
+      - name: Render a Luminance on-hit particle using the real resource
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          item = json.loads(Path('tools/fixtures/video-ui-buffs/g_17d5099f992a900b.json').read_text())
+          for slot in item['vfxManifest']['slots']:
+              if slot.get('rendererKind') == 'libraryParticle' and slot.get('event') == 'on_hit':
+                  slot['particle']['textureId'] = 'shineFlare'
+          Path('artifacts/workbench-ci/luminance-item.json').write_text(json.dumps(item))
+          PY
+          python tools/item-test-workbench/workbench.py run --no-build \
+            --item artifacts/workbench-ci/luminance-item.json \
+            --scenario tools/item-test-workbench/scenarios/client-vfx-captured.json \
+            --review native --gif --out artifacts/workbench-ci/luminance-hit
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          trace = json.loads(Path('artifacts/workbench-ci/luminance-hit/native.json').read_text())
+          render = trace['nativeRender']
+          hashes = render.get('luminanceResources', {}).get('selectedTextureSha256', {})
+          key = 'Luminance/Assets/GreyscaleTextures/ShineFlare'
+          if trace.get('status') != 'passed' or hashes.get(key) != '0d0445abd56981effdb50e045694ebd3312959eaa3a21c64618a345d5b9351e6':
+              raise SystemExit('Original Luminance on-hit texture was not loaded')
+          if not any(s.get('particleCount', 0) > 0 for s in render.get('snapshots', [])):
+              raise SystemExit('No native on-hit particles observed')
+          if not any(f.get('nonblackPixels', 0) > 0 for f in render.get('frames', [])):
+              raise SystemExit('No native pixels were rendered')
+          PY
+      - name: Exercise automatic equipment input
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m toolbox workbench probe --no-build \
+            --item tools/item-test-workbench/fixtures/synthetic-reaction-accessory.json \
+            --assert '{"kind":"player_stat_at","tick":5,"stat":"defense","value":2}' \
+            --out artifacts/workbench-ci/equip-probe
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('artifacts/workbench-ci/equip-probe')
+          plan = json.loads((root / 'probe-plan.json').read_text())
+          result = json.loads((root / 'probe-result.json').read_text())
+          if plan['cases'][0]['input'] != 'equip' or not result['passed']:
+              raise SystemExit('Authored equip input did not execute with the expected defense')
+          PY
+      - name: Export captured native frames as GIF
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          trace=artifacts/workbench-ci/evidence/captured-hit/native.json
+          if test -f "$trace"; then
+            python tools/item-test-workbench/workbench.py native-review "$trace" \
+              --out artifacts/workbench-ci/native-review --gif --gif-stride 2
+          else
+            echo 'Native capture did not complete; see previous step and logs.'
+          fi
+      - name: Capture the public lunar harpoon with probe --gif
+        id: lunar
+        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/item-test-workbench/examples/lunar-harpoon/build.py \
+            --player-assets "$INFINI_PLAYER_ASSET_DIR" --out artifacts/workbench-ci/lunar-item
+          python -m toolbox workbench probe \
+            --item artifacts/workbench-ci/lunar-item/item.json --gif --no-build \
+            --hold 35 --ticks 160 --assert '{"kind":"spawn_count","value":1}' \
+            --out artifacts/workbench-ci/lunar-probe 2>&1 | tee artifacts/workbench-ci/lunar-probe.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from PIL import Image
+          root = Path('artifacts/workbench-ci/lunar-probe')
+          result = json.loads((root / 'probe-result.json').read_text())
+          if result.get('passed') is not True or len(result['cases']) != 1:
+              raise SystemExit('Lunar probe failed; inspect its result and native logs')
+          case = result['cases'][0]
+          gif = Path(case.get('gif', ''))
+          if not gif.is_file():
+              raise SystemExit('Successful lunar probe did not produce a GIF')
+          with Image.open(gif) as image:
+              if getattr(image, 'n_frames', 1) < 2:
+                  raise SystemExit('Lunar GIF does not contain an animation')
+          close_gif = Path(case.get('closeGif', ''))
+          if not close_gif.is_file():
+              raise SystemExit('Lunar probe did not produce the close view')
+          with Image.open(close_gif) as image:
+              if getattr(image, 'n_frames', 1) < 2:
+                  raise SystemExit('Lunar close GIF does not contain an animation')
+          trace = json.loads((root / 'runs' / case['run'] / 'native.json').read_text())
+          render = trace['nativeRender']
+          if trace.get('status') != 'passed' or len(render.get('frames', [])) != 160:
+              raise SystemExit('Lunar trace is incomplete or failed')
+          if render.get('playerArtworkRendered') is not True or render.get('projectileArtworkRendered') is not True:
+              raise SystemExit('Native player or authored projectile was not rendered')
+          if not any(snapshot.get('particleCount', 0) > 0 for snapshot in render.get('snapshots', [])):
+              raise SystemExit('No actual ParticleLibrary particles were observed')
+          print(f'Native lunar probe: {gif}; {len(render["frames"])} PNG frames')
+          PY
+      - name: Exercise native hit effects and miss controls
+        if: ${{ !cancelled() && steps.lunar.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/item-test-workbench/verify_hit_feedback.py --no-build \
+            --item artifacts/workbench-ci/lunar-item/item.json \
+            --out artifacts/workbench-ci/hit-feedback
+      - name: Capture native vanilla weapon effects through probe
+        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets="$RUNNER_TEMP/vanilla-assets"
+          python tools/item-test-workbench/fetch_performance_assets.py \
+            --out "$assets" --items 98 368 --include-projectiles
+          python -m toolbox workbench probe --vanilla-item Minishark --gif \
+            --vanilla-assets "$assets" --ammo 97:200 --aim 1056 728 --set dummy.tileX=65 \
+            --ticks 100 --hold 65 --gif-stride 2 --no-build \
+            --assert '{"kind":"native_projectile_seen","id":14}' \
+            --assert '{"kind":"hit_count_at_least","minimum":1}' \
+            --out artifacts/workbench-ci/vanilla-bullet
+          python -m toolbox workbench probe --vanilla-item 368 --gif \
+            --vanilla-assets "$assets" --ticks 60 --hold 30 --gif-stride 2 --no-build \
+            --assert '{"kind":"native_projectile_seen","id":982}' \
+            --out artifacts/workbench-ci/vanilla-excalibur
+          # Existing installations with the original six projectile assets still
+          # render a bullet; the Excalibur slash must refuse its missing textures.
+          legacy="$RUNNER_TEMP/vanilla-legacy-assets"
+          cp -a "$assets" "$legacy"
+          rm "$legacy/Images/Projectile_982.png" "$legacy/Images/Extra_98.png"
+          python -m toolbox workbench probe --vanilla-item Minishark --gif \
+            --vanilla-assets "$legacy" --ammo 97:200 --aim 1056 728 --set dummy.tileX=65 \
+            --ticks 45 --hold 20 --gif-stride 2 --no-build \
+            --assert '{"kind":"native_projectile_seen","id":14}' \
+            --out artifacts/workbench-ci/vanilla-legacy-bullet
+          python -m toolbox workbench probe --vanilla-item 368 --gif \
+            --vanilla-assets "$legacy" --ticks 20 --hold 10 --gif-stride 2 --no-build \
+            --prepare --out artifacts/workbench-ci/vanilla-legacy-excalibur
+          if python tools/item-test-workbench/workbench.py run --vanilla-item 368 --no-build \
+            --scenario artifacts/workbench-ci/vanilla-legacy-excalibur/inputs/001-primary.json \
+            --out artifacts/workbench-ci/vanilla-legacy-excalibur-run --review none; then
+            echo 'Excalibur unexpectedly rendered without its native texture pair' >&2
+            exit 1
+          else
+            status=$?
+            test "$status" -eq 2 || { echo "Expected native error exit 2; got $status" >&2; exit 1; }
+          fi
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('artifacts/workbench-ci')
+          for label in ('vanilla-bullet', 'vanilla-excalibur'):
+              result = json.loads((root / label / 'probe-result.json').read_text())
+              case = result['cases'][0]
+              if not result['passed'] or not Path(case.get('gif', '')).is_file():
+                  raise SystemExit(f'{label}: native capture or GIF failed')
+              trace = json.loads((root / label / 'runs' / case['run'] / 'native.json').read_text())
+              frames = trace['nativeRender']['frames']
+              if not any(f.get('heldItemDrawCount', 0) > 0 for f in frames):
+                  raise SystemExit(f'{label}: native item was not actually drawn')
+              expected_type = 14 if label == 'vanilla-bullet' else 982
+              if not any(any(g.get('nativeType') == expected_type for g in f.get('projectileGeometry', [])) for f in frames):
+                  raise SystemExit(f'{label}: original projectile sprite was not submitted through Main.DrawProj')
+              if label == 'vanilla-bullet':
+                  events = [e for s in trace['snapshots'] for e in s.get('events', [])]
+                  if not any(e.get('kind') == 'spawn' and e.get('ammoItemIdUsed') == 97 for e in events):
+                      raise SystemExit('Native musket ball source was not observed')
+          legacy = json.loads((root / 'vanilla-legacy-bullet/probe-result.json').read_text())
+          refused = json.loads((root / 'vanilla-legacy-excalibur-run/native.json').read_text())
+          if not legacy['passed'] or refused['status'] != 'error' or 'requires both Projectile_982.png and Extra_98.png' not in refused['error']:
+              raise SystemExit('Legacy assets did not preserve bullet rendering and explicitly refuse missing Excalibur textures')
+          PY
+      - name: Upload native evidence and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-native-particle-evidence
+          path: artifacts/workbench-ci/
+          if-no-files-found: warn

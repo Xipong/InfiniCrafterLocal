@@ -55,7 +55,6 @@ def test_real_doctor_reports_missing_dependencies_without_execution(tmp_path):
     report = json.loads(result.stdout)
     assert report['ready'] is False
     assert report['checks']['dotnet'] is None
-    assert 'not a native execution' in report['note']
     assert list(tmp_path.iterdir()) == []
 
 

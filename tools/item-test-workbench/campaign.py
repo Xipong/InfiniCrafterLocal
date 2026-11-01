@@ -48,7 +48,7 @@ def plan_suite(manifest):
         raise ValueError("Suite requires 1..128 explicit cases")
     names, planned = set(), []
     for case in cases:
-        keys(case, ("name", "item", "vanillaItem", "fixture", "scenario", "expect", "itemBoundary", "review", "timeout"), "suite case")
+        keys(case, ("name", "item", "vanillaItem", "fixture", "scenario", "expect", "itemBoundary", "review", "timeout", "gif", "gifStride"), "suite case")
         name = case.get("name")
         if not isinstance(name, str) or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}", name) or name in names:
             raise ValueError("Case names must be unique safe directory names (1..64 characters)")
@@ -81,6 +81,10 @@ def plan_suite(manifest):
             raise ValueError("vanillaItem cannot use local_cache boundary")
         if case.get("review", "none") not in ("none", "schematic", "native"):
             raise ValueError("review must be none, schematic or native")
+        if type(case.get("gif", False)) is not bool or type(case.get("gifStride", 1)) is not int or not 1 <= case.get("gifStride", 1) <= 600:
+            raise ValueError("gif must be boolean and gifStride must be 1..600")
+        if case.get("gif") and case.get("review") != "native":
+            raise ValueError("GIF suite cases require native review")
         timeout = case.get("timeout", 180)
         if type(timeout) is not int or not 1 <= timeout <= 3600:
             raise ValueError("Case timeout must be 1..3600 seconds")
@@ -128,6 +132,8 @@ def run_suite(manifest, output, no_build=False):
                    "--scenario", case["scenario"], "--out", str(output / name),
                    "--review", case.get("review", "none"), "--timeout", str(case.get("timeout", 180)),
                    "--item-boundary", case.get("itemBoundary", "fresh")]
+        if case.get("gif"):
+            command += ["--gif", "--gif-stride", str(case.get("gifStride", 1))]
         if "vanillaItem" in case:
             command += ["--vanilla-item", case["vanillaItem"]]
         else:

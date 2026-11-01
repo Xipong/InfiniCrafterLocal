@@ -40,6 +40,7 @@ class TmlWorkflowTests(unittest.TestCase):
             # The CLI registers probe options before parsing doctor/build commands.
             for name in ("build/build_tml_windows.ps1", "build/parse_tml_build_log.py", "validate_release.py",
                          "item-test-workbench/workbench.py", "item-test-workbench/probe.py",
+                         "item-test-workbench/native_environment.py",
                          "item-test-workbench/campaign.py", "item-test-workbench/agent_evidence.py"):
                 target = tools / name
                 target.parent.mkdir(parents=True, exist_ok=True)

@@ -147,6 +147,22 @@
       "bytes": 871,
       "width": 24,
       "height": 150
+    },
+    {
+      "path": "Images/Projectile_982.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Projectile_982.png",
+      "sha256": "86d7720e3bdd298a32da04c283006dacbc4b43b4f7642873784024c4cd825fa9",
+      "bytes": 3086,
+      "width": 170,
+      "height": 680
+    },
+    {
+      "path": "Images/Extra_98.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Extra_98.png",
+      "sha256": "5cde61c4b43326ee0bb101eccd25fd44bf627e1e621ffd6bd21d1d6fd08b38ea",
+      "bytes": 2635,
+      "width": 72,
+      "height": 72
     }
   ]
 }

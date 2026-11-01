@@ -373,14 +373,31 @@ document.getElementById('play').onclick=()=>{if(timer){stop();return}if(+seek.va
     return {"replay":str(output/"replay.html"),"frames":frame_count,"sourceSha256":digest(trace_path)}
 
 
+def native_environment():
+    from native_environment import discover
+    return discover(ROOT)
+
+
 def doctor():
-    dotnet = os.environ.get("DOTNET", "dotnet")
-    tml = Path(os.environ.get("INFINI_TML_REFERENCE_DIR", "/nonexistent")).expanduser()
-    deps = Path(os.environ.get("INFINI_TML_DEPS_SRC", "/nonexistent")).expanduser()
+    env, sources = native_environment()
+    dotnet = env.get("DOTNET", "dotnet")
+    tml = Path(env.get("INFINI_TML_REFERENCE_DIR", "/nonexistent")).expanduser()
+    deps = Path(env.get("INFINI_TML_DEPS_SRC", "/nonexistent")).expanduser()
     checks = {"dotnet":shutil.which(dotnet),"tModLoader":(tml/"tModLoader.dll").is_file(),
               "ParticleLibrary":(deps/"ParticleLibrary/ParticleLibrary.dll").is_file(),
               "Luminance":(deps/"Luminance/bin/Debug/net8.0/Luminance.dll").is_file()}
-    return {"ready":all(checks.values()),"checks":checks,"note":"Dependency readiness is not a native execution or parity result."}
+    graphics = {
+        "nativeLibraries": all((Path(env.get("INFINI_TML_NATIVE_DIR", "/nonexistent")) / name).is_file()
+                               for name in ("libSDL2-2.0.so.0", "libFNA3D.so.0", "libFAudio.so.0", "libtheorafile.so")),
+        "tModLoaderContent": (Path(env.get("INFINI_TML_CONTENT_DIR", "/nonexistent")) / "PixelShader.xnb").is_file(),
+        "playerAssets": (Path(env.get("INFINI_PLAYER_ASSET_DIR", "/nonexistent")) / "Images/MagicPixel.png").is_file(),
+        "particleAssets": all((Path(env.get("INFINI_PARTICLE_ASSET_DIR", "/nonexistent")) / name).is_file()
+                              for name in ("Assets/Textures/Star.png", "Assets/Effects/InstancedParticle.xnb")),
+    }
+    return {"ready":all(checks.values()), "checks":checks,
+            "graphicsFilesPresent": graphics, "paths": {name:env[name] for name in sources if name in env},
+            "discovery": sources,
+            "note":"Basic file checks only: neither graphics initialization, matching versions, complete assets nor native execution are verified."}
 
 
 def source_fingerprint():
@@ -401,8 +418,9 @@ def source_fingerprint():
 
 def configured_reference_paths():
     paths = {}
-    tml = os.environ.get("INFINI_TML_REFERENCE_DIR")
-    deps = os.environ.get("INFINI_TML_DEPS_SRC")
+    env, _ = native_environment()
+    tml = env.get("INFINI_TML_REFERENCE_DIR")
+    deps = env.get("INFINI_TML_DEPS_SRC")
     if tml:
         paths["tModLoader"] = Path(tml).expanduser().resolve() / "tModLoader.dll"
     if deps:
@@ -436,10 +454,11 @@ def build():
     state=doctor()
     if not state["ready"]:
         raise RuntimeError("Native prerequisites unavailable: "+json.dumps(state))
-    command=[os.environ.get("DOTNET","dotnet"),"build",str(HERE/"ItemTestWorkbench.csproj"),"-c","Release",
-             "-p:InfiniTmlReferenceDir="+str(Path(os.environ["INFINI_TML_REFERENCE_DIR"]).expanduser().resolve()),
-             "-p:InfiniExternalDepsRoot="+str(Path(os.environ["INFINI_TML_DEPS_SRC"]).expanduser().resolve())]
-    subprocess.run(command,cwd=ROOT,check=True,stdout=sys.stderr)
+    env, _ = native_environment()
+    command=[env.get("DOTNET","dotnet"),"build",str(HERE/"ItemTestWorkbench.csproj"),"-c","Release",
+             "-p:InfiniTmlReferenceDir="+str(Path(env["INFINI_TML_REFERENCE_DIR"]).expanduser().resolve()),
+             "-p:InfiniExternalDepsRoot="+str(Path(env["INFINI_TML_DEPS_SRC"]).expanduser().resolve())]
+    subprocess.run(command,cwd=ROOT,env=env,check=True,stdout=sys.stderr)
     dll=HERE/"bin/Release/net8.0/ItemTestWorkbench.dll"
     (dll.parent/"build-provenance.json").write_text(json.dumps(build_state(dll)))
 
@@ -514,7 +533,7 @@ def execute_loader_run(args):
         return {str(p.relative_to(root)):digest(p) if p.is_file() else None for p in sorted(paths)}
     # The native host permits a source-root override. Bind evidence to the
     # effective metadata/assets, not just the default copied build content.
-    env = os.environ.copy()
+    env, _ = native_environment()
     configured_root = env.get("INFINI_MOD_SOURCE_ROOT", "")
     production_root = (Path(configured_root) if configured_root.strip() else dll.parent / "native-mod").resolve()
     env["INFINI_MOD_SOURCE_ROOT"] = str(production_root)
@@ -586,7 +605,7 @@ def execute_run(args):
     if args.item_boundary != "fresh":
         cmd.extend(["--item-boundary", args.item_boundary])
     try:
-        proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=args.timeout)
+        proc = subprocess.run(cmd, cwd=ROOT, env=native_environment()[0], capture_output=True, text=True, timeout=args.timeout)
     except subprocess.TimeoutExpired as exc:
         decode = lambda v: v.decode(errors="replace") if isinstance(v, bytes) else v or ""
         proc = subprocess.CompletedProcess(cmd, 124, decode(exc.stdout),
@@ -669,6 +688,9 @@ def main():
     from probe import add_parser,execute_probe
     add_parser(sub)
     sub.add_parser("doctor");sub.add_parser("build");sub.add_parser("test",help="Run offline utility tests; not native gameplay verification")
+    r=sub.add_parser("setup-particle",help="Install the pinned ParticleLibrary DLL and resources");r.add_argument("--deps-root",type=Path,help="Dependency root (default: INFINI_TML_DEPS_SRC or artifacts/dependencies)")
+    for name,help_text in (("setup-luminance","Install the pinned Luminance DLL and textures"),("setup-vfx","Install both ParticleLibrary and Luminance")):
+        r=sub.add_parser(name,help=help_text);r.add_argument("--deps-root",type=Path,help="Dependency root (default: INFINI_TML_DEPS_SRC or artifacts/dependencies)")
     sub.add_parser("catalog",help="Read-only inventory of supplied scenarios, actions and assertions")
     r=sub.add_parser("fixtures",help="Write synthetic fixtures through the native owner");r.add_argument("--out",type=Path,required=True);r.add_argument("--no-build",action="store_true")
     r=sub.add_parser("loader-run",help="Standalone native tML DLL autoload and controlled combat scene; no .tmod or game launch")
@@ -688,6 +710,15 @@ def main():
     r.add_argument("--gif-stride",type=int,default=1);r.add_argument("--timeout",type=int,default=180)
     args=parser.parse_args()
     try:
+        if args.command in ("setup-particle","setup-luminance","setup-vfx"):
+            from fetch_vfx_assets import MANIFEST,setup_particle
+            root=(args.deps_root or Path(os.environ.get("INFINI_TML_DEPS_SRC",ROOT/"artifacts/dependencies"))).expanduser()
+            if args.command=="setup-particle":result=setup_particle(root,read_json(MANIFEST))
+            else:
+                from fetch_luminance import setup_luminance
+                result=setup_luminance(root) if args.command=="setup-luminance" else {
+                    "particle":setup_particle(root,read_json(MANIFEST)),"luminance":setup_luminance(root)}
+            print(json.dumps(result,indent=2));return 0
         if args.command=="test":
             import unittest
             suite=unittest.defaultTestLoader.discover(str(HERE),pattern="test_*.py")

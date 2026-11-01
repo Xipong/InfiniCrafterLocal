@@ -1,5 +1,5 @@
 {
-  "schema": "infini.vfx-director.runtime-events.v3",
+  "schema": "infini.vfx-director.runtime-events.v4",
   "slots": [
     {
       "rendererKind": "libraryParticle",
@@ -35,7 +35,11 @@
           "b": 230
         },
         "endScale": 0.25,
-        "endOpacity": 0
+        "endOpacity": 0,
+        "spawn": {
+          "shape": "point"
+        },
+        "sampling": "point"
       },
       "id": "lunar_on_release",
       "entityId": "harpoon",
@@ -75,7 +79,11 @@
           "b": 230
         },
         "endScale": 0.25,
-        "endOpacity": 0
+        "endOpacity": 0,
+        "spawn": {
+          "shape": "point"
+        },
+        "sampling": "point"
       },
       "id": "lunar_on_hit",
       "entityId": "harpoon",
@@ -115,7 +123,11 @@
           "b": 230
         },
         "endScale": 0.25,
-        "endOpacity": 0
+        "endOpacity": 0,
+        "spawn": {
+          "shape": "point"
+        },
+        "sampling": "point"
       },
       "id": "lunar_on_kill",
       "entityId": "harpoon",

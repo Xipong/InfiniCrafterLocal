@@ -3,9 +3,11 @@
 
   python fetch_player_assets.py --out /path/to/terraria-player-assets
   python fetch_player_assets.py --out /path/to/terraria-player-assets --include-dummy
+  python fetch_player_assets.py --out /path/to/terraria-player-assets --include-zombie
 
 Use that output root (containing Images/) as the native player asset directory.
 --include-dummy adds exactly two optional native training-dummy textures.
+--include-zombie adds the original community NPC_3 texture for the controlled target.
 These are original source-pngs from a community repository labelled 1.4.4.9,
 NOT its generated HD textures. Official byte identity is not certified. No game
 assets are bundled with this utility; no downloaded code is executed.
@@ -25,6 +27,7 @@ PREFIX = f"https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/{
 REQUIRED = {f"Player_0_{i}.png" for i in [*range(14), 15]} | {"Player_Hair_1.png", "Player_HairAlt_1.png", "MagicPixel.png", "Dust.png", "Item_0.png"}
 
 DUMMY_REQUIRED = {"NPC_488.png", "Tiles_378.png"}
+ZOMBIE_REQUIRED = {"NPC_3.png"}
 
 def verify_png(data: bytes, entry: dict, label: str) -> None:
     verify(data, entry, label)
@@ -35,7 +38,7 @@ def verify_png(data: bytes, entry: dict, label: str) -> None:
         raise ValueError(f"PNG geometry mismatch: {label}")
 
 
-def provision(out: Path, manifest: dict, fetch=download, *, include_dummy: bool = False) -> dict:
+def provision(out: Path, manifest: dict, fetch=download, *, include_dummy: bool = False, include_zombie: bool = False) -> dict:
     if manifest["commit"] != COMMIT:
         raise ValueError("Unsupported community source commit")
     entries = list(manifest["files"])
@@ -45,6 +48,11 @@ def provision(out: Path, manifest: dict, fetch=download, *, include_dummy: bool 
         extra = manifest.get("trainingDummyFiles", [])
         if len(extra) != 2 or {e["path"] for e in extra} != {"Images/" + name for name in DUMMY_REQUIRED}:
             raise ValueError("Optional dummy manifest must contain exactly NPC_488 and Tiles_378")
+        entries += extra
+    if include_zombie:
+        extra = manifest.get("zombieFiles", [])
+        if len(extra) != 1 or {e["path"] for e in extra} != {"Images/" + name for name in ZOMBIE_REQUIRED}:
+            raise ValueError("Optional zombie manifest must contain exactly NPC_3")
         entries += extra
     out = out.absolute()
     if any(part.is_symlink() for part in (out, *out.parents)) or (out.exists() and not out.is_dir()):
@@ -80,7 +88,7 @@ def provision(out: Path, manifest: dict, fetch=download, *, include_dummy: bool 
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
     return {"status": "verified", "output": str(out), "downloaded": fetched, "reused": reused,
-            "verifiedFiles": len(entries), "includesTrainingDummy": include_dummy, "communityCommit": COMMIT, "versionClaim": "1.4.4.9",
+            "verifiedFiles": len(entries), "includesTrainingDummy": include_dummy, "includesZombie": include_zombie, "communityCommit": COMMIT, "versionClaim": "1.4.4.9",
             "officialByteIdentityVerified": False, "nativeRuntimeReady": False,
             "scope": "Pinned community source PNG integrity and dimensions verified; original native rendering is checked separately."}
 
@@ -89,9 +97,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--include-dummy", action="store_true", help="Also fetch the two pinned native training-dummy textures (default: 20 player/empty-item textures)")
+    parser.add_argument("--include-zombie", action="store_true", help="Also fetch the pinned controlled zombie texture")
     args = parser.parse_args()
     try:
-        result = provision(args.out, json.loads(MANIFEST.read_text(encoding="utf-8")), include_dummy=args.include_dummy)
+        result = provision(args.out, json.loads(MANIFEST.read_text(encoding="utf-8")), include_dummy=args.include_dummy, include_zombie=args.include_zombie)
     except (OSError, ValueError, KeyError, TypeError) as error:
         print(json.dumps({"status": "error", "error": str(error)})); return 2
     print(json.dumps(result, indent=2)); return 0

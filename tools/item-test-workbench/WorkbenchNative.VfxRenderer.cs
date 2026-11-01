@@ -22,8 +22,8 @@ using InfiniCrafterLocal.Common.Models;
 internal sealed partial class WNativeVfxRenderer : IDisposable
 {
     const BindingFlags All=BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Instance|BindingFlags.Static;
-    sealed class ResourceMod(string root):Mod {
-        public override string Name=>"ParticleLibrary";
+    sealed class ResourceMod(string root,string name="ParticleLibrary"):Mod {
+        public override string Name=>name;
         public override IContentSource CreateDefaultContentSource()=>new FileSystemContentSource(root);
     }
     readonly WorkbenchGraphicsContext graphics;
@@ -51,12 +51,14 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
     readonly Vector2 oldCamera;
     readonly IDictionary<string,Mod> registry;
     readonly ResourceMod mod;
+    ResourceMod? luminanceResources;
     readonly ParticleLibrary.ParticleLibrary actualMod;
     readonly ParticleManagerV3 particleManager;
     readonly InfiniDetachedVfxSystem system=new();
     readonly SpriteBatch batch;
     readonly RenderTarget2D target;
-    WNativeArtwork? artwork;WNativeTrainingDummy? trainingDummy;
+    WNativeArtwork? artwork;WNativeTrainingDummy? trainingDummy;WNativeZombieRender? zombie;
+    public void SetZombie(WNativeZombieRender value){zombie=value;Report["zombieAssets"]=value.Report.DeepClone();Report["zombieArtworkRendered"]=false;Report["gpuRenderLifecycleEnabled"]=true;Report["captureSemantics"]="Native zombie draw runs every tick; capture controls PNG export only";Report["scope"]="Original native controlled zombie DrawNPC and player/projectile layers on a neutral background; no full world or NPC AI parity";Report["unrenderedArtwork"]=new JsonArray("Terraria tile/world artwork and other NPCs",drawNativeDust?"No additional dust omission":"Native dust sprites");Report["originalDrawEntryPoints"]?.AsArray().Add(JsonValue.Create("Main.DrawNPC (controlled zombie)"));Report["passOrder"]?.AsArray().Insert(0,JsonValue.Create("Original controlled zombie Main.DrawNPC"));}
     public void SetTrainingDummy(WNativeTrainingDummy value){trainingDummy=value;Report["trainingDummy"]=value.Report.DeepClone();Report["scope"]="Original native training dummy tile layer, generated projectile PreDraw/PostDraw and detached VFX, then ordinary native player/held layers; neutral background, no solid terrain/world scene";Report["trainingDummyArtworkRendered"]=false;Report["unrenderedArtwork"]=new JsonArray("Solid terrain/world artwork and other NPCs","native dust sprites");Report["passOrder"]=new JsonArray("TileDrawing non-solid dummy object","InfiniDetachedVfxSystem.DrawProjectiles wrapper / original generated projectile PreDraw/PostDraw","PlayerRenderer.DrawPlayers ordinary unlocked player","Inventory preview (explicit diagnostic UI)");RefreshVanillaReport();}
     public void SetArtwork(WNativeArtwork value) {
         artwork=value;
@@ -74,12 +76,13 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
     void RefreshVanillaReport()
     {
         if(artwork?.NativeVanillaEnabled!=true)return;
-        Report["scope"]="Original native vanilla player/held-item"+(drawVanillaProjectiles?", Main.DrawProj":"")+(drawNativeDust?", Main.DrawDust":"")+(trainingDummy is null?"":", training dummy tile layer")+"; controlled neutral background, not full Main.Draw/world";
+        Report["scope"]="Original native vanilla player/held-item"+(drawVanillaProjectiles?", Main.DrawProj":"")+(drawNativeDust?", Main.DrawDust":"")+(trainingDummy is not null?", training dummy tile layer":zombie is not null?", controlled zombie Main.DrawNPC":"")+"; controlled neutral background, not full Main.Draw/world";
         Report["vanillaProjectileDrawEnabled"]=drawVanillaProjectiles;
         if(Report["vanillaProjectileDrawExecuted"] is null)Report["vanillaProjectileDrawExecuted"]=false;
-        Report["unrenderedArtwork"]=new JsonArray(drawVanillaProjectiles?"No additional projectile omission":"Native projectile sprites (simulation/hits still execute)",trainingDummy is null?"Terraria tile/NPC/world artwork":"Solid terrain/world artwork and other NPCs");
+        Report["unrenderedArtwork"]=new JsonArray(drawVanillaProjectiles?"No additional projectile omission":"Native projectile sprites (simulation/hits still execute)",trainingDummy is not null?"Solid terrain/world artwork and other NPCs":zombie is not null?"Terraria tile/world artwork and other NPCs":"Terraria tile/NPC/world artwork");
         if(!drawNativeDust)Report["unrenderedArtwork"]!.AsArray().Add(JsonValue.Create("Native dust sprites"));
         Report["originalDrawEntryPoints"]=artwork.Report["entrypoints"]?.DeepClone();
+        if(zombie is not null)Report["originalDrawEntryPoints"]?.AsArray().Add(JsonValue.Create("Main.DrawNPC (controlled zombie)"));
         Report["unsupportedDrawPasses"]=new JsonArray("Locked-to-tile players before NPCs","Over-player/over-wire/hidden projectile passes","Full terrain/world scene");
     }
     readonly AssetReaderCollection readers;
@@ -90,8 +93,11 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
     public WNativeVfxRenderer(WorkbenchGraphicsContext graphics,JsonObject settings,string absoluteFramesDir,GeneratedItemData? data)
     {
         string[] libraryTexturePaths=SelectedLibraryTexturePaths(data);
+        string[] luminancePaths=libraryTexturePaths.Where(p=>p.StartsWith("Luminance/",StringComparison.Ordinal)).ToArray();
+        string? luminanceRoot=Environment.GetEnvironmentVariable("INFINI_LUMINANCE_ASSET_DIR");
+        var luminanceHashes=InspectLuminanceResources(luminancePaths,luminanceRoot);
         this.graphics=graphics;framesDir=Path.GetFullPath(absoluteFramesDir);
-        foreach(string key in settings.Select(x=>x.Key)) if(key is not ("capture" or "width" or "height" or "cameraX" or "cameraY" or "zoom" or "drawArtwork" or "artworkFiles" or "drawPlayer" or "playerAssetRoot" or "dummyAssetRoot" or "drawNativeDust" or "lightingMode" or "drawPlacedBodies" or "drawDroppedItems" or "drawVanillaProjectiles" or "drawProjectileVfx"))throw new ArgumentException("Unknown nativeRender setting: "+key);
+        foreach(string key in settings.Select(x=>x.Key)) if(key is not ("capture" or "width" or "height" or "cameraX" or "cameraY" or "zoom" or "drawArtwork" or "artworkFiles" or "drawPlayer" or "playerAssetRoot" or "dummyAssetRoot" or "drawNativeDust" or "lightingMode" or "drawPlacedBodies" or "drawDroppedItems" or "drawVanillaProjectiles" or "drawProjectileVfx" or "drawZombie"))throw new ArgumentException("Unknown nativeRender setting: "+key);
         ConfigureScene(settings);drawVanillaProjectiles=settings["drawVanillaProjectiles"]?.GetValue<bool>()??false;drawDroppedItems=settings["drawDroppedItems"]?.GetValue<bool>()??false; if(drawDroppedItems && !(settings["drawArtwork"]?.GetValue<bool>()??false))throw new ArgumentException("drawDroppedItems requires drawArtwork");
         width=settings["width"]?.GetValue<int>()??512;height=settings["height"]?.GetValue<int>()??512;
         drawProjectileVfx=settings["drawProjectileVfx"]?.GetValue<bool>()??false;
@@ -105,6 +111,21 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
         foreach(string file in Directory.EnumerateFiles(Path.Combine(source,"Assets"),"*",SearchOption.AllDirectories).Where(p=>p.EndsWith(".png",StringComparison.OrdinalIgnoreCase)||p.EndsWith(".xnb",StringComparison.OrdinalIgnoreCase))) {
             string destination=Path.Combine(contentRoot,Path.GetRelativePath(source,file));Directory.CreateDirectory(Path.GetDirectoryName(destination)!);File.Copy(file,destination);
         }
+        if(luminancePaths.Length>0) {
+            // Freeze the exact selected bytes for the native resource loader;
+            // the source can otherwise change between receipt and GPU load.
+            string root=Path.Combine(contentRoot,"Luminance");
+            foreach(string path in luminancePaths) {
+                string relative=path.Substring("Luminance/".Length).Replace('/',Path.DirectorySeparatorChar)+".png";
+                byte[] bytes=File.ReadAllBytes(Path.Combine(luminanceRoot!,relative));
+                if(Hash(bytes)!=luminanceHashes[path])throw new InvalidOperationException("Luminance texture changed during preparation: "+path);
+                string targetPath=Path.Combine(root,relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);File.WriteAllBytes(targetPath,bytes);
+            }
+        }
+        registry=(IDictionary<string,Mod>)typeof(ModLoader).GetField("modsByName",All)!.GetValue(null)!;
+        if(registry.ContainsKey("ParticleLibrary"))throw new InvalidOperationException("ParticleLibrary already registered; isolated renderer refuses to overwrite an existing mod");
+        if(luminancePaths.Length>0 && registry.ContainsKey("Luminance"))throw new InvalidOperationException("Luminance already registered; isolated renderer refuses to overwrite an existing mod");
         game=(Game)typeof(WorkbenchGraphicsContext).GetField("game",All)!.GetValue(graphics)!;
         oldServices=typeof(Game).GetField("<Services>k__BackingField",All)!.GetValue(Main.instance);
         oldGraphics=Main.graphics;oldBatch=Main.spriteBatch;oldView=Main.GameViewMatrix;
@@ -113,10 +134,18 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
         typeof(Game).GetField("<Services>k__BackingField",All)!.SetValue(Main.instance,game.Services);
         readers=new AssetReaderCollection();readers.RegisterReader(new PngReader(graphics.Device),".png");readers.RegisterReader(new XnbReader(game.Services),".xnb");
         oldReaders=game.Services.GetService(typeof(AssetReaderCollection));if(oldReaders is not null)game.Services.RemoveService(typeof(AssetReaderCollection));game.Services.AddService(typeof(AssetReaderCollection),readers);
-        registry=(IDictionary<string,Mod>)typeof(ModLoader).GetField("modsByName",All)!.GetValue(null)!;
-        if(registry.ContainsKey("ParticleLibrary"))throw new InvalidOperationException("ParticleLibrary already registered; isolated renderer refuses to overwrite an existing mod");
         mod=new ResourceMod(contentRoot);typeof(Mod).GetProperty("Logger",All)!.SetValue(mod,log4net.LogManager.GetLogger("WorkbenchParticleLibrary"));
         typeof(Mod).GetMethod("PrepareAssets",All)!.Invoke(mod,null);registry.Add(mod.Name,mod);
+        // Only register a resource source when the authored item selects a
+        // Luminance texture. This is not Luminance's mod lifecycle or gameplay.
+        if(luminancePaths.Length>0) {
+            string root=Path.Combine(contentRoot,"Luminance");
+            luminanceResources=new ResourceMod(root,"Luminance");
+            typeof(Mod).GetProperty("Logger",All)!.SetValue(luminanceResources,log4net.LogManager.GetLogger("WorkbenchLuminanceResources"));
+            typeof(Mod).GetMethod("PrepareAssets",All)!.Invoke(luminanceResources,null);
+            try {registry.Add(luminanceResources.Name,luminanceResources);}
+            catch {luminanceResources.Assets.Dispose();luminanceResources=null;throw;}
+        }
         bool oldDedicated=Main.dedServ;Main.dedServ=false;
         try {
             var config=new ParticleLibrary.ParticleLibraryConfig();typeof(Terraria.ModLoader.Config.ModConfig).GetProperty("Mod",All)!.SetValue(config,mod);typeof(Terraria.ModLoader.Config.ConfigManager).GetMethod("Add",All)!.Invoke(null,new object[]{config});
@@ -129,11 +158,18 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
             if(ParticleManagerV3.InstancedParticleEffect is null)throw new InvalidOperationException("Original ParticleLibrary effect did not load after native main-thread queue");
             PrewarmLibraryTextures(libraryTexturePaths,path=>(bool)Invoke("EnsureLibraryReady",path)!,
                 ()=>typeof(Main).GetMethod("ConsumeAllMainThreadActions",All)!.Invoke(null,null));
+        } catch {
+            if(luminanceResources is not null){registry.Remove(luminanceResources.Name);luminanceResources.Assets.Dispose();luminanceResources=null;}
+            throw;
         } finally {Main.dedServ=oldDedicated;}
         batch=new SpriteBatch(graphics.Device);Main.spriteBatch=batch;target=new RenderTarget2D(graphics.Device,width,height);
         if(capture)Directory.CreateDirectory(framesDir);
         Report=new JsonObject{["backend"]="original_mod_draw_layers",["backendDescription"]="Original InfiniDetachedVfxSystem draw layers / FNA3D software OpenGL",["scope"]="VFX-only original mod layers on neutral black background; no Terraria scene artwork",["capture"]=capture,["pngExportEnabled"]=capture,["gpuRenderLifecycleEnabled"]=capture||drawNativeDust||drawVanillaProjectiles,["gpuRenderLifecycleExecuted"]=false,["nativeDustDrawEnabled"]=drawNativeDust,["nativeDustDrawExecuted"]=false,["soundValidated"]=false,["itemArtworkRendered"]=false,["projectileArtworkRendered"]=false,["worldRendered"]=false,["unrenderedArtwork"]=new JsonArray("item artwork","projectile artwork","Terraria world/player/NPC artwork"),["missingVfxAssets"]=new JsonArray(),["resourceReady"]=true,["originalParticleLibraryEffect"]=ParticleManagerV3.InstancedParticleEffect is not null,["libraryBuffers"]=(GetStatic("LibraryBuffers") as Array)?.Length??0,["starSha256"]=Hash(File.ReadAllBytes(Path.Combine(contentRoot,"Assets/Textures/Star.png"))),["effectSha256"]=Hash(File.ReadAllBytes(Path.Combine(contentRoot,"Assets/Effects/InstancedParticle.xnb"))),["loadedAssetSha256"]=JsonSerializer.SerializeToNode(Directory.EnumerateFiles(contentRoot,"*",SearchOption.AllDirectories).OrderBy(p=>p).ToDictionary(p=>Path.GetRelativePath(contentRoot,p),p=>Hash(File.ReadAllBytes(p)))),["particleLibraryAssemblySha256"]=Hash(File.ReadAllBytes(typeof(ParticleManagerV3).Assembly.Location)),["graphics"]=graphics.Provenance.DeepClone(),["width"]=width,["height"]=height,["cameraX"]=camera.X,["cameraY"]=camera.Y,["zoom"]=zoom,["frames"]=frames,["snapshots"]=snapshots};
         Report["readyLibraryTexturePaths"]=JsonSerializer.SerializeToNode(libraryTexturePaths);
+        if(luminanceResources is not null)Report["luminanceResources"]=new JsonObject {
+            ["scope"]="Resource-only registration; Luminance Load hooks and gameplay are not executed",
+            ["selectedTextureSha256"]=JsonSerializer.SerializeToNode(luminanceHashes)
+        };
     }
     // Resolve exactly the particle textures selected by this item, through the
     // production registry. No synthetic Star selection for empty/vanilla scenes.
@@ -146,6 +182,22 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
                 if(!(bool)resolve.Invoke(null,args)!)throw new NotSupportedException("Unknown selected particle texture: "+s.Particle.TextureId);
                 return (string)args[1]!;
             }).Distinct(StringComparer.Ordinal).ToArray();
+    }
+    // The paths come only from the production texture registry. Check each
+    // selected file up front and record its bytes; do not infer a replacement.
+    internal static Dictionary<string,string> InspectLuminanceResources(string[] paths,string? root)
+    {
+        var hashes=new Dictionary<string,string>(StringComparer.Ordinal);
+        if(paths.Length>0 && string.IsNullOrWhiteSpace(root))
+            throw new InvalidOperationException("Selected Luminance particle textures require INFINI_LUMINANCE_ASSET_DIR pointing to the Luminance source root");
+        foreach(string path in paths) {
+            if(!path.StartsWith("Luminance/Assets/",StringComparison.Ordinal) || path.Contains("..",StringComparison.Ordinal) || path.Contains('\\'))
+                throw new InvalidOperationException("Invalid Luminance texture path: "+path);
+            string file=Path.Combine(root!,path.Substring("Luminance/".Length).Replace('/',Path.DirectorySeparatorChar)+".png");
+            if(!File.Exists(file))throw new FileNotFoundException("Selected Luminance particle texture is missing: "+path,file);
+            hashes[path]=Hash(File.ReadAllBytes(file));
+        }
+        return hashes;
     }
     internal static void PrewarmLibraryTextures(string[] paths,Func<string,bool> ensure,Action drain)
     {
@@ -163,14 +215,14 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
         try {
             string beforeUpdate=Rng();system.PostUpdateEverything();string afterUpdate=Rng();
             JsonObject snapshot=Snapshot(tick);snapshot["mainRngBeforeUpdate"]=beforeUpdate;snapshot["mainRngAfterUpdate"]=afterUpdate;snapshots.Add(snapshot);
-            if(!capture&&!drawNativeDust&&!drawVanillaProjectiles&&activeVfx is null)return;
+            if(!capture&&!drawNativeDust&&!drawVanillaProjectiles&&activeVfx is null&&zombie is null)return;
             activeVfx?.BeginFrame();
             if(drawNativeDust){snapshot["nativeDustBeforeDraw"]=DustState();ConfigureDustReport();}
             string beforeDraw=Rng();
             int savedWidth=Main.screenWidth,savedHeight=Main.screenHeight;Vector2 savedCamera=Main.screenPosition;var savedView=Main.GameViewMatrix;
             JsonObject? scene = null;
             graphics.Device.SetRenderTarget(target);
-            try {Main.screenWidth=width;Main.screenHeight=height;Main.screenPosition=camera;Main.GameViewMatrix=new Terraria.Graphics.SpriteViewMatrix(graphics.Device){Zoom=new Vector2(zoom)};scene=SceneSnapshot();graphics.Device.Clear(Color.Black);artwork?.BeginFrame();placedBodies?.Draw(tick);if(drawDroppedItems)artwork?.DrawDroppedItems();trainingDummy?.Draw();if(artwork?.NativePlayerEnabled!=true)artwork?.DrawHeld();if(artwork is not null) Invoke("DrawProjectiles",new Terraria.On_Main.orig_DrawProjectiles(_=>artwork.DrawProjectiles()),Main.instance);else if(drawProjectileVfx)Invoke("DrawProjectiles",new Terraria.On_Main.orig_DrawProjectiles(_=>activeVfx!.Draw()),Main.instance);else {Invoke("BeginDrawBudgetFrame");Invoke("DrawLayer","BeforeProjectiles");Invoke("DrawLayer","AfterProjectiles");}if(artwork?.NativePlayerEnabled==true)artwork.DrawHeld();if(drawNativeDust)typeof(Main).GetMethod("DrawDust",All)!.Invoke(Main.instance,null);artwork?.DrawInventory();}
+            try {Main.screenWidth=width;Main.screenHeight=height;Main.screenPosition=camera;Main.GameViewMatrix=new Terraria.Graphics.SpriteViewMatrix(graphics.Device){Zoom=new Vector2(zoom)};scene=SceneSnapshot();graphics.Device.Clear(Color.Black);artwork?.BeginFrame();placedBodies?.Draw(tick);if(drawDroppedItems)artwork?.DrawDroppedItems();trainingDummy?.Draw();zombie?.Draw();if(artwork?.NativePlayerEnabled!=true)artwork?.DrawHeld();if(artwork is not null) Invoke("DrawProjectiles",new Terraria.On_Main.orig_DrawProjectiles(_=>artwork.DrawProjectiles()),Main.instance);else if(drawProjectileVfx)Invoke("DrawProjectiles",new Terraria.On_Main.orig_DrawProjectiles(_=>activeVfx!.Draw()),Main.instance);else {Invoke("BeginDrawBudgetFrame");Invoke("DrawLayer","BeforeProjectiles");Invoke("DrawLayer","AfterProjectiles");}if(artwork?.NativePlayerEnabled==true)artwork.DrawHeld();if(drawNativeDust)typeof(Main).GetMethod("DrawDust",All)!.Invoke(Main.instance,null);artwork?.DrawInventory();}
             finally {graphics.Device.SetRenderTarget(null);Main.screenWidth=savedWidth;Main.screenHeight=savedHeight;Main.screenPosition=savedCamera;Main.GameViewMatrix=savedView;}
             string afterDraw=Rng();
             Report["gpuRenderLifecycleExecuted"]=true;
@@ -186,6 +238,7 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
                 if((artwork.Frame["playerRenderAllLayersCalls"]?.GetValue<int>()??0)>0)Report["playerArtworkRendered"]=true;
             }
             if(trainingDummy is not null)Report["trainingDummyArtworkRendered"]=true;
+            if(zombie is not null){snapshot["zombie"]=zombie.Frame.DeepClone();if((zombie.Frame["drawCount"]?.GetValue<int>()??0)>0)Report["zombieArtworkRendered"]=true;}
             if(drawNativeDust){snapshot["nativeDustAfterDraw"]=DustState();snapshot["mainRngBeforeDraw"]=beforeDraw;snapshot["mainRngAfterDraw"]=afterDraw;snapshot["nativeDustDrawExecuted"]=true;snapshot["nativeDrawCounters"]=artwork?.Frame.DeepClone();Report["nativeDustDrawExecuted"]=true;}
             if(!capture)return;var pixels=new Color[width*height];target.GetData(pixels);
             string path=Path.Combine(framesDir,$"{tick:000000}.png");using(var stream=File.Create(path))target.SaveAsPng(stream,width,height);
@@ -199,6 +252,7 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
                 if((frame["playerRenderAllLayersCalls"]?.GetValue<int>()??0)>0)Report["playerArtworkRendered"]=true;
             }
             if(trainingDummy is not null){frame["trainingDummy"]=trainingDummy.Snapshot();frame["trainingDummyNativeDrawCalls"]=1;Report["trainingDummyArtworkRendered"]=true;}
+            if(zombie is not null)frame["zombie"]=zombie.Frame.DeepClone();
             // Keep complete dust states once, in the same-tick snapshot. Duplicating
             // hundreds of particles per PNG exceeded the portable trace size limit.
             if(drawNativeDust){frame["nativeDustDrawExecuted"]=true;frame["nativeDustStateTick"]=tick;frame["nativeDustBeforeDrawCount"]=snapshot["nativeDustBeforeDraw"]!.AsArray().Count;frame["nativeDustAfterDrawCount"]=snapshot["nativeDustAfterDraw"]!.AsArray().Count;}
@@ -211,9 +265,10 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
         Report["nativeDustDrawEntryPoint"]="Original Main.DrawDust after ordinary player layer and before diagnostic inventory UI";
         Report["nativeDustStateMutation"]="Original DrawDust may deactivate offscreen or black dust; camera is part of the deterministic scene";
         Report["dustAssetAlphaScope"]="Pinned community Dust PNG loaded through genuine PngReader; full sheet has partial alpha and original extraction alpha semantics are not independently certified. No official-byte/pixel parity claim.";
-        Report["unrenderedArtwork"]=new JsonArray(artwork?.NativeVanillaEnabled==true&&!drawVanillaProjectiles?"Native projectile sprites (simulation/hits still execute)":"No additional projectile omission",trainingDummy is null?"Terraria tile/NPC/world artwork":"Solid terrain/world artwork and other NPCs");
+        Report["unrenderedArtwork"]=new JsonArray(artwork?.NativeVanillaEnabled==true&&!drawVanillaProjectiles?"Native projectile sprites (simulation/hits still execute)":"No additional projectile omission",trainingDummy is null?(zombie is null?"Terraria tile/NPC/world artwork":"Terraria tile/world artwork and other NPCs"):"Solid terrain/world artwork and other NPCs");
         Report["unsupportedDrawPasses"]=new JsonArray("Locked-to-tile players before NPCs","Over-player/over-wire/hidden projectile passes","Full terrain/world scene");
         Report["passOrder"]=trainingDummy is null?new JsonArray("Original projectile/VFX wrapper","Ordinary native player/held layers","Original Main.DrawDust","Diagnostic inventory UI"):new JsonArray("Native training dummy non-solid tiles","Original projectile/VFX wrapper","Ordinary native player/held layers","Original Main.DrawDust","Diagnostic inventory UI");
+        if(zombie is not null){Report["scope"]="Original native controlled zombie DrawNPC, player/held, projectile/VFX and Main.DrawDust; neutral background, no full world or NPC AI parity";Report["passOrder"]!.AsArray().Insert(0,JsonValue.Create("Original controlled zombie Main.DrawNPC"));}
         if(drawProjectileVfx){Report["scope"]="Original procedural projectile VFX and Main.DrawDust; authored/player/world artwork unrendered";Report["unrenderedArtwork"]=new JsonArray("Authored item and projectile PNGs (no replacements)","Player artwork","Terraria tile/NPC/world artwork");Report["passOrder"]=new JsonArray("Original detached before-projectile layer","Original active projectile VFX under/over passes","Original detached after-projectile layer","Original Main.DrawDust");}
         RefreshVanillaReport();
     }
@@ -252,6 +307,7 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
     {
         if(disposed)return;disposed=true;bool oldDedicated=Main.dedServ;Main.dedServ=false;
         try {system.Unload();particleManager.Unload();actualMod.Unload();mod.Assets.Dispose();registry.Remove(mod.Name);
+            if(luminanceResources is not null){luminanceResources.Assets.Dispose();registry.Remove(luminanceResources.Name);}
             foreach(var field in typeof(Terraria.ModLoader.Config.ConfigManager).GetFields(All))if(field.IsStatic&&field.GetValue(null) is IDictionary dictionary&&dictionary.Contains(mod))dictionary.Remove(mod);
         } finally {
             target.Dispose();batch.Dispose();game.Services.RemoveService(typeof(AssetReaderCollection));if(oldReaders is not null)game.Services.AddService(typeof(AssetReaderCollection),oldReaders);
