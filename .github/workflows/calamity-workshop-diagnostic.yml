@@ -75,7 +75,7 @@ jobs:
       - name: Checkout native loader at reviewed commit
         uses: actions/checkout@v4
         with:
-          ref: 2b31b7c693a70131dab447ed767888d1c1b42d74
+          ref: 0d96b2b408175aa325273e1c177e27b8cdf9c75d
           path: ifc
       - uses: actions/setup-dotnet@v4
         with:
@@ -138,6 +138,7 @@ jobs:
           output="$RUNNER_TEMP/terratomere-diagnostic"
           set +e
           python tools/item-test-workbench/workbench.py loader-run \
+            --server-mode \
             --native-item CalamityMod/Terratomere \
             --scenario "$RUNNER_TEMP/terratomere-scenario.json" \
             --tmod "$mods/2824688266/2025.12/CalamityModMusic.tmod" \
