@@ -17,6 +17,32 @@ def trace():
             'snapshots':[{'tick':i,'player':actor,'dummy':dict(actor,x=80),'projectiles':[dict(actor,id=7,entityId='<unsafe>',vx=2,vy=0,active=True,x=20+i*2)]} for i in range(3)]}
 
 class WorkbenchTests(unittest.TestCase):
+    def test_server_fixture_verifier_requires_hooks_not_client_firing(self):
+        from unittest.mock import patch
+        verifier_spec=importlib.util.spec_from_file_location('verify_multi_mod_loader',Path(__file__).with_name('verify_multi_mod_loader.py'))
+        verifier=importlib.util.module_from_spec(verifier_spec);verifier_spec.loader.exec_module(verifier)
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);host=root/'host.dll';dep=root/'dep.dll';item=root/'item.dll'
+            for file in (host,dep,item):file.write_bytes(b'fixture')
+            arguments=['verify','--server-mode','--native-dll',str(host),'--dependency-dll',str(dep),
+                '--dependent-dll',str(item),'--dependency-root',str(root),'--dependent-root',str(root)]
+            def run(command,env,**kwargs):
+                self.assertEqual(command[command.index('--server-mode')+1],'true')
+                scenario=json.loads(Path(command[command.index('--scenario')+1]).read_text())
+                output=Path(command[command.index('--output')+1])
+                if scenario['actions']:
+                    output.write_text(json.dumps({'status':'error','error':'server-mode has no connected client'}))
+                    return subprocess.CompletedProcess(command,2,'','')
+                output.write_text(json.dumps({'status':'passed','execution':{'networkMode':2,'additionalMods':[
+                    {'name':'WorkbenchObserverFixture'},{'name':'WorkbenchDependentFixture'}]},
+                    'combat':{'spawns':0,'hits':0}}))
+                hooks=('GlobalNPC.SetDefaults.NpcSlotReady','GlobalNPC.OnSpawn','ModNPC.AI',
+                    'ModSystem.PostUpdateEverything','ModSystem.ServerPacketSerialized')
+                Path(env['IFC_WORKBENCH_OBSERVER_OUTPUT']).write_text(json.dumps({'counts':dict.fromkeys(hooks,1)}))
+                return subprocess.CompletedProcess(command,0,'','')
+            with patch.object(sys,'argv',arguments),patch.object(verifier.subprocess,'run',side_effect=run):
+                self.assertEqual(verifier.main(),0)
+
     def test_loader_run_requires_completed_assertions_and_agrees_with_exit(self):
         from types import SimpleNamespace
         from unittest.mock import patch
