@@ -52,11 +52,10 @@
     "itemUse": {
       "configured": true,
       "useStyle": "shoot",
-      "hideUseGraphic": false,
+      "hideUseGraphic": true,
       "disableMeleeHitbox": true,
       "channel": false,
       "handPose": "one_handed",
-      "releaseTiming": "immediate",
       "holdoutOffsetX": 0,
       "holdoutOffsetY": 0
     },
@@ -92,8 +91,7 @@
     "useTurn": true,
     "holdoutOffsetX": 0,
     "holdoutOffsetY": 0,
-    "handPose": "one_handed",
-    "releaseTiming": "immediate"
+    "handPose": "one_handed"
   },
   "accessory": {
     "enabled": true,

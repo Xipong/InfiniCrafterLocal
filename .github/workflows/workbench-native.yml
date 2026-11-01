@@ -139,7 +139,7 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          item = json.loads(Path('tools/fixtures/video-ui-buffs/g_17d5099f992a900b.json').read_text())
+          item = json.loads(Path('artifacts/workbench-ci/evidence/captured-hit/item.json').read_text())
           for slot in item['vfxManifest']['slots']:
               if slot.get('rendererKind') == 'libraryParticle' and slot.get('event') == 'on_hit':
                   slot['particle']['textureId'] = 'shineFlare'
