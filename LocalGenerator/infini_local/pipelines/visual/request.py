@@ -297,9 +297,9 @@ def _request_visual_kit(
     raw = llm_chat_json(with_llm_stage(request, "visual_repair" if repair else "visual_director"), timeout=env_int("INFINI_LLM_TIMEOUT", int(GENERATION_DEFAULTS["INFINI_LLM_TIMEOUT"])))
     content = raw["choices"][0]["message"]["content"]
     trace_event("response", "LLM:" + stage_name, "Visual stage response", {"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")}, response=content)
+    effective_format = effective_response_format(request, raw)
     try:
         parsed = parse_first_valid_llm_json(content)
-        effective_format = effective_response_format(request, raw)
         # Repair's object-or-null blocks have no semantic discriminator. Select the
         # object branch by container type, not by whether invalid authored leaves
         # happen to validate; those leaves must still reach exact-scope Repair.
@@ -316,4 +316,7 @@ def _request_visual_kit(
     except (ValueError, TypeError) as exc:
         if repair:
             raise PlannerUnavailable(f"Visual Repair returned malformed JSON: {type(exc).__name__}: {exc}") from exc
-        return MalformedVisualDirectorOutput(raw_text=str(content), error=f"{type(exc).__name__}: {exc}")
+        return MalformedVisualDirectorOutput(
+            raw_text=str(content), error=f"{type(exc).__name__}: {exc}",
+            response_format=copy.deepcopy(effective_format),
+        )
