@@ -24,7 +24,7 @@ public sealed class WorkbenchObserverFixture : Mod
         // returned Asset must remain unloaded even with ImmediateLoad.
         var deferred = ModContent.Request<Texture2D>("WorkbenchObserverFixture/ServerAssetRequest", AssetRequestMode.ImmediateLoad);
         if (deferred.IsLoaded) throw new InvalidOperationException("Server unexpectedly loaded a client texture");
-        if (Environment.GetEnvironmentVariable("IFC_FIXTURE_EXPECT_SERVER") == "1" && Main.netMode != NetmodeID.Server)
+        if (Environment.GetEnvironmentVariable("IFC_FIXTURE_EXPECT_SERVER") == "1" && (Main.netMode != NetmodeID.Server || Main.myPlayer != 255))
             throw new InvalidOperationException("Fixture expected server network mode during Load");
         if (Environment.GetEnvironmentVariable("IFC_FIXTURE_EXPECT_SERVER") == "1")
             AddContent(new ProbeMount());
@@ -219,7 +219,7 @@ public sealed class ProbeSystem : ModSystem
     public override void OnWorldLoad() => Observation.Reset();
     public override void PostUpdateEverything()
     {
-        if (Environment.GetEnvironmentVariable("IFC_FIXTURE_EXPECT_SERVER") == "1" && Main.netMode != NetmodeID.Server)
+        if (Environment.GetEnvironmentVariable("IFC_FIXTURE_EXPECT_SERVER") == "1" && (Main.netMode != NetmodeID.Server || Main.myPlayer != 255))
             throw new InvalidOperationException("Fixture expected server network mode during the scene");
         Observation.Hit("ModSystem.PostUpdateEverything");
         if (Main.GameUpdateCount % 10 == 0) Observation.Flush();

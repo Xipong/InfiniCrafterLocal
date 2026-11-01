@@ -30,6 +30,12 @@ def main():
                     {'tick': 0, 'kind': 'primary'}, {'tick': 1, 'kind': 'release'}],
         'assertions': [{'kind': 'spawned'}, {'kind': 'dummy_damaged'},
                        {'kind': 'all_inactive'}, {'kind': 'no_nonfinite'}]}
+    if args.server_mode:
+        # A dedicated server has no local client to drive item firing. Exercise
+        # its real mount, NPC and ModSystem lifecycle without inventing shots.
+        scenario['ticks'] = 2
+        scenario['actions'] = []
+        scenario['assertions'] = [{'kind': 'no_nonfinite'}]
     with tempfile.TemporaryDirectory(prefix='ifc-multiple-mods-') as directory:
         temp = Path(directory)
         scene = temp / 'scenario.json'
@@ -75,6 +81,12 @@ def main():
         if trace['combat']['spawns'] < 1 or trace['combat']['hits'] < 1:
             raise AssertionError(f'Dependent item did not hit using dependency projectile: {trace["combat"]}')
         counts = (observation or {}).get('counts', {})
+        if args.server_mode:
+            for hook in ('GlobalNPC.OnSpawn', 'ModNPC.AI', 'ModSystem.PostUpdateEverything'):
+                if counts.get(hook, 0) < 1:
+                    raise AssertionError(f'Server hook {hook} did not run: {counts}')
+            print('Native server mode and player index retained during actual mount, NPC and system hooks: PASS')
+            return 0
         for hook in ('ModProjectile.AI', 'ModProjectile.OnHitNPC', 'GlobalProjectile.OnSpawn', 'GlobalNPC.OnSpawn'):
             if counts.get(hook, 0) < 1:
                 raise AssertionError(f'Dependency gameplay hook {hook} did not run: {counts}')

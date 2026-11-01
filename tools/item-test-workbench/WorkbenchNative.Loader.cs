@@ -46,10 +46,11 @@ internal sealed class WNativeLoader : IDisposable
         Terraria.Program.SavePath = sandbox;
         Main.dedServ = true;
         Main.netMode = serverMode ? NetmodeID.Server : NetmodeID.SinglePlayer;
+        Main.myPlayer = serverMode ? 255 : 0;
         int expectedNetworkMode = Main.netMode;
         void CheckNetworkMode() {
-            if (Main.netMode != expectedNetworkMode)
-                throw new InvalidOperationException($"Native loader network mode changed: expected {expectedNetworkMode}, observed {Main.netMode}");
+            if (Main.netMode != expectedNetworkMode || Main.myPlayer != (serverMode ? 255 : 0))
+                throw new InvalidOperationException($"Native loader network context changed: mode={Main.netMode}, localPlayer={Main.myPlayer}");
         }
         Main.rand = new Terraria.Utilities.UnifiedRandom(1);
         // LocalizationLoader.Autoload adds mod GameTips to this real engine
