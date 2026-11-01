@@ -102,7 +102,7 @@ jobs:
           dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj -p:TmlVersion=2026.08.3.0
           dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj -p:TmlVersion=2026.08.3.0
           python - <<'PY'
-          import json, os
+          import json, os, shutil
           from pathlib import Path
           data = json.loads(Path('ModSources/InfiniCrafterLocal/obj/project.assets.json').read_text())
           packages = [entry for name, entry in data['libraries'].items() if name.lower().startswith('tmodloader/')]
@@ -110,8 +110,13 @@ jobs:
           refs = [Path(root) / packages[0]['path'] / 'lib/net8.0' for root in data['packageFolders']]
           refs = [path.resolve() for path in refs if (path / 'tModLoader.dll').is_file()]
           if len(refs) != 1: raise SystemExit('Expected one tModLoader reference directory')
+          runtime = list((Path(os.environ['RUNNER_TEMP']) / 'tml').glob('Libraries/**/runtimes/linux/lib/net8.0/Steamworks.NET.dll'))
+          if len(runtime) != 1: raise SystemExit(f'Expected one official Linux Steamworks.NET runtime, found {runtime}')
+          runtime_refs = Path(os.environ['RUNNER_TEMP']) / 'tml-workbench-references'
+          shutil.copytree(refs[0], runtime_refs)
+          shutil.copyfile(runtime[0], runtime_refs / 'Steamworks.NET.dll')
           with open(os.environ['GITHUB_ENV'], 'a') as stream:
-              stream.write(f'INFINI_TML_REFERENCE_DIR={refs[0]}\n')
+              stream.write(f'INFINI_TML_REFERENCE_DIR={runtime_refs}\n')
           PY
       - name: Build workbench
         working-directory: ifc
