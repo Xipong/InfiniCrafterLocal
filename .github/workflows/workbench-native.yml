@@ -29,7 +29,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libegl1 libgl1 libgl1-mesa-dri libopenal1
-          python -m pip install -r LocalGenerator/requirements-dev.lock
+          python -m pip install pillow==12.3.0
       - name: Install pinned tModLoader native libraries
         shell: bash
         run: |
