@@ -326,7 +326,7 @@ internal static partial class EngineRuntimeChecks
         typeof(SystemLoader).GetMethod("PostUpdateEverything", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, null);
         Console.WriteLine(JsonSerializer.Serialize(new { status = "passed", loader.ContentCount,
             productionAssembly = loader.Mod.Code.Location, nativePlayerAttached = true, npcSpawnHook = true,
-            missingIfcModDependencies = loader.MissingIfcDependencies, networkMode = Main.netMode, requestedServerMode = serverMode,
+            missingIfcModDependencies = loader.MissingIfcDependencies, networkMode = Terraria.Main.netMode, requestedServerMode = serverMode,
             additionalMods = loader.AdditionalMods.Select(m => new { name = m.Name, assembly = m.Code.Location }).ToArray(),
             additionalMod = loader.AdditionalMod is null ? null : new { name = loader.AdditionalMod.Name,
                 assembly = loader.AdditionalMod.Code.Location,
