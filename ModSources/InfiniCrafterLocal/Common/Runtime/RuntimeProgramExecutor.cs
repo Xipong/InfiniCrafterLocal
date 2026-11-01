@@ -34,6 +34,7 @@ internal static class RuntimeProgramExecutor
         => action.ActionCode switch
         {
             RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.HealOwner or RuntimeEventActionCode.MoveOwner
+                or RuntimeEventActionCode.EndProjectiles
                 => InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner),
             RuntimeEventActionCode.ApplyNpcEffect => InfiniRuntimeAuthority.ShouldRunNpcGameplay(),
             RuntimeEventActionCode.ApplyGeneratedBuff => InfiniRuntimeAuthority.ShouldRunPlayerGameplay(owner),
@@ -157,8 +158,45 @@ internal static class RuntimeProgramExecutor
             case RuntimeEventActionCode.MoveOwner:
                 MoveOwner(action, owner, eventPosition);
                 break;
+            case RuntimeEventActionCode.EndProjectiles:
+                EndProjectiles(data, sourceEntity, action, owner);
+                break;
             default:
                 return;
+        }
+    }
+
+    private static void EndProjectiles(GeneratedItemData data, RuntimeEntitySpec sourceEntity,
+        RuntimeEventActionSpec action, Player owner)
+    {
+        if (sourceEntity.Kind != RuntimeEntityKind.ItemBody || action.Action != "end_projectiles" || action.Event != RuntimeEventKind.OnUse
+            || action.DelayTicks != 0
+            || data.RuntimeProgram.TryGetEntity(action.EntityId)?.IsProjectileEntity != true)
+            return;
+
+        // Capture the whole native pool before calling Kill: an authored on_kill
+        // action may spawn children or recycle a later slot in this same use.
+        var targets = new List<(int Slot, Projectile Projectile, int Identity, GeneratedProjectile Instance)>();
+        for (int slot = 0; slot < Main.maxProjectiles; slot++)
+        {
+            Projectile projectile = Main.projectile[slot];
+            if (projectile is not { active: true } || projectile.owner != owner.whoAmI
+                || projectile.ModProjectile is not GeneratedProjectile generated
+                || !generated.Matches(data.Id, action.EntityId))
+                continue;
+            targets.Add((slot, projectile, projectile.identity, generated));
+        }
+        foreach (var target in targets)
+        {
+            Projectile projectile = target.Projectile;
+            if (!projectile.active || projectile.whoAmI != target.Slot || projectile.owner != owner.whoAmI
+                || projectile.identity != target.Identity || !ReferenceEquals(Main.projectile[target.Slot], projectile)
+                || !ReferenceEquals(projectile.ModProjectile, target.Instance)
+                || !target.Instance.Matches(data.Id, action.EntityId))
+                continue;
+            // Native termination owns hooks, synchronization and the existing
+            // terminal event semantics. This action does not invent an expiry.
+            projectile.Kill();
         }
     }
 

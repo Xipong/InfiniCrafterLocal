@@ -145,6 +145,9 @@ Exact-repetition policy: `{'kind': 'exact_repetition', 'minimumRepeatedPlacement
 | move_forward_then_retract | runtimeProgram.entities[].movement.code | 19 |
 | move_front_hand | runtimeProgram.entities[].movement.name | 'move_front_hand' |
 | move_front_hand | runtimeProgram.entities[].movement.code | 20 |
+| end_projectiles | runtimeProgram.entities[].events[].delayTicks | 0 |
+| end_projectiles | runtimeProgram.entities[].events[].action | 'end_projectiles' |
+| end_projectiles | runtimeProgram.entities[].events[].actionCode | 12 |
 | channel_beam | runtimeProgram.entities[].controller.name | 'channel_beam' |
 | channel_beam | runtimeProgram.entities[].controller.code | 1 |
 | charge_then_release | runtimeProgram.entities[].controller.name | 'charge_then_release' |
@@ -228,6 +231,7 @@ Typed structured choices и конечные enum-отображения так�
 | attract_npcs.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
 | sprite_scale_curve.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
 | projectile_collision.immunity | (('immunity', 'npcImmunityMode', True), ('immunity', 'localNpcHitCooldownTicks', True), ('immunity.localCooldown', 'localNpcHitCooldownTicks', False)) |
+| end_projectiles.when | (('when', 'event', False), ('when.on', 'event', False), ('when.useInput', 'useInput', False)) |
 | spawn_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.useInput', 'useInput', False), ('when', 'event', True), ('when.everySeconds', 'periodTicks', False), ('when.cooldown', 'reactionCooldownTicks', False)) |
 | spawn_at_hit.geometry | (('geometry', 'spreadRadians', True), ('geometry.beforeProbability', 'hitTargetSpawn.beforeProbability', False), ('geometry.hitboxMaxSideFactor', 'hitTargetSpawn.hitboxMaxSideFactor', False), ('geometry.clearanceBlocks', 'hitTargetSpawn.clearancePx', False), ('geometry.beforeJitterRadius', 'hitTargetSpawn.beforePositionJitterRadiusPx', False), ('geometry.beforeAngleJitter', 'hitTargetSpawn.beforeDirectionJitterRadians', False), ('geometry.afterFanSpread', 'hitTargetSpawn.afterFanSpreadRadians', False), ('geometry.ignoreTargetUpdates', 'hitTargetSpawn.initialIgnoreCountdownUpdates', False)) |
 | generated_buff_on_event.when | (('when.on', 'event', False), ('when.cooldown', 'reactionCooldownTicks', False)) |
@@ -450,6 +454,7 @@ Event actions:
 | generated_buff_on_event | 9 |
 | damage_nearby_on_event | 10 |
 | npc_effect_on_event | 11 |
+| end_projectiles | 12 |
 
 ### Entity kind → visual role
 

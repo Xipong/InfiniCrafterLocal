@@ -119,6 +119,10 @@ public sealed class RuntimeProgramSpec
             if (action.ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit
                 && !RuntimeEventActionSpec.SupportsTargetEmission(child))
                 throw new InvalidDataException("target emission requires the exact referenced spawn before normalization");
+            if (action.ActionCode == RuntimeEventActionCode.EndProjectiles
+                && (source?.Kind != RuntimeEntityKind.ItemBody || action.Event != RuntimeEventKind.OnUse
+                    || child is null || !child.IsProjectileEntity))
+                throw new InvalidDataException("end_projectiles requires item_body on_use and an exact projectile entity reference");
             if (action.HitTargetSpawn is not null
                 && (source is null || !source.IsProjectileEntity || !RuntimeEventActionSpec.SupportsTargetEmission(child)))
                 throw new InvalidDataException("target-relative emission requires exact source and referenced spawn before normalization");
@@ -320,6 +324,35 @@ public sealed class RuntimeProgramSpec
         if (eventSpawnBudget + Math.Max(primaryUseSpawnBudget, alternateUseSpawnBudget) > Limits.MaxEventSpawnsPerActivation)
             throw new InvalidDataException("runtime event spawn budget exceeded");
         ValidateAcyclicBoundedGraph(graph, Limits.MaxChildDepth);
+        ValidateEndProjectileTargets(item);
+    }
+
+    private void ValidateEndProjectileTargets(RuntimeEntitySpec item)
+    {
+        RuntimeEventActionSpec[] commands = item.Events.Where(action => action.ActionCode == RuntimeEventActionCode.EndProjectiles).ToArray();
+        if (commands.Length == 0) return;
+        var reachable = new HashSet<string>(StringComparer.Ordinal) { item.Id };
+        var pending = new Queue<RuntimeEntitySpec>();
+        pending.Enqueue(item);
+        void AddSpawn(string entityId)
+        {
+            RuntimeEntitySpec? entity = TryGetEntity(entityId);
+            if (entity?.IsProjectileEntity != true || !entity.Spawn.Enabled || !reachable.Add(entity.Id)) return;
+            pending.Enqueue(entity);
+        }
+        foreach (RuntimeBindingSpec binding in Bindings)
+            if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity) AddSpawn(binding.UsePolicy.Action.TargetId);
+        while (pending.TryDequeue(out RuntimeEntitySpec? entity))
+        {
+            foreach (RuntimeEventActionSpec action in entity.Events)
+                if (action.ActionCode is RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.SelectTargetsAndEmit)
+                    AddSpawn(action.EntityId);
+            if (entity.Controller.Code == RuntimeControllerCode.TargetAndFire) AddSpawn(entity.Targeting.ShotEntityId);
+        }
+        // A command addresses actors that the item can create; it is never a
+        // spawn edge that makes an otherwise unreachable entity executable.
+        if (commands.Any(action => !reachable.Contains(action.EntityId)))
+            throw new InvalidDataException("end_projectiles target requires an executable spawn path from this item");
     }
 
     private static void ValidateAcyclicBoundedGraph(Dictionary<string, HashSet<string>> graph, int maxDepth)
@@ -1868,6 +1901,7 @@ public static class RuntimeEventActionCode
     public const int ApplyGeneratedBuff = 9;
     public const int DamageNearby = 10;
     public const int ApplyNpcEffect = 11;
+    public const int EndProjectiles = 12;
 }
 
 public sealed class RuntimeHitTargetSpawnSpec
@@ -2151,6 +2185,15 @@ public sealed class RuntimeEventActionSpec
 
     public void NormalizeAndValidate()
     {
+        if (ActionCode == RuntimeEventActionCode.EndProjectiles
+            && (Action != "end_projectiles" || Event != RuntimeEventKind.OnUse
+                || string.IsNullOrEmpty(EntityId) || EntityId != RuntimeText.IdOptional(EntityId)
+                || DelayTicks != 0 || Count != 1 || SpreadRadians != 0f || DamageMultiplier != 1f
+                || PeriodTicks != 0 || BuffId != -1 || DurationTicks != 0 || RadiusPx != 0
+                || RangeTiles != 0f || Mode != "" || Strength != 0f || RadiusTiles != 0f
+                || DamageFraction != 0f || MaxHeal != 0 || CooldownTicks != 0 || !SafeTileOnly
+                || ReactionCooldownTicks != 0))
+            throw new InvalidDataException("end_projectiles requires an exact on_use event and projectile reference, without delayed or foreign action fields");
         if (ActionCode == RuntimeEventActionCode.ApplyNpcEffect)
         {
             if (Action != "apply_npc_effect_on_event" || Event is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
@@ -2184,7 +2227,7 @@ public sealed class RuntimeEventActionSpec
         EntityId = RuntimeText.IdOptional(EntityId);
         if (!RuntimeEventKind.IsKnown(Event))
             throw new InvalidDataException($"unknown runtime event '{Event}'");
-        if (ActionCode < RuntimeEventActionCode.SpawnEntity || ActionCode > RuntimeEventActionCode.ApplyNpcEffect)
+        if (ActionCode < RuntimeEventActionCode.SpawnEntity || ActionCode > RuntimeEventActionCode.EndProjectiles)
             throw new InvalidDataException($"unsupported event action opcode {ActionCode}");
         if (!string.Equals(Action, RuntimeOpcodeNames.EventActionName(ActionCode), StringComparison.Ordinal))
             throw new InvalidDataException($"event action name/opcode mismatch '{Action}'/{ActionCode}");
@@ -2333,6 +2376,7 @@ internal static class RuntimeOpcodeNames
         "", "spawn_entity_on_event", "apply_status_on_event", "damage_area_on_event",
         "chain_damage_on_event", "pull_on_event", "heal_owner_on_event", "move_owner_on_event",
         "select_targets_and_emit_on_event", "apply_generated_buff_on_event", "damage_nearby_on_event", "apply_npc_effect_on_event",
+        "end_projectiles",
     };
     public static string MovementName(int code) => code >= 0 && code < MovementNames.Length ? MovementNames[code] : "";
     public static string ControllerName(int code) => code >= 0 && code < ControllerNames.Length ? ControllerNames[code] : "";

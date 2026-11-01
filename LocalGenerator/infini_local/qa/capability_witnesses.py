@@ -167,10 +167,19 @@ def _binding(
 def build_capability_witness(fn: str) -> dict[str, Any]:
     if fn not in CAPABILITY_REGISTRY or not CAPABILITY_REGISTRY[fn].author_visible:
         raise KeyError(fn)
-    if fn == "weapon_ammo":
+    if fn in {"weapon_ammo", "end_projectiles"}:
         doc = build_capability_witness("move_straight")
         next(row for row in doc["runtimeProgram"]["calls"] if row["id"] == "witness_call")["id"] = "base_motion"
-        doc["runtimeProgram"]["calls"].append(_call("witness_call", fn, "item"))
+        if fn == "end_projectiles":
+            doc["runtimeProgram"]["bindings"].append(_binding("command", "alternate_use", "use_item_body", "item"))
+            doc["runtimeProgram"]["calls"].append(_call("witness_call", fn, "item", {
+                "when": {"on": "on_use", "useInput": "alternate_use"}, "entity": "witness_entity",
+            }))
+            doc["runtimeProgram"]["calls"].append(_call("terminal_blast", "damage_nearby_on_event", "witness_entity", {
+                "when": "on_kill", "radius": 3, "damageMultiplier": 0.5, "maxTargets": 8,
+            }))
+        else:
+            doc["runtimeProgram"]["calls"].append(_call("witness_call", fn, "item"))
         doc["name"] = f"Capability Witness {fn}"
         doc["concept"]["coreMechanic"] = f"Execute {fn} through its public typed contract."
         doc["realization"]["description"] = f"A minimal runtime witness executing {fn}."

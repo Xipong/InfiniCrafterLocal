@@ -2353,6 +2353,7 @@
                           "move_whip_lash",
                           "move_forward_then_retract",
                           "move_front_hand",
+                          "end_projectiles",
                           "channel_beam",
                           "charge_then_release",
                           "target_and_fire",
