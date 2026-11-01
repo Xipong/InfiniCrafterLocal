@@ -88,7 +88,7 @@ def install_file(root: Path, entry: dict, fetch=download) -> bool:
 
 def setup_particle(deps_root: Path, manifest: dict, fetch=download) -> dict:
     """Prepare the real pinned DLL and assets in the standard dependency layout."""
-    root = deps_root.absolute()
+    root = deps_root.expanduser().absolute()
     if root.is_symlink() or (root.exists() and not root.is_dir()):
         raise ValueError("Dependency root must be a directory, not a symlink")
     installed = manifest["installedDll"]

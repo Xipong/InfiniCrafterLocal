@@ -21,6 +21,30 @@ def arguments(*values):
 
 
 class ProbeTests(unittest.TestCase):
+    def test_single_tick_equipment_and_idle_do_not_require_release(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            item = root / "accessory.json"
+            for name in ("item.png", "overlay.png"):
+                (root / name).write_bytes(b"artwork")
+            item.write_text(json.dumps({"visual": {"spritePath": "item.png", "equipOverlayPath": "overlay.png"},
+                "accessory": {"enabled": True}, "runtimeProgram": {"bindings": [
+                    {"input": "equipped", "usePolicy": {"action": {"kind": "equip_passive"}}}]}}))
+            equip = probe.plan_probe(arguments("--item", item, "--gif", "--ticks", "1"))
+            self.assertEqual(equip["cases"][0]["input"], "equip")
+            self.assertEqual(equip["scenes"]["001-equip"]["actions"][-1], {"tick": 0, "kind": "equip"})
+            idle = probe.plan_probe(arguments("--item", item, "--gif", "--ticks", "1", "--input", "idle"))
+            self.assertEqual([a["kind"] for a in idle["scenes"]["001-idle"]["actions"]], ["aim"])
+            zombie = probe.plan_probe(arguments("--item", item, "--gif", "--target", "zombie"))
+            scene = zombie["scenes"]["001-equip"]
+            self.assertEqual(scene["dummy"]["nativeType"], "zombie")
+            self.assertTrue(scene["nativeRender"]["drawZombie"])
+            with self.assertRaisesRegex(ValueError, "release"):
+                probe.plan_probe(arguments("--item", item, "--gif", "--ticks", "1", "--input", "primary"))
+            for bad in ("null", "[]"):
+                with self.subTest(nativeRender=bad), self.assertRaises(ValueError):
+                    probe.plan_probe(arguments("--item", item, "--gif", "--set", "nativeRender=" + bad))
+
     def test_equipped_only_bindings_select_equip_for_each_item(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

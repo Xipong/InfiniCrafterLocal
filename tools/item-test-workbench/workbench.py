@@ -712,7 +712,7 @@ def main():
     try:
         if args.command in ("setup-particle","setup-luminance","setup-vfx"):
             from fetch_vfx_assets import MANIFEST,setup_particle
-            root=args.deps_root or Path(os.environ.get("INFINI_TML_DEPS_SRC",ROOT/"artifacts/dependencies"))
+            root=(args.deps_root or Path(os.environ.get("INFINI_TML_DEPS_SRC",ROOT/"artifacts/dependencies"))).expanduser()
             if args.command=="setup-particle":result=setup_particle(root,read_json(MANIFEST))
             else:
                 from fetch_luminance import setup_luminance

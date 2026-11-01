@@ -100,6 +100,19 @@ class PlayerAssetsTests(unittest.TestCase):
         self.manifest['trainingDummyFiles'] = self.manifest['files'][:2]
         with self.assertRaises(ValueError): fetcher.provision(self.root, self.manifest, self.download, include_dummy=True)
         self.assertEqual(self.calls, [])
+    def test_optional_zombie_download_and_default_unchanged(self):
+        name = 'NPC_3.png'
+        self.manifest['zombieFiles'] = [dict(path='Images/' + name, sourceURL=fetcher.PREFIX + name,
+            sha256=hashlib.sha256(self.data).hexdigest(), bytes=len(self.data), width=1, height=1)]
+        self.assertEqual(self.provision()['verifiedFiles'], 20)
+        result = fetcher.provision(self.root, self.manifest, self.download, include_zombie=True)
+        self.assertEqual((result['downloaded'], result['reused'], result['verifiedFiles']), (1, 20, 21))
+        self.assertTrue(result['includesZombie'])
+        self.assertEqual(self.provision()['verifiedFiles'], 20)
+    def test_optional_zombie_wrong_manifest_refused_before_download(self):
+        self.manifest['zombieFiles'] = self.manifest['files'][:1]
+        with self.assertRaises(ValueError): fetcher.provision(self.root, self.manifest, self.download, include_zombie=True)
+        self.assertEqual(self.calls, [])
     def test_bundled_metadata_exact_allowlist(self):
         manifest = json.loads(fetcher.MANIFEST.read_text())
         self.assertEqual(manifest['commit'], fetcher.COMMIT)

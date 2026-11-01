@@ -25,7 +25,7 @@ FILES = {
 
 
 def setup_luminance(deps_root: Path, fetch=download) -> dict:
-    root = deps_root.absolute()
+    root = deps_root.expanduser().absolute()
     if root.is_symlink() or (root.exists() and not root.is_dir()):
         raise ValueError("Dependency root must be a directory, not a symlink")
     dll = {"path": "Luminance/bin/Debug/net8.0/Luminance.dll", "sourceURL": DLL_URL,

@@ -125,6 +125,13 @@ interaction; ammunition is never guessed. `--gif-stride` samples only the GIF; b
 (repeat for up to four types; default stack 100). Native admission checks the
 item type and maximum stack. `--aim X Y` sets the initial cursor in world pixels;
 later explicit aim actions can change it.
+Use `--target zombie` to test native zombie hit feedback with a stationary
+controlled target. For GIF capture, fetch its pinned community PNG once with
+`fetch_player_assets.py --out /path/to/player-assets --include-zombie` and set
+`INFINI_PLAYER_ASSET_DIR` to that directory. The target uses original
+`NPC.FindFrame` / `Main.DrawNPC`; its AI is disabled, hitbox is set to 32×48,
+and life is set to 10,000 by this controlled scenario. It does not simulate
+world AI or natural spawning.
 When no `--input` is given, an item whose authored bindings exclusively specify
 `equipped` / `equip_passive` uses `equip`; other items use `primary`. The selected
 input is shown in the plan. Explicit `--input` always takes precedence.
@@ -563,7 +570,8 @@ In `client_vfx` with `drawNativeDust=true`, `native_npc_hit_effect` events obser
 the target and the dust slots newly active during that call; the observer does
 not create dust. A training dummy can legitimately produce no such dust, while
 the controlled `dummy.nativeType: "zombie"` exercises native NPC hit effects.
-The controlled zombie currently has no NPC artwork unless separately rendered.
+`nativeRender.drawZombie=true` also draws its verified source PNG through the
+original NPC renderer; its controlled, stationary AI is not a full NPC simulation.
 
 ### Equipment reactions and secondary targets
 

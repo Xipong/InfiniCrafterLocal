@@ -105,6 +105,7 @@ internal static partial class EngineRuntimeChecks
         bool drawPlacedBodies=scenario["nativeRender"]?["drawPlacedBodies"]?.GetValue<bool>()??false;
         bool drawArtwork=scenario["nativeRender"]?["drawArtwork"]?.GetValue<bool>()??false;
         bool drawPlayer=scenario["nativeRender"]?["drawPlayer"]?.GetValue<bool>()??false;
+        bool drawZombie=scenario["nativeRender"]?["drawZombie"]?.GetValue<bool>()??false;
         bool drawProjectileVfx=scenario["nativeRender"]?["drawProjectileVfx"]?.GetValue<bool>()??false;
         bool historyRibbon=data?.VfxManifest.Slots.Any(s=>s.RendererKind=="historyRibbon")==true;
         bool historyTrail=data?.VfxManifest.Slots.Any(s=>s.RendererKind=="historyTrail")==true;
@@ -113,6 +114,8 @@ internal static partial class EngineRuntimeChecks
         if(drawVanillaProjectiles && (data is not null || !drawPlayer))throw new NotSupportedException("drawVanillaProjectiles requires a vanilla item and drawPlayer=true");
         if((scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false)&&!drawPlayer&&!drawProjectileVfx)throw new ArgumentException("drawNativeDust requires drawPlayer or drawProjectileVfx with verified native assets");
         if(nativeDummy&&!drawPlayer)throw new ArgumentException("native_training_dummy requires nativeRender.drawPlayer=true");
+        if(drawZombie && (!renderClient || !drawPlayer || nativeDummy || scenario["dummy"]?["nativeType"]?.GetValue<string>()!="zombie"))
+            throw new ArgumentException("drawZombie requires client_vfx, drawPlayer=true and dummy.nativeType=zombie");
         if(!nativeDummy&&scenario["nativeRender"]?["dummyAssetRoot"] is not null)throw new ArgumentException("dummyAssetRoot requires native_training_dummy");
         if(drawPlayer&&!drawArtwork)throw new ArgumentException("drawPlayer requires drawArtwork=true");
         if(!drawPlayer&&!drawProjectileVfx&&scenario["nativeRender"]?["playerAssetRoot"] is not null)throw new ArgumentException("playerAssetRoot requires drawPlayer or drawProjectileVfx");
@@ -424,6 +427,7 @@ internal static partial class EngineRuntimeChecks
                 if(renderClient){Terraria.TimeLogger.Initialize();Terraria.Main.gameMenu=false;Terraria.Main.mapEnabled=false;
                 for(int lightingPhase=0;lightingPhase<4;lightingPhase++){nativeRenderer!.StepLighting();}}
                 using var playerAssets=(drawPlayer||drawProjectileVfx)?new WNativePlayerAssets(graphics!,scenario["nativeRender"]?["playerAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR")??throw new ArgumentException("Native procedural/player draw requires playerAssetRoot or INFINI_PLAYER_ASSET_DIR")):null;
+                using var zombie=drawZombie?new WNativeZombieRender(graphics!,dummy,scenario["nativeRender"]?["playerAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR")??throw new ArgumentException("drawZombie requires playerAssetRoot or INFINI_PLAYER_ASSET_DIR")):null;
                 using var pixelAssets=renderClient&&!drawPlayer&&!drawProjectileVfx?new WNativeMagicPixelAssets(graphics!,scenario["nativeRender"]?["playerAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR")??throw new ArgumentException("Native VFX requires playerAssetRoot or INFINI_PLAYER_ASSET_DIR for genuine MagicPixel")):null;
                 if(pixelAssets is not null)nativeRenderer!.Report["magicPixelResource"]=pixelAssets.Report.DeepClone();
                 if(trainingDummy is not null)trainingDummy.InitializeGraphics(graphics!,scenario["nativeRender"]?["dummyAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_DUMMY_ASSET_DIR")??scenario["nativeRender"]?["playerAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR")??throw new ArgumentException("native_training_dummy requires dummyAssetRoot or playerAssetRoot containing genuine dummy assets"));
@@ -436,13 +440,17 @@ internal static partial class EngineRuntimeChecks
                 if(nativeRenderer!=null) {
                     if(playerAssets is not null)nativeRenderer.Report["playerAssets"]=playerAssets.Report;
                     if(activeVfx is not null)report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create("InfiniVfxRuntime.Draw under/over passes with native GeneratedProjectile history; DrawTrail/SpriteBatch submissions observed"));
-                    if(artwork is not null) {if(drawPlayer){artwork.EnableNativePlayer();if(drawVanillaProjectiles)artwork.EnableNativeVanillaProjectiles();report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create(data is null?"Main.PlayerRenderer.DrawPlayers / native vanilla held-item DrawData":"Main.PlayerRenderer.DrawPlayers / PlayerDrawLayerLoader / GeneratedItem.ModifyItemDraw / ProjectileLoader.PreDraw/PostDraw"));}nativeRenderer.SetArtwork(artwork);if(playerAssets is not null)nativeRenderer.Report["playerAssets"]=playerAssets.Report;report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create(data is null?"PlayerDrawLayers.DrawPlayer_27_HeldItem / Dust.UpdateDust / Lighting.LightTiles":"GeneratedHeldItemDrawLayer.Draw / GeneratedItem.PreDrawInInventory / GeneratedProjectile.DrawAuthoredEntityVisual / InfiniDetachedVfxSystem.DrawProjectiles / Dust.UpdateDust / Lighting.LightTiles"));}
+                    if(artwork is not null) {if(drawPlayer){artwork.EnableNativePlayer();if(drawVanillaProjectiles)artwork.EnableNativeVanillaProjectiles(vanillaProjectileAssets!);report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create(data is null?"Main.PlayerRenderer.DrawPlayers / native vanilla held-item DrawData":"Main.PlayerRenderer.DrawPlayers / PlayerDrawLayerLoader / GeneratedItem.ModifyItemDraw / ProjectileLoader.PreDraw/PostDraw"));}nativeRenderer.SetArtwork(artwork);if(playerAssets is not null)nativeRenderer.Report["playerAssets"]=playerAssets.Report;report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create(data is null?"PlayerDrawLayers.DrawPlayer_27_HeldItem / Dust.UpdateDust / Lighting.LightTiles":"GeneratedHeldItemDrawLayer.Draw / GeneratedItem.PreDrawInInventory / GeneratedProjectile.DrawAuthoredEntityVisual / InfiniDetachedVfxSystem.DrawProjectiles / Dust.UpdateDust / Lighting.LightTiles"));}
                     if(scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false){
                         report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create("Main.DrawDust (original stateful native rendering; capture controls PNG export only)"));
                         var unsupported=report["execution"]!["unsupported"]!.AsArray();for(int u=0;u<unsupported.Count;u++)unsupported[u]=unsupported[u]!.GetValue<string>().Replace(" and native dust sprites","").Replace("native dust sprites, ","").Replace("native dust sprite rendering", "complete world rendering").Replace("/dust rendering", "/world rendering");
                     }
                     if(drawVanillaProjectiles){nativeRenderer.Report["vanillaProjectileAssets"]=vanillaProjectileAssets!.Report;report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create("Main.DrawProj (original vanilla projectile rendering)"));}
                     report["nativeRender"]=nativeRenderer.Report;if(trainingDummy is not null)nativeRenderer.SetTrainingDummy(trainingDummy);
+                    if(zombie is not null){nativeRenderer.SetZombie(zombie);report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create("NPC.FindFrame / Main.DrawNPC (original controlled zombie)"));
+                        report["execution"]!["scope"]="Actual client Player.Update, projectile simulation and controlled zombie NPC.UpdateNPC with AI disabled; original NPC.FindFrame and Main.DrawNPC; no full world or NPC AI parity";
+                        report["execution"]!["clientGraphics"]!["scope"]=report["execution"]!["scope"]!.DeepClone();
+                        var unsupported=report["execution"]!["unsupported"]!.AsArray();for(int u=0;u<unsupported.Count;u++)unsupported[u]=unsupported[u]!.GetValue<string>().Replace("tile/NPC/world","tile/world and other NPC").Replace("world/NPCs/","world/other NPCs/");}
                     report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create("InfiniDetachedVfxSystem.PostUpdateEverything / BeginDrawBudgetFrame / DrawLayer (BeforeProjectiles,AfterProjectiles)"));
                     if(!drawArtwork) nativeRenderer.Report["unrenderedArtwork"]=new JsonArray((data?.RuntimeProgram.Entities ?? Array.Empty<RuntimeEntitySpec>()).Select(e=>(JsonNode?)new JsonObject{["entityId"]=e.Id,["kind"]=e.Kind,["path"]=e.Visual.SpritePath,["reason"]="VFX-only draw scope; authored entity artwork is not rendered or substituted"}).ToArray());
                 }
@@ -497,6 +505,7 @@ internal static partial class EngineRuntimeChecks
                         if(nativeDummy)Terraria.Main.dedServ=false;
                         if(clientPlayer) events.Add(new JsonObject{["kind"]="native_phase",["phase"]="NPC.UpdateNPC",["dedServ"]=Terraria.Main.dedServ,["netMode"]=Terraria.Main.netMode,["active"]=dummy.active});
                         if(dummy.active) dummy.UpdateNPC(dummy.whoAmI);
+                        zombie?.UpdateFrame();
                         WUpdateControlledHostiles(events,report);
                         WRequireFinite(dummy,"npc",dummy.whoAmI,"after NPC.UpdateNPC",events,report);
                         if(hybridClient) Terraria.Main.dedServ=false;

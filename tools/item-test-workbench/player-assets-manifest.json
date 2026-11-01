@@ -192,5 +192,16 @@
       "height": 594
     }
   ],
-  "trainingDummyScope": "Optional original tile378 artwork plus NPC488 animation-frame texture. NPC488 is deliberately invisible; the native tile renderer draws the linked tile entity."
+  "trainingDummyScope": "Optional original tile378 artwork plus NPC488 animation-frame texture. NPC488 is deliberately invisible; the native tile renderer draws the linked tile entity.",
+  "zombieFiles": [
+    {
+      "path": "Images/NPC_3.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/NPC_3.png",
+      "sha256": "7fc248f3b3a3c4ea8ea0acd056b5794646f4117dd11e005a3bc132ff3d19b482",
+      "bytes": 1436,
+      "width": 38,
+      "height": 144
+    }
+  ],
+  "zombieScope": "Optional community NPC3 source artwork for native controlled zombie rendering; no complete NPC/world parity."
 }

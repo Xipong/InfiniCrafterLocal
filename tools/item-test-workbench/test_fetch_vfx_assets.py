@@ -93,6 +93,19 @@ class FetchVfxAssetsTests(unittest.TestCase):
         self.assertEqual(install.call_args.args[0], deps)
         self.assertEqual(install.call_args.args[1]["package"], "ParticleLibrary")
 
+    def test_workbench_setup_expands_explicit_home_path(self):
+        import sys
+        from contextlib import redirect_stdout
+        from io import StringIO
+        from unittest.mock import patch
+        import fetch_luminance
+        import workbench
+        with patch.object(sys, "argv", ["workbench", "setup-luminance", "--deps-root", "~/ifc-deps-test"]), \
+             patch.object(fetch_luminance, "setup_luminance", return_value={"status": "verified"}) as install, \
+             redirect_stdout(StringIO()):
+            self.assertEqual(workbench.main(), 0)
+        self.assertEqual(install.call_args.args[0], Path("~/ifc-deps-test").expanduser())
+
     def test_wrong_dll_refuses_before_download(self):
         self.dll.write_bytes(b"wrong DLL")
         with self.assertRaisesRegex(ValueError, "Integrity mismatch"):

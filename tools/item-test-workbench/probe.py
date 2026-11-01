@@ -148,6 +148,11 @@ def plan_probe(args):
         scene["nativeRender"] = {"width": 960, "height": 540, "cameraX": 480, "cameraY": 430,
                                  "zoom": 1.25, "capture": True, "lightingMode": "viewport_fill", "drawArtwork": True,
                                  "drawPlayer": True, "drawNativeDust": True}
+    if args.target == "zombie":
+        # Controlled stationary NPC, not a simulation of world AI or spawning.
+        scene["dummy"] = {"nativeType": "zombie", "x": 848, "y": 700, "width": 32, "height": 48, "life": 10000}
+        if args.gif:
+            scene["nativeRender"]["drawZombie"] = True
     for assignment in args.set:
         set_field(scene, assignment)
     if args.ammo:
@@ -171,11 +176,13 @@ def plan_probe(args):
         raise ValueError("--aim coordinates must be finite and within +/-1000000 pixels")
     ticks = bounded_integer(scene.get("ticks"), 1, 14400, "ticks")
     bounded_integer(args.start, 0, ticks - 1, "--start")
-    hold = bounded_integer(args.hold if args.hold is not None else (min(120, ticks - args.start - 1) if args.gif and args.repeat is None else 1), 1, 14399, "--hold")
+    # Idle/equip require no release; keep a valid placeholder hold even when
+    # only one tick remains. Press inputs still validate their release below.
+    hold = bounded_integer(args.hold if args.hold is not None else (max(1, min(120, ticks - args.start - 1)) if args.gif and args.repeat is None else 1), 1, 14399, "--hold")
     if args.repeat is not None:
         bounded_integer(args.repeat, 2, 14400, "--repeat")
-    if args.gif and (scene.get("playerUpdate") != "client_vfx" or
-                     any(scene.get("nativeRender", {}).get(k) is not True for k in ("capture", "drawArtwork", "drawPlayer"))):
+    if args.gif and (scene.get("playerUpdate") != "client_vfx" or not isinstance(scene.get("nativeRender"), dict) or
+                     any(scene["nativeRender"].get(k) is not True for k in ("capture", "drawArtwork", "drawPlayer"))):
         raise ValueError("--gif requires client_vfx, capture, drawArtwork and drawPlayer; do not disable them with --set")
     if scene.get("playerUpdate") not in ("item_check", "full", "client", "client_hybrid", "client_vfx"):
         raise ValueError("Unknown playerUpdate mode")
@@ -387,6 +394,7 @@ def add_parser(subparsers):
     parser.add_argument("--repeat", type=int, help="Ticks between explicit presses; must exceed hold")
     parser.add_argument("--ammo", action="append", default=[], metavar="ITEM_ID[:STACK]", help="Place explicit vanilla ammunition in slots 54..57 (repeatable, default stack 100)")
     parser.add_argument("--aim", type=float, nargs=2, metavar=("X", "Y"), help="Aim at world pixel coordinates from tick 0")
+    parser.add_argument("--target", choices=("zombie",), help="Use a stationary native zombie as the target (not world AI)")
     parser.add_argument("--set", action="append", default=[], metavar="PATH=JSON", help="Set a scene field, e.g. dummy.x=840 or tiles.0.tileY=44")
     parser.add_argument("--action", action="append", default=[], metavar="JSON", help="Append native actions; same-tick order follows generated input")
     parser.add_argument("--assert", dest="assertions", action="append", default=[], metavar="KIND_OR_JSON", help="Append a native assertion; default only no_nonfinite")

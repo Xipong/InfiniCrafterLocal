@@ -57,7 +57,8 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
     readonly InfiniDetachedVfxSystem system=new();
     readonly SpriteBatch batch;
     readonly RenderTarget2D target;
-    WNativeArtwork? artwork;WNativeTrainingDummy? trainingDummy;
+    WNativeArtwork? artwork;WNativeTrainingDummy? trainingDummy;WNativeZombieRender? zombie;
+    public void SetZombie(WNativeZombieRender value){zombie=value;Report["zombieAssets"]=value.Report.DeepClone();Report["zombieArtworkRendered"]=false;Report["gpuRenderLifecycleEnabled"]=true;Report["captureSemantics"]="Native zombie draw runs every tick; capture controls PNG export only";Report["scope"]="Original native controlled zombie DrawNPC and player/projectile layers on a neutral background; no full world or NPC AI parity";Report["unrenderedArtwork"]=new JsonArray("Terraria tile/world artwork and other NPCs",drawNativeDust?"No additional dust omission":"Native dust sprites");Report["originalDrawEntryPoints"]?.AsArray().Add(JsonValue.Create("Main.DrawNPC (controlled zombie)"));Report["passOrder"]?.AsArray().Insert(0,JsonValue.Create("Original controlled zombie Main.DrawNPC"));}
     public void SetTrainingDummy(WNativeTrainingDummy value){trainingDummy=value;Report["trainingDummy"]=value.Report.DeepClone();Report["scope"]="Original native training dummy tile layer, generated projectile PreDraw/PostDraw and detached VFX, then ordinary native player/held layers; neutral background, no solid terrain/world scene";Report["trainingDummyArtworkRendered"]=false;Report["unrenderedArtwork"]=new JsonArray("Solid terrain/world artwork and other NPCs","native dust sprites");Report["passOrder"]=new JsonArray("TileDrawing non-solid dummy object","InfiniDetachedVfxSystem.DrawProjectiles wrapper / original generated projectile PreDraw/PostDraw","PlayerRenderer.DrawPlayers ordinary unlocked player","Inventory preview (explicit diagnostic UI)");RefreshVanillaReport();}
     public void SetArtwork(WNativeArtwork value) {
         artwork=value;
@@ -75,12 +76,13 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
     void RefreshVanillaReport()
     {
         if(artwork?.NativeVanillaEnabled!=true)return;
-        Report["scope"]="Original native vanilla player/held-item"+(drawVanillaProjectiles?", Main.DrawProj":"")+(drawNativeDust?", Main.DrawDust":"")+(trainingDummy is null?"":", training dummy tile layer")+"; controlled neutral background, not full Main.Draw/world";
+        Report["scope"]="Original native vanilla player/held-item"+(drawVanillaProjectiles?", Main.DrawProj":"")+(drawNativeDust?", Main.DrawDust":"")+(trainingDummy is not null?", training dummy tile layer":zombie is not null?", controlled zombie Main.DrawNPC":"")+"; controlled neutral background, not full Main.Draw/world";
         Report["vanillaProjectileDrawEnabled"]=drawVanillaProjectiles;
         if(Report["vanillaProjectileDrawExecuted"] is null)Report["vanillaProjectileDrawExecuted"]=false;
-        Report["unrenderedArtwork"]=new JsonArray(drawVanillaProjectiles?"No additional projectile omission":"Native projectile sprites (simulation/hits still execute)",trainingDummy is null?"Terraria tile/NPC/world artwork":"Solid terrain/world artwork and other NPCs");
+        Report["unrenderedArtwork"]=new JsonArray(drawVanillaProjectiles?"No additional projectile omission":"Native projectile sprites (simulation/hits still execute)",trainingDummy is not null?"Solid terrain/world artwork and other NPCs":zombie is not null?"Terraria tile/world artwork and other NPCs":"Terraria tile/NPC/world artwork");
         if(!drawNativeDust)Report["unrenderedArtwork"]!.AsArray().Add(JsonValue.Create("Native dust sprites"));
         Report["originalDrawEntryPoints"]=artwork.Report["entrypoints"]?.DeepClone();
+        if(zombie is not null)Report["originalDrawEntryPoints"]?.AsArray().Add(JsonValue.Create("Main.DrawNPC (controlled zombie)"));
         Report["unsupportedDrawPasses"]=new JsonArray("Locked-to-tile players before NPCs","Over-player/over-wire/hidden projectile passes","Full terrain/world scene");
     }
     readonly AssetReaderCollection readers;
@@ -95,7 +97,7 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
         string? luminanceRoot=Environment.GetEnvironmentVariable("INFINI_LUMINANCE_ASSET_DIR");
         var luminanceHashes=InspectLuminanceResources(luminancePaths,luminanceRoot);
         this.graphics=graphics;framesDir=Path.GetFullPath(absoluteFramesDir);
-        foreach(string key in settings.Select(x=>x.Key)) if(key is not ("capture" or "width" or "height" or "cameraX" or "cameraY" or "zoom" or "drawArtwork" or "artworkFiles" or "drawPlayer" or "playerAssetRoot" or "dummyAssetRoot" or "drawNativeDust" or "lightingMode" or "drawPlacedBodies" or "drawDroppedItems" or "drawVanillaProjectiles" or "drawProjectileVfx"))throw new ArgumentException("Unknown nativeRender setting: "+key);
+        foreach(string key in settings.Select(x=>x.Key)) if(key is not ("capture" or "width" or "height" or "cameraX" or "cameraY" or "zoom" or "drawArtwork" or "artworkFiles" or "drawPlayer" or "playerAssetRoot" or "dummyAssetRoot" or "drawNativeDust" or "lightingMode" or "drawPlacedBodies" or "drawDroppedItems" or "drawVanillaProjectiles" or "drawProjectileVfx" or "drawZombie"))throw new ArgumentException("Unknown nativeRender setting: "+key);
         ConfigureScene(settings);drawVanillaProjectiles=settings["drawVanillaProjectiles"]?.GetValue<bool>()??false;drawDroppedItems=settings["drawDroppedItems"]?.GetValue<bool>()??false; if(drawDroppedItems && !(settings["drawArtwork"]?.GetValue<bool>()??false))throw new ArgumentException("drawDroppedItems requires drawArtwork");
         width=settings["width"]?.GetValue<int>()??512;height=settings["height"]?.GetValue<int>()??512;
         drawProjectileVfx=settings["drawProjectileVfx"]?.GetValue<bool>()??false;
@@ -213,14 +215,14 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
         try {
             string beforeUpdate=Rng();system.PostUpdateEverything();string afterUpdate=Rng();
             JsonObject snapshot=Snapshot(tick);snapshot["mainRngBeforeUpdate"]=beforeUpdate;snapshot["mainRngAfterUpdate"]=afterUpdate;snapshots.Add(snapshot);
-            if(!capture&&!drawNativeDust&&!drawVanillaProjectiles&&activeVfx is null)return;
+            if(!capture&&!drawNativeDust&&!drawVanillaProjectiles&&activeVfx is null&&zombie is null)return;
             activeVfx?.BeginFrame();
             if(drawNativeDust){snapshot["nativeDustBeforeDraw"]=DustState();ConfigureDustReport();}
             string beforeDraw=Rng();
             int savedWidth=Main.screenWidth,savedHeight=Main.screenHeight;Vector2 savedCamera=Main.screenPosition;var savedView=Main.GameViewMatrix;
             JsonObject? scene = null;
             graphics.Device.SetRenderTarget(target);
-            try {Main.screenWidth=width;Main.screenHeight=height;Main.screenPosition=camera;Main.GameViewMatrix=new Terraria.Graphics.SpriteViewMatrix(graphics.Device){Zoom=new Vector2(zoom)};scene=SceneSnapshot();graphics.Device.Clear(Color.Black);artwork?.BeginFrame();placedBodies?.Draw(tick);if(drawDroppedItems)artwork?.DrawDroppedItems();trainingDummy?.Draw();if(artwork?.NativePlayerEnabled!=true)artwork?.DrawHeld();if(artwork is not null) Invoke("DrawProjectiles",new Terraria.On_Main.orig_DrawProjectiles(_=>artwork.DrawProjectiles()),Main.instance);else if(drawProjectileVfx)Invoke("DrawProjectiles",new Terraria.On_Main.orig_DrawProjectiles(_=>activeVfx!.Draw()),Main.instance);else {Invoke("BeginDrawBudgetFrame");Invoke("DrawLayer","BeforeProjectiles");Invoke("DrawLayer","AfterProjectiles");}if(artwork?.NativePlayerEnabled==true)artwork.DrawHeld();if(drawNativeDust)typeof(Main).GetMethod("DrawDust",All)!.Invoke(Main.instance,null);artwork?.DrawInventory();}
+            try {Main.screenWidth=width;Main.screenHeight=height;Main.screenPosition=camera;Main.GameViewMatrix=new Terraria.Graphics.SpriteViewMatrix(graphics.Device){Zoom=new Vector2(zoom)};scene=SceneSnapshot();graphics.Device.Clear(Color.Black);artwork?.BeginFrame();placedBodies?.Draw(tick);if(drawDroppedItems)artwork?.DrawDroppedItems();trainingDummy?.Draw();zombie?.Draw();if(artwork?.NativePlayerEnabled!=true)artwork?.DrawHeld();if(artwork is not null) Invoke("DrawProjectiles",new Terraria.On_Main.orig_DrawProjectiles(_=>artwork.DrawProjectiles()),Main.instance);else if(drawProjectileVfx)Invoke("DrawProjectiles",new Terraria.On_Main.orig_DrawProjectiles(_=>activeVfx!.Draw()),Main.instance);else {Invoke("BeginDrawBudgetFrame");Invoke("DrawLayer","BeforeProjectiles");Invoke("DrawLayer","AfterProjectiles");}if(artwork?.NativePlayerEnabled==true)artwork.DrawHeld();if(drawNativeDust)typeof(Main).GetMethod("DrawDust",All)!.Invoke(Main.instance,null);artwork?.DrawInventory();}
             finally {graphics.Device.SetRenderTarget(null);Main.screenWidth=savedWidth;Main.screenHeight=savedHeight;Main.screenPosition=savedCamera;Main.GameViewMatrix=savedView;}
             string afterDraw=Rng();
             Report["gpuRenderLifecycleExecuted"]=true;
@@ -236,6 +238,7 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
                 if((artwork.Frame["playerRenderAllLayersCalls"]?.GetValue<int>()??0)>0)Report["playerArtworkRendered"]=true;
             }
             if(trainingDummy is not null)Report["trainingDummyArtworkRendered"]=true;
+            if(zombie is not null){snapshot["zombie"]=zombie.Frame.DeepClone();if((zombie.Frame["drawCount"]?.GetValue<int>()??0)>0)Report["zombieArtworkRendered"]=true;}
             if(drawNativeDust){snapshot["nativeDustAfterDraw"]=DustState();snapshot["mainRngBeforeDraw"]=beforeDraw;snapshot["mainRngAfterDraw"]=afterDraw;snapshot["nativeDustDrawExecuted"]=true;snapshot["nativeDrawCounters"]=artwork?.Frame.DeepClone();Report["nativeDustDrawExecuted"]=true;}
             if(!capture)return;var pixels=new Color[width*height];target.GetData(pixels);
             string path=Path.Combine(framesDir,$"{tick:000000}.png");using(var stream=File.Create(path))target.SaveAsPng(stream,width,height);
@@ -249,6 +252,7 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
                 if((frame["playerRenderAllLayersCalls"]?.GetValue<int>()??0)>0)Report["playerArtworkRendered"]=true;
             }
             if(trainingDummy is not null){frame["trainingDummy"]=trainingDummy.Snapshot();frame["trainingDummyNativeDrawCalls"]=1;Report["trainingDummyArtworkRendered"]=true;}
+            if(zombie is not null)frame["zombie"]=zombie.Frame.DeepClone();
             // Keep complete dust states once, in the same-tick snapshot. Duplicating
             // hundreds of particles per PNG exceeded the portable trace size limit.
             if(drawNativeDust){frame["nativeDustDrawExecuted"]=true;frame["nativeDustStateTick"]=tick;frame["nativeDustBeforeDrawCount"]=snapshot["nativeDustBeforeDraw"]!.AsArray().Count;frame["nativeDustAfterDrawCount"]=snapshot["nativeDustAfterDraw"]!.AsArray().Count;}
@@ -261,9 +265,10 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
         Report["nativeDustDrawEntryPoint"]="Original Main.DrawDust after ordinary player layer and before diagnostic inventory UI";
         Report["nativeDustStateMutation"]="Original DrawDust may deactivate offscreen or black dust; camera is part of the deterministic scene";
         Report["dustAssetAlphaScope"]="Pinned community Dust PNG loaded through genuine PngReader; full sheet has partial alpha and original extraction alpha semantics are not independently certified. No official-byte/pixel parity claim.";
-        Report["unrenderedArtwork"]=new JsonArray(artwork?.NativeVanillaEnabled==true&&!drawVanillaProjectiles?"Native projectile sprites (simulation/hits still execute)":"No additional projectile omission",trainingDummy is null?"Terraria tile/NPC/world artwork":"Solid terrain/world artwork and other NPCs");
+        Report["unrenderedArtwork"]=new JsonArray(artwork?.NativeVanillaEnabled==true&&!drawVanillaProjectiles?"Native projectile sprites (simulation/hits still execute)":"No additional projectile omission",trainingDummy is null?(zombie is null?"Terraria tile/NPC/world artwork":"Terraria tile/world artwork and other NPCs"):"Solid terrain/world artwork and other NPCs");
         Report["unsupportedDrawPasses"]=new JsonArray("Locked-to-tile players before NPCs","Over-player/over-wire/hidden projectile passes","Full terrain/world scene");
         Report["passOrder"]=trainingDummy is null?new JsonArray("Original projectile/VFX wrapper","Ordinary native player/held layers","Original Main.DrawDust","Diagnostic inventory UI"):new JsonArray("Native training dummy non-solid tiles","Original projectile/VFX wrapper","Ordinary native player/held layers","Original Main.DrawDust","Diagnostic inventory UI");
+        if(zombie is not null){Report["scope"]="Original native controlled zombie DrawNPC, player/held, projectile/VFX and Main.DrawDust; neutral background, no full world or NPC AI parity";Report["passOrder"]!.AsArray().Insert(0,JsonValue.Create("Original controlled zombie Main.DrawNPC"));}
         if(drawProjectileVfx){Report["scope"]="Original procedural projectile VFX and Main.DrawDust; authored/player/world artwork unrendered";Report["unrenderedArtwork"]=new JsonArray("Authored item and projectile PNGs (no replacements)","Player artwork","Terraria tile/NPC/world artwork");Report["passOrder"]=new JsonArray("Original detached before-projectile layer","Original active projectile VFX under/over passes","Original detached after-projectile layer","Original Main.DrawDust");}
         RefreshVanillaReport();
     }

@@ -11,7 +11,9 @@ import copy
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -64,12 +66,14 @@ def main():
     control_item.write_text(json.dumps(original), encoding='utf-8')
 
     traces = {}
-    for name, item, x in [('hit', hit_item, 848), ('control', control_item, 848), ('miss', hit_item, 1300)]:
-        target = {'nativeType': 'zombie', 'x': x, 'y': 700, 'width': 32, 'height': 48, 'life': 10000}
+    for name, item, x, visible in [('hit', hit_item, 848, True), ('control', control_item, 848, True),
+                                  ('miss', hit_item, 1300, True), ('hidden', hit_item, 848, False)]:
         case = out / name
         cmd = [sys.executable, str(w.HERE / 'workbench.py'), 'probe', '--item', str(item), '--gif',
                '--ticks', '85', '--hold', '35', '--gif-stride', '2', '--out', str(case),
-               '--set', 'dummy=' + json.dumps(target)]
+               '--target', 'zombie', '--set', 'dummy.x=' + str(x)]
+        if not visible:
+            cmd += ['--set', 'nativeRender.drawZombie=false']
         if args.no_build:
             cmd.append('--no-build')
         proc = subprocess.run(cmd, cwd=w.ROOT, capture_output=True, text=True, timeout=360)
@@ -82,9 +86,46 @@ def main():
         run = case / 'runs' / result['cases'][0]['run']
         traces[name] = (w.read_json(run / 'native.json'), run)
 
+    # Original player textures are available but the optional zombie PNG is not.
+    # Refuse the scene instead of substituting an invented sprite.
+    source_assets = Path(os.environ['INFINI_PLAYER_ASSET_DIR'])
+    missing_assets = out / 'missing-zombie-assets'
+    shutil.copytree(source_assets, missing_assets,
+                    ignore=lambda _dir, names: ['NPC_3.png'] if 'NPC_3.png' in names else [])
+    missing_case = out / 'missing-zombie'
+    cmd = [sys.executable, str(w.HERE / 'workbench.py'), 'probe', '--item', str(hit_item), '--gif',
+           '--ticks', '85', '--hold', '35', '--out', str(missing_case), '--target', 'zombie']
+    if args.no_build:
+        cmd.append('--no-build')
+    proc = subprocess.run(cmd, cwd=w.ROOT, capture_output=True, text=True, timeout=360,
+                          env={**os.environ, 'INFINI_PLAYER_ASSET_DIR': str(missing_assets)})
+    (out / 'missing-zombie.log').write_text(proc.stdout + '\n' + proc.stderr, encoding='utf-8')
+    missing_traces = list(missing_case.glob('runs/*/native.json'))
+    if proc.returncode == 0 or len(missing_traces) != 1:
+        raise RuntimeError('Missing zombie texture was not explicitly refused')
+    missing = w.read_json(missing_traces[0])
+    if missing.get('status') != 'error' or 'NPC_3.png' not in missing.get('error', '') or list(missing_case.rglob('*.gif')):
+        raise RuntimeError('Missing zombie texture did not produce the expected no-fallback error')
+
+    wrong_target = out / 'wrong-target'
+    cmd = [sys.executable, str(w.HERE / 'workbench.py'), 'probe', '--item', str(hit_item), '--gif',
+           '--ticks', '85', '--hold', '35', '--out', str(wrong_target), '--target', 'zombie',
+           '--set', 'dummy.nativeType="target_dummy"']
+    if args.no_build:
+        cmd.append('--no-build')
+    proc = subprocess.run(cmd, cwd=w.ROOT, capture_output=True, text=True, timeout=360)
+    (out / 'wrong-target.log').write_text(proc.stdout + '\n' + proc.stderr, encoding='utf-8')
+    wrong_traces = list(wrong_target.glob('runs/*/native.json'))
+    if proc.returncode == 0 or len(wrong_traces) != 1:
+        raise RuntimeError('Zombie rendering on a different NPC was not refused')
+    wrong = w.read_json(wrong_traces[0])
+    if wrong.get('status') != 'error' or 'drawZombie requires' not in wrong.get('error', '') or list(wrong_target.rglob('*.gif')):
+        raise RuntimeError('Wrong target did not produce the expected no-fallback error')
+
     hit, hit_dir = traces['hit']
     control, control_dir = traces['control']
     miss, _ = traces['miss']
+    hidden, hidden_dir = traces['hidden']
     hits = events(hit, 'hit')
     feedback = events(hit, 'native_npc_hit_effect')
     created = [(tick, row) for tick, row in feedback if row['npcType'] == 3 and not row['dedServ'] and row['newActiveDust']]
@@ -94,6 +135,18 @@ def main():
         raise RuntimeError('The effect ablation changed native hit timing')
 
     visual = hit['nativeRender']
+    if not visual.get('zombieArtworkRendered') or not any(
+            f.get('zombie', {}).get('drawCount', 0) > 0 for f in visual.get('frames', [])):
+        raise RuntimeError('Controlled zombie did not render through original Main.DrawNPC')
+    if [(t, e['damageDone']) for t, e in hits] != [(t, e['damageDone']) for t, e in events(hidden, 'hit')]:
+        raise RuntimeError('Enabling zombie artwork changed native hit timing or damage')
+    # Before the hit, compare the exact same target with native drawing on/off.
+    # PNG pixels prove a visible change, rather than relying on a draw call alone.
+    visible_frame = next(f for f in visual['frames'] if f['tick'] == 0)
+    hidden_frame = next(f for f in hidden['nativeRender']['frames'] if f['tick'] == 0)
+    with Image.open(hit_dir / visible_frame['path']) as a, Image.open(hidden_dir / hidden_frame['path']) as b:
+        if not ImageChops.difference(a.convert('RGB'), b.convert('RGB')).getbbox():
+            raise RuntimeError('Original zombie draw did not change any pixels')
     start = hits[0][0]
     after = [s for s in visual['snapshots'] if s['tick'] >= start]
     sprite = [d for s in after for d in s.get('detached', []) if d.get('texturePath', '').endswith(art.name)]
@@ -120,7 +173,8 @@ def main():
     summary = {'passed': True, 'scope': 'Native NPC.HitEffect/NPCLoader dust and original on-hit impact sprite/ring; synthetic control art',
                'hitTicks': [t for t, _ in hits], 'nativeHitEffectsWithNewDust': created,
                'impactSpriteRecords': len(sprite), 'impactRingRecords': len(ring),
-               'changedFramesVersusEffectAblation': changed, 'missHits': 0}
+               'changedFramesVersusEffectAblation': changed, 'missHits': 0,
+               'missingZombieRefused': True, 'wrongTargetRefused': True}
     (out / 'summary.json').write_text(json.dumps(summary, indent=2), encoding='utf-8')
     print(json.dumps(summary))
     return 0
