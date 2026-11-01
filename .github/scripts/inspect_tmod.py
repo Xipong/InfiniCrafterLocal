@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect pinned TMOD v0.11+ packages; extract only their assembly and Info.
+"""Inspect pinned TMOD v0.11+ packages; extract resources and reconstruct build metadata in runner temp.
 
 Layout follows tML Core/TmodFile.cs. Data and whole-file hashes are verified;
 DLLs remain in the runner's temporary directory and must not be published.
@@ -8,7 +8,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from pathlib import Path
+import io
+from pathlib import Path, PurePosixPath
 import struct
 import zlib
 
@@ -51,6 +52,63 @@ def file_hash(path, algorithm='sha256'):
     return digest.hexdigest()
 
 
+# Mirrors tML BuildProperties.ReadFromStream / InfoToBuildTxt. Info stores
+# already-resolved sortAfter, not buildIgnore or the original source build.txt.
+def build_txt(info, expected_version):
+    stream = io.BytesIO(info)
+    lists = {'dllReferences', 'modReferences', 'weakReferences', 'sortAfter', 'sortBefore'}
+    values = {'author', 'version', 'displayName', 'homepage', 'description', 'eacPath', 'buildVersion', 'modSource'}
+    flags = {'noCompile', '!playableOnPreview', 'translationMod', 'libraryMod', '!hideCode', '!hideResources', 'includeSource'}
+    parsed = {}
+    while (tag := string(stream)):
+        if tag in parsed:
+            raise ValueError(f'duplicate Info tag: {tag}')
+        if tag in lists:
+            items = []
+            while (value := string(stream)):
+                items.append(value)
+            parsed[tag] = items
+        elif tag in values:
+            parsed[tag] = string(stream)
+        elif tag in flags:
+            parsed[tag] = True
+        elif tag == 'side':
+            side = take(stream, 1)[0]
+            if side not in (0, 1, 2, 3):
+                raise ValueError('invalid Info side')
+            parsed[tag] = ('Both', 'Client', 'Server', 'NoSync')[side]
+        else:
+            raise ValueError(f'unknown Info tag: {tag}')
+    if stream.read(1) or parsed.get('version') != expected_version:
+        raise ValueError('Info trailing data or version mismatch')
+    lines = []
+    for key in ('displayName', 'author', 'version', 'homepage'):
+        if parsed.get(key): lines.append(f"{key} = {parsed[key]}")
+    for key in ('dllReferences', 'modReferences', 'weakReferences', 'sortAfter', 'sortBefore'):
+        if parsed.get(key): lines.append(f"{key} = {', '.join(parsed[key])}")
+    refs = [item.split('@', 1)[0] for key in ('modReferences', 'weakReferences') for item in parsed.get(key, [])]
+    ignored = [x for x in refs if x not in parsed.get('sortAfter', []) and x not in parsed.get('sortBefore', [])]
+    if ignored: lines.append(f"sortIgnore = {', '.join(ignored)}")
+    for key in ('noCompile', 'translationMod', 'libraryMod', 'includeSource'):
+        if parsed.get(key): lines.append(f'{key} = true')
+    if '!playableOnPreview' in parsed: lines.append('playableOnPreview = false')
+    if '!hideCode' not in parsed: lines.append('hideCode = true')
+    if '!hideResources' not in parsed: lines.append('hideResources = true')
+    if parsed.get('side', 'Both') != 'Both': lines.append(f"side = {parsed['side']}")
+    return '\n'.join(lines) + '\n', parsed
+
+
+def safe_target(output, entry):
+    path = PurePosixPath(entry)
+    if (not entry or path.is_absolute() or '\\' in entry or ':' in entry or
+        any(part in ('', '.', '..') for part in entry.split('/'))):
+        raise ValueError(f'unsafe TMOD entry: {entry!r}')
+    target = output.joinpath(*path.parts)
+    if not target.resolve().is_relative_to(output.resolve()):
+        raise ValueError(f'TMOD path escapes root: {entry!r}')
+    return target
+
+
 def inspect(path, output, expected_name):
     if file_hash(path) != EXPECTED[expected_name]:
         raise ValueError(f'{path}: differs from the officially obtained pinned package')
@@ -90,34 +148,39 @@ def inspect(path, output, expected_name):
             raise ValueError('TMOD file table does not span payload')
         output.mkdir(parents=True, exist_ok=False)
         files = []
-        for entry in (name + '.dll', 'Info'):
-            if entry not in entries:
-                raise ValueError(f'missing required TMOD entry: {entry}')
-            offset, length, compressed = entries[entry]
-            if length > 100_000_000 or compressed > 100_000_000:
-                raise ValueError('unexpectedly large assembly/metadata')
+        if sum(length for _, length, _ in entries.values()) > 2_000_000_000:
+            raise ValueError('TMOD expanded size exceeds diagnostic limit')
+        for required in (name + '.dll', 'Info'):
+            if required not in entries: raise ValueError(f'missing required TMOD entry: {required}')
+        for entry, (offset, length, compressed) in entries.items():
+            target = safe_target(output, entry)
+            if length > 300_000_000 or compressed > 300_000_000:
+                raise ValueError(f'oversized TMOD entry: {entry}')
             stream.seek(start + offset)
             raw = take(stream, compressed)
             if length != compressed:
                 decoder = zlib.decompressobj(-zlib.MAX_WBITS)
                 raw = decoder.decompress(raw, length + 1)
-                raw += decoder.flush()
                 if not decoder.eof or decoder.unused_data or decoder.unconsumed_tail:
                     raise ValueError(f'invalid deflate stream: {entry}')
             if len(raw) != length:
                 raise ValueError(f'invalid decoded length: {entry}')
-            if entry.endswith('.dll') and not raw.startswith(b'MZ'):
+            if entry == name + '.dll' and not raw.startswith(b'MZ'):
                 raise ValueError('mod assembly has no PE signature')
-            target = output / entry
-            target.write_bytes(raw)
-            files.append({'name': entry, 'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()})
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with target.open('xb') as dest: dest.write(raw)
+            if entry in (name + '.dll', 'Info'):
+                files.append({'name': entry, 'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()})
+        metadata, info = build_txt((output / 'Info').read_bytes(), version)
+        with (output / 'build.txt').open('x', encoding='utf-8') as dest: dest.write(metadata)
+        print(f'{name} build.txt reconstructed from packaged Info; not original source metadata:\n{metadata}')
     interest = [key for key in entries if 'terratomere' in key.lower()]
     localization = [key for key in entries if key.startswith('Localization/')]
     return {'name': name, 'version': version, 'tModLoaderBuildVersion': tml_version,
             'packageSha256': EXPECTED[expected_name], 'packageBytes': size,
             'payloadSha1Verified': True, 'fileCount': count, 'extracted': files,
             'terratomereEntries': sorted(interest), 'localizationEntries': len(localization),
-            'dllDirectory': str(output), 'binaryFilesPublished': False}
+            'dllDirectory': str(output), 'infoFields': sorted(info), 'binaryFilesPublished': False}
 
 
 def main():

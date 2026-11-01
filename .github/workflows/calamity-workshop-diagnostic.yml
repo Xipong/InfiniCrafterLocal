@@ -11,7 +11,7 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
       - name: Prepare official SteamCMD
@@ -65,7 +65,7 @@ jobs:
           test -f "$RUNNER_TEMP/tml/tModLoader.dll"
           printf 'Official tModLoader DLL: '
           sha256sum "$RUNNER_TEMP/tml/tModLoader.dll"
-      - name: Verify packages and inspect embedded assembly and metadata
+      - name: Verify and unpack packages inside runner temp
         shell: bash
         run: |
           set -euo pipefail
@@ -74,3 +74,77 @@ jobs:
             --name CalamityMod --out "$RUNNER_TEMP/calamity-inspection/CalamityMod"
           python .github/scripts/inspect_tmod.py "$workshop/2824688266/2025.12/CalamityModMusic.tmod" \
             --name CalamityModMusic --out "$RUNNER_TEMP/calamity-inspection/CalamityModMusic"
+      - name: Checkout native loader at reviewed commit
+        uses: actions/checkout@v4
+        with:
+          ref: 110c13f0d2533b38f335031180f787c20cbc7149
+          path: ifc
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install native graphics dependencies
+        run: sudo apt-get install -y libegl1 libgl1 libgl1-mesa-dri libopenal1
+      - name: Configure native workbench references
+        working-directory: ifc
+        shell: bash
+        run: |
+          set -euo pipefail
+          native="$RUNNER_TEMP/tml/Libraries/Native/Linux"
+          test -f "$native/libFNA3D.so.0"
+          test -f "$RUNNER_TEMP/tml/Content/PixelShader.xnb"
+          echo "INFINI_TML_NATIVE_DIR=$native" >> "$GITHUB_ENV"
+          echo "INFINI_TML_CONTENT_DIR=$RUNNER_TEMP/tml/Content" >> "$GITHUB_ENV"
+          deps="$RUNNER_TEMP/ifc-deps"
+          python -m toolbox workbench setup-vfx --deps-root "$deps"
+          echo "INFINI_TML_DEPS_SRC=$deps" >> "$GITHUB_ENV"
+          echo "INFINI_PARTICLE_ASSET_DIR=$deps/particle-assets" >> "$GITHUB_ENV"
+          dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj -p:TmlVersion=2026.08.3.0
+          dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj -p:TmlVersion=2026.08.3.0
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          data = json.loads(Path('ModSources/InfiniCrafterLocal/obj/project.assets.json').read_text())
+          packages = [entry for name, entry in data['libraries'].items() if name.lower().startswith('tmodloader/')]
+          if len(packages) != 1: raise SystemExit('Expected one tModLoader reference package')
+          refs = [Path(root) / packages[0]['path'] / 'lib/net8.0' for root in data['packageFolders']]
+          refs = [path.resolve() for path in refs if (path / 'tModLoader.dll').is_file()]
+          if len(refs) != 1: raise SystemExit('Expected one tModLoader reference directory')
+          with open(os.environ['GITHUB_ENV'], 'a') as stream:
+              stream.write(f'INFINI_TML_REFERENCE_DIR={refs[0]}\n')
+          PY
+      - name: Build workbench
+        working-directory: ifc
+        run: python tools/item-test-workbench/workbench.py build
+      - name: Attempt native Terratomere with original Workshop assemblies
+        working-directory: ifc
+        shell: bash
+        run: |
+          set -uo pipefail
+          echo 'Diagnostic only: extracted Info reconstructed into build.txt; assets are original packed rawimg, no full tML game/client emulation.'
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          scenario = json.loads(Path('tools/item-test-workbench/scenarios/primary.json').read_text())
+          scenario['assertions'] = [{'kind': 'no_nonfinite'}]
+          Path(os.environ['RUNNER_TEMP'], 'terratomere-scenario.json').write_text(json.dumps(scenario))
+          PY
+          mods="$RUNNER_TEMP/calamity-inspection"
+          output="$RUNNER_TEMP/terratomere-diagnostic"
+          python tools/item-test-workbench/workbench.py loader-run \
+            --native-item CalamityMod/Terratomere \
+            --scenario "$RUNNER_TEMP/terratomere-scenario.json" \
+            --mod "$mods/CalamityModMusic/CalamityModMusic.dll" "$mods/CalamityModMusic" \
+            --mod "$mods/CalamityMod/CalamityMod.dll" "$mods/CalamityMod" \
+            --out "$output" --no-build --timeout 600
+          status=$?
+          for log in stdout.log stderr.log native.json; do
+            if [[ -f "$output/$log" ]]; then
+              echo "--- $log (tail) ---"
+              tail -c 30000 "$output/$log"
+            fi
+          done
+          echo "Loader exit: $status"
+          exit "$status"
