@@ -75,7 +75,7 @@ jobs:
       - name: Checkout native loader at reviewed commit
         uses: actions/checkout@v4
         with:
-          ref: 2fbc1b2eab7bdcb6aef2b598eb2bb35f98b9add3
+          ref: 26adf3fd045926bd3928bbd5172bdfe63b156515
           path: ifc
       - uses: actions/setup-dotnet@v4
         with:
