@@ -56,7 +56,7 @@ def _runtime_card(data: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def _presentation_packet_context(data: Mapping[str, Any], runtime_rows: list[dict[str, Any]]) -> dict[str, Any]:
-    from infini_local.core.images.contracts import sprite_contract_for
+    from infini_local.core.images.contracts import native_held_frame_facts, sprite_contract_for
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
     runtime = data.get("runtimeProgram") if isinstance(data.get("runtimeProgram"), Mapping) else {}
     gameplay = data.get("gameplay") if isinstance(data.get("gameplay"), Mapping) else {}
@@ -75,6 +75,7 @@ def _presentation_packet_context(data: Mapping[str, Any], runtime_rows: list[dic
             fill[role][str(canvas)] = {field: copy.deepcopy(contract[field]) for field in fill_fields}
     return {
         "acceptedPresentationMechanicsReadOnly": mechanics,
+        "nativeHeldCanvasReadOnly": native_held_frame_facts(data),
         "spritePresentationReadOnly": {
             "placedVfx": "Accepted placement.placedVfx opt-in bounds are read-only actual top-left native TileFrameY, not an animation schedule. Root PNG is stable physical furniture/art; separate live flames, sparks or glow can be independently generated existing VFX assets later. Later VFX slots are not yet authored: describe intended independent live effects without claiming they exist, inserting slots, changing accepted mechanics or animating/pulsing/rotating the whole root PNG. Existing optional placedBody remains a static root picture; baked flames in it stay static even when off. Do not automatically strip accepted or authored decorative art; compose deliberate stable physical root vs intended independent live effects. VFX Director owns exact slots/assets after Visual.",
             "placedBody": {
@@ -85,18 +86,16 @@ def _presentation_packet_context(data: Mapping[str, Any], runtime_rows: list[dic
             },
             "units": "R=renderSizePx is the larger complete final frame side in base world pixels, not alpha-bbox, hitbox, requested canvas or physical shaft/tip length. C is the actual loaded final frame max-side. G=gameplay.itemScale, W=item.worldScale, I=item.inventoryScale, D=hitbox.drawScale, E=entity.scale and current P=Projectile.scale are independent dimensionless multipliers; Visual cannot edit G or D.",
             "axis": "forwardAngleDegrees is the final PNG local forward-axis in degrees: 0=+X, positive clockwise in y-down coordinates, before facing/gravity flips. It describes pixels, not AI movement. Describe this pose in the same authored prompt; reuse inherits root pixels and axis, never a second inferred axis.",
-            "rotation": "With an accepted rotation component, renderer angle = body angle minus flipped PNG forward axis, so visible forward = body angle. velocity/axis mode sets body angle = velocity/aim direction + offsetRadians (zero velocity uses aim). Offset 0 aligns with travel/aim; pi/2 deliberately draws sideways. PNG forwardAngleDegrees=-90 describes upward pixels, not a way to cancel that offset. Draw the declared PNG axis literally and preserve accepted rotation. spin follows its authored angle/time law. Without a rotation component, existing movement-driver presentation applies.",
+            "rotation": "With an accepted rotation component, renderer angle = body angle minus flipped PNG forward axis, so visible forward = body angle. velocity/axis mode sets body angle = velocity/aim direction + offsetRadians (zero velocity uses aim). Offset 0 aligns with travel/aim; pi/2 deliberately draws sideways. PNG forwardAngleDegrees=-90 describes upward pixels, not a way to cancel that offset. Draw the declared PNG axis literally and preserve accepted rotation. spin follows its authored angle/time law. Without a rotation component, orientation comes from the movement driver; aim, attachment and arm pose alone do not rotate a stationary attached body. PNG-axis metadata cannot repair that accepted pose.",
             "heldRootVisibility": {
                 "hideUseGraphic": CAPABILITY_REGISTRY["item_use"].params["hideUseGraphic"].description,
-                "customHeldSprite": CAPABILITY_REGISTRY["item_use"].params["customHeldSprite"].description,
-                "wireHint": "runtimeProgram.itemUse.releaseTiming",
+                "wireHint": "runtimeProgram.itemUse.hideUseGraphic",
             },
             "formulas": {
                 "q": "R / max(actual final PNG frame width, height)",
                 "inventory": "s_inventory * min(1, caller inventory frame max-side / C) * I; unchanged, no q",
                 "world": "q_item * s_world * W",
                 "held": "q_item * player.GetAdjustedItemScale(held) (G already included once)",
-                "heldRegistryOnly": "q_item * baseScale * clamp(G, .25, 4)",
                 "body": "q_selected * P when accepted hitboxCurve.mirrorToSprite=true or visualScaleCurve is present, with P=D*E*curveScale(active age) from that explicit visual owner; otherwise q_selected * clamp(P, .1, 8). No new curve or mirror is inferred.",
                 "liveBodyCopy": "q_selected * clamp(P, .1, 8) * slot.Scale",
                 "detachedBodyCopy": "q_selected * existing dimensionless pose/slot multiplier; capture/network pose remains dimensionless",
@@ -109,7 +108,7 @@ def _presentation_packet_context(data: Mapping[str, Any], runtime_rows: list[dic
             "ownership": "Root item owns R/canvas/axis for item_body and reuse_item_icon. A distinct baked entity owns R/canvas/axis. no_asset/runtime_geometry own none. Dedicated impact, overlay, material world widths, textured paths and collision/movement are outside this main-PNG conversion.",
             "fill": "Canonical bake fill/padding below describes artwork span inside the requested frame, not world size. Baked final frame and alpha extent may differ; no post-image axis/bbox inference. Runtime tip anchors remain existing gameplay geometry, not measured PNG tips.",
             "geometryCoverage": "Choose the visible body deliberately. runtime_geometry draws the explicitly authored geometry: a centered body_segment on its selected axis or an existing collision_path, with independent world-pixel dimensions, RGB color and opacity; it does not create a detailed sword, whip skin, taper or surface texture. A baked_sprite/reuse_item_icon is one rigid PNG at the body position, not a skin stretched along a curved path. For an authored textured curve, independent VFX texturedPath can follow supported beam/whip paths with its own generated strip and width/color/opacity profiles. Keeping runtime_geometry also keeps its solid base underneath; no_asset suppresses that base. If choosing no_asset for a visible path body, state that intended full-body texturedPath clearly in animationPlan for the following VFX stage; this is a request, not proof that a slot already exists. no_asset can also mean deliberate invisibility. ownerLink is a separate cosmetic straight connector to projectile.Center: ownerAnchor=mountedCenter reads owner.MountedCenter, while frontHand requires compositeFrontArm.enabled and otherwise refuses; neither invents a curved collision path. Other path sources forbid ownerAnchor. Choose surfaces and effects that make the accepted movement readable at gameplay scale. No automatic sprite stretching, mode conversion, VFX insertion or changes to accepted mechanics.",
-            "sourceCalibration": "Use available parent raw.spriteReference loaded texture/currentFrame or generatedParent.visual.renderSizePx as read-only size calibration, not a required copy. Consider chosen renderSizePx together with canonical bake fill/padding and intended visible alpha extent; canvas resolution alone does not set body size. Missing reference or alpha bounds are unknown: never substitute hitbox/collider dimensions, fallback textures or an inferred parent size. Accepted useTime/useAnimation, spawn, lifetimeTicks and collision constrain animation description only; do not change gameplay or frozen Repair fields.",
+            "sourceCalibration": "Use available parent raw.spriteReference loaded texture/currentFrame or generatedParent.visual.renderSizePx as read-only size calibration, not a required copy. Consider chosen renderSizePx together with canonical bake fill/padding and intended visible alpha extent; canvas resolution alone does not set body size. Native projectile spriteReference describes only an observed loaded atlas; framesRaw is a declared default, not proof of the actual draw layout. Custom draw frames, alpha bounds and world extent remain unknown unless observed in draw-source facts. Missing reference or alpha bounds are unknown: never substitute hitbox/collider dimensions, fallback textures or an inferred parent size. Accepted useTime/useAnimation, spawn, lifetimeTicks and collision constrain animation description only; do not change gameplay or frozen Repair fields.",
             "requiredMetadata": "Explicitly choose required presentation fields. No defaults, clamps, inferred axis or rebake.",
         },
         # This selected role roster is a runtime fact, not instruction authority.

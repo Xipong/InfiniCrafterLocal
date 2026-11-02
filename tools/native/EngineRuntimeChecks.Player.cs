@@ -24,60 +24,6 @@ internal static partial class EngineRuntimeChecks
         finally { instance.SetValue(null, previous); }
     }
 
-    private static void RejectedHeldPoseDoesNotLeak()
-    {
-        WithPlayer((player, _) =>
-        {
-            var clock = typeof(Terraria.Main).GetField("_gameUpdateCount", BindingFlags.Static | BindingFlags.NonPublic)!;
-            object? oldClock = clock.GetValue(null);
-            int oldMode = Terraria.Main.netMode, oldLocal = Terraria.Main.myPlayer;
-            try
-            {
-                Terraria.Main.netMode = Terraria.ID.NetmodeID.MultiplayerClient;
-                Terraria.Main.myPlayer = 0;
-                clock.SetValue(null, 100u);
-                player.whoAmI = 1;
-                player.selectedItem = 0;
-                var item = new Item { type = 1, stack = 1 };
-                typeof(Item).GetProperty("ModItem")!.SetValue(item, new GeneratedItem());
-                player.inventory[0] = player.inventory[1] = item;
-                GeneratedHeldItemDrawLayer.ClearNetCaches();
-                using var packet = new System.IO.MemoryStream();
-                using (var writer = new System.IO.BinaryWriter(packet, System.Text.Encoding.UTF8, leaveOpen: true))
-                {
-                    writer.Write(6); writer.Write((byte)1); writer.Write((byte)1);
-                    writer.Write("held-pose-test");
-                    writer.Write(160f); writer.Write(320f); writer.Write(0.5f);
-                    writer.Write(1); writer.Write(1f); writer.Write(true); writer.Write((byte)200);
-                }
-                packet.Position = 0;
-                using var reader = new System.IO.BinaryReader(packet);
-                GeneratedHeldItemDrawLayer.HandleHeldItemPresentationSyncPacket(reader, 0);
-                var resolve = typeof(GeneratedHeldItemDrawLayer).GetMethod("TryGetFreshRemotePayload", BindingFlags.Static | BindingFlags.NonPublic)!;
-                void AssertPose(bool accepted, string label)
-                {
-                    object?[] args = { player, null };
-                    Equal(accepted, (bool)resolve.Invoke(null, args)!, label);
-                    Equal(accepted, args[1] is not null, label + " payload availability");
-                }
-                AssertPose(true, "first-use grace remains valid");
-                clock.SetValue(null, 131u);
-                AssertPose(false, "wrong selected slot after grace");
-                player.selectedItem = 1;
-                AssertPose(true, "matching selected slot remains valid");
-                clock.SetValue(null, 155u);
-                AssertPose(false, "expired pose remains rejected");
-            }
-            finally
-            {
-                GeneratedHeldItemDrawLayer.ClearNetCaches();
-                clock.SetValue(null, oldClock);
-                Terraria.Main.netMode = oldMode;
-                Terraria.Main.myPlayer = oldLocal;
-            }
-        });
-    }
-
     private static void StationKeyIsNotConsumed()
     {
         WithPlayer((player, _) =>

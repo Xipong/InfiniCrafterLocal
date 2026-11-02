@@ -140,13 +140,8 @@ def test_director_and_frozen_repair_packets_explain_exact_hand_dependencies(wire
         assert dependency["requiredFields"] == ["renderSizePx", "forwardAngleDegrees", "grip"]
         assert dependency["selectedOwnerByAssetMode"] == {"reuse_item_icon": "item", "baked_sprite": "entity",
                                                          "no_asset": None, "runtime_geometry": None}
-        guidance = packet["spritePresentationReadOnly"]["frontHand"]
-        assert "attachment.anchor=front_hand" in guidance
-        assert "never derive them from art" in guidance
         assert row["attachment"]["axisOffsetPx"] == 11
         assert row["attachment"]["normalOffsetPx"] == 0
-        assert "no duplicate" in guidance
-        assert "never" in guidance
     assert not responses
 
 
@@ -168,7 +163,11 @@ def test_distinct_image_request_forwards_exact_grip_without_truncating_art(monke
     assert facts["grip"] == ENTITY_GRIP
     assert facts["grip"] != ROOT_GRIP
     assert raw["entities"][1]["prompt"] in prompt
-    assert "visible handle/hand-contact region must contain the declared final-space grip" in prompt
+    assert facts["entityId"] == "witness_entity"
+    assert facts["canvasSizePx"] == 64
+    for field in ("renderSizePx", "forwardAngleDegrees", "silhouette", "visualIdentity"):
+        assert facts[field] == raw["entities"][1][field]
+    assert "nativeHeldCanvas" not in facts  # Independent front-hand body, not the native item frame.
     assert "movementReadOnly" not in facts
     for member in ("aim", "attachment", "armPose"):
         assert facts[member] == data["runtimeProgram"]["entities"][1][member]

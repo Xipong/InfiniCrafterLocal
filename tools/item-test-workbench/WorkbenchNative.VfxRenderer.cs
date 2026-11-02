@@ -55,6 +55,7 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
     readonly ParticleLibrary.ParticleLibrary actualMod;
     readonly ParticleManagerV3 particleManager;
     readonly InfiniDetachedVfxSystem system=new();
+    VfxNativeTextureCache? materialTextures;
     readonly SpriteBatch batch;
     readonly RenderTarget2D target;
     WNativeArtwork? artwork;WNativeTrainingDummy? trainingDummy;WNativeZombieRender? zombie;
@@ -69,7 +70,7 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
         Report["fullProjectilePreDrawExecuted"]=false;
         Report["unavailableDrawBranch"]="Full GeneratedProjectile.PreDraw immediate VFX branch requires genuine Terraria Content/Images/MagicPixel.xnb, unavailable; partial mode admits detached libraryParticle/material/impactSprite and unvalidated soundCue; primitive impactRing requires full native hooks";
         Report["unrenderedArtwork"]=new JsonArray("Terraria world/player/NPC artwork","native dust sprites");
-        Report["originalDrawEntryPoints"]=new JsonArray("GeneratedHeldItemDrawLayer.GetDefaultVisibility/Draw","GeneratedItem.PreDrawInInventory","GeneratedProjectile.DrawAuthoredEntityVisual","InfiniDetachedVfxSystem.DrawProjectiles (original budget/layer wrapper)");
+        Report["originalDrawEntryPoints"]=new JsonArray("GeneratedItem.ModifyItemDraw","GeneratedItem.PreDrawInInventory","GeneratedProjectile.DrawAuthoredEntityVisual","InfiniDetachedVfxSystem.DrawProjectiles (original budget/layer wrapper)");
         if(value.NativePlayerEnabled){Report["scope"]=value.NativeVanillaEnabled?"Original native vanilla PlayerRenderer/item layer; original dust when enabled; native projectile simulation but projectile sprites not rendered":"Original native PlayerRenderer with original generated held layer once, full generated projectile PreDraw/PostDraw and detached VFX; neutral background, no Terraria tiles/NPC sprites";Report["partialProjectileHook"]=false;Report["fullProjectilePreDrawEnabled"]=!value.NativeVanillaEnabled;Report["fullProjectilePreDrawExecuted"]=false;Report["unavailableDrawBranch"]=null;Report["unrenderedArtwork"]=new JsonArray("Terraria tile/NPC/world artwork","native dust sprites");Report["originalDrawEntryPoints"]=value.Report["entrypoints"]?.DeepClone();Report["playerArtworkRendered"]=false;Report["passOrder"]=new JsonArray("InfiniDetachedVfxSystem.DrawProjectiles wrapper / original generated projectile PreDraw/PostDraw","PlayerRenderer.DrawPlayers ordinary unlocked player","Inventory preview (explicit diagnostic UI)");Report["unsupportedDrawPasses"]=new JsonArray("Locked-to-tile players before NPCs","Over-player/over-wire/hidden projectile passes","Full terrain/world scene and native dust sprites");}
         RefreshVanillaReport();
     }
@@ -152,13 +153,28 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
             actualMod=new ParticleLibrary.ParticleLibrary();typeof(Mod).GetProperty("Logger",All)!.SetValue(actualMod,log4net.LogManager.GetLogger("WorkbenchParticleLibrary"));actualMod.Load();
             particleManager=new ParticleManagerV3();typeof(ModType).GetProperty("Mod",All)!.SetValue(particleManager,mod);particleManager.Load();
             Invoke("LoadLibrary");
+            InfiniItemVfxRuntime.LoadItemHistory();
             // ParticleManager's effect load is itself queued. Production readiness
             // additionally serializes texture requests through one queued owner.
             typeof(Main).GetMethod("ConsumeAllMainThreadActions",All)!.Invoke(null,null);
             if(ParticleManagerV3.InstancedParticleEffect is null)throw new InvalidOperationException("Original ParticleLibrary effect did not load after native main-thread queue");
             PrewarmLibraryTextures(libraryTexturePaths,path=>(bool)Invoke("EnsureLibraryReady",path)!,
                 ()=>typeof(Main).GetMethod("ConsumeAllMainThreadActions",All)!.Invoke(null,null));
+            var materialIds=(data?.VfxManifest.Slots??Array.Empty<VfxSlotSpec>())
+                .Where(s=>s.Geometry is not null).SelectMany(s=>s.Geometry!.Draws)
+                .Where(d=>d.Material.Texture.Source=="library").Select(d=>d.Material.Texture.AssetId).Distinct().ToArray();
+            if(materialIds.Length>0) {
+                materialTextures=new VfxNativeTextureCache();materialTextures.Load();
+                var get=typeof(VfxNativeTextureCache).GetMethod("TryGet",All)!;
+                foreach(string id in materialIds) {
+                    if(get.Invoke(null,new object[]{id}) is Texture2D)continue;
+                    typeof(Main).GetMethod("ConsumeAllMainThreadActions",All)!.Invoke(null,null);
+                    if(get.Invoke(null,new object[]{id}) is not Texture2D)
+                        throw new InvalidOperationException("Selected native material texture unavailable: "+id);
+                }
+            }
         } catch {
+            materialTextures?.Unload();
             if(luminanceResources is not null){registry.Remove(luminanceResources.Name);luminanceResources.Assets.Dispose();luminanceResources=null;}
             throw;
         } finally {Main.dedServ=oldDedicated;}
@@ -176,10 +192,13 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
     internal static string[] SelectedLibraryTexturePaths(GeneratedItemData? data)
     {
         var resolve=typeof(InfiniDetachedVfxSystem).Assembly.GetType("InfiniCrafterLocal.Common.VFX.VfxLibraryTextures",throwOnError:true)!.GetMethod("TryGetPath",All)!;
-        return (data?.VfxManifest.Slots??Array.Empty<VfxSlotSpec>()).Where(s=>s.Particle is not null)
-            .Select(s=>{
-                object?[] args={s.Particle!.TextureId,null};
-                if(!(bool)resolve.Invoke(null,args)!)throw new NotSupportedException("Unknown selected particle texture: "+s.Particle.TextureId);
+        var slots=data?.VfxManifest.Slots??Array.Empty<VfxSlotSpec>();
+        var ids=slots.Where(s=>s.Particle is not null).Select(s=>s.Particle!.TextureId)
+            .Concat(slots.Where(s=>s.Geometry is not null).SelectMany(s=>s.Geometry!.Draws)
+                .Where(d=>d.Material.Texture.Source=="library").Select(d=>d.Material.Texture.AssetId));
+        return ids.Select(id=>{
+                object?[] args={id,null};
+                if(!(bool)resolve.Invoke(null,args)!)throw new NotSupportedException("Unknown selected library texture: "+id);
                 return (string)args[1]!;
             }).Distinct(StringComparer.Ordinal).ToArray();
     }
@@ -214,7 +233,8 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
         Report["vfxUpdateUsesSceneCamera"]=true;
         try {
             string beforeUpdate=Rng();system.PostUpdateEverything();string afterUpdate=Rng();
-            JsonObject snapshot=Snapshot(tick);snapshot["mainRngBeforeUpdate"]=beforeUpdate;snapshot["mainRngAfterUpdate"]=afterUpdate;snapshots.Add(snapshot);
+            StepLighting();
+            JsonObject snapshot=Snapshot(tick);snapshot["lightingScene"]=SceneSnapshot();snapshot["mainRngBeforeUpdate"]=beforeUpdate;snapshot["mainRngAfterUpdate"]=afterUpdate;snapshots.Add(snapshot);
             if(!capture&&!drawNativeDust&&!drawVanillaProjectiles&&activeVfx is null&&zombie is null)return;
             activeVfx?.BeginFrame();
             if(drawNativeDust){snapshot["nativeDustBeforeDraw"]=DustState();ConfigureDustReport();}
@@ -301,12 +321,31 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
             var center=(Vector2)Field(emission,"Center")!;
             detached.Add(new JsonObject{["sourceKey"]=Field(emission,"SourceKey")?.ToString(),["texturePath"]=Field(emission,"TexturePath")?.ToString(),["primitiveKind"]=Field(emission,"PrimitiveKind")?.ToString(),["startTick"]=Convert.ToUInt64(Field(emission,"StartUpdate")),["duration"]=Convert.ToInt32(Field(emission,"Duration")),["x"]=center.X,["y"]=center.Y});
         }
-        return new JsonObject{["tick"]=tick,["materialRecordCount"]=rows.Count,["particleCount"]=total,["records"]=rows,["pathRecordCount"]=paths.Count,["paths"]=paths,["detachedRecordCount"]=detached.Count,["detached"]=detached};
+        var shapes=new JsonArray();
+        foreach(object emission in (IEnumerable)GetStatic("ShapeEmissions")!) {
+            object design=Field(emission,"Design")!,geometry=Field(design,"Geometry")!,frame=Field(emission,"Frame")!;
+            var position=(Vector2)Field(frame,"Position")!;
+            shapes.Add(new JsonObject{["sourceKey"]=Field(emission,"SourceKey")?.ToString(),["kind"]=Field(geometry,"Kind")?.ToString(),["attachment"]=Field(geometry,"Attachment")?.ToString(),["rotationFrame"]=Field(geometry,"RotationFrame")?.ToString(),["dueTick"]=Convert.ToUInt64(Field(emission,"Due")),["durationTicks"]=Convert.ToInt32(Field(design,"Duration")),["x"]=position.X,["y"]=position.Y});
+        }
+        var contours=new JsonArray();
+        foreach(object emission in (IEnumerable)GetStatic("ContourEmissions")!) {
+            object design=Field(emission,"Design")!,frame=Field(emission,"Frame")!;
+            var draws=new JsonArray();
+            foreach(object draw in (IEnumerable)Field(design,"Draws")!) {
+                var path=new JsonArray();
+                if(Field(draw,"StrokePath") is IEnumerable points)
+                    foreach(Vector2 point in points)path.Add(new JsonObject{["x"]=point.X,["y"]=point.Y});
+                draws.Add(new JsonObject{["texturePath"]=Field(draw,"TexturePath")?.ToString(),["triangleCount"]=((Array)Field(draw,"Triangles")!).Length,["strokePath"]=path});
+            }
+            var position=(Vector2)Field(frame,"Position")!;
+            contours.Add(new JsonObject{["sourceKey"]=Field(emission,"SourceKey")?.ToString(),["attachment"]=Field(design,"Attachment")?.ToString(),["rotationFrame"]=Field(design,"RotationFrame")?.ToString(),["dueTick"]=Convert.ToUInt64(Field(emission,"Due")),["durationTicks"]=Convert.ToInt32(Field(design,"Duration")),["x"]=position.X,["y"]=position.Y,["draws"]=draws});
+        }
+        return new JsonObject{["tick"]=tick,["materialRecordCount"]=rows.Count,["particleCount"]=total,["records"]=rows,["pathRecordCount"]=paths.Count,["paths"]=paths,["detachedRecordCount"]=detached.Count,["detached"]=detached,["shapeRecordCount"]=shapes.Count,["shapes"]=shapes,["contourRecordCount"]=contours.Count,["contours"]=contours};
     }
     public void Dispose()
     {
         if(disposed)return;disposed=true;bool oldDedicated=Main.dedServ;Main.dedServ=false;
-        try {system.Unload();particleManager.Unload();actualMod.Unload();mod.Assets.Dispose();registry.Remove(mod.Name);
+        try {system.Unload();materialTextures?.Unload();particleManager.Unload();actualMod.Unload();mod.Assets.Dispose();registry.Remove(mod.Name);
             if(luminanceResources is not null){luminanceResources.Assets.Dispose();registry.Remove(luminanceResources.Name);}
             foreach(var field in typeof(Terraria.ModLoader.Config.ConfigManager).GetFields(All))if(field.IsStatic&&field.GetValue(null) is IDictionary dictionary&&dictionary.Contains(mod))dictionary.Remove(mod);
         } finally {

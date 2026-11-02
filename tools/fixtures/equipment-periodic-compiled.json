@@ -1,5 +1,5 @@
 {
-  "name": "Capability Witness configure_accessory",
+  "name": "Capability Witness accessory",
   "category": "generic",
   "runtimeProgram": {
     "apiVersion": "infini.runtime-program.v5",
@@ -26,11 +26,11 @@
             "periodTicks": 6,
             "entityId": "witness_child",
             "count": 1,
-            "spreadRadians": 0.0,
             "damageBasis": "authored_child",
             "knockbackBasis": "authored_child",
             "damageMultiplier": 0.5,
-            "delayTicks": 0
+            "delayTicks": 0,
+            "spreadRadians": 0.0
           }
         ],
         "visual": {
@@ -109,11 +109,10 @@
     "itemUse": {
       "configured": true,
       "useStyle": "shoot",
-      "hideUseGraphic": false,
+      "hideUseGraphic": true,
       "disableMeleeHitbox": true,
       "channel": false,
       "handPose": "one_handed",
-      "releaseTiming": "immediate",
       "holdoutOffsetX": 0,
       "holdoutOffsetY": 0
     }
@@ -126,6 +125,7 @@
     "useTime": 20,
     "useAnimation": 20,
     "manaCost": 0,
+    "manaCostInput": "both",
     "rarity": 1,
     "value": 1000,
     "maxStack": 1,
@@ -138,8 +138,7 @@
     "useTurn": true,
     "holdoutOffsetX": 0,
     "holdoutOffsetY": 0,
-    "handPose": "one_handed",
-    "releaseTiming": "immediate"
+    "handPose": "one_handed"
   },
   "accessory": {
     "enabled": true,

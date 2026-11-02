@@ -20,14 +20,18 @@ internal static partial class EngineRuntimeChecks
             {
                 bool body=entity.Kind==RuntimeEntityKind.ItemBody;
                 if(body && renderedVfx && WEquipmentBodyEventsSupported(data) && action.Event is RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill)continue;
+                bool hitNpcCallback=action.Event==RuntimeEventKind.OnHit
+                    && action.ActionCode is RuntimeEventActionCode.ApplyStatus or RuntimeEventActionCode.Pull;
                 bool supported=body
                     ? action.Event is RuntimeEventKind.OnUse or RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit
                         && (action.ActionCode==RuntimeEventActionCode.SpawnEntity
                             || (action.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit && action.ActionCode is RuntimeEventActionCode.HealOwner or RuntimeEventActionCode.ApplyNpcEffect))
+                        || hitNpcCallback
                     : action.ActionCode is RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.SelectTargetsAndEmit or RuntimeEventActionCode.DamageNearby
                         || action.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit && action.ActionCode==RuntimeEventActionCode.ApplyNpcEffect
+                        || hitNpcCallback
                         || renderedVfx && action.ActionCode==RuntimeEventActionCode.HealOwner;
-                if(!supported) throw new NotSupportedException("Client hybrid admits item-body on_use/on_hit/on_crit spawn and on_hit/on_crit healing or NPC effects; projectile callbacks admit spawn/select-target emission/native nearby damage, on_hit/on_crit NPC effects and rendered healing");
+                if(!supported) throw new NotSupportedException("Client hybrid admits item-body on_use/on_hit/on_crit spawn and on_hit/on_crit healing or NPC effects, on_hit native status/pull; projectile callbacks admit spawn/select-target emission/native nearby damage, on_hit/on_crit NPC effects, on_hit native status/pull and rendered healing");
             }
     }
     private delegate void WItemEventOriginal(GeneratedItem self,Player player,RuntimeEntitySpec entity,string eventName,NPC? target,int damageDone,string? useInput);

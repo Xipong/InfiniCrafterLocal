@@ -63,6 +63,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
     public override void Load()
     {
         LoadLibrary();
+        if(!Main.dedServ)InfiniItemVfxRuntime.LoadItemHistory();
         if (!Main.dedServ)
             On_Main.DrawProjectiles += DrawProjectiles;
     }
@@ -71,6 +72,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
     {
         if (!Main.dedServ)
             On_Main.DrawProjectiles -= DrawProjectiles;
+        if(!Main.dedServ)InfiniItemVfxRuntime.UnloadItemHistory();
         ClearLibrary(unload:true);
         Clear();
     }
@@ -82,6 +84,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
     public override void PostUpdateEverything()
     {
         if (!Main.dedServ) {
+            InfiniItemVfxRuntime.PruneHeldHistory();
             UpdateMaterials();
             PruneExpired();
         }

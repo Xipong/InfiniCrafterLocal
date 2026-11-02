@@ -237,7 +237,6 @@ public sealed class GameplaySpec : IItemEffectsSpec
     public int HoldoutOffsetX { get; set; } = 0;
     public int HoldoutOffsetY { get; set; } = 0;
     public string HandPose { get; set; } = "";
-    public string ReleaseTiming { get; set; } = "";
     public int ManaCost { get; set; } = 0;
     private string? _manaCostInput;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

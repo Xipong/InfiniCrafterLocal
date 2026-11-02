@@ -13,6 +13,29 @@ using Terraria.ModLoader;
 
 internal static partial class EngineRuntimeChecks
 {
+    // Exact retained combat examples, not a general legacy importer. Never overwrite the archived bytes.
+    private static JsonArray PlayedSecondaryCurrentTestEnvelopes()
+    {
+        string wire = File.ReadAllText(Path.Combine("tools", "fixtures", "played-secondaries-delivered.json"));
+        Equal("def06370b2d47cb11920972b6d60681046997afd199d97050cab60e7bcf5e8a5",
+            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(wire))).ToLowerInvariant(), "immutable secondary source");
+        var rows = JsonNode.Parse(wire)!.AsArray();
+        foreach (var row in rows)
+        {
+            var original = row!.DeepClone();
+            Equal(true, GeneratedItemData.FromJson(row.ToJsonString()) is null, "retired original secondary DTO remains rejected");
+            Equal("immediate", row["runtimeProgram"]!["itemUse"]!["releaseTiming"]!.GetValue<string>(), "known saved secondary runtime timing");
+            Equal("immediate", row["gameplay"]!["releaseTiming"]!.GetValue<string>(), "known saved secondary gameplay timing");
+            row["runtimeProgram"]!["itemUse"]!.AsObject().Remove("releaseTiming");
+            row["gameplay"]!.AsObject().Remove("releaseTiming");
+            var restored = row.DeepClone();
+            restored["runtimeProgram"]!["itemUse"]!["releaseTiming"] = "immediate";
+            restored["gameplay"]!["releaseTiming"] = "immediate";
+            Equal(true, JsonNode.DeepEquals(original, restored), "all combat, visual and identity fields preserved");
+        }
+        return rows;
+    }
+
     private static GeneratedItem TooltipSecondaryHost(GeneratedItemData data)
     {
         var host = AttachItem(new GeneratedItem(), new Item { type = 9, stack = 1 }, data);
@@ -83,7 +106,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void NearbyDamageTooltipUsesExplicitCapWithoutFallback()
     {
-        var row = JsonNode.Parse(File.ReadAllText(Path.Combine("tools", "fixtures", "played-secondaries-delivered.json")))!.AsArray()[0]!;
+        var row = PlayedSecondaryCurrentTestEnvelopes()[0]!;
         WithForgePresentationLanguages(locale =>
         {
             var data = GeneratedItemData.FromJson(row.ToJsonString())
@@ -119,7 +142,7 @@ internal static partial class EngineRuntimeChecks
 
     public static void PlayedSecondaryTooltipsDescribeExactDeliveredCombat()
     {
-        var rows = JsonNode.Parse(File.ReadAllText(Path.Combine("tools", "fixtures", "played-secondaries-delivered.json")))!.AsArray();
+        var rows = PlayedSecondaryCurrentTestEnvelopes();
         WithForgePresentationLanguages(locale =>
         {
             foreach (var row in rows)

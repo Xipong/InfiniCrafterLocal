@@ -10,14 +10,29 @@ using Microsoft.Xna.Framework.Graphics;
 
 internal static partial class EngineRuntimeChecks
 {
+    // Explicit current test counterpart; the captured delivery stays immutable
+    // and is refused by the strict reader. This is not a production importer.
+    private static string DocxCurrentVisibilityControlJson()
+    {
+        string raw = File.ReadAllText("tools/fixtures/docx-image-ready-delivered.json");
+        Equal(true, GeneratedItemData.FromJson(raw) is null, "retired visibility envelope is refused");
+        var node = System.Text.Json.Nodes.JsonNode.Parse(raw)!;
+        Equal("immediate", node["gameplay"]!["releaseTiming"]!.GetValue<string>(), "exact archived gameplay visibility");
+        Equal("immediate", node["runtimeProgram"]!["itemUse"]!["releaseTiming"]!.GetValue<string>(), "exact archived item visibility");
+        node["gameplay"]!.AsObject().Remove("releaseTiming");
+        node["runtimeProgram"]!["itemUse"]!.AsObject().Remove("releaseTiming");
+        node["runtimeProgram"]!["itemUse"]!["hideUseGraphic"] = true; // Preserve the explicit old hidden override.
+        return node.ToJsonString();
+    }
+
     // Linked canonical sources, actual delivery JSON and bytes, real FNA CPU
     // queues; only GPU decode/upload/dispose/flush are intercepted by the probe.
     private static void DocxReadyQueryAliasReachesInventoryAndWorld()
     {
         WithLighting((_, __) => {
             using var peers = new ReviewPeers(); using var probe = new AssetInvalidationProbe();
-            var data = GeneratedItemData.FromJson(File.ReadAllText("tools/fixtures/docx-image-ready-delivered.json"))
-                ?? throw new Exception("retained final Python delivery must be admitted by native DTO");
+            var data = GeneratedItemData.FromJson(DocxCurrentVisibilityControlJson())
+                ?? throw new Exception("current image-readiness control must be admitted by native DTO");
             GeneratedItemRegistryService.StampCurrentWorld(data);
             string file = GeneratedAssetSyncService.FileNameFromPath(data.Visual.SpritePath);
             byte[] expected = File.ReadAllBytes("tools/fixtures/docx-image-ready.png");
@@ -80,7 +95,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void DocxNativeItemReadyDomainRejectsUnfinishedProducer()
     {
-        var wire = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText("tools/fixtures/docx-image-ready-delivered.json"))!;
+        var wire = System.Text.Json.Nodes.JsonNode.Parse(DocxCurrentVisibilityControlJson())!;
         foreach (string status in new[] { "pending", "generating", "skipped_disabled_by_settings", "not_required", "future_unknown" }) {
             wire["visual"]!["spriteStatus"] = status;
             Equal(true, GeneratedItemData.FromJson(wire.ToJsonString()) is null, "unfinished root producer refused: " + status);
@@ -94,7 +109,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void DocxNativeSiblingProducerStatusesMatchDelivery()
     {
-        string json = File.ReadAllText("tools/fixtures/docx-image-ready-delivered.json");
+        string json = DocxCurrentVisibilityControlJson();
         foreach (string status in new[] { "generated", "generated_warn_invalid", "fallback", "fallback_after_failed_generation", "pending", "generating", "not_required", "future_unknown", "" })
         {
             bool expected = status is "generated" or "generated_warn_invalid" or "fallback" or "fallback_after_failed_generation";
@@ -120,7 +135,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void DocxVfxProducerQueryAliasMatchesAssetOwner()
     {
-        string json = File.ReadAllText("LocalGenerator/tests/fixtures/placed_vfx_final_wire.json");
+        string json = PlacedVfxCurrentVisibilityControlJson();
         foreach (string path in new[] { "synthetic.png", "https://offline.invalid/synthetic.png?revision=2#cached" })
         {
             var wire = System.Text.Json.Nodes.JsonNode.Parse(json)!;

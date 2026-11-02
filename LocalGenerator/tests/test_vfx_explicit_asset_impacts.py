@@ -94,3 +94,24 @@ def test_twelve_slot_ceiling_can_keep_twelve_distinct_authored_textures(monkeypa
     data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "maximum-distinct-art")
     assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
     assert len(vfx_validation.vfx_png_dependencies(data, raw, require_used=True)["dependencies"]) == 12
+
+
+def test_default_slot_budget_admits_sparse_and_twelve_but_not_thirteen(monkeypatch):
+    import importlib
+
+    try:
+        with monkeypatch.context() as context:
+            context.delenv("INFINI_VFX_LLM_DIRECTOR_MAX_SLOTS", raising=False)
+            importlib.reload(vfx_config)
+            data = _data()
+            assert vfx_surface.vfx_director_surface(data)["maxSlots"] == 12
+            for count in (0, 3, 12, 13):
+                raw = {"schema": vfx_contract.VFX_DIRECTOR_SCHEMA, "slots": [], "assets": []}
+                for index in range(count):
+                    single = impact(data, f"default_art_{index}")
+                    raw["slots"].extend(single["slots"])
+                    raw["assets"].extend(single["assets"])
+                result = vfx_validation.validate_vfx_director_output(raw, data)
+                assert result["ok"] == (count <= 12), result["errors"]
+    finally:
+        importlib.reload(vfx_config)

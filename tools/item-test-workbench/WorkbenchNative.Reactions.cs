@@ -49,9 +49,10 @@ internal static partial class EngineRuntimeChecks
     private static JsonArray WHostileSnapshots()=>new(Terraria.Main.npc.Skip(2).Take(8).Where(n=>n.type==NPCID.Zombie).Select(n=>(JsonNode?)new JsonObject{
         ["targetState"]=WTargetState(n),["slot"]=n.whoAmI,["nativeType"]=n.type,["active"]=n.active,["life"]=n.life,["x"]=WFinite(n.position.X),["y"]=WFinite(n.position.Y),["width"]=n.width,["height"]=n.height,["nonFinite"]=!WEntityFinite(n),["controlledAiStyle"]=n.aiStyle}).ToArray());
     private static bool WReactionAction(string kind)=>kind is "hurt_player" or "strike_hostile";
-    private static void WValidateReactionAction(JsonNode action,bool full,bool client)
+    private static void WValidateReactionAction(JsonNode action,bool full,bool client,bool renderedPlayerHurt=false)
     {
-        if(!full || client)throw new NotSupportedException("Reaction stimuli require full CPU Player.Update; rendered enemy/player damage effects are not admitted");
+        if(!full || client && !(renderedPlayerHurt && action["kind"]!.GetValue<string>()=="hurt_player"))
+            throw new NotSupportedException("Reaction stimuli require full CPU Player.Update, or rendered hurt_player with native player and dust; rendered hostile death is not admitted");
         WKeys(action,"reaction stimulus","kind","tick","damage");
         if(WInt(action,"damage",0) is < 1 or > 10000)throw new ArgumentException("reaction stimulus damage must be 1..10000");
     }

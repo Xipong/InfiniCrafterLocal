@@ -111,7 +111,7 @@ internal static partial class EngineRuntimeChecks
                 var projectile=new Projectile{rotation=0,scale=1,spriteDirection=1};
                 var selected=new SpritePresentationSelection("probe",null,null,ImpactTexture:true);
                 var pose=(VfxTrailPose)typeof(InfiniVfxRuntime).GetMethod("CaptureTrailPose",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,new object?[]{texture,projectile,null,selected,5f})!;
-                Equal(5f,pose.Scale,"old trail multiplier5 executes without4clamp");
+                Equal(new Vector2(5),pose.Scale,"old trail multiplier5 executes without4clamp");
             } finally {borrowedCache.Textures.Clear();system.OnWorldUnload();MaterialClock(tick);}
         });
     }

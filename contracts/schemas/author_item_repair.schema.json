@@ -3917,23 +3917,13 @@
                     "type": "boolean",
                     "x-infini-semanticType": "bounded_text"
                   },
-                  "customHeldSprite": {
-                    "description": "Generated root sprite visibility during active use. inherit or omission follows hideUseGraphic; hidden/visible override it.",
-                    "enum": [
-                      "hidden",
-                      "visible",
-                      "inherit"
-                    ],
-                    "type": "string",
-                    "x-infini-semanticType": "bounded_text"
-                  },
                   "disableMeleeHitbox": {
                     "description": "Disable vanilla item melee hitbox",
                     "type": "boolean",
                     "x-infini-semanticType": "bounded_text"
                   },
                   "handPose": {
-                    "description": "Exact renderer hint",
+                    "description": "Optional native composite-arm hint: nonempty enables the front arm; two_handed also enables the back arm",
                     "enum": [
                       "",
                       "one_handed",
@@ -3951,7 +3941,7 @@
                   },
                   "holdoutOffsetX": {
                     "default": 0,
-                    "description": "Held draw offset X",
+                    "description": "Native HoldoutOffset X; applicability and orientation follow Terraria use style",
                     "maximum": 96,
                     "minimum": -96,
                     "type": "integer",
@@ -3961,7 +3951,7 @@
                   },
                   "holdoutOffsetY": {
                     "default": 0,
-                    "description": "Held draw offset Y",
+                    "description": "Native HoldoutOffset Y; applicability and orientation follow Terraria use style",
                     "maximum": 96,
                     "minimum": -96,
                     "type": "integer",
@@ -8941,7 +8931,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "intervalSeconds": {
-                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Firing interval",
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Time to the first target check and between later checks. If no target passes the range/LOS filters, that opportunity is skipped until the next interval.",
                     "maximum": 60.0,
                     "minimum": 0.09166666666666666,
                     "type": "number",

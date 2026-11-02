@@ -23,6 +23,7 @@ LLM/image-запросов, импорта runtime, создания cache/PNG/�
 | Задача | Команда | Что действительно проверяет |
 |---|---|---|
 | Исторический midgame / классический Live20 | `python -m toolbox live10` / `live20` | Исходные 10 / 20 комбинаций с их собственными parent inputs |
+| Собственная панель, в том числе 40 случаев | `python -m toolbox live20 --cases-file /path/to/cases.json --runtime-dump /path/to/parents.jsonl --expected-case-count 40` | Явно предоставленные оператором пары и parent inputs; [формат и границы](fixtures/README.md#частная-панель-из-40-случаев) |
 | Найти все пакеты запросов | `python -m toolbox panels` | Пары ингредиентов, provenance, число cases и пути к исходным fixtures |
 | Узнать prerequisites | `python -m toolbox doctor` | Пути, доступность Python-модулей/команд, native-команда из manifest; без чтения credentials |
 | Разобрать сохранённую кампанию | `python -m toolbox summary /path/to/campaign` | Results + logical/HTTP/retry/image ledgers, пропуски, дубликаты и незавершённые запросы |
@@ -66,7 +67,7 @@ python -m toolbox workbench native-review /path/new-run/native.json --out /path/
 toolbox/
   __main__.py, cli.py      публичные команды
   infini_toolbox.py        discovery выбранного проекта
-  live/                   одна реализация Live10 и Live20
+  live/                   одна реализация исторических и custom panels
     catalog.py            каталог JSON-пакетов и defaults
     panels.py             загрузка выбранных пар и их собственных родителей
     preflight.py          read-only admission/config/source checks
@@ -76,9 +77,9 @@ toolbox/
     README.md             настройки и явный live-запуск
   fixtures/
     panels/               исходные пары Live10 midgame / Live20 / sprite-вариант
-    parents/              отдельные исторические parent snapshots
+    parents/              исторические snapshots встроенных пакетов
     items.jsonl           неизменённые 39 родителей классического Live20
-    classic_provenance.json  SHA256 и источники восстановленных входов
+    *_provenance.json      SHA256 и источники входов
   testing/                adapters к существующим verify/replay owners, doctor
   tests/                  offline CLI, transport, pipeline и accounting tests
   live-generation/        только безопасный shim старой команды Live20

@@ -129,12 +129,17 @@ def _strip_derived_packet_fields(value: Any) -> Any:
 
 def _native_sprite_reference_for_llm(value: Any) -> dict[str, Any]:
     """Copy loaded texture/UI-frame facts, never a collider or inferred display size."""
-    if not isinstance(value, dict) or value.get("source") != "TextureAssets.Item":
+    if not isinstance(value, dict) or value.get("source") not in {"TextureAssets.Item", "TextureAssets.Projectile"}:
         return {}
     width, height = value.get("textureWidthPx"), value.get("textureHeightPx")
     if any(type(dimension) is not int or not 1 <= dimension <= 2_147_483_647 for dimension in (width, height)):
         return {}
     observation = {"source": value["source"], "textureWidthPx": width, "textureHeightPx": height}
+    if value["source"] == "TextureAssets.Projectile":
+        if value.get("frameLayout") != "unknown_custom_draw_possible":
+            return {}
+        observation["frameLayout"] = value["frameLayout"]
+        return observation
     frame = value.get("currentFrame")
     if isinstance(frame, dict) and frame.get("source") in ("texture_bounds", "draw_animation"):
         numbers: list[Any] = [frame.get(key) for key in ("xPx", "yPx", "widthPx", "heightPx")]
@@ -198,7 +203,7 @@ def raw_parent_card_for_llm(item: dict[str, Any], *, include_visual_reference: b
     gd = generated_data_of(item)
     if include_visual_reference and not isinstance(item.get("generatedData"), dict):
         sprite_reference = _native_sprite_reference_for_llm(item.get("spriteReferenceRaw"))
-        if sprite_reference:
+        if sprite_reference and sprite_reference["source"] == "TextureAssets.Item":
             card["raw"]["spriteReference"] = sprite_reference
     direct: dict[str, Any] = {}
     effective: dict[str, Any] = {}
@@ -207,6 +212,12 @@ def raw_parent_card_for_llm(item: dict[str, Any], *, include_visual_reference: b
         direct = compact_projectile_profile(projectile_profile_of(item))
         effective = compact_projectile_profile(effective_projectile_profile_of(item))
         ammo = compact_ammo_profile(item)
+        if include_visual_reference:
+            for target, profile in ((direct, projectile_profile_of(item)),
+                                    (effective, effective_projectile_profile_of(item))):
+                reference = _native_sprite_reference_for_llm(profile.get("spriteReferenceRaw"))
+                if reference and reference["source"] == "TextureAssets.Projectile":
+                    target["spriteReference"] = reference
     if direct:
         card["raw"]["directProjectile"] = direct
     if effective:

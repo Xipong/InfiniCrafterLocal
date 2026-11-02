@@ -147,7 +147,10 @@ def test_real_retry_compactor_retains_selected_frame_with_long_art_and_png_diagn
     assert len(calls) == 4
     for first, retry, role in ((calls[0], calls[1], "item"), (calls[2], calls[3], "runtime:child_projectile")):
         assert _framing(retry["prompt"]) == _framing(first["prompt"])
-        assert "Retain the literal authored silhouette, component count" in retry["prompt"]
+        owner = (frozen["visualKit"]["item"] if role == "item" else
+                 next(row for row in frozen["visualKit"]["entities"] if row["entityId"] == "nail"))
+        for field in ("silhouette", "visualIdentity"):
+            assert _framing(retry["prompt"])[field] == owner[field]
         # The tiny PNG went through real postprocess/validation. No hand-written
         # reasons dictionary and no stubbed retry builder can satisfy this case.
         audit = "itemSpriteValidation" if role == "item" else role + "SpriteValidation"
@@ -196,13 +199,14 @@ def test_image_composition_preserves_prospective_grip_and_literal_topology(monke
     # Assert authored ownership/retry order, not cross-asset completion order.
     calls.sort(key=lambda call: (_framing(call["prompt"]).get("entityId", ""), call["attempt"]))
     root_prompt, arrow_prompt = (call["prompt"] for call in calls)
-    for prompt in (root_prompt, arrow_prompt):
-        assert "Retain the literal authored silhouette, component count, spatial arrangement and distinctive elements" in prompt
-        assert "Do not omit or merge authored parts to simplify the sprite" in prompt
-    assert "visible handle/hand-contact region must contain the declared final-space grip" in root_prompt
-    assert "not the guard, blade or empty space" in root_prompt
-    assert "not a RAW-image coordinate" in root_prompt
-    assert "not a RAW-image coordinate" not in arrow_prompt
+    item_facts, arrow_facts = _framing(root_prompt), _framing(arrow_prompt)
+    assert item_facts["grip"] == data["visualKit"]["item"]["grip"]
+    assert item_facts["silhouette"] == data["visualKit"]["item"]["silhouette"]
+    assert item_facts["visualIdentity"] == data["visualKit"]["item"]["visualIdentity"]
+    assert item_facts["nativeHeldCanvas"]["nativeBodyBindsPngGrip"] is False
+    assert "grip" not in arrow_facts
+    arrow_design = next(row for row in data["visualKit"]["entities"] if row["entityId"] == "nail")
+    assert arrow_facts["silhouette"] == arrow_design["silhouette"]
     assert "semanticReviewStatus" not in result["visual"]
 
 

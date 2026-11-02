@@ -7,3 +7,9 @@ tools/fixtures/placed-body-pre-alpha-delivered.json text eol=lf
 toolbox/fixtures/items.jsonl -text
 toolbox/fixtures/parents/live10-midgame.jsonl -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 toolbox/fixtures/parents/live20-classic-sprites.jsonl -text
+
+# Immutable archived native regression inputs: preserve blob bytes on every checkout.
+LocalGenerator/tests/fixtures/persisted_v5_baseline.json -text
+tools/fixtures/played-silver-delivered.json -text
+tools/fixtures/played-secondaries-delivered.json -text
+tools/fixtures/front-hand-compiled.json -text

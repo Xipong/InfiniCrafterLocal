@@ -17,16 +17,12 @@ Binding сохраняет exact `placementCallId`, `stackCost=1`, `contactDamag
 
 Неактивный ID — зарегистрированная `CapabilitySpec.fixed_wire_literals` константа. Receipt ссылается на реальный `.fn`, имеет статус `technical_projection` и проверяется по точному значению, output и originating call. Старый receipt owner `configure_placeable` удалён; обе текущие tile/wall операции и placement ledger сохраняются.
 
-## Видимость собственного held sprite
+## Видимость held body
 
-| `customHeldSprite` | Прежний wire `releaseTiming` | Смысл |
-|---|---|---|
-| `hidden` | `immediate` | Скрыть собственный held root |
-| `visible` | `on_release` | Сохранить root во время активного использования |
-| `inherit` | пустая строка | Существующее поведение по presentation metadata |
-| поле отсутствует | поле отсутствует | Существующее поведение отсутствующего hint |
-
-Это только собственный held root. `hideUseGraphic` отдельно управляет vanilla sprite. `customHeldSprite` явно выбирает visible/hidden/inherit; current presentation semantics остаются прежними. Retired `heldSpriteVisibilityHint` receipts больше не проходят аудит, включая `after_charge`; wire tokens не переписываются.
+`item_use.hideUseGraphic` — единственная видимость ordinary native item body.
+Отдельные `customHeldSprite`/wire `releaseTiming` удалены: они дублировали смысл,
+который теперь исполняется одним нативным renderer. Hidden/floating projectile
+bodies продолжают управляться своими принятыми capabilities.
 
 ## Recall без параметров blink
 

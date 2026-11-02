@@ -6,6 +6,7 @@ import copy
 import hashlib
 import json
 from typing import Any
+from pathlib import Path
 
 from toolbox.live.catalog import DEFAULT_PRESETS, FIXTURES, load_panel
 
@@ -102,3 +103,34 @@ def load_selection(args: Namespace):
         'casesFile': str(source_path), 'casesFileSha256': cases_file_sha256,
     }
     return runtime_dump, selected_routes, selected_cases, str(source_path), cases_file_sha256, metadata
+
+
+def load_case_input_payloads(source_path: Path, selected_cases: list[tuple[str, dict[str, Any], dict[str, Any]]]) -> dict[str, dict[str, Any]]:
+    """Optional exact native request inputs for real campaigns only.
+
+    Legacy panels still return their historical parent-only selection. An input
+    reference cannot silently replace the selected parent snapshots.
+    """
+    source_path = source_path.resolve()
+    raw = json.loads(source_path.read_text(encoding='utf-8'))
+    rows = raw.get('cases') if isinstance(raw, dict) else raw
+    if not isinstance(rows, list) or any(not isinstance(row, dict) or 'case' not in row for row in rows):
+        raise ValueError('case input metadata must contain case objects')
+    by_case = {row['case']: row for row in rows}
+    result = {}
+    for case_id, item_a, item_b in selected_cases:
+        reference = by_case[case_id].get('inputJson')
+        if reference is None:
+            continue
+        if not isinstance(reference, str) or not reference.strip():
+            raise ValueError('inputJson must be a nonempty file reference')
+        path = (source_path.parent / reference).resolve()
+        with path.open('rb') as handle:
+            blob = handle.read(32 * 1024 * 1024 + 1)
+        if len(blob) > 32 * 1024 * 1024:
+            raise ValueError('inputJson exceeds 32 MiB')
+        payload = json.loads(blob)
+        if not isinstance(payload, dict) or payload.get('itemA') != item_a or payload.get('itemB') != item_b:
+            raise ValueError('inputJson parents differ from selected canonical snapshots')
+        result[case_id] = {'payload': payload, 'path': str(path), 'sha256': hashlib.sha256(blob).hexdigest()}
+    return result

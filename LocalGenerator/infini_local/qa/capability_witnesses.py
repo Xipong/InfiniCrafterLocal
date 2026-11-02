@@ -26,9 +26,9 @@ _ITEM_BASE_STATS = {
 }
 _ITEM_BASE_USE = {
     "useStyle": "shoot", "autoReuse": False, "useTurn": True,
-    "hideUseGraphic": False, "disableMeleeHitbox": True, "channel": False,
+    "hideUseGraphic": True, "disableMeleeHitbox": True, "channel": False,
     "holdoutOffsetX": 0, "holdoutOffsetY": 0,
-    "handPose": "one_handed", "customHeldSprite": "hidden",
+    "handPose": "one_handed",
 }
 _SPAWN = {"velocity": {"speed": 30.0}, "count": 1, "spreadRadians": 0.0, "offsetBlocks": 0, "aim": "cursor", "position": {"at": "activation_origin"}}
 _DAMAGE = {"damageClass": "generic", "damage": 20, "knockback": 3.0, "ownerHitCheck": False}
@@ -241,7 +241,7 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
             item_use = deepcopy(_ITEM_BASE_USE)
             if fn in {"channel_beam", "charge_then_release", "move_flail_tether", "move_yoyo_hover"}:
                 item_use["channel"] = True
-                item_use["customHeldSprite"] = "visible"
+                item_use["hideUseGraphic"] = False
             calls.append(_call("item_use", "item_use", "item", item_use))
         if fn == "target_and_fire":
             kind = "stationary_projectile"

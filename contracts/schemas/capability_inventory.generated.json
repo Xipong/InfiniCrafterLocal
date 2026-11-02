@@ -1291,7 +1291,7 @@
         }
       },
       "positionOwnership": "owns_position_while_active",
-      "purpose": "Move around an anchored orbit with per-instance phase.",
+      "purpose": "Circular path in world XY around the selected anchor, with per-instance phase. The path has no terrain avoidance; tile collision is configured separately.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -2452,14 +2452,12 @@
         "gameplay.holdoutOffsetX",
         "gameplay.holdoutOffsetY",
         "gameplay.handPose",
-        "gameplay.releaseTiming",
         "runtimeProgram.itemUse.configured",
         "runtimeProgram.itemUse.useStyle",
         "runtimeProgram.itemUse.hideUseGraphic",
         "runtimeProgram.itemUse.disableMeleeHitbox",
         "runtimeProgram.itemUse.channel",
         "runtimeProgram.itemUse.handPose",
-        "runtimeProgram.itemUse.releaseTiming",
         "runtimeProgram.itemUse.holdoutOffsetX",
         "runtimeProgram.itemUse.holdoutOffsetY"
       ],
@@ -2483,20 +2481,6 @@
           "minimum": null,
           "reference": null,
           "required": true,
-          "semanticType": "bounded_text",
-          "units": ""
-        },
-        "customHeldSprite": {
-          "enum": [
-            "hidden",
-            "visible",
-            "inherit"
-          ],
-          "kind": "string",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": false,
           "semanticType": "bounded_text",
           "units": ""
         },

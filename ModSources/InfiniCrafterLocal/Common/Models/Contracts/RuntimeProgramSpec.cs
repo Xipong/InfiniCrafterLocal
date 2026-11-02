@@ -2292,7 +2292,6 @@ public sealed class RuntimeItemUseSpec
     public bool DisableMeleeHitbox { get; set; }
     public bool Channel { get; set; }
     public string HandPose { get; set; } = "";
-    public string ReleaseTiming { get; set; } = "";
     public int HoldoutOffsetX { get; set; }
     public int HoldoutOffsetY { get; set; }
     public void Normalize()
@@ -2300,7 +2299,6 @@ public sealed class RuntimeItemUseSpec
         UseStyle = RuntimeText.Safe(UseStyle, 32).ToLowerInvariant();
         _ = TerrariaRuntimeVocabulary.ResolveItemUseStyle(UseStyle);
         HandPose = RuntimeText.Safe(HandPose, 32).ToLowerInvariant();
-        ReleaseTiming = RuntimeText.Safe(ReleaseTiming, 32).ToLowerInvariant();
         HoldoutOffsetX = Math.Clamp(HoldoutOffsetX, -96, 96);
         HoldoutOffsetY = Math.Clamp(HoldoutOffsetY, -96, 96);
     }

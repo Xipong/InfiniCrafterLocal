@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
+using Terraria.DataStructures;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using InfiniCrafterLocal.Common.Models;
@@ -20,6 +22,10 @@ internal sealed class WNativeActiveVfx : IDisposable
     delegate void TrailObserver(TrailOriginal orig, Texture2D pixel, VfxManifestSpec manifest, ref InfiniVfxState state, Color color, float width);
     delegate void ExplicitTrailOriginal(Texture2D pixel,Projectile projectile,GeneratedItemData data,string entityId,VfxSlotSpec slot,VfxManifestSpec manifest,ref InfiniVfxState state);
     delegate void ExplicitTrailObserver(ExplicitTrailOriginal orig,Texture2D pixel,Projectile projectile,GeneratedItemData data,string entityId,VfxSlotSpec slot,VfxManifestSpec manifest,ref InfiniVfxState state);
+    delegate void HeldTrailOriginal(GeneratedItemData data,string entity,int owner,VfxSlotSpec slot,IReadOnlyList<VfxTrailSample> samples,DrawData draw);
+    delegate void HeldTrailObserver(HeldTrailOriginal orig,GeneratedItemData data,string entity,int owner,VfxSlotSpec slot,IReadOnlyList<VfxTrailSample> samples,DrawData draw);
+    readonly Hook heldTrail;
+    JsonArray heldDraws=new();
     readonly Hook trail;
     readonly Hook explicitTrail;
     readonly WNativeVisualGeometry? geometry;
@@ -48,8 +54,17 @@ internal sealed class WNativeActiveVfx : IDisposable
                 var geometryRows=WNativeVisualGeometry.Capture(()=>orig(pixel,projectile,data,entityId,slot,manifest,ref nativeState));
                 state=nativeState;
                 explicitDraws.Add(new JsonObject{["slotId"]=slot.Id,["entityId"]=entityId,["draw"]=slot.Trail!.Draw,["source"]=slot.Trail.Source,
-                    ["submittedSegments"]=geometryRows.Count,["nativeMagicPixel"]=ReferenceEquals(pixel,TextureAssets.MagicPixel.Value),
+                    ["submittedSegments"]=geometryRows.Count,["geometry"]=geometryRows,["nativeMagicPixel"]=ReferenceEquals(pixel,TextureAssets.MagicPixel.Value),
                     ["entrypoint"]="InfiniVfxRuntime.Draw -> DrawExplicitTrail -> DrawExplicitTrailSamples -> SpriteBatch.Draw (original)"});
+            }));
+        heldTrail=new Hook(typeof(InfiniItemVfxRuntime).GetMethod("DrawHeldHistorySlot",All)!,
+            (HeldTrailObserver)((HeldTrailOriginal orig,GeneratedItemData data,string entity,int owner,VfxSlotSpec slot,IReadOnlyList<VfxTrailSample> samples,DrawData body)=>{
+                var geometryRows=WNativeVisualGeometry.Capture(()=>orig(data,entity,owner,slot,samples,body));
+                var captured=new JsonArray();
+                foreach(var sample in samples)captured.Add(new JsonObject{["tick"]=sample.Tick,["position"]=WNativeVisualGeometry.Point(sample.Position),["rotation"]=sample.Pose?.Rotation});
+                heldDraws.Add(new JsonObject{["slotId"]=slot.Id,["entityId"]=entity,["owner"]=owner,["layer"]=slot.Layer,
+                    ["draw"]=slot.Trail!.Draw,["source"]=slot.Trail.Source,["samples"]=captured,["submittedSegments"]=geometryRows.Count,
+                    ["geometry"]=geometryRows,["entrypoint"]="native final DrawData -> InfiniItemVfxRuntime.DrawHeldHistorySlot -> original history renderer"});
             }));
         BeginFrame();
     }
@@ -58,7 +73,8 @@ internal sealed class WNativeActiveVfx : IDisposable
     {
         draws = new JsonArray();
         explicitDraws = new JsonArray();
-        Frame = new JsonObject { ["historyRibbonDraws"] = draws, ["historyTrailDraws"]=explicitDraws, ["activeProjectilePasses"] = 0 };
+        heldDraws = new JsonArray();
+        Frame = new JsonObject { ["historyRibbonDraws"] = draws, ["historyTrailDraws"]=explicitDraws, ["heldHistoryDraws"]=heldDraws, ["activeProjectilePasses"] = 0 };
     }
 
     public void Draw()
@@ -83,5 +99,5 @@ internal sealed class WNativeActiveVfx : IDisposable
         } finally { Main.spriteBatch.End(); }
     }
 
-    public void Dispose() { explicitTrail.Dispose(); trail.Dispose(); geometry?.Dispose(); }
+    public void Dispose() { heldTrail.Dispose(); explicitTrail.Dispose(); trail.Dispose(); geometry?.Dispose(); }
 }

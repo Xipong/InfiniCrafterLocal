@@ -64,7 +64,7 @@ def _silver_delivery(wire_transport, monkeypatch):
     return delivered
 
 
-def test_native_silver_fixture_is_actual_final_delivery(wire_transport, monkeypatch):
+def test_silver_presentation_survives_current_delivery_without_accepting_retired_envelope(wire_transport, monkeypatch):
     import json
     from pathlib import Path
     fixture = Path(__file__).resolve().parents[2] / "tools/fixtures/played-silver-delivered.json"
@@ -78,8 +78,10 @@ def test_native_silver_fixture_is_actual_final_delivery(wire_transport, monkeypa
     assert not strict_schema_errors(current["realization"], realization_schema())
     assert isinstance(saved["realization"]["selfEvaluation"], dict)
     assert isinstance(current["realization"]["selfEvaluation"], str)
+    report = validate_runtime_wire(saved)
+    assert not report["ok"] and any(e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
+    assert validate_runtime_wire(current)["ok"]
     for payload in (saved, current):
-        assert validate_runtime_wire(payload)["ok"]
         assert vfx_validation.validate_vfx_manifest_wire(payload)["ok"]
     assert saved["visual"] == current["visual"]
     # Fresh Director makes historical point sampling/spawning and identity UV explicit. Keep the
@@ -146,15 +148,24 @@ def test_serialized_visual_packet_preserves_hand_geometry_without_moving_collisi
     assert data == before
 
 
-def test_retained_played_umbrella_geometry_is_admitted_without_reauthoring():
+def test_retained_umbrella_body_is_unchanged_in_explicit_current_visibility_control():
     import json
     from pathlib import Path
     fixture = Path(__file__).resolve().parents[2] / "tools/fixtures/played-umbrellas-delivered.json"
     rows = json.loads(fixture.read_text(encoding="utf-8"))
     assert {row["id"] for row in rows} == {"g_a68f03dee9621149", "g_60d18fd7593d52d8", "g_9e339be4540919d3"}
+    before = copy.deepcopy(rows)
     for row in rows:
-        assert validate_runtime_wire(row)["ok"]
-        assert vfx_validation.validate_vfx_manifest_wire(row)["ok"]
+        report = validate_runtime_wire(row)
+        assert not report["ok"] and any(e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
+        control = copy.deepcopy(row)
+        assert control["gameplay"].pop("releaseTiming") == "immediate"
+        assert control["runtimeProgram"]["itemUse"].pop("releaseTiming") == "immediate"
+        assert control["runtimeProgram"]["itemUse"]["hideUseGraphic"] is True
+        assert validate_runtime_wire(control)["ok"]
+        assert control["runtimeProgram"]["entities"] == row["runtimeProgram"]["entities"]
+        assert control["visual"] == row["visual"]
+        assert vfx_validation.validate_vfx_manifest_wire(control)["ok"]
         entity = next(e for e in row["runtimeProgram"]["entities"] if e["id"] == row["runtimeProgram"]["primaryEntityId"])
         assert entity["movement"] == dict(code=20, name="move_front_hand", params=dict(aimMode="initial", durationTicks=13, hitboxOffsetPx=24, peakStretch="full", startStretch="none"))
         assert entity["hitbox"] == dict(drawScale=1, heightPx=30, hitboxScale=1, widthPx=30)
@@ -163,3 +174,5 @@ def test_retained_played_umbrella_geometry_is_admitted_without_reauthoring():
         if row["id"] == "g_9e339be4540919d3":
             assert [e["action"] for e in entity["events"]] == ["spawn_entity_on_event"]
             assert entity["events"][0]["count"] == 1
+
+    assert rows == before

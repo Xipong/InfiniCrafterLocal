@@ -33,7 +33,7 @@ def _sample_data() -> dict[str, Any]:
             "primaryEntityId": "orb",
             "primaryOwner": "projectile",
             "limits": {"maxEntityCount": 12, "maxChildDepth": 4, "maxEventSpawnsPerActivation": 32},
-            "itemUse": {"configured": True, "useStyle": "shoot", "hideUseGraphic": True, "disableMeleeHitbox": True, "channel": False, "holdoutOffsetX": 0, "holdoutOffsetY": 0, "handPose": "one_handed", "releaseTiming": "immediate"},
+            "itemUse": {"configured": True, "useStyle": "shoot", "hideUseGraphic": True, "disableMeleeHitbox": True, "channel": False, "holdoutOffsetX": 0, "holdoutOffsetY": 0, "handPose": "one_handed"},
             "itemContact": {"hitboxScale": 1.0, "contactForgivenessPx": 0},
             "bindings": [{
                 "id": "primary",

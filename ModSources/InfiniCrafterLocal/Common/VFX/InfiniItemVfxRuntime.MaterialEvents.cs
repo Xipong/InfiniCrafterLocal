@@ -103,6 +103,7 @@ public static partial class InfiniItemVfxRuntime
         if(data is null&&InfiniCrafterLocalMod.GeneratedItems?.TryGet(p.ItemId,out var registered)==true)data=registered;
         if(data is null||!GeneratedItemRegistryService.IsCurrentWorldData(data)||!HasExactSlot(data,p.EntityId,p.Event)||!AcceptMaterialItemEvent(p)||!AdmitRemoteEvent(p.Owner))return;
         VfxSourceBinding? binding=player is not null&&EventSourceItem(player,p.ItemId,p.Event) is GeneratedItem live&&live.PresentationToken==p.Token?VfxSourceBinding.Capture(player,live.Item,data):null;
+        if(p.Event=="on_use"&&binding is not null&&player is not null)BeginHeldHistory(player,data,p.EntityId);
         var allowance=new MaterialEventAllowance(data.VfxManifest.Budget.MaxParticlesTotal);
         EmitMaterialItemSnapshot(data,p,binding,allowance);
         // Simple renderers retain their live-player anchors; the admitted

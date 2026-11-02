@@ -565,6 +565,9 @@ def test_transient_unrecoverable_keying_retries_then_delivers_compact_png(offlin
         # ONLY into the first real postprocess call, not candidate scoring.
         calls.append(True)
         if len(calls) == 1:
+            # Exercise the cold processing path: a valid selected preparation
+            # intentionally bypasses keying, whose failure this control injects.
+            kwargs['prepared'] = None
             with monkeypatch.context() as patch:
                 patch.setattr(post, 'apply_background_removal',
                               lambda *_a, **_k: (_ for _ in ()).throw(ValueError('temporary keyer failure')))

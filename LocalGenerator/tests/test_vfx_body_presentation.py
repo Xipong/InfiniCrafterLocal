@@ -65,11 +65,11 @@ def test_item_body_uses_root_image_and_preserves_explicit_hidden_use():
     body = next(row for row in data["runtimeProgram"]["entities"] if row["kind"] == "item_body")
     body["visual"] = {"assetMode": "baked_sprite"}
     data["visual"] = {"renderSizePx": 48, "forwardAngleDegrees": 0}
-    data["runtimeProgram"]["itemUse"] = {"hideUseGraphic": True, "releaseTiming": "immediate"}
+    data["runtimeProgram"]["itemUse"] = {"hideUseGraphic": True}
     row = next(row for row in vfx_surface._body_presentation(data) if row["entityId"] == body["id"])
     assert row["image"] == {"renderSizePx": 48, "forwardAngleDegrees": 0}
     assert row["coverage"] == "inventory_and_item_use"
-    assert row["itemUse"] == {"hideUseGraphic": True, "releaseTiming": "immediate"}
+    assert row["itemUse"] == {"hideUseGraphic": True}
 
 
 @pytest.mark.parametrize("driver,source", [

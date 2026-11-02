@@ -21,10 +21,10 @@ using InfiniCrafterLocal.Content.Projectiles;
 internal sealed partial class WNativeArtwork:IDisposable {
  const BindingFlags All=BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Instance|BindingFlags.Static;
  readonly RuntimeSpriteCache cache=new();readonly GeneratedAssetSyncService sync=new();readonly Player owner;
- readonly object? oldCache,oldSync;readonly GeneratedHeldItemDrawLayer layer=new();readonly Func<Projectile,int> projectileId;
+ readonly object? oldCache,oldSync;readonly Func<Projectile,int> projectileId;
  readonly HashSet<Texture2D> heldTextures=new();
  WNativeEquipmentLayers? equipmentLayers;
- bool nativePlayer;Hook? heldObserver,playerObserver,proxyObserver,projectileObserver;
+ bool nativePlayer;Hook? playerObserver,proxyObserver,projectileObserver;
  public bool NativePlayerEnabled=>nativePlayer;
  public bool NativeVanillaEnabled=>reviewData is null;
  bool drawVanillaProjectiles;
@@ -41,8 +41,6 @@ internal sealed partial class WNativeArtwork:IDisposable {
  delegate bool ProxyObserver(ProxyOriginal orig,InfiniCrafterLocal.Content.Items.GeneratedItem self,ref PlayerDrawSet draw,ref DrawData item,ref DrawData? colored,ref DrawData? glow);
  delegate bool ProjectileDrawOriginal(GeneratedProjectile self,ref Color color);
  delegate bool ProjectileDrawObserver(ProjectileDrawOriginal orig,GeneratedProjectile self,ref Color color);
- delegate void HeldOriginal(GeneratedHeldItemDrawLayer self,ref PlayerDrawSet draw);
- delegate void HeldObserver(HeldOriginal orig,GeneratedHeldItemDrawLayer self,ref PlayerDrawSet draw);
  delegate void PlayerOriginal(ref PlayerDrawSet draw);
  delegate void PlayerObserver(PlayerOriginal orig,ref PlayerDrawSet draw);
  public void EnableNativePlayer(){
@@ -51,17 +49,13 @@ internal sealed partial class WNativeArtwork:IDisposable {
     bool result=orig(self,ref color);RecordProjectile(self.Projectile,self.Projectile.whoAmI==owner.heldProj?"Native PlayerDrawLayers -> Main.DrawProj -> GeneratedProjectile.PreDraw":"ProjectileLoader.PreDraw -> GeneratedProjectile.PreDraw");return result;
    }));
   if(owner.skinVariant!=0||owner.hair!=0)throw new NotSupportedException("Native player artwork currently requires actual default skinVariant0/hair0");
-  typeof(PlayerDrawLayerLoader).GetMethod("Add",All)!.Invoke(null,new object[]{layer});
   equipmentLayers=new WNativeEquipmentLayers(()=>Frame);
   typeof(PlayerDrawLayerLoader).GetMethod("ResizeArrays",All)!.Invoke(null,null);
-  heldObserver=new Hook(typeof(GeneratedHeldItemDrawLayer).GetMethod("Draw",All)!, (HeldObserver)((HeldOriginal orig,GeneratedHeldItemDrawLayer self,ref PlayerDrawSet draw)=>{
-   int count=draw.DrawDataCache.Count;orig(self,ref draw);for(int i=count;i<draw.DrawDataCache.Count;i++) RecordHeld(draw.DrawDataCache[i]);
-  }));
   playerObserver=new Hook(typeof(PlayerDrawLayers).GetMethod("DrawPlayer_RenderAllLayers",All)!, (PlayerObserver)((PlayerOriginal orig,ref PlayerDrawSet draw)=>{
    Frame["playerRenderAllLayersCalls"]=(Frame["playerRenderAllLayersCalls"]?.GetValue<int>()??0)+1;
    Frame["nativePlayerDrawDataCount"]=draw.DrawDataCache.Count;Frame["nativeGeneratedHeldDrawDataCount"]=draw.DrawDataCache.Count(d=>d.texture is not null&&heldTextures.Contains(d.texture));
    var nativeData=new JsonArray();foreach(var entry in draw.DrawDataCache){
-    if(entry.texture is not null&&heldTextures.Contains(entry.texture))RecordHeldGeometry(entry);
+    if(entry.texture is not null&&heldTextures.Contains(entry.texture)){RecordHeldGeometry(entry);Increment("heldItemDrawCount");}
     if(NativeVanillaEnabled&&ReferenceEquals(entry.texture,Terraria.GameContent.TextureAssets.Item[owner.HeldItem.type].Value)){RecordHeldGeometry(entry);Increment("heldItemDrawCount");}
     string textureIdentity=entry.texture is not null&&heldTextures.Contains(entry.texture)?"generated_held_item":"other";for(int part=0;part<Terraria.ID.PlayerTextureID.Count;part++)if(ReferenceEquals(entry.texture,Terraria.GameContent.TextureAssets.Players[owner.skinVariant,part]?.Value))textureIdentity="Player_"+owner.skinVariant+"_"+part;
     if(ReferenceEquals(entry.texture,Terraria.GameContent.TextureAssets.PlayerHair[owner.hair].Value))textureIdentity="Player_Hair_"+(owner.hair+1);
@@ -71,15 +65,20 @@ internal sealed partial class WNativeArtwork:IDisposable {
     nativeData.Add(new JsonObject{["textureIdentity"]=textureIdentity,["textureWidth"]=entry.texture?.Width,["textureHeight"]=entry.texture?.Height,["positionX"]=entry.position.X,["positionY"]=entry.position.Y,["originX"]=entry.origin.X,["originY"]=entry.origin.Y,["scaleX"]=entry.scale.X,["scaleY"]=entry.scale.Y,["rotation"]=entry.rotation,["sourceX"]=entry.sourceRect?.X,["sourceY"]=entry.sourceRect?.Y,["sourceWidth"]=entry.sourceRect?.Width,["sourceHeight"]=entry.sourceRect?.Height,["effects"]=entry.effect.ToString(),["shader"]=entry.shader});
    }Frame["nativePlayerDrawData"]=nativeData;
    Frame["nativeProxyDrawDataCount"]=draw.DrawDataCache.Count(d=>ReferenceEquals(d.texture,Terraria.GameContent.TextureAssets.Item[owner.HeldItem.type].Value));
-   Frame["nativePlayerDrawSet"]=new JsonObject{["itemX"]=draw.ItemLocation.X,["itemY"]=draw.ItemLocation.Y,["positionX"]=draw.Position.X,["positionY"]=draw.Position.Y,["bodyFrameX"]=draw.drawPlayer.bodyFrame.X,["bodyFrameY"]=draw.drawPlayer.bodyFrame.Y,["legFrameX"]=draw.drawPlayer.legFrame.X,["legFrameY"]=draw.drawPlayer.legFrame.Y};
+   Vector2? nativeHand=draw.drawPlayer.HandPosition;
+   Frame["nativePlayerDrawSet"]=new JsonObject{["itemX"]=draw.ItemLocation.X,["itemY"]=draw.ItemLocation.Y,["positionX"]=draw.Position.X,["positionY"]=draw.Position.Y,["bodyFrameX"]=draw.drawPlayer.bodyFrame.X,["bodyFrameY"]=draw.drawPlayer.bodyFrame.Y,["legFrameX"]=draw.drawPlayer.legFrame.X,["legFrameY"]=draw.drawPlayer.legFrame.Y,
+    ["nativeHandX"]=nativeHand?.X,["nativeHandY"]=nativeHand?.Y,
+    ["rotation"]=draw.rotation,["rotationOriginX"]=draw.rotationOrigin.X,["rotationOriginY"]=draw.rotationOrigin.Y,
+    ["gfxOffY"]=draw.drawPlayer.gfxOffY,["compositeFrontArmEnabled"]=draw.drawPlayer.compositeFrontArm.enabled};
    orig(ref draw);
   }));
   proxyObserver=new Hook(typeof(InfiniCrafterLocal.Content.Items.GeneratedItem).GetMethod("ModifyItemDraw",All)!, (ProxyObserver)((ProxyOriginal orig,InfiniCrafterLocal.Content.Items.GeneratedItem self,ref PlayerDrawSet draw,ref DrawData item,ref DrawData? colored,ref DrawData? glow)=>{
    Frame["nativeProxyBeforeVeto"]=new JsonObject{["positionX"]=item.position.X,["positionY"]=item.position.Y,["originX"]=item.origin.X,["originY"]=item.origin.Y,["rotation"]=item.rotation};bool result=orig(self,ref draw,ref item,ref colored,ref glow);
+   if(result && item.texture is not null && !ReferenceEquals(item.texture,Terraria.GameContent.TextureAssets.Item[self.Item.type].Value))heldTextures.Add(item.texture);
    if(!result)Frame["nativeProxyVetoCount"]=(Frame["nativeProxyVetoCount"]?.GetValue<int>()??0)+1;
    return result;
   }));
-  nativePlayer=true;Report["scope"]="Original native PlayerRenderer body/layer ordering, generated held layer once and full generated projectile PreDraw/PostDraw; separate inventory preview; no Terraria tile/NPC/world renderer";Report["entrypoints"]=Entrypoints();Report["nativePlayerRenderer"]="Main.PlayerRenderer.DrawPlayers / LegacyPlayerRenderer";Report["equipmentOverlayScope"]="Original five GeneratedEquipOverlay draw layers; actual equip/vanity selection and exact authored overlay PNG; no full armor atlas substitution";Report["fullProjectilePreDrawEnabled"]=true;Report["fullProjectilePreDrawExecuted"]=false;Report["missingFullPreDrawAsset"]=null;if(NativeVanillaEnabled){Report["scope"]="Original native PlayerRenderer and vanilla held-item layer using pinned actual item texture; no generated draw substitution";Report["fullProjectilePreDrawEnabled"]=false;}
+  nativePlayer=true;Report["scope"]="Original native PlayerRenderer body/layer ordering, native held image replacement once and full generated projectile PreDraw/PostDraw; separate inventory preview; no Terraria tile/NPC/world renderer";Report["entrypoints"]=Entrypoints();Report["nativePlayerRenderer"]="Main.PlayerRenderer.DrawPlayers / LegacyPlayerRenderer";Report["equipmentOverlayScope"]="Original five GeneratedEquipOverlay draw layers; actual equip/vanity selection and exact authored overlay PNG; no full armor atlas substitution";Report["fullProjectilePreDrawEnabled"]=true;Report["fullProjectilePreDrawExecuted"]=false;Report["missingFullPreDrawAsset"]=null;if(NativeVanillaEnabled){Report["scope"]="Original native PlayerRenderer and vanilla held-item layer using pinned actual item texture; no generated draw substitution";Report["fullProjectilePreDrawEnabled"]=false;}
  }
  public JsonObject Report {get;}=new();
  public JsonObject Frame {get;private set;}=new();
@@ -159,7 +158,7 @@ internal sealed partial class WNativeArtwork:IDisposable {
  }
  static string Hash(byte[] bytes)=>Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
  static void RejectSymlink(string path) {for(FileSystemInfo? p=new FileInfo(path);p is not null;p=p is FileInfo file?file.Directory:((DirectoryInfo)p).Parent)if(p.LinkTarget is not null||(p.Exists&&(p.Attributes&FileAttributes.ReparsePoint)!=0))throw new InvalidDataException("Artwork symlink/reparse path is not admitted: "+p.FullName);}
- JsonArray Entrypoints()=>NativeVanillaEnabled?(drawVanillaProjectiles?new("Main.PlayerRenderer.DrawPlayers","PlayerDrawLayers.DrawPlayer_27_HeldItem","PlayerDrawLayers.DrawPlayer_RenderAllLayers","Main.DrawProj -> SpriteBatch.Draw"):new("Main.PlayerRenderer.DrawPlayers","PlayerDrawLayers.DrawPlayer_27_HeldItem","PlayerDrawLayers.DrawPlayer_RenderAllLayers")):nativePlayer?new("Main.PlayerRenderer.DrawPlayers","GeneratedItem.ModifyItemDraw","GeneratedHeldItemDrawLayer.Draw (native layer loader)","PlayerDrawLayers.DrawPlayer_RenderAllLayers","ProjectileLoader.PreDraw / GeneratedProjectile.PreDraw","ProjectileLoader.PostDraw","GeneratedItem.PreDrawInInventory"):new("GeneratedItem.PreDrawInInventory","GeneratedHeldItemDrawLayer.GetDefaultVisibility/Draw","DrawData.Draw","GeneratedProjectile.DrawAuthoredEntityVisual");
+ JsonArray Entrypoints()=>NativeVanillaEnabled?(drawVanillaProjectiles?new("Main.PlayerRenderer.DrawPlayers","PlayerDrawLayers.DrawPlayer_27_HeldItem","PlayerDrawLayers.DrawPlayer_RenderAllLayers","Main.DrawProj -> SpriteBatch.Draw"):new("Main.PlayerRenderer.DrawPlayers","PlayerDrawLayers.DrawPlayer_27_HeldItem","PlayerDrawLayers.DrawPlayer_RenderAllLayers")):nativePlayer?new("Main.PlayerRenderer.DrawPlayers","GeneratedItem.ModifyItemDraw","GeneratedItem.ModifyItemDraw (native HeldItem owner)","PlayerDrawLayers.DrawPlayer_RenderAllLayers","ProjectileLoader.PreDraw / GeneratedProjectile.PreDraw","ProjectileLoader.PostDraw","GeneratedItem.PreDrawInInventory"):new("GeneratedItem.PreDrawInInventory","GeneratedItem.ModifyItemDraw (requires native PlayerRenderer)","DrawData.Draw","GeneratedProjectile.DrawAuthoredEntityVisual");
  static JsonObject PreviewAnchor()=>new(){["positionX"]=36,["positionY"]=36,["originX"]=24,["originY"]=24,["requestedFrameWidth"]=48,["requestedFrameHeight"]=48,["scope"]="Separate UI preview anchor; original hook determines actual authored PNG size"};
  public void BeginFrame(){heldTextures.Clear();equipmentLayers?.BeginFrame();Frame=new JsonObject{["visualReview"]=PlayerReview(),["projectileGeometry"]=new JsonArray(),["heldGeometry"]=new JsonArray(),["droppedItems"]=new JsonArray(),["unrenderedVanillaProjectiles"]=new JsonArray(),["vanillaProjectileDrawAttemptCount"]=0,["vanillaProjectileDrawAttempts"]=new JsonArray(),["equipmentOverlayDrawCount"]=0,["equipmentOverlayDrawData"]=new JsonArray(),["playerDrawCount"]=0,["playerRenderAllLayersCalls"]=0,["nativeProxyVetoCount"]=0,["nativeProxyDrawDataCount"]=0,["heldItemDrawCount"]=0,["projectileDrawCount"]=0,["inventoryPreviewDrawCount"]=0,["heldDrawData"]=new JsonArray(),["projectileIds"]=new JsonArray(),["projectileDraws"]=new JsonArray(),["entrypoints"]=Entrypoints(),["inventoryPreviewAnchor"]=PreviewAnchor()};}
  void Increment(string key,int amount=1)=>Frame[key]=Frame[key]!.GetValue<int>()+amount;
@@ -184,12 +183,8 @@ internal sealed partial class WNativeArtwork:IDisposable {
    if(active.Any(p=>!p.active))throw new InvalidOperationException("Native player rendering deactivated a projectile; swallowed draw errors cannot certify a successful gameplay run",drawError);
    Frame["playerDrawCount"]=1;return;
   }
-  var draw=new PlayerDrawSet{drawPlayer=owner,ItemLocation=owner.itemLocation,DrawDataCache=new List<DrawData>()};if(!layer.GetDefaultVisibility(draw))return;
-  object[] args={draw};typeof(GeneratedHeldItemDrawLayer).GetMethod("Draw",All)!.Invoke(layer,args);draw=(PlayerDrawSet)args[0];
-  Main.spriteBatch.Begin(SpriteSortMode.Deferred,BlendState.AlphaBlend,SamplerState.PointClamp,DepthStencilState.None,Main.Rasterizer,null,Main.GameViewMatrix.TransformationMatrix);
-  try{foreach(var entry in draw.DrawDataCache){entry.Draw(Main.spriteBatch);RecordHeld(entry);}}finally{Main.spriteBatch.End();}
+  Report["heldRootRendering"]="notRun: ordinary item body requires actual native PlayerRenderer; no partial pose surrogate";
  }
- void RecordHeld(DrawData entry){if(entry.texture is null)throw new InvalidOperationException("Native generated held draw has null texture");if(!nativePlayer)RecordHeldGeometry(entry);heldTextures.Add(entry.texture);Increment("heldItemDrawCount");Frame["heldDrawData"]!.AsArray().Add(new JsonObject{["positionX"]=entry.position.X,["positionY"]=entry.position.Y,["originX"]=entry.origin.X,["originY"]=entry.origin.Y,["scaleX"]=entry.scale.X,["scaleY"]=entry.scale.Y,["rotation"]=entry.rotation,["colorR"]=entry.color.R,["colorG"]=entry.color.G,["colorB"]=entry.color.B,["colorA"]=entry.color.A,["effects"]=entry.effect.ToString(),["textureWidth"]=entry.texture.Width,["textureHeight"]=entry.texture.Height});}
  public void DrawProjectiles() {
   Main.spriteBatch.Begin(SpriteSortMode.Deferred,BlendState.AlphaBlend,SamplerState.PointClamp,DepthStencilState.None,Main.Rasterizer,null,Main.GameViewMatrix.TransformationMatrix);
   try{foreach(var p in Main.projectile.Where(p=>p.active)) {
@@ -214,5 +209,5 @@ internal sealed partial class WNativeArtwork:IDisposable {
  void RecordProjectile(Projectile p,string entrypoint){
   Increment("projectileDrawCount");int id=projectileId(p);Frame["projectileIds"]!.AsArray().Add(JsonValue.Create(id));Frame["projectileDraws"]!.AsArray().Add(new JsonObject{["projectileId"]=id,["nativeSlot"]=p.whoAmI,["nativeIdentity"]=p.identity,["entrypoint"]=entrypoint});
  }
- public void Dispose(){visualObserver?.Dispose();geometryObserver?.Dispose();equipmentLayers?.Dispose();projectileObserver?.Dispose();heldObserver?.Dispose();playerObserver?.Dispose();proxyObserver?.Dispose();if(nativePlayer)typeof(PlayerDrawLayerLoader).GetMethod("Unload",All)!.Invoke(null,null);cache.Dispose();sync.Dispose();typeof(InfiniCrafterLocalMod).GetProperty("Sprites")!.SetValue(null,oldCache);typeof(InfiniCrafterLocalMod).GetProperty("AssetSync")!.SetValue(null,oldSync);}
+ public void Dispose(){visualObserver?.Dispose();geometryObserver?.Dispose();equipmentLayers?.Dispose();projectileObserver?.Dispose();playerObserver?.Dispose();proxyObserver?.Dispose();if(nativePlayer)typeof(PlayerDrawLayerLoader).GetMethod("Unload",All)!.Invoke(null,null);cache.Dispose();sync.Dispose();typeof(InfiniCrafterLocalMod).GetProperty("Sprites")!.SetValue(null,oldCache);typeof(InfiniCrafterLocalMod).GetProperty("AssetSync")!.SetValue(null,oldSync);}
 }

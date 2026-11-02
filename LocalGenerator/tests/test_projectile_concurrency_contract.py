@@ -126,7 +126,16 @@ def test_immutable_old_wire_preserves_concurrency_absence_and_current_admission(
     saved.pop("runtimeContract")
     saved_before = copy.deepcopy(saved)
     report = validate_runtime_wire(saved)
+    assert not report["ok"] and any(e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
+    # A named test counterpart isolates the unchanged concurrency/component
+    # contract; the original envelope is not silently admitted or migrated.
+    control = copy.deepcopy(saved)
+    assert control["gameplay"].pop("releaseTiming") == "immediate"
+    assert control["runtimeProgram"]["itemUse"].pop("releaseTiming") == "immediate"
+    control["runtimeProgram"]["itemUse"]["hideUseGraphic"] = True
+    report = validate_runtime_wire(control)
     assert report["ok"] is accepted, report
+    assert control["runtimeProgram"]["entities"] == saved["runtimeProgram"]["entities"]
     if not accepted:
         assert any(row["code"] == "unsupported_opcode" and row["path"].endswith(".movement.code")
                    for row in report["errors"])

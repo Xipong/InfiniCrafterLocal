@@ -173,6 +173,12 @@ def _director_schema(data: Mapping[str, Any], *, include_legacy: bool = False) -
     slot["allOf"].extend(contour_slot_clauses(item_ids, list(renderers), events))
     slot["allOf"].extend(contour_texture_clauses(_entity_texture_sources(data, include_legacy=include_legacy)))
     slot["allOf"].extend(history_slot_clauses(item_ids, list(renderers), events))
+    use = runtime.get("itemUse") if isinstance(runtime, Mapping) else None
+    if isinstance(use, Mapping) and use.get("hideUseGraphic"):
+        slot["allOf"].append({
+            "if": {"properties": {"entityId": {"enum": item_ids}}, "required": ["entityId"]},
+            "then": {"properties": {"rendererKind": {"enum": [r for r in renderers if r != "historyTrail"]}}},
+        })
     slot["allOf"].extend(history_texture_clauses(_entity_texture_sources(data, include_legacy=include_legacy)))
     slot["allOf"].extend(native_effect_slot_clauses(item_ids, list(renderers), events))
     slot["allOf"].extend(native_cue_slot_clauses(item_ids, list(renderers), events))

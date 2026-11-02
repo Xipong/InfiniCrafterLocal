@@ -77,8 +77,7 @@
           "channel": true,
           "holdoutOffsetX": 0,
           "holdoutOffsetY": 0,
-          "handPose": "",
-          "customHeldSprite": "hidden"
+          "handPose": ""
         }
       },
       {

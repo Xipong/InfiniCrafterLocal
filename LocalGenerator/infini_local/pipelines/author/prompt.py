@@ -337,9 +337,9 @@ def _balance_corridor(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
         "authority": stage.get("authority"),
         "parentDamage": stage.get("sourceDamage"),
         "parentUseTimeTicks": [item_field(parent, "useTime", None) for parent in (a, b)],
-        "parentProgressionFacts": stage.get("sourceNumericProgressionFacts"),
+        "parentCraftDepthFacts": stage.get("sourceCraftDepthFacts"),
         "broadEnvelope": envelope,
-        "rule": "Broad numeric bounds and observed parent values. Acquisition tier requires source progression facts, not rarity or value alone.",
+        "rule": "Parent numbers describe their existing roles, not a power ceiling for a new role; non-combat damage is not a combat balance target. Craft depth records recursive crafting, not acquisition tier. Missing acquisition context is unknown; rarity and value alone do not establish it.",
     }
 
 

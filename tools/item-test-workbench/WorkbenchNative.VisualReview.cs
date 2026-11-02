@@ -21,17 +21,24 @@ internal sealed partial class WNativeArtwork
     Vector2 FrontHand()=>owner.RotatedRelativePoint(owner.GetFrontHandPosition(owner.compositeFrontArm.stretch,owner.compositeFrontArm.rotation),addGfxOffY:false);
     Vector2 RenderedFrontHand()=>owner.RotatedRelativePoint(owner.GetFrontHandPosition(owner.compositeFrontArm.stretch,owner.compositeFrontArm.rotation),addGfxOffY:true);
     JsonObject PlayerReview()=>new(){["nativeFrontHand"]=WNativeVisualGeometry.Point(FrontHand()),["nativeRenderedFrontHand"]=WNativeVisualGeometry.Point(RenderedFrontHand()),["compositeArmEnabled"]=owner.compositeFrontArm.enabled,["armStretch"]=owner.compositeFrontArm.stretch.ToString(),["armRotation"]=owner.compositeFrontArm.rotation,["handScope"]="Native GetFrontHandPosition; authoritative only when composite arm is enabled. For ordinary frame arms inspect native proxy and rendered pixels; do not auto-fail the distance.",["collider"]=WNativeVisualGeometry.Rect(owner.Hitbox),["direction"]=owner.direction,["gravityDirection"]=owner.gravDir,["velocity"]=WNativeVisualGeometry.Point(owner.velocity),["gfxOffY"]=owner.gfxOffY,["fullRotation"]=owner.fullRotation,["accessoryMount"]=reviewData?.Visual.AccessoryMount,["itemAnimation"]=owner.itemAnimation,["itemTime"]=owner.itemTime,["controlUseItem"]=owner.controlUseItem,["channel"]=owner.channel,["visualVerdict"]="review_required",["scope"]="Draw execution/visibility is not aesthetic acceptance; authored reach can intentionally separate grip from hand."};
-    void AddGripDistance(JsonObject row)
+    void AddGripDistance(JsonObject row,bool rootHeld=false)
     {
         if(row["authoredGrip"] is not JsonObject grip)return;
         var point=new Vector2(grip["x"]!.GetValue<float>(),grip["y"]!.GetValue<float>());var delta=point-RenderedFrontHand();
         row["gripMinusGameplayFrontHand"]=WNativeVisualGeometry.Point(point-FrontHand());row["gripMinusRenderedFrontHand"]=WNativeVisualGeometry.Point(delta);row["gripDistancePx"]=owner.compositeFrontArm.enabled?delta.Length():null;row["diagnosticFrameArmGetterDistancePx"]=owner.compositeFrontArm.enabled?null:delta.Length();row["gripDistanceStatus"]=owner.compositeFrontArm.enabled?"measured_composite_hand":"not_authoritative_frame_arm: inspect native proxy and pixels";row["compositeHandAuthoritative"]=owner.compositeFrontArm.enabled;
+        if(rootHeld && !owner.compositeFrontArm.enabled && owner.HeldItem.useStyle==Terraria.ID.ItemUseStyleID.Shoot && owner.HandPosition is Vector2 hand)
+        {
+            row["nativeFrameHand"]=WNativeVisualGeometry.Point(hand);
+            row["gripMinusNativeFrameHand"]=WNativeVisualGeometry.Point(point-hand);
+            row["gripDistancePx"]=(point-hand).Length();
+            row["gripDistanceStatus"]="measured_native_frame_hand: authored holdout displacement remains intentional";
+        }
     }
     void RecordHeldGeometry(DrawData entry)
     {
         Vector2? grip=null;if(reviewData is not null){var selected=SpritePresentation.Root(reviewData);if(selected.Grip is {} g)grip=new Vector2((float)g.NormalizedX,(float)g.NormalizedY);}
         var row=WNativeVisualGeometry.Describe(entry.texture,entry.position,entry.sourceRect,entry.color,entry.rotation,entry.origin,entry.scale,entry.effect,grip);
-        row["kind"]=NativeVanillaEnabled?"vanilla_held_item":"root_held_item";if(NativeVanillaEnabled)row["gripDistanceStatus"]="not_available: no authored vanilla grip; inspect actual native item/player pixels, not ItemLocation-as-hand";row["transformStage"]=nativePlayer?"DrawPlayer_RenderAllLayers: after native DrawPlayer_TransformDrawData":"partial held layer: no full player transform";AddGripDistance(row);Frame["heldGeometry"]!.AsArray().Add(row);
+        row["kind"]=NativeVanillaEnabled?"vanilla_held_item":"root_held_item";if(NativeVanillaEnabled)row["gripDistanceStatus"]="not_available: no authored vanilla grip; inspect actual native item/player pixels, not ItemLocation-as-hand";row["transformStage"]=nativePlayer?"DrawPlayer_RenderAllLayers: after native DrawPlayer_TransformDrawData":"partial held layer: no full player transform";AddGripDistance(row,rootHeld:true);if(!NativeVanillaEnabled){row["gripDistanceStatus"]="diagnostic_only: native frame placement does not bind PNG handle to anatomical hand";row["gripDistancePx"]=null;}Frame["heldGeometry"]!.AsArray().Add(row);
     }
     void EnableVisualObserver()
     {

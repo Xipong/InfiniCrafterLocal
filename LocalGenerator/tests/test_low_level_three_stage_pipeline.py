@@ -442,7 +442,7 @@ def test_author_repair_wire_admission_and_frozen_results(wire_transport, scenari
         stats = next(c for c in current["runtimeProgram"]["calls"] if c["id"] == "item_stats")
         stats["params"]["damage"] = 1999
         fixed = copy.deepcopy(use)
-        fixed["params"].update(useStyle="shoot", customHeldSprite="visible")
+        fixed["params"].update(useStyle="shoot", hideUseGraphic=False)
         frozen_stats = copy.deepcopy(stats)
         frozen_stats["params"]["damage"] = 999
         patch["callsUpsert"] = [fixed, frozen_stats]
@@ -483,7 +483,7 @@ def test_author_repair_wire_admission_and_frozen_results(wire_transport, scenari
         assert context["acceptedItemContext"]["runtimeProgram"] == current["runtimeProgram"]
         calls = {c["id"]: c for c in repaired["runtimeProgram"]["calls"]}
         assert calls["item_use"]["params"]["useStyle"] == "shoot"
-        assert calls["item_use"]["params"]["customHeldSprite"] == "hidden"
+        assert calls["item_use"]["params"]["hideUseGraphic"] is True
         assert calls["item_stats"]["params"]["damage"] == 1999
         assert any(row["reason"] == "independent_valid_node_frozen" for row in repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"])
 

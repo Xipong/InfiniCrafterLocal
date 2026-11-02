@@ -158,7 +158,7 @@ def test_author_context_contains_only_source_backed_parent_packets_and_numeric_b
     assert "primarycategory" not in encoded_parents
     corridor = payload["balanceCorridor"]
     assert corridor["authority"] == "source_numeric_facts_only"
-    assert corridor["parentProgressionFacts"] == [
+    assert corridor["parentCraftDepthFacts"] == [
         {
             "parent": "A",
             "path": "generatedData.recipeMeta.generationDepth",

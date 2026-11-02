@@ -3225,6 +3225,7 @@
       "minimum": null,
       "name": "INFINI_PARTICLE_ASSET_DIR",
       "owners": [
+        "tools/item-test-workbench/verify_contours.py",
         "tools/item-test-workbench/verify_history_ribbon.py"
       ],
       "secret": false,
@@ -3337,6 +3338,7 @@
       "minimum": null,
       "name": "INFINI_PLAYER_ASSET_DIR",
       "owners": [
+        "tools/item-test-workbench/verify_authored_dust.py",
         "tools/item-test-workbench/verify_hit_feedback.py"
       ],
       "secret": false,
@@ -4899,14 +4901,14 @@
     {
       "declarations": [
         {
-          "default": 5,
+          "default": 12,
           "file": "LocalGenerator/infini_local/core/vfx/config.py",
           "maximum": null,
           "minimum": null,
           "type": "integer"
         }
       ],
-      "default": 5,
+      "default": 12,
       "documented": false,
       "example": null,
       "gui": false,
@@ -5452,7 +5454,7 @@
   ],
   "errors": [],
   "fieldCount": 222,
-  "fingerprint": "d94794104fe8dc0b661b18dc8a878f842b2e3eaae4a17ad0f8958b0aa242b873",
+  "fingerprint": "0dfaa622259fb0f19b46b1a10747c014a4b4cd692ec0ffe36ae01e418d2e138f",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

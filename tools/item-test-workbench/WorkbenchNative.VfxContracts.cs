@@ -6,6 +6,19 @@ using InfiniCrafterLocal.Common.Models;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static void WValidateNativeDust(VfxSlotSpec slot,bool nativeDraw)
+    {
+        if(!nativeDraw || slot.Dust is not {Type:"TintableDustLighted" or "Glass" or "GemDiamond" or "Electric"})
+            throw new NotSupportedException("nativeDust requires verified native draw and evidenced TintableDustLighted/Glass/GemDiamond/Electric selector");
+    }
+
+    private static void WValidateShape(VfxSlotSpec slot,bool fullNativeDraw)
+    {
+        if(!fullNativeDraw || !(slot.Shape is {Kind:"arc",Attachment:"world" or "source",RotationFrame:"world" or "source"}
+            or {Kind:"orbit",Attachment:"source",RotationFrame:"world",MoteOrientation:"world"}))
+            throw new NotSupportedException("shape currently requires proven world/source arc or source-bound world-frame orbit and full native draw with original MagicPixel");
+    }
+
     // Part of --check-assertions: actual stand policies, not a GPU/gameplay claim.
     private static void CheckWorkbenchVfxContracts()
     {
@@ -14,14 +27,52 @@ internal static partial class EngineRuntimeChecks
             try{action();}catch(NotSupportedException){rejected=true;}
             if(!rejected)throw new Exception(reason);
         }
+        var dust=new VfxSlotSpec{RendererKind="nativeDust",Dust=new VfxNativeDustSpec{Type="TintableDustLighted"}};
+        WValidateNativeDust(dust,true);
+        Refused(()=>WValidateNativeDust(dust,false),"Dust admitted without native draw");
+        dust.Dust.Type="Glass";WValidateNativeDust(dust,true);
+        dust.Dust.Type="GemDiamond";WValidateNativeDust(dust,true);
+        dust.Dust.Type="Electric";WValidateNativeDust(dust,true);
+        dust.Dust.Type="Smoke";
+        Refused(()=>WValidateNativeDust(dust,true),"Unproven dust admitted");
+        Refused(()=>WValidateNativeDust(new VfxSlotSpec{RendererKind="nativeDust"},true),"Missing dust admitted");
+        var shape=new VfxSlotSpec{RendererKind="shape",Shape=new VfxShapeSpec{Kind="arc",Attachment="world",RotationFrame="world"}};
+        WValidateShape(shape,true);
+        Refused(()=>WValidateShape(shape,false),"Shape admitted without full native draw");
+        shape.Shape.Attachment="source";
+        WValidateShape(shape,true);
+        shape.Shape.Attachment="world";shape.Shape.Kind="sector";
+        Refused(()=>WValidateShape(shape,true),"Unverified sector renderer admitted");
+        shape.Shape.Kind="arc";shape.Shape.RotationFrame="source";
+        WValidateShape(shape,true);
+        Refused(()=>WValidateShape(new VfxSlotSpec{RendererKind="shape"},true),"Missing shape admitted");
+        var orbit=new VfxSlotSpec{RendererKind="shape",Shape=new VfxShapeSpec{Kind="orbit",Attachment="source",RotationFrame="world",MoteOrientation="world"}};
+        WValidateShape(orbit,true);
+        orbit.Shape.RotationFrame="source";Refused(()=>WValidateShape(orbit,true),"Unproven orbit source rotation admitted");
+        orbit.Shape.RotationFrame="world";orbit.Shape.MoteOrientation="radial";Refused(()=>WValidateShape(orbit,true),"Unproven orbit mote orientation admitted");
         var trail=new VfxSlotSpec{RendererKind="historyTrail",Trail=new VfxHistoryTrailSpec{Draw="stroke",Source="center"}};
         WValidateHistoryTrail(trail,true);
         Refused(()=>WValidateHistoryTrail(trail,false),"historyTrail admitted without full PreDraw");
-        trail.Trail.Draw="sprites";
-        Refused(()=>WValidateHistoryTrail(trail,true),"Unverified sprite trail admitted");
+        trail.Trail.Draw="sprites";trail.Trail.Texture=new(){Source="entity",AssetId=""};trail.Trail.Pose="sampled";
+        WValidateHistoryTrail(trail,true);
+        trail.Trail.Texture.Source="library";
+        Refused(()=>WValidateHistoryTrail(trail,true),"Unverified sprite material admitted");
+        trail.Trail.Texture.Source="entity";trail.Trail.Pose="current";
+        Refused(()=>WValidateHistoryTrail(trail,true),"Unverified current-pose trail admitted");
         trail.Trail.Draw="stroke";trail.Trail.Source="tip";
         Refused(()=>WValidateHistoryTrail(trail,true),"Unverified tip trail admitted");
         Refused(()=>WValidateHistoryTrail(new VfxSlotSpec{RendererKind="historyTrail"},true),"Missing trail payload admitted");
+
+        var heldData=GeneratedItemData.Placeholder();
+        var held=new VfxSlotSpec{EntityId=heldData.RuntimeProgram.ItemEntityId,Event="on_use",RendererKind="historyTrail",Layer="AfterPlayer",Trail=new VfxHistoryTrailSpec{Draw="stroke",Source="tip"}};
+        WValidateHistoryTrail(held,true,heldData);
+        Refused(()=>WValidateHistoryTrail(held,false,heldData),"Held history without final native player draw admitted");
+        held.Trail.Draw="sprites";held.Trail.Texture=new(){Source="item",AssetId=""};
+        WValidateHistoryTrail(held,true,heldData);
+        held.Trail.Texture.Source="library";
+        Refused(()=>WValidateHistoryTrail(held,true,heldData),"Unverified alternate held history texture admitted");
+        held.Trail.Texture.Source="item";held.Layer="AfterProjectiles";
+        Refused(()=>WValidateHistoryTrail(held,true,heldData),"Held history routed through projectile layer");
 
         VfxSlotSpec Particle(string id)=>new(){RendererKind="libraryParticle",Particle=new VfxLibraryParticleSpec{TextureId=id}};
         var data=new GeneratedItemData();

@@ -328,3 +328,32 @@ def test_attack_observation_reaches_actual_vfx_parent_context(monkeypatch, packe
     assert_exact_json(dossier["acceptedRuntimeProgramReadOnly"], child["runtimeProgram"] | {
         "entities": [{k: v for k, v in entity.items() if k != "visual"} for entity in child["runtimeProgram"]["entities"]]})
     assert_exact_json((child, parent), before)
+
+@pytest.mark.parametrize('dimensions', [(14, 32), (137, 553), (1, 1)])
+def test_projectile_loaded_atlas_visual_card_preserves_unknown_layout(dimensions):
+    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
+    reference = {'source': 'TextureAssets.Projectile', 'textureWidthPx': dimensions[0],
+                 'textureHeightPx': dimensions[1], 'frameLayout': 'unknown_custom_draw_possible'}
+    projectile = {'type': 1, 'width': 7, 'height': 9, 'framesRaw': 1, 'spriteReferenceRaw': reference}
+    item = {'type': 40, 'shoot': 1, 'directProjectileRaw': projectile}
+    original = copy.deepcopy(item)
+    plain = raw_parent_card_for_llm(item)
+    visual = raw_parent_card_for_llm(item, include_visual_reference=True)
+    assert 'spriteReference' not in plain['raw']['directProjectile']
+    observed = visual['raw']['directProjectile'].pop('spriteReference')
+    assert observed == reference
+    assert 'currentFrame' not in observed
+    assert visual == plain
+    assert item == original
+
+
+@pytest.mark.parametrize('reference', [None, {}, {'source': 'TextureAssets.Projectile',
+    'textureWidthPx': 12, 'textureHeightPx': 40, 'frameLayout': 'inferred_vertical_strip'},
+    {'source': 'TextureAssets.Projectile', 'textureWidthPx': False, 'textureHeightPx': 40,
+     'frameLayout': 'unknown_custom_draw_possible'}])
+def test_projectile_absent_or_unobserved_atlas_does_not_gain_visual_extent(reference):
+    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
+    item = {'type': 40, 'shoot': 1, 'directProjectileRaw': {'type': 1, 'width': 999,
+            'height': 888, 'framesRaw': 1, 'spriteReferenceRaw': reference}}
+    card = raw_parent_card_for_llm(item, include_visual_reference=True)
+    assert 'spriteReference' not in card['raw']['directProjectile']

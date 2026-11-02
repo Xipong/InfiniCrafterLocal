@@ -9,7 +9,7 @@ using Terraria;
 
 namespace InfiniCrafterLocal.Common.VFX;
 
-internal readonly record struct VfxTrailPose(float Rotation,float Scale,SpriteEffects Effects,float GfxOffY,Vector2 Origin);
+internal readonly record struct VfxTrailPose(float Rotation,Vector2 Scale,SpriteEffects Effects,float GfxOffY,Vector2 Origin);
 internal readonly record struct VfxTrailSample(ulong Tick,Vector2 Position,VfxTrailPose? Pose);
 public sealed partial class InfiniVfxState
 {
@@ -17,7 +17,7 @@ public sealed partial class InfiniVfxState
 }
 public static partial class InfiniVfxRuntime
 {
-    private static Texture2D? TrailTexture(GeneratedItemData data,string entityId,VfxHistoryTrailSpec trail,out SpritePresentationSelection selected)
+    internal static Texture2D? TrailTexture(GeneratedItemData data,string entityId,VfxHistoryTrailSpec trail,out SpritePresentationSelection selected)
     {
         var texture=trail.Texture!;
         if(texture.Source is "asset" or "library") {
@@ -39,7 +39,7 @@ public static partial class InfiniVfxRuntime
             ?motionAxis:projectile.velocity.SafeNormalize(Vector2.UnitX);
         Vector2 origin=entity is null?selected.ProjectileOrigin(entity,texture.Width,texture.Height,drawScale,effects)
             :GeneratedProjectile.MotionSpriteOrigin(entity,selected,texture.Width,texture.Height,drawScale,effects,rotation,axis);
-        return new(rotation,drawScale,effects,projectile.gfxOffY,origin);
+        return new(rotation,new Vector2(drawScale),effects,projectile.gfxOffY,origin);
     }
     internal static bool TryExplicitTrailTip(Projectile projectile,GeneratedItemData data,string entityId,out Vector2 tip)
     {
@@ -104,7 +104,7 @@ public static partial class InfiniVfxRuntime
                 if(texture is null||pose is not {} draw||alpha<=0||trail.Scale<=0)continue;
                 if(!spend())break;
                 VfxTextureUv.Copy(trail.Texture!.Uv).Draw(Main.spriteBatch,texture,sample.Position-Main.screenPosition+new Vector2(0,draw.GfxOffY),color,
-                    draw.Rotation,draw.Origin,new Vector2(draw.Scale),draw.Effects);
+                    draw.Rotation,draw.Origin,draw.Scale,draw.Effects);
             }
         }
     }

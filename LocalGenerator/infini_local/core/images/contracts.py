@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import copy
 import math
-from typing import Any
+from typing import Any, Mapping
 
 from infini_local.core.images import config as visual_config
 from infini_local.core.images.config import (
@@ -19,10 +20,55 @@ from infini_local.core.images.config import (
     ZIMAGE_PROMPT_CONTRACT,
 )
 
+# Minimum clear-background evidence for fitted assets; fitting padding cannot supply it.
+SPRITE_MIN_TRANSPARENT_PCT = 0.03
+
 # AGENT MAP: cycle-safe sprite prompt/geometry contract helpers shared by
 # visual prompts and sprite postprocessing. No image IO or gameplay routing here.
 
 
+
+
+def native_held_frame_facts(data: Mapping[str, Any], canvas: int | None = None) -> dict[str, Any]:
+    """Read-only native body canvas contract, shared by Visual and image requests.
+
+    The bundled proxy asset is a reference frame, not an observed custom draw
+    pose. Actual origin/rotation remain native-owned; no item-family inference.
+    """
+    runtime = data.get("runtimeProgram")
+    use = runtime.get("itemUse") if isinstance(runtime, Mapping) else None
+    if not isinstance(use, Mapping):
+        return {}
+    fields = ("useStyle", "hideUseGraphic", "handPose", "holdoutOffsetX", "holdoutOffsetY")
+    facts: dict[str, Any] = {
+        "owner": "native_item_body",
+        "acceptedItemUse": {key: copy.deepcopy(use[key]) for key in fields if key in use},
+        "bundledNativeFrameSizePx": [32, 32],
+        "bundledFrameAsset": "Assets/GeneratedItem.png",
+        "actualNativeOriginPx": None,
+        "actualNativeRotationRadians": None,
+        "poseCoverage": "runtime_owned_not_observed_before_draw",
+        "canvasTransform": {
+            "nativeFrame": "N = actual native source-frame size, which custom draw hooks may change",
+            "artFrame": "A = complete final PNG size, including transparent padding",
+            "ratio": "k = max(A) / max(N)",
+            "origin": "artOrigin = (nativeOrigin - N / 2) * k + A / 2",
+            "scale": "artScale = nativeScale * renderSizePx / max(A)",
+            "positionRotationFlips": "preserved_from_native_DrawData",
+        },
+        "nativeBodyBindsPngGrip": False,
+        "nativeBodyAutoRotatesPngAxis": False,
+        "scope": "Visible native item_body only; independent entities retain their accepted movement and attachment owners.",
+    }
+    visual = data.get("visual")
+    if isinstance(visual, Mapping) and "renderSizePx" in visual:
+        facts["renderSizePx"] = copy.deepcopy(visual["renderSizePx"])
+    if canvas is not None:
+        size = final_sprite_canvas(canvas)
+        contract = sprite_contract_for("item", size)
+        facts["finalCanvasSizePx"] = [size, size]
+        facts["framing"] = {key: copy.deepcopy(contract[key]) for key in ("targetFill", "minFill", "maxFill", "marginPx", "cropPadPx")}
+    return facts
 
 
 def chroma_rgb() -> tuple[int, int, int]:

@@ -36,10 +36,10 @@ public sealed class VfxHistoryTrailSpec
             ||slot.Scale is not null||slot.Density is not null||slot.Alpha is not null||slot.Spread is not null||slot.TextureRole is not null
             ||slot.ParticleSystemId is not null||slot.Duration is not null||slot.RepeatEvery is not null||hasPhase||slot.PlacementBindingId is not null)
             throw new InvalidDataException("historyTrail forbids unused/foreign controls");
-        VfxMaterialValidation.Choice(slot.Event,"trail event","on_spawn","periodic");
+        VfxMaterialValidation.Choice(slot.Event,"trail event","on_spawn","periodic","on_use");
         VfxMaterialValidation.Choice(slot.Anchor,"trail anchor","self");
         VfxMaterialValidation.Choice(slot.Blend,"trail blend","alpha","additive");
-        VfxMaterialValidation.Choice(slot.Layer,"trail layer","BeforeProjectiles","AfterProjectiles");
+        VfxMaterialValidation.Choice(slot.Layer,"trail layer","BeforeProjectiles","AfterProjectiles","BeforePlayer","AfterPlayer");
         if(slot.StartTick is not null)throw new InvalidDataException("trail forbids startTick");
         VfxMaterialValidation.Choice(t.Draw,"trail draw","stroke","sprites");
         VfxMaterialValidation.Choice(t.Source,"trail source","center","tip");

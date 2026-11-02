@@ -59,6 +59,12 @@ def _only_projectile_lane(doc, lane='primary_use'):
     program = doc['runtimeProgram']
     program['bindings'] = [dict(program['bindings'][0], input=lane)]
     program['calls'] = [row for row in program['calls'] if row['fn'] != 'place_tile']
+    # This helper creates a current independent control, not a saved-item replay.
+    use = call(doc, 'item_use')['params']
+    visibility = use.pop('customHeldSprite', 'inherit')
+    assert visibility in ('hidden', 'visible', 'inherit')
+    if visibility != 'inherit':
+        use['hideUseGraphic'] = visibility == 'hidden'
     return doc
 
 
@@ -217,8 +223,17 @@ def test_unchanged_saved_motion_programs_remain_readable_without_recompiling_ret
     assert hashlib.sha256(json.dumps(full, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest() == row['expectedDeliveryWireSha256']
     # Exact archived envelope has the independently retired tooltip root. Do not
     # call it final-delivery GREEN or change the archive to hide that refusal.
-    assert [(e['path'], e['code']) for e in validate_runtime_wire(full)['errors']] == [('$.tooltip', 'unknown_final_wire_field')]
-    program_control = {'runtimeProgram': full['runtimeProgram']}
+    assert {(e['path'], e['code']) for e in validate_runtime_wire(full)['errors']} == {
+        ('$.tooltip', 'unknown_final_wire_field'),
+        ('$.runtimeProgram.itemUse.releaseTiming', 'unknown_final_wire_field')}
+    # Isolate only the saved movement in a newly compiled current envelope.
+    from infini_local.qa.capability_witnesses import build_capability_witness
+    program_control = compile_runtime_program(build_capability_witness('move_straight'))
+    program_control.pop('runtimeContract')
+    saved_movement = next(e['movement'] for e in full['runtimeProgram']['entities']
+                          if e.get('movement', {}).get('code') == code)
+    current_body = next(e for e in program_control['runtimeProgram']['entities'] if 'movement' in e)
+    current_body['movement'] = deepcopy(saved_movement)
     assert validate_runtime_wire(program_control)['ok']
     assert any(e.get('movement', {}).get('code') == code for e in full['runtimeProgram']['entities'])
     if code == 19:

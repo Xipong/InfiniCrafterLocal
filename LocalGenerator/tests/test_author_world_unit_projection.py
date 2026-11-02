@@ -323,7 +323,7 @@ def test_unresolved_clock_does_not_make_valid_world_values_repairable(mutation):
 
 
 @pytest.mark.parametrize("retain_receipts", [True, False])
-def test_authentic_pre_v6_compiler_wire_remains_readable(retain_receipts):
+def test_authentic_pre_v6_wire_is_frozen_but_retired_item_presentation_is_refused(retain_receipts):
     """Frozen d288982 compiler output, captured before any unit-migration edits.
 
     This is an offline capability witness, not a provider response or a promise
@@ -341,7 +341,17 @@ def test_authentic_pre_v6_compiler_wire_remains_readable(retain_receipts):
         del wire["runtimeContract"]
     before = deepcopy(wire)
     report = validate_runtime_wire(wire)
-    assert report["ok"], report
+    assert not report["ok"] and any(
+        e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
+    # Native movement value remains usable in a fresh item envelope.
+    from infini_local.qa.capability_witnesses import build_capability_witness
+    current = compile_runtime_program(build_capability_witness("move_straight"))
+    current.pop("runtimeContract")
+    target = next(e for e in current["runtimeProgram"]["entities"] if "movement" in e)
+    saved = next(e["movement"] for e in wire["runtimeProgram"]["entities"] if "movement" in e)
+    target["movement"] = deepcopy(saved)
+    assert validate_runtime_wire(current)["ok"]
+    assert target["movement"] == saved
     assert wire == before and path.read_bytes() == original_bytes
 
 
@@ -355,13 +365,23 @@ def test_saved_predecessor_omission_keeps_its_exact_integer_zero_domain():
             if r.get("authoredPath", "").endswith(".params.jumpSpeedBonusPxPerTick")]
     assert rows and all(r["status"] == "declared_neutral_omission"
                         and type(r["value"]) is int and r["value"] == 0 for r in rows)
-    assert validate_runtime_wire(wire)["ok"]
+    report = validate_runtime_wire(wire)
+    assert not report["ok"] and any(
+        e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
     assert wire == before
-    # The legacy token is not granted to a fresh/current source path.
-    for row in wire["runtimeContract"]["finalWireReceipts"]:
-        row["authoredPath"] = row.get("authoredPath", "").replace(
-            "jumpSpeedBonusPxPerTick", "jumpSpeedBonus")
-    assert not validate_runtime_wire(wire)["ok"]
+    # A current omitted jump has its own provenance; the archive's integer
+    # encoding cannot authenticate a fresh source merely by renaming its leaf.
+    from infini_local.qa.capability_witnesses import build_capability_witness
+    current_source = build_capability_witness("generated_buff_on_use")
+    selected = next(c for c in current_source["runtimeProgram"]["calls"] if c["fn"] == "generated_buff_on_use")
+    selected["params"].pop("jumpSpeedBonus", None)
+    current = compile_runtime_program(current_source)
+    assert validate_runtime_wire(current)["ok"]
+    receipt = next(r for r in current["runtimeContract"]["finalWireReceipts"]
+                   if r.get("authoredPath", "").endswith(".params.jumpSpeedBonus"))
+    assert receipt["status"] == "declared_neutral_omission" and receipt["value"] == 0
+    receipt["authoredPath"] = receipt["authoredPath"].removesuffix("jumpSpeedBonus") + "jumpSpeedBonusPxPerTick"
+    assert not validate_runtime_wire(current)["ok"]
 
 def test_converted_native_float_rates_reject_float32_nonzero_collapse():
     def leaves(spec):

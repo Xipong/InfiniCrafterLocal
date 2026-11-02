@@ -298,10 +298,18 @@ def test_old_wire_and_instant_radial_action_remain_distinct_and_unchanged():
     fingerprint = hashlib.sha256(json.dumps(historical, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     assert fingerprint == "beccfa0cf7d8d67c54a27b7f28017d83b1c394277409bcbc662a878766877d04"
     assert not any(key in json.dumps(historical) for key in ("stepCount", "selectionAnchor", "repeatPolicy"))
-    assert validate_runtime_wire({"runtimeProgram": historical})["ok"]
+    report = validate_runtime_wire({"runtimeProgram": historical})
+    assert not report["ok"] and any(e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
+    control = deepcopy(historical)
+    assert control["itemUse"].pop("releaseTiming") == "immediate"
+    control["itemUse"]["hideUseGraphic"] = True
+    assert validate_runtime_wire({"runtimeProgram": control})["ok"]
+    assert control["entities"] == historical["entities"]
     # The RAW archive's unrelated retired tooltip is still refused. Keep exact
     # saved bytes separate from a current final delivery / PNG-ready claim.
-    assert [(e["path"], e["code"]) for e in validate_runtime_wire(wire)["errors"]] == [("$.tooltip", "unknown_final_wire_field")]
+    assert {(e["path"], e["code"]) for e in validate_runtime_wire(wire)["errors"]} == {
+        ("$.tooltip", "unknown_final_wire_field"),
+        ("$.runtimeProgram.itemUse.releaseTiming", "unknown_final_wire_field")}
     assert wire == before and path.read_bytes() == raw
     # The saved nearest projection retains its old radial runtime discriminator.
     old = next(row["wire"] for row in json.loads((Path(__file__).with_name("fixtures") / "event_api_pre_simplification.json").read_text())["cases"]
