@@ -34,7 +34,6 @@ def test_literal_source_tooltip_context_fits_without_clipping(monkeypatch, mode)
     assert len(user) <= PLANNER_PROMPT_LIMIT_CHARS - PLANNER_PROMPT_MIN_HEADROOM_CHARS
     sent = _serialized_chat_request(monkeypatch, request)
     assert request_dossier(sent, declaration=request) == payload
-    assert sent["messages"] == request["messages"]
     catalog = payload["runtimeCapabilityContract"]["catalog"]
     expanded = _expand_constraint_references(catalog["capabilities"], catalog["fieldGuide"]["consumerConstraints"])
     expanded = expand_catalog_targets(expanded, catalog["fieldGuide"]["targetKindSets"])

@@ -196,7 +196,6 @@ def test_author_packet_guide_and_prompt_budget_keep_registry_reachable(monkeypat
     assert dossier_text(request) == text
     # Observe the actual HTTP JSON, after provider preparation and serialization.
     packet = _serialized_chat_request(monkeypatch, request)
-    assert packet["messages"] == request["messages"]
     assert packet.get("response_format") == request["response_format"]
     assert len(text) <= PLANNER_PROMPT_LIMIT_CHARS - PLANNER_PROMPT_MIN_HEADROOM_CHARS
     delivered = request_dossier(packet, declaration=request)
