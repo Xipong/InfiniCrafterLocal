@@ -182,7 +182,9 @@ def _serialized_chat_request(monkeypatch, request):
                 "api_key": "", "profile_id": "offline-unit-guidance",
             })
     assert len(sent) == 1
-    assert sent[0]["messages"] == request["messages"]
+    assert [row["role"] for row in sent[0]["messages"]] == ["system", "user"]
+    from prompt_packet_helpers import dossier_text
+    dossier_text(sent[0], declaration=request)  # Verify the complete local projection.
     assert sent[0].get("response_format") == request["response_format"]
     return sent[0]
 

@@ -194,6 +194,43 @@ def test_generic_responses_preserves_explicit_developer_and_refuses_unknown_role
         llm_provider_wire._responses_payload_from_chat(source)
 
 
+@pytest.mark.parametrize("stage", ["author", "repair", "format", "visual", "visual_repair", "vfx", "vfx_repair"])
+def test_local_chat_template_receives_one_initial_system_message(monkeypatch, stage):
+    packet = stage_packets(monkeypatch, stage, labels=("local-probe",))[0]
+    original = copy.deepcopy(packet)
+    observed = []
+
+    def fake_http(url, payload, timeout, context, *, api_mode):
+        observed.append(copy.deepcopy(payload))
+        return {"choices": [{"message": {"content": "{}"}}]}
+
+    monkeypatch.setattr(transport, "_perform_llm_http", fake_http)
+    local = {"provider": "local", "base_url": "http://localhost:1234", "model": "test-model"}
+    remote = {"provider": "openrouter", "base_url": "https://example.invalid/api/v1", "model": "test-model"}
+    transport._llm_chat_json_exact_context(packet, 10, local)
+    transport._llm_chat_json_exact_context(packet, 10, remote)
+
+    local_messages = observed[0]["messages"]
+    assert [row["role"] for row in local_messages] == ["system", "user"]
+    assert local_messages[0]["content"] == (
+        original["messages"][0]["content"] + "\n\nDeveloper instructions:\n" + original["messages"][1]["content"]
+    )
+    assert local_messages[1:] == original["messages"][2:]
+    assert observed[1]["messages"] == original["messages"]
+    assert packet == original
+    assert "_infini_prompt_cache" not in observed[0]
+
+
+def test_local_chat_keeps_ordinary_unsegmented_messages(monkeypatch):
+    packet = {"model": "test-model", "messages": [
+        {"role": "system", "content": "instructions"}, {"role": "user", "content": "facts"}]}
+    observed = []
+    monkeypatch.setattr(transport, "_perform_llm_http", lambda url, payload, timeout, context, **kwargs:
+                        observed.append(copy.deepcopy(payload)) or {"choices": [{"message": {"content": "{}"}}]})
+    transport._llm_chat_json_exact_context(packet, 10, {"provider": "local", "model": "test-model"})
+    assert observed[0]["messages"] == packet["messages"]
+
+
 @pytest.mark.parametrize("mutation", ["duplicate", "nan", "overflow_static", "overflow_dynamic", "nonobject", "wrongrole", "late", "bool", "unknown"])
 def test_complete_instruction_declaration_rejects_malformed_authority(monkeypatch, mutation):
     from infini_local.core.llm_prompt_cache import instruction_segment_index

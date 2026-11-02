@@ -6,14 +6,22 @@ from typing import Any
 
 def dossier_text(request, *, declaration=None):
     source = declaration if declaration is not None else request
-    if declaration is not None:
-        assert request["messages"] == declaration["messages"]
     marker = source.get("_infini_prompt_cache")
     if isinstance(marker, dict) and "instructionMessageIndex" in marker:
         from infini_local.core.llm_prompt_cache import instruction_segment_index
         index = instruction_segment_index(source)
         assert index is not None
-        rows = request["messages"][index:index + 2]
+        if declaration is not None and request["messages"] != declaration["messages"]:
+            original = declaration["messages"]
+            prefix = original[:index + 1]
+            merged = {"role": "system", "content": "\n\n".join(
+                row["content"] if row["role"] == "system" else "Developer instructions:\n" + row["content"]
+                for row in prefix
+            )}
+            if "name" in prefix[0]:
+                merged["name"] = prefix[0]["name"]
+            assert request["messages"] == [merged, *original[index + 1:]]
+        rows = source["messages"][index:index + 2]
         static, dynamic = [json.loads(row["content"]) for row in rows]
         if "schemaDefinitions" in static:
             definitions = static.pop("schemaDefinitions")
@@ -34,6 +42,8 @@ def dossier_text(request, *, declaration=None):
         static, dynamic = [row["content"] for row in rows]
         assert not json.loads(static).keys() & json.loads(dynamic).keys()
         return static[:-1] + "," + dynamic[1:]
+    if declaration is not None:
+        assert request["messages"] == declaration["messages"]
     return request["messages"][1]["content"]
 
 
