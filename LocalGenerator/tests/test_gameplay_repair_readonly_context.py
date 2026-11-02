@@ -191,6 +191,31 @@ def test_visible_independent_facts_grant_no_edits_through_real_repair(monkeypatc
     assert json.dumps(item, ensure_ascii=False) == before
 
 
+@pytest.mark.parametrize("valid_envelope", [True, False], ids=["exact-frozen-merge", "invalid-final-not-example"])
+def test_explicit_final_repair_output_preserves_shape_and_frozen_authority(monkeypatch, valid_envelope):
+    item = _broken_held_and_deployed()
+    before = copy.deepcopy(item)
+    incoming = _hostile_patch(item)
+    if not valid_envelope:
+        incoming["foreignRoot"] = True
+    content = 'An example is {"note":"not the final patch"}.\n```json\n' + json.dumps(incoming) + '\n```'
+    _offline_builder(monkeypatch, "json_object", lambda *_args, **_kwargs: {
+        "choices": [{"message": {"content": content}}]})
+    if not valid_envelope:
+        with pytest.raises(author.PlannerUnavailable, match="patch shape rejected"):
+            author.repair_author_item_after_failure(item, {}, {}, "explicit-output", failure_report=validate_runtime_program(item))
+    else:
+        repaired = author.repair_author_item_after_failure(item, {}, {}, "explicit-output", failure_report=validate_runtime_program(item))
+        audit = repaired.pop("debug")["gameplayRepairFilterAudit"]
+        expected = copy.deepcopy(item)
+        _call(expected, "held_lantern_pike_life")["params"]["lifetimeSeconds"] = 0.5
+        expected["realization"] = copy.deepcopy(incoming["realizationReplacement"])
+        assert repaired == expected
+        assert audit["ok"] and audit["ignoredChanges"]
+        assert validate_runtime_program(repaired)["ok"]
+    assert item == before
+
+
 @pytest.mark.parametrize("context_key", ["acceptedItemContext", "concept", "runtimeProgram", "immutableProgramIndex"])
 def test_readonly_context_is_not_an_output_schema_extension(context_key):
     from infini_local.core.runtime_authoring.program_schema import strict_repair_structure_report

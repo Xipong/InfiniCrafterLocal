@@ -27,13 +27,68 @@ def _visible_model_output(text: str) -> str:
     )
 
 
-def json_object_candidates(text: str) -> list[str]:
-    """Return complete top-level JSON object substrings from arbitrary LLM text.
+def _mask_output_literals(text: str) -> str:
+    """Hide literal fences without treating unmatched prose quotes as JSON."""
+    inline = re.compile(r'"(?:\\.|[^"\\\r\n])*"')
+    nested = re.compile(r'"(?:\\.|[^"\\])*"')
+    masked = list(text)
+    depth = index = 0
+    while index < len(text):
+        char = text[index]
+        if char == '"':
+            literal = (nested if depth else inline).match(text, index)
+            if literal is not None or depth:
+                end = literal.end() if literal is not None else len(text)
+                masked[index:end] = " " * (end - index)
+                index = end
+                continue
+        if char in "{[":
+            depth += 1
+        elif char in "}]":
+            depth = max(0, depth - 1)
+        index += 1
+    return "".join(masked)
 
-    A greedy regex is unsafe for `{...}{...}` responses. This scanner tracks
-    braces, strings, and escapes, then returns each complete object independently.
+
+def _explicit_json_block(text: str) -> str | None:
+    """Select an explicit output region, never a schema-valid example in prose.
+
+    A single JSON/unlabelled fence owns its whole body, even when malformed.
+    Multiple or unclosed output fences are ambiguous and must not fall back to
+    an earlier example. Quoted authored strings cannot introduce boundaries.
+    """
+    masked = _mask_output_literals(text)
+    opened: tuple[int, bool] | None = None
+    blocks: list[str] = []
+    for marker in re.finditer(r"```([^\r\n`]*)", masked):
+        if opened is None:
+            opened = (marker.end(), marker.group(1).strip().lower() in ("", "json"))
+        else:
+            start, is_json = opened
+            line_start = text.rfind("\n", 0, marker.start()) + 1
+            if marker.group(1).strip() or text[line_start:marker.start()].strip():
+                raise ValueError("Malformed explicit JSON output closing fence")
+            if is_json:
+                blocks.append(text[start:marker.start()].strip())
+            opened = None
+    if opened is not None and opened[1]:
+        raise ValueError("Unclosed explicit JSON output fence")
+    if len(blocks) > 1:
+        raise ValueError("Ambiguous explicit JSON output fences")
+    return blocks[0] if blocks else None
+
+
+def json_object_candidates(text: str) -> list[str]:
+    """Return one explicit output body, otherwise complete JSON object candidates.
+
+    A fenced body is not searched for a usable nested object. Without that
+    explicit boundary, preserve the existing prose/duplicate-object scanner:
+    track braces, strings and escapes, not a greedy `{...}{...}` regex.
     """
     text = _visible_model_output(text).strip()
+    explicit = _explicit_json_block(text)
+    if explicit is not None:
+        return [explicit]
     text = re.sub(r"^```(?:json)?", "", text).strip()
     text = re.sub(r"```$", "", text).strip()
     out: list[str] = []
