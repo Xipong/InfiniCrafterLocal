@@ -144,7 +144,7 @@ def test_sdcpp_lifecycle_recording_obeys_logging_toggle_without_launching_backen
     state = sdcpp_service.SdcppServerState()
     monkeypatch.setattr(backend, "SDCPP_SERVER_STATE", state)
     monkeypatch.setattr(backend, "CACHE_DIR", tmp_path)
-    monkeypatch.setattr(backend, "ROOT", tmp_path)
+    monkeypatch.setattr(backend, "STATE_ROOT", tmp_path)
     monkeypatch.setattr(backend, "SDCPP_SERVER_AUTOSTART", True)
     monkeypatch.setattr(backend, "SDCPP_SERVER_SHOW_CONSOLE", False)
     monkeypatch.setattr(backend, "SDCPP_SERVER_LOG_FILE", "")

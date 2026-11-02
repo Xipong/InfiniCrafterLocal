@@ -29,6 +29,8 @@ obj/
 *.nupkg
 *.snupkg
 *.tmod
+ModSources/InfiniCrafterLocal/Studio/manifest.json
+ModSources/InfiniCrafterLocal/Studio/runtime-*.zip
 TestResults/
 
 # Local generator/runtime outputs

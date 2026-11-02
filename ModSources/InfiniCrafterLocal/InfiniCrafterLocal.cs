@@ -21,6 +21,7 @@ public sealed class InfiniCrafterLocalMod : Mod
     public static RuntimeSpriteCache Sprites { get; private set; } = null!;
     public static GeneratedAssetSyncService AssetSync { get; private set; } = null!;
     public static GeneratedItemRegistryService GeneratedItems { get; private set; } = null!;
+    internal static BundledStudio? Studio { get; private set; }
 
     public override void Load()
     {
@@ -29,6 +30,8 @@ public sealed class InfiniCrafterLocalMod : Mod
         Sprites = new RuntimeSpriteCache();
         AssetSync = new GeneratedAssetSyncService();
         GeneratedItems = new GeneratedItemRegistryService();
+        if (!Terraria.Main.dedServ)
+            Studio = new BundledStudio(this, Terraria.Main.SavePath);
     }
 
 
@@ -164,8 +167,17 @@ public sealed class InfiniCrafterLocalMod : Mod
         return null;
     }
 
+    public override void Close()
+    {
+        Studio?.Dispose();
+        Studio = null;
+        base.Close();
+    }
+
     public override void Unload()
     {
+        Studio?.Dispose();
+        Studio = null;
         GeneratedHeldItemDrawLayer.ClearNetCaches();
         GeneratedEquipOverlayDrawLayerBase.ClearNetCaches();
         InfiniItemVfxRuntime.ClearUseEventCaches();

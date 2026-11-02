@@ -24,6 +24,7 @@ from infini_local.core import http_io
 from infini_local.services.sdcpp_backend import lora_dir_from_file
 from infini_local.desktop.settings_paths import (
     ROOT,
+    STATE_ROOT,
 )
 
 
@@ -504,11 +505,17 @@ class StudioOperations:
         launch_url = self._server_base_url()
         env = os.environ.copy()
         env.update(launch_values)
-        cmd = [sys.executable, str(ROOT / "server.py")]
+        # The launcher's selected data directory is process configuration, not
+        # an editable generator setting from config.env.
+        env["INFINI_DATA_DIR"] = str(STATE_ROOT)
+        # Embedded Python ignores PYTHON* environment options: pass these flags
+        # to the child too, so generator imports never write into the runtime.
+        cmd = [sys.executable, "-X", "utf8", "-u", "-B", str(ROOT / "server.py")]
         try:
-            options = {"cwd": str(ROOT), "env": env}
+            options = {"cwd": str(STATE_ROOT), "env": env, "stdin": subprocess.DEVNULL}
             if os.name == "nt":
-                options["creationflags"] = subprocess.CREATE_NEW_CONSOLE
+                options["creationflags"] = (subprocess.CREATE_NO_WINDOW if self.__dict__.get("_managed_by_tmodloader")
+                                            else subprocess.CREATE_NEW_CONSOLE)
             self.proc = subprocess.Popen(cmd, **options)
             self._owned_launch_settings = dict(launch_values)
             self._owned_server_base_url = launch_url
@@ -556,7 +563,7 @@ class StudioOperations:
         env.update(self.collect())
         cache = self._cache_dir_from_environment(env)
         worlds = Path(env.get("INFINI_WORLD_RECIPES_DIR", str(cache / "world_recipes")).strip())
-        worlds = (worlds if worlds.is_absolute() else ROOT / worlds).resolve()
+        worlds = (worlds if worlds.is_absolute() else STATE_ROOT / worlds).resolve()
         provider = env.get("INFINI_LLM_PROVIDER", "").strip().lower().replace("-", "_")
         # Read-only comparison normalization from llm_transport's main-profile
         # rules; never import runtime bootstrap (which creates cache folders).
@@ -727,8 +734,8 @@ class StudioOperations:
     def _cache_dir_from_environment(env: dict[str, str]) -> Path:
         # Match env_path() and the GUI launch cwd, including an explicit blank
         # override (Path("") == cwd). Do not expand ~ or reinterpret saved keys.
-        cache = Path(env.get("INFINI_CACHE_DIR", str(ROOT / "cache")).strip())
-        return (cache if cache.is_absolute() else ROOT / cache).resolve()
+        cache = Path(env.get("INFINI_CACHE_DIR", str(STATE_ROOT / "cache")).strip())
+        return (cache if cache.is_absolute() else STATE_ROOT / cache).resolve()
 
     def _effective_cache_dir(self) -> Path:
         env = os.environ.copy()
@@ -889,7 +896,7 @@ class StudioOperations:
                     for value in cleared:
                         if isinstance(value, str):
                             path = Path(value)
-                            path = (path if path.is_absolute() else ROOT / path).resolve()
+                            path = (path if path.is_absolute() else STATE_ROOT / path).resolve()
                             acknowledged.add(self._norm_path_for_compare(path))
                 if reply.get("ok") is not True or not expected.issubset(acknowledged):
                     return "Trace clear unavailable; server did not confirm all selected trace files."

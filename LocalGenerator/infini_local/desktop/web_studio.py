@@ -13,6 +13,8 @@ import queue
 import re
 import secrets
 import stat
+import subprocess
+import sys
 import threading
 import time
 from urllib.parse import parse_qs, urlsplit
@@ -39,8 +41,9 @@ class StudioServer:
     def __init__(self, assets: Path, *, port: int = 0):
         self.assets = assets
         self.token = secrets.token_urlsafe(32)
-        from infini_local.desktop.settings_paths import ROOT
-        self.file_root = ROOT
+        from infini_local.desktop.settings_paths import ROOT, STATE_ROOT
+        self.file_root = STATE_ROOT
+        self.guide_path = ROOT.parent / 'START_HERE.html'
         self.commands: queue.Queue[dict] = queue.Queue(maxsize=32)
         self.accepting_actions = True
         self._lock = threading.Lock()
@@ -88,7 +91,7 @@ class StudioServer:
                         self.reply(403, {'error': 'Session access required'})
                         return
                     try:
-                        guide = (owner.file_root.parent / 'START_HERE.html').read_bytes()
+                        guide = owner.guide_path.read_bytes()
                         self.reply(200, guide, 'text/html; charset=utf-8')
                     except OSError:
                         self.reply(404, {'error': 'Локальная инструкция не найдена'})
@@ -359,6 +362,7 @@ class StudioController:
             'notifications': self.notifications, 'actionResults': list(self.action_results.values()),
             'trace': dict(self.app.trace),
             'configPath': str(CONFIG_PATH), 'version': APP_VERSION, 'lastAction': self.last_action,
+            'managed': bool(self.app.__dict__.get('_managed_by_tmodloader', False)),
             'revision': self.revision, 'busy': list(self.app._gui_tasks), 'lanEnabled': bool(self.app.lan_enabled),
             'account': {'status': self.app.__dict__.get('_codex_account_status', ''), 'catalog': self.app.codex_catalog,
                         'images': self.app.codex_image_account, 'authenticated': auth_status()['authenticated'],
@@ -569,10 +573,55 @@ class StudioController:
             self.server.publish(final_state)
 
 
+def _watch_parent(descriptor: int, shutdown: threading.Event) -> None:
+    """Only the managed launcher uses stdin as a lifetime/control pipe."""
+    pending = b''
+    try:
+        while not shutdown.is_set():
+            chunk = os.read(descriptor, 1024)
+            if not chunk:
+                break
+            pending += chunk
+            while b'\n' in pending:
+                line, pending = pending.split(b'\n', 1)
+                if line.strip().upper() == b'STOP':
+                    shutdown.set()
+                    return
+            if len(pending) > 4096:
+                break
+    except OSError:
+        pass
+    shutdown.set()
+
+
+def _stop_owned_generator(app) -> None:
+    """Managed shutdown never adopts or terminates an external generator."""
+    process = app.proc
+    if process is None or process.poll() is not None:
+        return
+    url = app.__dict__.get('_owned_server_base_url')
+    if url:
+        try:
+            health = app._fetch_health_snapshot(timeout=1, base_url=url)
+            if health.get('pid') == process.pid and app._health_matches_this_gui(health):
+                app._try_http_shutdown_current_server(timeout=1, base_url=url, force=True)
+                process.wait(timeout=3)
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            pass
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=2)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Open the local Infinicraft Studio.')
     parser.add_argument('--no-browser', action='store_true')
     parser.add_argument('--port', type=int, default=0)
+    parser.add_argument('--managed', action='store_true', help='Stop when the owning tModLoader process closes stdin.')
     args = parser.parse_args(argv)
     from infini_local.desktop.settings_controller import SettingsController
     try:
@@ -581,27 +630,39 @@ def main(argv=None):
         raise SystemExit(f'Не удалось прочитать config.env: {exc} '
                          'Исправь указанную строку в редакторе или восстанови резервную копию, затем открой Studio снова.') from None
     server = StudioServer(Path(__file__).with_name('webui'), port=args.port)
+    app._managed_by_tmodloader = args.managed
     controller = StudioController(app, server)
-    server.publish(controller.snapshot())
-    server.start()
-    # Token URL is needed once to attach the user's browser; do not write it to log files.
-    print('Infinicraft Studio: ' + server.url, flush=True)
-    print('Close this console to exit Studio. The generator has its own Stop control.', flush=True)
-    if not args.no_browser:
-        webbrowser.open(server.url)
-    app.after(0, controller.tick)
+    shutdown = threading.Event()
     try:
-        while not app._gui_closed:
+        server.publish(controller.snapshot())
+        server.start()
+        # The private URL goes only to the controlling pipe/user's console.
+        if args.managed:
+            threading.Thread(target=_watch_parent, args=(sys.stdin.fileno(), shutdown),
+                             daemon=True, name='infini-studio-parent').start()
+            print('IFC_STUDIO_READY ' + json.dumps({'url': server.url}), flush=True)
+        else:
+            print('Infinicraft Studio: ' + server.url, flush=True)
+            print('Close this console to exit Studio. The generator has its own Stop control.', flush=True)
+        if not args.no_browser:
+            webbrowser.open(server.url)
+        app.after(0, controller.tick)
+        while not app._gui_closed and not shutdown.is_set():
             app.pump()
-            time.sleep(0.02)
+            shutdown.wait(0.02)
     except KeyboardInterrupt:
         app.on_close()
     finally:
+        app.on_close()
         # Let polling clients observe the terminal close receipt before the
-        # loopback listener disappears. No callbacks run after closure.
+        # loopback listener disappears. Parent EOF interrupts this grace period
+        # immediately, preserving the mod unload shutdown budget.
         if server._state.get('closed'):
-            time.sleep(5)
+            shutdown.wait(5)
+        shutdown.set()
         server.close()
+        if args.managed:
+            _stop_owned_generator(app)
 
 
 if __name__ == '__main__':

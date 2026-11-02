@@ -5,6 +5,11 @@ $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $project = Join-Path $root 'ModSources/InfiniCrafterLocal'
 $output = Join-Path $root 'artifacts/package'
 New-Item -ItemType Directory -Force $output | Out-Null
+# Assemble the private interpreter, pinned wheels and Studio/generator resources.
+# The smoke uses that interpreter, an isolated data directory and real HTTP;
+# it neither opens a browser nor contacts a model provider.
+& python (Join-Path $PSScriptRoot 'build_studio_bundle.py')
+if ($LASTEXITCODE -ne 0) { throw 'Studio runtime bundle or its startup smoke failed.' }
 $assets = Get-Content (Join-Path $project 'obj/project.assets.json') -Raw | ConvertFrom-Json
 $tml = @($assets.libraries.PSObject.Properties | Where-Object { $_.Name -like 'tModLoader/*' })
 if ($tml.Count -ne 1) { throw 'Expected exactly one resolved tML version.' }
@@ -62,5 +67,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Package verification failed.' }
     particleLibrarySha256 = (Get-FileHash (Join-Path $env:INFINI_TML_DEPS_SRC 'ParticleLibrary/ParticleLibrary.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
     luminanceSha256 = (Get-FileHash (Join-Path $env:INFINI_TML_DEPS_SRC 'Luminance/bin/Debug/net8.0/Luminance.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
     packageSha256 = (Get-FileHash $tmod -Algorithm SHA256).Hash.ToLowerInvariant()
+    studioManifest = (Get-Content (Join-Path $project 'Studio/manifest.json') -Raw | ConvertFrom-Json)
+    studioRuntimeSmoke = 'passed: embedded interpreter imports, HTTP frontend and managed shutdown'
     runtimeSmoke = 'notRun: packaging does not launch the game'
 } | ConvertTo-Json | Set-Content (Join-Path $output 'build-provenance.json') -Encoding utf8

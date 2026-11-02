@@ -12,7 +12,11 @@ import io
 import json
 from pathlib import Path
 import struct
+import sys
 import zlib
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from tools.build.build_studio_bundle import RESOURCE_MANIFEST, verify_resources
 
 
 def exact(stream: io.BytesIO, size: int) -> bytes:
@@ -95,7 +99,7 @@ def read_info(data: bytes) -> dict:
     return values
 
 
-def verify(path: Path, source: Path, assembly: Path, expected_tml: str) -> dict:
+def verify(path: Path, source: Path, assembly: Path, expected_tml: str, *, studio_source_root: Path | None = None) -> dict:
     data = path.read_bytes()
     tml, name, version, files = read_package(data)
     manifest = dict(line.split('=', 1) for line in source.joinpath('build.txt').read_text().splitlines() if '=' in line)
@@ -120,9 +124,13 @@ def verify(path: Path, source: Path, assembly: Path, expected_tml: str) -> dict:
             raise ValueError(f'Texture missing: {key}')
     if any(path.startswith(('bin/', 'obj/')) or path.endswith(('.cs', '.csproj')) for path in files):
         raise ValueError('Build/source debris in package')
+    if studio_source_root is not None and files.get(RESOURCE_MANIFEST) != (source / RESOURCE_MANIFEST).read_bytes():
+        raise ValueError('Studio manifest differs from the prepared release bundle')
+    studio = verify_resources(files.__getitem__, source_root=studio_source_root)
     return {'status': 'passed', 'name': name, 'version': version, 'tmlVersion': tml,
             'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data),
             'fileCount': len(files), 'modReferences': refs, 'files': sorted(files),
+            'studio': studio,
             'runtimeSmoke': 'notRun: container validation is not an in-game test'}
 
 
@@ -134,6 +142,7 @@ if __name__ == '__main__':
     parser.add_argument('--tml-version', required=True)
     parser.add_argument('--report', type=Path, required=True)
     args = parser.parse_args()
-    report = verify(args.package, args.source, args.assembly, args.tml_version)
+    report = verify(args.package, args.source, args.assembly, args.tml_version,
+                    studio_source_root=args.source.resolve().parents[1])
     args.report.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     print(f"Verified {report['name']} {report['version']}: {report['fileCount']} entries, SHA256 {report['sha256']}")
