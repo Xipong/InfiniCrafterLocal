@@ -1,5 +1,7 @@
 # Infinicraft
 
+<img src="docs/assets/IFC-discord-icon.png" alt="Infinicraft: glowing infinity symbol above an anvil" width="200">
+
 Соедини два предмета Terraria в **«Кузне чудес»** и получи новый предмет со своей механикой, описанием и рисунком. Мод работает в tModLoader; **LocalGenerator** обращается к выбранным тобой нейросетям.
 
 ## С чего начать
