@@ -1,4 +1,4 @@
-"""Lossless provider-schema projection and nullable optional transport.
+"""Provider-schema projection and lossless nullable optional transport.
 
 This adapter has no stage-specific default schema or generation dependencies.
 """
@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from typing import Any, Mapping
 
 from infini_local.core.schema_validation import strict_schema_errors
@@ -251,9 +252,35 @@ def _provider_subset_shape(schema: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
-def _provider_strict_projection(schema: Any, *, omit_annotations: bool = False) -> Any:
-    """Lossless provider-only subset + optional-property transport encoding.
+def defer_provider_cross_field_constraints(schema: Any) -> Any:
+    """Explicit transport basis; caller retains full local semantic validation.
 
+    VFX uses conditional renderer/event/material constraints beyond the provider
+    dialect. These stay in its original schema and existing validation/Repair,
+    not in a combinatorial provider union. Other callers do not opt in implicitly.
+    Only schema positions are traversed; literal constants and annotations stay.
+    """
+    if not isinstance(schema, Mapping):
+        return copy.deepcopy(schema)
+    out = {key: copy.deepcopy(value) for key, value in schema.items()
+           if key not in {"allOf", "if", "then", "else", "not"}}
+    for key in ("properties", "$defs"):
+        if isinstance(out.get(key), Mapping):
+            out[key] = {name: defer_provider_cross_field_constraints(child) for name, child in out[key].items()}
+    if isinstance(out.get("items"), Mapping):
+        out["items"] = defer_provider_cross_field_constraints(out["items"])
+    for key in ("anyOf", "oneOf"):
+        if isinstance(out.get(key), list):
+            out[key] = [defer_provider_cross_field_constraints(child) for child in out[key]]
+    return out
+
+
+def _provider_strict_projection(schema: Any, *, omit_annotations: bool = False) -> Any:
+    """Provider-only subset + lossless optional-property transport encoding.
+
+    Object minProperties and patterns needing lookaround/backreferences stay
+    with the original local validator, not the supported provider subset.
+    Nullable placeholder keys do not prove authored presence.
     Unsupported/unproved compositions fail closed. Do not recurse through JSON
     literals or owner annotations as if they were schemas.
     """
@@ -300,6 +327,16 @@ def _provider_strict_projection(schema: Any, *, omit_annotations: bool = False) 
             if key not in local_required and isinstance(child, dict):
                 props[key] = {"anyOf": [child, {"type": "null"}]}
         out["required"] = list(props)
+    # Structured Outputs rejects this keyword. Keep the authoritative local
+    # constraint intact; decoded all-null optionals become {} and fail locally.
+    # Do not expand every request with combinatorial presence alternatives.
+    out.pop("minProperties", None)
+    pattern = out.get("pattern")
+    # RE2-style Structured Outputs cannot encode lookaround or backreferences.
+    # Omit that constraint only at the provider boundary, not parts of its regex;
+    # original local validation still rejects the exact same authored strings.
+    if isinstance(pattern, str) and re.search(r"(?<!\\)(?:\\\\)*(?:\(\?(?:[=!]|<[=!]|P=)|\\[1-9])", pattern):
+        out.pop("pattern")
     return out
 
 

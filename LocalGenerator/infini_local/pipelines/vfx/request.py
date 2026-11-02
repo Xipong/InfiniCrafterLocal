@@ -11,6 +11,10 @@ from typing import Any, Mapping
 
 from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json
+from infini_local.core.provider_schema import (
+    _provider_strict_projection, defer_provider_cross_field_constraints,
+    project_provider_nullable_optionals_to_local, provider_nullable_transport_rule,
+)
 from infini_local.core.llm_prompt_cache import with_instruction_segments, with_schema_instruction_definitions
 from infini_local.core.llm_stage_messages import stage_chat_message
 from infini_local.core.vfx.contract import MalformedVfxDirectorOutput
@@ -22,6 +26,7 @@ from infini_local.pipelines.transport.client import (
 )
 from infini_local.pipelines.transport.provider_wire import (
     apply_llm_common_options,
+    effective_response_format,
     llm_json_response_format,
     llm_reasoning_system_suffix,
     with_llm_stage,
@@ -50,6 +55,9 @@ def call_llm_vfx_director(
             if message.get("name") == "vfx_repair_context":
                 message["content"] = json.dumps(user, ensure_ascii=False, separators=(",", ":"))
     output_schema = user.get("outputSchema") if isinstance(user.get("outputSchema"), Mapping) else None
+    # Full owner schema (including guidance) stays in the prompt; provider-only
+    # annotations would duplicate it on every Director/Repair request.
+    transport_basis = defer_provider_cross_field_constraints(output_schema) if output_schema else None
     request = {
         "model": model_name,
         "messages": messages or [
@@ -60,11 +68,18 @@ def call_llm_vfx_director(
         "max_tokens": max_tokens,
         "response_format": llm_json_response_format(
             "infini_vfx_repair_patch" if stage_name == "vfx_repair" else "infini_vfx_runtime_events",
-            schema=output_schema,
+            schema=lambda: _provider_strict_projection(transport_basis, omit_annotations=True),
             strict=True,
             auto_preference="json_schema",
         ) if output_schema else {"type": "json_object"},
     }
+    transport_rule = provider_nullable_transport_rule(request.get("response_format"))
+    if transport_rule:
+        request["messages"] = [dict(message) for message in request["messages"]]
+        for message in request["messages"]:
+            if message.get("role") == "system":
+                message["content"] += transport_rule
+                break
     request = apply_llm_common_options(request, model_name=model_name, default_max_tokens=max_tokens)
     static_keys = VFX_REPAIR_PROMPT_STATIC_KEYS if stage_name == "vfx_repair" else VFX_PROMPT_STATIC_KEYS
     request = with_instruction_segments(request, user, static_keys)
@@ -85,6 +100,10 @@ def call_llm_vfx_director(
     except (ValueError, TypeError, json.JSONDecodeError) as exc:
         return MalformedVfxDirectorOutput(raw_text=str(content), error=f"{type(exc).__name__}: {exc}")
     try:
+        if isinstance(parsed, dict) and transport_basis is not None:
+            parsed = project_provider_nullable_optionals_to_local(
+                parsed, transport_basis, response_format=effective_response_format(request, raw),
+            )
         return vfx_model_payload(parsed, to_wire=True) if isinstance(parsed, dict) else None
     except ValueError as exc:
         return MalformedVfxDirectorOutput(raw_text=str(content), error=str(exc))

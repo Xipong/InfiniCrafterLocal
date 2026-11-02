@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import stat
 import time
 from dataclasses import dataclass, field
@@ -31,11 +32,14 @@ CODEX = "https://chatgpt.com/backend-api/codex"
 
 def _assert_structured_outputs_subset(schema):
     """Offline wire gate, independent of the projector (not remote acceptance)."""
-    unsupported = {"oneOf", "allOf", "not", "dependentRequired", "dependentSchemas", "if", "then", "else"}
+    unsupported = {"oneOf", "allOf", "not", "dependentRequired", "dependentSchemas", "if", "then", "else", "minProperties", "maxProperties", "patternProperties", "propertyNames", "unevaluatedProperties", "unevaluatedItems", "contains", "minContains", "maxContains", "uniqueItems"}
     types = {str: "string", int: "integer", bool: "boolean", float: "number", type(None): "null", list: "array", dict: "object"}
 
     def visit(node, path=()):
         assert not (unsupported & node.keys()), f"unsupported provider keyword at {path}: {unsupported & node.keys()}"
+        if "pattern" in node:
+            # Known unsupported regex features, independently checked on wire.
+            assert not re.search(r"\(\?(?:[=!]|<[=!]|P=)|\\[1-9]", node["pattern"]), path
         if "const" in node:
             assert node.get("type") == types[type(node["const"])], f"untyped provider const at {path}"
         if node.get("type") == "object":

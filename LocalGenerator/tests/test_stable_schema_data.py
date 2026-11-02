@@ -115,8 +115,12 @@ def test_static_definitions_remain_case_independent_across_runtime_domains(monke
     other, = stage_packets(monkeypatch, stage, format_mode=mode, labels=("novel-a",))
     assert ordinary["messages"][:2] == other["messages"][:2]
     assert ordinary["messages"][2] != other["messages"][2] or fixture == "workbench_blade"
-    # Full provider schema remains exact and inline, regardless of affinity.
+    # Provider schema stays inline; VFX transport defers local-only constraints.
     from prompt_packet_helpers import request_dossier
     schema_key = "responseSchema" if stage.startswith("visual") else "outputSchema"
     if mode == "json_schema":
-        assert other["response_format"]["json_schema"]["schema"] == request_dossier(other)[schema_key]
+        expected = request_dossier(other)[schema_key]
+        if stage.startswith("vfx"):
+            from infini_local.core.provider_schema import _provider_strict_projection, defer_provider_cross_field_constraints
+            expected = _provider_strict_projection(defer_provider_cross_field_constraints(expected), omit_annotations=True)
+        assert other["response_format"]["json_schema"]["schema"] == expected

@@ -6,7 +6,7 @@ import copy
 import pytest
 
 from prompt_packet_helpers import request_dossier
-from infini_local.core import llm_config
+from infini_local.core import llm_config, provider_schema
 import infini_local.pipelines.vfx.prompt as vfx_prompt
 import infini_local.pipelines.vfx.stage as vfx_stage
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
@@ -61,7 +61,10 @@ def test_provider_instructions_stay_static_while_recipe_and_parent_facts_change(
         schema = packet["responseSchema" if director == "visual" else "outputSchema"]
         if mode == "json_schema":
             assert request["response_format"]["json_schema"]["strict"] is True
-            assert request["response_format"]["json_schema"]["schema"] == schema
+            expected_wire = schema if director == "visual" else provider_schema._provider_strict_projection(
+                provider_schema.defer_provider_cross_field_constraints(schema), omit_annotations=True,
+            )
+            assert request["response_format"]["json_schema"]["schema"] == expected_wire
         if director == "visual":
             assert packet["itemReadOnly" if repair else "item"]["literalSynthesis"] == data["concept"]["literalSynthesis"]
             parent_reference = (packet["parentSizeReferencesReadOnly"]["parentA"]["spriteReference"] if repair

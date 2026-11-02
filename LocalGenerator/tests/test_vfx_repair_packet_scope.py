@@ -12,6 +12,8 @@ import infini_local.core.vfx.schema as vfx_schema
 import infini_local.core.vfx.validation as vfx_validation
 import infini_local.pipelines.vfx.prompt as vfx_prompt
 import infini_local.pipelines.vfx.stage as vfx_stage
+from infini_local.core import llm_config
+from infini_local.core.provider_schema import _provider_strict_projection, defer_provider_cross_field_constraints
 from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.core.vfx.materials import vfx_model_payload
 from infini_local.pipelines.vfx import request as stage
@@ -118,13 +120,14 @@ def test_actual_http_sender_carries_scoped_grammar_for_all_provider_routes(mode)
             assert wire["method"] == "POST" and json.loads(wire["body"]) == wire["packet"]
             wrapper = wire["packet"].get("response_format", wire["packet"].get("text", {}).get("format"))
             actual_schema = wrapper.get("json_schema", wrapper).get("schema")
-            assert actual_schema == (expected if mode == "json_schema" else None)
+            assert actual_schema == (
+                _provider_strict_projection(defer_provider_cross_field_constraints(expected), omit_annotations=True)
+                if mode == "json_schema" else None
+            )
 
 
 def test_new_frozen_literals_have_entailed_types_and_closed_nested_shape(wire_transport, monkeypatch):
-    monkeypatch.setattr(stage, "llm_json_response_format", lambda name, **kw: {
-        "type": "json_schema", "json_schema": {"name": name, "strict": True, "schema": kw["schema"]},
-    })
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
     data = _accepted_visual_data("workbench_blade")
     accepted = _sprite(data)
     raw = copy.deepcopy(accepted)
@@ -133,7 +136,9 @@ def test_new_frozen_literals_have_entailed_types_and_closed_nested_shape(wire_tr
     result, packet = _send_repair(wire_transport, data, raw, patch)
     assert result["debug"]["vfxDirectorRaw"] == accepted
     schema = packet["outputSchema"]
-    assert wire_transport[1][1]["response_format"]["json_schema"]["schema"] == schema
+    assert wire_transport[1][1]["response_format"]["json_schema"]["schema"] == _provider_strict_projection(
+        defer_provider_cross_field_constraints(schema), omit_annotations=True,
+    )
     row = schema["properties"]["slotsUpsert"]["items"]
     assert row["properties"]["duration"] == {"type": "integer", "const": 20}
     assert row["properties"]["rendererKind"] == {"type": "string", "const": "spriteElement"}
@@ -277,9 +282,7 @@ def test_whole_response_and_create_preserve_complete_capability_grammar(wire_tra
 
 @pytest.mark.parametrize("response_format", ["json_schema", "json_object"])
 def test_alpha_request_has_only_exact_edit_domain_and_preserves_hostile_siblings(wire_transport, monkeypatch, response_format):
-    monkeypatch.setattr(stage, "llm_json_response_format", lambda name, **kw: (
-        {"type": "json_schema", "json_schema": {"name": name, "strict": True, "schema": kw["schema"]}}
-        if response_format == "json_schema" else {"type": "json_object"}))
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", response_format)
     data = _accepted_visual_data("workbench_blade")
     accepted = _sprite(data)
     sibling = dict(accepted["slots"][0], id="frozen_sibling", alpha=0.37)
@@ -319,7 +322,15 @@ def test_alpha_request_has_only_exact_edit_domain_and_preserves_hostile_siblings
     assert dossier["acceptedRuntimeProgramReadOnly"] == request_dossier(sent[0])["acceptedRuntimeProgramReadOnly"]
     assert len(json.dumps(sent[1])) < len(json.dumps(sent[0])) / 2
     if response_format == "json_schema":
-        assert sent[1]["response_format"]["json_schema"]["schema"] == schema
+        wire_schema = sent[1]["response_format"]["json_schema"]["schema"]
+        assert wire_schema == _provider_strict_projection(
+            defer_provider_cross_field_constraints(schema), omit_annotations=True,
+        )
+        # The provider projection may defer cross-field constraints, but it must
+        # still enforce this exact edit domain, frozen identity and alpha range.
+        assert not strict_schema_errors(vfx_model_payload(good), wire_schema)
+        assert strict_schema_errors(vfx_model_payload(dict(good, slotsUpsert=[sibling])), wire_schema)
+        assert strict_schema_errors(vfx_model_payload(dict(good, slotsUpsert=[dict(accepted["slots"][0], alpha=2)])), wire_schema)
     assert not responses
 
 

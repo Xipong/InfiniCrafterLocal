@@ -104,7 +104,7 @@ docs/                           user / development / reference / archive
 | VFX model packet / stage lifecycle / provider call | `pipelines/vfx/{prompt,stage,request}.py`; core не импортирует pipeline |
 | Parent context and native attack facts | `pipelines/context/{parents,cards,presentation,stats,generated_summary}.py`, `attack_*.py` |
 | Image contract / pixel algorithms / validation / retry / orchestration | `core/images/{config,contracts}.py`; `pipelines/images/{pixels,validation,retry,postprocess}.py`; backend prompt/context — `prompts.py` |
-| Shared lossless provider grammar / nullable inverse | `core/provider_schema.py`; каждый caller передаёт свою local schema явно |
+| Shared provider subset / lossless nullable inverse | `core/provider_schema.py`; каждый caller передаёт свою local schema явно |
 | Asset serving и optional sd.cpp lifecycle | `services/asset_sync_service.py`, `services/sdcpp_service.py`, `services/sdcpp_backend.py`, `web/server_utility_routes.py` |
 | World recipe API/storage, failure/trace evidence | `storage/world_recipe_runtime.py`, `storage/world_storage.py`, `storage/failure_state.py`, `storage/trace_runtime.py`, `storage/trace_tools.py` |
 | Studio shell/browser/native state | `desktop/web_studio.py`, `desktop/webui/index.html`, `desktop/webui/studio.css`, `desktop/webui/studio.js`; [native split](MODULES_RU.md#studio) |
