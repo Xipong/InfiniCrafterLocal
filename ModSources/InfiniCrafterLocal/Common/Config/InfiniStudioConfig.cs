@@ -21,67 +21,18 @@ public sealed class InfiniStudioConfig : ModConfig
 public sealed class OpenStudioElement : ConfigElement
 {
     private const string TextPrefix = "Mods.InfiniCrafterLocal.Studio.";
-    private bool _opening;
-    private string? _status;
 
     public override void OnBind()
     {
         base.OnBind();
         Func<string>? description = TooltipFunction;
-        TextDisplayFunction = () => _opening ? Language.GetTextValue(TextPrefix + "Starting") : Label;
-        TooltipFunction = () => _status ?? description?.Invoke() ?? "";
+        TextDisplayFunction = () => StudioBrowserAction.Opening ? Language.GetTextValue(TextPrefix + "Starting") : Label;
+        TooltipFunction = () => StudioBrowserAction.Status ?? description?.Invoke() ?? "";
     }
 
-    public override async void LeftClick(UIMouseEvent evt)
+    public override void LeftClick(UIMouseEvent evt)
     {
         base.LeftClick(evt);
-        if (_opening || Main.dedServ)
-            return;
-        if (!BundledStudio.IsSupported)
-        {
-            _status = Language.GetTextValue(TextPrefix + "UnsupportedPlatform");
-            return;
-        }
-        BundledStudio? studio = InfiniCrafterLocalMod.Studio;
-        if (studio == null)
-            return;
-        _opening = true;
-        _status = Language.GetTextValue(TextPrefix + "Starting");
-        try
-        {
-            Uri url = await studio.StartAsync();
-            Main.QueueMainThreadAction(() =>
-            {
-                if (!ReferenceEquals(InfiniCrafterLocalMod.Studio, studio))
-                    return;
-                try
-                {
-                    Utils.OpenToURL(url.AbsoluteUri);
-                    _status = Language.GetTextValue(TextPrefix + "Opened");
-                }
-                catch (Exception exception)
-                {
-                    _status = Language.GetTextValue(TextPrefix + "Failed", exception.Message);
-                    InfiniCrafterLocalMod.Instance.Logger.Warn("Could not open the Studio browser.", exception);
-                }
-                _opening = false;
-            });
-        }
-        catch (OperationCanceledException)
-        {
-            // Mod unloading cancels startup and invalidates this configuration page.
-            _opening = false;
-        }
-        catch (Exception exception)
-        {
-            Main.QueueMainThreadAction(() =>
-            {
-                if (!ReferenceEquals(InfiniCrafterLocalMod.Studio, studio))
-                    return;
-                _status = Language.GetTextValue(TextPrefix + "Failed", exception.Message);
-                _opening = false;
-                InfiniCrafterLocalMod.Instance.Logger.Warn("Could not start bundled Studio.", exception);
-            });
-        }
+        StudioBrowserAction.TryOpen();
     }
 }
