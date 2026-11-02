@@ -10,6 +10,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import urlencode
 
+from infini_local.core.app_paths import STATE_ROOT
 from infini_local.core.config_bootstrap import (
     APP_VERSION,
     CACHE_DIR,
@@ -159,7 +160,7 @@ def resolve_comfyui_workflow_path() -> Path | None:
     for c in candidates:
         p = Path(c)
         if not p.is_absolute():
-            p = ROOT / p
+            p = STATE_ROOT / p
         if p.exists():
             return p
     return None
@@ -292,7 +293,7 @@ def ensure_sdcpp_server() -> bool:
 
     ok = sdcpp_service.ensure_server(
         state=SDCPP_SERVER_STATE,
-        root=ROOT,
+        root=STATE_ROOT,
         cache_dir=CACHE_DIR,
         server_url=SDCPP_SERVER_URL,
         server_autostart=SDCPP_SERVER_AUTOSTART,

@@ -21,6 +21,25 @@ from tests.test_image_attempt_contracts import Response, offline, png
 from tests.vfx_image_fixtures import _data, _request, offline_backend
 
 
+@pytest.mark.parametrize('setting', ['COMFYUI_WORKFLOW', 'COMFYUI_WORKFLOW_NO_LORA', 'COMFYUI_WORKFLOW_LORA'])
+def test_comfyui_configured_workflow_uses_persistent_state(tmp_path, monkeypatch, setting):
+    runtime = tmp_path / 'runtime' / 'LocalGenerator'
+    state = tmp_path / 'persistent data'
+    relative = Path('workflows') / 'my-workflow.json'
+    for directory, content in ((runtime, 'old runtime copy'), (state, 'user workflow')):
+        path = directory / relative
+        path.parent.mkdir(parents=True)
+        path.write_text(content)
+    monkeypatch.setattr(backend, 'ROOT', runtime)
+    monkeypatch.setattr(backend, 'STATE_ROOT', state)
+    monkeypatch.setattr(backend, 'COMFYUI_WORKFLOW', 'auto')
+    monkeypatch.setattr(backend, 'COMFYUI_WORKFLOW_NO_LORA', '')
+    monkeypatch.setattr(backend, 'COMFYUI_WORKFLOW_LORA', '')
+    monkeypatch.setattr(backend, 'COMFYUI_LORA_NAME', 'configured-lora' if setting == 'COMFYUI_WORKFLOW_LORA' else '')
+    monkeypatch.setattr(backend, setting, relative.as_posix())
+    assert backend.resolve_comfyui_workflow_path() == state / relative
+
+
 @pytest.fixture
 def adapter_transport(offline, monkeypatch, tmp_path):
     root, sdcpp_requests = offline

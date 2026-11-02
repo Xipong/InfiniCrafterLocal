@@ -28,4 +28,8 @@
     <Error Condition="'$(InfiniParticleLibraryDll)' == '' or !Exists('$(InfiniParticleLibraryDll)')" Text="ParticleLibrary.dll was not found. Set /p:InfiniParticleLibraryDll=..., /p:InfiniExternalDepsRoot=..., or INFINI_TML_DEPS_SRC for the ParticleLibrary/Luminance backend." />
     <Error Condition="'$(InfiniLuminanceDll)' == '' or !Exists('$(InfiniLuminanceDll)')" Text="Luminance.dll was not found. Set /p:InfiniLuminanceDll=..., /p:InfiniExternalDepsRoot=..., or INFINI_TML_DEPS_SRC for the ParticleLibrary/Luminance backend." />
   </Target>
+  <Target Name="InfiniRequireStudioBundle" BeforeTargets="PackageMod" Condition="'$(TmlBuildPackageMod)' == 'true'">
+    <Error Condition="!Exists('$(MSBuildProjectDirectory)/Studio/manifest.json') or !Exists('$(MSBuildProjectDirectory)/Studio/runtime-win-x64.zip')"
+           Text="Studio runtime is missing. Run python tools/build/build_studio_bundle.py from the repository root before packaging, or use tools/build/package_tmod.ps1. For a compile-only check use /p:TmlBuildMod=false." />
+  </Target>
 </Project>
