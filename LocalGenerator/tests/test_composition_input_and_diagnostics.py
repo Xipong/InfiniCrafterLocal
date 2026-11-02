@@ -137,7 +137,7 @@ def test_native_status_interoperability_and_frozen_repair_survive_registry_retir
 def test_author_prioritizes_playable_composition_without_turning_advisory_into_a_gate(monkeypatch, mode):
     offline_builder(monkeypatch, mode, lambda *args, **kwargs: pytest.fail('unexpected model call'))
     request, _, _ = author.build_initial_author_request({}, {}, 'purposeful-composition', model_name='offline')
-    packet = request_dossier(_serialized_chat_request(monkeypatch, request))
+    packet = request_dossier(_serialized_chat_request(monkeypatch, request), declaration=request)
     # Verify delivery and priority of the owner rule, not incidental prose wording.
     assert packet['priorityHeader'][0] == AUTHOR_DESIGN_QUALITY_RULE
     assert packet['priorityHeader'].count(AUTHOR_DESIGN_QUALITY_RULE) == 1
@@ -188,7 +188,7 @@ def test_source_reading_guidance_is_delivered_once_outside_optional_concept(monk
     monkeypatch.setattr(prompt, 'source_interpretation_for_llm', lambda: deepcopy(guide))
     request, _, _ = author.build_initial_author_request({}, {}, 'source-guide', model_name='offline')
     sent = _serialized_chat_request(monkeypatch, request)
-    packet = request_dossier(sent)
+    packet = request_dossier(sent, declaration=request)
     assert packet['runtimeCapabilityContract']['catalog']['fieldGuide']['sourceInterpretation'] == guide
     assert json.dumps(sent['messages']).count('SOURCE_INTERPRETATION_SENTINEL') == 1
     assert 'SOURCE_INTERPRETATION_SENTINEL' not in json.dumps(packet['requiredJsonShape'])
