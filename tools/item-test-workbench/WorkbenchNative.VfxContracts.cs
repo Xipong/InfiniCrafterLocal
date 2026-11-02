@@ -14,10 +14,10 @@ internal static partial class EngineRuntimeChecks
 
     private static void WValidateShape(VfxSlotSpec slot,bool fullNativeDraw)
     {
-        if(!fullNativeDraw || !(slot.Shape is {Kind:"arc",Attachment:"world" or "source",RotationFrame:"world" or "source"}
+        if(!fullNativeDraw || !(slot.Shape is {Kind:"arc" or "sector",Attachment:"world" or "source",RotationFrame:"world" or "source"}
             or {Kind:"orbit",Attachment:"source",RotationFrame:"world",MoteOrientation:"world"}
             or {Kind:"orbit",Attachment:"world",RotationFrame:"world",MoteOrientation:"orbit"}))
-            throw new NotSupportedException("shape currently requires proven world/source arc, source-bound world-frame orbit with world-oriented motes, or world-fixed world-frame orbit with orbit-oriented motes, plus full native draw with original MagicPixel");
+            throw new NotSupportedException("shape currently requires proven world/source arc or sector, source-bound world-frame orbit with world-oriented motes, or world-fixed world-frame orbit with orbit-oriented motes, plus full native draw with original MagicPixel");
     }
 
     // Part of --check-assertions: actual stand policies, not a GPU/gameplay claim.
@@ -43,7 +43,11 @@ internal static partial class EngineRuntimeChecks
         shape.Shape.Attachment="source";
         WValidateShape(shape,true);
         shape.Shape.Attachment="world";shape.Shape.Kind="sector";
-        Refused(()=>WValidateShape(shape,true),"Unverified sector renderer admitted");
+        WValidateShape(shape,true);
+        shape.Shape.Attachment="source";WValidateShape(shape,true);
+        shape.Shape.RotationFrame="source";WValidateShape(shape,true);
+        shape.Shape.Attachment="world";WValidateShape(shape,true);
+        shape.Shape.Kind="line";Refused(()=>WValidateShape(shape,true),"Unverified line renderer admitted");
         shape.Shape.Kind="arc";shape.Shape.RotationFrame="source";
         WValidateShape(shape,true);
         Refused(()=>WValidateShape(new VfxSlotSpec{RendererKind="shape"},true),"Missing shape admitted");
