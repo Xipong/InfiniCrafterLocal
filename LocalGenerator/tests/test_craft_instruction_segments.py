@@ -255,3 +255,83 @@ def test_complete_instruction_declaration_rejects_malformed_authority(monkeypatc
         packet["_infini_prompt_cache"]["extra"] = True
     with pytest.raises(ValueError):
         instruction_segment_index(packet)
+
+
+@pytest.mark.parametrize("stage", ["author", "repair", "format", "visual", "visual_repair", "vfx", "vfx_repair"])
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+def test_local_responses_template_receives_one_initial_instruction_block(monkeypatch, stage, format_mode):
+    packet = stage_packets(monkeypatch, stage, format_mode, labels=("local-responses-probe",))[0]
+    original = copy.deepcopy(packet)
+    observed = []
+
+    def fake_http(url, payload, timeout, context, *, api_mode):
+        assert api_mode == "responses"
+        observed.append(copy.deepcopy(payload))
+        if context["provider"] == "local":
+            # LM Studio maps developer to system; its template accepts system
+            # only as the first message. Exercise that consumer rule.
+            roles = (["system"] if payload.get("instructions") else []) + [
+                "system" if row["role"] == "developer" else row["role"] for row in payload["input"]]
+            if "system" in roles[1:]:
+                raise RuntimeError("System message must be at the beginning")
+        return {"status": "completed", "output_text": "{}"}
+
+    monkeypatch.setattr(transport, "_perform_llm_http", fake_http)
+    local = {"provider": "local", "base_url": "http://localhost:1234", "model": "test-model"}
+    remote = {"provider": "openrouter", "base_url": "https://example.invalid/api/v1", "model": "test-model", "api_key": "synthetic"}
+    assert transport._llm_responses_json_single_context(packet, 10, local)["choices"][0]["message"]["content"] == "{}"
+    assert transport._llm_responses_json_single_context(packet, 10, remote)["choices"][0]["message"]["content"] == "{}"
+    assert observed[0]["input"] == [{key: row[key] for key in ("role", "content")} for row in original["messages"][2:]]
+    assert observed[0]["instructions"] == (
+        original["messages"][0]["content"] + "\n\nDeveloper instructions:\n" + original["messages"][1]["content"])
+    assert observed[1]["input"] == [{key: row[key] for key in ("role", "content")} for row in original["messages"][1:]]
+    assert observed[1]["instructions"] == original["messages"][0]["content"]
+    assert observed[0]["text"] == observed[1]["text"]
+    assert packet == original
+
+
+@pytest.mark.parametrize("messages", [
+    [{"role": "system", "content": "ordinary"}, {"role": "user", "content": "facts"}],
+    [{"role": "system", "content": "ordinary"}, {"role": "developer", "content": "unmarked"}, {"role": "user", "content": "facts"}],
+])
+def test_local_responses_keeps_unmarked_message_authority(monkeypatch, messages):
+    packet = {"model": "test-model", "messages": messages}
+    observed = []
+    monkeypatch.setattr(transport, "_perform_llm_http", lambda url, payload, timeout, context, **kwargs:
+                        observed.append(copy.deepcopy(payload)) or {"output_text": "{}"})
+    transport._llm_responses_json_single_context(packet, 10, {"provider": "local", "model": "test-model"})
+    assert observed[0]["instructions"] == messages[0]["content"]
+    assert observed[0]["input"] == messages[1:]
+
+
+def test_local_responses_refuses_malformed_declared_instruction_before_http(monkeypatch):
+    packet = stage_packets(monkeypatch, "author", labels=("invalid",))[0]
+    packet["messages"][1]["role"] = "user"
+    monkeypatch.setattr(transport, "_perform_llm_http", lambda *args, **kwargs: pytest.fail("invalid authority reached HTTP"))
+    with pytest.raises(ValueError):
+        transport._llm_responses_json_single_context(packet, 10, {"provider": "local", "model": "test-model"})
+
+
+@pytest.mark.parametrize("marked", [True, False])
+def test_local_responses_projection_preserves_declared_statelessness(monkeypatch, marked):
+    from infini_local.pipelines.transport import profiles
+    packet = stage_packets(monkeypatch, "author", labels=("lease-probe",))[0] if marked else {
+        "messages": [{"role": "system", "content": "instructions"}, {"role": "user", "content": "facts"}]}
+    before = copy.deepcopy(packet)
+    context = {"provider": "local", "model": "test-model"}
+    identity = llm_provider_wire._prompt_cache_identity(packet, "test-model", context=context) if marked else None
+    sent = []
+    monkeypatch.setattr(transport, "_perform_llm_http", lambda url, payload, timeout, ctx, **kwargs:
+                        sent.append(copy.deepcopy(payload)) or {"id": "next-response", "output_text": "{}"})
+    lease = profiles.LlmItemLease("lease-probe", "lease", "local", context, 1, previous_response_id="previous-response")
+    token = profiles._CURRENT_LLM_ITEM_LEASE.set(lease)
+    try:
+        transport._llm_responses_json_single_context(packet, 10, context)
+        assert sent[0].get("previous_response_id") == (None if marked else "previous-response")
+        assert lease.previous_response_id == ("" if marked else "next-response")
+    finally:
+        profiles._CURRENT_LLM_ITEM_LEASE.reset(token)
+    assert packet == before
+    if marked:
+        assert llm_provider_wire._prompt_cache_identity(packet, "test-model", context=context) == identity
+    assert "_infini_prompt_cache" not in sent[0]

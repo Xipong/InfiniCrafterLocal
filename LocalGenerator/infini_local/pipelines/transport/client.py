@@ -272,6 +272,7 @@ def _payload_for_context(payload: dict[str, Any], context: dict[str, Any]) -> di
 def _llm_responses_json_single_context(payload: dict[str, Any], timeout: float, context: dict[str, Any]) -> dict[str, Any]:
     profiles.ensure_llm_auth_configured(context)
     prepared = _payload_for_context(payload, context)
+    wire._project_local_instruction_segments(prepared, payload, context)
     lease = profiles._CURRENT_LLM_ITEM_LEASE.get()
     previous_id = ""
     messages_raw = prepared.get("messages")

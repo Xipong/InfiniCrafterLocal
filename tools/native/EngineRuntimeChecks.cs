@@ -44,6 +44,10 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("parent metadata native item clone", ParentMetadataSurvivesNativeClone),
+            ("parent metadata definition transport", ParentMetadataSurvivesDefinitionTransport),
+            ("parent metadata placed world save", ParentMetadataSurvivesPlacedWorldSave),
+            ("parent metadata registry and compact reference hydration", ParentMetadataSurvivesRegistryAndReferenceHydration),
             ("studio menu native visibility scale and launch admission", StudioMenuAdmission),
             ("projectile angle fresh remote hydration", ProjectileAngleFreshRemoteHydration),
             ("projectile raw impact native pose witness", ProjectileRawImpactKeepsLiteralNativePose),
@@ -170,6 +174,7 @@ internal static partial class EngineRuntimeChecks
             ("atlas book controls responsive bounds and scaled hit areas", AtlasBookControlsStayReachableAcrossUiScales),
             ("atlas discovery search favorites filters and exact ancestry", AtlasDiscoverySelectionKeepsSearchFavoritesAndAncestry),
             ("atlas detail lineage navigation restores discovery context", AtlasDetailLineageNavigationPreservesReturnLocation),
+            ("atlas detail generation uses known ancestry", AtlasDetailGenerationUsesKnownAncestry),
             ("lineage exact identity bounded DAG and routing", RecipeLineageUsesExactBoundedDag),
             ("lineage localization native filename prefix", LineageLocalizationUsesNativeFilenamePrefix),
             ("lineage viewport anchored zoom bounded pan and scaled hit targets", LineageViewportKeepsAnchorAndReachableHitTargets),
