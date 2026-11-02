@@ -33,6 +33,7 @@ def gui_workflow(tmp_path, monkeypatch):
     root.mkdir()
     config = root / 'config.env'
     monkeypatch.setattr(controls, 'ROOT', root)
+    monkeypatch.setattr(controls, 'STATE_ROOT', root)
     monkeypatch.delenv('INFINI_CACHE_DIR', raising=False)
     monkeypatch.setenv('NO_PROXY', '127.0.0.1,localhost')
     monkeypatch.setenv('no_proxy', '127.0.0.1,localhost')
