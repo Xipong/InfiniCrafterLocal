@@ -5,15 +5,16 @@ const nodes=new Map(), events={};
 function node() {return {hidden:false,open:false,dataset:{},textContent:'',innerHTML:'',value:'',disabled:false,append(){},focus(){},replaceChildren(){},remove(){},classList:{toggle(){},add(){},remove(){},contains(){return false;}},setAttribute(){},addEventListener(){},close(){this.open=false;},showModal(){this.open=true;},querySelector(){return node();}};}
 global.setTimeout=()=>0;
 // Single- and multi-node queries must see the same mounted fixture nodes.
-global.document={documentElement:{lang:'ru'},createElement:()=>node(),activeElement:null,addEventListener(name,fn){events[name]=fn;},querySelectorAll(selector){return nodes.has(selector) ? [nodes.get(selector)] : [];},querySelector(selector){if(selector === 'dialog[open]') return nodes.get('#utility-dialog')?.open ? nodes.get('#utility-dialog') : nodes.get('#search-dialog')?.open ? nodes.get('#search-dialog') : null;if(!nodes.has(selector)) nodes.set(selector,node());return nodes.get(selector);}};
+global.document={documentElement:{lang:'ru'},createElement:()=>node(),activeElement:null,dispatchEvent(){},addEventListener(name,fn){events[name]=fn;},querySelectorAll(selector){return nodes.has(selector) ? [nodes.get(selector)] : [];},querySelector(selector){if(selector === 'dialog[open]') return nodes.get('#utility-dialog')?.open ? nodes.get('#utility-dialog') : nodes.get('#search-dialog')?.open ? nodes.get('#search-dialog') : null;if(!nodes.has(selector)) nodes.set(selector,node());return nodes.get(selector);}};
 global.window={INFINI_BOOTSTRAP:{token:'test-only'},addEventListener(){}};
 vm.runInThisContext(fs.readFileSync(require('node:path').join(__dirname,'../infini_local/desktop/webui/studio-i18n.js'),'utf8'));
 const messages=[];
 let source=fs.readFileSync(require('node:path').join(__dirname,'../infini_local/desktop/webui/studio.js'),'utf8');
 source=source.replace('  navigate();poll();',`
+  const renderMainDashboard=renderOperate;
   poll=()=>{};setMenu=()=>{};render=()=>{globalThis.renderCount++;};renderOperate=()=>{};syncInputs=()=>{};updateDiagnostics=()=>{};updateActionButtons=()=>{};
   const originalToast=toast;toast=(message,error)=>{originalToast(message,error);if(!state.suppressToast) globalThis.messages.push({message,error});};
-  globalThis.studio={state,acceptSnapshot,recomputeDirty,heading,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,refreshDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog,restoreActionFocus,aside};
+  globalThis.studio={state,acceptSnapshot,recomputeDirty,heading,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,refreshDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog,restoreActionFocus,aside,renderMainDashboard};
 `);
 global.messages=messages;global.renderCount=0;
 vm.runInThisContext(source);
@@ -313,6 +314,38 @@ assert.equal(state.shutdown,false);
 acceptSnapshot(snapshot({}, {actionResults:[{id:'exit',status:'succeeded',ok:true}]}));
 assert.equal(state.shutdown,true);
 
+async function testMainDashboardConfigFolder() {
+  state.remote=null;state.draft={};state.dirty.clear();state.edits={};
+  state.shutdown=false;state.connected=true;state.pending=null;state.submission=null;state.posting=false;state.page='operate';state.operateSignature=null;
+  document.activeElement=null;
+  const disk=snapshot({[key]:'saved',INFINI_LANGUAGE:'ru'}, {savedRevision:'dashboard-config',home:{}});
+  acceptSnapshot(disk);
+  state.draft[key]='unsaved dashboard draft';recomputeDirty();
+  studio.renderMainDashboard();
+  const markup=document.querySelector('#workspace').innerHTML;
+  const buttons=[...markup.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)];
+  const folder=buttons.find(([,attrs])=>/\bdata-action="openConfigFolder"/.test(attrs));
+  assert(folder,'main Generator dashboard must expose its own direct config-folder button');
+  assert(folder[2].replace(/<[^>]*>/g,'').trim(),'folder button needs a readable accessible label');
+  const actionName=folder[1].match(/data-action="([^"]+)"/)?.[1];
+  assert.equal(actionName,'openConfigFolder');
+  const requests=[];
+  global.fetch=async(url,options)=>{requests.push({url,options,body:JSON.parse(options.body)});return {ok:true,json:async()=>({ok:true,id:'dashboard-folder'})};};
+  const button={dataset:{action:actionName},tagName:'BUTTON'};
+  const click=()=>events.click({target:{closest:selector=>selector==='button,[data-ui],[data-search-key]' ? button:null}});
+  state.connected=false;click();assert.equal(requests.length,0,'disconnected bridge must remain refused');
+  state.connected=true;click();await new Promise(setImmediate);
+  assert.equal(requests.length,1,'one main-dashboard click sends one existing action');
+  assert.equal(requests[0].url,'/api/action');
+  assert.equal(requests[0].options.headers['X-Infini-Token'],'test-only');
+  assert.equal(requests[0].body.action,'openConfigFolder');
+  assert(!Object.hasOwn(requests[0].body.extra,'path'));
+  acceptSnapshot({...disk,actionResults:[{id:'dashboard-folder',action:actionName,ok:true,status:'succeeded'}]});
+  assert.equal(state.page,'operate','folder action must not navigate to another settings page');
+  assert.equal(state.draft[key],'unsaved dashboard draft');
+  assert.equal(state.baseline[key],'saved');assert(state.dirty.has(key));
+}
+
 async function testRepeatedSubmission() {
   state.shutdown=false;state.connected=true;state.pending=null;state.submission=null;state.posting=false;
   let calls=0,release;
@@ -403,7 +436,7 @@ async function testInterruptedDefaultsRefresh() {
   assert.equal(state.lan,false);assert.equal(state.savedRevision,'discard-disk');
 }
 
-testRepeatedSubmission().then(testCatalogAutoload).then(testInterruptedDefaultsRefresh).then(()=>console.log('Studio frontend regressions passed')).catch(error=>{console.error(error);process.exitCode=1;});
+testRepeatedSubmission().then(testCatalogAutoload).then(testInterruptedDefaultsRefresh).then(testMainDashboardConfigFolder).then(()=>console.log('Studio frontend regressions passed')).catch(error=>{console.error(error);process.exitCode=1;});
 
 // The image checkbox is a real checked boolean, and disabling it preserves the limit.
 const parallelKey='INFINI_IMAGE_PARALLEL', limitKey='INFINI_IMAGE_MAX_CONCURRENCY';
