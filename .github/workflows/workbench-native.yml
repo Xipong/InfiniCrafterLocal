@@ -305,8 +305,25 @@ jobs:
                       raise SystemExit('Native musket ball source was not observed')
           legacy = json.loads((root / 'vanilla-legacy-bullet/probe-result.json').read_text())
           refused = json.loads((root / 'vanilla-legacy-excalibur-run/native.json').read_text())
-          if not legacy['passed'] or refused['status'] != 'error' or 'requires both Projectile_982.png and Extra_98.png' not in refused['error']:
-              raise SystemExit('Legacy assets did not preserve bullet rendering and explicitly refuse missing Excalibur textures')
+          complete_case = json.loads((root / 'vanilla-excalibur/probe-result.json').read_text())['cases'][0]
+          complete = json.loads((root / 'vanilla-excalibur/runs' / complete_case['run'] / 'native.json').read_text())
+          def assets(trace):
+              return trace['nativeRender']['vanillaProjectileAssets']['textures']
+          def loaded_projectile(rows, native_type):
+              return any(row.get('nativeType') == native_type and row.get('state') == 'Loaded'
+                         and row.get('sha256') and row.get('sha256') == row.get('loadedBytesSha256') for row in rows)
+          full_assets, missing_assets = assets(complete), assets(refused)
+          error_lines = refused.get('error', '').splitlines()
+          error_class = error_lines[0].partition(':')[0] if error_lines else ''
+          error_site = error_lines[1].strip().partition('(')[0] if len(error_lines) > 1 else ''
+          if (not legacy['passed'] or refused['status'] != 'error'
+                  or error_class != 'System.IO.FileNotFoundException'
+                  or error_site != 'at WNativeVanillaProjectileAssets.RequireReady'
+                  or not loaded_projectile(full_assets, 982)
+                  or not any(row.get('asset') == 'Extra_98' and row.get('state') == 'Loaded' for row in full_assets)
+                  or not loaded_projectile(missing_assets, 14)
+                  or any(row.get('nativeType') == 982 or row.get('asset') == 'Extra_98' for row in missing_assets)):
+              raise SystemExit('Legacy asset control did not prove loaded bullet resources and refusal of the missing native texture pair')
           PY
       - name: Upload native evidence and diagnostics
         if: always()

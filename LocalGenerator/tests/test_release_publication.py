@@ -107,7 +107,7 @@ const context={repo:{owner:'Xipong',repo:'InfiniCrafterLocal'},sha,payload:{ref_
     for line in lines[begin:]:
         if not line.startswith('            '):break
         block.append(line[12:])
-    result=subprocess.run([node,'-e',harness],input=json.dumps({'scenario':scenario,'temp':str(tmp_path),'module':str(ROOT/'tools/build/release_github.js'),'stage':stage,'guard':'\n'.join(block)}),text=True,capture_output=True,check=True)
+    result=subprocess.run([node,'-e',harness],input=json.dumps({'scenario':scenario,'temp':str(tmp_path),'module':str(ROOT/'tools/build/release_github.js'),'stage':stage,'guard':'\n'.join(block)}),text=True,capture_output=True,check=True,timeout=30)
     row=json.loads(result.stdout);assert row['writes']==expected_writes
     assert (row['error'] is None)==(scenario=='good')
     if stage=='admit' and scenario=='good':assert row['outputs']['run']=='12' and row['outputs']['version']=='0.5.5'
@@ -117,10 +117,10 @@ def test_prepare_archives_only_tracked_source_and_refuses_overwrite(package,tmp_
     root,artifact=package
     hygiene=root/'tools/checks/check_project_hygiene.py';hygiene.parent.mkdir(parents=True)
     hygiene.write_text("import sys; assert sys.argv[1:] == ['--strict-archive']\n")
-    subprocess.run(['git','init',str(root)],check=True,capture_output=True)
-    subprocess.run(['git','add','.'],cwd=root,check=True)
-    subprocess.run(['git','-c','user.name=Test','-c','user.email=test@example.invalid','commit','-m','fixture'],cwd=root,check=True,capture_output=True)
-    sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
+    subprocess.run(['git','init',str(root)],check=True,capture_output=True,timeout=30)
+    subprocess.run(['git','add','.'],cwd=root,check=True,timeout=30)
+    subprocess.run(['git','-c','user.name=Test','-c','user.email=test@example.invalid','commit','-m','fixture'],cwd=root,check=True,capture_output=True,timeout=30)
+    sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True,timeout=30).strip()
     p=artifact/'build-provenance.json';row=json.loads(p.read_text());row['sourceCommit']=sha;p.write_text(json.dumps(row))
     (root/'private-untracked.txt').write_text('dummy exclusion witness')
     out=tmp_path/'assets'
@@ -146,10 +146,10 @@ def test_invalid_package_never_prepares_assets(package,tmp_path):
     root,artifact=package;out=tmp_path/'assets'
     hygiene=root/'tools/checks/check_project_hygiene.py';hygiene.parent.mkdir(parents=True)
     hygiene.write_text("import sys; assert sys.argv[1:] == ['--strict-archive']\n")
-    subprocess.run(['git','init',str(root)],check=True,capture_output=True)
-    subprocess.run(['git','add','.'],cwd=root,check=True)
-    subprocess.run(['git','-c','user.name=Test','-c','user.email=test@example.invalid','commit','-m','fixture'],cwd=root,check=True,capture_output=True)
-    sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
+    subprocess.run(['git','init',str(root)],check=True,capture_output=True,timeout=30)
+    subprocess.run(['git','add','.'],cwd=root,check=True,timeout=30)
+    subprocess.run(['git','-c','user.name=Test','-c','user.email=test@example.invalid','commit','-m','fixture'],cwd=root,check=True,capture_output=True,timeout=30)
+    sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True,timeout=30).strip()
     corrupt=b'not a package'
     (artifact/'InfiniCrafterLocal.tmod').write_bytes(corrupt)
     provenance=artifact/'build-provenance.json';row=json.loads(provenance.read_text())
@@ -186,14 +186,14 @@ def test_old_unbundled_package_is_not_a_current_release(package):
 @pytest.mark.parametrize('autocrlf', ['true','false'])
 def test_cross_platform_checkout_must_preserve_blob_bytes_for_studio(package,tmp_path,autocrlf):
     root,artifact=package
-    subprocess.run(['git','init',str(root)],check=True,capture_output=True)
-    subprocess.run(['git','add','.'],cwd=root,check=True)
-    subprocess.run(['git','-c','user.name=Test','-c','user.email=test@example.invalid','commit','-m','fixture'],cwd=root,check=True,capture_output=True)
+    subprocess.run(['git','init',str(root)],check=True,capture_output=True,timeout=30)
+    subprocess.run(['git','add','.'],cwd=root,check=True,timeout=30)
+    subprocess.run(['git','-c','user.name=Test','-c','user.email=test@example.invalid','commit','-m','fixture'],cwd=root,check=True,capture_output=True,timeout=30)
     checkout=tmp_path/'checkout'
-    subprocess.run(['git','-c',f'core.autocrlf={autocrlf}','clone',str(root),str(checkout)],check=True,capture_output=True)
+    subprocess.run(['git','-c',f'core.autocrlf={autocrlf}','clone',str(root),str(checkout)],check=True,capture_output=True,timeout=30)
     original=(root/'LocalGenerator/server.py').read_bytes()
     copied=(checkout/'LocalGenerator/server.py').read_bytes()
-    assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=root)==subprocess.check_output(['git','rev-parse','HEAD'],cwd=checkout)
+    assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,timeout=30)==subprocess.check_output(['git','rev-parse','HEAD'],cwd=checkout,timeout=30)
     if autocrlf=='true':
         assert copied==original.replace(b'\n',b'\r\n')
         with pytest.raises(ValueError,match='Studio source missing or changed'):
