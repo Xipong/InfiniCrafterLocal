@@ -16,7 +16,8 @@ public sealed partial class GeneratorClient
     // ask about thousands of clones; the very large native dispatcher is decoded
     // once. JSON is cloned on read so callers cannot mutate the cached program.
     private static readonly ConcurrentDictionary<MethodBase, Lazy<List<AmmoIl>>> AttackSourceCode = new();
-    private static readonly ConcurrentDictionary<(int Type, int Style), Lazy<string>> AttackSourcePrograms = new();
+    private sealed record ProjectileAttackCapture(string Source, string Spawns);
+    private static readonly ConcurrentDictionary<(int Type, int Style), Lazy<ProjectileAttackCapture>> AttackSourcePrograms = new();
     private static List<AmmoIl> AttackCode(MethodBase method)
         => AttackSourceCode.GetOrAdd(method, m => new Lazy<List<AmmoIl>>(() => ReadAmmoIl(m, preserveStructure: true, sourceGraph: true))).Value;
 
@@ -28,8 +29,7 @@ public sealed partial class GeneratorClient
         var refusal = new JsonObject { ["source"] = "read_only_native_attack_source", ["coverage"] = new JsonObject
             { ["unresolved"] = "native_module_certificate_unavailable_or_nonvanilla_identity" } };
         if (!moduleVerified || projectile.ModProjectile is not null || projectile.type <= ProjectileID.None || projectile.type >= ProjectileID.Count) return refusal;
-        JsonObject result = JsonNode.Parse(AttackSourcePrograms.GetOrAdd((projectile.type, projectile.aiStyle),
-            key => new Lazy<string>(() => BuildProjectileAttackSource(key.Type, key.Style).ToJsonString())).Value)!.AsObject();
+        JsonObject result = JsonNode.Parse(ProjectileAttackSource(projectile.type, projectile.aiStyle).Source)!.AsObject();
         // Literal admission observations are not geometry or guaranteed hits.
         result["admission"] = new JsonObject { ["ownerHitCheck"] = projectile.ownerHitCheck,
             ["ownerHitCheckDistance"] = projectile.ownerHitCheckDistance, ["usesOwnerMeleeHitCD"] = projectile.usesOwnerMeleeHitCD,
@@ -37,8 +37,17 @@ public sealed partial class GeneratorClient
         return result;
     }
 
-    private static JsonObject BuildProjectileAttackSource(int type, int style)
+    private static ProjectileAttackCapture ProjectileAttackSource(int type, int style)
+        => AttackSourcePrograms.GetOrAdd((type, style), key => new Lazy<ProjectileAttackCapture>(() => BuildProjectileAttackSource(key.Type, key.Style))).Value;
+
+    private static JsonArray ProjectileSpawnReferences(Projectile projectile)
+        => NativeSourceModuleVerified.Value && projectile.ModProjectile is null
+            && projectile.type > ProjectileID.None && projectile.type < ProjectileID.Count
+            ? JsonNode.Parse(ProjectileAttackSource(projectile.type, projectile.aiStyle).Spawns)!.AsArray() : new JsonArray();
+
+    private static ProjectileAttackCapture BuildProjectileAttackSource(int type, int style)
     {
+        var spawnReferences = new JsonArray();
         var result = new JsonObject { ["source"] = "read_only_native_attack_source", ["version"] = 1,
             ["identityPredicates"] = new JsonObject { ["Projectile.type"] = type, ["Projectile.aiStyle"] = style },
             ["scope"] = "Source statements, not execution, inheritance, final hit/DPS or a gameplay preset. Every observation requires reaching its offset. Predicates retain both successor offsets; alternatives are reaching definitions, not independent rolls. Native hook overrides/detours, enclosing dispatcher flow, hit admission and GPU/texture extent remain unresolved. Fields are live source reads, not captured AI values. Source order is significant.",
@@ -63,14 +72,14 @@ public sealed partial class GeneratorClient
                 // Select the captured actor before traversing/serializing every
                 // sibling's equations. Raw audit capture has an independent work
                 // budget and cannot erase a successfully proved selected body.
-                if (boundActor && slice is null && role is "motion" or "draw")
+                if (boundActor && role is "motion" or "draw" or "dispatch")
                 {
                     try
                     {
                         var selection = new AttackIdentitySelection(body, type, style);
                         if (selection.Selected.Count > 0)
                         {
-                            selectedObservation = new AttackSourceObservation(new ParentSourceMethod(method, AttackCode(method), selectedSuccessors: selection.Selected), role, selection: selection);
+                            selectedObservation = new AttackSourceObservation(new ParentSourceMethod(method, slice ?? AttackCode(method), next, selectedSuccessors: selection.Selected), role, selection: selection);
                             specialized = selectedObservation.Finish();
                             specialized["identitySelection"] = selection.Receipt;
                         }
@@ -89,6 +98,10 @@ public sealed partial class GeneratorClient
                 }
                 if (specialized is not null) program["identitySelected"] = specialized;
                 if (selectionFailure is not null) program["identitySelectionUnavailable"] = selectionFailure;
+                var exposed = specialized ?? program;
+                if (exposed["observations"] is JsonArray)
+                    foreach (var reference in (specialized is not null ? selectedObservation! : observation).LiteralProjectileSpawns(exposed))
+                        spawnReferences.Add(reference!.DeepClone());
                 foreach (var call in observation.ReferencedMethods.Concat(selectedObservation?.ReferencedMethods ?? new HashSet<MethodBase>())
                     .Where(m => m.Module == typeof(Projectile).Module && m.GetMethodBody() is not null)) Certify(call);
                 return program;
@@ -106,10 +119,10 @@ public sealed partial class GeneratorClient
             {
                 var code = AttackCode(method);
                 bool windowRefused = false;
-                var windows = ProjectileIdentityWindows(code, type, style, reason => { windowRefused = true; gaps.Add(root + "_" + reason); }).ToArray();
+                var windows = ProjectileIdentityWindows(code, type, style, reason => { windowRefused = true; gaps.Add(root + "_" + reason); }, meaningfulBudget: root == "VanillaAI").ToArray();
                 if (windows.Length == 0) { if (!windowRefused) gaps.Add(root + "_identity_dispatch_outside_supported_source_shape"); continue; }
                 var slice = windows.SelectMany(w => w.Code).GroupBy(i => i.Offset).Select(g => g.First()).OrderBy(i => i.Offset).ToList();
-                var dispatch = Observe(method, root == "VanillaAI" ? "dispatch" : "collision", slice);
+                var dispatch = Observe(method, root == "VanillaAI" ? "dispatch" : "collision", slice, boundActor: root == "VanillaAI");
                 dispatch["identityWindows"] = new JsonArray(windows.Select(w => (JsonNode?)new JsonObject
                     { ["field"] = w.Field, ["literal"] = w.Literal, ["guardOffset"] = w.Guard }).ToArray());
                 if (root == "Colliding")
@@ -134,6 +147,7 @@ public sealed partial class GeneratorClient
                 {
                     result["motionDispatch"] = dispatch;
                     var helpers = slice.Select(i => i.Arg).OfType<MethodInfo>().Where(m => m.DeclaringType == typeof(Projectile)
+                        && m.Name is not ("Kill" or "Damage")
                         && m.GetParameters().Length == 0 && m.ReturnType == typeof(void) && m.GetMethodBody() is not null).Distinct().ToArray();
                     ParentSourceMethod? caller = null;
                     string? callerFailure = null;
@@ -178,7 +192,7 @@ public sealed partial class GeneratorClient
             }
             catch (Exception error) when (error is not OutOfMemoryException) { gaps.Add("draw_source:" + error.GetType().Name); }
         }
-        if (result["motion"] is not null && Native(typeof(Projectile), "UpdatePosition") is { } integration)
+        if ((result["motion"] is not null || result["motionDispatch"] is not null) && Native(typeof(Projectile), "UpdatePosition") is { } integration)
         {
             // This is a direct entry-point source conditioned on the captured
             // actor identity, not a claim that an enclosing Update has reached it.
@@ -199,7 +213,7 @@ public sealed partial class GeneratorClient
         result["sourceMethods"] = certificates;
         result["coverage"] = new JsonObject { ["proved"] = "bounded_native_source_observations_only", ["unresolved"] = gaps,
             ["boundaries"] = "ProjectileLoader.Colliding/ShouldUpdatePosition and all other hooks remain unevaluated; no source fact is absence of a mechanic; damage may stop before visual lifetime; held-item draw is separate and not inferred from noMelee" };
-        return result;
+        return new ProjectileAttackCapture(result.ToJsonString(), spawnReferences.ToJsonString());
     }
 
     // This is a syntax recognizer for immutable identity selectors, NOT an IL
@@ -254,6 +268,7 @@ public sealed partial class GeneratorClient
     {
         private readonly ParentSourceMethod body;
         private readonly string role;
+        private readonly bool explicitRoots;
         private readonly AttackIdentitySelection? selection;
         private readonly ParentSourceMethod.Value[] roots, branches;
         private readonly JsonObject dependencies = new(), symbols = new();
@@ -272,7 +287,7 @@ public sealed partial class GeneratorClient
         private int expressionCount;
         internal AttackSourceObservation(ParentSourceMethod body, string role, IEnumerable<ParentSourceMethod.Value>? selected = null, AttackIdentitySelection? selection = null)
         {
-            this.body = body; this.role = role; this.selection = selection;
+            this.body = body; this.role = role; this.selection = selection; explicitRoots = selected is not null;
             roots = (selected ?? body.Statements.Where(IsRoot)).Where(v => selection is null || selection.Reachable.Contains(v.Block)).OrderBy(v => v.At).ToArray();
             branches = body.Statements.Where(v => (selection is null || selection.Reachable.Contains(v.Block) && !selection.Selected.ContainsKey(v.Block)) && body.Blocks[v.Block].Next.Distinct().Count() > 1
                 && (v.Op == "switch" || v.Op.StartsWith("b", StringComparison.Ordinal))).ToArray();
@@ -280,11 +295,20 @@ public sealed partial class GeneratorClient
         private bool IsRoot(ParentSourceMethod.Value value)
         {
             if (role is "collision" or "predicate") return value.Op == "ret" || value.Operand is MethodInfo m && m.ReturnType == typeof(bool);
-            if (role == "dispatch") return value.Operand is MethodInfo;
+            if (role == "dispatch" && value.Op == "ret") return true;
+            if (role == "dispatch" && value.Operand is MethodInfo effect && effect.DeclaringType == typeof(Projectile))
+            {
+                // Effect roots and the same native AI helper entrypoints already
+                // followed below. Ordinary math/VFX calls remain dependencies only
+                // when a mechanical argument or predicate actually references them.
+                if (effect.Name is "NewProjectile" or "NewProjectileDirect" or "Damage" or "Kill"
+                    || effect.GetParameters().Length == 0 && effect.ReturnType == typeof(void) && effect.GetMethodBody() is not null) return true;
+            }
             if (role == "draw") return value.Operand is MethodBase draw && (draw.Name.Contains("Draw", StringComparison.Ordinal)
                 || draw.Name == "Frame" || draw.IsConstructor && draw.DeclaringType?.Name == "Color");
             if (value.Op == "stfld" && value.Operand is FieldInfo field && (field.DeclaringType == typeof(Projectile) || field.DeclaringType == typeof(Entity)))
-                return field.Name is "position" or "velocity" or "rotation" or "scale" or "timeLeft" or "direction" or "spriteDirection";
+                return field.Name is "position" or "velocity" or "rotation" or "scale" or "timeLeft" or "direction" or "spriteDirection"
+                    || role == "dispatch" && field.Name is "width" or "height" or "damage" or "knockBack" or "penetrate" or "active";
             if (value.Operand is MethodInfo call && (call.DeclaringType == typeof(Projectile) || call.DeclaringType == typeof(Entity))
                 && (call.Name is "set_Center" or "Kill")) return true;
             // Native movement commonly writes velocity.Y/position.X through a
@@ -400,6 +424,34 @@ public sealed partial class GeneratorClient
             if (value.Operand is MethodBase method) return Symbol(method) + "[" + string.Join(",", inputs) + "]";
             return value.Op + "(" + string.Join(",", inputs) + (value.Operand is null ? "" : ";" + (SourceOperand(value.Operand)?.ToJsonString() ?? "null")) + ")";
         }
+        internal JsonArray LiteralProjectileSpawns(JsonObject program)
+        {
+            var references = new JsonArray();
+            foreach (var call in roots.Where(v => v.Operand is MethodInfo method && method.DeclaringType == typeof(Projectile)
+                && method.Name is "NewProjectile" or "NewProjectileDirect"))
+            {
+                var method = (MethodInfo)call.Operand!;
+                int parameter = Array.FindIndex(method.GetParameters(), p => string.Equals(p.Name, "Type", StringComparison.OrdinalIgnoreCase));
+                int slot = parameter + (method.IsStatic ? 0 : 1);
+                var row = MethodSourceIdentity(body.Method);
+                row["at"] = call.At;
+                row["requiredPredicates"] = program["observations"]!.AsArray().First(v => v!["at"]!.GetValue<int>() == call.At)!["requiredPredicates"]!.DeepClone();
+                var candidates = new JsonArray();
+                bool unknown = parameter < 0 || slot >= call.Inputs.Count;
+                if (!unknown)
+                {
+                    var definitions = body.Definitions(call.Inputs[slot])
+                        .Where(v => selection is null || selection.Reachable.Contains(v.Block) || v.Op.StartsWith("unresolved", StringComparison.Ordinal)).ToArray();
+                    unknown = definitions.Length == 0 || definitions.Any(v => v.Op != "const" || v.Operand is not int);
+                    foreach (int id in definitions.Where(v => v.Op == "const" && v.Operand is int).Select(v => (int)v.Operand!).Distinct()) candidates.Add(id);
+                }
+                row["projectileTypes"] = candidates;
+                if (unknown) row["unresolved"] = "spawn_type_requires_runtime_expression_or_unresolved_definition";
+                references.Add(row);
+            }
+            return references;
+        }
+
         internal JsonObject Finish()
         {
             JsonObject result = MethodSourceIdentity(body.Method);
@@ -422,8 +474,32 @@ public sealed partial class GeneratorClient
                 observations.Add(row);
             }
             result["observations"] = observations; result["dependencies"] = dependencies; result["predicates"] = predicates; result["symbols"] = symbols;
-            result["coverage"] = "connected_source_slice; opaque_fields_calls_and_address_aliases_are_symbolic";
-            if (body.Unknown.Count > 0) result["unresolved"] = new JsonArray(body.Unknown.Distinct().Select(s => (JsonNode?)JsonValue.Create(s)).ToArray());
+            result["coverage"] = role == "dispatch"
+                ? "effect_motion_and_ai_state_source_slice; nonselected_calls_and_opaque_helper_effects_are_unresolved; not_complete_AI_or_cadence"
+                : "connected_source_slice; opaque_fields_calls_and_address_aliases_are_symbolic";
+            var unknown = body.Unknown.ToList();
+            if (role == "dispatch" && !explicitRoots)
+            {
+                var unobservedCalls = body.Statements.Where(v => !roots.Contains(v) && v.Operand is MethodInfo
+                    && (selection is null || selection.Reachable.Contains(v.Block))).ToArray();
+                // Passing values only rules out a direct argument alias, not
+                // mutation through static/global state inside an opaque helper.
+                if (unobservedCalls.Length > 0) unknown.Add("nonselected_call_global_side_effects_unresolved");
+                foreach (var value in unobservedCalls)
+                {
+                    var call = (MethodInfo)value.Operand!;
+                    int skip = call.IsStatic ? 0 : 1;
+                    var parameters = call.GetParameters();
+                    // Value arguments cannot alias the actor or its clock array.
+                    // Reference/byref arguments and an instance receiver can;
+                    // their effects stay unknown even when no return is consumed.
+                    if (value.Inputs.Where((_, index) => index < skip || index - skip < parameters.Length
+                            && (!parameters[index - skip].ParameterType.IsValueType || parameters[index - skip].ParameterType.IsByRef))
+                        .Any(input => CapturedMotionActor(input, new()) || ContainsClock(input, new()) || ContainsMotionVector(input, new())))
+                        unknown.Add("opaque_actor_call_side_effects:" + SourceMember(call) + "@" + value.At);
+                }
+            }
+            if (unknown.Count > 0) result["unresolved"] = new JsonArray(unknown.Distinct().Select(s => (JsonNode?)JsonValue.Create(s)).ToArray());
             // Source evidence is not a prompt-size budget. CFG, expression and
             // dependency work remain bounded; never throw away complete captured
             // mechanics solely because their JSON spelling crosses a text length.

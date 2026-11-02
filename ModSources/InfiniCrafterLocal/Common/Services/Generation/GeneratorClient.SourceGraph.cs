@@ -27,7 +27,7 @@ public sealed partial class GeneratorClient
 
     // Shared native identity-window recognizer. It selects source syntax only;
     // entry, hooks and any opaque/non-identity predicates remain unresolved.
-    private static IEnumerable<(string Field, int Literal, int Guard, AmmoIl[] Code)> ProjectileIdentityWindows(List<AmmoIl> code, int type, int style, Action<string>? gap = null)
+    private static IEnumerable<(string Field, int Literal, int Guard, AmmoIl[] Code)> ProjectileIdentityWindows(List<AmmoIl> code, int type, int style, Action<string>? gap = null, bool meaningfulBudget = false)
     {
         for (int n = 0; n + 4 < code.Count; n++)
         {
@@ -49,11 +49,14 @@ public sealed partial class GeneratorClient
                 end = boundary;
             }
             else continue;
-            // Keep the existing raw-instruction admission budget unchanged;
-            // distinguish its refusal from an unsupported identity selector.
-            var window = code.Skip(n).Take(4).Concat(code.Skip(start).TakeWhile(i => i.Offset < end)).Take(1025).ToArray();
-            if (window.Length > 1024)
+            // The broad source graph keeps its raw1024 budget. Narrow attack
+            // observation can admit nop-padded windows without removing offsets.
+            int rawLimit = meaningfulBudget ? 4096 : 1024;
+            var window = code.Skip(n).Take(4).Concat(code.Skip(start).TakeWhile(i => i.Offset < end)).Take(rawLimit + 1).ToArray();
+            if (window.Length > rawLimit)
             { gap?.Invoke("identity_window_raw_instruction_bound"); continue; }
+            if (meaningfulBudget && window.Count(i => i.Op != "nop") > 1024)
+            { gap?.Invoke("identity_window_meaningful_instruction_bound"); continue; }
             yield return (field.Name, literal, code[n + 3].Offset, window);
         }
     }

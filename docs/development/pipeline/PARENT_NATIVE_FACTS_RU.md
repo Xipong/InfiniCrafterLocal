@@ -22,8 +22,8 @@
   assembly без исполнения игровых hooks. Runtime допускает наблюдения только при
   точном совпадении SHA256 тела метода **и** ModuleVersionId, только для vanilla
   объектов. Новый/неподдержанный binary или modded объект не заимствует сертификат.
-  Эти ссылки, исходные offsets и scope проходят до Author целиком: точные
-  повторы могут иметь `sourceSameAs: N` — точный индекс полного значения в
+  Исходные offsets и сертификаты сохраняются в native dump; Author получает
+  connected behavior projection с условиями и scope. Точные повторы могут иметь `sourceSameAs: N` — точный индекс полного значения в
   `nativeSourceFacts[N]` того же dossier. Это lossless sharing, не удаление фактов или выбор «лучшего»
   наблюдения. Порядок/кратность массивов и типы сохраняются после раскрытия;
   literal tooltip и accepted generated-parent packets остаются inline.
@@ -91,12 +91,44 @@ input на 357; Hellwing меняет только current projectile 1 на 485
 
 ## Причины неполного identity window
 
-Native equality windows сохраняют прежний предел 1024 сырых IL инструкций,
-включая `nop`. Отказ `identity_window_raw_instruction_bound` означает найденное,
-но слишком большое окно; он не подменяется отсутствием поддержанного dispatch.
-Неподдержанный non-forward переход отмечается отдельно. Эти diagnostics не
-расширяют source admission, не меняют character budget 16000 общего графа и
-не добавляют отсутствующие cadence/механические факты.
+Общий `parentSourceGraph` сохраняет предел 1024 сырых IL инструкций и character
+budget 16000. Узкое наблюдение `VanillaAI` допускает до 1024 значимых инструкций
+при отдельном hard bound 4096 сырых: `nop` и исходные offsets не удаляются.
+Отказы по raw/meaningful budget отличаются от неподдержанного dispatch и
+non-forward перехода. Превышение границы остаётся unknown, не пустой механикой.
+
+Существующий certified identity selector применяется также к inline dispatch:
+выбираются только доказанные ветви captured type/aiStyle; живые условия, alias
+hazards и неподдержанные пути не угадываются. Effect/clock slice сохраняет
+создание снаряда, Damage/Kill, связанные изменения состояния и hitbox,
+AI/localAI writes, predicates, loop dependencies и выходы из invocation.
+`UpdatePosition` наблюдается и при inline движении без отдельного AI helper.
+Opaque helper/global effects остаются unknown; даже value-only аргумент не
+доказывает чистоту вызова. Счётчики означают AI invocations, а не автоматически
+тики мира, секунды, точную частоту попаданий или DPS. Полный AI не обещается.
+
+## Условные дочерние source profiles: один переход
+
+`referencedProjectiles` собирает тот же `ProjectileRawSnapshot`, который
+используется обычным `Prepare` и `/infinidump`; внешний dump для live-запроса
+не нужен. Producer связывает literal candidates из уже выбранных source
+observations с исходными callsites, conditions и сертификатами. Runtime/dynamic
+ID остаётся явно unresolved; соседняя исключённая identity-ветка не возвращается
+через каталог. Один профиль может обслуживать несколько условных вызовов.
+
+Вложенный snapshot содержит native defaults/source, не состояние реально
+созданного снаряда. Его sourceItem отсутствует; фактические damage, velocity,
+owner и AI arguments читаются из родительского вызова, а не из нулевых defaults.
+Python передаёт read-only profile через существующие compaction и exact-sharing,
+не выбирая механику и не меняя input/fingerprint.
+
+Раскрывается ровно один переход: вложенные вызовы имеют
+`includeChildReferences:false`, поэтому self/cyclic references не вызывают
+рекурсию. Технический предел — восемь **целых** profiles на snapshot; все callsites
+и overflow identities сохраняются с причиной unknown. Это бюджет наблюдения,
+не ограничение игрового числа дочерних снарядов и не рекомендация Author.
+Отдельный catalog snapshot может содержать больше собственного source-контекста,
+чем неполная ссылка на него; отсутствие профиля не доказывает отсутствие эффекта.
 
 ## Неопределённость не запрещает новый дизайн
 

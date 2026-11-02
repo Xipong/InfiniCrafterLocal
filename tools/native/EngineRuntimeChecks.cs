@@ -77,6 +77,8 @@ internal static partial class EngineRuntimeChecks
             ("projectile attack identity specialization receiver and mutation safety", ProjectileAttackIdentitySelectionKeepsUnknownConditions),
             ("projectile attack native dispatch and source sibling controls", ProjectileAttackNativeDispatchAndSiblingWitnesses),
             ("parent identity window refusal diagnostics", ParentIdentityWindowRefusalDiagnostics),
+            ("parent effect slice clocks predicates and loops", ParentEffectSliceKeepsConditionsClocksAndLoops),
+            ("parent single hop projectile source references", ParentSingleHopProjectileReferences),
             ("parent native geometry helper semantic equivalence", ParentNativeGeometryHelperRulesMatchSource),
             ("parent native arrow motion source execution oracle", ParentNativeArrowMotionMatchesSelectedSource),
             ("parent native position integration execution oracle", ParentNativePositionIntegrationMatchesLiveGuards),
