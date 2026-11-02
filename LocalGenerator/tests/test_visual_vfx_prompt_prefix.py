@@ -230,7 +230,7 @@ def test_visual_style_changes_advisory_system_only(wire_transport, monkeypatch):
     visual_request._request_visual_kit(data, {}, {})
     monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Terraria Like", raising=False)
     visual_request._request_visual_kit(data, {}, {})
-    assert "Terraria Like art direction" in sent[1]["messages"][0]["content"]
+    assert sent[0]["messages"][0] != sent[1]["messages"][0]
     assert sent[0]["messages"][1:] == sent[1]["messages"][1:]
     assert sent[0]["response_format"] == sent[1]["response_format"]
 

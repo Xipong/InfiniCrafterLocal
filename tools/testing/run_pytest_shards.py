@@ -346,9 +346,23 @@ def merge_reports(directory: Path, shard_count: int, source_revision: str) -> di
             "durationSeconds": max(row["durationSeconds"] for row in rows)}
 
 
+def configured_shard_count() -> int:
+    command = json.loads((ROOT / ".agent/manifest.json").read_text(encoding="utf-8"))["checks"]["pytest"]
+    if not isinstance(command, list) or command.count("--shards") != 1:
+        raise ValueError("Canonical pytest command must declare one shard count")
+    index = command.index("--shards") + 1
+    if index >= len(command) or not isinstance(command[index], str) or not command[index].isdigit():
+        raise ValueError("Canonical pytest shard count must be a positive integer")
+    count = int(command[index])
+    if not 1 <= count <= 256:
+        raise ValueError("Canonical pytest shard count exceeds matrix bounds")
+    return count
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--shards", type=int, default=4)
+    parser.add_argument("--shards", type=int, help="Override the canonical manifest shard count")
+    parser.add_argument("--matrix", action="store_true", help="Print the canonical CI partition matrix without running tests")
     parser.add_argument("--json-out", type=Path)
     parser.add_argument("--shard-index", type=int)
     parser.add_argument("--timeout-seconds", type=int, default=60, help="Timeout per batched or isolated pytest command")
@@ -356,14 +370,24 @@ def main() -> int:
     parser.add_argument("--merge-reports", type=Path, help="Validate complete same-revision CI partition receipts instead of executing tests")
     args = parser.parse_args()
 
+    try:
+        count = args.shards if args.shards is not None else configured_shard_count()
+        if not 1 <= count <= 256:
+            raise ValueError("Pytest shard count exceeds matrix bounds")
+    except (ValueError, TypeError, KeyError, OSError) as exc:
+        parser.error(str(exc))
+    if args.matrix:
+        print(json.dumps({"shard": list(range(1, count + 1))}))
+        return 0
+
     report: dict[str, Any]
     if args.merge_reports:
         try:
-            report = merge_reports(args.merge_reports, args.shards, os.environ.get("GITHUB_SHA", ""))
+            report = merge_reports(args.merge_reports, count, os.environ.get("GITHUB_SHA", ""))
         except (ValueError, TypeError, KeyError, OSError) as exc:
             report = {"schema": "infini.pytest-shards.v3", "ok": False, "status": "failed", "errors": [str(exc)], "shards": []}
     else:
-        report = run(args.shards, args.shard_index, args.timeout_seconds)
+        report = run(count, args.shard_index, args.timeout_seconds)
         report["sourceRevision"] = os.environ.get("GITHUB_SHA")
     text = json.dumps(report, ensure_ascii=False, indent=None if args.compact else 2, sort_keys=True) + "\n"
     if args.json_out:

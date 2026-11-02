@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 
@@ -47,12 +48,35 @@ def _contract_check_strict_archive_runtime_junk_patterns_are_recognized() -> Non
     assert not hygiene._is_runtime_junk(Path("LocalGenerator/infini_local/web/server.py"), Path("server.py"))
 
 
-def _contract_check_dependency_free_sandbox_gate_is_honest_and_bounded(tmp_path: Path) -> None:
+def _contract_check_dependency_free_sandbox_gate_is_honest_and_bounded(tmp_path: Path, monkeypatch) -> None:
+    spec = importlib.util.spec_from_file_location("sandbox_gate_contract", SANDBOX_TOOL)
+    assert spec is not None and spec.loader is not None
+    sandbox = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sandbox)
+    # Keep the complete cheap repository scans, including all contracts/.agent JSON.
+    # Manifest hygiene validates selected JSON owners, not this exhaustive roster.
+    for check in (sandbox._python_and_json_syntax(), sandbox._test_process_safety(), sandbox._pytest_bootstrap_policy()):
+        assert check["status"] == "passed", check
+
+    # Exercise the actual dependency-free orchestration without repeating the five
+    # whole-project static checks already owned by the release manifest.
+    fixture = tmp_path / "repo"
+    copied_tool = fixture / "tools/testing/validate_sandbox.py"
+    copied_tool.parent.mkdir(parents=True)
+    shutil.copyfile(SANDBOX_TOOL, copied_tool)
+    tests = fixture / "LocalGenerator/tests"
+    tests.mkdir(parents=True)
+    shutil.copyfile(ROOT / "LocalGenerator/tests/conftest.py", tests / "conftest.py")
+    for _, command in sandbox.STATIC_COMMANDS:
+        checker = fixture / command[0]
+        checker.parent.mkdir(parents=True, exist_ok=True)
+        checker.write_text("import sys\nraise SystemExit(0)\n", encoding="utf-8")
+
     report_path = tmp_path / "sandbox-validation.json"
     env = os.environ.copy()
     env.pop("PYTHONPATH", None)
     proc = subprocess.run(
-        [sys.executable, "-S", str(SANDBOX_TOOL), "--json-out", str(report_path)],
+        [sys.executable, "-S", str(copied_tool), "--json-out", str(report_path)],
         cwd=ROOT,
         env=env,
         text=True,
@@ -71,6 +95,38 @@ def _contract_check_dependency_free_sandbox_gate_is_honest_and_bounded(tmp_path:
         report["missingFullSuiteDependencies"]
     )
     assert not report["failed"]
+    assert {check["name"] for check in report["checks"]} == {
+        "syntax_and_json", "test_process_safety", "pytest_bootstrap_policy",
+        *(name for name, _ in sandbox.STATIC_COMMANDS),
+    }
+    failing_name, failing_command = sandbox.STATIC_COMMANDS[0]
+    (fixture / failing_command[0]).write_text("raise SystemExit(9)\n", encoding="utf-8")
+    failed = subprocess.run(
+        [sys.executable, "-S", str(copied_tool), "--json-out", str(report_path)],
+        cwd=fixture, env=env, text=True, capture_output=True, check=False, timeout=15,
+    )
+    assert failed.returncode == 1, failed.stdout
+    failed_report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert failed_report["failed"] == [failing_name]
+    assert next(c for c in failed_report["checks"] if c["name"] == failing_name)["returnCode"] == 9
+    with monkeypatch.context() as scoped:
+        scoped.setattr(sandbox, "ROOT", fixture)
+        slow = fixture / "slow.py"
+        slow.write_text("import time\ntime.sleep(30)\n", encoding="utf-8")
+        timed = sandbox._run_static_command("slow", ("slow.py",), 0.05)
+        assert timed["status"] == "timeout"
+        assert timed["returnCode"] is not None
+        (tests / "test_unsafe.py").write_text(
+            "import os, subprocess\nos.environ['UNAPPROVED'] = '1'\nsubprocess.run([])\n",
+            encoding="utf-8",
+        )
+        unsafe = sandbox._test_process_safety()
+        assert unsafe["status"] == "failed" and len(unsafe["errors"]) == 2
+        (tests / "conftest.py").write_text(
+            "def _configure_deterministic_sandbox():\n    forbidden()\n"
+            "_configure_deterministic_sandbox()\n", encoding="utf-8",
+        )
+        assert sandbox._pytest_bootstrap_policy()["status"] == "failed"
 
     runner_report_path = tmp_path / "pytest-unavailable.json"
     runner = subprocess.run(

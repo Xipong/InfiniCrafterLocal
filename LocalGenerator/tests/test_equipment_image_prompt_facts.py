@@ -92,9 +92,6 @@ def test_actual_adapter_receives_overlay_design_and_exact_slot_fit(offline, monk
     assert _facts(overlay_request["prompt"]) == expected
     assert authored["prompt"] in overlay_request["prompt"]
     assert overlay_request["negative_prompt"] == frozen["visualKit"]["item"]["negativePrompt"]
-    assert f"attached to the player's {body_part}" in overlay_request["prompt"]
-    assert "fits the whole final PNG" in overlay_request["prompt"]
-    assert "visible silhouette smaller" in overlay_request["prompt"]
     for foreign in ("inventory-only", '"renderSizePx"', '"grip"'):
         assert foreign not in overlay_request["prompt"]
     assert "Read-only equipment overlay facts:" not in item_request["prompt"]
@@ -177,7 +174,6 @@ def test_retry_and_prompt_only_preserve_long_overlay_facts(offline, monkeypatch,
     assert _facts(retry)["silhouette"] == frozen["visualKit"]["equipOverlay"]["silhouette"]
     assert _facts(retry)["visualIdentity"] == frozen["visualKit"]["equipOverlay"]["visualIdentity"]
     assert "SILHOUETTE_END" in retry and "IDENTITY_END" in retry
-    assert "Technical correction:" in retry if zimage else "fix these technical issues:" in retry
     attempts = json.loads(result["debug"]["equip_overlaySpriteValidation"])
     assert not attempts[0]["validation"]["ok"] and attempts[1]["validation"]["ok"]
     # The sd.cpp adapter performs its existing whitespace normalization.

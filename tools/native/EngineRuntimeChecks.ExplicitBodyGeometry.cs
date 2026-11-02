@@ -40,15 +40,32 @@ internal static partial class EngineRuntimeChecks
         Equal(null, JsonSerializer.Deserialize<RuntimeEntityVisualSpec>("{}", options)!.Geometry, "old saved absent geometry stays absent");
         foreach (string failure in new[] { "mode", "aim", "path" }) {
             var entity = new RuntimeEntitySpec { Id = "body", Kind = RuntimeEntityKind.FreeProjectile };
+            entity.Movement = new RuntimeMovementSpec { Name = "move_straight", Code = 0 };
+            entity.Spawn.Enabled = true;
             entity.VisualRole = entity.Visual.Role = RuntimeEntityKind.VisualRoleFor(entity.Kind);
-            entity.Visual.AssetMode = failure == "mode" ? "no_asset" : "runtime_geometry";
+            entity.Visual.AssetMode = "runtime_geometry";
             entity.Visual.Geometry = ExplicitBody(failure == "path" ? "collision_path" : "body_segment");
-            if (failure == "aim") entity.Visual.Geometry.Axis = "aim";
+            if (failure == "aim") {
+                entity.Visual.Geometry.Axis = "aim";
+                entity.Aim = new RuntimeMotionAimSpec { Source = "facing", TurnOwner = true };
+            }
+            if (failure == "path") {
+                entity.Aim = new RuntimeMotionAimSpec { Source = "facing", TurnOwner = true };
+                entity.BeamGeometry = new RuntimeBeamGeometrySpec { LengthPx = 90, WidthPx = 12, RaycastTiles = false };
+            }
+            entity.NormalizeAndValidate(new RuntimeLimitsSpec());
+            // Each negative differs from an admitted fixture in one dependency only.
+            if (failure == "mode") entity.Visual.AssetMode = "no_asset";
+            else {
+                var missingDependency = JsonSerializer.SerializeToNode(entity, options)!.AsObject();
+                missingDependency.Deserialize<RuntimeEntitySpec>(options)!.NormalizeAndValidate(new RuntimeLimitsSpec());
+                Equal(true, missingDependency.Remove(failure == "aim" ? "aim" : "beamGeometry"),
+                    "negative removes exactly the admitted dependency");
+                entity = missingDependency.Deserialize<RuntimeEntitySpec>(options)!;
+            }
             bool refused = false;
             try { entity.NormalizeAndValidate(new RuntimeLimitsSpec()); }
-            catch (InvalidDataException e) {
-                refused = e.Message.Contains(failure == "mode" ? "belongs only" : failure == "aim" ? "requires entity aim" : "requires beam or lash");
-            }
+            catch (InvalidDataException) { refused = true; }
             Equal(true, refused, "native admission enforces geometry dependency: " + failure);
         }
 

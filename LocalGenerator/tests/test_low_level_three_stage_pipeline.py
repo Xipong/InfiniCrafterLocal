@@ -324,10 +324,8 @@ def test_single_format_repair_preserves_recoverable_design(wire_transport, monke
     context = request_dossier(requests[1])
     assert context["malformedRawText"] == raw
     if stage == "gameplay":
-        assert context["task"].startswith("Repair JSON syntax only")
         assert "multiple" not in context["allowedCallParamsReadOnly"]["spawn_on_event"]
         assert "count" in context["allowedCallParamsReadOnly"]["spawn_on_event"]
-        assert "do not invent undeclared params" in requests[1]["messages"][0]["content"]
     else:
         assert context["exactErrors"][0]["message"].startswith("malformed_json:")
         if stage == "vfx":

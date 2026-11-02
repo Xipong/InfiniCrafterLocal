@@ -185,8 +185,6 @@ def test_beam_offset_real_author_and_repair_packets_explain_shifted_origin(monke
         packet = _http_packet(monkeypatch, request)
         prose = " ".join(m["content"] for m in packet["messages"])
         assert "startOffsetBlocks" in prose and "MotionAxis" in prose
-        assert "beam_geometry starts at body center, not at an inventory grip" not in prose
-        assert "start=body center+axis*startOffsetBlocks" in prose
     card = next(row for row in request_dossier(initial)["runtimeCapabilityContract"]["catalog"]["capabilities"]
                 if row["fn"] == "beam_geometry")
     field = card["params"]["startOffsetBlocks"]

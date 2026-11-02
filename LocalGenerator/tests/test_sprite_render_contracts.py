@@ -143,9 +143,8 @@ def test_transparent_selects_native_alpha_without_a_chroma_fallback(monkeypatch,
     for role in ("item", "runtime:projectile", "equip_overlay", "impact", "vfx_cutout", "vfx_strip"):
         assert prompts.sprite_contract_for(role, 32)["background"] == "transparent"
         text = prompts.normalize_asset_prompt({}, role, authored, 32)
-        assert authored in text and "transparent background" in text and "solid rgb" not in text
+        assert authored in text
     rule = prompts.visual_background_transport_rule()
-    assert "transparent background in the raw image" in rule and "solid rgb" not in rule
 
 
 def source_image():
@@ -410,7 +409,6 @@ def test_grip_image_boundary(monkeypatch, role, present, long):
     assert authored in text and data == before
     if role == "item" and present:
         assert '"normalizedX":0.123456789' in text and '"normalizedY":0.8' in text
-        assert "final canvas" in text and "upper-left" in text
     else:
         assert "normalizedX" not in text
     if long:

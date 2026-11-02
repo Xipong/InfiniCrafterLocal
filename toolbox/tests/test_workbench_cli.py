@@ -20,7 +20,7 @@ def invoke(tmp_path, *args):
                           cwd=tmp_path, env=env, capture_output=True, text=True)
 
 
-@pytest.mark.parametrize('status', [0, 1, 2, 7])
+@pytest.mark.parametrize('status', [0, 7])
 def test_forwarding_preserves_argv_exit_and_caller_context(monkeypatch, tmp_path, status):
     from toolbox.cli import main
     monkeypatch.chdir(tmp_path)

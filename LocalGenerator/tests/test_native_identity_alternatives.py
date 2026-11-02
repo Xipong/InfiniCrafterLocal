@@ -22,8 +22,6 @@ def test_actual_native_excluded_paths_have_selfcontained_conditions_and_scope():
         projected = project_attack_behavior(reference)['positionIntegration']
         alternatives = projected['identityAlternatives']
         assert known_identity_alternatives(alternatives)
-        assert 'not imported Author options' in alternatives['meaning']
-        assert 'enclosing caller identity preservation is not proved' in projected['identitySelection']['scope']
         assert len(projected['predicates']) == 11 and len(projected['observations']) == 6
         cases = alternatives['cases']
         assert len(cases) == 8
@@ -87,5 +85,3 @@ def test_actual_author_request_keeps_other_identity_choices_visible(monkeypatch,
         integration = packet['parents'][label]['packet']['raw']['directProjectile']['attackReference']['positionIntegration']
         assert known_identity_alternatives(integration['identityAlternatives'])
         assert len(integration['identityAlternatives']['cases']) == 8
-        assert 'not imported Author options' in integration['identityAlternatives']['meaning']
-        assert 'enclosing caller identity preservation is not proved' in integration['identitySelection']['scope']

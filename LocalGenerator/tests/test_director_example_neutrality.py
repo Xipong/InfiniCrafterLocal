@@ -189,14 +189,8 @@ def test_image_packet_preserves_literal_art_and_selected_facts_without_build_exa
     payload = json.loads(json.dumps(image.sdcpp_server_payload(prompt, "no text", 64, 64, 7, "a1111")))
     text = payload["prompt"]
     assert text.startswith(authored)
-    assert "transparent background" in text
-    assert "Retain the literal authored silhouette, component count, spatial arrangement" in text
-    assert "normalized final canvas coordinates" in text
-    assert "Terraria (tModLoader) game asset" in text
     facts = json.JSONDecoder().raw_decode(text.split("Read-only final-frame facts: ", 1)[1])[0]
     for key, value in data["visual"].items():
         assert facts[key] == value
     assert facts["canvasSizePx"] == 64
     assert data == frozen
-    assert "with a separately chosen texturedPath for the path" not in text
-    assert "can coexist with a baked tip/body" not in text

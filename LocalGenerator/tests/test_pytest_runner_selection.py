@@ -835,7 +835,7 @@ def test_ci_partition_aggregation_refuses_incomplete_or_mixed_evidence(shard_rec
 def test_ci_partition_cli_refuses_missing_source_identity_without_running_tests(shard_receipts, monkeypatch, capsys):
     directory, _ = shard_receipts
     monkeypatch.delenv("GITHUB_SHA", raising=False)
-    monkeypatch.setattr(shards.sys, "argv", ["run_pytest_shards.py", "--merge-reports", str(directory)])
+    monkeypatch.setattr(shards.sys, "argv", ["run_pytest_shards.py", "--shards", "4", "--merge-reports", str(directory)])
     monkeypatch.setattr(shards, "run", lambda *args: pytest.fail("Aggregation must not rerun test workloads"))
     assert shards.main() == 1
     assert "source revision" in capsys.readouterr().out
@@ -863,3 +863,38 @@ def test_validation_keeps_all_python_gates_with_explicit_partition_admission(tmp
         if name == "pytest" and aggregate:
             assert command == expected + ["--merge-reports", str((tmp_path / "receipts").resolve())]
         else: assert command == expected
+
+
+@pytest.mark.parametrize("count", [1, 6])
+def test_ci_matrix_and_local_default_share_canonical_count(tmp_path, monkeypatch, capsys, count):
+    (tmp_path / ".agent").mkdir()
+    (tmp_path / ".agent/manifest.json").write_text(json.dumps({"checks": {"pytest": ["python", "runner", "--shards", str(count)]}}))
+    monkeypatch.setattr(shards, "ROOT", tmp_path)
+    monkeypatch.setattr(shards.sys, "argv", ["runner", "--matrix"])
+    monkeypatch.setattr(shards, "run", lambda *args: pytest.fail("Matrix planning must not execute tests"))
+    assert shards.main() == 0
+    assert json.loads(capsys.readouterr().out) == {"shard": list(range(1, count + 1))}
+    calls = []
+    monkeypatch.setattr(shards.sys, "argv", ["runner"])
+    monkeypatch.setattr(shards, "run", lambda *args: calls.append(args) or {"ok": True, "shards": []})
+    assert shards.main() == 0
+    assert calls == [(count, None, 60)]
+
+
+@pytest.mark.parametrize("arguments", [[], ["--shards"], ["--shards", "0"], ["--shards", "257"], ["--shards", "bad"], ["--shards", "2", "--shards", "3"]])
+def test_ci_matrix_refuses_invalid_canonical_count(tmp_path, monkeypatch, arguments):
+    (tmp_path / ".agent").mkdir()
+    (tmp_path / ".agent/manifest.json").write_text(json.dumps({"checks": {"pytest": arguments}}))
+    monkeypatch.setattr(shards, "ROOT", tmp_path)
+    with pytest.raises(ValueError):
+        shards.configured_shard_count()
+
+
+@pytest.mark.parametrize("count", [0, -1, 257])
+def test_explicit_matrix_count_refuses_empty_or_unbounded_work(monkeypatch, capsys, count):
+    monkeypatch.setattr(shards.sys, "argv", ["runner", "--matrix", "--shards", str(count)])
+    monkeypatch.setattr(shards, "run", lambda *args: pytest.fail("Invalid matrix must not run tests"))
+    with pytest.raises(SystemExit) as exc:
+        shards.main()
+    assert exc.value.code == 2
+    assert not capsys.readouterr().out

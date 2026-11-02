@@ -13,12 +13,24 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  python-partitions:
+    name: Canonical Python partition matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.partition.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: partition
+        run: |
+          matrix="$(python tools/testing/run_pytest_shards.py --matrix)"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   python-shards:
-    name: Python shard ${{ matrix.shard }}/4
+    name: Python shard ${{ matrix.shard }}/${{ strategy.job-total }}
+    needs: python-partitions
     strategy:
       fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
+      matrix: ${{ fromJSON(needs.python-partitions.outputs.matrix) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,18 +44,19 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r LocalGenerator/requirements-dev.lock
       - name: Run canonical pytest partition
-        run: python tools/testing/run_pytest_shards.py --shards 4 --shard-index ${{ matrix.shard }} --timeout-seconds 300 --json-out artifacts/validation/pytest_shards.json
+        run: python tools/testing/run_pytest_shards.py --shard-index ${{ matrix.shard }} --timeout-seconds 300 --json-out artifacts/validation/pytest_shards.json
       - name: Upload partition coverage and timing
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pytest-shard-${{ matrix.shard }}
+          overwrite: true
           path: artifacts/validation/pytest_shards.json
           if-no-files-found: error
 
   python-tests:
     name: Python tests
-    needs: python-shards
+    needs: [python-partitions, python-shards]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -67,13 +80,15 @@ jobs:
       - name: Require successful matrix job outcomes
         if: always()
         env:
+          PLAN_RESULT: ${{ needs.python-partitions.result }}
           SHARD_RESULT: ${{ needs.python-shards.result }}
-        run: test "$SHARD_RESULT" = success
+        run: test "$PLAN_RESULT" = success && test "$SHARD_RESULT" = success
       - name: Upload aggregate validation evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: python-validation
+          overwrite: true
           path: artifacts/validation/
           if-no-files-found: error
 
