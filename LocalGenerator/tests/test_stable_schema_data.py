@@ -72,7 +72,12 @@ def test_actual_senders_cache_grammar_instructions_and_preserve_author(monkeypat
         source = first["messages"][1:]
     else:
         source = first["messages"]
-    assert [(r["role"], wire_text(r)) for r in authored] == [(r["role"], r["content"]) for r in source]
+    if provider == "local":
+        expected = [("system", source[0]["content"] + "\n\nDeveloper instructions:\n" + source[1]["content"])]
+        expected.extend((r["role"], r["content"]) for r in source[2:])
+    else:
+        expected = [(r["role"], r["content"]) for r in source]
+    assert [(r["role"], wire_text(r)) for r in authored] == expected
     assert first == before
     assert "_infini_prompt_cache" not in wires[0]
     if mode == "json_schema":
