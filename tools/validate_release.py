@@ -171,6 +171,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--refresh', choices=['runtime', 'config', 'docs'])
     parser.add_argument('--group', choices=['full', 'python', 'static', 'build'], default='full')
+    parser.add_argument('--pytest-reports', type=Path, help='Validate complete CI shard receipts; the default executes pytest locally')
     parser.add_argument('--require-build', action='store_true')
     parser.add_argument('--require-runtime-selftest', action='store_true')
     parser.add_argument('--skip-build', action='store_true')
@@ -195,7 +196,10 @@ def main() -> int:
         if args.skip_build and name == 'tml_build':
             row: dict[str, Any] = {'name': name, 'status': 'notRun', 'output': 'Build explicitly skipped', 'durationSeconds': 0}
         else:
-            row = run_check(name, manifest['checks'][name], env=env)
+            command = list(manifest['checks'][name])
+            if name == 'pytest' and args.pytest_reports:
+                command += ['--merge-reports', str(args.pytest_reports.resolve())]
+            row = run_check(name, command, env=env)
         output = row.pop('output', '')
         (art / f'{name}.log').write_text(output, encoding='utf-8')
         row['log'] = f'artifacts/validation/{name}.log'

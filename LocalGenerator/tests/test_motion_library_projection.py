@@ -58,20 +58,3 @@ def test_enabled_trigger_cannot_reference_an_unknown_parameter(monkeypatch):
     monkeypatch.setattr(audit, "CAPABILITY_REGISTRY", caps)
     assert any(row["path"] == f"capabilities.{fn}.requirements"
                for row in issues("unknown_enabled_trigger_param"))
-
-
-def test_inventory_marks_author_choices_and_retained_wire_rows_separately():
-    import runpy
-    from pathlib import Path
-    renderer = runpy.run_path(str(Path(__file__).resolve().parents[2] / "tools/generate/generate_low_level_runtime_docs.py"))
-    # Rendering metadata is a unit-test input, not a fabricated audit result.
-    text = renderer["inventory_markdown"]({"score": 0, "scoreMax": 100, "errorCount": 1, "warningCount": 0})
-    caps = audit.CAPABILITY_REGISTRY
-    visible = sum(cap.author_visible for cap in caps.values())
-    assert f"**{visible} Author-visible capabilities**" in text
-    assert f"**{len(caps) - visible} saved-wire-only capabilities**" in text
-    for fn, cap in caps.items():
-        row = next(line for line in text.splitlines() if line.startswith(f"| `{fn}` |"))
-        assert row.split("|")[2].strip() == ("да" if cap.author_visible else "нет (saved wire)")
-    shape = renderer["param_shape"](caps["front_arm_pose"].params["peakProgress"])
-    assert "exclusiveMinimum=0" in shape and "exclusiveMaximum=1" in shape

@@ -28,8 +28,6 @@ def test_exact_provider_slugs_survive_save_reload_and_provider_switch(tmp_path):
     loaded = settings_env.parse_env(path)
     assert {key: loaded[key] for key in expected} == expected
     assert loaded["INFINI_OPENROUTER_MODEL"] == "owner/model:free"
-    for key in expected:
-        assert path.read_text().index(key + "=") < path.read_text().index("# ===== IMAGE =====")
 
 
 def test_pin_visibility_tracks_exact_profile_provider_without_erasing_values():

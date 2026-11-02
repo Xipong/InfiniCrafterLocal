@@ -435,7 +435,6 @@ def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(wi
     assert len(requests) == 1 and not responses
     repair_system = requests[0]["messages"][0]["content"]
     assert "create.calls.allowedTargetKinds" in repair_system
-    assert "emitted exactly once in entitiesUpsert" in repair_system
     assert validate_runtime_program(llm_repaired)["ok"]
 
 

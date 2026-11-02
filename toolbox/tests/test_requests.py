@@ -12,8 +12,15 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.mark.parametrize('api_mode', ['chat_completions', 'responses'])
-@pytest.mark.parametrize('mutation,expected', [('none', 'accepted'), ('temperature', 'blocked'), ('wire-temperature', 'blocked'), ('image', 'blocked')])
+@pytest.mark.parametrize('api_mode,mutation,expected', [
+    ('chat_completions', 'none', 'accepted'),
+    ('responses', 'none', 'accepted'),
+    ('chat_completions', 'wire-temperature', 'blocked'),
+    ('responses', 'wire-temperature', 'blocked'),
+    # These guards reject before API-specific wire projection.
+    ('chat_completions', 'temperature', 'blocked'),
+    ('chat_completions', 'image', 'blocked'),
+])
 def test_actual_request_and_parser_through_campaign_hooks(tmp_path, mutation, expected, api_mode):
     # Import-time provider configuration is intentionally exercised in a fresh process.
     script = textwrap.dedent('''

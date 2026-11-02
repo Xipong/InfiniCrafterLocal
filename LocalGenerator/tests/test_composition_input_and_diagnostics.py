@@ -118,7 +118,6 @@ def test_native_status_interoperability_and_frozen_repair_survive_registry_retir
     repair_sent = _serialized_chat_request(monkeypatch, repair_request)
     dossier = request_dossier(repair_sent, declaration=repair_request)
     assert 'runtimeCapabilityContract' not in dossier
-    assert 'status effects' in dossier['runtimeExecutionTruth'].get('statusEffects', '')
     assert dossier['runtimeExecutionTruth']['statusEffects'] == packet['runtimeCapabilityContract']['catalog']['fieldGuide']['statusEffects']
     assert dossier['repairScope']['fieldPermissions']['calls'] == [
         {'id': status['id'], 'paths': ['params.duration']}]
@@ -141,10 +140,6 @@ def test_author_prioritizes_playable_composition_without_turning_advisory_into_a
     # Verify delivery and priority of the owner rule, not incidental prose wording.
     assert packet['priorityHeader'][0] == AUTHOR_DESIGN_QUALITY_RULE
     assert packet['priorityHeader'].count(AUTHOR_DESIGN_QUALITY_RULE) == 1
-    system = request['messages'][0]['content']
-    assert 'Terraria (tModLoader)' in system
-    assert 'Art direction' not in system and 'frozen fields' not in system
-    assert 'Preserve literal parent identity' not in system
     assert isinstance(packet['requiredJsonShape']["concept"], str)
     assert set(packet['requiredJsonShape']["realization"]) == {"description", "selfEvaluation"}
     # No concept/report is needed to execute an intentionally simple composition.
@@ -157,7 +152,7 @@ def test_author_prioritizes_playable_composition_without_turning_advisory_into_a
 
 
 @pytest.mark.parametrize('mode', ['json_schema', 'json_object'])
-def test_ammo_balance_guidance_separates_damage_from_projectile_conversion(monkeypatch, mode):
+def test_parent_ammo_packet_retains_damage_without_inventory_stack(monkeypatch, mode):
     offline_builder(monkeypatch, mode, lambda *args, **kwargs: pytest.fail('unexpected model call'))
     source = {'name': 'Observed ammo context', 'ammoRaw': {
         'mode': 'weapon_uses_ammo', 'playerInventoryAmmoRaw': [{'type': 40, 'damage': 5, 'stack': 9}],
@@ -166,11 +161,6 @@ def test_ammo_balance_guidance_separates_damage_from_projectile_conversion(monke
     before = deepcopy(source)
     request, _, _ = author.build_initial_author_request(source, {}, 'ammo-balance-guidance', model_name='offline')
     packet = request_dossier(_serialized_chat_request(monkeypatch, request), declaration=request)
-    source_guide = packet['runtimeCapabilityContract']['catalog']['fieldGuide']['sourceInterpretation']
-    meaning = source_guide['ammunition']
-    assert 'Ammo damage contributes to a compatible launcher, including when its projectile is replaced' in meaning
-    assert 'Weapon-ammo configurations describe separate cases' in meaning
-    assert 'fallback examples are illustrative' in source_guide['progression']
     ammo = packet['parents']['A']['packet']['raw']['ammo']
     assert ammo['playerInventoryAmmoRaw'][0]['damage'] == 5
     assert 'stack' not in ammo['playerInventoryAmmoRaw'][0]

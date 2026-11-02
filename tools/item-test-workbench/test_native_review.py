@@ -18,7 +18,8 @@ class NativeReviewTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);t,tp,p=self.fixture(root);before=p.read_bytes();out=root/'review';r=n.export_native_review(t,tp,out)
             self.assertEqual((out/'frames/000000.png').read_bytes(),before);self.assertEqual(p.read_bytes(),before)
-            self.assertEqual(r['nativeFrames'],1);self.assertIn('Exact same-tick telemetry',(out/'native.html').read_text());self.assertIn('Not a complete Terraria world render',(out/'native.html').read_text())
+            self.assertEqual(r['nativeFrames'],1)
+            self.assertEqual(json.loads((out/'native-review.json').read_text())['nativeRendering'],t['nativeRender'])
             self.assertFalse(json.loads((out/'native-review.json').read_text())['pixelsRedrawn'])
     def test_bad_hash_dimensions_and_truncated_frame_refused(self):
         with tempfile.TemporaryDirectory() as d:

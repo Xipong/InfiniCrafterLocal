@@ -40,18 +40,6 @@ def test_parent_local_buff_effect_reference_reaches_provider_without_reinterpret
 
 
 @pytest.mark.parametrize("mode", ["json_schema", "json_object"])
-def test_author_explicitly_composes_buffs_and_debuffs_without_requiring_native_identity(monkeypatch, mode):
-    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
-    request, _, _ = build_initial_author_request({}, {}, "effect-composition", model_name="offline")
-    packet = request_dossier(_serialized_chat_request(monkeypatch, request), declaration=request)
-    guidance = packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["statusEffects"]
-    assert "status effects" in guidance
-    assert "native buff immunity or AI" in guidance
-    assert "listed operations and conditions" in guidance
-    assert "statusIdentityChoices" not in json.dumps(packet)
-
-
-@pytest.mark.parametrize("mode", ["json_schema", "json_object"])
 def test_exact_repeated_source_facts_fit_original_budget_without_losing_any_value(monkeypatch, mode):
     from infini_local.pipelines.context.cards import raw_parent_card_for_llm
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)

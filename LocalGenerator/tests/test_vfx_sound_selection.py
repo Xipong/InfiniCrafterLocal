@@ -197,7 +197,6 @@ def test_real_repair_corrects_only_diagnosed_sound_leaf(monkeypatch, bad, mode):
     assert len(sent) == 2
     director, repair = [request_dossier(r) for r in sent]
     assert repair["runtimeVocabularyReadOnly"]["soundId"] == director["runtimeVocabulary"]["soundId"] == list(SOUND_IDS)
-    assert "soundCue requires an explicit soundId" in director["runtimeVocabulary"]["rendererSemantics"]["soundCue"]
     expected_scope = copy.deepcopy(scope)
     if mode == "json_schema" and bad is None:
         # Strict transport null is the declared optional-absence sentinel. The

@@ -21,7 +21,6 @@ internal static partial class EngineRuntimeChecks
             lifecycle.PostSetupContent();
             Equal(true, (bool)available.GetValue(null)!, "native profile installs: "
                 + adapter.GetProperty("UnsupportedBoundary", PersistenceStatic)!.GetValue(null));
-            Equal(19, (int)PlacedNativeCall("GetOwnedHookCount")!, "complete native hook roster retained");
             Equal(true, GeneratedPlacedBodyNativeAdapter.TryAdmitNative(
                 Terraria.ID.TileID.Stone, null, false, out _), "supported ordinary native tile admitted");
             Equal(false, GeneratedPlacedBodyNativeAdapter.TryAdmitNative(

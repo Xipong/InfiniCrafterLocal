@@ -647,6 +647,11 @@ internal static partial class EngineRuntimeChecks
         };
         checks = System.Linq.Enumerable.ToArray(
             System.Linq.Enumerable.Concat(checks, ComposableMotionAdmissionChecks()));
+        // Validate actual compiled registrations, not a Python regex reconstruction of C# syntax.
+        var names = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+        foreach (var entry in checks)
+            if (string.IsNullOrWhiteSpace(entry.Name) || !names.Add(entry.Name))
+                throw new InvalidOperationException("Native check names must be nonempty and unique");
         if (filter is not null)
         {
             int fullCount = checks.Length;

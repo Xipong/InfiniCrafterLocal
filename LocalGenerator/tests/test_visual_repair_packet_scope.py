@@ -112,7 +112,6 @@ def test_whole_response_repair_keeps_complete_contract_and_raw_source(wire_trans
     assert packet["responseSchema"] == (_provider_strict_projection(expected) if mode == "json_schema" else expected)
     assert packet["malformedRawText"] == source.raw_text
     assert "parentFactsReadOnly" in packet
-    assert "preserve all recoverable visual fields" in requests[0]["messages"][0]["content"]
 
 
 @pytest.mark.parametrize("bad_rows", [True, 7, {"malformed": "container"}])

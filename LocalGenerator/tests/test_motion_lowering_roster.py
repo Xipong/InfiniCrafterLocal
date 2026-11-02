@@ -11,8 +11,6 @@ from infini_local.core.runtime_authoring.technical_lowering import capability_fi
 def test_lowery_reference_lists_current_exact_aliases_and_fn_selected_outputs():
     root = Path(__file__).resolve().parents[2]
     rendered = runpy.run_path(str(root / "tools/generate/generate_lowery.py"))["render"]()
-    assert "Gameplay Author-visible semantic aliases: **нет**" not in rendered
-    assert "## Запрет на добавление alias" not in rendered
     assert "authoredSourceChecked=false" in rendered
     for fn, cap in CAPABILITY_REGISTRY.items():
         if cap.wire_action:

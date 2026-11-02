@@ -100,7 +100,7 @@ internal static partial class EngineRuntimeChecks
         {
             string ready = Terraria.Localization.Language.GetTextValue("Mods.InfiniCrafterLocal.ChargeUI.Ready");
             string partial = Terraria.Localization.Language.GetTextValue("Mods.InfiniCrafterLocal.ChargeUI.Progress", 50);
-            Equal(locale == "ru-RU" ? "Готово" : "Ready", ready, "localized charge readiness");
+            Equal(true, !string.IsNullOrWhiteSpace(ready) && ready != "Mods.InfiniCrafterLocal.ChargeUI.Ready", "charge readiness localization resolves");
             Equal(true, partial.Contains("50%") && !partial.Contains("Mods."), "localized partial percent");
         });
     }

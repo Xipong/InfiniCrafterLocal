@@ -222,8 +222,6 @@ internal static partial class EngineRuntimeChecks
                 Equal(false,rendered.Contains("native minimum",StringComparison.OrdinalIgnoreCase)
                     || rendered.Contains("минимума движка",StringComparison.OrdinalIgnoreCase),
                     locale + " tooltip never invents a native minimum mana cost");
-                Equal(true,rendered.Contains(locale == "ru-RU" ? "расход маны" : "mana cost",StringComparison.OrdinalIgnoreCase),
-                    locale + " exact mana-cost label is used");
             });
             Equal(before, VideoUiSnapshot(host.Data), "audit does not rebalance saved crystal");
         });

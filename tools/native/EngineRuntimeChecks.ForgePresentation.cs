@@ -67,6 +67,12 @@ internal static partial class EngineRuntimeChecks
         {
             WithForgePresentationLanguages(locale =>
             {
+                foreach (string reason in new[] { "TransferPending", "NeedInputs", "LaneBusy", "StationUnavailable" })
+                {
+                    string key = "Mods.InfiniCrafterLocal.StationUI." + reason;
+                    string resolved = Language.GetTextValue(key);
+                    Equal(true, !string.IsNullOrWhiteSpace(resolved) && resolved != key, "readiness localization resolves");
+                }
                 var player = new InfiniCraftPlayer();
                 player.TrySetMultiDevWindowCount(3, syncServer: false);
                 foreach (string name in new[] { "InputA", "InputB", "InputC", "InputD", "InputE", "InputF" })
@@ -75,8 +81,9 @@ internal static partial class EngineRuntimeChecks
                 for (int lane = 0; lane < 3; lane++)
                 {
                     Equal(false, player.CanStartStationCraftLane(lane), "pending transfer still blocks admission");
-                    Equal(locale == "ru-RU" ? "Ждём подтверждения переноса" : "Awaiting item transfer confirmation",
-                        player.CraftLaneStatus(lane), locale + " full inputs cannot be mislabeled missing " + lane);
+                    Equal(InfiniCraftPlayer.StationCraftReadiness.TransferPending, player.GetStationCraftReadiness(lane), "full inputs wait for transfer, not missing materials");
+                    Equal(Language.GetTextValue("Mods.InfiniCrafterLocal.StationUI.TransferPending"),
+                        player.CraftLaneStatus(lane), "pending lane uses its localized readiness");
                     Equal(1, player.StationInput(lane * 2).stack, "status preserves first material");
                     Equal(1, player.StationInput(lane * 2 + 1).stack, "status preserves second material");
                     Equal(false, player.TryStartCraftFromStation(lane), "blocked start keeps same admission");
@@ -85,16 +92,19 @@ internal static partial class EngineRuntimeChecks
                 Equal(true, player.CanStartStationCraftLane(0), "cleared transfer admits full pair");
                 player.InputB.TurnToAir();
                 Equal(false, player.CanStartStationCraftLane(0), "missing second unit still refuses");
-                Equal(locale == "ru-RU" ? "Нужны два предмета" : "Need two items", player.StationCraftReadinessText(0), "real missing inputs");
+                Equal(InfiniCraftPlayer.StationCraftReadiness.NeedInputs, player.GetStationCraftReadiness(0), "real missing inputs");
+                Equal(Language.GetTextValue("Mods.InfiniCrafterLocal.StationUI.NeedInputs"), player.StationCraftReadinessText(0), "localized readiness follows actual state");
                 player.InputB = new Item { type = Terraria.ID.ItemID.Wood, stack = 1 };
                 typeof(InfiniCraftPlayer).GetField("_request", fields)!.SetValue(player, new GeneratorClient.PreparedGenerationRequest());
                 Equal(false, player.CanStartStationCraftLane(0), "pending lane still refuses");
                 Equal(true, player.CanStartStationCraftLane(1), "other full lane remains independent");
-                Equal(locale == "ru-RU" ? "Этот горн занят" : "This hearth is busy", player.StationCraftReadinessText(0), "busy canonical reason");
+                Equal(InfiniCraftPlayer.StationCraftReadiness.LaneBusy, player.GetStationCraftReadiness(0), "busy canonical reason");
+                Equal(Language.GetTextValue("Mods.InfiniCrafterLocal.StationUI.LaneBusy"), player.StationCraftReadinessText(0), "localized readiness follows actual state");
                 foreach (int invalid in new[] { -1, 3, int.MaxValue })
                     Equal(false, player.CanStartStationCraftLane(invalid), "invalid lane remains refused without indexing inputs");
                 typeof(InfiniCraftPlayer).GetField("_stationEscrowUsesRemoteAuthority", fields)!.SetValue(player, true);
-                Equal(locale == "ru-RU" ? "Нет доступа к материалам станции" : "Station authority unavailable", player.StationCraftReadinessText(1), "unavailable is not missing inputs");
+                Equal(InfiniCraftPlayer.StationCraftReadiness.StationUnavailable, player.GetStationCraftReadiness(1), "unavailable is not missing inputs");
+                Equal(Language.GetTextValue("Mods.InfiniCrafterLocal.StationUI.StationUnavailable"), player.StationCraftReadinessText(1), "localized readiness follows actual state");
                 Equal(false, player.CanStartStationCraftLane(1), "remote material cannot admit locally");
                 Equal(1, player.InputC.stack, "unavailable material mirror unchanged");
                 for (int lane = 1; lane < 3; lane++)
