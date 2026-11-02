@@ -3,7 +3,7 @@
 ## Standalone native loader
 
 `loader-run` is the new CPU path for native tModLoader autoload from separate
-DLLs. It needs no `.tmod` packaging, installation, game client or saved world:
+DLLs or supplied `.tmod` archives. It needs no game client or saved world:
 
 ```bash
 python tools/item-test-workbench/workbench.py loader-run \
@@ -22,13 +22,49 @@ including an `INFINI_MOD_SOURCE_ROOT` override, and refuses evidence if those
 inputs change during the run.
 
 For a registered item use `--native-item WoodenBoomerang`, a native ID, or
-`--native-item ModName/ItemName` instead of generated JSON. An additional mod
-can be autoloaded from its separately built DLL using `--probe-dll PATH` and
-`--probe-mod-root PATH` (directory containing its build.txt, localization and
-assets). Its declared dependencies, including weak references, must be loaded;
+`--native-item ModName/ItemName` instead of generated JSON. Supply additional
+separately built mod DLLs and their source/content roots with repeatable `--mod`
+options, for example:
+
+```bash
+python tools/item-test-workbench/workbench.py loader-run \
+  --native-item ExampleMod/ExampleItem --scenario /path/to/scenario.json \
+  --mod /path/to/ExampleMod.dll /path/to/ExampleMod \
+  --mod /path/to/Dependency.dll /path/to/Dependency --out /path/to/run
+```
+
+Each root must contain `build.txt` and the original content files. The loader
+orders supplied mods by their declared dependency names; CLI order need not
+match load order. The previous `--probe-dll PATH --probe-mod-root PATH` pair
+remains supported. Declared dependencies, including weak references, must be loaded;
 unavailable ones are refused because this host does not emulate tML's separate
 mod assembly contexts and weak-dependency type filtering.
+Alternatively use repeatable `--tmod /path/to/mod.tmod` for original archives,
+including their dependencies. The loader keeps the original `TmodFile` open,
+uses its original `Info`, verifies its payload hash, and stages its unmodified
+managed DLL for the process. It refuses archives with embedded DLL references:
+the separate assembly contexts needed to resolve those correctly are not implemented.
+Source-root and archive inputs may be combined. The receipt hashes every archive
+before and after the run.
+
+This name-based dependency check does not validate dependency versions. For a
+source-root mod, the in-memory `Mod.File` contains metadata and localization
+rather than a complete original `.tmod`. Even with a genuine archive, asset
+readers and the client lifecycle are not initialized by this headless mode.
+Therefore a passing CPU scenario is not evidence that arbitrary mod content,
+resources or graphics will load correctly in the client.
 For a native mod NPC set `dummy.nativeType` to its exact `ModName/NpcName`.
+
+Pass `--server-mode` to keep tML's server network mode throughout mod loading
+and the CPU scene. This enables native server initialization for mods that
+register mounts without requiring client textures. The server uses the native dedicated-server local player index (255); the
+scene has no connected client and does not simulate a network session or
+client-side item firing. Primary and alternate use actions fail explicitly in
+this mode. Its report identifies the mode and these limitations. For a
+no-input server check of a registered item, use
+`tools/item-test-workbench/scenarios/server-native-item.json`; this tests
+loading and finite state, not an attack. The default remains the earlier
+single-player network mode.
 
 This path currently supports CPU scenes with aim/primary/alt/release, a bounded
 tile layout, a controlled vanilla target or a mod NPC with its native defaults
@@ -45,6 +81,9 @@ older runner. The existing `run` and rendering tools retain their earlier scope.
 `verify_loader_scene.py` checks real combat and effects plus independent hooks
 from `fixture-mod/WorkbenchObserverFixture.Standalone.csproj`. These are
 standalone child processes, without launching `Terraria.Main` or a server.
+`verify_multi_mod_loader.py` exercises separate dependent fixture assemblies,
+dependency ordering, missing/cyclic dependencies and the effects of each mod's
+hooks on combat.
 
 A separate local utility for exercising an **already generated InfiniCrafterLocal
 item JSON**, then inspecting its behavior with code and vision. Runs do not call an

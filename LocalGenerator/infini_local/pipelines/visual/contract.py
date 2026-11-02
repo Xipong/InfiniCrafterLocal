@@ -63,6 +63,7 @@ _ENTITY_SCALE_DESCRIPTION = (
 class MalformedVisualDirectorOutput:
     raw_text: str
     error: str
+    response_format: Mapping[str, Any] | None = None
 
 
 def _visual_item_schema() -> dict[str, Any]:

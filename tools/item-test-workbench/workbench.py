@@ -27,7 +27,8 @@ def read_json(path: Path):
 
 
 def digest(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    with Path(path).open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 
@@ -524,12 +525,19 @@ def execute_loader_run(args):
     command += ["--item",str(output/"item.json")] if item is not None else ["--native-item",native_item]
     command += ["--scenario", str(output / "scenario.json"),
                "--output", str(output / "native.json"), "--item-boundary", args.item_boundary]
+    if getattr(args, "server_mode", False): command += ["--server-mode", "true"]
     external = {}
     external_content = {}
-    def mod_content_state(root):
+    def mod_content_state(root, external=False):
         paths={root/"build.txt"}
-        for name in ("Localization","Assets","asset-content"):
-            paths.update(p for p in (root/name).rglob("*") if p.is_file())
+        if external:
+            # External source mods may load Items/, Projectiles/, Effects/,
+            # Sounds/, or any other content path. Do not treat Assets/ as the
+            # complete resource tree. Git bookkeeping is not runtime content.
+            paths.update(p for p in root.rglob("*") if p.is_file() and ".git" not in p.relative_to(root).parts)
+        else:
+            for name in ("Localization","Assets","asset-content"):
+                paths.update(p for p in (root/name).rglob("*") if p.is_file())
         return {str(p.relative_to(root)):digest(p) if p.is_file() else None for p in sorted(paths)}
     # The native host permits a source-root override. Bind evidence to the
     # effective metadata/assets, not just the default copied build content.
@@ -538,12 +546,25 @@ def execute_loader_run(args):
     production_root = (Path(configured_root) if configured_root.strip() else dll.parent / "native-mod").resolve()
     env["INFINI_MOD_SOURCE_ROOT"] = str(production_root)
     production_content = {"root": str(production_root), "files": mod_content_state(production_root)}
+    pairs = []
     if args.probe_dll:
-        probe = args.probe_dll.resolve(strict=True)
-        probe_root = args.probe_mod_root.resolve(strict=True)
-        command.extend(["--probe-dll", str(probe), "--probe-mod-root", str(probe_root)])
+        pairs.append((args.probe_dll, args.probe_mod_root, True))
+    pairs.extend((Path(dll), Path(root), False) for dll, root in getattr(args, "mods", []))
+    for mod_dll, mod_root, legacy in pairs:
+        probe = mod_dll.expanduser().resolve(strict=True)
+        probe_root = mod_root.expanduser().resolve(strict=True)
+        if not probe.is_file() or not probe_root.is_dir():
+            raise ValueError("Each extra mod requires an existing DLL and source directory")
+        command.extend((["--probe-dll", str(probe), "--probe-mod-root", str(probe_root)] if legacy else
+                        ["--mod-dll", str(probe), "--mod-root", str(probe_root)]))
         external[str(probe)] = digest(probe)
-        external_content[str(probe_root)] = mod_content_state(probe_root)
+        external_content[str(probe_root)] = mod_content_state(probe_root, external=True)
+    archives = {}
+    for tmod in getattr(args, "tmods", []):
+        archive = tmod.expanduser().resolve(strict=True)
+        if not archive.is_file(): raise ValueError("Each --tmod requires an existing archive file")
+        command.extend(["--tmod", str(archive)])
+        archives[str(archive)] = digest(archive)
     try:
         proc = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True, timeout=args.timeout)
     except subprocess.TimeoutExpired as exc:
@@ -552,12 +573,13 @@ def execute_loader_run(args):
     (output / "stdout.log").write_text(proc.stdout, encoding="utf-8")
     (output / "stderr.log").write_text(proc.stderr, encoding="utf-8")
     unchanged = build_state(dll) == provenance and all(Path(p).is_file() and digest(Path(p)) == h for p,h in external.items())
-    unchanged = unchanged and all(mod_content_state(Path(p)) == h for p,h in external_content.items())
+    unchanged = unchanged and all(Path(p).is_file() and digest(Path(p)) == h for p,h in archives.items())
+    unchanged = unchanged and all(mod_content_state(Path(p), external=True) == h for p,h in external_content.items())
     unchanged = unchanged and mod_content_state(production_root) == production_content["files"]
     unchanged = unchanged and (item is None or digest(output / "item.json") == item_sha) and digest(output / "scenario.json") == scenario_sha
     receipt = {"command": command, "exitCode": proc.returncode, "build": provenance,
                "itemSha256": item_sha, "nativeItem": native_item, "scenarioSha256": scenario_sha,
-               "extraAssemblies": external, "extraContent": external_content, "productionContent": production_content, "binariesUnchanged": unchanged}
+               "extraAssemblies": external, "extraContent": external_content, "extraArchives": archives, "productionContent": production_content, "binariesUnchanged": unchanged}
     (output / "receipt.json").write_text(json.dumps(receipt, indent=2), encoding="utf-8")
     if not unchanged:
         raise RuntimeError("Native loader inputs or binaries changed during execution")
@@ -693,11 +715,14 @@ def main():
         r=sub.add_parser(name,help=help_text);r.add_argument("--deps-root",type=Path,help="Dependency root (default: INFINI_TML_DEPS_SRC or artifacts/dependencies)")
     sub.add_parser("catalog",help="Read-only inventory of supplied scenarios, actions and assertions")
     r=sub.add_parser("fixtures",help="Write synthetic fixtures through the native owner");r.add_argument("--out",type=Path,required=True);r.add_argument("--no-build",action="store_true")
-    r=sub.add_parser("loader-run",help="Standalone native tML DLL autoload and controlled combat scene; no .tmod or game launch")
+    r=sub.add_parser("loader-run",help="Standalone native tML autoload and controlled combat scene; no game launch")
     sources=r.add_mutually_exclusive_group(required=True);sources.add_argument("--item",type=Path);sources.add_argument("--native-item",help="Native ItemID/name or registered Mod/Item")
     r.add_argument("--scenario",type=Path,required=True);r.add_argument("--out",type=Path,required=True)
     r.add_argument("--no-build",action="store_true");r.add_argument("--item-boundary",choices=("fresh","local_cache"),default="fresh")
     r.add_argument("--timeout",type=int,default=180);r.add_argument("--probe-dll",type=Path);r.add_argument("--probe-mod-root",type=Path)
+    r.add_argument("--mod", dest="mods", type=Path, nargs=2, action="append", default=[], metavar=("DLL", "SOURCE_ROOT"), help="Additional original mod and source root; repeat for each dependency")
+    r.add_argument("--server-mode", action="store_true", help="Use native server network mode for loading and the controlled CPU scene")
+    r.add_argument("--tmod", dest="tmods", type=Path, action="append", default=[], metavar="PATH", help="Additional original .tmod archive; repeat for dependencies")
     r=sub.add_parser("report",help="Audit a saved run and emit compact agent evidence; no execution");r.add_argument("run",type=Path);r.add_argument("--out",type=Path);r.add_argument("--contact-sheet",action="store_true")
     r=sub.add_parser("suite",help="Execute an explicit scenario matrix, preserving expected native failures");r.add_argument("manifest",type=Path);r.add_argument("--out",type=Path,required=True);r.add_argument("--no-build",action="store_true");r.add_argument("--plan",action="store_true",help="Read-only input validation and case listing; not a run")
     r=sub.add_parser("inspect");r.add_argument("trace",type=Path);r.add_argument("--tick",type=int);r.add_argument("--events",action="store_true");r.add_argument("--kind");r.add_argument("--summary",action="store_true",help="Compact read-only resource/hit/event aggregates")
