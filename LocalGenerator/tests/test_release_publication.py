@@ -201,3 +201,11 @@ def test_cross_platform_checkout_must_preserve_blob_bytes_for_studio(package,tmp
     else:
         assert copied==original
         assert release.validate_package(checkout,artifact,'0.5.5',SHA)['sourceCommit']==SHA
+
+
+def test_guarded_replacement_preserves_backups_and_stops_partial_publication():
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node required to execute GitHub Actions replacement controls')
+    subprocess.run([node, str(Path(__file__).with_name('release_replacement.cjs'))],
+                   check=True, capture_output=True, text=True, timeout=30)
