@@ -169,7 +169,8 @@ app.on_close()
         (self.runtime / "server.py").write_text(
             "import json, os, sys\nfrom pathlib import Path\nimport child_fixture\n"
             "print(json.dumps({'value': child_fixture.VALUE, 'cwd': str(Path.cwd()), "
-            "'data': os.environ.get('INFINI_DATA_DIR'), 'utf8': sys.flags.utf8_mode, "
+            "'data': os.environ.get('INFINI_DATA_DIR'), 'launch_id': os.environ.get('INFINI_STUDIO_LAUNCH_ID'), "
+            "'utf8': sys.flags.utf8_mode, "
             "'unbuffered': sys.stdout.write_through}, ensure_ascii=False))\n", encoding="utf-8")
         before = inventory(self.runtime)
         script = r'''
@@ -190,6 +191,8 @@ with patch("infini_local.desktop.studio_operations.subprocess.Popen") as launch:
     assert launch.call_count == 1
     command = launch.call_args.args[0]
     options = launch.call_args.kwargs
+    assert options["env"]["INFINI_STUDIO_LAUNCH_ID"] == app._owned_server_launch_id
+    assert len(app._owned_server_launch_id) == 32
 app.on_close()
 # Embedded Python ignores PYTHON* settings. -E reproduces that interpreter
 # boundary here, without depending on Windows or a downloaded runtime.
@@ -204,6 +207,8 @@ print(child.stdout, end="")
             text=True, encoding="utf-8", timeout=20)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         child = json.loads(result.stdout)
+        launch_id = child.pop("launch_id")
+        self.assertRegex(launch_id, r"^[0-9a-f]{32}$")
         self.assertEqual(child, {"value": "готово", "cwd": str(self.data), "data": str(self.data),
                                  "utf8": 1, "unbuffered": True})
         self.assertTrue((self.data / "config.env").is_file())
