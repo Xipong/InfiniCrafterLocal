@@ -595,22 +595,27 @@ def _responses_payload_from_chat(payload: dict[str, Any], previous_response_id: 
 
 
 def _responses_output_text(result: dict[str, Any]) -> str:
-    direct = result.get("output_text")
-    if isinstance(direct, str) and direct.strip():
-        return direct
     chunks: list[str] = []
+    has_message = False
     for item in result.get("output") or []:
-        if not isinstance(item, dict):
+        if (not isinstance(item, dict) or item.get("type") != "message"
+                or item.get("role") not in (None, "assistant")):
             continue
+        has_message = True
         for part in item.get("content") or []:
             if not isinstance(part, dict):
                 continue
             if str(part.get("type") or "") == "refusal":
                 raise RuntimeError(str(part.get("refusal") or "LLM Responses request refused"))
             text = part.get("text")
-            if isinstance(text, str):
+            if part.get("type") == "output_text" and isinstance(text, str):
                 chunks.append(text)
-    return "".join(chunks).strip()
+    if has_message:
+        return "".join(chunks).strip()
+    # Compatibility endpoints may provide only the flattened final-text field.
+    # Typed messages, when present, are authoritative over that convenience copy.
+    direct = result.get("output_text")
+    return direct if isinstance(direct, str) and direct.strip() else ""
 
 
 def effective_response_format(request: Mapping[str, Any], raw: Mapping[str, Any]) -> Mapping[str, Any] | None:
