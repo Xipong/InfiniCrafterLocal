@@ -354,23 +354,30 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: float, context: d
                 "effectiveResponseFormat": diagnostics._format_diagnostic(codex_wire),
                 "effectiveReasoning": diagnostics._reasoning_diagnostic(codex_wire),
             }
-        from infini_local.services.codex_auth import generation_observations
-        join = {name: state[name] for name in ("logicalCallId", "stage", "leaseId")} if state is not None else {}
+        from infini_local.services import codex_auth
+        inherited_join, inherited_observer = codex_auth._GENERATION_OBSERVATIONS.get()
+        join = {**inherited_join, **({name: state[name] for name in ("logicalCallId", "stage", "leaseId")} if state is not None else {})}
         def observe_codex(observation):
-            if state is None:
-                return
-            if observation["event"] == "request" and state["physicalAttemptCount"] is None:
-                state["physicalAttemptCount"] = 0
-            if observation["event"] == "post_start":
-                state["physicalAttemptCount"] = (state["physicalAttemptCount"] or 0) + 1
-            if observation["event"] == "attempt_end" and observation["networkStarted"]:
-                row = {**state["lastAttempt"], **observation, "provider": "openai_codex", "profileId": profiles._profile_id(context)}
-                state["lastAttempt"] = row
-                if len(state["physicalAttempts"]) < diagnostics._LLM_MAX_DIAGNOSTIC_ATTEMPTS:
-                    state["physicalAttempts"].append(copy.deepcopy(row))
-                else:
-                    state["physicalAttemptsDropped"] += 1
-        with generation_observations(join, observe_codex):
+            try:
+                if state is None:
+                    return
+                if observation["event"] == "request" and state["physicalAttemptCount"] is None:
+                    state["physicalAttemptCount"] = 0
+                if observation["event"] == "post_start":
+                    state["physicalAttemptCount"] = (state["physicalAttemptCount"] or 0) + 1
+                if observation["event"] == "attempt_end" and observation["networkStarted"]:
+                    row = {**state["lastAttempt"], **observation, "provider": "openai_codex", "profileId": profiles._profile_id(context)}
+                    state["lastAttempt"] = row
+                    if len(state["physicalAttempts"]) < diagnostics._LLM_MAX_DIAGNOSTIC_ATTEMPTS:
+                        state["physicalAttempts"].append(copy.deepcopy(row))
+                    else:
+                        state["physicalAttemptsDropped"] += 1
+            finally:
+                # Like the image owner, enrich rather than replace an enclosing
+                # campaign observer. The generation boundary keeps this fail-open.
+                if inherited_observer is not None:
+                    inherited_observer(observation)
+        with codex_auth.generation_observations(join, observe_codex):
             result = generate_chat(prepared, timeout=remaining_seconds(diagnostics._request_deadline(timeout)))
         usage = wire._usage_fields(result)
         result["_debug"] = {**(result.get("_debug") or {}), **usage}
