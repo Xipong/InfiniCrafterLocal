@@ -67,6 +67,10 @@ python tools/agentctl.py diff --base origin/main
 
 Для native CPU: `dotnet` в PATH, `INFINI_TML_REFERENCE_DIR` указывает на `tModLoader/lib/net8.0`, `INFINI_TML_DEPS_SRC` — на корень ParticleLibrary/Luminance. Runner собирает harness один раз и запускает DLL только после успешной сборки. Это не GPU/world/MP проверка. `--require-build` и `--require-runtime-selftest` делают соответствующие environment gates обязательными для release command.
 
+В GitHub CI четыре детерминированные pytest-partition выполняются параллельно на отдельных runners через существующий `run_pytest_shards.py --shard-index`. Итоговый check **Python tests** принимает только четыре полных отчёта того же `GITHUB_SHA`: проверяет уникальность partition, точный список файлов обоих test roots, исполненные команды/изоляцию, exit codes и суммы passed. Пропущенный, смешанный или failed отчёт даёт RED; failed/cancelled matrix job также не становится PASS. Затем тот же `validate_release.py --group python --pytest-reports ...` исполняет остальные Python gates. Обычный локальный запуск без этого явного флага по-прежнему запускает тесты, а не читает прошлые результаты. Артефакты `pytest-shard-*` и `python-validation` сохраняют coverage, вывод pytest и длительности; ускорение оценивается по фактической полной CI wall-clock, а не сумме времени параллельных jobs.
+
+Source-spelling тесты (regex-имитация C# compilation/registration, запрет литерала вместо именованной константы, точная фраза workflow и дублирующий полный source scan) не заменяют исполнение. C# компилируется и выполняется штатным native gate; уникальность его фактического roster проверяет сам runner. Schema/provenance freshness, parser/path behavior, packet identity и opt-in безопасность self-test остаются отдельными существенными контрактами.
+
 Обновление производных файлов: `python tools/validate_release.py --refresh runtime` либо `--refresh config`; оба вызывают существующих producers и в конце обновляют offline handbook. Для одной документации — `--refresh docs`. Refresh не запускает тестовую кампанию и не меняет runtime contracts сам.
 
 ## Запуск

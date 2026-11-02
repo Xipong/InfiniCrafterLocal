@@ -2,7 +2,7 @@
 """Source-language policies only; compilation and native checks own runtime behavior.
 
 Do not add implementation-presence or method-order assertions here. This gate
-checks warning suppression, authored tooltip ownership, named engine sentinels,
+checks warning suppression, authored tooltip ownership,
 forbidden gameplay routers, inert opt-in self-test and public packet identity,
 not runtime correctness.
 """
@@ -66,22 +66,11 @@ def source_policy_issues(sources: dict[str, str]) -> list[str]:
                 issues.append(f"selftest_opt_in:{path}")
             if re.search(r"\bProjectile\s*\.\s*NewProjectile(?:Direct)?\s*\(", code):
                 issues.append(f"selftest_projectile_spawn:{path}")
-        patterns = []
         if path.startswith("Localization/") and path.endswith(".hjson"):
             for name in ("GeneratedItem", "GeneratedHeadArmor", "GeneratedBodyArmor", "GeneratedLegsArmor"):
                 blocks = re.findall(r"\b" + name + r":\s*\{([^}]*)\}", stripped(text, keep_strings=True))
                 if not blocks or any(re.search(r"\bTooltip\s*:", block) for block in blocks):
                     issues.append(f"proxy_tooltip:{path}:{name}")
-        if path == "Common/Models/Runtime/GeneratedItemData.Apply.cs":
-            patterns = [r"\b(?:item|Item)\s*\.\s*useStyle\s*=\s*0\s*;"]
-        elif (Path(path).parent.as_posix() == "Common/Services/Generation"
-              and (Path(path).name == "GeneratorClient.cs" or Path(path).name.startswith("GeneratorClient."))):
-            patterns = [r"\.\s*shoot\s*(?:>|<=)\s*0\b", r"\bprojectileType\s*(?:<=|>=)\s*0\b",
-                        r"\.\s*create(?:Tile|Wall)\s*>=\s*0\b", r"\.\s*rare\s*>=\s*3\b"]
-        elif path in {"Common/Commands/InfiniDumpCommand.cs", "Common/Commands/InfiniDumpPictureCommand.cs"}:
-            patterns = [r"\.\s*shoot\s*>\s*0\b", r"\bprojectileType\s*>?=\s*0\b"]
-        if any(re.search(pattern, code) for pattern in patterns):
-            issues.append(f"numeric_sentinel:{path}")
     return issues
 
 

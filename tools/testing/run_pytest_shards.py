@@ -279,6 +279,73 @@ def run(shard_count: int, shard_index: int | None = None, timeout_seconds: int =
     }
 
 
+
+def merge_reports(directory: Path, shard_count: int, source_revision: str) -> dict[str, Any]:
+    """Admit this CI run's complete partition receipts; never a cache or local-test substitute."""
+    if not re.fullmatch(r"[0-9a-f]{40}", source_revision):
+        raise ValueError("Shard aggregation requires the exact CI source revision")
+    files = _test_files()
+    if not files:
+        raise ValueError("No test files selected for aggregation")
+    partitions = _partition(files, shard_count)
+    reports = [json.loads(path.read_text(encoding="utf-8")) for path in sorted(directory.rglob("pytest_shards.json"))]
+    if len(reports) != len(partitions):
+        raise ValueError("Missing or extra shard reports")
+    selected: dict[int, dict[str, Any]] = {}
+    for report in reports:
+        if not isinstance(report, dict):
+            raise ValueError("Shard report must be an object")
+        index = report.get("selectedShardIndex")
+        if type(index) is not int or not 1 <= index <= len(partitions) or index in selected:
+            raise ValueError("Invalid or duplicate shard identity")
+        if (report.get("schema") != "infini.pytest-shards.v3" or report.get("sourceRevision") != source_revision
+                or report.get("requestedShardCount") != shard_count or report.get("testFileCount") != len(files)
+                or report.get("isolatedPolicy") != sorted(ISOLATED_TEST_FILES)
+                or report.get("ok") is not True or report.get("status") != "passed"):
+            raise ValueError("Failed shard or incompatible source/selection receipt")
+        rows = report.get("shards", [])
+        if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
+            raise ValueError("Each matrix job must report exactly one shard")
+        row = rows[0]
+        expected = partitions[index - 1]
+        expected_files = [path.relative_to(ROOT).as_posix() for path in expected]
+        if (row.get("shard") != index or row.get("files") != expected_files
+                or row.get("fileCount") != len(expected) or row.get("executedFileCount") != len(expected)
+                or row.get("status") != "passed" or row.get("exitCode") != 0):
+            raise ValueError("Incomplete or changed shard file coverage")
+        commands = row.get("commandResults", [])
+        if not isinstance(commands, list):
+            raise ValueError("Command receipts must be an array")
+        executed = []
+        total = 0
+        for command in commands:
+            if (not isinstance(command, dict) or not isinstance(command.get("files"), list)
+                    or not all(isinstance(name, str) for name in command["files"])):
+                raise ValueError("Malformed command/file receipt")
+            if (command.get("status") != "passed" or command.get("exitCode") != 0
+                    or command.get("timedOut") is not False or type(command.get("passed")) is not int
+                    or command["passed"] < 0 or command.get("fileCount") != len(command.get("files", []))):
+                raise ValueError("Failed or malformed pytest command receipt")
+            isolated = any(Path(name).name in ISOLATED_TEST_FILES for name in command["files"])
+            if (isolated and (command.get("mode") != "isolated" or len(command["files"]) != 1)
+                    or not isolated and (command.get("mode") != "batched" or not 1 <= len(command["files"]) <= 4)):
+                raise ValueError("Changed pytest process-isolation coverage")
+            executed.extend(command["files"])
+            total += command["passed"]
+        expected_commands = [path.relative_to(ROOT / "LocalGenerator").as_posix()
+                             if path.is_relative_to(ROOT / "LocalGenerator")
+                             else "../" + path.relative_to(ROOT).as_posix() for path in expected]
+        if sorted(executed) != sorted(expected_commands) or total != row.get("passed") or total != report.get("passed"):
+            raise ValueError("Missing/duplicate executed files or inconsistent pytest counts")
+        selected[index] = row
+    rows = [selected[index] for index in sorted(selected)]
+    return {"schema": "infini.pytest-shards.v3", "ok": True, "status": "passed",
+            "sourceRevision": source_revision, "requestedShardCount": shard_count, "selectedShardIndex": None,
+            "testFileCount": len(files), "passed": sum(row["passed"] for row in rows), "shards": rows,
+            "executionMode": "ci-partition-aggregation",
+            "durationSeconds": max(row["durationSeconds"] for row in rows)}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--shards", type=int, default=4)
@@ -286,14 +353,25 @@ def main() -> int:
     parser.add_argument("--shard-index", type=int)
     parser.add_argument("--timeout-seconds", type=int, default=60, help="Timeout per batched or isolated pytest command")
     parser.add_argument("--compact", action="store_true")
+    parser.add_argument("--merge-reports", type=Path, help="Validate complete same-revision CI partition receipts instead of executing tests")
     args = parser.parse_args()
 
-    report = run(args.shards, args.shard_index, args.timeout_seconds)
+    report: dict[str, Any]
+    if args.merge_reports:
+        try:
+            report = merge_reports(args.merge_reports, args.shards, os.environ.get("GITHUB_SHA", ""))
+        except (ValueError, TypeError, KeyError, OSError) as exc:
+            report = {"schema": "infini.pytest-shards.v3", "ok": False, "status": "failed", "errors": [str(exc)], "shards": []}
+    else:
+        report = run(args.shards, args.shard_index, args.timeout_seconds)
+        report["sourceRevision"] = os.environ.get("GITHUB_SHA")
     text = json.dumps(report, ensure_ascii=False, indent=None if args.compact else 2, sort_keys=True) + "\n"
     if args.json_out:
         args.json_out.parent.mkdir(parents=True, exist_ok=True)
         args.json_out.write_text(text, encoding="utf-8")
 
+    for error in report.get("errors", []):
+        print(f"[PYTEST] {error}")
     for row in report.get("shards", []):
         if row["status"] != "passed":
             for command in row.get("commandResults", []):

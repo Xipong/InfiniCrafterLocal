@@ -13,8 +13,12 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  python-tests:
-    name: Python tests
+  python-shards:
+    name: Python shard ${{ matrix.shard }}/4
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,8 +31,51 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r LocalGenerator/requirements-dev.lock
+      - name: Run canonical pytest partition
+        run: python tools/testing/run_pytest_shards.py --shards 4 --shard-index ${{ matrix.shard }} --timeout-seconds 300 --json-out artifacts/validation/pytest_shards.json
+      - name: Upload partition coverage and timing
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-shard-${{ matrix.shard }}
+          path: artifacts/validation/pytest_shards.json
+          if-no-files-found: error
+
+  python-tests:
+    name: Python tests
+    needs: python-shards
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: LocalGenerator/requirements-dev.lock
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r LocalGenerator/requirements-dev.lock
+      - name: Download this run's partition receipts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pytest-shard-*
+          path: artifacts/python-shards
       - name: Shared Python validation gates
-        run: python tools/validate_release.py --group python
+        run: python tools/validate_release.py --group python --pytest-reports artifacts/python-shards
+      - name: Require successful matrix job outcomes
+        if: always()
+        env:
+          SHARD_RESULT: ${{ needs.python-shards.result }}
+        run: test "$SHARD_RESULT" = success
+      - name: Upload aggregate validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-validation
+          path: artifacts/validation/
+          if-no-files-found: error
 
   strict-hygiene:
     name: Strict hygiene and static contracts

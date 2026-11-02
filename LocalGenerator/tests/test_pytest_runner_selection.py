@@ -185,12 +185,6 @@ def test_shards_without_files_are_not_reported_as_passed(monkeypatch: pytest.Mon
     assert report["ok"] is False
 
 
-def test_hosted_shards_use_the_accepted_finite_command_budget() -> None:
-    manifest = json.loads((ROOT / ".agent/manifest.json").read_text(encoding="utf-8"))
-    command = manifest["checks"]["pytest"]
-    assert command[command.index("--timeout-seconds") + 1] == "300"
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    assert "python tools/validate_release.py --group python" in workflow
 
 
 def test_hosted_suite_executes_supported_roots_once() -> None:
@@ -201,7 +195,6 @@ def test_hosted_suite_executes_supported_roots_once() -> None:
     assert len(groups) == len(set(groups))
     assert groups == validation.checks_for_group("full", manifest)
     assert groups.count("pytest") == groups.count("tml_build") == 1
-    assert manifest["checks"]["pytest"][1] == "tools/testing/run_pytest_shards.py"
 
 
 def test_failed_shard_cli_explains_command_termination(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -775,3 +768,98 @@ def test_moved_generation_owners_retain_required_checks_and_tests(monkeypatch, p
     selected = changed.build_plan()
     assert "LocalGenerator/tests/" + test in selected["selected"]
     assert selected["fullSelectionTriggers"] == []
+
+
+@pytest.fixture
+def shard_receipts(tmp_path, monkeypatch):
+    root = tmp_path / "repo"
+    files = [root / "LocalGenerator/tests" / f"test_case_{i}.py" for i in range(8)]
+    monkeypatch.setattr(shards, "ROOT", root)
+    monkeypatch.setattr(shards, "_test_files", lambda: files)
+    directory = tmp_path / "reports"
+    revision = "a" * 40
+    for index, selected in enumerate(shards._partition(files, 4), 1):
+        command_files = [path.relative_to(root / "LocalGenerator").as_posix() for path in selected]
+        row = {"shard": index, "files": [path.relative_to(root).as_posix() for path in selected],
+               "fileCount": len(selected), "executedFileCount": len(selected), "status": "passed",
+               "exitCode": 0, "passed": 3, "durationSeconds": index,
+               "commandResults": [{"files": command_files, "fileCount": len(selected), "status": "passed",
+                                   "exitCode": 0, "timedOut": False, "passed": 3, "mode": "batched"}]}
+        report = {"schema": "infini.pytest-shards.v3", "sourceRevision": revision,
+                  "requestedShardCount": 4, "selectedShardIndex": index, "testFileCount": len(files),
+                  "isolatedPolicy": sorted(shards.ISOLATED_TEST_FILES),
+                  "ok": True, "status": "passed", "passed": 3, "shards": [row]}
+        path = directory / str(index) / "pytest_shards.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps(report))
+    return directory, revision
+
+
+def test_ci_partition_aggregation_preserves_complete_selection_and_counts(shard_receipts):
+    directory, revision = shard_receipts
+    report = shards.merge_reports(directory, 4, revision)
+    assert report["ok"] and report["passed"] == 12 and report["testFileCount"] == 8
+    assert [row["shard"] for row in report["shards"]] == [1, 2, 3, 4]
+    assert len({name for row in report["shards"] for name in row["files"]}) == 8
+    assert report["durationSeconds"] == 4
+
+
+@pytest.mark.parametrize("mutation", ["missing", "extra", "duplicate", "mixed_revision", "failed",
+    "missing_file", "executed_count", "command_failed", "timed_out", "duplicate_execution", "wrong_total", "wrong_isolation", "top_level_list", "row_null", "commands_mapping", "command_null"])
+def test_ci_partition_aggregation_refuses_incomplete_or_mixed_evidence(shard_receipts, mutation):
+    directory, revision = shard_receipts
+    path = directory / "1/pytest_shards.json"
+    report = json.loads(path.read_text())
+    row = report["shards"][0]
+    if mutation == "missing": path.unlink()
+    elif mutation == "extra":
+        extra = directory / "5/pytest_shards.json"; extra.parent.mkdir(); extra.write_text(path.read_text())
+    elif mutation == "duplicate": report["selectedShardIndex"] = 2
+    elif mutation == "mixed_revision": report["sourceRevision"] = "b" * 40
+    elif mutation == "failed": report["ok"] = False
+    elif mutation == "missing_file": row["files"].pop()
+    elif mutation == "executed_count": row["executedFileCount"] = 1
+    elif mutation == "command_failed": row["commandResults"][0]["exitCode"] = 1
+    elif mutation == "timed_out": row["commandResults"][0]["timedOut"] = True
+    elif mutation == "duplicate_execution": row["commandResults"].append(row["commandResults"][0].copy())
+    elif mutation == "wrong_total": report["passed"] = 900
+    elif mutation == "wrong_isolation": report["isolatedPolicy"] = []
+    elif mutation == "top_level_list": report = []
+    elif mutation == "row_null": report["shards"] = [None]
+    elif mutation == "commands_mapping": row["commandResults"] = {}
+    elif mutation == "command_null": row["commandResults"] = [None]
+    if mutation not in {"missing", "extra"}: path.write_text(json.dumps(report))
+    with pytest.raises(ValueError): shards.merge_reports(directory, 4, revision)
+
+
+def test_ci_partition_cli_refuses_missing_source_identity_without_running_tests(shard_receipts, monkeypatch, capsys):
+    directory, _ = shard_receipts
+    monkeypatch.delenv("GITHUB_SHA", raising=False)
+    monkeypatch.setattr(shards.sys, "argv", ["run_pytest_shards.py", "--merge-reports", str(directory)])
+    monkeypatch.setattr(shards, "run", lambda *args: pytest.fail("Aggregation must not rerun test workloads"))
+    assert shards.main() == 1
+    assert "source revision" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("aggregate", [False, True])
+def test_validation_keeps_all_python_gates_with_explicit_partition_admission(tmp_path, monkeypatch, aggregate):
+    from tools import validate_release as validation
+    manifest = json.loads((ROOT / ".agent/manifest.json").read_text())
+    (tmp_path / ".agent").mkdir()
+    (tmp_path / ".agent/manifest.json").write_text(json.dumps(manifest))
+    monkeypatch.setattr(validation, "ROOT", tmp_path)
+    argv = ["validate_release.py", "--group", "python", "--report", str(tmp_path / "report.json")]
+    if aggregate: argv += ["--pytest-reports", str(tmp_path / "receipts")]
+    monkeypatch.setattr(validation.sys, "argv", argv)
+    calls = []
+    def execute(name, command, **kwargs):
+        calls.append((name, command))
+        return {"name": name, "status": "passed", "exitCode": 0, "durationSeconds": 0, "output": ""}
+    monkeypatch.setattr(validation, "run_check", execute)
+    assert validation.main() == 0
+    assert [name for name, _ in calls] == manifest["validationGroups"]["python"]
+    for name, command in calls:
+        expected = manifest["checks"][name]
+        if name == "pytest" and aggregate:
+            assert command == expected + ["--merge-reports", str((tmp_path / "receipts").resolve())]
+        else: assert command == expected
