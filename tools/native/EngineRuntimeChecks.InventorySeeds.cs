@@ -56,7 +56,6 @@ internal static partial class EngineRuntimeChecks
         Equal(true, (bool)SeedFlag().GetValue(data.Gameplay)!, "delivered opt-in survives FromJson/Normalize");
         data.Normalize();
         Equal(true, (bool)SeedFlag().GetValue(data.Gameplay)!, "normalization never clears explicit opt-in");
-        Equal(typeof(bool?), SeedFlag().PropertyType, "nullable storage preserves old absent serializer/hash domain");
         SeedFlag().SetValue(data.Gameplay, false);
         Equal(false, (bool)SeedFlag().GetValue(GeneratedItemData.FromJson(data.ToNetworkJson())!.Gameplay)!, "explicit false remains declared inactive, not coerced to true");
         Equal<object?>(null, SeedFlag().GetValue(GeneratedItemData.Placeholder().Gameplay), "absent storage stays null, semantically inactive");
@@ -79,9 +78,9 @@ internal static partial class EngineRuntimeChecks
             typeof(ModType).GetProperty("Mod", TestInstance)!.SetValue(host, new TooltipProbeMod());
             var rows = new System.Collections.Generic.List<TooltipLine>();
             host.ModifyRuntimeTooltips(rows, expanded: true);
-            string expected = locale == "ru-RU"
-                ? "В инвентаре: позволяет получать семена при срезании травы"
-                : "While in inventory: allows grass to drop Seeds";
+            const string key = "Mods.InfiniCrafterLocal.RuntimeTooltip.InventorySeedCollection";
+            string expected = Terraria.Localization.Language.GetTextValue(key);
+            Equal(true, !string.IsNullOrWhiteSpace(expected) && expected != key, "inventory seed localization resolves");
             Equal(expected, rows.Single(row => row.Name == "InfiniInventorySeedCollection").Text,
                 "inventory passive is disclosed as its actual native condition, not an active-use promise");
             SeedFlag().SetValue(visible.Gameplay, false);

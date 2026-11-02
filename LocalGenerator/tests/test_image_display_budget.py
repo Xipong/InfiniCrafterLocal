@@ -23,7 +23,7 @@ import infini_local.pipelines.images.validation as post_validation
 import infini_local.pipelines.visual.contract as visual_contract
 import infini_local.pipelines.visual.stage as visual_stage
 from infini_local.pipelines.images import stage as generation
-from infini_local.pipelines.images.prompts import image_final_frame_prompt_clause
+from infini_local.pipelines.images.prompts import image_final_frame_prompt_clause, image_generation_prompt_suffix
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
@@ -136,6 +136,10 @@ def test_absent_presentation_stays_absent_and_special_assets_do_not_borrow_root_
 @pytest.mark.parametrize("zimage", [False, True])
 def test_real_retry_compactor_retains_selected_frame_with_long_art_and_png_diagnostics(monkeypatch, tmp_path, style, zimage):
     monkeypatch.setattr(llm_config, "PROMPT_STYLE", style)
+    selected_guidance = image_generation_prompt_suffix()
+    with monkeypatch.context() as other_style:
+        other_style.setattr(llm_config, "PROMPT_STYLE", "Terraria Like" if style == "Default" else "Default")
+        assert selected_guidance != image_generation_prompt_suffix()
     monkeypatch.setattr(post_retry, "image_backend_is_zimage", lambda: zimage)
     monkeypatch.setenv("INFINI_ZIMAGE_RETRY_PROMPT_LIMIT", "2200")
     data = _accepted_visual_data(long_art=True)
@@ -158,16 +162,15 @@ def test_real_retry_compactor_retains_selected_frame_with_long_art_and_png_diagn
         validation = attempts[0]["validation"]
         assert not validation["ok"] and any(reason.startswith("too_few_opaque_pixels") for reason in validation["reasons"])
         assert len(validation["reasons"]) >= 2
-        assert post_retry.validation_retry_notes(validation, role)
-        assert "Technical correction:" in retry["prompt"] if zimage else "fix these technical issues:" in retry["prompt"]
+        notes = post_retry.validation_retry_notes(validation, role)
+        assert notes and notes in retry["prompt"]
         from infini_local.services.sdcpp_backend import server_payload
         for call in (first, retry):
             payload = server_payload(backend._sdcpp_config(), call["prompt"], "not sent", 512, 512, 42, "a1111", is_zimage=zimage, positive_only=True)
             wire = json.loads(json.dumps(payload, ensure_ascii=False))
             assert _framing(wire["prompt"]) == _framing(call["prompt"])
             assert wire["negative_prompt"] == ""
-            assert "Terraria (tModLoader) game asset" in wire["prompt"]
-            assert ("Terraria Like art direction" in wire["prompt"]) == (style == "Terraria Like")
+            assert wire["prompt"].endswith(selected_guidance)
         assert Path(first["raw"]).read_bytes() == first["bytes"]
         assert Path(retry["raw"]).read_bytes() == retry["bytes"]
     assert frozen["visual"]["imagePrompt"] in calls[0]["prompt"]

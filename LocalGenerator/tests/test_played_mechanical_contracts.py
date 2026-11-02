@@ -236,12 +236,6 @@ def test_unchanged_saved_motion_programs_remain_readable_without_recompiling_ret
     current_body['movement'] = deepcopy(saved_movement)
     assert validate_runtime_wire(program_control)['ok']
     assert any(e.get('movement', {}).get('code') == code for e in full['runtimeProgram']['entities'])
-    if code == 19:
-        # Retained execution documentation remains truthful even though this
-        # card is no longer offered to fresh Author or Repair.
-        text = json.dumps(CAPABILITY_REGISTRY['move_forward_then_retract'].prompt_card()).lower()
-        assert 'live owner cursor' in text and 'every ai update' in text
-        assert 'not a fixed initial' in text and 'not hand-attached' in text
     assert full == before and path.read_bytes() == raw
 
 

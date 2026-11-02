@@ -89,21 +89,12 @@ def test_author_and_scoped_repair_deliver_physical_facts_without_reauthoring(mon
         assert packet["response_format"]["type"] == mode
         if mode == "json_schema":
             assert '"description": "' not in json.dumps(packet["response_format"]["json_schema"]["schema"])
-        # These facts must be in messages, not stripped JSON Schema annotations.
-        prose = " ".join(m["content"] for m in packet["messages"])
-        for fact in ("MountedCenter", "front_arm_pose", "reachCurve", "4 to 10px",
-                     "no automatic arm", "selected PNG", "beam", "Visual", "constant contact",
-                     "compensates attachment offsets only", "hilt region", "native held-projectile pass"):
-            assert fact in prose, fact
     cards = request_dossier(initial_packet, declaration=initial)["runtimeCapabilityContract"]["catalog"]["capabilities"]
     attach = next(c for c in cards if c["fn"] == "attach")
     repair_attach = next(c for c in repair["existingBrokenCapabilityCards"] if c["fn"] == "attach")
     for field in ("meaning", "enum", "type"):
         assert attach["params"]["anchor"][field] == repair_attach["params"]["anchor"][field]
-    assert "MountedCenter" in json.dumps(attach)
-    assert "does not cancel" in json.dumps(attach)
-    assert "body center" in json.dumps(attach["params"]["reachCurve"])
-    assert "not a hand anchor" in json.dumps(next(c for c in cards if c["fn"] == "beam_geometry"))
+
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])

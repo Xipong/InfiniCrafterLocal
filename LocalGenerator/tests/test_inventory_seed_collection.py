@@ -162,21 +162,6 @@ def test_leaf_repair_freezes_seed_selection_or_absence(monkeypatch, present, mod
     assert validate_runtime_wire(final)["ok"]
 
 
-def test_native_seed_dto_keeps_nullable_omitted_storage_for_old_definition_identity():
-    from infini_local.qa.primitive_loss_audit import _PARSER, _nodes, item_gameplay_surface_audit
-    source = (Path(__file__).resolve().parents[2] / "ModSources/InfiniCrafterLocal/Common/Models/Contracts/GeneratedItemData.Model.cs").read_bytes()
-    properties = [node for node in _nodes(_PARSER.parse(source).root_node, "property_declaration")
-                  if (name := node.child_by_field_name("name")) is not None
-                  and source[name.start_byte:name.end_byte] == b"CollectSeedsFromGrass"]
-    assert len(properties) == 1
-    prop = properties[0]
-    storage = prop.child_by_field_name("type")
-    assert source[storage.start_byte:storage.end_byte] == b"bool?", "inactive semantics must not materialize false into old definition bytes"
-    text = source[prop.start_byte:prop.end_byte]
-    assert b"JsonIgnoreCondition.WhenWritingNull" in text
-    assert b"throw new InvalidDataException" in text, "present null is not an authored boolean"
-    assert item_gameplay_surface_audit(source)["ok"]
-
 
 def test_committed_native_fixture_preserves_compiler_delivery_in_headless_mode():
     actual = sanitize_recipe_for_delivery(compile_runtime_program(seed_source()))

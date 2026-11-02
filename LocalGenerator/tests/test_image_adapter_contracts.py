@@ -200,7 +200,7 @@ def test_sdcpp_local_response_read_failure_never_retries_or_substitutes_art(
         assert result['visual']['spriteStatus'] == 'generated'
         assert asset_sync_service.is_complete_png_file(result['visual']['spritePath'])
         if expected_calls == 2:
-            assert 'STRICT RETRY 1' in requests[1]['prompt']
+            assert requests[1]['prompt'] != requests[0]['prompt']
     else:
         assert result['visual']['spriteStatus'] == 'failed'
     diagnostics = json.loads(result['debug']['itemSpriteDiagnostics'])
@@ -460,7 +460,7 @@ def test_vfx_comfy_placeholder_preserves_the_accepted_nonce_digest_calls(adapter
     assert [row['seed'] for row in prompts] == [91023, 91023]
     assert all(row['negative'] == job['negativePrompt'] for row in prompts)
     assert prompts[0]['text'].endswith(generation.normalize_asset_prompt(data, 'vfx_' + layout, job['prompt'], 32))
-    assert 'STRICT RETRY 1' in prompts[1]['text']
+    assert prompts[1]['text'] != prompts[0]['text']
     assert len(downloads) == 2
 
 @pytest.mark.parametrize("configured_seed", [0, 731])

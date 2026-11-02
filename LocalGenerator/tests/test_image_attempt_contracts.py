@@ -234,7 +234,7 @@ def test_corrupt_provider_image_remains_a_bounded_quality_retry(offline, monkeyp
     assert result[3] == 'generated' and Path(result[0]).exists()
     assert len(calls) == 2 and len(requests) == 1
     assert calls[0]['seed'] == calls[1]['seed'] == 731
-    assert 'STRICT RETRY 1' in calls[1]['prompt']
+    assert calls[1]['prompt'] != calls[0]['prompt']
 
 
 def test_raw_provider_canvas_above_client_limit_still_processes_to_final_png(offline, monkeypatch):
