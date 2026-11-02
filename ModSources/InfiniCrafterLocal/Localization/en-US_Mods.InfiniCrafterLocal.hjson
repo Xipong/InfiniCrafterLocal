@@ -296,6 +296,14 @@ Items: {
 Projectiles.GeneratedProjectile.DisplayName: Generated Projectile
 
 Configs: {
+	InfiniStudioConfig: {
+		DisplayName: Studio and generator setup
+		OpenStudio: {
+			Label: Open Infinicraft Studio
+			Tooltip: Opens Studio in your default browser. The first launch prepares the bundled runtime in the tModLoader save directory. Settings and generated items are kept separately when the mod updates. The external launcher remains available.
+		}
+	}
+
 	InfiniGameplayQolConfig: {
 		DisplayName: Gameplay and sprites
 
@@ -385,4 +393,11 @@ Configs: {
 			Tooltip: Enables camera shake included in generated effects. Luminance settings also apply.
 		}
 	}
+}
+
+Studio: {
+	Starting: Preparing Studio…
+	Opened: Studio is open in your browser. Click again to reopen it. Studio launched from the mod closes when the mod unloads.
+	UnsupportedPlatform: Bundled Studio currently supports Windows x64. Use the external Studio launcher on this platform.
+	Failed: "Could not open Studio: {0}"
 }

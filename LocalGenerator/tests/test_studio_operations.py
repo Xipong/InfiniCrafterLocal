@@ -61,6 +61,7 @@ class OperationHost(operations.StudioOperations):
 @pytest.fixture
 def host(tmp_path, monkeypatch):
     monkeypatch.setattr(operations, 'ROOT', tmp_path)
+    monkeypatch.setattr(operations, 'STATE_ROOT', tmp_path)
     app = OperationHost(tmp_path)
     yield app
     app.on_close()

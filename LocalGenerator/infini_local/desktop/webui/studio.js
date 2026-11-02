@@ -269,7 +269,8 @@
       if (pending.action === 'exitStudio' && receipt.ok && receipt.status === 'succeeded') {
         state.shutdown=true;clearTimeout(state.pollTimer);$('#utility-dialog').close();
         $('#connection').innerHTML=`<span class="status-dot"></span><span>${t("Студия закрыта")}</span>`;
-        $('#workspace').innerHTML=`<div class="initial-loading"><h1>${t("Студия закрыта")}</h1><p>${t("Закрыта только студия. Генератор не остановлен этим действием.")}<br>${t("Эту вкладку можно закрыть.")}</p></div>`;
+        const closeMessage=remote.managed ? t('Студия закрыта. Запущенный ею генератор завершает работу.') : t('Закрыта только студия. Генератор не остановлен этим действием.');
+        $('#workspace').innerHTML=`<div class="initial-loading"><h1>${t("Студия закрыта")}</h1><p>${closeMessage}<br>${t("Эту вкладку можно закрыть.")}</p></div>`;
         updateActionButtons();return true;
       }
       if (receipt.result?.kind === 'document') showDocument(receipt.result);
@@ -362,6 +363,8 @@
   }
   function updateActionButtons() {
     $('#language-select').disabled=!state.remote || state.shutdown;
+    const exitHint=state.remote?.managed ? t('Закрыть студию и запущенный ею генератор') : t('Закрыть только студию, не генератор');
+    $$('[data-ui="exit"]').forEach(button=>button.title=exitHint);
     const locked = !state.connected || state.pending || state.posting || state.shutdown;
     $$('[data-action], [data-browse], [data-submit-action]').forEach(button => {button.disabled = !!locked;});
     const pendingAction=state.pending?.action || state.submission?.action;
@@ -566,6 +569,7 @@
       if (field.secret) control += `<button class="reveal" data-reveal="${key}" type="button" aria-label="${t("Показать ключ")}" aria-pressed="false">${icon('eye')}</button>`;
       if (browse && !field.synthetic) control += `<button class="browse" data-browse="${key}" data-browse-type="${browse}" type="button" title="${t("Выбрать на этом компьютере")}" aria-label="${t("Выбрать файл:")} ${esc(title)}">${icon('folder')}</button>`;
     }
+    if (key === 'INFINI_SDCPP_SERVER_EXE') control += `<span class="field-note"><a class="text-button" href="https://github.com/leejet/stable-diffusion.cpp/releases/latest" target="_blank" rel="noopener noreferrer" title="${t('Официальные сборки sd.cpp на GitHub')}">${t('Скачать sd.cpp')} ${icon('arrow')}</a></span>`;
     return `<div class="field-row${state.dirty.has(key) ? ' is-dirty':''}" data-field-row="${key}"><div class="field-copy"><div class="field-label-line"><label for="${id}">${esc(title)}</label><button class="field-help-toggle" data-help-field="${key}" type="button" aria-label="${t("Подробности:")} ${esc(title)}" aria-expanded="${help}">?</button></div><div class="field-key${help ? '':' hidden-key'}">${key}</div><p class="field-help" id="help-${key}">${esc(t(help ? field.help || shortHelp[key] || t('Параметр локального генератора. Значение сохраняется без преобразования.') : shortHelp[key] || ''))}</p>${browse && !field.secret ? `<span class="field-file" data-file-basename="${key}" title="${esc(val)}" ${val.trim() ? '':'hidden'}>${esc(basename(val))}</span>`:''}</div><div class="field-control${field.secret || browse ? ' has-extra':''}">${control}${inactive && !derived ? `<span class="field-note" data-inactive-source>${esc(inactive)}</span>`:''}</div></div>`;
   }
   function disclosure(id,title,fields,reason='',force=false) {
@@ -1116,7 +1120,10 @@
       case 'help':showHelp();break;
       case 'force-restart':confirm(t('Прервать крафт и перезапустить?'),t('Активный и ожидающий крафт будет прерван. Это не подтверждает возврат материалов в игре. Используй только если безопасный перезапуск недоступен.'),'forceRestart',{confirm:true},t('Прервать и перезапустить'));break;
       case 'stop':confirm(t('Остановить генератор?'),t('Проверим активный крафт перед остановкой собственного запущенного сервера. Черновик адреса не меняет цель; чужие процессы не изменяются.'),'stop',{},t('Остановить безопасно'));break;
-      case 'exit':confirm(t('Закрыть студию?'),t('Закроется только локальный интерфейс. Это действие не останавливает генератор. Несохранённые изменения в этой вкладке будут потеряны.'),'exitStudio',{},t('Закрыть студию'));break;
+      case 'exit':confirm(
+        state.remote?.managed ? t('Закрыть студию и генератор?') : t('Закрыть студию?'),
+        state.remote?.managed ? t('Если Studio запустила генератор, он остановится вместе с ней, а текущий крафт прервётся. Несохранённые изменения в этой вкладке будут потеряны.') : t('Закроется только локальный интерфейс. Это действие не останавливает генератор. Несохранённые изменения в этой вкладке будут потеряны.'),
+        'exitStudio',{},t('Закрыть студию'));break;
       case 'clear-trace':confirm(t('Очистить локальный журнал?'),t('Будут удалены диагностические записи сохранённой конфигурации. Черновик пути не меняет цель. Готовые игровые предметы и рецепты не меняются. Это действие нельзя отменить.'),'clearTrace',{confirm:true},t('Очистить журнал'));break;
       case 'clear-lora':confirm(t('Отключить адаптер?'),t('Сбросим настройки LoRA. Сам файл на диске не удаляется.'),'clearLora',{},t('Отключить LoRA'));break;
       case 'reset-sprite':confirm(t('Вернуть базовый resize?'),t('Фильтр станет BOX, premultiplied resize будет включён. Остальные параметры спрайта остаются.'),'resetSprite',{},t('Вернуть BOX'));break;

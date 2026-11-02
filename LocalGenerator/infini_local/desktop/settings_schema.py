@@ -6,7 +6,7 @@ from pathlib import Path
 from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 
 
-from infini_local.desktop.settings_paths import ROOT
+from infini_local.desktop.settings_paths import STATE_ROOT
 
 
 # AGENT MAP: static browser Studio settings schema.
@@ -265,7 +265,7 @@ DEFAULTS = {
     "INFINI_SDCPP_SERVER_COMMAND_TEMPLATE": SDCPP_DEFAULT_COMMAND_TEMPLATE,
     "INFINI_SDCPP_SERVER_EXTRA_ARGS": SDCPP_EXTRA_PROFILES["flux2_klein4b_rx6800xt_hybrid"],
     "INFINI_SDCPP_SERVER_SHOW_CONSOLE": "1" if os.name == "nt" else "0",
-    "INFINI_SDCPP_SERVER_LOG_FILE": str(ROOT / "cache" / "sdcpp_server.log"),
+    "INFINI_SDCPP_SERVER_LOG_FILE": str(STATE_ROOT / "cache" / "sdcpp_server.log"),
     "INFINI_SDCPP_WIDTH": "512",
     "INFINI_SDCPP_HEIGHT": "512",
     "INFINI_SDCPP_STEPS": "4",
