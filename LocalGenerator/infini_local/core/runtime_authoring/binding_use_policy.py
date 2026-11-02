@@ -65,7 +65,7 @@ def placement_call_id(binding: Mapping[str, Any]) -> str:
 
 def stack_cost(binding: Mapping[str, Any]) -> int:
     if "stackCost" not in binding:
-        return 1 if action_kind(binding) == PLACE_ITEM_ACTION else 0 if binding.get("input") not in ACTIVE_USE_INPUTS else -1
+        return 1 if action_kind(binding) == PLACE_ITEM_ACTION else 0 if binding.get("input") not in ACTIVE_USE_INPUTS or action_kind(binding) == "native_fishing" else -1
     value = use_policy(binding).get("stackCost")
     return value if isinstance(value, int) and not isinstance(value, bool) else -1
 
@@ -180,7 +180,7 @@ def canonical_transaction(binding: Mapping[str, Any], *, item_body_id: str) -> d
             action_row.pop("kind", None)
         if not action_row:
             result.pop("action")
-    if result["input"] not in ACTIVE_USE_INPUTS or kind == PLACE_ITEM_ACTION:
+    if result["input"] not in ACTIVE_USE_INPUTS or kind in {PLACE_ITEM_ACTION, "native_fishing"}:
         result.pop("stackCost", None)
         result.pop("contactDamage", None)
     return result
@@ -205,6 +205,10 @@ def project_to_wire(
         "kind": kind,
         "targetId": str(authored_action["targetId"]),
     }
+    if kind == "native_fishing":
+        from infini_local.core.runtime_authoring.capability_registry import NATIVE_FISHING_PARAMETERS
+        wire_action["fishing"] = {spec.wire_name or name: spec.to_wire(authored_action["fishing"][name])
+                                  for name, spec in NATIVE_FISHING_PARAMETERS.items()}
     if "effectGroupId" in authored_action:
         wire_action["effectGroupId"] = str(authored_action["effectGroupId"])
     if kind == PLACE_ITEM_ACTION:

@@ -35,6 +35,10 @@ Author schema ограничивает значения всех примити�
 
 | Author | Действие / engine semantics | Единица | Neutral | Author range | Wire DTO | Фаза |
 |---|---|---|---|---|---|---|
+| playerEffect | Independent player modifiers; condition applies to this component only. Available in equipment or a generated buff. | bounded_text | None | object | accessory.playerEffect | C# normalized item projection |
+| regenWhen | When lifeRegen applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself. | bounded_text | always | always/stationary | accessory.lifeRegenCondition | C# normalized item projection |
+| treasureSense | Highlight eligible native treasures, including ores, chests and life crystals; not a radius or ore-only scan | bounded_text | False | boolean | accessory.treasureSense | C# normalized item projection |
+| treasureWhen | When treasureSense applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself. | bounded_text | always | always/stationary | accessory.treasureSenseCondition | C# normalized item projection |
 | defensePoints | Add native item defense | defense_points | 0 | -50…200<br>runtime clamp: -100…500 | accessory.defense | ModItem.UpdateAccessory |
 | maxLifePoints | Add maximum life | life_points | 0 | -200…1000<br>runtime clamp: -500…5000 | accessory.maxLife | ModItem.UpdateAccessory |
 | maxManaPoints | Add maximum mana | mana_points | 0 | -200…1000<br>runtime clamp: -500…5000 | accessory.maxMana | ModItem.UpdateAccessory |
@@ -75,6 +79,10 @@ Authority: `owner_execute_sync`; техническая фаза/сетевая 
 |---|---|---|---|---|---|---|
 | slot | Armor equip slot | bounded_text | None | head/body/legs | armor.slot | C# normalized item projection |
 | setKey | Exact authored set key (empty when no matching set is intended) | bounded_text |  | ^[a-z0-9_]{0,48}$ | armor.setKey | C# normalized item projection |
+| playerEffect | Independent player modifiers; condition applies to this component only. Available in equipment or a generated buff. | bounded_text | None | object | armor.playerEffect | C# normalized item projection |
+| regenWhen | When lifeRegen applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself. | bounded_text | always | always/stationary | armor.lifeRegenCondition | C# normalized item projection |
+| treasureSense | Highlight eligible native treasures, including ores, chests and life crystals; not a radius or ore-only scan | bounded_text | False | boolean | armor.treasureSense | C# normalized item projection |
+| treasureWhen | When treasureSense applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself. | bounded_text | always | always/stationary | armor.treasureSenseCondition | C# normalized item projection |
 | defensePoints | Add native item defense | defense_points | 0 | 0…200<br>runtime clamp: 0…500 | armor.defense | ModItem.UpdateEquip |
 | maxLifePoints | Add maximum life | life_points | 0 | -200…1000<br>runtime clamp: -500…5000 | armor.maxLife | ModItem.UpdateEquip |
 | maxManaPoints | Add maximum mana | mana_points | 0 | -200…1000<br>runtime clamp: -500…5000 | armor.maxMana | ModItem.UpdateEquip |
@@ -135,7 +143,7 @@ C# DTO и runtime safety bounds проецируются из текущих typ
 
 - Все `RuntimeEventActionSpec` поля, включая `DelayTicks`, сверяются с exact wire paths. Каждый event action допускает `delayTicks=0…600`; C# scheduler проверяет spawn budget/authority и переносит действие, не создавая новый дизайн.
 - `move_owner_on_event` телепортирует только к **сохранённой позиции события** (ограничение `rangeTiles`, проверка safe tile, общий cooldown с `blink_on_use`). Wire `Mode=blink_to_event_position` — фиксированный технический discriminator; старое `blink_to_entity` исполнялось той же веткой и больше не предлагается модели.
-- `oreSenseEnabled` — булево включение Terraria `Player.findTreasure`; `GeneratedBuffSpec.OreSenseRadiusTiles` хранит только 0/1, **не радиус**. В prompt нет ложных тайлов.
+- `treasureSense` — булево включение Terraria `Player.findTreasure`; `GeneratedBuffSpec.OreSenseRadiusTiles` хранит только 0/1, **не радиус**. В prompt нет ложных тайлов.
 - `target_and_fire` использует только typed `Targeting.ShotEntityId`/`IntervalTicks`/`SameTargetBias`; typed interval обязателен и положителен, executor сохраняет floor 6 world ticks и перевод при extraUpdates. Старые `RuntimeParamsSpec.ShotEntity`/`IntervalTicks`/`SameTargetBias` удалены; старые Params-поля в saved wire отвергаются, fallback cadence отсутствует.
 - `refresh_held_effect` явно выбирает `runtimeProgram.heldEffectGroupId`: только named generated-buff group. `GeneratedItem.HoldItem -> RefreshHeldEffectGroup -> ApplyGeneratedUtilityBuff` пытается refresh раз за world tick для exact held item; duration управляет lingering после release, exhaustion остаётся отдельной политикой. Healing, mobility и native buffs не выводятся из held light/mining-speed или prose.
 - Single-slot `GameplaySpec.BuffCode`/`BuffTime` удалены; старые gameplay-поля отвергаются. Default и named effect groups используют явный многобафовый `ExtraBuffs[]` с `BuffEntrySpec.BuffCode`/`BuffTime`; `GeneratedItem.ApplyItemEffects` вызывает native `Player.AddBuff` для каждой записи. `ApplyUseEffectFields` очищает `Item.buffType`/`buffTime` до0, не восстанавливает single slot.

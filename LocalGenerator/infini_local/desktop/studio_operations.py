@@ -874,6 +874,20 @@ class StudioOperations:
         self._set_trace_text("failure", self._pretty(snap.get("lastCombineFailure")))
 
 
+    def open_config_folder(self):
+        folder = self.config_path.absolute().parent
+        if not folder.is_dir():
+            return {"ok": False, "message": "Папка конфигурации недоступна. Скопируй путь к файлу настроек из Studio."}
+        try:
+            if os.name == "nt":
+                os.startfile(folder)
+            elif not webbrowser.open(folder.as_uri()):
+                raise OSError("No folder opener available")
+        except OSError:
+            return {"ok": False, "message": "Не удалось открыть папку конфигурации. Скопируй путь к файлу настроек из Studio."}
+        self.status = "Открываем папку конфигурации."
+        return {"ok": True, "message": self.status}
+
     def open_cache_folder(self):
         cache = self._effective_cache_dir()
         cache.mkdir(parents=True, exist_ok=True)

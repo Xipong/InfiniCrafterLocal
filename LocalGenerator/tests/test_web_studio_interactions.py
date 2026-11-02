@@ -148,6 +148,70 @@ def test_open_config_never_saves_and_masks_credential_assignments(studio):
     assert 'secret-fixture' in config.read_text()
 
 
+@pytest.mark.parametrize('platform', ['nt', 'posix'])
+@pytest.mark.parametrize('existing_file', [False, True])
+def test_config_folder_uses_active_override_without_saving_or_reading_secrets(studio, monkeypatch, platform, existing_file):
+    app, controller, _server, original = studio
+    config = original.parent / 'custom folder with spaces' / 'chosen.env'
+    config.parent.mkdir()
+    app.config_path = config
+    if existing_file:
+        config.write_text('INFINI_PRIVATE_TOKEN=DO-NOT-DISCLOSE\n', encoding='utf-8')
+    before = dict(app.values)
+    opened = []
+    monkeypatch.setattr(controls, 'os', SimpleNamespace(name=platform, startfile=lambda path: opened.append(path)))
+    monkeypatch.setattr(controls.webbrowser, 'open', lambda uri: opened.append(uri) or True)
+    result = command(controller, 'openConfigFolder', values={'INFINI_PROMPT_STYLE': 'unsaved'},
+                     extra={'path': str(original.parent / 'untrusted-target')})
+    assert result['ok'] is True
+    assert opened == [config.parent if platform == 'nt' else config.parent.as_uri()]
+    assert app.values == before
+    assert config.exists() is existing_file
+    if existing_file:
+        assert config.read_text() == 'INFINI_PRIVATE_TOKEN=DO-NOT-DISCLOSE\n'
+    assert 'DO-NOT-DISCLOSE' not in json.dumps(result)
+    assert controller.snapshot()['configPath'] == str(config)
+
+
+@pytest.mark.parametrize('failure', ['missing-folder', 'os-error', 'no-handler'])
+def test_config_folder_unavailable_is_an_honest_failure_without_creation(studio, monkeypatch, failure):
+    app, controller, _server, config = studio
+    if failure == 'missing-folder':
+        app.config_path = config.parent / 'missing' / 'config.env'
+    opened = []
+    def open_folder(uri):
+        opened.append(uri)
+        if failure == 'os-error':
+            raise OSError('PRIVATE-OS-DETAIL')
+        return False
+    monkeypatch.setattr(controls, 'os', SimpleNamespace(name='posix'))
+    monkeypatch.setattr(controls.webbrowser, 'open', open_folder)
+    before = dict(app.values)
+    result = command(controller, 'openConfigFolder')
+    assert result['ok'] is False and result['status'] == 'failed'
+    assert 'Скопируй путь' in result['message'] and 'PRIVATE-OS-DETAIL' not in result['message']
+    assert opened == ([] if failure == 'missing-folder' else [config.parent.as_uri()])
+    assert not app.config_path.exists() and app.values == before
+    if failure == 'missing-folder':
+        assert not app.config_path.parent.exists()
+
+
+def test_config_folder_http_action_reaches_active_controller_without_path_authority(studio, monkeypatch):
+    app, controller, server, config = studio
+    opened = []
+    monkeypatch.setattr(controls, 'os', SimpleNamespace(name='nt', startfile=lambda path: opened.append(path)))
+    server.start()
+    body = json.dumps({'action': 'openConfigFolder', 'values': {}, 'extra': {'path': 'untrusted-folder'}}).encode()
+    request = urllib.request.Request(server.base_url + '/api/action', data=body,
+        headers={'Content-Type': 'application/json', 'X-Infini-Token': server.token}, method='POST')
+    with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(request, timeout=3) as response:
+        queued = json.load(response)
+    assert queued['ok'] is True and not opened
+    controller.tick()
+    assert controller.action_results[queued['id']]['status'] == 'succeeded'
+    assert opened == [config.parent] and not config.exists()
+
+
 def test_help_returns_real_guide_without_desktop_browser(studio):
     _app, controller, _server, _config = studio
     result = command(controller, 'help')

@@ -219,7 +219,7 @@ def test_generated_buff_fields_cannot_hide_or_forge_executable_effect(field, val
         for r in (
             ("miningSpeedMultiplier", 1.5, "miningSpeedMultiplier", 1.5),
             ("lightStrength", 0.25, "emitLightStrength", 0.25),
-            ("oreSenseEnabled", True, "oreSenseRadiusTiles", 1),
+            ("treasureSense", True, "oreSenseRadiusTiles", 1),
             ("moveSpeedBonus", 20, "movementSpeed", 0.2),
             ("jumpSpeedBonus", 60 / 16, "jumpBoost", 1),
             ("manaRegen", 1, "manaRegen", 1),
@@ -233,7 +233,7 @@ def test_single_buff_effect_is_not_inert_and_sparse_wire_is_exact(effect, value,
     params = next(c["params"] for c in source["runtimeProgram"]["calls"] if c["fn"] == "generated_buff_on_use")
     neutrals = {
         "miningSpeedMultiplier": 1,
-        "oreSenseEnabled": False,
+        "treasureSense": False,
         "moveSpeedBonus": 0,
         "jumpSpeedBonus": 0,
         "manaRegen": 0,

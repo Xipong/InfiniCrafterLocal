@@ -145,9 +145,10 @@ GLOBAL_TECHNICAL_LOWERINGS: tuple[dict[str, Any], ...] = (
         "id": "author_binding_lanes",
         "inputs": ["runtimeProgram.bindings[].id", "runtimeProgram.bindings[].input", "runtimeProgram.bindings[].action.kind",
                    "runtimeProgram.bindings[].action.targetId", "runtimeProgram.bindings[].stackCost", "runtimeProgram.bindings[].contactDamage",
-                   "runtimeProgram.bindings[].action.effectGroupId", "runtimeProgram.entities[].id", "runtimeProgram.entities[].kind", "runtimeProgram.primaryEntityId"],
+                   "runtimeProgram.bindings[].action.effectGroupId", "runtimeProgram.bindings[].action.fishing.power", "runtimeProgram.bindings[].action.fishing.castSpeed", "runtimeProgram.entities[].id", "runtimeProgram.entities[].kind", "runtimeProgram.primaryEntityId"],
         "outputs": ["runtimeProgram.bindings[].id", "runtimeProgram.bindings[].input", "runtimeProgram.bindings[].usePolicy.action.kind",
                     "runtimeProgram.bindings[].usePolicy.action.targetId", "runtimeProgram.bindings[].usePolicy.action.effectGroupId",
+                    "runtimeProgram.bindings[].usePolicy.action.fishing.power", "runtimeProgram.bindings[].usePolicy.action.fishing.castSpeedPxPerTick",
                     "runtimeProgram.bindings[].usePolicy.stackCost", "runtimeProgram.bindings[].usePolicy.contactDamage",
                     "runtimeProgram.entities[].id", "runtimeProgram.entities[].kind", "runtimeProgram.primaryEntityId", "runtimeProgram.itemEntityId"],
         "equivalence": "exact current source lanes and uniquely declared fixed-branch/body dependencies; sorted outputs retain exact id association",
@@ -260,7 +261,7 @@ def _exact_mechanical_view(document: Mapping[str, Any]) -> dict[str, Any]:
             continue
         if spec.target_kinds == ("item_body",) and body is not None and "targetId" not in action:
             action["targetId"] = body
-        if binding["input"] not in {"primary_use", "alternate_use"} or spec.name == "place_item":
+        if binding["input"] not in {"primary_use", "alternate_use"} or spec.name in {"place_item", "native_fishing"}:
             binding.setdefault("stackCost", 1 if spec.name == "place_item" else 0)
             binding.setdefault("contactDamage", False)
     return out
@@ -302,6 +303,12 @@ def _author_binding_receipts(source: Mapping[str, Any], final: Mapping[str, Any]
                                 [base + ".input"] if key == "kind" else
                                 [base + ".input", *([base + ".action.kind"] if isinstance(raw_action, Mapping) and "kind" in raw_action else []), *body_paths])
             emit(paths, dest + ".usePolicy.action." + key, binding["action"][key])
+        if binding.get("action", {}).get("kind") == "native_fishing":
+            from infini_local.core.runtime_authoring.capability_registry import NATIVE_FISHING_PARAMETERS
+            for name, spec in NATIVE_FISHING_PARAMETERS.items():
+                emit(identity + [base + ".action.fishing." + name],
+                     dest + ".usePolicy.action.fishing." + (spec.wire_name or name),
+                     spec.to_wire(binding["action"]["fishing"][name]))
         for key in ("stackCost", "contactDamage"):
             paths = identity + ([base + "." + key] if key in raw else
                                 [base + ".input", *([base + ".action.kind"] if isinstance(raw.get("action"), Mapping) and "kind" in raw["action"] else [])])
@@ -351,7 +358,7 @@ def declared_neutral_omissions(fn: str, params: Mapping[str, Any]) -> dict[str, 
                     omitted.update((leaf, value) for leaf, _, value in spec.leaf_values(spec.default, path))
                 else:
                     omitted[path] = spec.default
-            elif (prefix or name in cap.nested_components) and name in values and spec.properties and isinstance(values[name], Mapping):
+            elif name in values and spec.properties and isinstance(values[name], Mapping):
                 omitted.update(walk(spec.properties, values[name], path + "."))
         return omitted
     return walk(cap.params, params)

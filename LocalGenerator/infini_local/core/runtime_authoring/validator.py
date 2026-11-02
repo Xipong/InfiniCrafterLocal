@@ -64,6 +64,7 @@ VALIDATION_ERROR_CODES = frozenset({
     "incompatible_param_variant",
     "ambiguous_global_id",
     "binding_dependency",
+    "binding_action_mismatch",
     "missing_effect_group",
     "invalid_held_effect_group",
     "invalid_reaction_effect_group",
@@ -695,7 +696,10 @@ def _validate_requirement(
     if requirement.kind == "at_least_one_param_nonzero":
         declared_cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
         if declared_cap is None or not (
-            any(name in params and params[name] != declared_cap.params[name].neutral
+            any(name in params and any(
+                    leaf.neutral is not None and leaf.kind in {"number", "integer", "boolean"}
+                    and value != leaf.neutral
+                    for _, leaf, value in declared_cap.params[name].leaf_values(params[name], name))
                 for name in requirement.nonzero_params)
             or any(
                 row.get("fn") in requirement.any_of
@@ -1179,6 +1183,18 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
                     required_any_of,
                     (item_id,) if item_id else (),
                 ))
+        if action_name == "native_fishing":
+            from infini_local.core.runtime_authoring.capability_registry import NATIVE_FISHING_PARAMETERS
+            fishing = binding_action(binding).get("fishing")
+            if isinstance(fishing, Mapping):
+                for name, spec in NATIVE_FISHING_PARAMETERS.items():
+                    if name in fishing and type(fishing[name]) in (int, float):
+                        if reason := spec.consumer_value_error(fishing[name]):
+                            issues.append(ValidationIssue(f"$.runtimeProgram.bindings[{index}].action.fishing.{name}",
+                                "consumer_representability", reason, (), (str(binding.get("id") or ""),)))
+        if action_name == "native_fishing" and "ammo_item" in item_fns:
+            issues.append(ValidationIssue(f"$.runtimeProgram.bindings[{index}].action",
+                "binding_action_mismatch", "A native ammo stack cannot also own a native fishing bobber.", (), (item_id,)))
         if action_name != "place_item":
             continue
         if stack_cost(binding) != 1:

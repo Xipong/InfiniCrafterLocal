@@ -56,6 +56,9 @@ jobs:
     name: Windows tModLoader/dotnet build smoke
     runs-on: windows-latest
     steps:
+      - name: Preserve Git blob bytes for cross-platform release verification
+        shell: pwsh
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:

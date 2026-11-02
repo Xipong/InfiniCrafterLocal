@@ -98,7 +98,7 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
         string? luminanceRoot=Environment.GetEnvironmentVariable("INFINI_LUMINANCE_ASSET_DIR");
         var luminanceHashes=InspectLuminanceResources(luminancePaths,luminanceRoot);
         this.graphics=graphics;framesDir=Path.GetFullPath(absoluteFramesDir);
-        foreach(string key in settings.Select(x=>x.Key)) if(key is not ("capture" or "width" or "height" or "cameraX" or "cameraY" or "zoom" or "drawArtwork" or "artworkFiles" or "drawPlayer" or "playerAssetRoot" or "dummyAssetRoot" or "drawNativeDust" or "lightingMode" or "drawPlacedBodies" or "drawDroppedItems" or "drawVanillaProjectiles" or "drawProjectileVfx" or "drawZombie"))throw new ArgumentException("Unknown nativeRender setting: "+key);
+        foreach(string key in settings.Select(x=>x.Key)) if(key is not ("capture" or "width" or "height" or "cameraX" or "cameraY" or "zoom" or "drawArtwork" or "artworkFiles" or "drawPlayer" or "playerAssetRoot" or "dummyAssetRoot" or "drawNativeDust" or "lightingMode" or "drawPlacedBodies" or "drawDroppedItems" or "drawVanillaProjectiles" or "vanillaItemTextures" or "drawProjectileVfx" or "drawZombie"))throw new ArgumentException("Unknown nativeRender setting: "+key);
         ConfigureScene(settings);drawVanillaProjectiles=settings["drawVanillaProjectiles"]?.GetValue<bool>()??false;drawDroppedItems=settings["drawDroppedItems"]?.GetValue<bool>()??false; if(drawDroppedItems && !(settings["drawArtwork"]?.GetValue<bool>()??false))throw new ArgumentException("drawDroppedItems requires drawArtwork");
         width=settings["width"]?.GetValue<int>()??512;height=settings["height"]?.GetValue<int>()??512;
         drawProjectileVfx=settings["drawProjectileVfx"]?.GetValue<bool>()??false;

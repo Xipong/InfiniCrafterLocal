@@ -295,7 +295,7 @@ def filter_repair_patch_scope(
                 if namespace == "bindings" and "action" in row_permissions and "action" not in original:
                     # A permitted explicit action closes only its schema-required
                     # independent lanes. No decision is copied out of a foreign wrapper.
-                    if action_kind(candidate) != "place_item" and candidate.get("input") in ACTIVE_USE_INPUTS:
+                    if action_kind(candidate) not in {"place_item", "native_fishing"} and candidate.get("input") in ACTIVE_USE_INPUTS:
                         row_permissions.update(key for key in ("stackCost", "contactDamage") if key not in original)
                 row_deletions: list[str] = []
                 if namespace == "calls":

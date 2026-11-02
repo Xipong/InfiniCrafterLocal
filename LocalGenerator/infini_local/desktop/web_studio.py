@@ -28,7 +28,7 @@ ACTION_BODY_TIMEOUT_SECONDS = 10
 ACTIONS = frozenset({
     'save', 'start', 'stop', 'health', 'validate', 'trace', 'applyPreset', 'savePreset',
     'codexLogin', 'codexStatus', 'codexCatalog', 'codexPing', 'clearLora', 'useLora',
-    'resetSprite', 'openConfig', 'openCache', 'clearTrace', 'browse', 'help', 'exitStudio',
+    'resetSprite', 'openConfig', 'openConfigFolder', 'openCache', 'clearTrace', 'browse', 'help', 'exitStudio',
     'forceRestart', 'cancelTrace', 'codexLogout', 'acceptDefaults', 'declineDefaults',
 })
 STATIC_FILES = {'/studio.css': ('studio.css', 'text/css; charset=utf-8'),
@@ -361,7 +361,7 @@ class StudioController:
             'traceStatus': self.app.trace_status,
             'notifications': self.notifications, 'actionResults': list(self.action_results.values()),
             'trace': dict(self.app.trace),
-            'configPath': str(CONFIG_PATH), 'version': APP_VERSION, 'lastAction': self.last_action,
+            'configPath': str(CONFIG_PATH.absolute()), 'version': APP_VERSION, 'lastAction': self.last_action,
             'managed': bool(self.app.__dict__.get('_managed_by_tmodloader', False)),
             'revision': self.revision, 'busy': list(self.app._gui_tasks), 'lanEnabled': bool(self.app.lan_enabled),
             'account': {'status': self.app.__dict__.get('_codex_account_status', ''), 'catalog': self.app.codex_catalog,
@@ -482,7 +482,7 @@ class StudioController:
             target = dict(DEFAULTS, **saved)
             target['INFINI_GUI_PIPELINE_PRESET'] = app._pipeline_preset_from_config(target, app.user_presets)
             self._values(target, {'lanEnabled': target.get('INFINI_HOST') == '0.0.0.0' or bool(target.get('INFINI_ASSET_PUBLIC_BASE_URL'))})
-        elif action not in {'acceptDefaults', 'declineDefaults', 'help', 'openConfig', 'exitStudio', 'codexLogin', 'codexStatus', 'codexCatalog', 'codexPing', 'codexLogout', 'stop', 'cancelTrace'}:
+        elif action not in {'acceptDefaults', 'declineDefaults', 'help', 'openConfig', 'openConfigFolder', 'exitStudio', 'codexLogin', 'codexStatus', 'codexCatalog', 'codexPing', 'codexLogout', 'stop', 'cancelTrace'}:
             self._values(command.get('values', {}), extra)
         callbacks = {'save': app.save, 'start': app.start_server, 'stop': app.stop_server,
                      'health': app._delayed_health_check, 'validate': app.validate_paths,
@@ -490,7 +490,8 @@ class StudioController:
                      'codexStatus': app.codex_status, 'codexCatalog': app.refresh_codex_text_catalog,
                      'codexPing': app.ping_codex_image_account, 'clearLora': app.clear_lora_settings,
                      'useLora': app.use_selected_lora, 'resetSprite': app.reset_sprite_resize,
-                     'openCache': app.open_cache_folder, 'cancelTrace': app.cancel_trace_refresh,
+                     'openCache': app.open_cache_folder, 'openConfigFolder': app.open_config_folder,
+                     'cancelTrace': app.cancel_trace_refresh,
                      'codexLogout': app.codex_logout}
         if action in {'acceptDefaults', 'declineDefaults'}:
             from infini_local.desktop.settings_defaults import decide_defaults

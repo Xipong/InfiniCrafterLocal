@@ -39,7 +39,7 @@ internal static partial class EngineRuntimeChecks
             }
             void Event(ulong occurrence=1,long? token=null){using var reader=new BinaryReader(new MemoryStream(EventPacket(occurrence,token)));InfiniItemVfxRuntime.HandleUseEventPacket(reader,0);}
             void Reset(){InfiniItemVfxRuntime.ClearUseEventCaches();clock.SetValue(null,100u);player.itemAnimation=0;player.selectedItem=0;player.dead=false;}
-            bool Visible()=>GeneratedHeldItemPresentation.TryGetVisibleHeldSpriteData(new Terraria.DataStructures.PlayerDrawSet{drawPlayer=player,heldItem=player.HeldItem},out _);
+            bool Ready()=>GeneratedHeldItemPresentation.TryGetHeldSpriteData(new Terraria.DataStructures.PlayerDrawSet{drawPlayer=player,heldItem=player.HeldItem},out _);
             object State()=>histories.GetValue(0)!;
             int SampleSlots()=>((IDictionary)State().GetType().GetField("Samples",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(State())!).Count;
             ulong UseTick()=>(ulong)State().GetType().GetField("UseTick",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(State())!;
@@ -52,8 +52,8 @@ internal static partial class EngineRuntimeChecks
             }
             // Pure state-seam controls: positive animation is explicitly supplied here.
             // Full remote native ItemCheck initiation is tested separately by HeldProxy.
-            Reset();player.itemAnimation=20;Event();InfiniItemVfxRuntime.PruneHeldHistory();Equal(true,Visible(),"native animation-first visible");Pending();
-            Reset();Event();InfiniItemVfxRuntime.PruneHeldHistory();Pending();Equal(false,Visible(),"event alone cannot invent animation");
+            Reset();player.itemAnimation=20;Event();InfiniItemVfxRuntime.PruneHeldHistory();Equal(true,Ready(),"native animation-first artwork ready");Pending();
+            Reset();Event();InfiniItemVfxRuntime.PruneHeldHistory();Pending();Equal(true,Ready(),"idle artwork readiness is independent of an active use");Equal(0,player.itemAnimation,"event alone cannot invent animation");
             var emptyDraw=new Terraria.DataStructures.PlayerDrawSet{drawPlayer=player,heldItem=player.HeldItem,DrawDataCache=new System.Collections.Generic.List<Terraria.DataStructures.DrawData>()};
             InfiniItemVfxRuntime.RegisterHeldHistoryDraw(ref emptyDraw,default);Pending();
             clock.SetValue(null,101u);player.itemAnimation=20;InfiniItemVfxRuntime.PruneHeldHistory();Pending();CaptureDrawData();

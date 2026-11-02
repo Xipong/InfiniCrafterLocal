@@ -97,6 +97,10 @@ def _complete_binding_transactions(
     action_name: str,
     target_id: str,
 ) -> list[dict[str, Any]]:
+    if action_name == "native_fishing":
+        # Power and cast speed are independent authored values, not enumerable
+        # transaction literals. Never manufacture them for a missing binding.
+        return []
     if action_name == "place_item":
         call_ids = sorted(
             str(call.get("id") or "")
@@ -204,6 +208,13 @@ def _binding_repair_alternatives(
                 target_ids = [_body_id(rows)]
             for target_id in target_ids:
                 if entity_kind_by_id.get(target_id) not in action_spec.target_kinds:
+                    continue
+                if action_name == "native_fishing" and original_action == action_name:
+                    candidate = copy.deepcopy(dict(binding))
+                    candidate.update(input=input_name, stackCost=0, contactDamage=False)
+                    candidate["action"]["targetId"] = target_id
+                    if not strict_schema_errors({**candidate, "id": "transaction_probe"}, binding_schema()):
+                        alternatives.append(canonical_transaction(candidate, item_body_id=_body_id(rows)))
                     continue
                 if action_name != original_action or input_name != original_input:
                     alternatives.extend(_complete_binding_transactions(

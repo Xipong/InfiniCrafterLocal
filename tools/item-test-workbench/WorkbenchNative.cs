@@ -87,7 +87,7 @@ internal static partial class EngineRuntimeChecks
         if(itemBoundary is not ("fresh" or "local_cache")) throw new ArgumentException("item-boundary must be fresh or local_cache");
         GeneratedItemData? data = itemPath is null ? null : (itemBoundary=="local_cache"?GeneratedItemData.FromLocalCacheJson(File.ReadAllText(itemPath)):GeneratedItemData.FromJson(File.ReadAllText(itemPath))) ?? throw new InvalidDataException("Item rejected by actual "+(itemBoundary=="local_cache"?"GeneratedItemData.FromLocalCacheJson":"GeneratedItemData.FromJson")+": " + ContractJsonDiagnostics.LastError);
         var scenario = JsonNode.Parse(File.ReadAllText(scenarioPath))!.AsObject();
-        WKeys(scenario,"scenario","ticks","seed","player","dummy","tiles","actions","assertions","playerUpdate","inventory","worldId","nativeRender","itemStack","hostiles","world","vanillaAssetRoot","recallSpawn","worldWidthTiles");
+        WKeys(scenario,"scenario","ticks","seed","player","dummy","tiles","actions","assertions","playerUpdate","inventory","worldId","nativeRender","itemStack","hostiles","world","vanillaAssetRoot","recallSpawn","worldWidthTiles","fishing");
         int worldId=WInt(scenario,"worldId",0);
         WValidateAmmoInventory(scenario);
         WValidateHostiles(scenario["hostiles"]);
@@ -111,7 +111,9 @@ internal static partial class EngineRuntimeChecks
         bool historyTrail=data?.VfxManifest.Slots.Any(s=>s.RendererKind=="historyTrail")==true;
         if(drawProjectileVfx && (!renderClient || drawArtwork || data is null))throw new ArgumentException("drawProjectileVfx requires a generated item, client_vfx and drawArtwork=false; artwork mode owns its full PreDraw");
         bool drawVanillaProjectiles=scenario["nativeRender"]?["drawVanillaProjectiles"]?.GetValue<bool>()??false;
-        if(drawVanillaProjectiles && (data is not null || !drawPlayer))throw new NotSupportedException("drawVanillaProjectiles requires a vanilla item and drawPlayer=true");
+        int[] nativeItemTextures=(scenario["nativeRender"]?["vanillaItemTextures"]?.AsArray()??new JsonArray()).Select(n=>n!.GetValue<int>()).ToArray();
+        if(nativeItemTextures.Length>16 || nativeItemTextures.Distinct().Count()!=nativeItemTextures.Length || nativeItemTextures.Any(id=>id<1||id>=ItemID.Count) || nativeItemTextures.Length>0&&!drawVanillaProjectiles)throw new ArgumentException("vanillaItemTextures requires at most16 unique native IDs and drawVanillaProjectiles");
+        if(drawVanillaProjectiles && ((data is not null && !data.RuntimeProgram.Bindings.Any(b=>b.UsePolicy.Action.Kind==RuntimeBindingAction.NativeFishing)) || !drawPlayer))throw new NotSupportedException("drawVanillaProjectiles requires a vanilla item or explicit native_fishing binding and drawPlayer=true");
         if((scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false)&&!drawPlayer&&!drawProjectileVfx)throw new ArgumentException("drawNativeDust requires drawPlayer or drawProjectileVfx with verified native assets");
         if(nativeDummy&&!drawPlayer)throw new ArgumentException("native_training_dummy requires nativeRender.drawPlayer=true");
         if(drawZombie && (!renderClient || !drawPlayer || nativeDummy || scenario["dummy"]?["nativeType"]?.GetValue<string>()!="zombie"))
@@ -130,7 +132,7 @@ internal static partial class EngineRuntimeChecks
         if(initialGravity is not (-1 or 1) || initialGravity==-1 && !gravityPotion)throw new ArgumentException("gravityDirection must be +/-1; inverted gravity requires explicit gravitationPotion=true");
         if(initialDirection is not (-1 or 1)) throw new ArgumentException("player.direction must be -1 or1");
         if(data is null && drawArtwork && !drawPlayer)throw new NotSupportedException("Vanilla artwork requires actual native drawPlayer; partial generated layer cannot substitute it");
-        if(scenario["vanillaAssetRoot"] is not null && (data is not null || !clientPlayer))throw new ArgumentException("vanillaAssetRoot applies only to vanilla client/client_hybrid contact");
+        if(scenario["vanillaAssetRoot"] is not null && (data is not null && !drawVanillaProjectiles || !clientPlayer))throw new ArgumentException("vanillaAssetRoot applies only to vanilla client/client_hybrid contact");
         bool fullPlayer=playerUpdate is "full" or "client" or "client_hybrid" or "client_vfx";
         int worldWidthTiles=WInt(scenario,"worldWidthTiles",100);
         if(worldWidthTiles is <100 or >400 || !fullPlayer && worldWidthTiles!=100)throw new ArgumentException("worldWidthTiles must be100..400 and requires full Player.Update outside default100");
@@ -280,6 +282,7 @@ internal static partial class EngineRuntimeChecks
             typeof(Terraria.Main).GetMethod("Initialize_TileAndNPCData1",PersistenceStatic)!.Invoke(null,null);
             TorchID.Initialize(); // Main.Initialize_AlmostEverything normally owns native torch light providers.
             foreach(var player in Terraria.Main.player) player.active=false;
+            WFishingScene.Validate(scenario["fishing"],fullPlayer,worldWidthTiles);
             if(fullPlayer) WPrepareFullWorld(worldWidthTiles);
             Terraria.Main.tileSolid[TileID.Dirt] = true;
             foreach (var rect in terrain) {
@@ -311,7 +314,7 @@ internal static partial class EngineRuntimeChecks
                     int registeredItemType=(int)typeof(ItemLoader).GetMethod("Register",PersistenceStatic)!.Invoke(null,new object[]{host})!;
                     item.type=registeredItemType; WRegisterItemSingleton(host);
                 }
-                WValidateVanillaPerformance(item,data,clientPlayer,fullPlayer && actions.Any(a=>a!["kind"]!.GetValue<string>() is "equip" or "vanity" or "unequip") && !actions.Any(a=>a!["kind"]!.GetValue<string>() is "primary" or "alt"));
+                WValidateVanillaPerformance(item,data,clientPlayer,fullPlayer && actions.Any(a=>a!["kind"]!.GetValue<string>() is "equip" or "vanity" or "unequip") && !actions.Any(a=>a!["kind"]!.GetValue<string>() is "primary" or "alt"),fullPlayer);
                 owner.inventory[0]=item; owner.selectedItem=0; owner.releaseUseItem=true;
                 using var npcGlobals=new WNpcGlobals();
                 NPC dummy=null!;int initialLife=0;
@@ -435,6 +438,7 @@ internal static partial class EngineRuntimeChecks
                         events.Add(new JsonObject{["kind"]="native_ui_message",["text"]=text,["r"]=r,["g"]=g,["b"]=b,["gameUpdateCount"]=(long)Terraria.Main.GameUpdateCount,["source"]=achievementFeedbackActive?"Native AchievementInitializer.OnAchievementCompleted -> Main.NewText -> RemadeChatMonitor.NewText":"InfiniCraftPlayer.NotifyGeneratedUseRefusal -> Main.NewText -> RemadeChatMonitor.NewText",["chatRendered"]=false,["unresolvedLocalizationKey"]=text.StartsWith("Mods.InfiniCrafterLocal.",StringComparison.Ordinal),["adapter"]="Text-only chat sink; original Main.NewText continues native sound call"});
                     })):null;
                 if(fullPlayer) WPrepareFullPlayer(owner,modPlayer,manaCrystals);
+                using var fishingScene=scenario["fishing"] is JsonNode fishingSettings?new WFishingScene(owner,fishingSettings,report):null;
                 using var worldScene=scenario["world"] is JsonObject worldSettings?new WWorldScene(worldSettings,worldLedger,data,report):null;
                 using var nativeRenderer=renderClient?new WNativeVfxRenderer(graphics!,scenario["nativeRender"]!.AsObject(),Path.Combine(Path.GetDirectoryName(outputPath!)!,"native-frames"),data):null;
                 if(renderClient){Terraria.TimeLogger.Initialize();Terraria.Main.gameMenu=false;Terraria.Main.mapEnabled=false;
@@ -447,7 +451,7 @@ internal static partial class EngineRuntimeChecks
                 using var artwork=drawArtwork?new WNativeArtwork(data!,owner,(scenario["nativeRender"]?["artworkFiles"]?.AsArray()??throw new ArgumentException("drawArtwork requires artworkFiles")).Select(f=>f!.GetValue<string>()).ToArray(),WProjectileId):null;
                 using var activeVfx=(drawProjectileVfx||(historyRibbon||historyTrail)&&drawPlayer)?new WNativeActiveVfx(artwork is not null):null;
                 if(activeVfx is not null)nativeRenderer!.SetActiveVfx(activeVfx,drawProjectileVfx);
-                using var vanillaProjectileAssets=drawVanillaProjectiles?new WNativeVanillaProjectileAssets(graphics!,scenario["vanillaAssetRoot"]!.GetValue<string>()):null;
+                using var vanillaProjectileAssets=drawVanillaProjectiles?new WNativeVanillaProjectileAssets(graphics!,scenario["vanillaAssetRoot"]?.GetValue<string>()??throw new ArgumentException("Native projectile rendering requires explicit vanillaAssetRoot"),nativeItemTextures):null;
                 using var placedBodies=drawPlacedBodies?new WNativePlacedBodies():null;
                 if(placedBodies is not null)nativeRenderer!.SetPlacedBodies(placedBodies);
                 if(nativeRenderer!=null) {
@@ -504,6 +508,7 @@ internal static partial class EngineRuntimeChecks
                                 events.Add(new JsonObject { ["kind"]="input", ["input"]=kind });
                             } else if(!WReactionAction(kind)) throw new NotSupportedException("Unknown action: " + kind);
                         }
+                        fishingScene?.BeforeUpdate(tick);
                         if (alternateHeld && owner.controlUseItem) owner.altFunctionUse = 1;
                         if (events.Count > 0) { var before = WSnapshot(tick,owner,dummy,events); before["phase"]="after_input_before_update"; frames.Add(before); events = new JsonArray(); }
                         if(ReferenceEquals(owner.HeldItem,item)) heldNativeTicks++;
@@ -541,6 +546,7 @@ internal static partial class EngineRuntimeChecks
                         } finally {if(hybridClient) Terraria.Main.dedServ=true;}
                         for(int hostileSlot=2;hostileSlot<10;hostileSlot++)if(Terraria.Main.npc[hostileSlot].type==NPCID.Zombie)WRequireFinite(Terraria.Main.npc[hostileSlot],"hostile",hostileSlot,"after projectile/delayed/render updates",events,report);
                         worldScene?.Update();
+                        fishingScene?.Observe(tick,tick==ticks-1);
                         frames.Add(WSnapshot(tick, owner, dummy, events)); events = new JsonArray();
                         report["timeline"]!["completedTicks"]=tick+1;
                     }

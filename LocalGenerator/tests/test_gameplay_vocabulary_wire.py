@@ -12,6 +12,8 @@ from infini_local.core.runtime_authoring.technical_lowering import audit_compile
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 
+_ADDED_CAPABILITIES = frozenset({"reduce_heal_cooldown_on_event"})
+
 _CAPTURE = json.loads(gzip.decompress((Path(__file__).parent / "fixtures" / "gameplay_vocabulary_wire_baseline.json.gz").read_bytes()))
 
 
@@ -22,12 +24,14 @@ def executable_wire(document):
 
 
 def current_vocabulary_source(captured):
-    """Named test control: retain every choice except the retired visibility alias."""
+    """Translate only retired test spellings; preserve their exact declared meaning."""
     source = deepcopy(captured)
     for call in source["runtimeProgram"]["calls"]:
         if call["fn"] == "item_use" and "customHeldSprite" in call["params"]:
             assert call["params"].pop("customHeldSprite") == "hidden"
             call["params"]["hideUseGraphic"] = True
+        if call["fn"] == "generated_buff_on_use" and "oreSenseEnabled" in call["params"]:
+            call["params"]["treasureSense"] = call["params"].pop("oreSenseEnabled")
     return source
 
 
@@ -38,6 +42,21 @@ def current_vocabulary_wire_control(captured):
         assert wire["runtimeProgram"]["itemUse"].pop("releaseTiming") == "immediate"
         wire["runtimeProgram"]["itemUse"]["hideUseGraphic"] = True
     return wire
+
+
+def remove_new_declared_neutral_conditions(actual, expected):
+    """Compare retained execution while proving each new omission is neutral."""
+    pairs = [(actual.get(key), expected.get(key)) for key in ("accessory", "armor")]
+    pairs.append((actual.get("gameplay", {}).get("generatedBuff"), expected.get("gameplay", {}).get("generatedBuff")))
+    old_groups = {row["id"]: row for row in expected["runtimeProgram"].get("effectGroups", [])}
+    for row in actual["runtimeProgram"].get("effectGroups", []):
+        pairs.append((row.get("generatedBuff"), old_groups[row["id"]].get("generatedBuff")))
+    for fresh, old in pairs:
+        if not isinstance(fresh, dict) or not isinstance(old, dict):
+            continue
+        for key in ("lifeRegenCondition", "treasureSenseCondition"):
+            if key in fresh and key not in old:
+                assert fresh.pop(key) == "always"
 
 
 def assert_archived_vocabulary_boundary(wire):
@@ -67,6 +86,7 @@ def test_canonical_choices_preserve_captured_execution_in_current_visibility_env
         assert "startOffsetPx" not in old["beamGeometry"]
         neutral = fresh["beamGeometry"].pop("startOffsetPx")
         assert type(neutral) in (int, float) and neutral == 0
+    remove_new_declared_neutral_conditions(actual, expected)
     assert actual == expected
     assert validate_runtime_wire(wire)["ok"]
     assert_archived_vocabulary_boundary(case["wire"])
@@ -76,7 +96,8 @@ def test_canonical_choices_preserve_captured_execution_in_current_visibility_env
 
 def test_capture_covers_every_visible_capability_and_old_identity_is_not_an_author_alias():
     covered = {capability_for_saved_receipt(row["previousFn"]).name for row in _CAPTURE["cases"]}
-    assert covered == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible}
+    assert not covered.intersection(_ADDED_CAPABILITIES)
+    assert covered | _ADDED_CAPABILITIES == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible}
     for row in _CAPTURE["cases"]:
         cap = capability_for_saved_receipt(row["previousFn"])
         if cap.name == row["previousFn"]:
@@ -131,7 +152,10 @@ def test_equipment_aligned_combat_names_keep_scoped_mechanics_and_archive_bounda
     source = current_vocabulary_source(case["author"])
     assert validate_runtime_program(source)["ok"]
     wire = compile_runtime_program(source)
-    assert executable_wire(wire) == current_vocabulary_wire_control(case["wire"])
+    actual = executable_wire(wire)
+    expected = current_vocabulary_wire_control(case["wire"])
+    remove_new_declared_neutral_conditions(actual, expected)
+    assert actual == expected
     assert_archived_vocabulary_boundary(case["wire"])
     assert not validate_runtime_program(case["previousAuthor"])["ok"]
     assert not audit_compiler_receipts(case["wire"]["runtimeContract"]["finalWireReceipts"], authored_document=source, final_document=case["wire"])["ok"]
@@ -150,3 +174,23 @@ def test_common_combat_names_have_explicit_units_without_changing_numeric_projec
         for value in (spec.minimum, 0, spec.maximum):
             assert spec.to_wire(value) == value
         assert old not in card
+
+
+@pytest.mark.parametrize("name", sorted(_ADDED_CAPABILITIES))
+def test_post_capture_capabilities_have_current_executable_witness(name):
+    from infini_local.qa.capability_witnesses import build_capability_witness
+    source = build_capability_witness(name)
+    assert validate_runtime_program(source)["ok"]
+    wire = compile_runtime_program(source)
+    assert validate_runtime_wire(wire)["ok"]
+    assert any(event["actionCode"] == 12 and event["cooldownReductionTicks"] > 0
+               for entity in wire["runtimeProgram"]["entities"] for event in entity.get("events", []))
+    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+        authored_document=source, final_document=wire)["ok"]
+
+
+def test_new_condition_comparison_does_not_hide_non_neutral_change():
+    with pytest.raises(AssertionError):
+        remove_new_declared_neutral_conditions(
+            {"accessory":{"lifeRegenCondition":"stationary","treasureSenseCondition":"always"},"runtimeProgram":{}},
+            {"accessory":{},"runtimeProgram":{}})

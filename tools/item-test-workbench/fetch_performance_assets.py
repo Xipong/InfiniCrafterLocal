@@ -17,8 +17,8 @@ from fetch_vfx_assets import destination, download
 MANIFEST = Path(__file__).with_name('performance-assets-manifest.json')
 ITEM_INDEX = Path(__file__).with_name('vanilla-item-assets.json')
 IDS = {46, 96, 98, 162, 168, 190, 930, 964, 2223, 3019, 3029, 3485}
-PROJECTILE_IDS = {1, 14, 91, 92, 357, 485, 982}
-PROJECTILE_EXTRAS = {'Images/Extra_98.png'}
+PROJECTILE_IDS = {1, 14, 91, 92, 357, 360, 485, 982}
+PROJECTILE_EXTRAS = {'Images/Extra_98.png', 'Images/FishingLine.png'}
 
 
 def item_entries(ids, index):

@@ -116,6 +116,7 @@ public sealed partial class InfiniCraftPlayer
 
     public override void UpdateDead()
     {
+        ResetDepartedNativeUseProjection();
         // Keep the last dead tick: queued activations from this life must not revive buffs.
         _generatedUtilityDeathTick = Main.GameUpdateCount;
         RetireGeneratedUtilityOnDeath(syncNetwork: true);

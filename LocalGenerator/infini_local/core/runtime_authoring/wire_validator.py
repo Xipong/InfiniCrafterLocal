@@ -105,12 +105,12 @@ _EVENT_KEYS = frozenset({
     "id", "event", "action", "actionCode", "entityId", "count", "spreadRadians", "damageMultiplier",
     "delayTicks", "periodTicks", "buffId", "durationTicks", "radiusPx", "rangeTiles", "mode", "strength",
     "radiusTiles", "damageFraction", "maxHeal", "cooldownTicks", "safeTileOnly", "reactionCooldownTicks",
-    "damageBasis", "knockbackBasis", "hitTargetSpawn", "effectGroupId", "useInput", "ownerStrength", "targetStrength", "maxTargets",
+    "cooldownReductionTicks", "damageBasis", "knockbackBasis", "hitTargetSpawn", "effectGroupId", "useInput", "ownerStrength", "targetStrength", "maxTargets",
 }) | _TARGET_EMISSION_FIELDS | frozenset(member for cap in CAPABILITY_REGISTRY.values()
                                         if cap.category == "event" for member in cap.wire_components)
 _BINDING_KEYS = frozenset({"id", "input", "role", "usePolicy"})
 _USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage", "stackConsumeChancePercent"})
-_BINDING_ACTION_KEYS = frozenset({"kind", "targetId", "placement", "effectGroupId"})
+_BINDING_ACTION_KEYS = frozenset({"kind", "targetId", "placement", "effectGroupId", "fishing"})
 _PLACEMENT_KEYS = frozenset({"tileId", "wallId", "placeStyle", "placedBody", "placedLight", "placedVfx"})
 _PLACED_BODY_KEYS = frozenset(name for name in CAPABILITY_REGISTRY["placed_sprite"].params if name != "placementCallId")
 _ITEM_USE_KEYS = frozenset({"configured", "useStyle", "hideUseGraphic", "disableMeleeHitbox", "channel", "handPose", "holdoutOffsetX", "holdoutOffsetY"})
@@ -311,7 +311,7 @@ def _validate_generated_buff(wire: Mapping[str, Any], errors: list[dict[str, Any
         elif spec.wire_boolean_true_value is not None:
             valid = type(value) is int and value in (0, spec.wire_boolean_true_value)
         elif spec.kind == "string":
-            valid = isinstance(value, str) and (value in spec.enum or (value == "" and no_light))
+            valid = isinstance(value, str) and (value in spec.enum or (key == "lightColorName" and value == "" and no_light))
         elif spec.wire_kind:
             valid = spec.matches_scalar_projection(value)
         else:
@@ -347,12 +347,18 @@ def _generated_buff_has_effect(wire: Mapping[str, Any]) -> bool:
         # Duration and color describe an effect; neither executes one. The
         # registry marks exactly the executable stats with neutral values.
         if spec.kind == "object" and name in wire:
-            # Composite combat retains numeric units, not necessarily Author
-            # names. Read exact declared DTO leaves before testing effect scope.
-            value = wire[name]
-            if isinstance(value, Mapping):
-                params[name] = {key: value[field] for key, child in spec.properties.items()
-                                if (field := (child.wire_name or key).rsplit(".", 1)[-1]) in value}
+            # Test executable leaves in their declared wire units. Nested
+            # modifiers may rename/scale fields; raw wire is not Author input.
+            for projection in _wire_projection_witness(spec, name, "buff", {"buff": wire}):
+                leaf = spec
+                for part in projection.authored_path.split(".")[1:]:
+                    leaf = leaf.properties.get(part)
+                    if leaf is None:
+                        break
+                if (leaf is not None and leaf.neutral is not None
+                    and type(projection.value) in (int, float, bool)
+                    and projection.value != leaf.to_wire(leaf.neutral)):
+                    return True
         if spec.neutral is None:
             continue
         value = wire.get(spec.wire_name or name)
@@ -1208,6 +1214,26 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         contact_value = policy.get("contactDamage")
         if not isinstance(contact_value, bool):
             errors.append({"path": f"{binding_path}.usePolicy.contactDamage", "code": "required_boolean", "message": "contactDamage must be a boolean."})
+        fishing = action_row.get("fishing")
+        if action_name == "native_fishing":
+            from infini_local.core.runtime_authoring.capability_registry import NATIVE_FISHING_PARAMETERS
+            fishing_schema = {"type": "object", "additionalProperties": False,
+                "properties": {spec.wire_name or name: spec.wire_schema() for name, spec in NATIVE_FISHING_PARAMETERS.items()},
+                "required": [spec.wire_name or name for name, spec in NATIVE_FISHING_PARAMETERS.items()]}
+            for issue in strict_schema_errors(fishing, fishing_schema, path=f"{binding_path}.usePolicy.action.fishing"):
+                errors.append({**issue, "code": "invalid_native_fishing"})
+            if isinstance(fishing, Mapping):
+                for name, spec in NATIVE_FISHING_PARAMETERS.items():
+                    key = spec.wire_name or name
+                    if key in fishing and type(fishing[key]) in (int, float):
+                        if reason := spec.consumer_value_error(fishing[key], wire_value=True):
+                            errors.append({"path": f"{binding_path}.usePolicy.action.fishing.{key}", "code": "invalid_native_fishing", "message": reason})
+            if cost != 0 or contact_value is not False:
+                errors.append({"path": f"{binding_path}.usePolicy", "code": "binding_action_mismatch", "message": "Native fishing retains the item and has no contact damage."})
+            if gameplay.get("ammoCategory"):
+                errors.append({"path": f"{binding_path}.usePolicy.action", "code": "ammo_role_conflict", "message": "A native ammo stack cannot also own a native fishing bobber."})
+        elif fishing is not None:
+            errors.append({"path": f"{binding_path}.usePolicy.action.fishing", "code": "binding_action_mismatch", "message": "Only native_fishing may carry fishing payload."})
         placement = action_row.get("placement")
         if action_name == "place_item":
             if cost != 1:
@@ -1318,8 +1344,23 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         component = fn.removeprefix("configure_")
         node = data.get(component)
         if not isinstance(node, Mapping):
+            if component in data:
+                errors.append({"path": "$." + component, "code": "required_object", "message": "Equipment must be an object."})
             continue
+        prefix = component + "."
+        allowed = frozenset(path[len(prefix):].split(".", 1)[0]
+                            for cap in CAPABILITY_REGISTRY.values() for path in cap.final_wire_paths
+                            if path.startswith(prefix))
+        _reject_unknown(node, allowed, "$." + component, errors)
         for name, spec in CAPABILITY_REGISTRY[fn].params.items():
+            fields = spec.wire_field_names(name)
+            # Closed nested components keep their typed shape even after saved
+            # wire strips receipts; unknown siblings must not disappear.
+            if spec.structured and fields and all(field.startswith(name + ".") for field in fields):
+                if name in node and not _wire_projection_witness(spec, name, component, {component: node}):
+                    errors.append({"path": f"$.{component}.{name}", "code": "invalid_equipment_parameter",
+                                   "message": "Present equipment component must match its complete registered wire shape."})
+                continue
             if not spec.wire_presence_requires_receipt or spec.structured:
                 continue
             field = spec.wire_name or name

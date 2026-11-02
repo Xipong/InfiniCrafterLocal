@@ -31,7 +31,7 @@ internal sealed partial class WNativeArtwork:IDisposable {
  WNativeVanillaProjectileAssets? vanillaProjectileAssets;
  public bool NativeVanillaProjectilesEnabled=>drawVanillaProjectiles;
  public void EnableNativeVanillaProjectiles(WNativeVanillaProjectileAssets assets){
-  if(!NativeVanillaEnabled||!nativePlayer)throw new NotSupportedException("Native projectile sprites require a vanilla item and full native player artwork");
+  if((!NativeVanillaEnabled && reviewData?.RuntimeProgram.Bindings.Any(b=>b.UsePolicy.Action.Kind==RuntimeBindingAction.NativeFishing)!=true)||!nativePlayer)throw new NotSupportedException("Native projectile sprites require a vanilla item and full native player artwork");
   vanillaProjectileAssets=assets;
   drawVanillaProjectiles=true;
   Report["vanillaProjectileRendering"]="Original Main.DrawProj with pinned native projectile textures; other types refuse";
@@ -191,7 +191,7 @@ internal sealed partial class WNativeArtwork:IDisposable {
    if(nativePlayer && p.whoAmI==owner.heldProj)continue; // Native player layer owns this pass exactly once.
    if(p.hide)throw new NotSupportedException("Hidden or specially ordered projectile draw passes are not admitted");
    if(p.ModProjectile is not GeneratedProjectile){
-    if(!NativeVanillaEnabled)throw new NotSupportedException("Only generated projectile authored core is supported");
+    if(!NativeVanillaEnabled && !(p.bobber && reviewData?.RuntimeProgram.Bindings.Any(b=>b.UsePolicy.Action.Kind==RuntimeBindingAction.NativeFishing)==true))throw new NotSupportedException("Only authored generated bodies or explicit native fishing bobbers are supported");
     if(drawVanillaProjectiles){
      (vanillaProjectileAssets??throw new InvalidOperationException("Native projectile resources are not initialized")).RequireReady(p.type);
      var draws=WNativeVisualGeometry.Capture(()=>Main.instance.DrawProj(p.whoAmI));

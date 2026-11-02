@@ -20,7 +20,7 @@ FN = "generated_buff_on_use"
 def document(activation=FN):
     doc = build_capability_witness(activation)
     call = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == FN)
-    call["params"].update(lightStrength=0, miningSpeedMultiplier=1, oreSenseEnabled=False,
+    call["params"].update(lightStrength=0, miningSpeedMultiplier=1, treasureSense=False,
         moveSpeedBonus=0, jumpSpeedBonus=0, manaRegen=0, lifeRegen=0)
     return doc, call
 

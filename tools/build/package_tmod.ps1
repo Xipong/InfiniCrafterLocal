@@ -70,4 +70,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Package verification failed.' }
     studioManifest = (Get-Content (Join-Path $project 'Studio/manifest.json') -Raw | ConvertFrom-Json)
     studioRuntimeSmoke = 'passed: embedded interpreter imports, HTTP frontend and managed shutdown'
     runtimeSmoke = 'notRun: packaging does not launch the game'
-} | ConvertTo-Json | Set-Content (Join-Path $output 'build-provenance.json') -Encoding utf8
+} | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $output 'build-provenance.json') -Encoding utf8
+# Verify the actual serialized receipt, not just the in-memory manifest.
+$written = Get-Content (Join-Path $output 'build-provenance.json') -Raw | ConvertFrom-Json
+$expectedStudio = Get-Content (Join-Path $project 'Studio/manifest.json') -Raw | ConvertFrom-Json
+if (($written.studioManifest | ConvertTo-Json -Depth 8 -Compress) -cne ($expectedStudio | ConvertTo-Json -Depth 8 -Compress)) {
+    throw 'Serialized Studio provenance differs from the packaged manifest.'
+}

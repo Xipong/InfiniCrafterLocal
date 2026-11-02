@@ -193,7 +193,7 @@ def test_discrete_author_units_reach_each_engine_destination(fn, param, path, va
     doc = build_capability_witness(fn)
     call = next(row for row in doc["runtimeProgram"]["calls"] if row["id"] == "witness_call")
     if fn == FN:
-        call["params"]["oreSenseEnabled"] = True
+        call["params"]["treasureSense"] = True
     _set_stat(call["params"], param, value)
     before = _bytes(doc)
     wire = compile_runtime_program(doc)
@@ -228,7 +228,7 @@ def percent_document(fn, name, value, *, companion=True):
         params = call["params"]
         params.update({key: spec.neutral for key, spec in CAPABILITY_REGISTRY[FN].params.items() if spec.neutral is not None})
         if companion == "ore":
-            params["oreSenseEnabled"] = True
+            params["treasureSense"] = True
         elif companion == "healing":
             doc["runtimeProgram"]["calls"].append({"id": "healing", "fn": "restore_resources_on_use",
                 "params": {"healLife": 1, "healMana": 0, "usesPotionRules": False}})
@@ -329,7 +329,7 @@ def test_numeric_collapse_has_exact_repair_authority_and_frozen_siblings(fn, nam
     assert REPAIR_ERROR_POLICY["consumer_representability"]["llmRepairable"] is True
     doc, index, call = percent_document(fn, name, value)
     if name == "miningSpeedMultiplier":
-        call["params"]["oreSenseEnabled"] = True
+        call["params"]["treasureSense"] = True
     before = _bytes(doc)
     report = validate_runtime_program(doc)
     assert [(e["code"], e["path"]) for e in report["errors"]] == [

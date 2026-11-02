@@ -166,7 +166,7 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
             assert "paramRef" not in cards[owner]["params"][leaf]
             row = copy.deepcopy(cards[owner]["params"][leaf])
             fn = owner
-        if fn == "armor" and "meaning" not in row:
+        if fn == "armor" and "meaning" not in row and "typeRef" not in row:
             row["meaning"] = resolve_param("accessory", param)["meaning"]
         return row
 

@@ -34,11 +34,12 @@ internal static partial class EngineRuntimeChecks
         if(binding is null) return "No binding for input "+input;
         if(!client && binding.UsePolicy.ContactDamage) return "Item-body contact requires native client geometry for input "+input+"; use client_hybrid for admitted no-VFX projectile combinations or client_vfx for supported VFX";
         string kind=binding.UsePolicy.Action.Kind;
-        if(client && kind!=RuntimeBindingAction.UseItemBody && !(hybrid && kind==RuntimeBindingAction.SpawnEntity) && !(render && kind==RuntimeBindingAction.ApplyItemEffects) && kind!=RuntimeBindingAction.PlaceItem && !(render && kind==RuntimeBindingAction.EquipPassive)) return "Client input requires use_item_body or hybrid spawn_entity: "+input;
+        if(kind==RuntimeBindingAction.NativeFishing && !full)return "Native fishing requires full player lifecycle";
+        if(client && kind!=RuntimeBindingAction.NativeFishing && kind!=RuntimeBindingAction.UseItemBody && !(hybrid && kind==RuntimeBindingAction.SpawnEntity) && !(render && kind==RuntimeBindingAction.ApplyItemEffects) && kind!=RuntimeBindingAction.PlaceItem && !(render && kind==RuntimeBindingAction.EquipPassive)) return "Client input requires use_item_body or hybrid spawn_entity: "+input;
         bool effects=full && kind==RuntimeBindingAction.ApplyItemEffects;
         bool placement=full && kind==RuntimeBindingAction.PlaceItem && binding.UsePolicy.StackCost==1;
         bool equipment=full && input==RuntimeInputKind.Equipped && (data.Accessory.Enabled || data.Armor.Enabled) && kind==RuntimeBindingAction.EquipPassive;
-        if(kind!=RuntimeBindingAction.SpawnEntity && !effects && !equipment && !placement && !(client && kind==RuntimeBindingAction.UseItemBody)) return "Input action is not admitted: "+input+" / "+kind;
+        if(kind!=RuntimeBindingAction.NativeFishing && kind!=RuntimeBindingAction.SpawnEntity && !effects && !equipment && !placement && !(client && kind==RuntimeBindingAction.UseItemBody)) return "Input action is not admitted: "+input+" / "+kind;
         if(render && effects && data.EffectsForBinding(binding).ExtraBuffs.Any(b=>b.BuffCode is not (Terraria.ID.BuffID.Gravitation or Terraria.ID.BuffID.Sonar)))
             return "Client VFX ExtraBuffs admit only proven native Gravitation/Sonar flags; other buff actors/art are not admitted";
         if(effects && data.EffectsForBinding(binding).MobilityMode is not ("" or "blink_to_cursor" or "recall_home")) return "Only blink_to_cursor and explicit-scene recall_home item mobility are admitted";

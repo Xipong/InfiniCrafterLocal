@@ -1,0 +1,63 @@
+name: Publish verified release
+on: create
+permissions:
+  contents: read
+concurrency:
+  group: publish-${{ github.event.ref }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'Xipong/InfiniCrafterLocal' && github.event.ref_type == 'branch' && startsWith(github.event.ref, 'release/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Guard main identity before executing repository code
+        id: source
+        uses: actions/github-script@v7
+        with:
+          retries: 0
+          script: |
+            if (context.payload.ref_type !== 'branch' || !/^release\/v\d+\.\d+\.\d+$/.test(context.payload.ref)) throw new Error('Invalid release branch');
+            const main = await github.rest.git.getRef({...context.repo, ref:'heads/main'});
+            if (main.data.object.sha !== context.sha) throw new Error('Release source must equal current main');
+            core.setOutput('sha', main.data.object.sha);
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Admit exact main CI artifact
+        id: admit
+        uses: actions/github-script@v7
+        with:
+          retries: 0
+          script: |
+            await require('./tools/build/release_github.js').admit({github, context, core});
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.admit.outputs.artifact }}
+          run-id: ${{ steps.admit.outputs.run }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/ci-package
+          merge-multiple: true
+      - name: Verify package and prepare clean source archive
+        env:
+          RELEASE_VERSION: ${{ steps.admit.outputs.version }}
+          RELEASE_SHA: ${{ github.sha }}
+          CI_RUN: ${{ steps.admit.outputs.run }}
+        run: |
+          python tools/build/prepare_release.py --artifact "$RUNNER_TEMP/ci-package" --output "$RUNNER_TEMP/release-assets" --version "$RELEASE_VERSION" --sha "$RELEASE_SHA" --run-id "$CI_RUN"
+      - name: Publish once after all validation
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ steps.admit.outputs.tag }}
+          CI_RUN: ${{ steps.admit.outputs.run }}
+        with:
+          retries: 0
+          script: |
+            await require('./tools/build/release_github.js').publish({github, context, core});

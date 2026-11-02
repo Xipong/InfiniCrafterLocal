@@ -732,6 +732,12 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     # frozen context; deletion of its own call is leaf-local.
                     mark("calls", node_id, can_delete=True)
                     requirement_row["allowedValues"] = []
+        elif code == "binding_action_mismatch" and node_namespace == "bindings" and node_id:
+            # The diagnosed action conflicts with an independent frozen item
+            # capability. Only this use transaction may be replaced; the
+            # finite alternatives retain its input and target identity.
+            grant("bindings", node_id, "")
+            binding_action_change_ids.add(node_id)
         elif code == "place_item_without_stack_cost":
             if node_namespace == "bindings":
                 binding_id = str(node_row.get("id") or "")

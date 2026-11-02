@@ -91,6 +91,9 @@ public sealed partial class GeneratedItemData
             : null;
         item.shootSpeed = primaryEntity?.Spawn.SpeedPxPerTick ?? 0f;
         ApplyWeaponAmmoField(item, primary?.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity);
+        RuntimeFishingSpec? fishing = primary?.UsePolicy.Action.Kind == RuntimeBindingAction.NativeFishing
+            ? primary.UsePolicy.Action.Fishing : null;
+        item.fishingPole = fishing?.Power ?? 0;
 
         // Exact Terraria ammo-item projection. Item.ammo means “this item is ammo”;
         // The separate explicit WeaponAmmo capability owns Item.useAmmo. Neither is
@@ -105,6 +108,11 @@ public sealed partial class GeneratedItemData
             item.noMelee = true;
         }
 
+        if (fishing is not null)
+        {
+            item.shoot = ProjectileID.BobberWooden;
+            item.shootSpeed = fishing.CastSpeedPxPerTick;
+        }
 
         bool hasActiveUse = primary is not null || alternate is not null;
         if (isArmor)
