@@ -278,6 +278,7 @@ internal static partial class EngineRuntimeChecks
             report["scene"]!["sourceWorldScoped"]=data?.RecipeMeta.WorldScoped;
             report["scene"]!["currentWorldSource"]=data is null?null:InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.IsCurrentWorldData(data);
             typeof(Terraria.Main).GetMethod("Initialize_TileAndNPCData1",PersistenceStatic)!.Invoke(null,null);
+            TorchID.Initialize(); // Main.Initialize_AlmostEverything normally owns native torch light providers.
             foreach(var player in Terraria.Main.player) player.active=false;
             if(fullPlayer) WPrepareFullWorld(worldWidthTiles);
             Terraria.Main.tileSolid[TileID.Dirt] = true;

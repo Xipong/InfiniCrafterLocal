@@ -64,6 +64,7 @@ internal sealed class WNativeLoader : IDisposable
         // The game initializes NPC slots before mod content samples execute
         // GlobalNPC.SetDefaults, where mods may inspect other NPC slots.
         for (int i = 0; i < Main.npc.Length; i++) Main.npc[i] ??= new NPC { whoAmI = i };
+        TorchID.Initialize(); // Native Main initialization precedes content/mod setup.
         ContentSamples.Initialize(); // vanilla samples before mod registration
         typeof(Main).GetMethod("Initialize_TileAndNPCData1", Any)!.Invoke(null, null);
         Terraria.ObjectData.TileObjectData.Initialize();
