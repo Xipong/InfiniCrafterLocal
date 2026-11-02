@@ -14,6 +14,7 @@ internal sealed class WNativeVanillaProjectileAssets:IDisposable
 {
     static readonly Dictionary<int,string> ExpectedHashes=new()
     {
+        [ProjectileID.BobberWooden]="69d47726765cdcb304e79847f83d9ad2cb8f28ec3048b7fb7c294ec3af1559b6",
         [ProjectileID.WoodenArrowFriendly]="b5c1a2ef77f365d3458a5c2d6317ab640792822d8cc35ebec48d81393f233663",
         [ProjectileID.Bullet]="9a649ba443ca84851800d0001ae28bbce1ba3309dc6d93f4a1d6c832dd385859",
         [91]="a53165811a311f3452d4e078bae6b1d5eb0a031116f9f3c9c410a333282e06ed",
@@ -24,22 +25,32 @@ internal sealed class WNativeVanillaProjectileAssets:IDisposable
     };
     readonly Dictionary<int,Asset<Texture2D>> original=new();
     readonly Dictionary<int,Asset<Texture2D>> loaded=new();
+    readonly Dictionary<int,Asset<Texture2D>> oldItems=new(),loadedItems=new();
     readonly AssetRepository assets;
     Asset<Texture2D>? originalExtra98,loadedExtra98;
     bool extra98Bound;
+    Asset<Texture2D>? oldFishingLine,loadedFishingLine;bool fishingLineBound;
     public static bool Supports(int id)=>ExpectedHashes.ContainsKey(id);
     public void RequireReady(int id)
     {
         if(!Supports(id))throw new NotSupportedException("Native projectile draw type not admitted: "+id);
-        if(!loaded.ContainsKey(id))throw new FileNotFoundException("Native projectile draw type "+id+" requires both Projectile_982.png and Extra_98.png; rerun fetch_performance_assets.py --include-projectiles");
+        if(!loaded.ContainsKey(id) || id==ProjectileID.BobberWooden && !fishingLineBound)throw new FileNotFoundException("Native projectile draw type "+id+" requires its pinned projectile and companion textures; see the native asset receipt");
     }
     public JsonObject Report {get;}=new(){["entrypoint"]="Main.DrawProj (original)",["sourceCommit"]="c835594415e31ed88734dc778661014b48ffb648",["source"]="Pinned community Terraria 1.4.4.9 source PNGs, not HD outputs",["officialByteIdentityVerified"]=false,["textures"]=new JsonArray()};
-    public WNativeVanillaProjectileAssets(WorkbenchGraphicsContext graphics,string root)
+    public WNativeVanillaProjectileAssets(WorkbenchGraphicsContext graphics,string root,int[]? itemTextures=null)
     {
         var readers=new AssetReaderCollection();
         readers.RegisterReader(new PngReader(graphics.Device),".png");
         assets=new AssetRepository(readers);
         try{
+            foreach(int id in itemTextures??Array.Empty<int>()){
+                byte[] bytes=WVanillaItemAssets.Read(root,id,out var receipt);
+                using var input=new MemoryStream(bytes,writable:false);
+                var texture=assets.CreateUntracked<Texture2D>(input,"Item_"+id+".png",AssetRequestMode.ImmediateLoad);
+                if(texture.State!=AssetState.Loaded)throw new InvalidDataException("Requested native item texture is not loaded: "+id);
+                oldItems.Add(id,TextureAssets.Item[id]);loadedItems.Add(id,texture);TextureAssets.Item[id]=texture;
+                receipt["scope"]="Explicit native draw resource, not a selected catch or inventory grant";Report["textures"]!.AsArray().Add(receipt);
+            }
             // The original Excalibur slash uses Extra_98 for its native sparkle.
             // Supply the exact pinned pixels rather than replacing that draw pass.
             string extraPath=Path.GetFullPath(Path.Combine(root,"Images","Extra_98.png"));
@@ -57,7 +68,20 @@ internal sealed class WNativeVanillaProjectileAssets:IDisposable
                 originalExtra98=TextureAssets.Extra[98];TextureAssets.Extra[98]=loadedExtra98;extra98Bound=true;
                 Report["textures"]!.AsArray().Add(new JsonObject{["asset"]="Extra_98",["path"]=extraPath,["sha256"]=extraHash,["loadedBytesSha256"]=extraHash,["state"]=loadedExtra98.State.ToString(),["width"]=loadedExtra98.Value.Width,["height"]=loadedExtra98.Value.Height});
             }
+            string fishingPath=Path.Combine(root,"Images","FishingLine.png");
+            bool hasFishing=File.Exists(fishingPath)&&File.Exists(Path.Combine(root,"Images","Projectile_360.png"));
+            if(hasFishing){
+                for(FileSystemInfo? part=new FileInfo(fishingPath);part is not null;part=part is FileInfo file?file.Directory:((DirectoryInfo)part).Parent)if(part.LinkTarget is not null)throw new InvalidDataException("FishingLine asset must not traverse symlinks");
+                if(new FileInfo(fishingPath).Length!=89)throw new InvalidDataException("FishingLine source size differs from pinned asset");
+                byte[] bytes=File.ReadAllBytes(fishingPath);string hash=Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+                if(hash!="a5be7ca1f2725682feabcdee6e16d75bab56583e8a26f4ae12f4930131815c4b")throw new InvalidDataException("FishingLine differs from pinned community source");
+                using var input=new MemoryStream(bytes,writable:false);loadedFishingLine=assets.CreateUntracked<Texture2D>(input,"FishingLine.png",AssetRequestMode.ImmediateLoad);
+                if(loadedFishingLine.State!=AssetState.Loaded)throw new InvalidDataException("FishingLine did not load");
+                oldFishingLine=TextureAssets.FishingLine;TextureAssets.FishingLine=loadedFishingLine;fishingLineBound=true;
+                Report["textures"]!.AsArray().Add(new JsonObject{["asset"]="FishingLine",["sha256"]=hash,["width"]=loadedFishingLine.Value.Width,["height"]=loadedFishingLine.Value.Height});
+            }
             foreach(var entry in ExpectedHashes){
+                if(entry.Key==ProjectileID.BobberWooden&&!hasFishing)continue;
                 if(entry.Key==982&&!hasExcalibur)continue;
                 string path=Path.GetFullPath(Path.Combine(root,"Images","Projectile_"+entry.Key+".png"));
                 for(FileSystemInfo? part=new FileInfo(path);part is not null;part=part is FileInfo file?file.Directory:((DirectoryInfo)part).Parent)
@@ -76,5 +100,5 @@ internal sealed class WNativeVanillaProjectileAssets:IDisposable
             }
         }catch{Dispose();throw;}
     }
-    public void Dispose(){if(extra98Bound){TextureAssets.Extra[98]=originalExtra98;extra98Bound=false;}loadedExtra98?.Dispose();loadedExtra98=null;foreach(var p in original)TextureAssets.Projectile[p.Key]=p.Value;original.Clear();foreach(var p in loaded)p.Value.Dispose();loaded.Clear();assets.Dispose();}
+    public void Dispose(){foreach(var item in oldItems)TextureAssets.Item[item.Key]=item.Value;oldItems.Clear();foreach(var item in loadedItems)item.Value.Dispose();loadedItems.Clear();if(fishingLineBound){TextureAssets.FishingLine=oldFishingLine;fishingLineBound=false;}loadedFishingLine?.Dispose();loadedFishingLine=null;if(extra98Bound){TextureAssets.Extra[98]=originalExtra98;extra98Bound=false;}loadedExtra98?.Dispose();loadedExtra98=null;foreach(var p in original)TextureAssets.Projectile[p.Key]=p.Value;original.Clear();foreach(var p in loaded)p.Value.Dispose();loaded.Clear();assets.Dispose();}
 }

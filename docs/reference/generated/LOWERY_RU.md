@@ -48,22 +48,22 @@ Schemas: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v7` / `
 
 ### Event producer contract
 
-`EventKindSpec` владеет producer calls, producer binding inputs и exact producer params; `EntityKindSpec.base_events` владеет producer-free availability для конкретного kind. Validator и Repair вызывают одну generic registry projection. Event-name `if/elif` вне registry запрещён.
+`EventKindSpec` владеет producer calls, producer binding inputs, exact producer params и playerEffect predicate; `EntityKindSpec.base_events` владеет producer-free availability для конкретного kind. Validator и Repair вызывают одну generic registry projection. Event-name `if/elif` вне registry запрещён.
 
-| event | producer calls | producer binding inputs | producer-free kinds | exact params |
-|---|---|---|---|---|
-| on_use | — | primary_use, alternate_use | — | — |
-| on_spawn | — | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |
-| on_hit | projectile_damage | primary_use, alternate_use | — | — |
-| on_crit | projectile_damage | primary_use, alternate_use | — | — |
-| on_tile_collision | projectile_collision | — | — | projectile_collision(tileCollide=True) |
-| on_expire | projectile_lifetime | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |
-| on_kill | — | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |
-| periodic | — | — | item_body, owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |
-| on_release | charge_then_release, charge | — | — | — |
-| channel_complete | charge_then_release, charge | — | — | — |
-| on_hurt | — | equipped | — | — |
-| on_enemy_kill | — | equipped | — | — |
+| event | producer calls | producer binding inputs | producer-free kinds | exact params | playerEffect predicate |
+|---|---|---|---|---|---|
+| on_use | — | primary_use, alternate_use | — | — | — |
+| on_spawn | — | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | — |
+| on_hit | projectile_damage | primary_use, alternate_use | — | — | — |
+| on_crit | projectile_damage | primary_use, alternate_use | — | — | — |
+| on_tile_collision | projectile_collision | — | — | projectile_collision(tileCollide=True) | — |
+| on_expire | projectile_lifetime | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | — |
+| on_kill | — | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | — |
+| periodic | — | — | item_body, owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | — |
+| on_release | charge_then_release, charge | — | — | — | — |
+| channel_complete | charge_then_release, charge | — | — | — | — |
+| on_hurt | — | equipped | — | — | — |
+| on_enemy_kill | — | equipped | — | — | — |
 
 <a id="lowering"></a>
 
@@ -73,123 +73,126 @@ Exact-repetition policy: `{'kind': 'exact_repetition', 'minimumRepeatedPlacement
 
 | lowerer | authored inputs | wire outputs | adds design |
 |---|---|---|---|
-| author_binding_lanes | runtimeProgram.bindings[].id, runtimeProgram.bindings[].input, runtimeProgram.bindings[].action.kind, runtimeProgram.bindings[].action.targetId, runtimeProgram.bindings[].stackCost, runtimeProgram.bindings[].contactDamage, runtimeProgram.bindings[].action.effectGroupId, runtimeProgram.entities[].id, runtimeProgram.entities[].kind, runtimeProgram.primaryEntityId | runtimeProgram.bindings[].id, runtimeProgram.bindings[].input, runtimeProgram.bindings[].usePolicy.action.kind, runtimeProgram.bindings[].usePolicy.action.targetId, runtimeProgram.bindings[].usePolicy.action.effectGroupId, runtimeProgram.bindings[].usePolicy.stackCost, runtimeProgram.bindings[].usePolicy.contactDamage, runtimeProgram.entities[].id, runtimeProgram.entities[].kind, runtimeProgram.primaryEntityId, runtimeProgram.itemEntityId | false |
+| author_binding_lanes | runtimeProgram.bindings[].id, runtimeProgram.bindings[].input, runtimeProgram.bindings[].action.kind, runtimeProgram.bindings[].action.targetId, runtimeProgram.bindings[].stackCost, runtimeProgram.bindings[].contactDamage, runtimeProgram.bindings[].action.effectGroupId, runtimeProgram.bindings[].action.fishing.power, runtimeProgram.bindings[].action.fishing.castSpeed, runtimeProgram.entities[].id, runtimeProgram.entities[].kind, runtimeProgram.primaryEntityId | runtimeProgram.bindings[].id, runtimeProgram.bindings[].input, runtimeProgram.bindings[].usePolicy.action.kind, runtimeProgram.bindings[].usePolicy.action.targetId, runtimeProgram.bindings[].usePolicy.action.effectGroupId, runtimeProgram.bindings[].usePolicy.action.fishing.power, runtimeProgram.bindings[].usePolicy.action.fishing.castSpeedPxPerTick, runtimeProgram.bindings[].usePolicy.stackCost, runtimeProgram.bindings[].usePolicy.contactDamage, runtimeProgram.entities[].id, runtimeProgram.entities[].kind, runtimeProgram.primaryEntityId, runtimeProgram.itemEntityId | false |
 | binding_stack_chance_identity | runtimeProgram.bindings[].id, runtimeProgram.bindings[].stackConsumeChancePercent | runtimeProgram.bindings[].usePolicy.stackConsumeChancePercent | false |
 | binding_effect_group_identity | runtimeProgram.bindings[].id, runtimeProgram.bindings[].action.effectGroupId | runtimeProgram.bindings[].usePolicy.action.effectGroupId | false |
 | entity_kind_to_visual_role | runtimeProgram.entities[].kind | runtimeProgram.entities[].visualRole, runtimeProgram.entities[].visual.role | false |
 | primary_entity_to_binding_role | runtimeProgram.primaryEntityId, runtimeProgram.bindings[].action.targetId, runtimeProgram.bindings[].id, runtimeProgram.bindings[].input, runtimeProgram.bindings[].action.kind, runtimeProgram.entities[].id, runtimeProgram.entities[].kind | runtimeProgram.bindings[].role | false |
 | primary_entity_kind_to_owner | runtimeProgram.primaryEntityId, runtimeProgram.entities[].id, runtimeProgram.entities[].kind | runtimeProgram.primaryOwner | false |
 | capability_name_to_opcode | runtimeProgram.calls[].fn | runtimeProgram.entities[].movement.code, runtimeProgram.entities[].controller.code, runtimeProgram.entities[].events[].actionCode | false |
-| item_fields_to_tml_projection | item_body capability params | gameplay.damageClass, gameplay.damage, gameplay.knockback, gameplay.useTime, gameplay.useAnimation, gameplay.manaCost, gameplay.manaCostInput, gameplay.rarity, gameplay.value, gameplay.maxStack, gameplay.craftYield, gameplay.width, gameplay.height, gameplay.itemScale, gameplay.useStyleName, gameplay.autoReuse, gameplay.useTurn, gameplay.holdoutOffsetX, gameplay.holdoutOffsetY, gameplay.handPose, runtimeProgram.itemUse.configured, runtimeProgram.itemUse.useStyle, runtimeProgram.itemUse.hideUseGraphic, runtimeProgram.itemUse.disableMeleeHitbox, runtimeProgram.itemUse.channel, runtimeProgram.itemUse.handPose, runtimeProgram.itemUse.holdoutOffsetX, runtimeProgram.itemUse.holdoutOffsetY, gameplay.collectSeedsFromGrass, runtimeProgram.itemContact.hitboxScale, runtimeProgram.itemContact.contactForgivenessPx, gameplay.ammoCategory, gameplay.ammoProjectileId, gameplay.ammoShootSpeedPxPerTick, gameplay.notAmmo, gameplay.healLife, gameplay.healMana, gameplay.potion, gameplay.extraBuffs[].buffCode, gameplay.extraBuffs[].buffTime, gameplay.generatedBuff.durationTicks, gameplay.generatedBuff.exhaustionTicks, gameplay.generatedBuff.miningSpeedMultiplier, gameplay.generatedBuff.emitLightStrength, gameplay.generatedBuff.lightColorName, gameplay.generatedBuff.oreSenseRadiusTiles, gameplay.generatedBuff.movementSpeed, gameplay.generatedBuff.jumpBoost, gameplay.generatedBuff.manaRegen, gameplay.generatedBuff.lifeRegen, gameplay.generatedBuff.combat.defensePoints, gameplay.generatedBuff.combat.attackSpeedPercent, gameplay.generatedBuff.combat.critChancePoints, gameplay.generatedBuff.combat.damagePercent, gameplay.generatedBuff.combat.damageClass, gameplay.pickPower, gameplay.axePower, gameplay.hammerPower, gameplay.miningSpeedScale, gameplay.useConditions[].input, gameplay.useConditions[].useConditionMode, gameplay.useConditions[].useConditionMinLife, gameplay.useConditions[].useConditionMinMana, gameplay.holdLightStrength, gameplay.holdLightColorName, gameplay.mobilityMode, gameplay.mobilityRangeTiles, gameplay.mobilityCooldownTicks, gameplay.mobilitySafeTileOnly, accessory.enabled, accessory.defense, accessory.maxLife, accessory.maxMana, accessory.lifeRegen, accessory.manaRegen, accessory.movementSpeed, accessory.maxRunSpeed, accessory.jumpSpeed, accessory.genericCrit, accessory.attackSpeed, accessory.knockback, accessory.minionSlots, accessory.sentrySlots, accessory.manaCostReduction, accessory.ammoSaveChance, accessory.aggro, accessory.endurance, accessory.armorPenetration, accessory.whipRange, accessory.summonTagDamage, accessory.lightStrength, accessory.lightColorName, accessory.fallDamageImmune, accessory.lavaImmune, accessory.waterWalk, accessory.iceSkate, accessory.noKnockback, accessory.fireWalk, accessory.accRunSpeed, accessory.rocketBoots, accessory.wireVision, armor.enabled, armor.slot, armor.setKey, armor.defense, armor.maxLife, armor.maxMana, armor.lifeRegen, armor.manaRegen, armor.movementSpeed, armor.maxRunSpeed, armor.jumpSpeed, armor.genericCrit, armor.attackSpeed, armor.knockback, armor.minionSlots, armor.sentrySlots, armor.manaCostReduction, armor.ammoSaveChance, armor.aggro, armor.endurance, armor.armorPenetration, armor.whipRange, armor.summonTagDamage, armor.lightStrength, armor.lightColorName, armor.fallDamageImmune, armor.lavaImmune, armor.waterWalk, armor.setBonusGenericCrit, armor.setBonusMovementSpeed, armor.setBonusLifeRegen, armor.setBonusManaRegen, armor.setBonusMinionSlots, armor.setBonusSentrySlots, armor.setBonusManaCostReduction, armor.setBonusAmmoSaveChance, armor.setBonusAggro, armor.setBonusEndurance, armor.setBonusArmorPenetration, accessory.genericDamage, accessory.meleeDamage, accessory.rangedDamage, accessory.magicDamage, accessory.summonDamage, armor.genericDamage, armor.meleeDamage, armor.rangedDamage, armor.magicDamage, armor.summonDamage, armor.setBonusGenericDamage, armor.setBonusMeleeDamage, armor.setBonusRangedDamage, armor.setBonusMagicDamage, armor.setBonusSummonDamage | false |
+| item_fields_to_tml_projection | item_body capability params | gameplay.damageClass, gameplay.damage, gameplay.knockback, gameplay.useTime, gameplay.useAnimation, gameplay.manaCost, gameplay.manaCostInput, gameplay.rarity, gameplay.value, gameplay.maxStack, gameplay.craftYield, gameplay.width, gameplay.height, gameplay.itemScale, gameplay.useStyleName, gameplay.autoReuse, gameplay.useTurn, gameplay.holdoutOffsetX, gameplay.holdoutOffsetY, gameplay.handPose, runtimeProgram.itemUse.configured, runtimeProgram.itemUse.useStyle, runtimeProgram.itemUse.hideUseGraphic, runtimeProgram.itemUse.disableMeleeHitbox, runtimeProgram.itemUse.channel, runtimeProgram.itemUse.handPose, runtimeProgram.itemUse.holdoutOffsetX, runtimeProgram.itemUse.holdoutOffsetY, gameplay.collectSeedsFromGrass, runtimeProgram.itemContact.hitboxScale, runtimeProgram.itemContact.contactForgivenessPx, gameplay.ammoCategory, gameplay.ammoProjectileId, gameplay.ammoShootSpeedPxPerTick, gameplay.notAmmo, gameplay.healLife, gameplay.healMana, gameplay.potion, gameplay.extraBuffs[].buffCode, gameplay.extraBuffs[].buffTime, gameplay.generatedBuff.playerEffect.condition, gameplay.generatedBuff.playerEffect.fishingPowerPoints, gameplay.generatedBuff.playerEffect.preventLineBreak, gameplay.generatedBuff.playerEffect.allowLavaFishing, gameplay.generatedBuff.playerEffect.revealHookedCatch, gameplay.generatedBuff.playerEffect.extraCrateChancePercent, gameplay.generatedBuff.playerEffect.itemPickupRangePx, gameplay.generatedBuff.playerEffect.heartPickupRangePx, gameplay.generatedBuff.playerEffect.manaPickupRangePx, gameplay.generatedBuff.playerEffect.coinPickupRangePx, gameplay.generatedBuff.playerEffect.highlightDanger, gameplay.generatedBuff.playerEffect.highlightCreatures, gameplay.generatedBuff.playerEffect.nightVision, gameplay.generatedBuff.playerEffect.healingPotionCooldownReductionPercent, gameplay.generatedBuff.playerEffect.healingPotionCooldownReductionTicks, gameplay.generatedBuff.playerEffect.autoManaPotionBelowPercent, gameplay.generatedBuff.playerEffect.healingPotionCooldownOnHitReductionTicks, gameplay.generatedBuff.playerEffect.hurtInvulnerabilityBonusTicks, gameplay.generatedBuff.durationTicks, gameplay.generatedBuff.exhaustionTicks, gameplay.generatedBuff.miningSpeedMultiplier, gameplay.generatedBuff.emitLightStrength, gameplay.generatedBuff.lightColorName, gameplay.generatedBuff.oreSenseRadiusTiles, gameplay.generatedBuff.movementSpeed, gameplay.generatedBuff.jumpBoost, gameplay.generatedBuff.manaRegen, gameplay.generatedBuff.lifeRegen, gameplay.generatedBuff.lifeRegenCondition, gameplay.generatedBuff.treasureSenseCondition, gameplay.generatedBuff.combat.defensePoints, gameplay.generatedBuff.combat.attackSpeedPercent, gameplay.generatedBuff.combat.critChancePoints, gameplay.generatedBuff.combat.damagePercent, gameplay.generatedBuff.combat.damageClass, gameplay.pickPower, gameplay.axePower, gameplay.hammerPower, gameplay.miningSpeedScale, gameplay.useConditions[].input, gameplay.useConditions[].useConditionMode, gameplay.useConditions[].useConditionMinLife, gameplay.useConditions[].useConditionMinMana, gameplay.holdLightStrength, gameplay.holdLightColorName, gameplay.mobilityMode, gameplay.mobilityRangeTiles, gameplay.mobilityCooldownTicks, gameplay.mobilitySafeTileOnly, accessory.enabled, accessory.playerEffect.condition, accessory.playerEffect.fishingPowerPoints, accessory.playerEffect.preventLineBreak, accessory.playerEffect.allowLavaFishing, accessory.playerEffect.revealHookedCatch, accessory.playerEffect.extraCrateChancePercent, accessory.playerEffect.itemPickupRangePx, accessory.playerEffect.heartPickupRangePx, accessory.playerEffect.manaPickupRangePx, accessory.playerEffect.coinPickupRangePx, accessory.playerEffect.highlightDanger, accessory.playerEffect.highlightCreatures, accessory.playerEffect.nightVision, accessory.playerEffect.healingPotionCooldownReductionPercent, accessory.playerEffect.healingPotionCooldownReductionTicks, accessory.playerEffect.autoManaPotionBelowPercent, accessory.playerEffect.healingPotionCooldownOnHitReductionTicks, accessory.playerEffect.hurtInvulnerabilityBonusTicks, accessory.lifeRegenCondition, accessory.treasureSense, accessory.treasureSenseCondition, accessory.defense, accessory.maxLife, accessory.maxMana, accessory.lifeRegen, accessory.manaRegen, accessory.movementSpeed, accessory.maxRunSpeed, accessory.jumpSpeed, accessory.genericCrit, accessory.attackSpeed, accessory.knockback, accessory.minionSlots, accessory.sentrySlots, accessory.manaCostReduction, accessory.ammoSaveChance, accessory.aggro, accessory.endurance, accessory.armorPenetration, accessory.whipRange, accessory.summonTagDamage, accessory.lightStrength, accessory.lightColorName, accessory.fallDamageImmune, accessory.lavaImmune, accessory.waterWalk, accessory.iceSkate, accessory.noKnockback, accessory.fireWalk, accessory.accRunSpeed, accessory.rocketBoots, accessory.wireVision, armor.enabled, armor.slot, armor.setKey, armor.playerEffect.condition, armor.playerEffect.fishingPowerPoints, armor.playerEffect.preventLineBreak, armor.playerEffect.allowLavaFishing, armor.playerEffect.revealHookedCatch, armor.playerEffect.extraCrateChancePercent, armor.playerEffect.itemPickupRangePx, armor.playerEffect.heartPickupRangePx, armor.playerEffect.manaPickupRangePx, armor.playerEffect.coinPickupRangePx, armor.playerEffect.highlightDanger, armor.playerEffect.highlightCreatures, armor.playerEffect.nightVision, armor.playerEffect.healingPotionCooldownReductionPercent, armor.playerEffect.healingPotionCooldownReductionTicks, armor.playerEffect.autoManaPotionBelowPercent, armor.playerEffect.healingPotionCooldownOnHitReductionTicks, armor.playerEffect.hurtInvulnerabilityBonusTicks, armor.lifeRegenCondition, armor.treasureSense, armor.treasureSenseCondition, armor.defense, armor.maxLife, armor.maxMana, armor.lifeRegen, armor.manaRegen, armor.movementSpeed, armor.maxRunSpeed, armor.jumpSpeed, armor.genericCrit, armor.attackSpeed, armor.knockback, armor.minionSlots, armor.sentrySlots, armor.manaCostReduction, armor.ammoSaveChance, armor.aggro, armor.endurance, armor.armorPenetration, armor.whipRange, armor.summonTagDamage, armor.lightStrength, armor.lightColorName, armor.fallDamageImmune, armor.lavaImmune, armor.waterWalk, armor.setBonusGenericCrit, armor.setBonusMovementSpeed, armor.setBonusLifeRegen, armor.setBonusManaRegen, armor.setBonusMinionSlots, armor.setBonusSentrySlots, armor.setBonusManaCostReduction, armor.setBonusAmmoSaveChance, armor.setBonusAggro, armor.setBonusEndurance, armor.setBonusArmorPenetration, accessory.genericDamage, accessory.meleeDamage, accessory.rangedDamage, accessory.magicDamage, accessory.summonDamage, armor.genericDamage, armor.meleeDamage, armor.rangedDamage, armor.magicDamage, armor.summonDamage, armor.setBonusGenericDamage, armor.setBonusMeleeDamage, armor.setBonusRangedDamage, armor.setBonusMagicDamage, armor.setBonusSummonDamage | false |
 
 ### Точные выбранные проекции capabilities
 
-Это не второй список политик: значения ниже получены из registry fixed_wire_literals, MOVEMENT_OPCODE/CONTROLLER_OPCODE/EVENT_ACTION_OPCODE и cap.wire_action через canonical lowerer. Каждый fn-selected выход требует ровно один technical_projection receipt с exact source .fn, callId, finalPath и типизированным значением. Source-aware audit связывает его с реально выбранным executor и authored target; согласованно изменить wire и receipt недостаточно. Без Author `authoredSourceChecked=false`: это только проверка согласованности сохранённых утверждений, не восстановление неизвестного намерения. Старые wire/opcodes/отсутствия не переписываются на чтении.
+Это не второй список политик: значения ниже получены из registry fixed_wire_literals, MOVEMENT_OPCODE/CONTROLLER_OPCODE/EVENT_ACTION_OPCODE и cap.wire_action через canonical lowerer. Каждый fn-selected выход требует ровно один technical_projection receipt с exact source .fn, callId, finalPath и типизированным значением. Source-aware audit связывает его с реально выбранным executor и authored target; согласованно изменить wire и receipt недостаточно. Без Author `authoredSourceChecked=false`: это только проверка согласованности сохранённых утверждений, не восстановление неизвестного намерения. Старые wire/opcodes/отсутствия не переписываются на чтении. `fresh Author` означает доступный модели самостоятельный fn; `retained runtime` сохраняется для принятого runtime wire, но не предлагается как самостоятельный fn в новом Author.
 
-| capability | fn-selected wire output | exact value |
-|---|---|---|
-| sustain_mana | runtimeProgram.entities[].manaSustain.cadence | 'held_item_use_time' |
-| kill_on_arrival | runtimeProgram.entities[].arrival.action | 'kill' |
-| item_use | runtimeProgram.itemUse.configured | True |
-| collect_seeds | gameplay.collectSeedsFromGrass | True |
-| place_tile | runtimeProgram.bindings[].usePolicy.action.placement.wallId | -1 |
-| place_wall | runtimeProgram.bindings[].usePolicy.action.placement.tileId | -1 |
-| recall_home_on_use | gameplay.mobilityMode | 'recall_home' |
-| recall_home_on_use | runtimeProgram.effectGroups[].mobilityMode | 'recall_home' |
-| recall_home_on_use | gameplay.mobilityRangeTiles | 0 |
-| recall_home_on_use | runtimeProgram.effectGroups[].mobilityRangeTiles | 0 |
-| recall_home_on_use | gameplay.mobilitySafeTileOnly | False |
-| recall_home_on_use | runtimeProgram.effectGroups[].mobilitySafeTileOnly | False |
-| accessory | accessory.enabled | True |
-| armor | armor.enabled | True |
-| spawn | runtimeProgram.entities[].spawn.enabled | True |
-| projectile_damage | runtimeProgram.entities[].damage.enabled | True |
-| orient_whip_to_owner_gravity | runtimeProgram.entities[].whipUsesOwnerGravity | True |
-| move_straight | runtimeProgram.entities[].movement.name | 'move_straight' |
-| move_straight | runtimeProgram.entities[].movement.code | 0 |
-| move_slow_homing | runtimeProgram.entities[].movement.name | 'move_slow_homing' |
-| move_slow_homing | runtimeProgram.entities[].movement.code | 1 |
-| move_gravity_arc | runtimeProgram.entities[].movement.name | 'move_gravity_arc' |
-| move_gravity_arc | runtimeProgram.entities[].movement.code | 2 |
-| move_drift | runtimeProgram.entities[].movement.name | 'move_drift' |
-| move_drift | runtimeProgram.entities[].movement.code | 3 |
-| move_orbit | runtimeProgram.entities[].movement.name | 'move_orbit' |
-| move_orbit | runtimeProgram.entities[].movement.code | 4 |
-| move_boomerang | runtimeProgram.entities[].movement.name | 'move_boomerang' |
-| move_boomerang | runtimeProgram.entities[].movement.code | 5 |
-| move_sine_homing | runtimeProgram.entities[].movement.name | 'move_sine_homing' |
-| move_sine_homing | runtimeProgram.entities[].movement.code | 7 |
-| move_phase | runtimeProgram.entities[].movement.name | 'move_phase' |
-| move_phase | runtimeProgram.entities[].movement.code | 8 |
-| move_accelerate | runtimeProgram.entities[].movement.name | 'move_accelerate' |
-| move_accelerate | runtimeProgram.entities[].movement.code | 9 |
-| move_spiral | runtimeProgram.entities[].movement.name | 'move_spiral' |
-| move_spiral | runtimeProgram.entities[].movement.code | 10 |
-| move_vortex_orb | runtimeProgram.entities[].movement.name | 'move_vortex_orb' |
-| move_vortex_orb | runtimeProgram.entities[].movement.code | 11 |
-| move_blackhole_pull | runtimeProgram.entities[].movement.name | 'move_blackhole_pull' |
-| move_blackhole_pull | runtimeProgram.entities[].movement.code | 12 |
-| move_proximity_missile | runtimeProgram.entities[].movement.name | 'move_proximity_missile' |
-| move_proximity_missile | runtimeProgram.entities[].movement.code | 13 |
-| move_returning_glaive | runtimeProgram.entities[].movement.name | 'move_returning_glaive' |
-| move_returning_glaive | runtimeProgram.entities[].movement.code | 14 |
-| move_expanding_wave | runtimeProgram.entities[].movement.name | 'move_expanding_wave' |
-| move_expanding_wave | runtimeProgram.entities[].movement.code | 15 |
-| move_flail_tether | runtimeProgram.entities[].movement.name | 'move_flail_tether' |
-| move_flail_tether | runtimeProgram.entities[].movement.code | 16 |
-| move_yoyo_hover | runtimeProgram.entities[].movement.name | 'move_yoyo_hover' |
-| move_yoyo_hover | runtimeProgram.entities[].movement.code | 17 |
-| move_whip_lash | runtimeProgram.entities[].movement.name | 'move_whip_lash' |
-| move_whip_lash | runtimeProgram.entities[].movement.code | 18 |
-| move_forward_then_retract | runtimeProgram.entities[].movement.name | 'move_forward_then_retract' |
-| move_forward_then_retract | runtimeProgram.entities[].movement.code | 19 |
-| move_front_hand | runtimeProgram.entities[].movement.name | 'move_front_hand' |
-| move_front_hand | runtimeProgram.entities[].movement.code | 20 |
-| channel_beam | runtimeProgram.entities[].controller.name | 'channel_beam' |
-| channel_beam | runtimeProgram.entities[].controller.code | 1 |
-| charge_then_release | runtimeProgram.entities[].controller.name | 'charge_then_release' |
-| charge_then_release | runtimeProgram.entities[].controller.code | 2 |
-| target_and_fire | runtimeProgram.entities[].controller.name | 'target_and_fire' |
-| target_and_fire | runtimeProgram.entities[].controller.code | 3 |
-| spawn_on_event | runtimeProgram.entities[].events[].action | 'spawn_entity_on_event' |
-| spawn_on_event | runtimeProgram.entities[].events[].actionCode | 1 |
-| spawn_at_hit | runtimeProgram.entities[].events[].action | 'spawn_entity_on_event' |
-| spawn_at_hit | runtimeProgram.entities[].events[].actionCode | 1 |
-| emit_to_targets_on_event | runtimeProgram.entities[].events[].action | 'select_targets_and_emit_on_event' |
-| emit_to_targets_on_event | runtimeProgram.entities[].events[].actionCode | 8 |
-| generated_buff_on_event | runtimeProgram.entities[].events[].action | 'apply_generated_buff_on_event' |
-| generated_buff_on_event | runtimeProgram.entities[].events[].actionCode | 9 |
-| npc_effect_on_event | runtimeProgram.entities[].events[].action | 'apply_npc_effect_on_event' |
-| npc_effect_on_event | runtimeProgram.entities[].events[].actionCode | 11 |
-| apply_status_on_event | runtimeProgram.entities[].events[].action | 'apply_status_on_event' |
-| apply_status_on_event | runtimeProgram.entities[].events[].actionCode | 2 |
-| damage_nearby_on_event | runtimeProgram.entities[].events[].action | 'damage_nearby_on_event' |
-| damage_nearby_on_event | runtimeProgram.entities[].events[].actionCode | 10 |
-| damage_area_on_event | runtimeProgram.entities[].events[].action | 'damage_area_on_event' |
-| damage_area_on_event | runtimeProgram.entities[].events[].actionCode | 3 |
-| damage_nearest_on_event | runtimeProgram.entities[].events[].action | 'chain_damage_on_event' |
-| damage_nearest_on_event | runtimeProgram.entities[].events[].actionCode | 4 |
-| pull_on_event | runtimeProgram.entities[].events[].action | 'pull_on_event' |
-| pull_on_event | runtimeProgram.entities[].events[].actionCode | 5 |
-| pull_owner_to_event_target | runtimeProgram.entities[].events[].mode | 'owner_to_target' |
-| pull_owner_to_event_target | runtimeProgram.entities[].events[].radiusTiles | 1 |
-| pull_owner_to_event_target | runtimeProgram.entities[].events[].action | 'pull_on_event' |
-| pull_owner_to_event_target | runtimeProgram.entities[].events[].actionCode | 5 |
-| heal_owner_on_event | runtimeProgram.entities[].events[].action | 'heal_owner_on_event' |
-| heal_owner_on_event | runtimeProgram.entities[].events[].actionCode | 6 |
-| move_owner_on_event | runtimeProgram.entities[].events[].mode | 'blink_to_event_position' |
-| move_owner_on_event | runtimeProgram.entities[].events[].action | 'move_owner_on_event' |
-| move_owner_on_event | runtimeProgram.entities[].events[].actionCode | 7 |
+| capability | availability | fn-selected wire output | exact value |
+|---|---|---|---|
+| sustain_mana | fresh Author | runtimeProgram.entities[].manaSustain.cadence | 'held_item_use_time' |
+| kill_on_arrival | fresh Author | runtimeProgram.entities[].arrival.action | 'kill' |
+| item_use | fresh Author | runtimeProgram.itemUse.configured | True |
+| collect_seeds | fresh Author | gameplay.collectSeedsFromGrass | True |
+| place_tile | fresh Author | runtimeProgram.bindings[].usePolicy.action.placement.wallId | -1 |
+| place_wall | fresh Author | runtimeProgram.bindings[].usePolicy.action.placement.tileId | -1 |
+| recall_home_on_use | fresh Author | gameplay.mobilityMode | 'recall_home' |
+| recall_home_on_use | fresh Author | runtimeProgram.effectGroups[].mobilityMode | 'recall_home' |
+| recall_home_on_use | fresh Author | gameplay.mobilityRangeTiles | 0 |
+| recall_home_on_use | fresh Author | runtimeProgram.effectGroups[].mobilityRangeTiles | 0 |
+| recall_home_on_use | fresh Author | gameplay.mobilitySafeTileOnly | False |
+| recall_home_on_use | fresh Author | runtimeProgram.effectGroups[].mobilitySafeTileOnly | False |
+| accessory | fresh Author | accessory.enabled | True |
+| armor | fresh Author | armor.enabled | True |
+| spawn | fresh Author | runtimeProgram.entities[].spawn.enabled | True |
+| projectile_damage | fresh Author | runtimeProgram.entities[].damage.enabled | True |
+| orient_whip_to_owner_gravity | retained runtime | runtimeProgram.entities[].whipUsesOwnerGravity | True |
+| move_straight | fresh Author | runtimeProgram.entities[].movement.name | 'move_straight' |
+| move_straight | fresh Author | runtimeProgram.entities[].movement.code | 0 |
+| move_slow_homing | retained runtime | runtimeProgram.entities[].movement.name | 'move_slow_homing' |
+| move_slow_homing | retained runtime | runtimeProgram.entities[].movement.code | 1 |
+| move_gravity_arc | retained runtime | runtimeProgram.entities[].movement.name | 'move_gravity_arc' |
+| move_gravity_arc | retained runtime | runtimeProgram.entities[].movement.code | 2 |
+| move_drift | retained runtime | runtimeProgram.entities[].movement.name | 'move_drift' |
+| move_drift | retained runtime | runtimeProgram.entities[].movement.code | 3 |
+| move_orbit | retained runtime | runtimeProgram.entities[].movement.name | 'move_orbit' |
+| move_orbit | retained runtime | runtimeProgram.entities[].movement.code | 4 |
+| move_boomerang | retained runtime | runtimeProgram.entities[].movement.name | 'move_boomerang' |
+| move_boomerang | retained runtime | runtimeProgram.entities[].movement.code | 5 |
+| move_sine_homing | retained runtime | runtimeProgram.entities[].movement.name | 'move_sine_homing' |
+| move_sine_homing | retained runtime | runtimeProgram.entities[].movement.code | 7 |
+| move_phase | retained runtime | runtimeProgram.entities[].movement.name | 'move_phase' |
+| move_phase | retained runtime | runtimeProgram.entities[].movement.code | 8 |
+| move_accelerate | retained runtime | runtimeProgram.entities[].movement.name | 'move_accelerate' |
+| move_accelerate | retained runtime | runtimeProgram.entities[].movement.code | 9 |
+| move_spiral | retained runtime | runtimeProgram.entities[].movement.name | 'move_spiral' |
+| move_spiral | retained runtime | runtimeProgram.entities[].movement.code | 10 |
+| move_vortex_orb | retained runtime | runtimeProgram.entities[].movement.name | 'move_vortex_orb' |
+| move_vortex_orb | retained runtime | runtimeProgram.entities[].movement.code | 11 |
+| move_blackhole_pull | retained runtime | runtimeProgram.entities[].movement.name | 'move_blackhole_pull' |
+| move_blackhole_pull | retained runtime | runtimeProgram.entities[].movement.code | 12 |
+| move_proximity_missile | retained runtime | runtimeProgram.entities[].movement.name | 'move_proximity_missile' |
+| move_proximity_missile | retained runtime | runtimeProgram.entities[].movement.code | 13 |
+| move_returning_glaive | retained runtime | runtimeProgram.entities[].movement.name | 'move_returning_glaive' |
+| move_returning_glaive | retained runtime | runtimeProgram.entities[].movement.code | 14 |
+| move_expanding_wave | retained runtime | runtimeProgram.entities[].movement.name | 'move_expanding_wave' |
+| move_expanding_wave | retained runtime | runtimeProgram.entities[].movement.code | 15 |
+| move_flail_tether | retained runtime | runtimeProgram.entities[].movement.name | 'move_flail_tether' |
+| move_flail_tether | retained runtime | runtimeProgram.entities[].movement.code | 16 |
+| move_yoyo_hover | retained runtime | runtimeProgram.entities[].movement.name | 'move_yoyo_hover' |
+| move_yoyo_hover | retained runtime | runtimeProgram.entities[].movement.code | 17 |
+| move_whip_lash | retained runtime | runtimeProgram.entities[].movement.name | 'move_whip_lash' |
+| move_whip_lash | retained runtime | runtimeProgram.entities[].movement.code | 18 |
+| move_forward_then_retract | retained runtime | runtimeProgram.entities[].movement.name | 'move_forward_then_retract' |
+| move_forward_then_retract | retained runtime | runtimeProgram.entities[].movement.code | 19 |
+| move_front_hand | retained runtime | runtimeProgram.entities[].movement.name | 'move_front_hand' |
+| move_front_hand | retained runtime | runtimeProgram.entities[].movement.code | 20 |
+| channel_beam | retained runtime | runtimeProgram.entities[].controller.name | 'channel_beam' |
+| channel_beam | retained runtime | runtimeProgram.entities[].controller.code | 1 |
+| charge_then_release | retained runtime | runtimeProgram.entities[].controller.name | 'charge_then_release' |
+| charge_then_release | retained runtime | runtimeProgram.entities[].controller.code | 2 |
+| target_and_fire | fresh Author | runtimeProgram.entities[].controller.name | 'target_and_fire' |
+| target_and_fire | fresh Author | runtimeProgram.entities[].controller.code | 3 |
+| spawn_on_event | fresh Author | runtimeProgram.entities[].events[].action | 'spawn_entity_on_event' |
+| spawn_on_event | fresh Author | runtimeProgram.entities[].events[].actionCode | 1 |
+| spawn_at_hit | fresh Author | runtimeProgram.entities[].events[].action | 'spawn_entity_on_event' |
+| spawn_at_hit | fresh Author | runtimeProgram.entities[].events[].actionCode | 1 |
+| emit_to_targets_on_event | fresh Author | runtimeProgram.entities[].events[].action | 'select_targets_and_emit_on_event' |
+| emit_to_targets_on_event | fresh Author | runtimeProgram.entities[].events[].actionCode | 8 |
+| generated_buff_on_event | fresh Author | runtimeProgram.entities[].events[].action | 'apply_generated_buff_on_event' |
+| generated_buff_on_event | fresh Author | runtimeProgram.entities[].events[].actionCode | 9 |
+| npc_effect_on_event | fresh Author | runtimeProgram.entities[].events[].action | 'apply_npc_effect_on_event' |
+| npc_effect_on_event | fresh Author | runtimeProgram.entities[].events[].actionCode | 11 |
+| apply_status_on_event | fresh Author | runtimeProgram.entities[].events[].action | 'apply_status_on_event' |
+| apply_status_on_event | fresh Author | runtimeProgram.entities[].events[].actionCode | 2 |
+| damage_nearby_on_event | fresh Author | runtimeProgram.entities[].events[].action | 'damage_nearby_on_event' |
+| damage_nearby_on_event | fresh Author | runtimeProgram.entities[].events[].actionCode | 10 |
+| damage_area_on_event | retained runtime | runtimeProgram.entities[].events[].action | 'damage_area_on_event' |
+| damage_area_on_event | retained runtime | runtimeProgram.entities[].events[].actionCode | 3 |
+| damage_nearest_on_event | retained runtime | runtimeProgram.entities[].events[].action | 'chain_damage_on_event' |
+| damage_nearest_on_event | retained runtime | runtimeProgram.entities[].events[].actionCode | 4 |
+| pull_on_event | fresh Author | runtimeProgram.entities[].events[].action | 'pull_on_event' |
+| pull_on_event | fresh Author | runtimeProgram.entities[].events[].actionCode | 5 |
+| pull_owner_to_event_target | retained runtime | runtimeProgram.entities[].events[].mode | 'owner_to_target' |
+| pull_owner_to_event_target | retained runtime | runtimeProgram.entities[].events[].radiusTiles | 1 |
+| pull_owner_to_event_target | retained runtime | runtimeProgram.entities[].events[].action | 'pull_on_event' |
+| pull_owner_to_event_target | retained runtime | runtimeProgram.entities[].events[].actionCode | 5 |
+| reduce_heal_cooldown_on_event | fresh Author | runtimeProgram.entities[].events[].action | 'reduce_healing_potion_cooldown_on_event' |
+| reduce_heal_cooldown_on_event | fresh Author | runtimeProgram.entities[].events[].actionCode | 12 |
+| heal_owner_on_event | fresh Author | runtimeProgram.entities[].events[].action | 'heal_owner_on_event' |
+| heal_owner_on_event | fresh Author | runtimeProgram.entities[].events[].actionCode | 6 |
+| move_owner_on_event | fresh Author | runtimeProgram.entities[].events[].mode | 'blink_to_event_position' |
+| move_owner_on_event | fresh Author | runtimeProgram.entities[].events[].action | 'move_owner_on_event' |
+| move_owner_on_event | fresh Author | runtimeProgram.entities[].events[].actionCode | 7 |
 
 ### Явные event-проекции
 
 Разное authored имя может выбирать точную зарегистрированную проекцию существующего event executor. Это полезный отдельный выбор, не разрешение угадывать действие из prose и не whole-weapon macro.
 
-| authored capability | wire action | fixed outputs |
-|---|---|---|
-| spawn_at_hit | spawn_entity_on_event | {'action': 'spawn_entity_on_event', 'actionCode': 1} |
-| damage_nearest_on_event | chain_damage_on_event | {'action': 'chain_damage_on_event', 'actionCode': 4} |
-| pull_owner_to_event_target | pull_on_event | {'mode': 'owner_to_target', 'radiusTiles': 1, 'action': 'pull_on_event', 'actionCode': 5} |
+| capability | availability | wire action | fixed outputs |
+|---|---|---|---|
+| spawn_at_hit | fresh Author | spawn_entity_on_event | {'action': 'spawn_entity_on_event', 'actionCode': 1} |
+| damage_nearest_on_event | retained runtime | chain_damage_on_event | {'action': 'chain_damage_on_event', 'actionCode': 4} |
+| pull_owner_to_event_target | retained runtime | pull_on_event | {'mode': 'owner_to_target', 'radiusTiles': 1, 'action': 'pull_on_event', 'actionCode': 5} |
+| reduce_heal_cooldown_on_event | fresh Author | reduce_healing_potion_cooldown_on_event | {'action': 'reduce_healing_potion_cooldown_on_event', 'actionCode': 12} |
 
 ### Structured и enum projections
 
@@ -216,8 +219,11 @@ Typed structured choices и конечные enum-отображения так�
 | oscillate_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
 | add_sprite_scale.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
 | set_opacity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
+| generated_buff_on_use.playerEffect | (('playerEffect.condition', 'playerEffect.condition', False), ('playerEffect.fishingPowerPoints', 'playerEffect.fishingPowerPoints', False), ('playerEffect.preventLineBreak', 'playerEffect.preventLineBreak', False), ('playerEffect.allowLavaFishing', 'playerEffect.allowLavaFishing', False), ('playerEffect.revealHookedCatch', 'playerEffect.revealHookedCatch', False), ('playerEffect.extraCrateChancePercent', 'playerEffect.extraCrateChancePercent', False), ('playerEffect.itemPickupRangeBlocks', 'playerEffect.itemPickupRangePx', False), ('playerEffect.heartPickupRangeBlocks', 'playerEffect.heartPickupRangePx', False), ('playerEffect.manaPickupRangeBlocks', 'playerEffect.manaPickupRangePx', False), ('playerEffect.coinPickupRangeBlocks', 'playerEffect.coinPickupRangePx', False), ('playerEffect.highlightDanger', 'playerEffect.highlightDanger', False), ('playerEffect.highlightCreatures', 'playerEffect.highlightCreatures', False), ('playerEffect.nightVision', 'playerEffect.nightVision', False), ('playerEffect.healCooldownReductionPercent', 'playerEffect.healingPotionCooldownReductionPercent', False), ('playerEffect.healCooldownReduction', 'playerEffect.healingPotionCooldownReductionTicks', False), ('playerEffect.manaPotionBelowPercent', 'playerEffect.autoManaPotionBelowPercent', False), ('playerEffect.healCooldownOnHit', 'playerEffect.healingPotionCooldownOnHitReductionTicks', False), ('playerEffect.hurtImmunityBonus', 'playerEffect.hurtInvulnerabilityBonusTicks', False)) |
 | generated_buff_on_use.combat | (('combat.defensePoints', 'combat.defensePoints', False), ('combat.attackSpeedBonus', 'combat.attackSpeedPercent', False), ('combat.critChance', 'combat.critChancePoints', False), ('combat.damageBonus', 'combat.damagePercent', False), ('combat.damageClass', 'combat.damageClass', False)) |
 | use_condition.condition | (('condition', 'useConditionMode', True), ('condition.lifeAtLeast', 'useConditionMinLife', False), ('condition.manaAtLeast', 'useConditionMinMana', False)) |
+| accessory.playerEffect | (('playerEffect.condition', 'playerEffect.condition', False), ('playerEffect.fishingPowerPoints', 'playerEffect.fishingPowerPoints', False), ('playerEffect.preventLineBreak', 'playerEffect.preventLineBreak', False), ('playerEffect.allowLavaFishing', 'playerEffect.allowLavaFishing', False), ('playerEffect.revealHookedCatch', 'playerEffect.revealHookedCatch', False), ('playerEffect.extraCrateChancePercent', 'playerEffect.extraCrateChancePercent', False), ('playerEffect.itemPickupRangeBlocks', 'playerEffect.itemPickupRangePx', False), ('playerEffect.heartPickupRangeBlocks', 'playerEffect.heartPickupRangePx', False), ('playerEffect.manaPickupRangeBlocks', 'playerEffect.manaPickupRangePx', False), ('playerEffect.coinPickupRangeBlocks', 'playerEffect.coinPickupRangePx', False), ('playerEffect.highlightDanger', 'playerEffect.highlightDanger', False), ('playerEffect.highlightCreatures', 'playerEffect.highlightCreatures', False), ('playerEffect.nightVision', 'playerEffect.nightVision', False), ('playerEffect.healCooldownReductionPercent', 'playerEffect.healingPotionCooldownReductionPercent', False), ('playerEffect.healCooldownReduction', 'playerEffect.healingPotionCooldownReductionTicks', False), ('playerEffect.manaPotionBelowPercent', 'playerEffect.autoManaPotionBelowPercent', False), ('playerEffect.healCooldownOnHit', 'playerEffect.healingPotionCooldownOnHitReductionTicks', False), ('playerEffect.hurtImmunityBonus', 'playerEffect.hurtInvulnerabilityBonusTicks', False)) |
+| armor.playerEffect | (('playerEffect.condition', 'playerEffect.condition', False), ('playerEffect.fishingPowerPoints', 'playerEffect.fishingPowerPoints', False), ('playerEffect.preventLineBreak', 'playerEffect.preventLineBreak', False), ('playerEffect.allowLavaFishing', 'playerEffect.allowLavaFishing', False), ('playerEffect.revealHookedCatch', 'playerEffect.revealHookedCatch', False), ('playerEffect.extraCrateChancePercent', 'playerEffect.extraCrateChancePercent', False), ('playerEffect.itemPickupRangeBlocks', 'playerEffect.itemPickupRangePx', False), ('playerEffect.heartPickupRangeBlocks', 'playerEffect.heartPickupRangePx', False), ('playerEffect.manaPickupRangeBlocks', 'playerEffect.manaPickupRangePx', False), ('playerEffect.coinPickupRangeBlocks', 'playerEffect.coinPickupRangePx', False), ('playerEffect.highlightDanger', 'playerEffect.highlightDanger', False), ('playerEffect.highlightCreatures', 'playerEffect.highlightCreatures', False), ('playerEffect.nightVision', 'playerEffect.nightVision', False), ('playerEffect.healCooldownReductionPercent', 'playerEffect.healingPotionCooldownReductionPercent', False), ('playerEffect.healCooldownReduction', 'playerEffect.healingPotionCooldownReductionTicks', False), ('playerEffect.manaPotionBelowPercent', 'playerEffect.autoManaPotionBelowPercent', False), ('playerEffect.healCooldownOnHit', 'playerEffect.healingPotionCooldownOnHitReductionTicks', False), ('playerEffect.hurtImmunityBonus', 'playerEffect.hurtInvulnerabilityBonusTicks', False)) |
 | armor.setBonuses | (('setBonuses.critChance', 'setBonusGenericCrit', False), ('setBonuses.moveSpeedBonus', 'setBonusMovementSpeed', False), ('setBonuses.lifeRegen', 'setBonusLifeRegen', False), ('setBonuses.manaRegen', 'setBonusManaRegen', False), ('setBonuses.minionSlotsBonus', 'setBonusMinionSlots', False), ('setBonuses.sentrySlotsBonus', 'setBonusSentrySlots', False), ('setBonuses.manaCostReduction', 'setBonusManaCostReduction', False), ('setBonuses.ammoSaveChancePercent', 'setBonusAmmoSaveChance', False), ('setBonuses.aggroPoints', 'setBonusAggro', False), ('setBonuses.damageReduction', 'setBonusEndurance', False), ('setBonuses.armorPenetration', 'setBonusArmorPenetration', False)) |
 | spawn.velocity | (('velocity.speed', 'speedPxPerTick', False), ('velocity.fanSpeed', 'velocityDistribution.kind', True), ('velocity.fanSpeed', 'speedPxPerTick', True), ('velocity.fanSpeed.minSpeed', 'velocityDistribution.minSpeedPxPerUpdate', False), ('velocity.fanSpeed.maxSpeed', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.radial', 'velocityDistribution.kind', True), ('velocity.radial', 'speedPxPerTick', True), ('velocity.radial.minSpeed', 'velocityDistribution.minSpeedPxPerUpdate', False), ('velocity.radial.maxSpeed', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.disk', 'velocityDistribution.kind', True), ('velocity.disk', 'speedPxPerTick', True), ('velocity.disk.maxSpeed', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.cone', 'velocityDistribution.kind', True), ('velocity.cone', 'speedPxPerTick', True), ('velocity.cone.minSpeed', 'velocityDistribution.minSpeedPxPerUpdate', False), ('velocity.cone.maxSpeed', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.cone.halfAngleRadians', 'velocityDistribution.halfAngleRadians', False)) |
 | spawn.position | (('position', 'overTarget.heightTiles', True), ('position', 'overTarget.delayTicks', True), ('position.at', 'placement', False), ('position.above', 'placement', False), ('position.heightTiles', 'overTarget.heightTiles', False), ('position.activationDelay', 'overTarget.delayTicks', False)) |
@@ -267,13 +273,19 @@ Typed structured choices и конечные enum-отображения так�
 | item_stats.manaCostInput | 'both' | unconditional declared neutral |
 | item_use.holdoutOffsetX | 0 | unconditional declared neutral |
 | item_use.holdoutOffsetY | 0 | unconditional declared neutral |
+| generated_buff_on_use.regenWhen | 'always' | unconditional declared neutral |
+| generated_buff_on_use.treasureWhen | 'always' | unconditional declared neutral |
 | generated_buff_on_use.miningSpeedMultiplier | 1 | unconditional declared neutral |
-| generated_buff_on_use.oreSenseEnabled | False | unconditional declared neutral |
+| generated_buff_on_use.treasureSense | False | unconditional declared neutral |
 | generated_buff_on_use.moveSpeedBonus | 0 | unconditional declared neutral |
 | generated_buff_on_use.jumpSpeedBonus | 0.0 | unconditional declared neutral |
 | generated_buff_on_use.manaRegen | 0 | unconditional declared neutral |
 | generated_buff_on_use.lifeRegen | 0 | unconditional declared neutral |
 | placed_sprite.pivotSpace | 'frame' | unconditional declared neutral |
+| accessory.regenWhen | 'always' | unconditional declared neutral |
+| accessory.treasureWhen | 'always' | unconditional declared neutral |
+| armor.regenWhen | 'always' | unconditional declared neutral |
+| armor.treasureWhen | 'always' | unconditional declared neutral |
 | spawn.count | 1 | {'targetKinds': ('child_projectile',), 'paramEquals': (), 'targetCapabilities': ()} |
 | spawn.spreadRadians | 0 | {'targetKinds': ('child_projectile',), 'paramEquals': (('count', 1),), 'targetCapabilities': ()} |
 | turn_velocity.window.phase | 'always' | all timing absent: startDelay, duration, window |
@@ -372,8 +384,9 @@ Typed structured choices и конечные enum-отображения так�
 ### Поля с неочевидными Terraria units
 
 - `valueCopper` напрямую пишет `Item.value`; это base/shop value в copper, а не обещание конкретной суммы resale игроком.
-- Author `tool_stats.axePowerTooltipPercent` задаёт целое 0..500 с шагом 5 в видимых процентах tooltip; compiler точно пишет старое целое `gameplay.axePower = value / 5` в `Item.axe` 0..100. Старое имя `axePower` не принимается как Author alias.
-- Author `generated_buff_on_use.lifeRegenHpPerSecond` задаёт вклад в HP/с (0..60, шаг 0.5); compiler точно пишет старое целое `gameplay.generatedBuff.lifeRegen = value × 2`. Это вклад в engine stat до остальных эффектов, не обещание итогового лечения.
+- Author `tool_stats.axePower` задаёт целое 0..500 с шагом 5 в видимых процентах tooltip; compiler точно пишет старое целое `gameplay.axePower = value / 5` в `Item.axe` 0..100. Старое имя `axePower` не принимается как Author alias.
+- Author `generated_buff_on_use.lifeRegen` задаёт вклад в HP/с (-50..60, шаг 0.5); compiler точно пишет старое целое `gameplay.generatedBuff.lifeRegen = value × 2`. Это вклад в engine stat до остальных эффектов, не обещание итогового лечения.
+- `lifeRegen`/`regenWhen` и `treasureSense`/`treasureWhen` — единственные Author-входы для этих эффектов. Условия переводятся в typed native condition fields, не создают вторую stat-величину и сами по себе не являются эффектом. Nested `playerEffect.lifeRegen…`/`highlightTreasure` отвергаются.
 
 <a id="player-text"></a>
 
@@ -449,6 +462,7 @@ Event actions:
 | generated_buff_on_event | 9 |
 | damage_nearby_on_event | 10 |
 | npc_effect_on_event | 11 |
+| reduce_heal_cooldown_on_event | 12 |
 
 ### Entity kind → visual role
 

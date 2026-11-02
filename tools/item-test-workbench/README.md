@@ -1120,3 +1120,33 @@ native player's edge margins, so inspect both teleport events and later position
 spawn, player override, invalid scene refusal and unaffected primary firing.
 Only the test world's identity changes in the copied item. Rendered gallery
 capture is separate from these CPU controls; multiplayer remains unproven.
+
+### Native fishing proof
+
+`verify_native_fishing.py --native-dll PATH --out DIR` executes native rod, bait,
+water, natural bite, ordinary reel input and inventory catch. The generated rod
+is an explicit synthetic fixture, not a model sample. CPU negatives run within a
+bounded 2,400-tick window; no-bait casting is allowed by vanilla, but cannot catch.
+The verifier checks cast evidence before cancel/switch/death, zero-mana refusal,
+native bait debit, and the native caught-item identity against inventory.
+
+A `fishing` scene requires full player updates. Optional `water` is a bounded
+`tileX/tileY/width/height` rectangle of real static water tiles, not rendered liquid.
+`reelOnBite` sends a single ordinary input after observing native negative bobber
+`ai[1]`; `reelInput` explicitly selects `primary` (default) or `alt`. It never sets
+bite/catch state. Gameplay still owns admission and payment. Native popup text is
+not rendered; inventory observations are retained.
+
+For native bobber/line rendering, fetch the pinned projectile resources with
+`fetch_performance_assets.py --include-projectiles` (including Projectile_360 and
+FishingLine). `nativeRender.vanillaItemTextures` optionally declares at most 16
+unique native item texture IDs for original native draw calls, e.g. a caught fish;
+fetch their exact PNGs through the existing `--items` option. This list grants no
+items and does not choose a catch. Missing or corrupt selected textures refuse;
+there is no auto-fetch or placeholder. Original native Main.DrawProj renders the
+bobber, line and caught fish. Existing 600-tick/pixel GPU limits are unchanged.
+
+`verify_fishing_resources.py --native-dll PATH --assets DIR --out DIR` checks
+actual native loading plus missing/corrupt texture, duplicate/over-budget IDs and
+incompatible render-mode refusals. Its 12-tick positive does not claim a catch:
+explicitly loading a fish texture must not grant that fish to inventory.

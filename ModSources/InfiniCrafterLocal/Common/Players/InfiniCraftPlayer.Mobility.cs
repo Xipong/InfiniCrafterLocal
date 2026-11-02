@@ -31,7 +31,10 @@ public sealed partial class InfiniCraftPlayer
         public float JumpBoost;
         public int ManaRegen;
         public int LifeRegen;
+        public string LifeRegenCondition = "always";
+        public string TreasureSenseCondition = "always";
         public GeneratedCombatBuffSpec? Combat;
+        public PlayerEffectSpec? PlayerEffect;
 
         public static ActiveGeneratedUtilityBuff From(GeneratedBuffSpec buff) => new()
         {
@@ -45,7 +48,10 @@ public sealed partial class InfiniCraftPlayer
             JumpBoost = Math.Clamp(buff.JumpBoost, -8f, 8f),
             ManaRegen = Math.Clamp(buff.ManaRegen, -100, 120),
             LifeRegen = Math.Clamp(buff.LifeRegen, -100, 120),
+            LifeRegenCondition = buff.LifeRegenCondition ?? "always",
+            TreasureSenseCondition = buff.TreasureSenseCondition ?? "always",
             Combat = buff.Combat,
+            PlayerEffect = buff.PlayerEffect,
         };
 
         public bool SameEffect(ActiveGeneratedUtilityBuff other)
@@ -57,7 +63,10 @@ public sealed partial class InfiniCraftPlayer
             && JumpBoost == other.JumpBoost
             && ManaRegen == other.ManaRegen
             && LifeRegen == other.LifeRegen
-            && GeneratedCombatBuffSpec.SameEffect(Combat, other.Combat);
+            && (LifeRegen == 0 || LifeRegenCondition == other.LifeRegenCondition)
+            && (OreSenseRadiusTiles == 0 || TreasureSenseCondition == other.TreasureSenseCondition)
+            && GeneratedCombatBuffSpec.SameEffect(Combat, other.Combat)
+            && PlayerEffectSpec.SameEffect(PlayerEffect, other.PlayerEffect);
     }
 
     public bool TryReserveGeneratedMobilityCooldown(int cooldownTicks)
@@ -392,8 +401,28 @@ public sealed partial class InfiniCraftPlayer
         }
     }
 
+    internal int CurrentGeneratedLifeRegen
+    {
+        get
+        {
+            int units = 0;
+            foreach (var active in _activeGeneratedUtilityBuffs)
+                if (active.Ticks > 0 && PlayerEffectSpec.IsConditionActive(active.LifeRegenCondition, Player))
+                    units += active.LifeRegen;
+            // Select active contributions first, then preserve the existing cap.
+            return Math.Clamp(units, -100, 120);
+        }
+    }
+
+    internal bool HasActiveGeneratedTreasureSense
+        => _activeGeneratedUtilityBuffs.Any(active =>
+            active.Ticks > 0 && active.OreSenseRadiusTiles > 0
+                && PlayerEffectSpec.IsConditionActive(active.TreasureSenseCondition, Player));
+
     private void ApplyGeneratedUtilityBuffEffects()
     {
+        foreach (var active in _activeGeneratedUtilityBuffs)
+            if (active.Ticks > 0 && active.PlayerEffect is { } effect) ApplyPlayerEffect(effect);
         if (Player.dead || _generatedBuffTicks <= 0 || !InfiniRuntimeAuthority.ShouldRunPlayerGameplay(Player))
             return;
         if (_generatedMiningSpeedMultiplier != 1f)
@@ -404,10 +433,8 @@ public sealed partial class InfiniCraftPlayer
             Player.jumpSpeedBoost += _generatedJumpBoost;
         if (_generatedManaRegen != 0)
             Player.manaRegenBonus += _generatedManaRegen;
-        if (_generatedLifeRegen != 0)
-            Player.lifeRegen += _generatedLifeRegen;
-        if (_generatedOreSenseRadiusTiles > 0)
-            Player.findTreasure = true;
+        ApplyLifeRegen(CurrentGeneratedLifeRegen);
+        ApplyTreasureSense(HasActiveGeneratedTreasureSense);
         Player.statDefense += _generatedDefense;
         Player.GetAttackSpeed(DamageClass.Generic) += _generatedAttackSpeed / 100f;
         Player.GetCritChance(DamageClass.Generic) += _generatedCrit;

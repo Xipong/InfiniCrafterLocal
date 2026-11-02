@@ -154,7 +154,7 @@ internal static partial class EngineRuntimeChecks
             var cloneAfter=Render(originalClone);
             Sequence(cloneAfter,"same-ID live replacement cannot lend its new PNG to old native pose",generatedTexture);
             Equal(cloneBefore.DrawDataCache[0],cloneAfter.DrawDataCache[0],"old native clone retains exact frame/pose/canvas scale");
-            Equal(true,GeneratedHeldItemPresentation.TryGetVisibleHeldSpriteData(Info(originalClone),out var cloneData),"old native clone remains visible");
+            Equal(true,GeneratedHeldItemPresentation.TryGetHeldSpriteData(Info(originalClone),out var cloneData),"old native clone remains visible");
             Equal(true,ReferenceEquals(clonedOwner.Data,cloneData),"actual native clone definition owns presentation");
             var nextClone=item.Clone();
             Sequence(Render(nextClone),"new native clone uses the new accepted artwork",foreignTexture);
@@ -167,14 +167,15 @@ internal static partial class EngineRuntimeChecks
             Equal(true,((GeneratedItem)resetClone.ModItem).NativeHeldSourceData is null,"native SetDefaults clears clone provenance");
             var compactClone=originalClone.Clone();var compact=GeneratedItemData.Placeholder();compact.Id=data.Id;compact.SourceMode="player_save_ref";
             Install((GeneratedItem)compactClone.ModItem,compact);
-            Equal(false,GeneratedHeldItemPresentation.TryGetVisibleHeldSpriteData(Info(compactClone),out _),"compact native clone cannot borrow current live definition art");
+            Equal(false,GeneratedHeldItemPresentation.TryGetHeldSpriteData(Info(compactClone),out _),"compact native clone cannot borrow current live definition art");
             Install(generated,data);item.useStyle=ItemUseStyleID.HoldUp;
             textures.Remove(replacement.Visual.SpritePath);
 
             // Native remote animation is authoritative; no custom pose packet exists.
             Terraria.Main.player[0]=player;Terraria.Main.myPlayer=1;Terraria.Main.netMode=NetmodeID.MultiplayerClient;
             player.itemAnimation=0;
-            Equal(false,GeneratedHeldItemPresentation.TryGetVisibleHeldSpriteData(Info(item),out _),"no local animation means no remote held body");
+            Equal(true,GeneratedHeldItemPresentation.TryGetHeldSpriteData(Info(item),out _),"idle readiness does not manufacture a native held body");
+            Sequence(Render(item),"native idle without hold style submits no body");
             // Unlike the inert rendering fixture above, this explicitly has a usable binding.
             data.RuntimeProgram.ItemUse.Configured=true;
             data.RuntimeProgram.Bindings=new[]{new RuntimeBindingSpec{Id="native_use",Input=RuntimeInputKind.PrimaryUse,Role=RuntimeEntityRole.Primary,
@@ -191,7 +192,7 @@ internal static partial class EngineRuntimeChecks
             Equal(data.Id,((GeneratedItem)player.lastVisualizedSelectedItem.ModItem).Data.Id,"native visualized clone preserves generated identity");
             Sequence(Render(player.lastVisualizedSelectedItem),"actual remote native animation submits the instance body",generatedTexture);
             player.controlUseItem=false;item.noUseGraphic=true;
-            Equal(false,GeneratedHeldItemPresentation.TryGetVisibleHeldSpriteData(Info(item),out _),"native noUseGraphic also owns remote visibility");item.noUseGraphic=false;
+            Equal(false,GeneratedHeldItemPresentation.TryGetHeldSpriteData(Info(item),out _),"native noUseGraphic also owns remote visibility");item.noUseGraphic=false;
             Terraria.Main.myPlayer=0;Terraria.Main.netMode=NetmodeID.SinglePlayer; // Remaining registry hydration controls do not test network transport.
             var reference=GeneratedItemData.Placeholder();reference.Id=data.Id;reference.SourceMode="player_save_ref";reference.Visual=data.Visual;
             var registryProperty=typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("GeneratedItems")!;
@@ -199,15 +200,15 @@ internal static partial class EngineRuntimeChecks
             using(var registry=new GeneratedItemRegistryService()) {
                 try {
                     registryProperty.SetValue(null,registry);AttachItem(generated,item,reference);
-                    Equal(false,GeneratedHeldItemPresentation.TryGetVisibleHeldSpriteData(Info(item),out _),"compact reference without canonical data cannot draw");
+                    Equal(false,GeneratedHeldItemPresentation.TryGetHeldSpriteData(Info(item),out _),"compact reference without canonical data cannot draw");
                     GeneratedItemRegistryService.StampCurrentWorld(data);
                     var definitions=(IDictionary)registry.GetType().GetField("_byId",instance)!.GetValue(registry)!;definitions[data.Id]=data;
-                    Equal(false,GeneratedHeldItemPresentation.TryGetVisibleHeldSpriteData(Info(item),out _),"registry availability alone cannot lend art to a compact native snapshot");
+                    Equal(false,GeneratedHeldItemPresentation.TryGetHeldSpriteData(Info(item),out _),"registry availability alone cannot lend art to a compact native snapshot");
                     GeneratedItemRegistryService.StampCurrentWorld(reference);MaterialClock(200);
                     typeof(GeneratedItem).GetMethod("EnsureRuntimeHydration",instance)!.Invoke(generated,new object?[]{player});
-                    Equal(true,GeneratedHeldItemPresentation.TryGetVisibleHeldSpriteData(Info(item),out var hydrated),"actual item hydration permits its accepted native snapshot");
+                    Equal(true,GeneratedHeldItemPresentation.TryGetHeldSpriteData(Info(item),out var hydrated),"actual item hydration permits its accepted native snapshot");
                     Equal(true,ReferenceEquals(data,hydrated),"hydration installs exact accepted definition");
-                    definitions.Remove(data.Id);Equal(true,GeneratedHeldItemPresentation.TryGetVisibleHeldSpriteData(Info(item),out _),"already accepted native snapshot does not borrow registry state");
+                    definitions.Remove(data.Id);Equal(true,GeneratedHeldItemPresentation.TryGetHeldSpriteData(Info(item),out _),"already accepted native snapshot does not borrow registry state");
                 } finally {registryProperty.SetValue(null,oldRegistry);AttachItem(generated,item,data);}
             }
             Terraria.Main.myPlayer=0;Terraria.Main.netMode=NetmodeID.SinglePlayer;
@@ -216,7 +217,7 @@ internal static partial class EngineRuntimeChecks
             Equal(false,item.noUseGraphic,"asset absence never mutates gameplay visibility");
             textures.Add(path,Activator.CreateInstance(record,generatedTexture,0f,0L)!);
             player.itemAnimation=0;item.holdStyle=1;
-            Sequence(Render(item),"no animation cannot create a generated active body",delivered?Array.Empty<Texture2D>():new[]{nativeTexture});
+            Sequence(Render(item),"native idle hold style uses the ready instance canvas",generatedTexture);
             item.holdStyle=0;player.itemAnimation=8;
             item.noUseGraphic=true;Sequence(Render(item),"native noUseGraphic prevents hook submission");item.noUseGraphic=false;
             player.dead=true;Sequence(Render(item),"dead native player stays invisible");player.dead=false;

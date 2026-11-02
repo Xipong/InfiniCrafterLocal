@@ -84,6 +84,175 @@
       ],
       "description": "Phase alone covers the whole phase. charging/released/since_release require charge; returning/since_return require return_when on this entity, never seek/arrival. Timing is all-or-none; relative clocks wait for their latch and sample step-start age.",
       "x-infini-semanticType": "bounded_text"
+    },
+    "player_effect": {
+      "type": "object",
+      "properties": {
+        "condition": {
+          "type": "string",
+          "enum": [
+            "always",
+            "stationary"
+          ],
+          "description": "When to apply this component: stationary requires zero velocity and no active item animation.",
+          "default": "always",
+          "x-infini-neutral": "always"
+        },
+        "fishingPowerPoints": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Add fishing-power points before native rod/bait/environment multipliers.",
+          "x-infini-neutral": 0
+        },
+        "preventLineBreak": {
+          "type": "boolean",
+          "description": "Prevent fishing-line breakage.",
+          "x-infini-neutral": false
+        },
+        "allowLavaFishing": {
+          "type": "boolean",
+          "description": "Allow catches in lava with otherwise suitable fishing gear.",
+          "x-infini-neutral": false
+        },
+        "revealHookedCatch": {
+          "type": "boolean",
+          "description": "Reveal the hooked catch before reeling it in.",
+          "x-infini-neutral": false
+        },
+        "extraCrateChancePercent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Additional independent percent chance to turn a non-crate fishing attempt into a crate attempt; ordinary catch eligibility remains native.",
+          "x-infini-neutral": 0
+        },
+        "itemPickupRangeBlocks": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 40.0,
+          "multipleOf": 0.0625,
+          "description": "Author units: blocks. Native consumer: Additional pickup range for every item; combines with specialized ranges.",
+          "x-infini-units": "blocks",
+          "x-infini-semanticType": "blocks",
+          "x-infini-neutral": 0.0,
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true
+          }
+        },
+        "heartPickupRangeBlocks": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 40.0,
+          "multipleOf": 0.0625,
+          "description": "Author units: blocks. Native consumer: Additional pickup range for heart pickups.",
+          "x-infini-units": "blocks",
+          "x-infini-semanticType": "blocks",
+          "x-infini-neutral": 0.0,
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true
+          }
+        },
+        "manaPickupRangeBlocks": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 40.0,
+          "multipleOf": 0.0625,
+          "description": "Author units: blocks. Native consumer: Additional pickup range for mana-star pickups.",
+          "x-infini-units": "blocks",
+          "x-infini-semanticType": "blocks",
+          "x-infini-neutral": 0.0,
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true
+          }
+        },
+        "coinPickupRangeBlocks": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 40.0,
+          "multipleOf": 0.0625,
+          "description": "Author units: blocks. Native consumer: Additional pickup range for coins.",
+          "x-infini-units": "blocks",
+          "x-infini-semanticType": "blocks",
+          "x-infini-neutral": 0.0,
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true
+          }
+        },
+        "highlightDanger": {
+          "type": "boolean",
+          "description": "Enable native hazardous-tile highlighting.",
+          "x-infini-neutral": false
+        },
+        "highlightCreatures": {
+          "type": "boolean",
+          "description": "Enable native creature highlighting.",
+          "x-infini-neutral": false
+        },
+        "nightVision": {
+          "type": "boolean",
+          "description": "Improve dark visibility without emitting world light.",
+          "x-infini-neutral": false
+        },
+        "healCooldownReductionPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 90,
+          "description": "Reduce the next healing potion base cooldown by this percent, before native duration multipliers; does not change a running timer.",
+          "x-infini-neutral": 0
+        },
+        "healCooldownReduction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 60.0,
+          "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Subtract seconds from the next healing potion base cooldown after the selected percentage reduction and before native duration multipliers; floor zero.",
+          "x-infini-units": "seconds",
+          "x-infini-semanticType": "seconds",
+          "x-infini-neutral": 0.0,
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true,
+            "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+          }
+        },
+        "manaPotionBelowPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Use an available native mana potion when mana falls below this percentage of maximum; zero disables automation.",
+          "x-infini-neutral": 0
+        },
+        "healCooldownOnHit": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 60.0,
+          "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Remove this duration from an already running healing-potion cooldown on each actual owner item/projectile hit while this modifier is active; zero grants no proc.",
+          "x-infini-units": "seconds",
+          "x-infini-semanticType": "seconds",
+          "x-infini-neutral": 0.0,
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true,
+            "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+          }
+        },
+        "hurtImmunityBonus": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5.0,
+          "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Add immunity time after a surviving hurt to that hit's actual immunity slot.",
+          "x-infini-units": "seconds",
+          "x-infini-semanticType": "seconds",
+          "x-infini-neutral": 0.0,
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true,
+            "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+          }
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "minProperties": 1,
+      "description": "Independent player modifiers; condition applies to this component only. Available in equipment or a generated buff.",
+      "x-infini-semanticType": "bounded_text"
     }
   },
   "type": "object",
@@ -696,6 +865,95 @@
                     "pattern": "^[a-z][a-z0-9_]{0,47}$"
                   },
                   "input": {
+                    "const": "primary_use"
+                  },
+                  "action": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "native_fishing"
+                      },
+                      "targetId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 48,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "x-infini-reference": {
+                          "namespace": "entity",
+                          "targetKinds": [
+                            "item_body"
+                          ],
+                          "allowSelf": true,
+                          "graphEdge": false
+                        }
+                      },
+                      "fishing": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "power": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 1000,
+                            "description": "Native fishing power points before player, bait and environment modifiers."
+                          },
+                          "castSpeed": {
+                            "type": "number",
+                            "minimum": 0.0,
+                            "maximum": 240.0,
+                            "exclusiveMinimum": 0,
+                            "description": "Author units: blocks/second. Native consumer: Native bobber cast speed.",
+                            "x-infini-units": "blocks/second",
+                            "x-infini-semanticType": "blocks/second",
+                            "x-infini-consumerConstraint": {
+                              "storage": "float32",
+                              "neutral": null,
+                              "rule": "nonneutral_must_remain_nonneutral",
+                              "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values."
+                            },
+                            "x-infini-authorProjection": {
+                              "nonzeroMustRemainNonzero": true
+                            }
+                          }
+                        },
+                        "required": [
+                          "power",
+                          "castSpeed"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "fishing"
+                    ]
+                  },
+                  "stackCost": {
+                    "type": "integer",
+                    "const": 0
+                  },
+                  "contactDamage": {
+                    "type": "boolean",
+                    "const": false
+                  }
+                },
+                "required": [
+                  "id",
+                  "input",
+                  "action"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 48,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                  },
+                  "input": {
                     "const": "alternate_use"
                   },
                   "action": {
@@ -1113,6 +1371,95 @@
                   "stackCost": {
                     "type": "integer",
                     "const": 1
+                  },
+                  "contactDamage": {
+                    "type": "boolean",
+                    "const": false
+                  }
+                },
+                "required": [
+                  "id",
+                  "input",
+                  "action"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 48,
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                  },
+                  "input": {
+                    "const": "alternate_use"
+                  },
+                  "action": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "native_fishing"
+                      },
+                      "targetId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 48,
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "x-infini-reference": {
+                          "namespace": "entity",
+                          "targetKinds": [
+                            "item_body"
+                          ],
+                          "allowSelf": true,
+                          "graphEdge": false
+                        }
+                      },
+                      "fishing": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "power": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 1000,
+                            "description": "Native fishing power points before player, bait and environment modifiers."
+                          },
+                          "castSpeed": {
+                            "type": "number",
+                            "minimum": 0.0,
+                            "maximum": 240.0,
+                            "exclusiveMinimum": 0,
+                            "description": "Author units: blocks/second. Native consumer: Native bobber cast speed.",
+                            "x-infini-units": "blocks/second",
+                            "x-infini-semanticType": "blocks/second",
+                            "x-infini-consumerConstraint": {
+                              "storage": "float32",
+                              "neutral": null,
+                              "rule": "nonneutral_must_remain_nonneutral",
+                              "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values."
+                            },
+                            "x-infini-authorProjection": {
+                              "nonzeroMustRemainNonzero": true
+                            }
+                          }
+                        },
+                        "required": [
+                          "power",
+                          "castSpeed"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "fishing"
+                    ]
+                  },
+                  "stackCost": {
+                    "type": "integer",
+                    "const": 0
                   },
                   "contactDamage": {
                     "type": "boolean",
@@ -4510,6 +4857,31 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
+                      "playerEffect": {
+                        "$ref": "#/$defs/player_effect"
+                      },
+                      "regenWhen": {
+                        "type": "string",
+                        "enum": [
+                          "always",
+                          "stationary"
+                        ],
+                        "description": "When lifeRegen applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": "always",
+                        "x-infini-neutral": "always"
+                      },
+                      "treasureWhen": {
+                        "type": "string",
+                        "enum": [
+                          "always",
+                          "stationary"
+                        ],
+                        "description": "When treasureSense applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": "always",
+                        "x-infini-neutral": "always"
+                      },
                       "combat": {
                         "type": "object",
                         "properties": {
@@ -4659,7 +5031,7 @@
                         "description": "Canonical light color",
                         "x-infini-semanticType": "runtime_color"
                       },
-                      "oreSenseEnabled": {
+                      "treasureSense": {
                         "type": "boolean",
                         "description": "Enable native Spelunker treasure highlighting, including eligible ores, chests and life crystals; not a radius or ore-only filter",
                         "x-infini-semanticType": "boolean_capability",
@@ -5654,6 +6026,37 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
+                      "playerEffect": {
+                        "$ref": "#/$defs/player_effect"
+                      },
+                      "regenWhen": {
+                        "type": "string",
+                        "enum": [
+                          "always",
+                          "stationary"
+                        ],
+                        "description": "When lifeRegen applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": "always",
+                        "x-infini-neutral": "always"
+                      },
+                      "treasureSense": {
+                        "type": "boolean",
+                        "description": "Highlight eligible native treasures, including ores, chests and life crystals; not a radius or ore-only scan",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "treasureWhen": {
+                        "type": "string",
+                        "enum": [
+                          "always",
+                          "stationary"
+                        ],
+                        "description": "When treasureSense applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": "always",
+                        "x-infini-neutral": "always"
+                      },
                       "defensePoints": {
                         "type": "integer",
                         "minimum": -50,
@@ -6085,6 +6488,37 @@
                         "description": "Exact authored set key (empty when no matching set is intended)",
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-neutral": ""
+                      },
+                      "playerEffect": {
+                        "$ref": "#/$defs/player_effect"
+                      },
+                      "regenWhen": {
+                        "type": "string",
+                        "enum": [
+                          "always",
+                          "stationary"
+                        ],
+                        "description": "When lifeRegen applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": "always",
+                        "x-infini-neutral": "always"
+                      },
+                      "treasureSense": {
+                        "type": "boolean",
+                        "description": "Highlight eligible native treasures, including ores, chests and life crystals; not a radius or ore-only scan",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "treasureWhen": {
+                        "type": "string",
+                        "enum": [
+                          "always",
+                          "stationary"
+                        ],
+                        "description": "When treasureSense applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": "always",
+                        "x-infini-neutral": "always"
                       },
                       "defensePoints": {
                         "type": "integer",
@@ -10538,6 +10972,89 @@
                           "targetImpulseBlocksPerSecond"
                         ]
                       }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable unique call id."
+                  },
+                  "fn": {
+                    "const": "reduce_heal_cooldown_on_event"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body",
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "when": {
+                        "type": "string",
+                        "enum": [
+                          "on_hit",
+                          "on_crit"
+                        ],
+                        "description": "Exact emitted event",
+                        "x-infini-semanticType": "runtime_event_trigger"
+                      },
+                      "seconds": {
+                        "type": "number",
+                        "minimum": 0.008333333333333333,
+                        "maximum": 60.0,
+                        "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Amount removed per admitted event; 0.5 seconds removes 30 ticks. No active cooldown means no change.",
+                        "x-infini-units": "seconds",
+                        "x-infini-semanticType": "seconds",
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true,
+                          "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                        }
+                      },
+                      "delay": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 10.0,
+                        "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Delay this exact action after the chosen event; 0 executes immediately",
+                        "x-infini-units": "seconds",
+                        "x-infini-semanticType": "seconds",
+                        "x-infini-neutral": 0.0,
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true,
+                          "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                        }
+                      }
+                    },
+                    "required": [
+                      "when",
+                      "seconds"
                     ]
                   }
                 },

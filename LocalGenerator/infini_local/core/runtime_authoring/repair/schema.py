@@ -28,6 +28,7 @@ REPAIR_ERROR_POLICY: dict[str, dict[str, Any]] = {
     "incompatible_param_variant": {"strategy": "patch_exact_call_param", "llmRepairable": True, "allowNodeDelete": False},
     "consumer_representability": {"strategy": "patch_exact_param", "llmRepairable": True, "allowNodeDelete": False},
     "ambiguous_global_id": {"strategy": "delete_exact_duplicate", "llmRepairable": True, "allowNodeDelete": True},
+    "binding_action_mismatch": {"strategy": "replace_exact_action_transaction", "llmRepairable": True, "allowNodeDelete": False},
     "binding_dependency": {"strategy": "synthesize_exact_dependency_or_delete_exact_binding", "llmRepairable": True, "allowNodeDelete": True},
     "missing_effect_group": {"strategy": "retarget_exact_effect_group", "llmRepairable": True, "allowNodeDelete": False},
     "invalid_held_effect_group": {"strategy": "retarget_exact_effect_group", "llmRepairable": True, "allowNodeDelete": False},

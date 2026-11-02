@@ -106,6 +106,8 @@ public sealed partial class GeneratedItemData
     {
         if (RuntimeProgram.WeaponAmmo is not null && Gameplay.AmmoCategory.Length > 0)
             throw new InvalidDataException("one generated item cannot be both an ammo consumer and a native ammo stack");
+        if (Gameplay.AmmoCategory.Length > 0 && RuntimeProgram.Bindings.Any(b => b.UsePolicy.Action.Kind == RuntimeBindingAction.NativeFishing))
+            throw new InvalidDataException("native_fishing cannot also be a native ammo stack: Item.shoot owns the native bobber identity");
         bool hasExplicitEquipment = Accessory.Enabled || Armor.Enabled;
         bool hasPlacement = RuntimeProgram.Bindings.Any(b => b.UsePolicy.Action.Kind == RuntimeBindingAction.PlaceItem);
 

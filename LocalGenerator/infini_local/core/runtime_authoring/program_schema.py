@@ -68,7 +68,7 @@ def entity_schema() -> dict[str, Any]:
 
 
 def _binding_action_schema(action_name: str, *, include_kind: bool = True) -> dict[str, Any]:
-    from infini_local.core.runtime_authoring.capability_registry import BINDING_ACTION_REGISTRY, PLACEMENT_CAPABILITIES
+    from infini_local.core.runtime_authoring.capability_registry import BINDING_ACTION_REGISTRY, PLACEMENT_CAPABILITIES, NATIVE_FISHING_PARAMETERS
     properties: dict[str, Any] = {}
     required: list[str] = []
     properties["kind"] = {"const": action_name}
@@ -82,6 +82,11 @@ def _binding_action_schema(action_name: str, *, include_kind: bool = True) -> di
     }
     if action_spec.target_kinds != ("item_body",):
         required.append("targetId")
+    if action_name == "native_fishing":
+        properties["fishing"] = {"type": "object", "additionalProperties": False,
+                                 "properties": {name: spec.schema() for name, spec in NATIVE_FISHING_PARAMETERS.items()},
+                                 "required": list(NATIVE_FISHING_PARAMETERS)}
+        required.append("fishing")
     if action_name == "apply_item_effects":
         properties["effectGroupId"] = _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN)
     if action_name == "place_item":
@@ -106,7 +111,7 @@ def _binding_variant_schema(input_name: str, action_name: str, cost: int | None 
     properties["action"] = action_shape
     if action_shape["required"]:
         required.append("action")
-    if active_use and action_name != "place_item":
+    if active_use and action_name not in {"place_item", "native_fishing"}:
         properties["stackCost"] = {"type": "integer", "const": cost}
         if cost == 1:
             properties["stackConsumeChancePercent"] = {"type": "integer", "minimum": 0, "maximum": 100,
@@ -125,7 +130,7 @@ def binding_schema() -> dict[str, Any]:
             _binding_variant_schema(input_name, action_name, cost)
             for input_name, input_spec in INPUT_KIND_REGISTRY.items()
             for action_name in input_spec.allowed_actions
-            for cost in ((0, 1) if input_name in {"primary_use", "alternate_use"} and action_name != "place_item" else (None,))
+            for cost in ((0, 1) if input_name in {"primary_use", "alternate_use"} and action_name not in {"place_item", "native_fishing"} else (None,))
         ],
     }
 

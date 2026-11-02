@@ -37,7 +37,7 @@ RUNTIME_ROW_SHAPE_RULE = (
     "and params only for zero-argument capabilities. "
     "Fixed binding literals may be omitted: hold kind=spawn_entity; equipped kind=equip_passive; "
     "item-body-only action targetId=the unique item_body id; hold/equipped stackCost=0 and contactDamage=false; "
-    "place_item stackCost=1 and contactDamage=false. Active non-placement kind, stackCost and contactDamage are explicit. "
+    "place_item stackCost=1; native_fishing stackCost=0; both contactDamage=false. Other active kind, stackCost and contactDamage are explicit. "
     "placementCallId belongs only to place_item; effectGroupId belongs only to apply_item_effects, "
     "where absence selects ungrouped effects."
     " Physical composition: owner_mounted is owner.MountedCenter, not the hand. "

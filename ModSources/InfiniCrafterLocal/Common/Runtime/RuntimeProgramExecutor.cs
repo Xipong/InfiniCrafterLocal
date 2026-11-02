@@ -33,7 +33,7 @@ internal static class RuntimeProgramExecutor
     internal static bool HasActionAuthority(RuntimeEventActionSpec action, Player owner)
         => action.ActionCode switch
         {
-            RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.HealOwner or RuntimeEventActionCode.MoveOwner
+            RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.HealOwner or RuntimeEventActionCode.MoveOwner or RuntimeEventActionCode.ReduceHealingPotionCooldown
                 => InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner),
             RuntimeEventActionCode.ApplyNpcEffect => InfiniRuntimeAuthority.ShouldRunNpcGameplay(),
             RuntimeEventActionCode.ApplyGeneratedBuff => InfiniRuntimeAuthority.ShouldRunPlayerGameplay(owner),
@@ -150,6 +150,9 @@ internal static class RuntimeProgramExecutor
                     && data.RuntimeProgram.TryGetEffectGroup(action.EffectGroupId ?? "") is { IsGeneratedBuffOnly: true } group)
                     owner.GetModPlayer<InfiniCraftPlayer>().ApplyGeneratedUtilityBuff(group.GeneratedBuff,
                         syncNetwork: Main.netMode != Terraria.ID.NetmodeID.SinglePlayer, source: data);
+                break;
+            case RuntimeEventActionCode.ReduceHealingPotionCooldown:
+                owner.GetModPlayer<InfiniCraftPlayer>().ReduceHealingPotionCooldown(action.CooldownReductionTicks!.Value);
                 break;
             case RuntimeEventActionCode.HealOwner:
                 HealOwner(action, owner, damageDone);

@@ -83,7 +83,9 @@ public static partial class InfiniItemVfxRuntime
         if(state.AwaitingFirstDraw&&(now<state.UseTick||now-state.UseTick>54)) {
             ItemHistories[owner]=null;return null;
         }
-        bool visible=GeneratedHeldItemPresentation.TryGetVisibleHeldSpriteData(new PlayerDrawSet{drawPlayer=player},out var resolved);
+        bool visible=GeneratedHeldItemPresentation.TryGetHeldSpriteData(new PlayerDrawSet{drawPlayer=player},out var resolved);
+        // on_use history belongs to the active use cycle, not every native idle held pose.
+        visible &= player.itemAnimation > 0;
         if(resolved is not null&&!ReferenceEquals(resolved,state.Data)) {
             ItemHistories[owner]=null;return null;
         }

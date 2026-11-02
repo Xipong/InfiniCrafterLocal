@@ -17,10 +17,10 @@ public static class GeneratedHeldItemPresentation
     private static readonly Dictionary<string,int> HeldAssetRequestTicks=new(StringComparer.OrdinalIgnoreCase);
 
     internal static bool HasReadyHeldSprite(PlayerDrawSet draw)
-        => TryGetVisibleHeldSpriteData(draw,out var data)
+        => TryGetHeldSpriteData(draw,out var data)
             && global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites?.TryGet(data!.Visual.SpritePath) is not null;
 
-    internal static bool TryGetVisibleHeldSpriteData(PlayerDrawSet draw,out GeneratedItemData? data)
+    internal static bool TryGetHeldSpriteData(PlayerDrawSet draw,out GeneratedItemData? data)
     {
         data=null;
         var player=draw.drawPlayer;
@@ -42,7 +42,9 @@ public static class GeneratedHeldItemPresentation
             RequestHeldItemCatchup(id,null);data=null;return false;
         }
         if(data.Visual.RenderSizePx is null||data.Visual.ForwardAngleDegrees is null)return false;
-        if(player.itemAnimation<=0||presentationItem.noUseGraphic||presentationItem.useStyle<=ItemUseStyleID.None)return false;
+        // Native HeldItem may submit an idle hold-style or fishing body after use animation.
+        // Readiness does not second-guess that native draw decision.
+        if(presentationItem.noUseGraphic||presentationItem.useStyle<=ItemUseStyleID.None)return false;
         if(string.IsNullOrWhiteSpace(data.Visual.SpritePath)) {RequestHeldItemCatchup(id,null);return false;}
         if(global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites?.TryGet(data.Visual.SpritePath) is null) {
             RequestHeldItemCatchup(id,data.Visual.SpritePath);

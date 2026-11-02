@@ -14,7 +14,8 @@ internal readonly record struct GeneratedUtilityBuffValues(
     int RemainingTicks, float MiningSpeedMultiplier, float EmitLightStrength,
     string LightColorName, int OreSenseRadiusTiles, float MovementSpeed,
     float JumpBoost, int ManaRegen, int LifeRegen, int Defense = 0, float AttackSpeed = 0,
-    float CritChance = 0, IReadOnlyDictionary<string, float>? DamageBonuses = null);
+    float CritChance = 0, IReadOnlyDictionary<string, float>? DamageBonuses = null, global::InfiniCrafterLocal.Common.Models.PlayerEffectSpec? PlayerEffect = null,
+    string LifeRegenCondition = "always", string TreasureSenseCondition = "always");
 
 internal sealed record GeneratedUtilityBuffPresentation(
     GeneratedUtilityBuffValues Current, IReadOnlyList<GeneratedUtilityBuffValues> Entries);
@@ -22,7 +23,7 @@ internal sealed record GeneratedUtilityBuffPresentation(
 internal enum GeneratedUtilityBuffField
 {
     MiningSpeedMultiplier, EmitLightStrength, OreSenseRadiusTiles,
-    MovementSpeed, JumpBoost, ManaRegen, LifeRegen, Defense, AttackSpeed, CritChance, Damage,
+    MovementSpeed, JumpBoost, ManaRegen, LifeRegen, Defense, AttackSpeed, CritChance, Damage, PlayerEffect,
 }
 
 internal sealed record GeneratedUtilityBuffStatus(
@@ -39,7 +40,7 @@ internal static class GeneratedUtilityBuffStatusView
     private static readonly (GeneratedUtilityBuffField Field, int Icon, string Label, string RussianLabel)[] Map = {
         (GeneratedUtilityBuffField.MiningSpeedMultiplier, BuffID.Mining, "Generated mining speed", "Скорость добычи"),
         (GeneratedUtilityBuffField.EmitLightStrength, BuffID.Shine, "Generated light", "Свет"),
-        (GeneratedUtilityBuffField.OreSenseRadiusTiles, BuffID.Spelunker, "Generated ore sense", "Обнаружение руды"),
+        (GeneratedUtilityBuffField.OreSenseRadiusTiles, BuffID.Spelunker, "Treasure highlighting", "Подсветка сокровищ"),
         (GeneratedUtilityBuffField.MovementSpeed, BuffID.Swiftness, "Generated movement speed", "Скорость передвижения"),
         (GeneratedUtilityBuffField.JumpBoost, BuffID.Featherfall, "Generated jump boost", "Усиление прыжка"),
         (GeneratedUtilityBuffField.ManaRegen, BuffID.ManaRegeneration, "Generated mana regeneration", "Восстановление маны"),
@@ -73,6 +74,11 @@ internal static class GeneratedUtilityBuffStatusView
                 + contributions;
             statuses.Add(new(mapping.Field, mapping.Icon, russian ? mapping.RussianLabel : mapping.Label, remaining, tooltip));
         }
+        foreach (var entry in snapshot.Entries)
+            if (entry.RemainingTicks > 0 && entry.PlayerEffect is { HasEffect: true } effect)
+                statuses.Add(new(GeneratedUtilityBuffField.PlayerEffect, BuffID.WellFed,
+                    russian ? "Модификатор игрока" : "Player modifier", entry.RemainingTicks,
+                    PlayerEffectDescription.Build(effect, culture) + " — " + Duration(entry.RemainingTicks, culture)));
         return statuses.AsReadOnly();
     }
 
@@ -101,12 +107,16 @@ internal static class GeneratedUtilityBuffStatusView
         {
             GeneratedUtilityBuffField.MiningSpeedMultiplier => (russian ? "множитель скорости добычи ×" : "pickSpeed divisor ×") + Number(value.MiningSpeedMultiplier),
             GeneratedUtilityBuffField.EmitLightStrength => Number(value.EmitLightStrength) + (russian ? " — интенсивность света (" : " RGB coefficient (") + value.LightColorName + ")",
-            // Existing runtime sets findTreasure, not an enforced authored radius.
-            GeneratedUtilityBuffField.OreSenseRadiusTiles => russian ? (value.OreSenseRadiusTiles > 0 ? "обнаружение сокровищ включено" : "обнаружение сокровищ выключено") : "findTreasure = " + (value.OreSenseRadiusTiles > 0 ? "true" : "false"),
+            GeneratedUtilityBuffField.OreSenseRadiusTiles => PlayerEffectDescription.WithCondition(russian
+                ? (value.OreSenseRadiusTiles > 0 ? "подсветка сокровищ включена" : "подсветка сокровищ выключена")
+                : (value.OreSenseRadiusTiles > 0 ? "treasure highlighting enabled" : "treasure highlighting disabled"),
+                value.TreasureSenseCondition, culture),
             GeneratedUtilityBuffField.MovementSpeed => Signed(value.MovementSpeed) + (russian ? " к коэффициенту скорости передвижения" : " moveSpeed factor"),
             GeneratedUtilityBuffField.JumpBoost => Signed(PlayerDisplayUnits.BlocksPerSecond(value.JumpBoost)) + (russian ? " блоков/с к скорости прыжка" : " blocks/s jump-speed bonus"),
             GeneratedUtilityBuffField.ManaRegen => Signed(value.ManaRegen) + (russian ? " единиц manaRegenBonus" : " manaRegenBonus points"),
-            GeneratedUtilityBuffField.LifeRegen => Signed(value.LifeRegen / 2f) + (russian ? " ОЗ/с — вклад в регенерацию" : " HP/s contribution"),
+            GeneratedUtilityBuffField.LifeRegen => PlayerEffectDescription.WithCondition(
+                Signed(value.LifeRegen / 2f) + (russian ? " ОЗ/с — вклад в регенерацию" : " HP/s contribution"),
+                value.LifeRegenCondition, culture),
             GeneratedUtilityBuffField.Defense => Signed(value.Defense) + (russian ? " защиты" : " defense"),
             GeneratedUtilityBuffField.AttackSpeed => Signed(value.AttackSpeed) + (russian ? "% скорости атаки" : "% attack speed"),
             GeneratedUtilityBuffField.CritChance => Signed(value.CritChance) + (russian ? " п.п. шанса критического удара" : " percentage points critical chance"),

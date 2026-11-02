@@ -163,6 +163,22 @@
       "bytes": 2635,
       "width": 72,
       "height": 72
+    },
+    {
+      "path": "Images/Projectile_360.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Projectile_360.png",
+      "sha256": "69d47726765cdcb304e79847f83d9ad2cb8f28ec3048b7fb7c294ec3af1559b6",
+      "bytes": 356,
+      "width": 30,
+      "height": 30
+    },
+    {
+      "path": "Images/FishingLine.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/FishingLine.png",
+      "sha256": "a5be7ca1f2725682feabcdee6e16d75bab56583e8a26f4ae12f4930131815c4b",
+      "bytes": 89,
+      "width": 12,
+      "height": 12
     }
   ]
 }

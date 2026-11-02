@@ -9,7 +9,7 @@ from infini_local.core.runtime_authoring.wire_validator import validate_runtime_
 def combat_document(activation='generated_buff_on_use'):
     doc = build_capability_witness(activation)
     buff = next(c for c in doc['runtimeProgram']['calls'] if c['fn'] == 'generated_buff_on_use')
-    buff['params'].update(lightStrength=0, miningSpeedMultiplier=1, oreSenseEnabled=False,
+    buff['params'].update(lightStrength=0, miningSpeedMultiplier=1, treasureSense=False,
         moveSpeedBonus=0, jumpSpeedBonus=0, manaRegen=0, lifeRegen=0)
     buff['params']['combat'] = dict(defensePoints=10, attackSpeedBonus=15, critChance=4, damageBonus=25, damageClass='melee')
     return doc

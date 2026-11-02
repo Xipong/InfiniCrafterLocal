@@ -407,6 +407,88 @@
                     "action": {
                       "additionalProperties": false,
                       "properties": {
+                        "fishing": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "castSpeed": {
+                              "description": "Author units: blocks/second. Native consumer: Native bobber cast speed.",
+                              "exclusiveMinimum": 0,
+                              "maximum": 240.0,
+                              "minimum": 0.0,
+                              "type": "number",
+                              "x-infini-authorProjection": {
+                                "nonzeroMustRemainNonzero": true
+                              },
+                              "x-infini-consumerConstraint": {
+                                "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                                "neutral": null,
+                                "rule": "nonneutral_must_remain_nonneutral",
+                                "storage": "float32"
+                              },
+                              "x-infini-semanticType": "blocks/second",
+                              "x-infini-units": "blocks/second"
+                            },
+                            "power": {
+                              "description": "Native fishing power points before player, bait and environment modifiers.",
+                              "maximum": 1000,
+                              "minimum": 1,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "power",
+                            "castSpeed"
+                          ],
+                          "type": "object"
+                        },
+                        "kind": {
+                          "const": "native_fishing"
+                        },
+                        "targetId": {
+                          "maxLength": 48,
+                          "minLength": 1,
+                          "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                          "type": "string",
+                          "x-infini-reference": {
+                            "allowSelf": true,
+                            "graphEdge": false,
+                            "namespace": "entity",
+                            "targetKinds": [
+                              "item_body"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "fishing"
+                      ],
+                      "type": "object"
+                    },
+                    "contactDamage": {
+                      "const": false,
+                      "type": "boolean"
+                    },
+                    "input": {
+                      "const": "primary_use"
+                    },
+                    "stackCost": {
+                      "const": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "input",
+                    "action"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "action": {
+                      "additionalProperties": false,
+                      "properties": {
                         "kind": {
                           "const": "spawn_entity"
                         },
@@ -783,6 +865,88 @@
                     },
                     "stackCost": {
                       "const": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "input",
+                    "action"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "action": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "fishing": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "castSpeed": {
+                              "description": "Author units: blocks/second. Native consumer: Native bobber cast speed.",
+                              "exclusiveMinimum": 0,
+                              "maximum": 240.0,
+                              "minimum": 0.0,
+                              "type": "number",
+                              "x-infini-authorProjection": {
+                                "nonzeroMustRemainNonzero": true
+                              },
+                              "x-infini-consumerConstraint": {
+                                "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                                "neutral": null,
+                                "rule": "nonneutral_must_remain_nonneutral",
+                                "storage": "float32"
+                              },
+                              "x-infini-semanticType": "blocks/second",
+                              "x-infini-units": "blocks/second"
+                            },
+                            "power": {
+                              "description": "Native fishing power points before player, bait and environment modifiers.",
+                              "maximum": 1000,
+                              "minimum": 1,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "power",
+                            "castSpeed"
+                          ],
+                          "type": "object"
+                        },
+                        "kind": {
+                          "const": "native_fishing"
+                        },
+                        "targetId": {
+                          "maxLength": 48,
+                          "minLength": 1,
+                          "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                          "type": "string",
+                          "x-infini-reference": {
+                            "allowSelf": true,
+                            "graphEdge": false,
+                            "namespace": "entity",
+                            "targetKinds": [
+                              "item_body"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "fishing"
+                      ],
+                      "type": "object"
+                    },
+                    "contactDamage": {
+                      "const": false,
+                      "type": "boolean"
+                    },
+                    "input": {
+                      "const": "alternate_use"
+                    },
+                    "stackCost": {
+                      "const": 0,
                       "type": "integer"
                     }
                   },
@@ -1435,6 +1599,88 @@
                       "action": {
                         "additionalProperties": false,
                         "properties": {
+                          "fishing": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "castSpeed": {
+                                "description": "Author units: blocks/second. Native consumer: Native bobber cast speed.",
+                                "exclusiveMinimum": 0,
+                                "maximum": 240.0,
+                                "minimum": 0.0,
+                                "type": "number",
+                                "x-infini-authorProjection": {
+                                  "nonzeroMustRemainNonzero": true
+                                },
+                                "x-infini-consumerConstraint": {
+                                  "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                                  "neutral": null,
+                                  "rule": "nonneutral_must_remain_nonneutral",
+                                  "storage": "float32"
+                                },
+                                "x-infini-semanticType": "blocks/second",
+                                "x-infini-units": "blocks/second"
+                              },
+                              "power": {
+                                "description": "Native fishing power points before player, bait and environment modifiers.",
+                                "maximum": 1000,
+                                "minimum": 1,
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "power",
+                              "castSpeed"
+                            ],
+                            "type": "object"
+                          },
+                          "kind": {
+                            "const": "native_fishing"
+                          },
+                          "targetId": {
+                            "maxLength": 48,
+                            "minLength": 1,
+                            "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                            "type": "string",
+                            "x-infini-reference": {
+                              "allowSelf": true,
+                              "graphEdge": false,
+                              "namespace": "entity",
+                              "targetKinds": [
+                                "item_body"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "fishing"
+                        ],
+                        "type": "object"
+                      },
+                      "contactDamage": {
+                        "const": false,
+                        "type": "boolean"
+                      },
+                      "input": {
+                        "const": "primary_use"
+                      },
+                      "stackCost": {
+                        "const": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "input",
+                      "action"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "action": {
+                        "additionalProperties": false,
+                        "properties": {
                           "kind": {
                             "const": "spawn_entity"
                           },
@@ -1826,6 +2072,88 @@
                       "action": {
                         "additionalProperties": false,
                         "properties": {
+                          "fishing": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "castSpeed": {
+                                "description": "Author units: blocks/second. Native consumer: Native bobber cast speed.",
+                                "exclusiveMinimum": 0,
+                                "maximum": 240.0,
+                                "minimum": 0.0,
+                                "type": "number",
+                                "x-infini-authorProjection": {
+                                  "nonzeroMustRemainNonzero": true
+                                },
+                                "x-infini-consumerConstraint": {
+                                  "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                                  "neutral": null,
+                                  "rule": "nonneutral_must_remain_nonneutral",
+                                  "storage": "float32"
+                                },
+                                "x-infini-semanticType": "blocks/second",
+                                "x-infini-units": "blocks/second"
+                              },
+                              "power": {
+                                "description": "Native fishing power points before player, bait and environment modifiers.",
+                                "maximum": 1000,
+                                "minimum": 1,
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "power",
+                              "castSpeed"
+                            ],
+                            "type": "object"
+                          },
+                          "kind": {
+                            "const": "native_fishing"
+                          },
+                          "targetId": {
+                            "maxLength": 48,
+                            "minLength": 1,
+                            "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                            "type": "string",
+                            "x-infini-reference": {
+                              "allowSelf": true,
+                              "graphEdge": false,
+                              "namespace": "entity",
+                              "targetKinds": [
+                                "item_body"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "fishing"
+                        ],
+                        "type": "object"
+                      },
+                      "contactDamage": {
+                        "const": false,
+                        "type": "boolean"
+                      },
+                      "input": {
+                        "const": "alternate_use"
+                      },
+                      "stackCost": {
+                        "const": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "input",
+                      "action"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "action": {
+                        "additionalProperties": false,
+                        "properties": {
                           "kind": {
                             "const": "spawn_entity"
                           },
@@ -2183,6 +2511,7 @@
                             "use_item_body",
                             "apply_item_effects",
                             "place_item",
+                            "native_fishing",
                             "equip_passive"
                           ],
                           "type": "string"
@@ -2367,6 +2696,7 @@
                           "damage_nearest_on_event",
                           "pull_on_event",
                           "pull_owner_to_event_target",
+                          "reduce_heal_cooldown_on_event",
                           "heal_owner_on_event",
                           "move_owner_on_event",
                           "projectile_light"
@@ -3065,6 +3395,88 @@
                     "action": {
                       "additionalProperties": false,
                       "properties": {
+                        "fishing": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "castSpeed": {
+                              "description": "Author units: blocks/second. Native consumer: Native bobber cast speed.",
+                              "exclusiveMinimum": 0,
+                              "maximum": 240.0,
+                              "minimum": 0.0,
+                              "type": "number",
+                              "x-infini-authorProjection": {
+                                "nonzeroMustRemainNonzero": true
+                              },
+                              "x-infini-consumerConstraint": {
+                                "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                                "neutral": null,
+                                "rule": "nonneutral_must_remain_nonneutral",
+                                "storage": "float32"
+                              },
+                              "x-infini-semanticType": "blocks/second",
+                              "x-infini-units": "blocks/second"
+                            },
+                            "power": {
+                              "description": "Native fishing power points before player, bait and environment modifiers.",
+                              "maximum": 1000,
+                              "minimum": 1,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "power",
+                            "castSpeed"
+                          ],
+                          "type": "object"
+                        },
+                        "kind": {
+                          "const": "native_fishing"
+                        },
+                        "targetId": {
+                          "maxLength": 48,
+                          "minLength": 1,
+                          "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                          "type": "string",
+                          "x-infini-reference": {
+                            "allowSelf": true,
+                            "graphEdge": false,
+                            "namespace": "entity",
+                            "targetKinds": [
+                              "item_body"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "fishing"
+                      ],
+                      "type": "object"
+                    },
+                    "contactDamage": {
+                      "const": false,
+                      "type": "boolean"
+                    },
+                    "input": {
+                      "const": "primary_use"
+                    },
+                    "stackCost": {
+                      "const": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "input",
+                    "action"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "action": {
+                      "additionalProperties": false,
+                      "properties": {
                         "kind": {
                           "const": "spawn_entity"
                         },
@@ -3441,6 +3853,88 @@
                     },
                     "stackCost": {
                       "const": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "input",
+                    "action"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "action": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "fishing": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "castSpeed": {
+                              "description": "Author units: blocks/second. Native consumer: Native bobber cast speed.",
+                              "exclusiveMinimum": 0,
+                              "maximum": 240.0,
+                              "minimum": 0.0,
+                              "type": "number",
+                              "x-infini-authorProjection": {
+                                "nonzeroMustRemainNonzero": true
+                              },
+                              "x-infini-consumerConstraint": {
+                                "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                                "neutral": null,
+                                "rule": "nonneutral_must_remain_nonneutral",
+                                "storage": "float32"
+                              },
+                              "x-infini-semanticType": "blocks/second",
+                              "x-infini-units": "blocks/second"
+                            },
+                            "power": {
+                              "description": "Native fishing power points before player, bait and environment modifiers.",
+                              "maximum": 1000,
+                              "minimum": 1,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "power",
+                            "castSpeed"
+                          ],
+                          "type": "object"
+                        },
+                        "kind": {
+                          "const": "native_fishing"
+                        },
+                        "targetId": {
+                          "maxLength": 48,
+                          "minLength": 1,
+                          "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                          "type": "string",
+                          "x-infini-reference": {
+                            "allowSelf": true,
+                            "graphEdge": false,
+                            "namespace": "entity",
+                            "targetKinds": [
+                              "item_body"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "fishing"
+                      ],
+                      "type": "object"
+                    },
+                    "contactDamage": {
+                      "const": false,
+                      "type": "boolean"
+                    },
+                    "input": {
+                      "const": "alternate_use"
+                    },
+                    "stackCost": {
+                      "const": 0,
                       "type": "integer"
                     }
                   },
@@ -3997,6 +4491,88 @@
                           "action": {
                             "additionalProperties": false,
                             "properties": {
+                              "fishing": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "castSpeed": {
+                                    "description": "Author units: blocks/second. Native consumer: Native bobber cast speed.",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 240.0,
+                                    "minimum": 0.0,
+                                    "type": "number",
+                                    "x-infini-authorProjection": {
+                                      "nonzeroMustRemainNonzero": true
+                                    },
+                                    "x-infini-consumerConstraint": {
+                                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                                      "neutral": null,
+                                      "rule": "nonneutral_must_remain_nonneutral",
+                                      "storage": "float32"
+                                    },
+                                    "x-infini-semanticType": "blocks/second",
+                                    "x-infini-units": "blocks/second"
+                                  },
+                                  "power": {
+                                    "description": "Native fishing power points before player, bait and environment modifiers.",
+                                    "maximum": 1000,
+                                    "minimum": 1,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "power",
+                                  "castSpeed"
+                                ],
+                                "type": "object"
+                              },
+                              "kind": {
+                                "const": "native_fishing"
+                              },
+                              "targetId": {
+                                "maxLength": 48,
+                                "minLength": 1,
+                                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                                "type": "string",
+                                "x-infini-reference": {
+                                  "allowSelf": true,
+                                  "graphEdge": false,
+                                  "namespace": "entity",
+                                  "targetKinds": [
+                                    "item_body"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "fishing"
+                            ],
+                            "type": "object"
+                          },
+                          "contactDamage": {
+                            "const": false,
+                            "type": "boolean"
+                          },
+                          "input": {
+                            "const": "primary_use"
+                          },
+                          "stackCost": {
+                            "const": 0,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "input",
+                          "action"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "action": {
+                            "additionalProperties": false,
+                            "properties": {
                               "kind": {
                                 "const": "spawn_entity"
                               },
@@ -4373,6 +4949,88 @@
                           },
                           "stackCost": {
                             "const": 1,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "input",
+                          "action"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "action": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "fishing": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "castSpeed": {
+                                    "description": "Author units: blocks/second. Native consumer: Native bobber cast speed.",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 240.0,
+                                    "minimum": 0.0,
+                                    "type": "number",
+                                    "x-infini-authorProjection": {
+                                      "nonzeroMustRemainNonzero": true
+                                    },
+                                    "x-infini-consumerConstraint": {
+                                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                                      "neutral": null,
+                                      "rule": "nonneutral_must_remain_nonneutral",
+                                      "storage": "float32"
+                                    },
+                                    "x-infini-semanticType": "blocks/second",
+                                    "x-infini-units": "blocks/second"
+                                  },
+                                  "power": {
+                                    "description": "Native fishing power points before player, bait and environment modifiers.",
+                                    "maximum": 1000,
+                                    "minimum": 1,
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "power",
+                                  "castSpeed"
+                                ],
+                                "type": "object"
+                              },
+                              "kind": {
+                                "const": "native_fishing"
+                              },
+                              "targetId": {
+                                "maxLength": 48,
+                                "minLength": 1,
+                                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                                "type": "string",
+                                "x-infini-reference": {
+                                  "allowSelf": true,
+                                  "graphEdge": false,
+                                  "namespace": "entity",
+                                  "targetKinds": [
+                                    "item_body"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "fishing"
+                            ],
+                            "type": "object"
+                          },
+                          "contactDamage": {
+                            "const": false,
+                            "type": "boolean"
+                          },
+                          "input": {
+                            "const": "alternate_use"
+                          },
+                          "stackCost": {
+                            "const": 0,
                             "type": "integer"
                           }
                         },

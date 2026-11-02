@@ -192,6 +192,7 @@ public sealed partial class InfiniCraftPlayer
 
     public override void Initialize()
     {
+        ClearNativeUseSync();
         _generatedUtilityDeathTick = null;
         ClearGeneratedUtilityState();
         Array.Clear(_craftLaneOutcomes);
@@ -585,12 +586,14 @@ public sealed partial class InfiniCraftPlayer
 
     public override bool PreItemCheck()
     {
+        RefreshNativeUseProjectionBeforeItemCheck();
         Common.Systems.GeneratedPlacementLedgerSystem.RefreshPlacementInput(Player);
         return true;
     }
 
     public override void PostUpdate()
     {
+        AutoUseManaPotion();
         RefreshRemoteStationAuthority();
         TickCraftLanePresentation();
         TickCraftAudioGuard();

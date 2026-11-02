@@ -77,7 +77,7 @@ def _params(fn: str) -> dict[str, Any]:
         "restore_resources_on_use": {"healLife": 20, "healMana": 0, "usesPotionRules": False},
         "generated_buff_on_use": {
             "duration": 1, "miningSpeedMultiplier": 1.0, "lightStrength": 0.25,
-            "lightColor": "white", "oreSenseEnabled": False, "moveSpeedBonus": 0.0,
+            "lightColor": "white", "treasureSense": False, "moveSpeedBonus": 0.0,
             "jumpSpeedBonus": 0.0, "manaRegen": 0, "lifeRegen": 0,
         },
         "place_tile": {"tileId": 4, "placeStyle": 0},

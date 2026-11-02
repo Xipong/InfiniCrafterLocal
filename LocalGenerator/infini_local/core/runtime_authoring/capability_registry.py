@@ -104,6 +104,7 @@ BINDING_ACTIONS: Final[tuple[str, ...]] = (
     "use_item_body",
     "apply_item_effects",
     "place_item",
+    "native_fishing",
     "equip_passive",
 )
 EVENT_KINDS: Final[tuple[str, ...]] = (
@@ -182,13 +183,21 @@ class BindingActionSpec:
     required_item_capabilities_any_of: tuple[str, ...] = ()
 
     def prompt_card(self) -> dict[str, Any]:
-        return {
+        card: dict[str, Any] = {
             "action": self.name,
             "targets": list(self.target_kinds),
             "inputs": list(self.allowed_inputs),
             "does": self.summary,
             "requiresItemAnyOf": list(self.required_item_capabilities_any_of),
         }
+
+        if self.name == "native_fishing":
+            card["requiredPayload"] = {"fishing": {
+                "type": "object", "additionalProperties": False,
+                "properties": {name: spec.schema() for name, spec in NATIVE_FISHING_PARAMETERS.items()},
+                "required": list(NATIVE_FISHING_PARAMETERS),
+            }}
+        return card
 
 
 @dataclass(frozen=True, slots=True)
@@ -880,6 +889,35 @@ _MOVEMENT_OWNER = "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::
 _COMPILER_OWNER = "infini_local.core.runtime_authoring.compiler::compile_runtime_program"
 
 
+def _player_effect_param() -> ParamSpec:
+    """Shared mechanical vocabulary for equipment and timed generated buffs."""
+    return _p("object", "Independent player modifiers; condition applies to this component only. Available in equipment or a generated buff.", required=False, shared_type="player_effect", min_properties=1, properties={
+        "condition": _p("string", "When to apply this component: stationary requires zero velocity and no active item animation.", required=False, enum=("always", "stationary"), default="always", neutral="always", wire_name="playerEffect.condition"),
+        "fishingPowerPoints": _p("integer", 'Add fishing-power points before native rod/bait/environment multipliers.', required=False, minimum=0, maximum=100, neutral=0, wire_name="playerEffect.fishingPowerPoints", wire_presence_requires_receipt=True),
+        "preventLineBreak": _p("boolean", 'Prevent fishing-line breakage.', required=False, neutral=False, wire_name="playerEffect.preventLineBreak", wire_presence_requires_receipt=True),
+        "allowLavaFishing": _p("boolean", 'Allow catches in lava with otherwise suitable fishing gear.', required=False, neutral=False, wire_name="playerEffect.allowLavaFishing", wire_presence_requires_receipt=True),
+        "revealHookedCatch": _p("boolean", 'Reveal the hooked catch before reeling it in.', required=False, neutral=False, wire_name="playerEffect.revealHookedCatch", wire_presence_requires_receipt=True),
+        "extraCrateChancePercent": _p("integer", "Additional independent percent chance to turn a non-crate fishing attempt into a crate attempt; ordinary catch eligibility remains native.", required=False, minimum=0, maximum=100, neutral=0, wire_name="playerEffect.extraCrateChancePercent", wire_presence_requires_receipt=True),
+        "itemPickupRangeBlocks": _world_units(_p("integer", 'Additional pickup range for every item; combines with specialized ranges.', required=False, minimum=0, maximum=640, neutral=0, wire_name="playerEffect.itemPickupRangePx", wire_presence_requires_receipt=True), "itemPickupRangePx", multiplier=16, units='blocks'),
+        "heartPickupRangeBlocks": _world_units(_p("integer", 'Additional pickup range for heart pickups.', required=False, minimum=0, maximum=640, neutral=0, wire_name="playerEffect.heartPickupRangePx", wire_presence_requires_receipt=True), "heartPickupRangePx", multiplier=16, units='blocks'),
+        "manaPickupRangeBlocks": _world_units(_p("integer", 'Additional pickup range for mana-star pickups.', required=False, minimum=0, maximum=640, neutral=0, wire_name="playerEffect.manaPickupRangePx", wire_presence_requires_receipt=True), "manaPickupRangePx", multiplier=16, units='blocks'),
+        "coinPickupRangeBlocks": _world_units(_p("integer", 'Additional pickup range for coins.', required=False, minimum=0, maximum=640, neutral=0, wire_name="playerEffect.coinPickupRangePx", wire_presence_requires_receipt=True), "coinPickupRangePx", multiplier=16, units='blocks'),
+        "highlightDanger": _p("boolean", 'Enable native hazardous-tile highlighting.', required=False, neutral=False, wire_name="playerEffect.highlightDanger", wire_presence_requires_receipt=True),
+        "highlightCreatures": _p("boolean", 'Enable native creature highlighting.', required=False, neutral=False, wire_name="playerEffect.highlightCreatures", wire_presence_requires_receipt=True),
+        "nightVision": _p("boolean", 'Improve dark visibility without emitting world light.', required=False, neutral=False, wire_name="playerEffect.nightVision", wire_presence_requires_receipt=True),
+        "healCooldownReductionPercent": replace(_p("integer", 'Reduce the next healing potion base cooldown by this percent, before native duration multipliers; does not change a running timer.', required=False, minimum=0, maximum=90, neutral=0, wire_name="playerEffect.healingPotionCooldownReductionPercent", wire_presence_requires_receipt=True), predecessor_names=("healingPotionCooldownReductionPercent",)),
+        "healCooldownReduction": replace(_seconds(_p("integer", 'Subtract seconds from the next healing potion base cooldown after the selected percentage reduction and before native duration multipliers; floor zero.', required=False, minimum=0, maximum=3600, neutral=0, wire_name="playerEffect.healingPotionCooldownReductionTicks", wire_presence_requires_receipt=True), "healingPotionCooldownReductionTicks"), predecessor_names=("healingPotionCooldownReductionSeconds", "healingPotionCooldownReductionTicks")),
+        "manaPotionBelowPercent": replace(_p("integer", 'Use an available native mana potion when mana falls below this percentage of maximum; zero disables automation.', required=False, minimum=0, maximum=100, neutral=0, wire_name="playerEffect.autoManaPotionBelowPercent", wire_presence_requires_receipt=True), predecessor_names=("autoManaPotionBelowPercent",)),
+        "healCooldownOnHit": replace(_seconds(_p("integer", "Remove this duration from an already running healing-potion cooldown on each actual owner item/projectile hit while this modifier is active; zero grants no proc.", required=False, minimum=0, maximum=3600, neutral=0, wire_name="playerEffect.healingPotionCooldownOnHitReductionTicks", wire_presence_requires_receipt=True), "healingPotionCooldownOnHitReductionTicks"), predecessor_names=("healingPotionCooldownOnHitReductionSeconds", "healingPotionCooldownOnHitReductionTicks")),
+        "hurtImmunityBonus": replace(_seconds(_p("integer", "Add immunity time after a surviving hurt to that hit's actual immunity slot.", required=False, minimum=0, maximum=300, neutral=0, wire_name="playerEffect.hurtInvulnerabilityBonusTicks", wire_presence_requires_receipt=True), "hurtInvulnerabilityBonusTicks"), predecessor_names=("hurtInvulnerabilityBonusSeconds", "hurtInvulnerabilityBonusTicks")),
+    })
+
+def _stat_condition_param(wire_name: str, effect: str) -> ParamSpec:
+    return _p("string", f"When {effect} applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+              required=False, enum=("always", "stationary"), default="always", neutral="always",
+              wire_name=wire_name, wire_presence_requires_receipt=True)
+
+
 def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
     """One Author vocabulary for equipped effects and their exact DTO projection."""
     phase = "ModItem.UpdateEquip" if armor else "ModItem.UpdateAccessory"
@@ -914,6 +952,10 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
                   consumer_storage="float32" if percent else "")
 
     p: dict[str, ParamSpec] = {
+        "playerEffect": _player_effect_param(),
+        "regenWhen": _stat_condition_param("lifeRegenCondition", "lifeRegen"),
+        "treasureSense": _p("boolean", "Highlight eligible native treasures, including ores, chests and life crystals; not a radius or ore-only scan", required=False, neutral=False, wire_name="treasureSense", wire_presence_requires_receipt=True),
+        "treasureWhen": _stat_condition_param("treasureSenseCondition", "treasureSense"),
         "defensePoints": stat("defense", "Add native item defense", 0 if armor else -50, 200, "defense_points", integer=True),
         "maxLifePoints": stat("maxLife", "Add maximum life", -200, 1000, "life_points", integer=True),
         "maxManaPoints": stat("maxMana", "Add maximum mana", -200, 1000, "mana_points", integer=True),
@@ -1492,6 +1534,9 @@ _CAPS: list[CapabilitySpec] = [
         "item_utility",
         ("item_body",),
         {
+            "playerEffect": _player_effect_param(),
+            "regenWhen": _stat_condition_param("lifeRegenCondition", "lifeRegen"),
+            "treasureWhen": _stat_condition_param("treasureSenseCondition", "treasureSense"),
             "combat": _p("object", "Optional signed temporary combat modifiers; all fields explicit when selected. Negative values penalize their selected stat; zero has no effect. Same-effect refresh does not stack. No automatic active binding.", required=False, properties={
                 "defensePoints": _p("integer", "Signed Player.statDefense points; negative weakens defense; aggregate generated-buff range -100..100", minimum=-100, maximum=100, neutral=0, wire_name="combat.defensePoints"),
                 "attackSpeedBonus": _previous_param_name("attackSpeedPercent", _p("number", "Signed additive generic attack speed percent; negative slows attacks; aggregate range -80..100", minimum=-80, maximum=100, neutral=0, wire_name="combat.attackSpeedPercent", consumer_storage="float32", units="additive_percent")),
@@ -1504,7 +1549,7 @@ _CAPS: list[CapabilitySpec] = [
             "miningSpeedMultiplier": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster, <1 is a real mining-speed penalty, 1 is neutral", minimum=0.25, maximum=4, units="engine units: pickSpeed divisor", required=False, default=1, neutral=1, consumer_storage="float32"),
             "lightStrength": _p("number", "Client light RGB coefficient multiplying selected light color; not tile radius", minimum=0, maximum=1.5, wire_name="emitLightStrength", units="engine units: RGB coefficient", neutral=0, consumer_storage="float32"),
             "lightColor": _p("string", "Canonical light color", enum=_COLOR, wire_name="lightColorName"),
-            "oreSenseEnabled": _p("boolean", "Enable native Spelunker treasure highlighting, including eligible ores, chests and life crystals; not a radius or ore-only filter", semantic_type="boolean_capability", wire_name="oreSenseRadiusTiles", wire_boolean_true_value=1, neutral=False, required=False, default=False),
+            "treasureSense": replace(_p("boolean", "Enable native Spelunker treasure highlighting, including eligible ores, chests and life crystals; not a radius or ore-only filter", semantic_type="boolean_capability", wire_name="oreSenseRadiusTiles", wire_boolean_true_value=1, neutral=False, required=False, default=False), predecessor_names=("oreSenseEnabled",)),
             "moveSpeedBonus": _previous_param_name('moveSpeedBonusPercent', _p("number", "Signed additive Player.moveSpeed percent; 20 adds 20%, -20 subtracts 20% before other modifiers", minimum=-80, maximum=200, wire_name="movementSpeed", wire_divisor=100, units="additive_percent", semantic_type="additive_percent", required=False, default=0, neutral=0, consumer_storage="float32")),
             "jumpSpeedBonus": _previous_param_name('jumpSpeedBonusBlocksPerSecond', _world_units(_p("number", "Signed Player.jumpSpeedBoost contribution; negative reduces jump launch speed, not an exact height", minimum=-8, maximum=8, wire_name="jumpBoost", units="pixels/world tick", required=False, default=0, neutral=0, consumer_storage="float32"), "jumpSpeedBonusPxPerTick", multiplier=16, divisor=60, updates_power=0, units='blocks/s')),
             "manaRegen": _previous_param_name('manaRegenBonusPoints', _p("integer", "Signed Player.manaRegenBonus contribution; negative penalizes regeneration; not directly mana/second", minimum=-100, maximum=120, wire_name="manaRegen", units="engine units: manaRegenBonus points", required=False, default=0, neutral=0)),
@@ -1514,6 +1559,7 @@ _CAPS: list[CapabilitySpec] = [
         py=_COMPILER_OWNER,
         cs="Content/Items/GeneratedItem.Use.cs::ApplyItemEffects",
         wire=(
+            *("gameplay.generatedBuff." + path for path in _player_effect_param().wire_field_names("playerEffect")),
             "gameplay.generatedBuff.durationTicks",
             "gameplay.generatedBuff.exhaustionTicks",
             "gameplay.generatedBuff.miningSpeedMultiplier",
@@ -1524,6 +1570,8 @@ _CAPS: list[CapabilitySpec] = [
             "gameplay.generatedBuff.jumpBoost",
             "gameplay.generatedBuff.manaRegen",
             "gameplay.generatedBuff.lifeRegen",
+            "gameplay.generatedBuff.lifeRegenCondition",
+            "gameplay.generatedBuff.treasureSenseCondition",
             "gameplay.generatedBuff.combat.defensePoints",
             "gameplay.generatedBuff.combat.attackSpeedPercent",
             "gameplay.generatedBuff.combat.critChancePoints",
@@ -2467,6 +2515,18 @@ _CAPS.extend([
         fixed_wire_literals={"mode": "owner_to_target", "radiusTiles": 1},
     ),
     _cap(
+        "reduce_heal_cooldown_on_event",
+        "Subtract authored seconds from the owner's already running healing-potion cooldown. Both native potionDelay and Potion Sickness remaining time decrease, floored at zero.",
+        "event", ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
+        {"when": _event_when_param(("on_hit", "on_crit")),
+         "seconds": _seconds(_p("integer", "Amount removed per admitted event; 0.5 seconds removes 30 ticks. No active cooldown means no change.", minimum=1, maximum=3600, wire_name="cooldownReductionTicks", wire_presence_requires_receipt=True), "cooldownReductionTicks")},
+        component_slot="event_action", authority="owner_execute_sync", meaningful_for_stationary=True,
+        multiplicity="many_per_target", py=_COMPILER_OWNER,
+        cs="Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+        events=("on_hit", "on_crit"),
+        wire_action="reduce_healing_potion_cooldown_on_event", persisted_name="reduce_healing_potion_cooldown_on_event",
+    ),
+    _cap(
         "heal_owner_on_event",
         "Heal the owning player from dealt damage on hit/crit.",
         "event",
@@ -2597,6 +2657,12 @@ ENTITY_KIND_REGISTRY: Final[Mapping[str, EntityKindSpec]] = MappingProxyType({
     ),
 })
 
+NATIVE_FISHING_PARAMETERS: Final[Mapping[str, ParamSpec]] = MappingProxyType({
+    "power": _p("integer", "Native fishing power points before player, bait and environment modifiers.", minimum=1, maximum=1000),
+    "castSpeed": _world_units(_p("number", "Native bobber cast speed.", minimum=0, exclusive_minimum=0, maximum=64),
+                              "castSpeedPxPerTick", multiplier=16, divisor=60, units="blocks/second"),
+})
+
 BINDING_ACTION_REGISTRY: Final[Mapping[str, BindingActionSpec]] = MappingProxyType({
     "spawn_entity": BindingActionSpec(
         "spawn_entity", tuple(kind for kind in PROJECTILE_ENTITY_KIND_ORDER if ENTITY_KIND_REGISTRY[kind].spawnable_by_binding), ("primary_use", "alternate_use", "hold"),
@@ -2615,6 +2681,10 @@ BINDING_ACTION_REGISTRY: Final[Mapping[str, BindingActionSpec]] = MappingProxyTy
         "place_item", ("item_body",), ("primary_use", "alternate_use"),
         "Execute the referenced placement. The same generated item is held unavailable while placed and returned when the tile breaks. Placement emits no item_body.on_use.",
     ),
+    "native_fishing": BindingActionSpec(
+        "native_fishing", ("item_body",), ("primary_use", "alternate_use"),
+        "Native Wooden Bobber cast/reel, line, bait and catch cycle; engine-owned bobber, not an authored runtime entity or custom sprite. The selected binding projects its accepted fishing fields. Required fishing power and castSpeed (blocks/second); own stackCost=0, contactDamage=false. Selected use ignores weapon ammo; mana and item_body.on_use occur on a new cast, not reeling an existing bobber.",
+    ),
     "equip_passive": BindingActionSpec(
         "equip_passive", ("item_body",), ("equipped",),
         "Enable configured accessory or armor effects.",
@@ -2623,8 +2693,8 @@ BINDING_ACTION_REGISTRY: Final[Mapping[str, BindingActionSpec]] = MappingProxyTy
 })
 
 INPUT_KIND_REGISTRY: Final[Mapping[str, InputKindSpec]] = MappingProxyType({
-    "primary_use": InputKindSpec("primary_use", True, ("spawn_entity", "use_item_body", "apply_item_effects", "place_item"), "Primary item use.", ("item_use",)),
-    "alternate_use": InputKindSpec("alternate_use", True, ("spawn_entity", "use_item_body", "apply_item_effects", "place_item"), "Alternate item use.", ("item_use",)),
+    "primary_use": InputKindSpec("primary_use", True, ("spawn_entity", "use_item_body", "apply_item_effects", "place_item", "native_fishing"), "Primary item use.", ("item_use",)),
+    "alternate_use": InputKindSpec("alternate_use", True, ("spawn_entity", "use_item_body", "apply_item_effects", "place_item", "native_fishing"), "Alternate item use.", ("item_use",)),
     "hold": InputKindSpec("hold", True, ("spawn_entity",), "While this inventory item is selected; spawning is suppressed while a matching entity remains alive."),
     "equipped": InputKindSpec("equipped", True, ("equip_passive",), "While worn as functional accessory or armor."),
 })
@@ -2636,7 +2706,7 @@ EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
         (),
         "Emitted by item_body after an accepted non-placement primary_use/alternate_use, including spawn_entity actions; the emitting source is not the action target.",
         producer_binding_inputs=("primary_use", "alternate_use"),
-        producer_binding_actions=("spawn_entity", "use_item_body", "apply_item_effects"),
+        producer_binding_actions=("spawn_entity", "use_item_body", "apply_item_effects", "native_fishing"),
         producer_binding_kinds=("item_body",),
     ),
     "on_spawn": EventKindSpec(
@@ -2841,7 +2911,10 @@ def _derived_requirements(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
             ))
         if cap.name == "generated_buff_on_use":
             requirements.append(RequirementSpec(
-                "non_neutral_param", message="at least one generated-buff effect must be non-neutral",
+                "non_neutral_param",
+                nonzero_params=tuple(name for name, spec in cap.params.items()
+                                     if spec.kind == "object" or (spec.neutral is not None and spec.kind in {"number", "integer", "boolean"})),
+                message="at least one generated-buff effect must be non-neutral",
             ))
         return tuple(requirements)
     if cap.name == "accessory":
@@ -3006,6 +3079,7 @@ EVENT_ACTION_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
     "generated_buff_on_event": 9,
     "damage_nearby_on_event": 10,
     "npc_effect_on_event": 11,
+    "reduce_heal_cooldown_on_event": 12,
 })
 
 

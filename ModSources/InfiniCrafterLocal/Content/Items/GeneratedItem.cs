@@ -58,6 +58,7 @@ public partial class GeneratedItem : ModItem
         try { clone.Data = (Data ?? GeneratedItemData.Placeholder()).CloneForItemInstance(); }
         catch { clone.Data = GeneratedItemData.Placeholder(); }
         clone._itemPresentationToken=0;clone._itemPresentationGeneration=new object();
+        clone._nativeUseSnapshot=null;clone._invalidNativeUseSnapshot=false;
         clone._itemEventBudget = new RuntimeSpawnBudget(0);
         clone._periodicItemEvents = default;
         clone.ResetPureMobilityUseOutcome();
@@ -75,6 +76,7 @@ public partial class GeneratedItem : ModItem
         _periodicItemEvents = default;
         if(Data?.Id!=data?.Id){_itemPresentationToken=0;_itemPresentationGeneration=new object();_hasMaterialTransportIdentity=false;}
         Data = data ?? GeneratedItemData.Placeholder();
+        _nativeUseDefinitionData = null;
         _nativeToolPowersSuppressed = false;
         try { ApplyDataWithNativePrefix(); }
         catch (Exception ex)
@@ -144,13 +146,15 @@ public partial class GeneratedItem : ModItem
 
     public override void NetSend(BinaryWriter writer)
     {
-        bool materialTransport=HasMaterialTransportIdentity
+        bool activeTransport = _nativeUseSnapshot.HasValue;
+        bool materialTransport = activeTransport || HasMaterialTransportIdentity
             || global::InfiniCrafterLocal.Common.Runtime.GeneratedQuickUtilityActivation.IsEligible(Data);
-        writer.Write(materialTransport?8:GeneratedItemNetPayloadVersion);
+        writer.Write(activeTransport ? 9 : materialTransport ? 8 : GeneratedItemNetPayloadVersion);
         try { writer.Write((Data ?? GeneratedItemData.Placeholder()).ToPlayerSaveJson()); }
         catch { writer.Write(GeneratedItemData.Placeholder().ToPlayerSaveJson()); }
-        if(materialTransport)writer.Write(PresentationToken);
+        if (materialTransport) writer.Write(PresentationToken);
         writer.Write(ValidateNativePrefixToken(InstanceNativePrefix));
+        if (activeTransport) WriteNativeUseSnapshot(writer);
     }
 
     public override void NetReceive(BinaryReader reader)
@@ -158,23 +162,26 @@ public partial class GeneratedItem : ModItem
         try
         {
             int version = reader.ReadInt32();
-            if (version != GeneratedItemNetPayloadVersion && version != 8)
+            if (version != GeneratedItemNetPayloadVersion && version != 8 && version != 9)
                 throw new InvalidDataException($"Unsupported generated item payload {version}");
             GeneratedItemData reference = GeneratedItemData.FromPlayerSaveJson(reader.ReadString()) ?? GeneratedItemData.Placeholder();
-            bool materialTransport = version == 8;
+            bool materialTransport = version is 8 or 9;
             long token = materialTransport ? reader.ReadInt64() : 0;
             if (materialTransport && token == 0) throw new InvalidDataException("missing generated item presentation generation");
             // ItemIO already attempted Prefix on the native defaults before this hook.
             RetainNativePrefixForHydration(reader.ReadInt32());
+            NativeUseSnapshot? projection = version == 9 ? ReadNativeUseSnapshot(reader, token) : null;
             GeneratedItemData resolved = reference;
             var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
             if (GeneratedItemRegistryService.IsCurrentWorldData(reference) && !string.IsNullOrWhiteSpace(reference.Id) && registry is not null && registry.TryGet(reference.Id, out var canonical) && GeneratedItemRegistryService.IsCurrentWorldData(canonical))
                 resolved = canonical;
             SetData(resolved, ensureAssets: false, registerLocal: false, notifyNetState: false);
             ApplyPresentationToken(token);
+            _nativeUseSnapshot = projection;
+            _invalidNativeUseSnapshot = false;
             EnsureRuntimeHydration();
         }
-        catch { SetData(GeneratedItemData.Placeholder(), ensureAssets: false, registerLocal: false, notifyNetState: false); }
+        catch { _nativeUseSnapshot = null; _invalidNativeUseSnapshot = true; SetData(GeneratedItemData.Placeholder(), ensureAssets: false, registerLocal: false, notifyNetState: false); }
     }
 
     private void EnsureRuntimeHydration(Player? player = null)
@@ -258,7 +265,7 @@ public partial class GeneratedItem : ModItem
         if (AllowsDiagnosticProxy(PresentationData()) && !GeneratedHeldItemPresentation.HasReadyHeldSprite(drawInfo))
             return true;
 
-        if (!GeneratedHeldItemPresentation.TryGetVisibleHeldSpriteData(drawInfo, out var accepted)
+        if (!GeneratedHeldItemPresentation.TryGetHeldSpriteData(drawInfo, out var accepted)
             || accepted is null) return false;
         var artwork = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites?.TryGet(accepted.Visual.SpritePath);
         if (artwork is null) return false;

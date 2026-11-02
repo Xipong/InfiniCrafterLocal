@@ -435,17 +435,20 @@ public static class RuntimeBindingAction
     public const string ApplyItemEffects = "apply_item_effects";
     public const string PlaceItem = "place_item";
     public const string EquipPassive = "equip_passive";
+    public const string NativeFishing = "native_fishing";
     private static readonly HashSet<string> Known = new(StringComparer.Ordinal)
     {
-        SpawnEntity, UseItemBody, ApplyItemEffects, PlaceItem, EquipPassive,
+        SpawnEntity, UseItemBody, ApplyItemEffects, PlaceItem, EquipPassive, NativeFishing,
     };
     public static bool IsKnown(string? value) => value is not null && Known.Contains(value);
 
     public static bool IsAllowed(string? input, string? action)
         => input switch
         {
-            RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse
-                => action is SpawnEntity or UseItemBody or ApplyItemEffects or PlaceItem,
+            RuntimeInputKind.PrimaryUse
+                => action is SpawnEntity or UseItemBody or ApplyItemEffects or PlaceItem or NativeFishing,
+            RuntimeInputKind.AlternateUse
+                => action is SpawnEntity or UseItemBody or ApplyItemEffects or PlaceItem or NativeFishing,
             RuntimeInputKind.Hold => action == SpawnEntity,
             RuntimeInputKind.Equipped => action == EquipPassive,
             _ => false,
@@ -557,6 +560,9 @@ public sealed class RuntimeBindingUsePolicySpec
                 || input is not (RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse)
                 || Action.Kind == RuntimeBindingAction.PlaceItem))
             throw new InvalidDataException("stackConsumeChancePercent requires 0..100 and an active non-placement stackCost=1 binding");
+        if (Action.Kind == RuntimeBindingAction.NativeFishing
+            && (input is not (RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse) || StackCost != 0 || ContactDamage))
+            throw new InvalidDataException("native_fishing requires primary_use or alternate_use, stackCost=0 and contactDamage=false; native bait owns consumption");
         if (Action.Kind == RuntimeBindingAction.PlaceItem)
         {
             if (StackCost != 1)
@@ -575,6 +581,7 @@ public sealed class RuntimeBindingActionSpec
     public string Kind { get; set; } = "";
     public string TargetId { get; set; } = "";
     public RuntimePlacementSpec? Placement { get; set; }
+    public RuntimeFishingSpec? Fishing { get; set; }
     private string? _effectGroupId;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? EffectGroupId
@@ -589,6 +596,13 @@ public sealed class RuntimeBindingActionSpec
         TargetId = RuntimeText.Id(TargetId);
         if (!RuntimeBindingAction.IsKnown(Kind))
             throw new InvalidDataException($"unknown runtime binding action '{Kind}'");
+        if (Kind == RuntimeBindingAction.NativeFishing)
+        {
+            if (Fishing is null) throw new InvalidDataException("native_fishing requires an exact fishing payload");
+            Fishing.Validate();
+        }
+        else if (Fishing is not null)
+            throw new InvalidDataException("only native_fishing may carry a fishing payload");
         if (EffectGroupId is not null && Kind != RuntimeBindingAction.ApplyItemEffects)
             throw new InvalidDataException("only apply_item_effects may select an effectGroupId");
         if (Kind == RuntimeBindingAction.PlaceItem)
@@ -601,6 +615,22 @@ public sealed class RuntimeBindingActionSpec
         {
             throw new InvalidDataException("only place_item may carry a placement payload");
         }
+    }
+}
+
+// Native Terraria fishing owns the wooden bobber, line, bait, bite and catch lifecycle.
+// These values configure casting, not a generated projectile or authored catch table.
+public sealed class RuntimeFishingSpec
+{
+    public int Power { get; set; }
+    public float CastSpeedPxPerTick { get; set; }
+
+    public void Validate()
+    {
+        if (Power is < 1 or > 1000)
+            throw new InvalidDataException("fishing power must be 1..1000");
+        if (!float.IsFinite(CastSpeedPxPerTick) || CastSpeedPxPerTick <= 0f || CastSpeedPxPerTick > 64f)
+            throw new InvalidDataException("fishing castSpeedPxPerTick must be finite and >0..64");
     }
 }
 
@@ -1868,6 +1898,7 @@ public static class RuntimeEventActionCode
     public const int ApplyGeneratedBuff = 9;
     public const int DamageNearby = 10;
     public const int ApplyNpcEffect = 11;
+    public const int ReduceHealingPotionCooldown = 12;
 }
 
 public sealed class RuntimeHitTargetSpawnSpec
@@ -2060,6 +2091,13 @@ public sealed class RuntimeEventActionSpec
 
     public float RadiusTiles { get; set; }
     public float DamageFraction { get; set; }
+    private int? _cooldownReductionTicks;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CooldownReductionTicks
+    {
+        get => _cooldownReductionTicks;
+        set { if (value is not int ticks || ticks < 1 || ticks > 3600) throw new InvalidDataException("cooldownReductionTicks must be 1..3600"); _cooldownReductionTicks = ticks; }
+    }
     public int MaxHeal { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public int ReactionCooldownTicks { get; set; }
@@ -2184,10 +2222,16 @@ public sealed class RuntimeEventActionSpec
         EntityId = RuntimeText.IdOptional(EntityId);
         if (!RuntimeEventKind.IsKnown(Event))
             throw new InvalidDataException($"unknown runtime event '{Event}'");
-        if (ActionCode < RuntimeEventActionCode.SpawnEntity || ActionCode > RuntimeEventActionCode.ApplyNpcEffect)
+        if (ActionCode < RuntimeEventActionCode.SpawnEntity || ActionCode > RuntimeEventActionCode.ReduceHealingPotionCooldown)
             throw new InvalidDataException($"unsupported event action opcode {ActionCode}");
         if (!string.Equals(Action, RuntimeOpcodeNames.EventActionName(ActionCode), StringComparison.Ordinal))
             throw new InvalidDataException($"event action name/opcode mismatch '{Action}'/{ActionCode}");
+        if (ActionCode == RuntimeEventActionCode.ReduceHealingPotionCooldown)
+        {
+            if (CooldownReductionTicks is null || Event is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit))
+                throw new InvalidDataException("cooldown reduction requires an explicit amount and a direct hit/crit event");
+        }
+        else if (CooldownReductionTicks is not null) throw new InvalidDataException("cooldown reduction belongs to its exact action");
         if (ActionCode == RuntimeEventActionCode.ApplyGeneratedBuff)
         {
             if (Event is not (RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill) || EffectGroupId is null)
@@ -2330,7 +2374,7 @@ internal static class RuntimeOpcodeNames
     {
         "", "spawn_entity_on_event", "apply_status_on_event", "damage_area_on_event",
         "chain_damage_on_event", "pull_on_event", "heal_owner_on_event", "move_owner_on_event",
-        "select_targets_and_emit_on_event", "apply_generated_buff_on_event", "damage_nearby_on_event", "apply_npc_effect_on_event",
+        "select_targets_and_emit_on_event", "apply_generated_buff_on_event", "damage_nearby_on_event", "apply_npc_effect_on_event", "reduce_healing_potion_cooldown_on_event",
     };
     public static string MovementName(int code) => code >= 0 && code < MovementNames.Length ? MovementNames[code] : "";
     public static string ControllerName(int code) => code >= 0 && code < ControllerNames.Length ? ControllerNames[code] : "";
