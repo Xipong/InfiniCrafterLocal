@@ -544,6 +544,7 @@ def _llm_chat_json_exact_context(
 ) -> dict[str, Any]:
     candidate = _payload_for_context(payload, context)
     wire._cache_wire_options(candidate, payload, context, api_mode="chat")
+    wire._project_local_instruction_segments(candidate, payload, context)
     url = profiles.llm_chat_completions_url(context)
     # This gateway maps OpenAI Chat JSON mode to Responses, whose input check
     # excludes system instructions. Keep the logical packet/cache source intact.

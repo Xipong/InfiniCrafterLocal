@@ -527,6 +527,28 @@ def _cache_wire_options(wire: dict[str, Any], source: dict[str, Any],
     wire["prompt_cache_key"] = _prompt_cache_identity(identity_source, model, context=context)
 
 
+def _project_local_instruction_segments(wire: dict[str, Any], source: dict[str, Any],
+                                        context: dict[str, Any]) -> None:
+    """Combine builder-owned instructions for local chat templates with one system slot."""
+    if profiles.active_llm_provider(context) != "local":
+        return
+    index = instruction_segment_index(source)
+    if index is None:
+        return
+    messages = wire["messages"]
+    prefix = messages[:index + 1]
+    if any(not isinstance(row, dict) or not set(row) <= {"role", "name", "content"}
+           or row["role"] not in {"system", "developer"}
+           or not isinstance(row["content"], str) for row in prefix):
+        raise ValueError("local instruction projection requires plain system/developer text")
+    parts = [row["content"] if row["role"] == "system"
+             else "Developer instructions:\n" + row["content"] for row in prefix]
+    merged = {"role": "system", "content": "\n\n".join(parts)}
+    if "name" in prefix[0]:
+        merged["name"] = prefix[0]["name"]
+    messages[:index + 1] = [merged]
+
+
 def _ensure_json_input_marker(messages: list[dict[str, Any]]) -> None:
     """Frame JSON mode without editing an authored dossier or its cache identity."""
     for message in messages:
