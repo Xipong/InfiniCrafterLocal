@@ -508,7 +508,9 @@ class StudioOperations:
         # The launcher's selected data directory is process configuration, not
         # an editable generator setting from config.env.
         env["INFINI_DATA_DIR"] = str(STATE_ROOT)
-        cmd = [sys.executable, str(ROOT / "server.py")]
+        # Embedded Python ignores PYTHON* environment options: pass these flags
+        # to the child too, so generator imports never write into the runtime.
+        cmd = [sys.executable, "-X", "utf8", "-u", "-B", str(ROOT / "server.py")]
         try:
             options = {"cwd": str(STATE_ROOT), "env": env, "stdin": subprocess.DEVNULL}
             if os.name == "nt":

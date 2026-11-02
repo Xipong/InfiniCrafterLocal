@@ -432,7 +432,7 @@
       "declarations": [
         {
           "default": {
-            "expression": "ROOT / \"cache\""
+            "expression": "STATE_ROOT / \"cache\""
           },
           "file": "LocalGenerator/infini_local/core/config_bootstrap.py",
           "maximum": null,
@@ -451,7 +451,7 @@
       ],
       "default": [
         {
-          "expression": "ROOT / \"cache\""
+          "expression": "STATE_ROOT / \"cache\""
         },
         {
           "expression": "_LOCAL_GEN / \"cache\""
@@ -1239,6 +1239,30 @@
       "secret": false,
       "type": "unknown",
       "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": "",
+          "file": "LocalGenerator/infini_local/core/app_paths.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_DATA_DIR",
+      "owners": [
+        "LocalGenerator/infini_local/core/app_paths.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
     },
     {
       "declarations": [],
@@ -5451,8 +5475,8 @@
     }
   ],
   "errors": [],
-  "fieldCount": 222,
-  "fingerprint": "d94794104fe8dc0b661b18dc8a878f842b2e3eaae4a17ad0f8958b0aa242b873",
+  "fieldCount": 223,
+  "fingerprint": "5c5df2893f2b10a09332e47bcfd7f7b2e60b32f60ba8206652abba2ab0a891c7",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

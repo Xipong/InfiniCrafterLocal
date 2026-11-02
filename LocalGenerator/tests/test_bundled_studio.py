@@ -162,6 +162,53 @@ app.on_close()
         self.assertEqual(source.returncode, 0, source.stderr)
         self.assertEqual(inventory(self.runtime), before)
 
+    def test_generator_launch_keeps_runtime_read_only_when_python_environment_is_ignored(self):
+        # Replace only the child program with an import probe. The real launch
+        # owner still chooses its executable, flags, cwd and environment.
+        (self.runtime / "child_fixture.py").write_text("VALUE = 'готово'\n", encoding="utf-8")
+        (self.runtime / "server.py").write_text(
+            "import json, os, sys\nfrom pathlib import Path\nimport child_fixture\n"
+            "print(json.dumps({'value': child_fixture.VALUE, 'cwd': str(Path.cwd()), "
+            "'data': os.environ.get('INFINI_DATA_DIR'), 'utf8': sys.flags.utf8_mode, "
+            "'unbuffered': sys.stdout.write_through}, ensure_ascii=False))\n", encoding="utf-8")
+        before = inventory(self.runtime)
+        script = r'''
+import importlib.util, json, subprocess, sys
+from pathlib import Path
+from unittest.mock import patch
+runtime, data, save = map(Path, sys.argv[1:4])
+spec = importlib.util.spec_from_file_location("bundled_entry", runtime / "scripts/bundled_studio.py")
+entry = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(entry)
+entry.configure_environment(data, save)
+from infini_local.desktop.settings_controller import SettingsController
+app = SettingsController()
+app.update_values({"INFINI_LANGUAGE": "en", "INFINI_DATA_DIR": "must-not-replace-selected-data"})
+with patch("infini_local.desktop.studio_operations.subprocess.Popen") as launch:
+    result = app._start_server_after_guard()
+    assert result["ok"], result
+    assert launch.call_count == 1
+    command = launch.call_args.args[0]
+    options = launch.call_args.kwargs
+app.on_close()
+# Embedded Python ignores PYTHON* settings. -E reproduces that interpreter
+# boundary here, without depending on Windows or a downloaded runtime.
+child = subprocess.run([command[0], "-E", *command[1:]], **options,
+                       capture_output=True, text=True, encoding="utf-8", timeout=10)
+assert child.returncode == 0, child.stdout + child.stderr
+print(child.stdout, end="")
+'''
+        result = subprocess.run(
+            [sys.executable, "-I", "-B", "-c", script, str(self.runtime), str(self.data), str(self.save)],
+            cwd=self.root, env=isolated_environment(), capture_output=True,
+            text=True, encoding="utf-8", timeout=20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        child = json.loads(result.stdout)
+        self.assertEqual(child, {"value": "готово", "cwd": str(self.data), "data": str(self.data),
+                                 "utf8": 1, "unbuffered": True})
+        self.assertTrue((self.data / "config.env").is_file())
+        self.assertEqual(inventory(self.runtime), before)
+
 
 class ManagedPipeTests(unittest.TestCase):
     @staticmethod
