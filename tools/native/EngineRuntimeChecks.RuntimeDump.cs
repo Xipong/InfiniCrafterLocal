@@ -100,4 +100,114 @@ internal static partial class EngineRuntimeChecks
         Equal(nameof(InvalidOperationException), rows[1]["captureError"]!.GetValue<string>(), "bounded diagnostic is exception type only");
         Equal(false, rows[1].ToJsonString().Contains("private runtime detail", StringComparison.Ordinal), "exception content is not exposed");
     }
+    private static void RuntimeDumpPublishesImmutablePairAndPreservesPreviousOnFailure()
+    {
+        string root = System.IO.Directory.CreateTempSubdirectory("ifc-dump-pair-").FullName;
+        try
+        {
+            var captureEnvironment = typeof(InfiniDumpCommand).GetMethod("CaptureDumpEnvironment", BindingFlags.Static | BindingFlags.NonPublic)!;
+            var environment = (JsonObject)captureEnvironment.Invoke(null, null)!;
+            Equal(Terraria.Main.versionNumber, environment["gameVersion"]!.GetValue<string>(), "manifest game version comes from loaded native constants");
+            Equal(typeof(Terraria.ModLoader.ModLoader).Module.ModuleVersionId.ToString(),
+                environment["tModLoader"]!["mvid"]!.GetValue<string>(), "loaded tML module identity is observed, not inferred from game version");
+            Equal(typeof(InfiniDumpCommand).Module.ModuleVersionId.ToString(),
+                environment["exporter"]!["mvid"]!.GetValue<string>(), "manifest identifies the actual exporter build");
+            JsonObject Publish(bool fail) => InfiniDumpCommand.PublishSnapshot(root,
+                writer => writer.WriteLine("{\"type\":1,\"damage\":0}"),
+                writer =>
+                {
+                    writer.WriteLine("{\"type\":2,\"unavailable\":true}");
+                    if (fail) throw new System.IO.IOException("test interruption before manifest publication");
+                }, environment);
+            JsonObject first = Publish(false);
+            string manifestPath = System.IO.Path.Combine(root, InfiniDumpCommand.DumpManifestName);
+            string original = System.IO.File.ReadAllText(manifestPath);
+            string oldItem = System.IO.Path.Combine(root, first["files"]!["items"]!["path"]!.GetValue<string>());
+            string oldProjectile = System.IO.Path.Combine(root, first["files"]!["projectiles"]!["path"]!.GetValue<string>());
+            Equal(1, first["files"]!["items"]!["rows"]!.GetValue<int>(), "manifest counts literal item rows");
+            Equal(1, first["files"]!["projectiles"]!["unavailableRows"]!.GetValue<int>(), "capture refusals are counted, not hidden");
+            foreach (string kind in new[] { "items", "projectiles" })
+            {
+                var entry = first["files"]![kind]!;
+                byte[] bytes = System.IO.File.ReadAllBytes(System.IO.Path.Combine(root, entry["path"]!.GetValue<string>()));
+                Equal((long)bytes.Length, entry["bytes"]!.GetValue<long>(), "manifest binds exact byte length");
+                Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant(),
+                    entry["sha256"]!.GetValue<string>(), "manifest binds exact SHA-256");
+            }
+            bool failed = false;
+            try { Publish(true); } catch (System.IO.IOException) { failed = true; }
+            Equal(true, failed, "I/O failure remains terminal, never successful partial export");
+            Equal(original, System.IO.File.ReadAllText(manifestPath), "failed second capture cannot replace the previous manifest");
+            Equal(true, System.IO.File.Exists(oldItem) && System.IO.File.Exists(oldProjectile), "previous complete pair survives");
+            Equal(1, System.IO.Directory.GetDirectories(System.IO.Path.Combine(root, "runtime_dump_snapshots")).Length,
+                "only unpublished failed attempt is removed");
+            JsonObject second = Publish(false);
+            Equal(false, first["snapshotId"]!.GetValue<string>() == second["snapshotId"]!.GetValue<string>(), "new snapshot has a separate immutable identity");
+            Equal(true, System.IO.File.Exists(oldItem) && System.IO.File.Exists(oldProjectile), "successful publication also retains previous pair");
+            Equal(false, System.IO.File.Exists(System.IO.Path.Combine(root, "items_runtime_dump.jsonl")), "no mutable legacy alias recreates mixed-pair risk");
+            string current = System.IO.File.ReadAllText(manifestPath);
+            try
+            {
+                InfiniDumpCommand.PublishSnapshot(root, writer =>
+                {
+                    for (int n = 0; n <= InfiniDumpCommand.DumpRowLimit; n++) writer.WriteLine("{\"type\":1}");
+                }, _ => { }, environment);
+                throw new Exception("row bound did not refuse export");
+            }
+            catch (System.IO.InvalidDataException) { }
+            Equal(current, System.IO.File.ReadAllText(manifestPath), "bounded failure leaves accepted manifest unchanged");
+            if (Environment.GetEnvironmentVariable("INFINI_DUMP_MANIFEST_TEST_OUTPUT") is string output)
+            {
+                System.IO.Directory.CreateDirectory(output);
+                // Synthetic rows only; enables reader interoperability verification.
+                InfiniDumpCommand.PublishSnapshot(output,
+                    writer => writer.WriteLine("{\"type\":1}"),
+                    writer => writer.WriteLine("{\"type\":2,\"sourceMod\":\"Synthetic\",\"internalName\":\"Bolt\"}"),
+                    environment);
+            }
+        }
+        finally { System.IO.Directory.Delete(root, recursive: true); }
+    }
+
+    private static void RuntimeDumpNebulaRainbowAvailableContentRoundTrip()
+    {
+        using var state = new NativeActorState();
+        Terraria.Main.netMode = NetmodeID.SinglePlayer;
+        Terraria.Main.dedServ = true; // No GPU/world simulation is part of this content check.
+        var rows = new List<JsonObject>();
+        foreach (int type in new[] { ItemID.NebulaArcanum, ItemID.RainbowCrystalStaff })
+        {
+            Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(91);
+            var item = new Item(type);
+            using var request = JsonDocument.Parse(new GeneratorClient().Prepare(item, item, new Player()).PayloadJson);
+            var live = JsonNode.Parse(request.RootElement.GetProperty("itemA").GetRawText())!.AsObject();
+            Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(91);
+            JsonObject dump = InfiniDumpCommand.CaptureItemSnapshot(item);
+            foreach (string field in new[] { "useTime", "useAnimation", "reuseDelay", "tooltipLines", "tooltipSource",
+                "nativeShootReference", "nativeEquipmentReference", "nativeContactHitStatusReference", "parentSourceGraph" })
+                Equal(true, JsonNode.DeepEquals(live[field], dump[field]), "bounded parent live/dump literal content parity: " + field);
+            var direct = dump["directProjectileRaw"]!.AsObject();
+            var standalone = InfiniDumpCommand.CaptureProjectileSnapshot(item.shoot);
+            foreach (string field in new[] { "timeLeft", "extraUpdates", "framesRaw", "setsRaw", "attackReference",
+                "motionReference", "collisionReference", "onHitStatusReference", "spriteReferenceRaw" })
+                Equal(true, JsonNode.DeepEquals(direct[field], standalone[field]), "item/standalone projectile available observation parity: " + field);
+            Equal(true, direct["attackReference"] is JsonObject, "bounded source coverage, including unknowns, reaches dump");
+            rows.Add(dump);
+        }
+        if (Environment.GetEnvironmentVariable("INFINI_DUMP_CONTENT_TEST_OUTPUT") is string output)
+        {
+            var captureEnvironment = typeof(InfiniDumpCommand).GetMethod("CaptureDumpEnvironment", BindingFlags.Static | BindingFlags.NonPublic)!;
+            var environment = (JsonObject)captureEnvironment.Invoke(null, null)!;
+            InfiniDumpCommand.PublishSnapshot(output,
+                writer => { foreach (var row in rows) writer.WriteLine(row.ToJsonString()); },
+                writer =>
+                {
+                    // Catalog rows exist independently of any proved spawn edge.
+                    foreach (int type in new[] { ProjectileID.NebulaArcanum, ProjectileID.NebulaArcanumSubshot,
+                        ProjectileID.RainbowCrystal, ProjectileID.RainbowCrystalExplosion })
+                        writer.WriteLine(InfiniDumpCommand.CaptureProjectileSnapshot(type).ToJsonString());
+                }, environment);
+        }
+    }
+
 }

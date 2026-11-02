@@ -46,7 +46,7 @@ LLM_PROJECTILE_RAW_KEYS = [
     "tileCollide", "ignoreWater", "friendly", "hostile", "arrow", "minion", "sentry", "minionSlots",
     "ownerHitCheck", "usesLocalNPCImmunity", "localNPCHitCooldown", "usesIDStaticNPCImmunity", "idStaticNPCHitCooldown",
     "stopsDealingDamageAfterPenetrateHits", "light", "alpha", "netImportant", "damageClass",
-    "framesRaw", "setsRaw", "fromGeneratedAttack", "engineMetrics", "unavailable",
+    "framesRaw", "setsRaw", "fromGeneratedAttack", "engineMetrics", "unavailable", "runtimeDumpProvenance",
 ]
 LLM_AMMO_ITEM_KEYS = [
     "source", "inventorySlot", "type", "name", "internalName", "sourceMod", "fullName", "damage", "damageClass",

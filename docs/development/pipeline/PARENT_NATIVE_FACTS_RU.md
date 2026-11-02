@@ -241,6 +241,37 @@ item snapshots и полные accepted generated graphs продолжают р
 Новые references проходят Python compact packet с полными conditions, нулями,
 false, пустыми альтернативами и независимой копией данных.
 
+## Сохранённый dump как источник read-only context
+
+`/infinidump` использует тот же `ToWireItem` / `ProjectileRawSnapshot`, что live
+`Prepare`: это не второй extractor. Полная строка item содержит исходные numeric
+use/cooldown/lifetime поля, literal tooltips, доступные native references и
+bounded source graph. `timeLeft` или `useTime` не являются записью всей AI
+последовательности и не доказывают частоту дочерних выстрелов.
+
+`runtime_dump_service.py` загружает проверенную manifest-пару один раз при старте.
+`native_item_context_from_dump` дополняет только read-only parent card: требует
+целую verified пару и точное stable item identity (numeric ID плюс fullName либо
+sourceMod/internalName). Известное противоречие module MVID, item identity или
+shoot identity запрещает заимствование. Отсутствие сравнимых modules остаётся
+`currentModSet=unverified`, а не доказательством текущей совместимости.
+
+Копируются только целиком отсутствующие producer-owned native source references,
+`parentSourceGraph`, `directProjectileRaw`, `spriteReferenceRaw` и связка literal
+tooltip/source. Presence проверяется в root, runtimeFacts и fingerprint: null,
+пустой объект и unavailable не заполняются старым dump. Частичный source graph
+не сливается рекурсивно с другим capture. Scalars, player ammo/effective state,
+recipe identity, fingerprint и исходный input не изменяются; generated parents
+не используют этот путь. Provenance с перечнем добавленных полей проходит в
+Author/Visual/VFX cards, включая честный dump-origin для projectile.
+
+Legacy JSONL без manifest сохраняет прежний **projectile-only** lookup с меткой
+`legacy_unverified`; новый item enrichment на него не распространяется. Если
+полную item-строку подают как исходный parent, её уже присутствующие поля идут
+обычным projection, без нового восстановления. Непокрытые/отказанные native
+AI/source окна остаются unknown и в live, и в dump, и в card: отсутствие cadence
+не заменяется вручную поддерживаемыми таблицами Terraria.
+
 ## Воспроизведение и ограничения
 
 ```bash

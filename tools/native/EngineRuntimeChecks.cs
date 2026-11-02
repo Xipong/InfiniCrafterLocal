@@ -65,6 +65,8 @@ internal static partial class EngineRuntimeChecks
             ("parent attack source certificates match native shooting collision", ParentAttackCertificatesMatchNativeShootingAndCollision),
             ("parent quantified snapshots and ammo observation identity", ParentQuantifiedFactsKeepSnapshotsAndObservationIdentity),
             ("parent native item scale penetration and use limit", ParentNativeItemStatsSurviveCaptureAndNormalization),
+            ("runtime dump Nebula Rainbow available content roundtrip", RuntimeDumpNebulaRainbowAvailableContentRoundTrip),
+            ("runtime dump atomic paired manifest and failed publication", RuntimeDumpPublishesImmutablePairAndPreservesPreviousOnFailure),
             ("runtime dump shares complete parent and projectile capture", RuntimeDumpSharesCompleteParentAndProjectileCapture),
             ("runtime dump preserves capture failures as explicit unavailable rows", RuntimeDumpKeepsCaptureFailuresAsExplicitRows),
             ("parent complete projectile attack source reaches live and dump", ParentProjectileAttackSemanticsReachPrepareAndDump),

@@ -14,7 +14,7 @@ using Terraria.ModLoader;
 
 namespace InfiniCrafterLocal.Common.Commands;
 
-public sealed class InfiniDumpCommand : ModCommand
+public sealed partial class InfiniDumpCommand : ModCommand
 {
     public override CommandType Type => CommandType.Chat;
     public override string Command => "infinidump";
@@ -23,12 +23,7 @@ public sealed class InfiniDumpCommand : ModCommand
     public override void Action(CommandCaller caller, string input, string[] args)
     {
         string dir = Path.Combine(Main.SavePath, "InfiniCrafterLocal");
-        Directory.CreateDirectory(dir);
-        string itemPath = Path.Combine(dir, "items_runtime_dump.jsonl");
-        string projectilePath = Path.Combine(dir, "projectiles_runtime_dump.jsonl");
-
-        var options = new JsonSerializerOptions { WriteIndented = false };
-        using (var itemWriter = new StreamWriter(itemPath, false))
+        JsonObject manifest = PublishSnapshot(dir, itemWriter =>
         {
             for (int type = InfiniTerrariaSentinels.FirstValidItemType; type < ItemLoader.ItemCount; type++)
             {
@@ -37,20 +32,18 @@ public sealed class InfiniDumpCommand : ModCommand
                     Item item = new();
                     item.SetDefaults(type);
                     return item.IsAir || string.IsNullOrWhiteSpace(item.Name) ? null : CaptureItemSnapshot(item);
-                }, options);
+                }, DumpJsonOptions);
             }
-        }
-
-        using (var projectileWriter = new StreamWriter(projectilePath, false))
+        }, projectileWriter =>
         {
             for (int type = InfiniTerrariaSentinels.FirstValidProjectileType; type < ProjectileLoader.ProjectileCount; type++)
-            {
-                WriteSnapshot(projectileWriter, type, () => CaptureProjectileSnapshot(type), options);
-            }
-        }
+                WriteSnapshot(projectileWriter, type, () => CaptureProjectileSnapshot(type), DumpJsonOptions);
+        }, CaptureDumpEnvironment());
 
-        Main.NewText($"InfiniCraft dump written: {itemPath}", 120, 220, 255);
-        Main.NewText($"InfiniCraft dump written: {projectilePath}", 120, 220, 255);
+        Main.NewText($"InfiniCraft snapshot: {Path.Combine(dir, DumpManifestName)}", 120, 220, 255);
+        foreach (string kind in new[] { "items", "projectiles" })
+            Main.NewText(Path.Combine(dir, manifest["files"]![kind]!["path"]!.GetValue<string>()), 120, 220, 255);
+        Main.NewText("Restart LocalGenerator to read this snapshot; previous snapshots were kept.", 120, 220, 255);
     }
 
     internal static void WriteSnapshot(TextWriter writer, int type, Func<JsonObject?> capture, JsonSerializerOptions options)
