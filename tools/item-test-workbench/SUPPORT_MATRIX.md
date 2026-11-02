@@ -111,3 +111,5 @@ Contour support is limited to the world/world polyline stroke subset documented 
 scene explicitly provides `recallSpawn`. Player/world spawn selection and
 cooldown are observed; Player.Spawn, actual bed validation, arbitrary destination
 safety and multiplayer are not certified.
+
+Native torch light providers are initialized through the original `TorchID.Initialize` before scene/content setup, matching the native Main bootstrap owner. `verify_status_dust.py` exercises on-hit Shadowflame/Frostburn2 through NPC and Dust update, real dust pixels, expiry, fresh-process reset and no-hit/no-buff/no-draw controls. This does not expand the authored `nativeDust` selector admission or certify arbitrary mod torch providers.
