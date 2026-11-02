@@ -273,7 +273,7 @@ def _generated_placement_fields(item: dict[str, Any]) -> dict[str, Any]:
         ("createTile", "tileId"), ("createWall", "wallId"), ("placeStyle", "placeStyle")
     ) if source in placement and placement[source] is not None}
 
-def compact_projectile_profile(proj: dict[str, Any]) -> dict[str, Any]:
+def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool = True) -> dict[str, Any]:
     if not isinstance(proj, dict) or not proj:
         return {}
     out = _select_raw_keys(proj, LLM_PROJECTILE_RAW_KEYS)
@@ -292,6 +292,23 @@ def compact_projectile_profile(proj: dict[str, Any]) -> dict[str, Any]:
         out["onHitStatusReference"] = copy.deepcopy(proj["onHitStatusReference"])
     if isinstance(proj.get("collisionReference"), dict):
         out["collisionReference"] = copy.deepcopy(proj["collisionReference"])
+    if include_references and isinstance(proj.get("referencedProjectiles"), dict):
+        references = copy.deepcopy(proj["referencedProjectiles"])
+        # Producer-owned one-hop facts; no catalog lookup, ID inference or new
+        # gameplay choice. Unknown/future envelopes stay literal.
+        if (references.get("source") == "native_single_hop_projectile_references"
+                and type(references.get("version")) is int and references["version"] == 1
+                and set(references) <= {"source", "version", "scope", "profileLimit", "sourceCalls", "references"}
+                and isinstance(references.get("sourceCalls"), list)
+                and isinstance(references.get("references"), list)
+                and all(isinstance(row, dict) and set(row) <= {"type", "sourceCallIndices", "profile", "unresolved"}
+                        for row in references["references"])):
+            for reference in references["references"]:
+                if (isinstance(reference.get("profile"), dict)
+                        and reference["profile"].get("unavailable") is not True
+                        and "referencedProjectiles" not in reference["profile"]):
+                    reference["profile"] = compact_projectile_profile(reference["profile"], include_references=False)
+        out["referencedProjectiles"] = references
     if LLM_INCLUDE_AISTYLE_RAW and _compact_keep(proj.get("aiStyle")):
         out["aiStyle"] = _compact_raw_value(proj.get("aiStyle"))
     return out

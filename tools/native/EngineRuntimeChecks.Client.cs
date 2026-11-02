@@ -370,9 +370,8 @@ internal static partial class EngineRuntimeChecks
                     Equal("unknown_custom_draw_possible", observed.GetProperty("frameLayout").GetString()!, "default one frame does not prove draw layout");
                     Equal(false, observed.TryGetProperty("currentFrame", out _), "no guessed frame rectangle");
                 }
-                var snapshotMethod = typeof(GeneratorClient).GetMethod("ProjectileRawSnapshot", BindingFlags.Static | BindingFlags.NonPublic)!;
-                JsonElement Snapshot() => JsonSerializer.SerializeToElement(snapshotMethod.Invoke(null,
-                    new object[] { projectile.type, 3f, "test", source, -1 }),
+                JsonElement Snapshot() => JsonSerializer.SerializeToElement(
+                    GeneratorClient.ProjectileRawSnapshot(projectile.type, 3f, "test", source, -1),
                     new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
                 var loadedSnapshot = Snapshot();
                 typeof(Asset<Texture2D>).GetProperty("State")!.SetValue(asset, AssetState.NotLoaded);

@@ -752,7 +752,7 @@ public sealed partial class GeneratorClient
         catch { return null; } // Optional request-local observation; never force asset loading.
     }
 
-    internal static object? ProjectileRawSnapshot(int projectileType, float itemShootSpeed, string source, Item? sourceItem, int inventorySlot)
+    internal static object? ProjectileRawSnapshot(int projectileType, float itemShootSpeed, string source, Item? sourceItem, int inventorySlot, bool includeChildReferences = true)
     {
         if (projectileType <= ProjectileID.None)
             return null;
@@ -838,9 +838,11 @@ public sealed partial class GeneratorClient
                 onHitStatusReference = CaptureNativeHitStatusReference(p)
             };
             var sprite = TryCaptureProjectileSpriteReference(p);
-            if (sprite is null) return snapshot;
+            var children = includeChildReferences ? ReferencedProjectileSnapshots(ProjectileSpawnReferences(p)) : null;
+            if (sprite is null && children is null) return snapshot;
             var observed = JsonSerializer.SerializeToNode(snapshot, WireJsonOptions)!.AsObject();
-            observed["spriteReferenceRaw"] = JsonSerializer.SerializeToNode(sprite, WireJsonOptions);
+            if (sprite is not null) observed["spriteReferenceRaw"] = JsonSerializer.SerializeToNode(sprite, WireJsonOptions);
+            if (children is not null) observed["referencedProjectiles"] = children;
             return observed;
         }
         catch
@@ -854,6 +856,42 @@ public sealed partial class GeneratorClient
                 unavailable = true
             };
         }
+    }
+
+    private static JsonObject? ReferencedProjectileSnapshots(JsonArray calls)
+    {
+        if (calls.Count == 0) return null;
+        // Source-observation work bound, not a runtime spawn/design limit. Keep
+        // every callsite and omitted identity; never truncate a connected profile.
+        const int ProfileLimit = 8;
+        var references = new JsonArray();
+        var identities = new Dictionary<int, JsonArray>();
+        for (int index = 0; index < calls.Count; index++)
+            foreach (var candidate in calls[index]!["projectileTypes"]!.AsArray())
+            {
+                int id = candidate!.GetValue<int>();
+                if (!identities.TryGetValue(id, out var sites)) identities[id] = sites = new JsonArray();
+                sites.Add(index);
+            }
+        int captured = 0;
+        foreach (var (id, sites) in identities)
+        {
+            var reference = new JsonObject { ["type"] = id, ["sourceCallIndices"] = sites };
+            if (id <= ProjectileID.None || id >= ProjectileLoader.ProjectileCount)
+                reference["unresolved"] = "spawn_projectile_identity_not_registered";
+            else if (captured >= ProfileLimit) reference["unresolved"] = "single_hop_profile_count_bound";
+            else
+            {
+                captured++;
+                // Defaults/source only; actual spawn arguments stay in parent.
+                reference["profile"] = JsonSerializer.SerializeToNode(ProjectileRawSnapshot(id, 0f,
+                    "conditional_native_spawn_candidate", null, -1, includeChildReferences: false), WireJsonOptions);
+            }
+            references.Add(reference);
+        }
+        return new JsonObject { ["source"] = "native_single_hop_projectile_references", ["version"] = 1,
+            ["scope"] = "Conditional literal source candidates, not executed spawns or inherited mechanics. Child profiles are native defaults/source only; actual damage, velocity, owner and AI arguments belong to the parent call. One hop; dynamic IDs and opaque effects remain unknown.",
+            ["profileLimit"] = ProfileLimit, ["sourceCalls"] = calls, ["references"] = references };
     }
 
     private static object ProjectileSetsRaw(int projectileType)

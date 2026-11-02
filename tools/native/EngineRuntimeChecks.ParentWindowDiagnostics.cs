@@ -25,12 +25,12 @@ internal static partial class EngineRuntimeChecks
         return type.CreateType()!.GetMethod("Source")!;
     }
 
-    private static (List<ITuple> Windows, List<string> Gaps) ReadParentWindows(MethodInfo method, int style)
+    private static (List<ITuple> Windows, List<string> Gaps) ReadParentWindows(MethodInfo method, int style, bool meaningfulBudget = false)
     {
         const BindingFlags flags=BindingFlags.NonPublic|BindingFlags.Static;
         object code=typeof(GeneratorClient).GetMethod("AttackCode",flags)!.Invoke(null,new object[]{method})!;
         var gaps=new List<string>(); Action<string> report=gaps.Add;
-        var windows=(IEnumerable)typeof(GeneratorClient).GetMethod("ProjectileIdentityWindows",flags)!.Invoke(null,new object[]{code,643,style,report})!;
+        var windows=(IEnumerable)typeof(GeneratorClient).GetMethod("ProjectileIdentityWindows",flags)!.Invoke(null,new object[]{code,643,style,report,meaningfulBudget})!;
         return (windows.Cast<ITuple>().ToList(),gaps);
     }
 
@@ -51,13 +51,12 @@ internal static partial class EngineRuntimeChecks
         var unknown=ReadParentWindows(ParentWindowFixture(8,0,unsupported:true),123);
         Equal(0,unknown.Windows.Count,"unrecognized comparison still refused");
         Equal(0,unknown.Gaps.Count,"unrecognized comparison not a budget refusal");
-        foreach(var identity in new[]{(Type:617,Style:118),(Type:643,Style:123)})
+        var native=typeof(Projectile).GetMethod("VanillaAI",BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic)!;
+        foreach(int style in new[]{118,123})
         {
-            var facts=GeneratorClient.CaptureProjectileAttackReference(new Projectile{type=identity.Type,aiStyle=identity.Style});
-            Equal(false,facts.ContainsKey("motionDispatch"),"existing overbudget native source remains unadmitted");
-            var gaps=facts["coverage"]!["unresolved"]!.AsArray();
-            Equal(true,gaps.Any(g=>g!.GetValue<string>()=="VanillaAI_identity_window_raw_instruction_bound"),"actual installed native source reports raw budget");
-            Equal(false,gaps.Any(g=>g!.GetValue<string>()=="VanillaAI_identity_dispatch_outside_supported_source_shape"),"no false unsupported identity syntax diagnosis");
+            var current=ReadParentWindows(native,style);
+            Equal(0,current.Windows.Count,"broad graph still refuses original overbudget native window");
+            Equal(true,current.Gaps.Contains("identity_window_raw_instruction_bound"),"broad graph raw budget unchanged");
         }
     }
 }
