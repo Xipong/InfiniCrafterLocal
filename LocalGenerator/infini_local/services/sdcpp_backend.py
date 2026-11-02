@@ -17,6 +17,7 @@ import os
 from pathlib import Path, PureWindowsPath
 import re
 import shlex
+import sys
 from typing import Any, Callable
 from urllib import request as urlrequest
 
@@ -49,6 +50,37 @@ class SdcppBackendConfig:
     lora_file: str = ""
 
 
+def _portable_rocm_root(server_exe: str) -> str:
+    """Recognize only a colocated Windows HIP/rocBLAS layout, not GPU settings."""
+    if sys.platform != "win32" or not server_exe or server_exe.replace("\\", "/").startswith("//"):
+        return ""
+    try:
+        exe = Path(server_exe).expanduser().absolute()
+        root = exe.parent
+        required = (exe, root / "ggml-hip.dll", root / "rocblas.dll")
+        library = root / "rocblas" / "library"
+        if any(path.is_symlink() for path in (*root.parents, root, library.parent, library)):
+            return ""
+        if any(path.is_symlink() or not path.is_file() for path in required):
+            return ""
+        if not any((root / name).is_file() and not (root / name).is_symlink()
+                   for name in ("amdhip64_7.dll", "amdhip64_6.dll")):
+            return ""
+        if not library.is_dir():
+            return ""
+        # Bounded layout observation only; do not execute launchers or read a
+        # manifest's commands/environment/paths, and never infer a GPU/backend.
+        with os.scandir(library) as entries:
+            for index, entry in enumerate(entries):
+                if index >= 512:
+                    break
+                if entry.is_file(follow_symlinks=False) and not entry.is_symlink():
+                    return str(root)
+    except (OSError, ValueError):
+        pass
+    return ""
+
+
 def server_process_environment(
     cfg: SdcppBackendConfig,
     *,
@@ -58,7 +90,13 @@ def server_process_environment(
     env = dict(os.environ if base_env is None else base_env)
     raw_root = str(cfg.rocm_compat_root or "").strip().rstrip("\\/")
     if not raw_root:
-        return env
+        # An inherited ROCm setup is explicit operator intent too. Only an
+        # explicit config root may supersede it, never automatic discovery.
+        if any(key in env for key in ("ROCM_COMPAT_ROOT", "ROCM_PATH", "HIP_PATH", "ROCBLAS_TENSILE_LIBPATH")):
+            return env
+        raw_root = _portable_rocm_root(cfg.server_exe)
+        if not raw_root:
+            return env
     is_windows_path = len(raw_root) >= 2 and raw_root[1] == ":"
     root = str(PureWindowsPath(raw_root)) if is_windows_path else raw_root
     rocblas = (

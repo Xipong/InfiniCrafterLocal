@@ -84,7 +84,8 @@ class StudioOperations:
                     outcome = on_result(*result)
                     if isinstance(outcome, dict):
                         finish_action(self, state["command_id"], outcome.get("ok", result[0]), outcome.get("message", ""),
-                                      saved=outcome.get("saved", False))
+                                      saved=outcome.get("saved", False), cancelled=outcome.get("cancelled", False),
+                                      result=outcome.get("result"))
                     else:
                         finish_action(self, state["command_id"], result[0], "Действие завершено." if result[0] else "Действие не выполнено.")
                 except Exception:

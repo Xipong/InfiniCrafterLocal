@@ -273,3 +273,47 @@ def test_parallel_image_checkbox_round_trips_saved_config(studio):
             assert reloaded.values['INFINI_IMAGE_MAX_CONCURRENCY'] == '4'
         finally:
             reloaded.on_close()
+
+
+def test_stock_and_hybrid_arguments_preserve_paths_and_custom_profile(studio):
+    app, controller = studio
+    paths = {key: '/chosen/' + key for key in (
+        'INFINI_SDCPP_SERVER_EXE', 'INFINI_SDCPP_MODEL', 'INFINI_SDCPP_VAE',
+        'INFINI_SDCPP_LLM', 'INFINI_SDCPP_ROCM_COMPAT_ROOT')}
+    custom = dict(paths, INFINI_SDCPP_SERVER_EXTRA_ARGS=' --my-exact "two words" ', INFINI_LLM_PROVIDER='openrouter')
+    original = app.config_path.read_bytes()
+    saved = apply(controller, 'savePreset', custom, {'name': 'My flags'})
+    assert saved['ok']
+    preset_path = app.config_path.with_name('gui_user_presets.json')
+    before = preset_path.read_bytes()
+    for name in ('sd.cpp: стандартные аргументы', 'sd.cpp: FLUX.2 Klein 4B / RX 6800 XT hybrid (аргументы)'):
+        result = apply(controller, 'applyPreset', custom, {'name': name})
+        assert result['ok']
+        assert all(result['values'][key] == val for key, val in paths.items())
+        assert result['values']['INFINI_LLM_PROVIDER'] == 'openrouter'
+        assert result['values']['INFINI_SDCPP_SERVER_EXTRA_ARGS'] == PRESETS[name]['INFINI_SDCPP_SERVER_EXTRA_ARGS']
+        assert app.config_path.read_bytes() == original
+        assert preset_path.read_bytes() == before
+    loaded = SettingsController(app.config_path)
+    try:
+        assert loaded.user_presets['My flags']['INFINI_SDCPP_SERVER_EXTRA_ARGS'] == custom['INFINI_SDCPP_SERVER_EXTRA_ARGS']
+    finally:
+        loaded.on_close()
+    for consent in (None, False, 'true', 1):
+        with pytest.raises(ValueError):
+            apply(controller, 'savePreset', {'INFINI_SDCPP_SERVER_EXTRA_ARGS': '--changed'}, {'name': 'My flags', 'overwrite': consent})
+    assert preset_path.read_bytes() == before
+    accepted = apply(controller, 'savePreset', {'INFINI_SDCPP_SERVER_EXTRA_ARGS': '--changed'}, {'name': 'My flags', 'overwrite': True})
+    assert accepted['ok']
+    assert app.config_path.read_bytes() == original
+
+
+def test_universal_local_preset_preserves_selected_models(studio):
+    app, controller = studio
+    selected = {key: '/chosen/' + key for key in ('INFINI_SDCPP_MODEL', 'INFINI_SDCPP_VAE', 'INFINI_SDCPP_LLM', 'INFINI_SDCPP_SERVER_EXE')}
+    result = apply(controller, 'applyPreset', dict(selected, INFINI_LLM_PROVIDER='openrouter'), {'name': 'Локалка: LM Studio + sd.cpp (универсальный)'})
+    assert result['ok']
+    assert all(result['values'][key] == val for key, val in selected.items())
+    assert result['values']['INFINI_LLM_PROVIDER'] == 'local'
+    assert result['values']['INFINI_SDCPP_SERVER_EXTRA_ARGS'] == ''
+    assert result['values']['INFINI_SDCPP_ROCM_COMPAT_ROOT'] == ''

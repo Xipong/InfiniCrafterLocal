@@ -192,7 +192,7 @@ DEFAULTS = {
     "INFINI_USE_LLM": "1",
     "INFINI_PROMPT_STYLE": "Default",
     "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK": "0",
-    "INFINI_GUI_PIPELINE_PRESET": "Локалка: LM Studio + FLUX.2 Klein 4B hybrid",
+    "INFINI_GUI_PIPELINE_PRESET": "Локалка: LM Studio + sd.cpp (универсальный)",
     "INFINI_LLM_PROVIDER": "local",
     "INFINI_CODEX_LLM_MODEL": "",
     "INFINI_LMSTUDIO_URL": "http://127.0.0.1:1234",
@@ -250,11 +250,11 @@ DEFAULTS = {
     "INFINI_IMAGE_BACKEND": "sdcpp",
     "INFINI_IMAGE_PARALLEL": "1",
     "INFINI_IMAGE_MAX_CONCURRENCY": "4",
-    "INFINI_SDCPP_SERVER_EXE": r"C:\Games\sdcpp-hybrid-gfx1030-134c821\sd-server.exe",
-    "INFINI_SDCPP_ROCM_COMPAT_ROOT": r"C:\Games\sdcpp-hybrid-gfx1030-134c821",
-    "INFINI_SDCPP_MODEL": r"C:\Games\sdcpp-hybrid-gfx1030-134c821\models\Flux 2 4B\flux-2-klein-4b-Q8_0.gguf",
-    "INFINI_SDCPP_VAE": r"C:\Games\sdcpp-hybrid-gfx1030-134c821\models\Flux 2 4B\ae.safetensors",
-    "INFINI_SDCPP_LLM": r"C:\Games\sdcpp-hybrid-gfx1030-134c821\models\Flux 2 4B\Qwen 3\Qwen3-4B-UD-Q5_K_XL.gguf",
+    "INFINI_SDCPP_SERVER_EXE": "",
+    "INFINI_SDCPP_ROCM_COMPAT_ROOT": "",
+    "INFINI_SDCPP_MODEL": "",
+    "INFINI_SDCPP_VAE": "",
+    "INFINI_SDCPP_LLM": "",
     "INFINI_SDCPP_LORA_DIR": "",
     "INFINI_SDCPP_LORA_FILE": "",
     "INFINI_SDCPP_LORA_WEIGHT": "0.25",
@@ -263,7 +263,7 @@ DEFAULTS = {
     "INFINI_SDCPP_SERVER_AUTOSTART": "1",
     "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
     "INFINI_SDCPP_SERVER_COMMAND_TEMPLATE": SDCPP_DEFAULT_COMMAND_TEMPLATE,
-    "INFINI_SDCPP_SERVER_EXTRA_ARGS": SDCPP_EXTRA_PROFILES["flux2_klein4b_rx6800xt_hybrid"],
+    "INFINI_SDCPP_SERVER_EXTRA_ARGS": "",
     "INFINI_SDCPP_SERVER_SHOW_CONSOLE": "1" if os.name == "nt" else "0",
     "INFINI_SDCPP_SERVER_LOG_FILE": str(STATE_ROOT / "cache" / "sdcpp_server.log"),
     "INFINI_SDCPP_WIDTH": "512",
@@ -326,6 +326,24 @@ DEFAULTS = {
 }
 
 PRESETS = {
+    # Paths and model-specific sampling choices remain user-owned. No optional
+    # device/module/backend flags are needed for the stock server command.
+    "Локалка: LM Studio + sd.cpp (универсальный)": {
+        "INFINI_LLM_PROVIDER": "local",
+        "INFINI_IMAGE_BACKEND": "sdcpp",
+        "INFINI_SDCPP_SERVER_AUTOSTART": "1",
+        "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
+        "INFINI_SDCPP_SERVER_EXTRA_ARGS": "",
+        "INFINI_SDCPP_ROCM_COMPAT_ROOT": "",
+    },
+    "sd.cpp: стандартные аргументы": {
+        "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
+        "INFINI_SDCPP_SERVER_EXTRA_ARGS": "",
+    },
+    "sd.cpp: FLUX.2 Klein 4B / RX 6800 XT hybrid (аргументы)": {
+        "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
+        "INFINI_SDCPP_SERVER_EXTRA_ARGS": SDCPP_EXTRA_PROFILES["flux2_klein4b_rx6800xt_hybrid"],
+    },
     "OpenAI-compatible + FLUX.2 Klein 4B hybrid": {
         "INFINI_SPRITE_DOWNSCALE_FILTER": "box",
         "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "1",

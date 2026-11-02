@@ -235,10 +235,16 @@
       if(receipt.savedValues && receipt.savedRevision && ['save','start','forceRestart','acceptDefaults'].includes(pending.action)) reconcilePersistedValues(pending,receipt,remote.defaults);
       state.suppressToast=(remote.notifications || []).some(notice=>notice.actionId === pending.id || notice.message === receipt.message);
       if (receipt.ok && receipt.status !== 'cancelled') {
-        const transforming = ['applyPreset','browse','clearLora','useLora','resetSprite','savePreset'].includes(pending.action);
+        const transforming = ['applyPreset','clearLora','useLora','resetSprite','savePreset'].includes(pending.action);
         if (transforming) Object.entries({...remote.defaults,...(receipt.values || remote.values)}).forEach(([key,val]) => {
           if ((state.edits[key] || 0) <= pending.clock) state.draft[key] = val;
         });
+        if (pending.action === 'browse' && receipt.result?.kind === 'folderSelection') {
+          const picker=pending.picker, result=receipt.result;
+          if(picker && state.picker === picker && $('#utility-dialog').open && $('#utility-dialog').dataset.kind === 'files' && result.key === picker.key && typeof result.path === 'string' && (state.edits[result.key] || 0) <= pending.clock) {
+            selectFile(result.path);
+          }
+        }
         const defaultsDecision = ['acceptDefaults','declineDefaults'].includes(pending.action);
         if (defaultsDecision) {
           if (pending.action === 'acceptDefaults') {
@@ -262,7 +268,8 @@
       } else {
         const message = receipt.message || t('Действие не выполнено. Изменения сохранены в этой вкладке.');
         if (['acceptDefaults','declineDefaults'].includes(pending.action)) defaultsError(message);
-        toast(message,true);
+        if(pending.action === 'browse' && state.picker === pending.picker && $('#utility-dialog').open) {$('#file-error').hidden=false;$('#file-error').textContent=t(message);}
+        toast(message,receipt.status !== 'cancelled');
       }
       state.suppressToast=false;state.pending = null; clearTimeout(pending.timer);finished=pending;
       if(receipt.ok && ['applyPreset','savePreset'].includes(pending.action)) state.presetChoice=null;
@@ -275,7 +282,7 @@
       }
       if (receipt.result?.kind === 'document') showDocument(receipt.result);
       if (receipt.result?.kind === 'guide' && receipt.result.url?.startsWith('/guide?')) utility(receipt.result.title || t('Инструкция'), `<p class="dialog-copy">${t("Интерактивное руководство открывается в отдельной вкладке.")}</p><a class="button button-primary" href="${esc(receipt.result.url)}" target="_blank" rel="noopener">${t("Открыть руководство ↗")}</a>`);
-      if (['applyPreset','browse','clearLora','useLora','resetSprite','savePreset'].includes(pending.action)) needsRender=true;
+      if (['applyPreset','clearLora','useLora','resetSprite','savePreset'].includes(pending.action)) needsRender=true;
     }
     for (const notice of remote.notifications || []) {
       if (state.seenNotifications.has(notice.id)) continue;
@@ -335,13 +342,14 @@
     const defaultsDecision = ['acceptDefaults','declineDefaults'].includes(name);
     const sent = defaultsDecision ? (name === 'acceptDefaults' ? Object.fromEntries((state.defaultsPreview?.changes || []).map(row => [row.key,row.recommended])) : {}) : editableValues();
     const clock = state.editClock, sentLan = state.lan, dirtyKeys=[...state.dirty];
+    const picker = name === 'browse' ? state.picker : null;
     // Protect the submission from the first byte sent, not only after its id arrives.
     state.submission = {action:name,sent,clock,lan:sentLan,dirtyKeys,focus};
     updateActionButtons();
     try {
       const queued = await api('/api/action',{action:name,values:defaultsDecision ? {} : sent,extra:defaultsDecision ? {revision:extra.revision} : {lanEnabled:sentLan,...(['save','start','forceRestart'].includes(name) ? {savedRevision:state.savedRevision} : {}),...extra}});
       if (!queued.ok || !queued.id) throw new Error(t('Локальный сервер не подтвердил очередь действия.'));
-      const pending = {id:queued.id,action:name,sent,clock,lan:sentLan,dirtyKeys,focus,timer:null};
+      const pending = {id:queued.id,action:name,sent,clock,lan:sentLan,dirtyKeys,focus,timer:null,picker};
       state.pending = pending;
       state.submission = null;
       pending.timer = setTimeout(() => {
@@ -366,8 +374,9 @@
     const exitHint=state.remote?.managed ? t('Закрыть студию и запущенный ею генератор') : t('Закрыть только студию, не генератор');
     $$('[data-ui="exit"]').forEach(button=>button.title=exitHint);
     const locked = !state.connected || state.pending || state.posting || state.shutdown;
-    $$('[data-action], [data-browse], [data-submit-action]').forEach(button => {button.disabled = !!locked;});
+    $$('[data-action], [data-browse], [data-submit-action], [data-native-folder]').forEach(button => {button.disabled = !!locked;});
     const pendingAction=state.pending?.action || state.submission?.action;
+    $$('[data-native-folder]').forEach(button=>{button.textContent=pendingAction === 'browse' ? t('Ожидаем выбор в проводнике…') : t('Выбрать папку через проводник');button.setAttribute('aria-busy',String(pendingAction === 'browse'));});
     const progressLabels={save:t('Сохраняем…'),start:t('Проверяем и запускаем…'),health:t('Проверяем соединение…'),validate:t('Проверяем пути…'),trace:t('Читаем журнал…'),codexStatus:t('Проверяем аккаунт…'),codexCatalog:t('Обновляем модели…'),codexLogin:t('Ожидаем вход…'),codexPing:t('Проверяем аккаунт…')};
     $$('[data-action]').forEach(button=>{
       if(button.dataset.action === pendingAction && progressLabels[pendingAction]) {
@@ -966,7 +975,7 @@
   }
   async function showFilePicker(key,kind='file') {
     state.picker={key,kind,request:0};
-    utility(t('Выбрать на компьютере генератора'), `<p class="dialog-copy">${esc(t(names[key]) || key)}${t(". Выбор изменит только черновик; файлы не загружаются и не изменяются.")}</p><form id="file-location"><label class="dialog-field-label" for="file-path">${t("Папка или полный путь")}</label><div class="file-location"><input class="dialog-input" id="file-path" autocomplete="off" spellcheck="false"><button class="button" type="submit">${t("Открыть")}</button></div></form><p id="file-error" role="alert" class="defaults-error" hidden></p><div id="file-entries" class="file-entries" aria-live="polite"></div><p id="file-selection" class="dialog-copy" aria-live="polite"></p><div class="dialog-actions"><button class="button" data-ui="close-dialog">${t("Отмена")}</button><button class="button button-primary" id="file-select" disabled>${kind === 'folder' ? t('Выбрать папку'):t('Выбрать файл')}</button></div>`);
+    utility(t('Выбрать на компьютере генератора'), `<p class="dialog-copy">${esc(t(names[key]) || key)}${t(". Выбор изменит только черновик; файлы не загружаются и не изменяются.")}</p>${kind === 'folder' && state.remote.nativeFolderPicker && state.fields.some(field=>field.key === key && field.browse === 'folder') ? `<button class="button" data-native-folder>${t("Выбрать папку через проводник")}</button><p class="dialog-copy">${t("Системное окно откроется на Windows-компьютере генератора. Ниже можно выбрать папку через список Studio.")}</p>`:''}<form id="file-location"><label class="dialog-field-label" for="file-path">${t("Папка или полный путь")}</label><div class="file-location"><input class="dialog-input" id="file-path" autocomplete="off" spellcheck="false"><button class="button" type="submit">${t("Перейти")}</button></div></form><p id="file-error" role="alert" class="defaults-error" hidden></p><div id="file-entries" class="file-entries" aria-live="polite"></div><p id="file-selection" class="dialog-copy" aria-live="polite"></p><div class="dialog-actions"><button class="button" data-ui="close-dialog">${t("Отмена")}</button><button class="button button-primary" id="file-select" disabled>${kind === 'folder' ? t('Выбрать папку'):t('Выбрать файл')}</button></div>`);
     $('#utility-dialog').dataset.kind='files';
     $('#file-location').onsubmit=event=>{event.preventDefault();loadFiles($('#file-path').value);};
     $('#file-select').onclick=()=>selectFile(state.picker?.selection);
@@ -1057,7 +1066,7 @@
       if (!name) {$('#new-preset-name').focus();return;}
       if (Object.hasOwn(state.remote.userPresets || {},name)) {
         $('#utility-dialog').close();
-        confirm(t('Заменить существующий профиль?'),t("Профиль «{0}» уже существует. Сохраним текущую сборку вместо него; config.env не изменится.", name),'savePreset',{name},t('Заменить профиль'));
+        confirm(t('Заменить существующий профиль?'),t("Профиль «{0}» уже существует. Сохраним текущую сборку вместо него; config.env не изменится.", name),'savePreset',{name,overwrite:true},t('Заменить профиль'));
         return;
       }
       $('#utility-dialog').close();action('savePreset',{name});
@@ -1085,7 +1094,7 @@
       updatePageOverview();
     }
     if(target.matches('[data-lan]')) {state.lan=target.checked;state.lanEdit=++state.editClock;target.parentElement.querySelector('.toggle-label').textContent=target.checked?t('Включено'):t('Выключено');recomputeDirty();render();$('#lan-enabled')?.focus({preventScroll:true});}
-    if(target.id === 'file-path' && state.picker) {state.picker.request++;state.picker.selection=null;$('#file-select').disabled=true;$('#file-selection').textContent=t('Нажми «Открыть», чтобы проверить новый путь.');$$('[data-file-index]').forEach(row=>row.classList.remove('selected'));}
+    if(target.id === 'file-path' && state.picker) {state.picker.request++;state.picker.selection=null;$('#file-select').disabled=true;$('#file-selection').textContent=t('Нажми «Перейти», чтобы проверить новый путь.');$$('[data-file-index]').forEach(row=>row.classList.remove('selected'));}
     if(target.id === 'preset-select') state.presetChoice=target.value;
     if(target.id === 'global-search') {state.searchIndex=0;renderSearch();}
     if(target.id === 'page-search') {const start=target.selectionStart;state.filter=target.value;render();$('#page-search').focus({preventScroll:true});$('#page-search').setSelectionRange(start,start);}
@@ -1102,6 +1111,7 @@
     if (button.tagName === 'A' && button.dataset.ui) event.preventDefault();
     if(button.dataset.action) {action(button.dataset.action);return;}
     if(button.dataset.browse) {showFilePicker(button.dataset.browse,button.dataset.browseType);return;}
+    if(button.dataset.nativeFolder !== undefined && state.picker?.kind === 'folder') {action('browse',{key:state.picker.key,path:$('#file-path').value});return;}
     if(button.dataset.reveal) {const input=$(`[data-field="${button.dataset.reveal}"]`);input.type=input.type === 'password'?'text':'password';button.setAttribute('aria-pressed',String(input.type === 'text'));button.setAttribute('aria-label',input.type === 'text'?t('Скрыть ключ'):t('Показать ключ'));return;}
     if(button.dataset.helpField) {event.preventDefault();const key=button.dataset.helpField;state.helpFields.has(key)?state.helpFields.delete(key):state.helpFields.add(key);const y=window.scrollY;render();window.scrollTo(0,y);$(`[data-help-field="${key}"]`)?.focus({preventScroll:true});return;}
     if(button.dataset.searchKey) {focusField(button.dataset.searchKey);return;}

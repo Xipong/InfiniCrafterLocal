@@ -312,6 +312,7 @@ class StudioController:
         CONFIG_PATH, EXAMPLE_PATH = self.app.config_path, self.app.example_path
         from infini_local.services.codex_auth import auth_status
         from infini_local.services.codex_text_backend import EFFORTS
+        from infini_local.desktop.windows_folder_picker import is_available
         values = self.app._current_profile_settings()
         values['INFINI_GUI_PIPELINE_PRESET'] = self.app.preset
         # Controller values include unsaved edits from non-saving actions. A fresh
@@ -363,6 +364,7 @@ class StudioController:
             'trace': dict(self.app.trace),
             'configPath': str(CONFIG_PATH.absolute()), 'version': APP_VERSION, 'lastAction': self.last_action,
             'managed': bool(self.app.__dict__.get('_managed_by_tmodloader', False)),
+            'nativeFolderPicker': is_available(),
             'revision': self.revision, 'busy': list(self.app._gui_tasks), 'lanEnabled': bool(self.app.lan_enabled),
             'account': {'status': self.app.__dict__.get('_codex_account_status', ''), 'catalog': self.app.codex_catalog,
                         'images': self.app.codex_image_account, 'authenticated': auth_status()['authenticated'],
@@ -482,7 +484,7 @@ class StudioController:
             target = dict(DEFAULTS, **saved)
             target['INFINI_GUI_PIPELINE_PRESET'] = app._pipeline_preset_from_config(target, app.user_presets)
             self._values(target, {'lanEnabled': target.get('INFINI_HOST') == '0.0.0.0' or bool(target.get('INFINI_ASSET_PUBLIC_BASE_URL'))})
-        elif action not in {'acceptDefaults', 'declineDefaults', 'help', 'openConfig', 'openConfigFolder', 'exitStudio', 'codexLogin', 'codexStatus', 'codexCatalog', 'codexPing', 'codexLogout', 'stop', 'cancelTrace'}:
+        elif action not in {'acceptDefaults', 'declineDefaults', 'help', 'openConfig', 'openConfigFolder', 'browse', 'exitStudio', 'codexLogin', 'codexStatus', 'codexCatalog', 'codexPing', 'codexLogout', 'stop', 'cancelTrace'}:
             self._values(command.get('values', {}), extra)
         callbacks = {'save': app.save, 'start': app.start_server, 'stop': app.stop_server,
                      'health': app._delayed_health_check, 'validate': app.validate_paths,
@@ -512,12 +514,41 @@ class StudioController:
             app.apply_preset()
         elif action == 'savePreset':
             name = str(extra.get('name', '')).strip()
-            app.user_presets = save_user_preset(CONFIG_PATH.with_name('gui_user_presets.json'), name, app._current_profile_settings())
+            app.user_presets = save_user_preset(CONFIG_PATH.with_name('gui_user_presets.json'), name, app._current_profile_settings(), overwrite=extra.get('overwrite') is True)
             app.preset = USER_PRESET_PREFIX + name
             app._capture_profile_baseline()
             app.status = f'Профиль «{name}» сохранён. config.env не изменён.'
         elif action == 'browse':
-            raise ValueError('Выбери путь в браузерном списке файлов или введи его вручную.')
+            from infini_local.desktop.windows_folder_picker import choose_folder, is_available
+            key, path = extra.get('key'), extra.get('path', '')
+            field = next((field for field in self.fields if field['key'] == key), None)
+            if field is None or field.get('browse') != 'folder' or field.get('secret') or not isinstance(path, str):
+                raise ValueError('Native folder selection requires a registered folder setting')
+            if not is_available():
+                raise ValueError('Системный выбор папки доступен только на Windows-компьютере генератора. Используй список Studio.')
+            if 'native-folder-picker' in app._gui_tasks:
+                raise ValueError('Окно выбора папки уже открыто на компьютере генератора.')
+            # Existing local-path admission rejects UNC, mapped drives and links
+            # before seeding the OS dialog, and validates the returned selection.
+            initial = self.server.list_files(path, 'folder')['path']
+            def work(cancel):
+                if cancel.is_set():
+                    return None
+                selected = choose_folder(initial)
+                if selected is None:
+                    return None
+                listing = self.server.list_files(selected, 'folder')
+                if listing['warning'] or not Path(selected).is_dir():
+                    raise ValueError('Selected folder is unavailable')
+                return listing['path']
+            def completed(ok, selected):
+                if not ok:
+                    return {'ok': False, 'message': 'Не удалось выбрать локальную папку. Используй список Studio или введи путь.'}
+                if selected is None:
+                    return {'ok': True, 'cancelled': True, 'message': 'Выбор папки отменён. Черновик не изменён.'}
+                return {'ok': True, 'message': 'Папка выбрана. Изменён только черновик в этой вкладке.',
+                        'result': {'kind': 'folderSelection', 'key': key, 'path': selected}}
+            app._run_gui_task('native-folder-picker', work, completed)
         elif action == 'help':
             from infini_local.desktop.settings_paths import ROOT
             if not (ROOT.parent / 'START_HERE.html').is_file():
