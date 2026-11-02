@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from http.server import ThreadingHTTPServer
 from typing import Any
 
@@ -274,6 +275,7 @@ def _health_payload() -> dict[str, Any]:
     vfx_llm_director_configured = bool(VFX_LLM_DIRECTOR_ENABLED)
     vfx_llm_director_active = bool(USE_LLM and VFX_LLM_DIRECTOR_ENABLED)
     auth = llm_auth_snapshot()
+    launch_id = env_str("INFINI_STUDIO_LAUNCH_ID", "", strip=False)
     return {
         "ok": True,
         "version": APP_VERSION,
@@ -293,6 +295,8 @@ def _health_payload() -> dict[str, Any]:
         "serverRoot": str(ROOT),
         "configPath": str(CONFIG_PATH),
         "pid": os.getpid(),
+        # Readiness correlation only, not authorization or persisted config.
+        "studioLaunchId": launch_id if re.fullmatch(r"[0-9a-f]{32}", launch_id) else None,
         "useLLM": USE_LLM,
         "llmProvider": active_llm_provider(),
         "llmAuth": auth,
