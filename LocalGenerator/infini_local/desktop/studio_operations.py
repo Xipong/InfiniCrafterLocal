@@ -16,6 +16,7 @@ import time
 import urllib.error
 import urllib.request
 from urllib.parse import urlsplit
+import uuid
 import webbrowser
 from pathlib import Path, PureWindowsPath
 
@@ -481,6 +482,7 @@ class StudioOperations:
                 self._server_lifecycle = "stopped"
                 self.__dict__.pop('_owned_launch_settings', None)
                 self.__dict__.pop('_owned_server_base_url', None)
+                self.__dict__.pop('_owned_server_launch_id', None)
                 self._cancel_gui_task("health-config")
                 self._applied_config_ack = None
                 scheduled = self.__dict__.get("_health_after_id")
@@ -504,6 +506,12 @@ class StudioOperations:
         launch_url = self._server_base_url()
         env = os.environ.copy()
         env.update(launch_values)
+        # Correlate readiness through Windows venv redirectors: Popen.pid may
+        # belong to the launcher, not the Python child serving /health. This is
+        # not an auth secret and never becomes a persisted config setting.
+        launch_id = uuid.uuid4().hex
+        env["INFINI_STUDIO_LAUNCH_ID"] = launch_id
+        self.__dict__.pop('_owned_server_launch_id', None)
         cmd = [sys.executable, str(ROOT / "server.py")]
         try:
             options = {"cwd": str(ROOT), "env": env}
@@ -512,6 +520,7 @@ class StudioOperations:
             self.proc = subprocess.Popen(cmd, **options)
             self._owned_launch_settings = dict(launch_values)
             self._owned_server_base_url = launch_url
+            self._owned_server_launch_id = launch_id
             self._server_lifecycle = "starting"
             self.status = ("server.py запущен. Runtime config ещё не подтверждён.")
             previous = self.__dict__.get("_health_after_id")
@@ -665,12 +674,22 @@ class StudioOperations:
             return
         studio_request = bool(self.__dict__.get("_studio_command_id"))
         base_url = self._saved_or_owned_server_base_url() if studio_request else self._server_base_url()
-        expected_pid = self.proc.pid if self.proc is not None and self.proc.poll() is None else None
+        observed_proc = self.proc
+        observed_launch_id = self.__dict__.get('_owned_server_launch_id')
+        expected_pid = observed_proc.pid if observed_proc is not None and observed_proc.poll() is None else None
+        expected_launch_id = observed_launch_id
         self.applied_config = ("Checking runtime config (partial non-secret projection)…")
 
         def work(cancel):
             snap = self._fetch_health_snapshot(timeout=3, base_url=base_url)
-            if not self._shutdown_identity_is_safe(snap) or (expected_pid is not None and snap.get("pid") != expected_pid):
+            if not self._shutdown_identity_is_safe(snap):
+                return None
+            if expected_launch_id is not None:
+                if expected_pid is None or snap.get("studioLaunchId") != expected_launch_id:
+                    return None
+            elif expected_pid is not None and snap.get("pid") != expected_pid:
+                # Preserve legacy owned-process checks and external attachment
+                # policy; a new launch never silently falls back to PID equality.
                 return None
             # Drop all other health/config/auth metadata before it enters the UI
             # queue or cached acknowledgement; unexpected fields cannot leak.
@@ -682,7 +701,10 @@ class StudioOperations:
 
         def apply(ok, ack):
             current_target = self._saved_or_owned_server_base_url() if studio_request else self._server_base_url()
-            if ack is not None and ack["baseUrl"] != current_target:
+            if (ack is not None and (ack["baseUrl"] != current_target
+                    or self.proc is not observed_proc
+                    or self.__dict__.get('_owned_server_launch_id') != observed_launch_id
+                    or (expected_pid is not None and observed_proc.poll() is not None))):
                 ack = None
             self.activity = ack["activityText"] if ok and ack is not None else "Backend activity unknown (health unavailable or foreign server)."
             if not ok or ack is None:

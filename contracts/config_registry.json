@@ -4665,6 +4665,30 @@
     {
       "declarations": [
         {
+          "default": "",
+          "file": "LocalGenerator/infini_local/web/server.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
+        }
+      ],
+      "default": "",
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_STUDIO_LAUNCH_ID",
+      "owners": [
+        "LocalGenerator/infini_local/web/server.py"
+      ],
+      "secret": false,
+      "type": "string",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [
+        {
           "default": "7777",
           "file": "LocalGenerator/infini_local/core/config_bootstrap.py",
           "maximum": null,
@@ -5453,8 +5477,8 @@
     }
   ],
   "errors": [],
-  "fieldCount": 222,
-  "fingerprint": "0dfaa622259fb0f19b46b1a10747c014a4b4cd692ec0ffe36ae01e418d2e138f",
+  "fieldCount": 223,
+  "fingerprint": "29b32cf32c4116f4fb755720b0e5b922a83172fc12ec6970cbd9bf6824e2d1de",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

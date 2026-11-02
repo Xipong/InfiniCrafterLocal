@@ -516,6 +516,115 @@ def test_health_feedback_cannot_confirm_stale_unverified_or_failed_results(appli
     assert "CANARY" not in gui.applied_config + gui.status
 
 
+@pytest.mark.parametrize("case,accepted", [
+    ("child-pid", True), ("different-launch", False), ("missing-launch", False),
+    ("malformed-launch", False), ("malformed-pid", False), ("foreign-root", False),
+    ("missing-projection", False), ("replaced-while-checking", False), ("owned-exited", False),
+    ("process-replaced-while-checking", False), ("process-exits-while-checking", False),
+])
+def test_owned_launch_health_correlates_instance_not_wrapper_pid(applied_gui, held_gui_call, case, accepted):
+    gui, root, _config, effective = applied_gui
+    launch_id = "a" * 32
+    gui._owned_server_launch_id = launch_id
+    health = {"ok": True, "serverRoot": str(root), "pid": gui.proc.pid + 1,
+              "studioLaunchId": launch_id, "effectiveConfig": effective,
+              "generationActivity": {"active": 0, "waiting": 0, "accepting": True, "requests": []}}
+    if case == "different-launch":
+        health["studioLaunchId"] = "b" * 32
+    elif case == "missing-launch":
+        health.pop("studioLaunchId")
+        health["pid"] = gui.proc.pid  # PID equality cannot replace the new launch's proof.
+    elif case == "malformed-launch":
+        health["studioLaunchId"] = 12
+    elif case == "malformed-pid":
+        health["pid"] = True
+    elif case == "foreign-root":
+        health["serverRoot"] = str(root.parent / "foreign")
+    elif case == "missing-projection":
+        health.pop("effectiveConfig")
+    elif case == "owned-exited":
+        gui.proc.poll = lambda: 0
+    hold = held_gui_call(gui, "_fetch_health_snapshot", health)
+    gui._delayed_health_check()
+    hold.assert_pending()
+    if case == "replaced-while-checking":
+        gui._owned_server_launch_id = "b" * 32
+    elif case == "process-replaced-while-checking":
+        gui.proc = OwnedProcess()
+    elif case == "process-exits-while-checking":
+        gui.proc.poll = lambda: 0
+    hold.release.set()
+    gui.drain_until(lambda: "health-config" not in gui._gui_tasks)
+    assert bool(gui._applied_config_ack) is accepted
+    assert gui._server_lifecycle == ("responding" if accepted else "unknown")
+
+
+def test_external_same_root_health_keeps_existing_attachment_policy(applied_gui, held_gui_call):
+    gui, root, _config, effective = applied_gui
+    pid = gui.proc.pid
+    gui.proc = None
+    health = {"ok": True, "serverRoot": str(root), "pid": pid, "effectiveConfig": effective}
+    hold = held_gui_call(gui, "_fetch_health_snapshot", health)
+    gui._delayed_health_check()
+    hold.assert_pending()
+    hold.release.set()
+    gui.drain_until(lambda: "health-config" not in gui._gui_tasks)
+    assert gui._applied_config_ack["pid"] == pid
+
+
+def test_launch_correlation_is_fresh_child_environment_only_and_clears_on_failure(guarded_restart, monkeypatch):
+    gui, _root, config, _original, actions = guarded_restart
+    monkeypatch.setenv("INFINI_STUDIO_LAUNCH_ID", "inherited-not-authoritative")
+    launches = []
+    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **kw: launches.append(kw["env"]) or OwnedProcess(actions))
+    for _ in range(2):
+        assert gui._start_server_after_guard()["ok"]
+        assert gui._owned_server_launch_id == launches[-1]["INFINI_STUDIO_LAUNCH_ID"]
+        assert len(gui._owned_server_launch_id) == 32
+        assert "INFINI_STUDIO_LAUNCH_ID" not in gui._owned_launch_settings
+        assert "INFINI_STUDIO_LAUNCH_ID" not in config.read_text()
+    assert launches[0]["INFINI_STUDIO_LAUNCH_ID"] != launches[1]["INFINI_STUDIO_LAUNCH_ID"]
+    assert os.environ["INFINI_STUDIO_LAUNCH_ID"] == "inherited-not-authoritative"
+    gui._applied_config_ack = {"pid": gui.proc.pid}
+    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **kw: (_ for _ in ()).throw(OSError("launch failed")))
+    assert not gui._start_server_after_guard()["ok"]
+    assert gui.__dict__.get("_owned_server_launch_id") is None
+    assert gui._applied_config_ack is None
+
+
+@pytest.mark.parametrize("launch_id", ["a" * 32, "", "bad-value", "A" * 32, "a" * 33, " " + "a" * 32])
+def test_health_echoes_only_bounded_launch_correlation(monkeypatch, launch_id):
+    from infini_local.web import server
+    monkeypatch.setenv("INFINI_STUDIO_LAUNCH_ID", launch_id)
+    health = server._health_payload()
+    assert health["studioLaunchId"] == (launch_id if launch_id == "a" * 32 else None)
+    assert "studioLaunchId" not in health["effectiveConfig"]
+
+
+def test_spawn_environment_health_echo_reaches_real_readiness(gui_workflow, held_gui_call, monkeypatch):
+    from infini_local.web import server
+
+    gui, root, _config = gui_workflow
+    launches = []
+    monkeypatch.setattr(controls.subprocess, "Popen", lambda *a, **kw: launches.append(kw) or OwnedProcess())
+    assert gui._start_server_after_guard()["ok"]
+    gui.after_cancel(gui._health_after_id)
+    gui._health_after_id = None
+    # OS boundary only: simulate a redirector's separate child PID and exact
+    # inherited environment. The health producer and Studio consumer are real.
+    monkeypatch.setenv("INFINI_STUDIO_LAUNCH_ID", launches[0]["env"]["INFINI_STUDIO_LAUNCH_ID"])
+    monkeypatch.setattr(server, "os", SimpleNamespace(getpid=lambda: gui.proc.pid + 1))
+    monkeypatch.setattr(server, "ROOT", root)
+    health = server._health_payload()
+    hold = held_gui_call(gui, "_fetch_health_snapshot", health)
+    gui._delayed_health_check()
+    hold.assert_pending()
+    hold.release.set()
+    gui.drain_until(lambda: "health-config" not in gui._gui_tasks)
+    assert gui._applied_config_ack["pid"] == health["pid"] != gui.proc.pid
+    assert gui._server_lifecycle == "responding"
+
+
 def test_health_activity_display_consumes_actual_backend_owner():
     from infini_local.services import combine_endpoint as backend
     from infini_local.desktop.studio_operations import StudioOperations as controls
