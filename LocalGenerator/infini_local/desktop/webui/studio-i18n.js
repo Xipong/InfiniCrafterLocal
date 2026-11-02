@@ -2,6 +2,19 @@
 'use strict';
 (() => {
   const en = {
+  "Ожидаем выбор в проводнике…": "Waiting for selection in Explorer…",
+  "Выбрать папку через проводник": "Choose folder in Explorer",
+  "Системное окно откроется на Windows-компьютере генератора. Ниже можно выбрать папку через список Studio.": "The system dialog opens on the generator's Windows computer. You can also use Studio's folder list below.",
+  "Перейти": "Go",
+  "Нажми «Перейти», чтобы проверить новый путь.": "Click Go to check the new path.",
+  "Выбор папки отменён. Черновик не изменён.": "Folder selection cancelled. The draft is unchanged.",
+  "Папка выбрана. Изменён только черновик в этой вкладке.": "Folder selected. Only this tab's draft has changed.",
+  "Не удалось выбрать локальную папку. Используй список Studio или введи путь.": "Could not select a local folder. Use Studio's list or enter the path.",
+  "Окно выбора папки уже открыто на компьютере генератора.": "A folder dialog is already open on the generator computer.",
+  "Системный выбор папки доступен только на Windows-компьютере генератора. Используй список Studio.": "Native folder selection is only available on a Windows generator computer. Use Studio's list.",
+  "Локалка: LM Studio + sd.cpp (универсальный)": "Local: LM Studio + sd.cpp (stock)",
+  "sd.cpp: стандартные аргументы": "sd.cpp: stock arguments",
+  "sd.cpp: FLUX.2 Klein 4B / RX 6800 XT hybrid (аргументы)": "sd.cpp: FLUX.2 Klein 4B / RX 6800 XT hybrid (arguments)",
   "Скачать sd.cpp": "Download sd.cpp",
   "Официальные сборки sd.cpp на GitHub": "Official sd.cpp builds on GitHub",
   "Закрыть студию и запущенный ею генератор": "Close Studio and the generator it started",

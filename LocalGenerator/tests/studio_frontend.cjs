@@ -14,7 +14,7 @@ source=source.replace('  navigate();poll();',`
   const renderMainDashboard=renderOperate;
   poll=()=>{};setMenu=()=>{};render=()=>{globalThis.renderCount++;};renderOperate=()=>{};syncInputs=()=>{};updateDiagnostics=()=>{};updateActionButtons=()=>{};
   const originalToast=toast;toast=(message,error)=>{originalToast(message,error);if(!state.suppressToast) globalThis.messages.push({message,error});};
-  globalThis.studio={state,acceptSnapshot,recomputeDirty,heading,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,refreshDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog,restoreActionFocus,aside,renderMainDashboard};
+  globalThis.studio={state,acceptSnapshot,recomputeDirty,heading,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,refreshDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog,restoreActionFocus,aside,renderMainDashboard,showFilePicker,showPresetPreview,showSavePreset,setAction(fn){action=fn;}};
 `);
 global.messages=messages;global.renderCount=0;
 vm.runInThisContext(source);
@@ -346,6 +346,50 @@ async function testMainDashboardConfigFolder() {
   assert.equal(state.baseline[key],'saved');assert(state.dirty.has(key));
 }
 
+
+async function testNativeFolderPicker() {
+  const folderKey='INFINI_SDCPP_ROCM_COMPAT_ROOT', other='INFINI_PORT';
+  for(const outcome of ['success','cancel','error','close','reopen','edit','wrong-key']) {
+    state.shutdown=false;state.connected=true;state.remote=null;state.draft={};state.dirty.clear();state.edits={};state.pending=null;state.submission=null;state.posting=false;state.page='images';
+    const saved={[folderKey]:'C:/old folder',[other]:'5055'};
+    const metadata={nativeFolderPicker:true,fields:[{key:folderKey,browse:'folder'}]};
+    acceptSnapshot(snapshot(saved,metadata));state.draft[other]='6000';recomputeDirty();
+    let submitted, acknowledge, requests=0;
+    global.fetch=async(url,options)=>{
+      if(url.startsWith('/api/files?')) return {ok:true,json:async()=>({path:'C:/old folder',entries:[],parent:'C:/'})};
+      requests++;submitted=JSON.parse(options.body);
+      assert.equal(options.headers['X-Infini-Token'],'test-only');
+      return new Promise(resolve=>{acknowledge=resolve;});
+    };
+    await studio.showFilePicker(folderKey,'folder');
+    assert.match(document.querySelector('#utility-body').innerHTML, /<button[^>]*data-native-folder[^>]*>[^<]+<\/button>/);
+    const originalPicker=state.picker,dialog=document.querySelector('#utility-dialog');
+    const button={dataset:{nativeFolder:''}};
+    const click=()=>events.click({target:{closest:selector=>selector==='button,[data-ui],[data-search-key]'?button:null}});
+    click();click();assert.equal(requests,1,'repeat click cannot duplicate the native dialog command');
+    assert.equal(submitted.action,'browse');assert.equal(submitted.extra.key,folderKey);assert.equal(submitted.extra.path,'C:/old folder');
+    if(outcome === 'close') dialog.close();
+    if(outcome === 'reopen') await studio.showFilePicker(folderKey,'folder');
+    if(outcome === 'edit') {state.draft[folderKey]='C:/newer edit';state.edits[folderKey]=++state.editClock;recomputeDirty();}
+    acknowledge({ok:true,json:async()=>({ok:true,id:'folder-choice'})});
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(state.pending.picker,originalPicker,'capture picker before POST acknowledgment, not a replacement dialog');
+    const receipt={id:'folder-choice',ok:outcome !== 'error',status:outcome === 'cancel'?'cancelled':outcome === 'error'?'failed':'succeeded',message:'synthetic outcome'};
+    if(!['cancel','error'].includes(outcome)) receipt.result={kind:'folderSelection',key:outcome === 'wrong-key'?other:folderKey,path:'C:/Chosen folder Юникод'};
+    acceptSnapshot(snapshot(saved,{...metadata,actionResults:[receipt]}));
+    assert.equal(state.draft[folderKey],outcome === 'success'?'C:/Chosen folder Юникод':outcome === 'edit'?'C:/newer edit':'C:/old folder');
+    assert.equal(state.draft[other],'6000','picker does not adopt shared controller values over another draft field');
+    assert.deepEqual(state.baseline,saved);assert.equal(state.page,'images');assert.equal(state.pending,null);
+    if(outcome === 'success') assert(!dialog.open);
+    if(outcome === 'reopen') assert(dialog.open);
+  }
+  state.remote.nativeFolderPicker=false;state.pending=null;state.posting=false;
+  global.fetch=async()=>({ok:true,json:async()=>({path:'C:/list alternative',entries:[],parent:'C:/'})});
+  await studio.showFilePicker(folderKey,'folder');
+  assert(!document.querySelector('#utility-body').innerHTML.includes('data-native-folder'));
+  assert.equal(document.querySelector('#file-select').disabled,false,'browser folder selection still works without Windows');
+  document.querySelector('#file-select').onclick();assert.equal(state.draft[folderKey],'C:/list alternative');
+}
 async function testRepeatedSubmission() {
   state.shutdown=false;state.connected=true;state.pending=null;state.submission=null;state.posting=false;
   let calls=0,release;
@@ -436,7 +480,7 @@ async function testInterruptedDefaultsRefresh() {
   assert.equal(state.lan,false);assert.equal(state.savedRevision,'discard-disk');
 }
 
-testRepeatedSubmission().then(testCatalogAutoload).then(testInterruptedDefaultsRefresh).then(testMainDashboardConfigFolder).then(()=>console.log('Studio frontend regressions passed')).catch(error=>{console.error(error);process.exitCode=1;});
+testNativeFolderPicker().then(testRepeatedSubmission).then(testCatalogAutoload).then(testInterruptedDefaultsRefresh).then(testMainDashboardConfigFolder).then(testProfileConsent).then(()=>console.log('Studio frontend regressions passed')).catch(error=>{console.error(error);process.exitCode=1;});
 
 // The image checkbox is a real checked boolean, and disabling it preserves the limit.
 const parallelKey='INFINI_IMAGE_PARALLEL', limitKey='INFINI_IMAGE_MAX_CONCURRENCY';
@@ -470,3 +514,34 @@ assert.match(parallelHTML, /Если сохранён лимит 1/);
 assert.match(parallelHTML, /поставь 2–4 ниже/);
 assert.match(parallelHTML, /перезапустить сервер/);
 assert.match(studio.fieldHTML({key:limitKey}), /по умолчанию 4/);
+
+function testProfileConsent() {
+// Profile preview/cancel is draft-only; replacement requires the second consent.
+const profileActions=[];
+studio.setAction((name,extra)=>profileActions.push({name,extra}));
+state.remote={...state.remote,presets:{Stock:{INFINI_SDCPP_SERVER_EXTRA_ARGS:''}},userPresets:{Mine:{INFINI_SDCPP_SERVER_EXTRA_ARGS:'--keep'}}};
+state.draft.INFINI_SDCPP_SERVER_EXTRA_ARGS='--keep';
+document.querySelector('#preset-select').value='Stock';
+const beforePreset=JSON.stringify(state.draft);
+studio.showPresetPreview();
+assert.equal(profileActions.length,0);
+document.querySelector('#utility-dialog').close();
+assert.equal(JSON.stringify(state.draft),beforePreset);
+assert.equal(profileActions.length,0);
+studio.showPresetPreview();
+document.querySelector('#confirm-submit').onclick();
+assert.deepEqual(profileActions.pop(),{name:'applyPreset',extra:{name:'Stock'}});
+studio.showSavePreset();
+document.querySelector('#new-preset-name').value='Mine';
+document.querySelector('#confirm-submit').onclick();
+assert.equal(profileActions.length,0);
+document.querySelector('#utility-dialog').close();
+assert.equal(profileActions.length,0);
+studio.showSavePreset();
+document.querySelector('#new-preset-name').value='Mine';
+document.querySelector('#confirm-submit').onclick();
+document.querySelector('#confirm-submit').onclick();
+assert.deepEqual(profileActions.pop(),{name:'savePreset',extra:{name:'Mine',overwrite:true}});
+
+studio.setAction(studio.action);
+}

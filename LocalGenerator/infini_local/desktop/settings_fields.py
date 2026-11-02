@@ -11,7 +11,7 @@ def _field(key, label, page, *, options=(), hint='', secret=False, multiline=Fal
     return {'key': key, 'label': label, 'help': hint or FIELD_HELP.get(key, ''),
             'options': list(options), 'secret': secret, 'page': page,
             'advanced': key not in _BASIC_FIELDS and not key.startswith('INFINI_LLM_POOL_'),
-            'multiline': multiline}
+            'multiline': multiline, 'browse': 'folder' if key.endswith(('_DIR', '_ROOT')) else ''}
 
 
 FIELDS = [
