@@ -212,7 +212,7 @@ public sealed partial class GeneratedProjectile
             if (!retainOwnerExclusion) _sampledInitialVelocity = receivedVelocity;
             if (!retainOwnerExclusion) _nativeShotInitialVelocity = receivedNativeLaunch;
             if (_vfxSourceToken != sourceToken || _data?.Id != _generatedItemId || _entity?.Id != _entityId)
-                _penetrationInitialized = false;
+                _nativeEntityStateInitialized = false;
             if(_vfxSourceToken!=sourceToken){
                 _presentationGeneration=new object();_presentationRetired=false;
                 _vfxState=new InfiniVfxState {SourceKey=$"net:{Projectile.owner}:{sourceToken}:{_generatedItemId}:{_entityId}"};

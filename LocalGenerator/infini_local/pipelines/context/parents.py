@@ -20,6 +20,7 @@ from infini_local.pipelines.pipeline_runtime_constants import (
 )
 from infini_local.services.runtime_dump_service import (
     runtime_projectile_lookup,
+    runtime_item_lookup,
 )
 
 
@@ -34,6 +35,88 @@ def _raw_section_dict(item: dict[str, Any], *names: str) -> dict[str, Any]:
             return v
     return {}
 
+
+
+def _observed_parent_field(item: dict[str, Any], name: str) -> tuple[bool, Any]:
+    """Presence, not truthiness; preserve the existing readers' case aliases."""
+    fingerprint = item.get("fingerprint")
+    projectile_alias = name in ("directProjectileRaw", "effectiveProjectileRaw")
+    runtime_alias = projectile_alias or name in (
+        "nativeEquipmentReference", "nativeEnvironmentReference", "parentSourceGraph")
+    sources = [(item, projectile_alias), (fingerprint, projectile_alias),
+               (dict_get_ci(item, "runtimeFacts"), runtime_alias)]
+    if isinstance(fingerprint, dict):
+        sources.append((dict_get_ci(fingerprint, "runtimeFacts"), runtime_alias))
+    absent = object()
+    for source, case_alias in sources:
+        if not isinstance(source, dict):
+            continue
+        value = dict_get_ci(source, name, absent) if case_alias else source.get(name, absent)
+        if value is not absent:
+            return True, value
+    return False, None
+
+
+# Whole producer-owned observations only. Never copy combat scalars, stateful
+# effective/ammo snapshots, fingerprints, generated data, tags or inferred design.
+_DUMP_ITEM_OBSERVATIONS = (
+    "nativeShootReference", "nativeContactHitStatusReference", "nativeEquipmentReference",
+    "nativeEnvironmentReference", "nativeBuffEffectReference",
+    "parentSourceGraph", "directProjectileRaw", "spriteReferenceRaw",
+)
+
+
+def native_item_context_from_dump(item: dict[str, Any]) -> dict[str, Any]:
+    """Read-only card enrichment; the input/recipe/fingerprint remain unchanged."""
+    if isinstance(item.get("generatedData"), dict) or item.get("unavailable") is True:
+        return item
+    absent = object()
+    for container in (item, item.get("fingerprint")):
+        runtime = dict_get_ci(container, "runtimeFacts", absent)
+        if runtime is not absent and (not isinstance(runtime, dict) or runtime.get("unavailable") is True):
+            return item
+    missing = [key for key in _DUMP_ITEM_OBSERVATIONS if not _observed_parent_field(item, key)[0]]
+    # Lines and their source form one observation; don't splice another locale
+    # or capture's certificate onto a present (even empty) live tooltip.
+    if not any(_observed_parent_field(item, key)[0] for key in ("tooltipLines", "tooltipSource")):
+        missing.extend(("tooltipLines", "tooltipSource"))
+    if not missing:
+        return item
+    _, identity = _observed_parent_field(item, "id")
+    if identity is None:
+        _, identity = _observed_parent_field(item, "type")
+    if type(identity) not in (int, str):
+        return item
+    _, full_name = _observed_parent_field(item, "fullName")
+    if not isinstance(full_name, str) or not full_name:
+        _, mod = _observed_parent_field(item, "sourceMod")
+        _, name = _observed_parent_field(item, "internalName")
+        if isinstance(mod, str) and mod and isinstance(name, str) and name:
+            full_name = name if name.startswith(mod + "/") else mod + "/" + name
+    _, graph = _observed_parent_field(item, "parentSourceGraph")
+    _, shoot = _observed_parent_field(item, "shoot")
+    source = runtime_item_lookup(identity, expected_full_name=full_name,
+        expected_modules=graph.get("modules") if isinstance(graph, dict) else None, expected_shoot=shoot)
+    if not source:
+        return item
+    provenance = copy.deepcopy(source.get("runtimeDumpProvenance", {}))
+    if source.get("unavailable") is True:
+        # Refusal is observable at the lookup/startup diagnostic, not a new
+        # property of a live parent that consumed no saved observation.
+        return item
+    added = [key for key in missing if key in source]
+    if not added:
+        return item
+    out = dict(item)
+    for key in added:
+        out[key] = copy.deepcopy(source[key])
+    provenance.update(fields=added, scope="saved_item_source_observations; not_current_player_state")
+    if "directProjectileRaw" in added and isinstance(out["directProjectileRaw"], dict):
+        direct_provenance = {key: copy.deepcopy(value) for key, value in provenance.items() if key != "fields"}
+        out["directProjectileRaw"]["runtimeDumpProvenance"] = direct_provenance
+        out["directProjectileRaw"]["fromRuntimeDump"] = True
+    out["runtimeDumpItemProvenance"] = provenance
+    return out
 
 def _strip_texture_metrics_for_llm(profile: dict[str, Any]) -> dict[str, Any]:
     """Keep source texture metrics out of LLM authoring cards by default.
@@ -54,10 +137,15 @@ def projectile_profile_of(item: dict[str, Any]) -> dict[str, Any]:
         # Generated parents expose their complete accepted entity graph. There
         # is no truthful single vanilla projectile profile to select for it.
         return {}
-    raw_direct = _raw_section_dict(item, "directProjectileRaw")
-    if raw_direct:
+    observed, raw_direct = _observed_parent_field(item, "directProjectileRaw")
+    if observed:
+        if not isinstance(raw_direct, dict) or not raw_direct:
+            return {}
         out = _strip_texture_metrics_for_llm(raw_direct)
-        out.setdefault("fromLiveWireRaw", True)
+        if isinstance(raw_direct.get("runtimeDumpProvenance"), dict):
+            out.setdefault("fromRuntimeDump", True)
+        else:
+            out.setdefault("fromLiveWireRaw", True)
         out.setdefault("fromItemShoot", item_field(item, "shoot", 0))
         return out
     pp = item.get("projectileProfile")
@@ -69,7 +157,16 @@ def projectile_profile_of(item: dict[str, Any]) -> dict[str, Any]:
         return pp
     shoot = item_field(item, "shoot", 0)
     if shoot:
-        found = runtime_projectile_lookup(shoot)
+        graph = item_field(item, "parentSourceGraph", {})
+        if not isinstance(graph, dict):
+            graph = {}
+        identity_context = {}
+        full_name = item_field(item, "shootProjectileFullName", None)
+        if full_name:
+            identity_context["expected_full_name"] = full_name
+        if graph.get("modules"):
+            identity_context["expected_modules"] = graph["modules"]
+        found = runtime_projectile_lookup(shoot, **identity_context)
         if found:
             out = _strip_texture_metrics_for_llm(found)
             out["fromRuntimeDump"] = True
@@ -95,9 +192,9 @@ def ammo_profile_of(item: dict[str, Any]) -> dict[str, Any]:
 def effective_projectile_profile_of(item: dict[str, Any]) -> dict[str, Any]:
     if generated_data_of(item):
         return {}
-    raw_effective = _raw_section_dict(item, "effectiveProjectileRaw")
-    if raw_effective:
-        return _strip_texture_metrics_for_llm(raw_effective)
+    observed, raw_effective = _observed_parent_field(item, "effectiveProjectileRaw")
+    if observed:
+        return _strip_texture_metrics_for_llm(raw_effective) if isinstance(raw_effective, dict) else {}
     return projectile_profile_of(item)
 
 
@@ -138,11 +235,8 @@ def compact_item_raw_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     # whitespace, empty lines and source-bound refusal without compacting it.
     for key in ("tooltipLines", "tooltipSource", "nativeShootReference", "nativeContactHitStatusReference",
                 "nativeEquipmentReference", "nativeEnvironmentReference", "nativeBuffEffectReference", "parentSourceGraph"):
-        value = item_field(item, key, None)
-        if value is None and key in ("nativeEquipmentReference", "nativeEnvironmentReference", "parentSourceGraph"):
-            runtime = dict_get_ci(item, "runtimeFacts", {})
-            value = dict_get_ci(runtime, key, None) if isinstance(runtime, dict) else None
-        if value is not None:
+        observed, value = _observed_parent_field(item, key)
+        if observed and value is not None:
             out[key] = copy.deepcopy(value)
     if generated_data_of(item):
         for key in ("nativeEquipmentReference", "nativeEnvironmentReference", "parentSourceGraph"):

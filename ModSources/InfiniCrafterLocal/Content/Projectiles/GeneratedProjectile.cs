@@ -30,7 +30,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
     private string _generatedItemId = "";
     private string _entityId = "";
     private bool _configured;
-    private bool _penetrationInitialized;
+    private bool _nativeEntityStateInitialized;
     private bool _runtimePayloadRejected;
     private int _childDepth;
     private int _remainingSpawnBudget; // peer-visible snapshot only; not owner authority
@@ -162,7 +162,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
             && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(budgetOwner);
         if (!preserveSyncedState)
         {
-            _penetrationInitialized = false;
+            _nativeEntityStateInitialized = false;
             _spawnBudgetLease?.Release();
             _spawnBudgetLease = null;
             if (localAuthority && entity.Spawn.DescendantMaxActive is int cap)
@@ -259,12 +259,15 @@ public sealed partial class GeneratedProjectile : ModProjectile
         // Hydrating entity metadata must not reset either to authored base stats.
         Projectile.DamageType = TerrariaRuntimeVocabulary.ResolveDamageClass(entity.Damage.DamageClass);
         Projectile.ownerHitCheck = entity.Damage.OwnerHitCheck;
-        // Native damage owns the remaining allowance after first hydration.
-        // Re-reading metadata for the same physical source must not grant hits.
-        if (!_penetrationInitialized)
+        // Initialize native per-source state once, including first remote metadata
+        // hydration. SyncProjectile does not carry rotation; its unconfigured zero
+        // is not an accepted body pose. Re-reading this same source must neither
+        // grant hits nor reset an orientation already evolved by its drivers.
+        if (!_nativeEntityStateInitialized)
         {
             Projectile.penetrate = entity.Collision.Pierce;
-            _penetrationInitialized = true;
+            Projectile.rotation = SpritePresentation.ProjectileNativeRotation(entity, 0f);
+            _nativeEntityStateInitialized = true;
         }
         // Native Damage() uses maxPenetrate to decide whether owner NPC
         // immunity applies. Dynamic admission must update both initial fields.

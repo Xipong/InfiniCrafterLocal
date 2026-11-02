@@ -31,8 +31,7 @@ public static partial class InfiniVfxRuntime
         if(scale<=0)return null;
         if(!selected.ImpactTexture&&(!selected.RenderSizePx.HasValue||!selected.ForwardAngleDegrees.HasValue))return null;
         SpriteEffects effects=projectile.spriteDirection<0?SpriteEffects.FlipHorizontally:SpriteEffects.None;
-        float rotation=entity is null?selected.ProjectileRotation(entity,projectile.rotation,effects)
-            :GeneratedProjectile.MotionSpriteRotation(entity,selected,projectile.rotation,effects);
+        float rotation=selected.ProjectileRotation(entity,projectile.rotation,effects);
         float drawScale=projectile.scale*scale*selected.FrameScale(texture.Width,texture.Height);
         if(!float.IsFinite(drawScale)||drawScale<=0)return null;
         Vector2 axis=projectile.ModProjectile is GeneratedProjectile generated&&generated.TryGetMotionPresentationAxis(out var motionAxis)

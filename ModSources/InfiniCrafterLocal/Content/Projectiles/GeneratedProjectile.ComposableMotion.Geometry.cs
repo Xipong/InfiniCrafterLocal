@@ -80,12 +80,6 @@ public sealed partial class GeneratedProjectile
         if (!_configured || _entity?.Aim is null) return false;
         axis = MotionAxis(Owner(), publish: false); return true;
     }
-    internal static float MotionSpriteRotation(RuntimeEntitySpec entity, SpritePresentationSelection selected,
-        float rotation, Microsoft.Xna.Framework.Graphics.SpriteEffects effects)
-        => !selected.ImpactTexture && entity.Rotation is not null
-            ? SpritePresentation.AlignForward(rotation, SpritePresentation.RequireForwardAngle(selected.ForwardAngleDegrees), effects)
-            : selected.ProjectileRotation(entity, rotation, effects);
-
     internal static Vector2 MotionSpriteOrigin(RuntimeEntitySpec entity, SpritePresentationSelection selected,
         int width, int height, float scale, Microsoft.Xna.Framework.Graphics.SpriteEffects effects,
         float drawRotation, Vector2 axis)

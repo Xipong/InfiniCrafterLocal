@@ -441,6 +441,24 @@ not certified by the controlled no-fishing scene.
 positive/no-use or no-hurt/vanity controls, plus explicit refusal controls.
 The short-expiry buff counterpart is synthetic test data, not a changed craft.
 
+### Controlled passive-accessory movement
+
+CPU `full` scenes may equip one native passive accessory with the same existing
+`equip` / `vanity` / `unequip` commands as generated equipment. Native
+`Player.Update` owns all effects, acceleration and braking; native accessories
+are not admitted as damage weapons or rendered equipment by this extension.
+Movement snapshots expose the actual `accRunSpeed`, `maxRunSpeed`,
+`runAcceleration` and `runSlowdown` fields, but these fields are not a measured
+maximum speed. Measure actual `vx`, displacement, plateau and stopping distance.
+
+Optional `worldWidthTiles` is bounded to100..400 for full-player scenes; default100
+is unchanged. Native world's side margins make the old100-tile scene too short
+for sustained running. A wider real tilemap prevents that boundary confound;
+it does not change movement physics. `verify_accessory_movement.py` checks native
+Hermes/Frostspark equip, vanity/inventory equivalence, actual acceleration/plateau/
+braking, unchanged default width and invalid-width/input refusals. No shoe-art,
+full world, ice/flight or multiplayer parity is implied.
+
 ## Actual pixels versus schematic replay
 
 `render`, `frame` and the run's `review/replay.html` visualize recorded positions and

@@ -24,17 +24,30 @@ internal readonly record struct SpritePresentationSelection(string Path, int? Re
         return new InfiniCrafterLocal.Common.VFX.InfiniVfxSpriteAnchor((float)Grip.NormalizedX, (float)Grip.NormalizedY,
             ForwardAngleDegrees.Value, entity.Movement.Params.HitboxOffsetPx!.Value).Origin(width, height, scale, effects);
     }
+    // One boundary owns native angle decoding and PNG-local forward alignment.
+    // Dedicated impact/material textures retain their independent raw pose.
     internal float ProjectileRotation(RuntimeEntitySpec? entity, float rotation, SpriteEffects effects)
-    {
-        // Explicit spinning poses and whip are native, not motion-aimed sprites.
-        if (ImpactTexture || entity is null || entity.Movement.Code is 14 or 16 or 17 or 18)
-            return rotation;
-        return SpritePresentation.AlignForward(rotation - MathF.PI / 2f, SpritePresentation.RequireForwardAngle(ForwardAngleDegrees), effects);
-    }
+        => ImpactTexture ? rotation : SpritePresentation.AlignForward(
+            SpritePresentation.ProjectileBodyAngle(entity, rotation),
+            SpritePresentation.RequireForwardAngle(ForwardAngleDegrees), effects);
+
 }
 
 internal static class SpritePresentation
 {
+    // Ordinary generated movement stores its native angle on the Y axis;
+    // explicit composed rotation and legacy spin drivers already use body-forward.
+    // Keep that native storage convention at the boundary, not in model metadata.
+    private static float ProjectileNativeAngleOffset(RuntimeEntitySpec? entity)
+        => entity is null || entity.Rotation is not null || entity.Movement.Code is 14 or 16 or 17
+            ? 0f : MathHelper.PiOver2;
+
+    internal static float ProjectileBodyAngle(RuntimeEntitySpec? entity, float nativeRotation)
+        => nativeRotation - ProjectileNativeAngleOffset(entity);
+
+    internal static float ProjectileNativeRotation(RuntimeEntitySpec entity, float bodyAngle)
+        => bodyAngle + ProjectileNativeAngleOffset(entity);
+
     // Exact opaque pixel-edge support geometry, measured once with the selected
     // texture generation. This is presentation normalization, not an inferred
     // material/decoration classification or a change to the native item collider.

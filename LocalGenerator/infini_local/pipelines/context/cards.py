@@ -28,6 +28,7 @@ from infini_local.pipelines.context.parents import (
     compact_vanilla_flags_for_llm,
     effective_projectile_profile_of,
     projectile_profile_of,
+    native_item_context_from_dump,
 )
 
 # LLM parent packet owner. Extraction lives in parent_context_pipeline; identity
@@ -182,6 +183,7 @@ def raw_parent_card_for_llm(item: dict[str, Any], *, include_visual_reference: b
     silhouette, palette, grip, canvas/axis and scales. Missing facts stay unknown;
     no appearance becomes a gameplay choice or required child dimension.
     """
+    item = native_item_context_from_dump(item)
     item_raw = compact_item_raw_for_llm(item)
     cross_mod_identity = {
         "sourceMod": str(item_field(item, "sourceMod", "Terraria")),
@@ -197,6 +199,8 @@ def raw_parent_card_for_llm(item: dict[str, Any], *, include_visual_reference: b
     }
     if cross_mod_identity:
         card["raw"]["crossModIdentity"] = cross_mod_identity
+    if isinstance(item.get("runtimeDumpItemProvenance"), dict):
+        card["raw"]["runtimeDumpProvenance"] = copy.deepcopy(item["runtimeDumpItemProvenance"])
     vanilla_flags = compact_vanilla_flags_for_llm(item)
     if vanilla_flags:
         card["raw"]["vanillaFlags"] = vanilla_flags

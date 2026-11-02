@@ -89,6 +89,15 @@ input на 357; Hellwing меняет только current projectile 1 на 485
 Нет нового progression solver, recommended damage corridor или скрытого
 перебаланса сохранённого ребёнка при смене патронов.
 
+## Причины неполного identity window
+
+Native equality windows сохраняют прежний предел 1024 сырых IL инструкций,
+включая `nop`. Отказ `identity_window_raw_instruction_bound` означает найденное,
+но слишком большое окно; он не подменяется отсутствием поддержанного dispatch.
+Неподдержанный non-forward переход отмечается отдельно. Эти diagnostics не
+расширяют source admission, не меняют character budget 16000 общего графа и
+не добавляют отсутствующие cadence/механические факты.
+
 ## Неопределённость не запрещает новый дизайн
 
 Заявление «родитель накладывает X» требует подходящего source-наблюдения с
@@ -231,6 +240,37 @@ in-memory detours сторонних модов.
 item snapshots и полные accepted generated graphs продолжают работать независимо.
 Новые references проходят Python compact packet с полными conditions, нулями,
 false, пустыми альтернативами и независимой копией данных.
+
+## Сохранённый dump как источник read-only context
+
+`/infinidump` использует тот же `ToWireItem` / `ProjectileRawSnapshot`, что live
+`Prepare`: это не второй extractor. Полная строка item содержит исходные numeric
+use/cooldown/lifetime поля, literal tooltips, доступные native references и
+bounded source graph. `timeLeft` или `useTime` не являются записью всей AI
+последовательности и не доказывают частоту дочерних выстрелов.
+
+`runtime_dump_service.py` загружает проверенную manifest-пару один раз при старте.
+`native_item_context_from_dump` дополняет только read-only parent card: требует
+целую verified пару и точное stable item identity (numeric ID плюс fullName либо
+sourceMod/internalName). Известное противоречие module MVID, item identity или
+shoot identity запрещает заимствование. Отсутствие сравнимых modules остаётся
+`currentModSet=unverified`, а не доказательством текущей совместимости.
+
+Копируются только целиком отсутствующие producer-owned native source references,
+`parentSourceGraph`, `directProjectileRaw`, `spriteReferenceRaw` и связка literal
+tooltip/source. Presence проверяется в root, runtimeFacts и fingerprint: null,
+пустой объект и unavailable не заполняются старым dump. Частичный source graph
+не сливается рекурсивно с другим capture. Scalars, player ammo/effective state,
+recipe identity, fingerprint и исходный input не изменяются; generated parents
+не используют этот путь. Provenance с перечнем добавленных полей проходит в
+Author/Visual/VFX cards, включая честный dump-origin для projectile.
+
+Legacy JSONL без manifest сохраняет прежний **projectile-only** lookup с меткой
+`legacy_unverified`; новый item enrichment на него не распространяется. Если
+полную item-строку подают как исходный parent, её уже присутствующие поля идут
+обычным projection, без нового восстановления. Непокрытые/отказанные native
+AI/source окна остаются unknown и в live, и в dump, и в card: отсутствие cadence
+не заменяется вручную поддерживаемыми таблицами Terraria.
 
 ## Воспроизведение и ограничения
 
