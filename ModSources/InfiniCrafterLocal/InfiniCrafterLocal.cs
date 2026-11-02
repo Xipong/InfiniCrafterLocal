@@ -15,12 +15,13 @@ namespace InfiniCrafterLocal;
 // authoring here — generated behavior must already be explicit GeneratedItemData.
 public sealed class InfiniCrafterLocalMod : Mod
 {
-    public const string ModVersion = "0.5.1";
+    public const string ModVersion = "0.5.5";
     public static InfiniCrafterLocalMod Instance { get; private set; } = null!;
     public static GeneratorClient Generator { get; private set; } = null!;
     public static RuntimeSpriteCache Sprites { get; private set; } = null!;
     public static GeneratedAssetSyncService AssetSync { get; private set; } = null!;
     public static GeneratedItemRegistryService GeneratedItems { get; private set; } = null!;
+    internal static BundledStudio? Studio { get; private set; }
 
     public override void Load()
     {
@@ -29,6 +30,8 @@ public sealed class InfiniCrafterLocalMod : Mod
         Sprites = new RuntimeSpriteCache();
         AssetSync = new GeneratedAssetSyncService();
         GeneratedItems = new GeneratedItemRegistryService();
+        if (!Terraria.Main.dedServ)
+            Studio = new BundledStudio(this, Terraria.Main.SavePath);
     }
 
 
@@ -159,8 +162,17 @@ public sealed class InfiniCrafterLocalMod : Mod
         return null;
     }
 
+    public override void Close()
+    {
+        Studio?.Dispose();
+        Studio = null;
+        base.Close();
+    }
+
     public override void Unload()
     {
+        Studio?.Dispose();
+        Studio = null;
         GeneratedHeldItemPresentation.ClearAssetRequests();
         GeneratedEquipOverlayDrawLayerBase.ClearNetCaches();
         InfiniItemVfxRuntime.ClearUseEventCaches();

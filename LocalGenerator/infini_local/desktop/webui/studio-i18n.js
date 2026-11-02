@@ -2,7 +2,16 @@
 'use strict';
 (() => {
   const en = {
+  "Скачать sd.cpp": "Download sd.cpp",
+  "Официальные сборки sd.cpp на GitHub": "Official sd.cpp builds on GitHub",
+  "Закрыть студию и запущенный ею генератор": "Close Studio and the generator it started",
+  "Закрыть студию и генератор?": "Close Studio and its generator?",
+  "Если Studio запустила генератор, он остановится вместе с ней, а текущий крафт прервётся. Несохранённые изменения в этой вкладке будут потеряны.": "If Studio started the generator, closing Studio will also stop it and interrupt the current craft. Unsaved changes in this tab will be lost.",
+  "Студия закрыта. Запущенный ею генератор завершает работу.": "Studio is closed. The generator it started is shutting down.",
   "Язык": "Language",
+  "Открыть папку конфигурации": "Open config folder",
+  "Путь к файлу настроек": "Config file path",
+  "Открываем папку конфигурации.": "Opening config folder.",
   "Язык интерфейса и текста новых предметов. Для генерации сохрани настройки и перезапусти сервер.": "Language of the interface and new item text. Save and restart the server to apply it to generation.",
   "Адрес сервера": "Server address",
   "127.0.0.1 — только ты; 0.0.0.0 — принимать подключения из Radmin/LAN.": "127.0.0.1 — only this computer; 0.0.0.0 — accept Radmin/LAN connections.",

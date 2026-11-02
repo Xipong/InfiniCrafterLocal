@@ -996,9 +996,9 @@ body:has(#save-tray:not([hidden])) .draft-indicator { background: var(--accent);
 .save-panel.is-dirty { border-color: #afbf7f; background: #edf1d9; }
 .save-panel.is-dirty .button { background: var(--accent); color: var(--on-accent); border-color: #c5d85e; }
 .config-file { margin-top: 17px; color: var(--muted); font-size: 10px; }
-.config-file > summary { display: flex; align-items: center; gap: 7px; min-height: 35px; cursor: pointer; }
-.config-file > summary svg { width: 14px; height: 14px; }
-.config-file code { display: block; color: var(--subtle); font-size: 9px; line-height: 1.8; overflow-wrap: anywhere; margin-block: 5px 10px; }
+.config-file label { display: block; margin-top: 12px; font-size: 9px; }
+.config-file .config-path { display: block; width: 100%; min-width: 0; margin-block: 5px 10px; padding: 7px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--muted); font-family: var(--mono); font-size: 9px; line-height: 1.8; resize: vertical; overflow-wrap: anywhere; }
+.config-file > .text-button { white-space: normal; text-align: left; }
 .config-file .text-button { font-size: 10px; }
 .context-banner { display: flex; align-items: center; gap: 13px; padding: 14px 17px; margin-bottom: 20px; background: #ecf0df; border: 1px solid #d5ddc0; border-radius: 9px; }
 .context-banner > svg { flex: 0 0 19px; width: 19px; height: 19px; color: #83925d; }

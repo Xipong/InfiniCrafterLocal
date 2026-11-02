@@ -258,7 +258,7 @@
           toast(pending.action !== 'save' ? (receipt.message || t('Процесс генератора запущен. Проверь соединение, чтобы подтвердить готовность.')) : t('Настройки записаны в config.env.'));
         } else if (pending.action === 'savePreset') toast(t('Профиль сохранён отдельно. config.env не изменён.'));
         else if (transforming) toast(t('Изменения подготовлены. Сохрани конфигурацию, чтобы записать их на диск.'));
-        else if (pending.action !== 'exitStudio' && !defaultsDecision) toast(({start:t('Запуск передан генератору. Его состояние — на рабочем столе.'),stop:t('Безопасная остановка завершена.'),health:t('Проверка соединения завершена. Состояние — на рабочем столе.'),validate:t('Проверка путей завершена.'),trace:t('Журнал обновлён. Источник и статус показаны над записями.'),codexLogin:t('Результат входа показан в статусе аккаунта.'),codexStatus:t('Статус аккаунта обновлён.'),codexCatalog:t('Каталог моделей обновлён.'),codexPing:t('Проверка аккаунта завершена.'),codexLogout:t('Выход из аккаунта обработан.'),cancelTrace:t('Обновление журнала отменено.'),openConfig:t('Сохранённая конфигурация открыта для просмотра.'),openCache:t('Открываем папку кеша.'),clearTrace:t('Очистка журнала завершена.')})[pending.action] || t('Действие обработано.'));
+        else if (pending.action !== 'exitStudio' && !defaultsDecision) toast(({start:t('Запуск передан генератору. Его состояние — на рабочем столе.'),stop:t('Безопасная остановка завершена.'),health:t('Проверка соединения завершена. Состояние — на рабочем столе.'),validate:t('Проверка путей завершена.'),trace:t('Журнал обновлён. Источник и статус показаны над записями.'),codexLogin:t('Результат входа показан в статусе аккаунта.'),codexStatus:t('Статус аккаунта обновлён.'),codexCatalog:t('Каталог моделей обновлён.'),codexPing:t('Проверка аккаунта завершена.'),codexLogout:t('Выход из аккаунта обработан.'),cancelTrace:t('Обновление журнала отменено.'),openConfig:t('Сохранённая конфигурация открыта для просмотра.'),openCache:t('Открываем папку кеша.'),openConfigFolder:t('Открываем папку конфигурации.'),clearTrace:t('Очистка журнала завершена.')})[pending.action] || t('Действие обработано.'));
       } else {
         const message = receipt.message || t('Действие не выполнено. Изменения сохранены в этой вкладке.');
         if (['acceptDefaults','declineDefaults'].includes(pending.action)) defaultsError(message);
@@ -269,7 +269,8 @@
       if (pending.action === 'exitStudio' && receipt.ok && receipt.status === 'succeeded') {
         state.shutdown=true;clearTimeout(state.pollTimer);$('#utility-dialog').close();
         $('#connection').innerHTML=`<span class="status-dot"></span><span>${t("Студия закрыта")}</span>`;
-        $('#workspace').innerHTML=`<div class="initial-loading"><h1>${t("Студия закрыта")}</h1><p>${t("Закрыта только студия. Генератор не остановлен этим действием.")}<br>${t("Эту вкладку можно закрыть.")}</p></div>`;
+        const closeMessage=remote.managed ? t('Студия закрыта. Запущенный ею генератор завершает работу.') : t('Закрыта только студия. Генератор не остановлен этим действием.');
+        $('#workspace').innerHTML=`<div class="initial-loading"><h1>${t("Студия закрыта")}</h1><p>${closeMessage}<br>${t("Эту вкладку можно закрыть.")}</p></div>`;
         updateActionButtons();return true;
       }
       if (receipt.result?.kind === 'document') showDocument(receipt.result);
@@ -362,6 +363,8 @@
   }
   function updateActionButtons() {
     $('#language-select').disabled=!state.remote || state.shutdown;
+    const exitHint=state.remote?.managed ? t('Закрыть студию и запущенный ею генератор') : t('Закрыть только студию, не генератор');
+    $$('[data-ui="exit"]').forEach(button=>button.title=exitHint);
     const locked = !state.connected || state.pending || state.posting || state.shutdown;
     $$('[data-action], [data-browse], [data-submit-action]').forEach(button => {button.disabled = !!locked;});
     const pendingAction=state.pending?.action || state.submission?.action;
@@ -566,6 +569,7 @@
       if (field.secret) control += `<button class="reveal" data-reveal="${key}" type="button" aria-label="${t("Показать ключ")}" aria-pressed="false">${icon('eye')}</button>`;
       if (browse && !field.synthetic) control += `<button class="browse" data-browse="${key}" data-browse-type="${browse}" type="button" title="${t("Выбрать на этом компьютере")}" aria-label="${t("Выбрать файл:")} ${esc(title)}">${icon('folder')}</button>`;
     }
+    if (key === 'INFINI_SDCPP_SERVER_EXE') control += `<span class="field-note"><a class="text-button" href="https://github.com/leejet/stable-diffusion.cpp/releases/latest" target="_blank" rel="noopener noreferrer" title="${t('Официальные сборки sd.cpp на GitHub')}">${t('Скачать sd.cpp')} ${icon('arrow')}</a></span>`;
     return `<div class="field-row${state.dirty.has(key) ? ' is-dirty':''}" data-field-row="${key}"><div class="field-copy"><div class="field-label-line"><label for="${id}">${esc(title)}</label><button class="field-help-toggle" data-help-field="${key}" type="button" aria-label="${t("Подробности:")} ${esc(title)}" aria-expanded="${help}">?</button></div><div class="field-key${help ? '':' hidden-key'}">${key}</div><p class="field-help" id="help-${key}">${esc(t(help ? field.help || shortHelp[key] || t('Параметр локального генератора. Значение сохраняется без преобразования.') : shortHelp[key] || ''))}</p>${browse && !field.secret ? `<span class="field-file" data-file-basename="${key}" title="${esc(val)}" ${val.trim() ? '':'hidden'}>${esc(basename(val))}</span>`:''}</div><div class="field-control${field.secret || browse ? ' has-extra':''}">${control}${inactive && !derived ? `<span class="field-note" data-inactive-source>${esc(inactive)}</span>`:''}</div></div>`;
   }
   function disclosure(id,title,fields,reason='',force=false) {
@@ -669,7 +673,7 @@
     const sections=state.filter ? []:pageSections(page,state.fields.filter(field=>field.route === page));
     const related={configure:['operate',t('Проверить генератор')],providers:['images',t('Источник изображения')],images:['models',t('Файлы моделей и LoRA')],sprites:['images',t('Параметры исходника')],models:['images',t('Способ запуска sd.cpp')],multiplayer:['diagnostics',t('Проверить соединение')],diagnostics:['multiplayer',t('Настроить адрес')]}[page];
     const total=state.dirty.size+Number(state.lan !== state.baselineLan);
-    return `<aside class="settings-aside">${sections.length ? `<nav class="section-nav" aria-label="${t("Разделы этой страницы")}"><h2>${t("На этой странице")}</h2>${sections.map((section,index)=>`<button data-section-link="section-${page}-${section.id}"><span>${String(index+1).padStart(2,'0')}</span>${section.title}</button>`).join('')}</nav>`:''}${related ? `<a class="related-page" href="#${related[0]}"><span>${t("Связанный раздел")}<strong>${related[1]}</strong></span>${icon('arrow')}</a>`:''}<div class="save-panel${total ? ' is-dirty':''}"><div class="aside-heading"><h2>${icon('save')}${t("Конфигурация")}</h2></div><strong data-dirty-count>${total ? t("{0} несохранённых изменений", total):t('Изменений нет')}</strong><p>${t("Сохрани настройки перед перезапуском генератора.")}</p><button class="button" data-action="save">${t("Сохранить")} <kbd>Ctrl S</kbd></button></div><details class="config-file"><summary>${icon('folder')}${t("Файл настроек")}</summary><code>${esc(state.remote.configPath || 'config.env')}</code><button class="text-button" data-action="openConfig">${t("Открыть файл")} ${icon('arrow')}</button></details></aside>`;
+    return `<aside class="settings-aside">${sections.length ? `<nav class="section-nav" aria-label="${t("Разделы этой страницы")}"><h2>${t("На этой странице")}</h2>${sections.map((section,index)=>`<button data-section-link="section-${page}-${section.id}"><span>${String(index+1).padStart(2,'0')}</span>${section.title}</button>`).join('')}</nav>`:''}${related ? `<a class="related-page" href="#${related[0]}"><span>${t("Связанный раздел")}<strong>${related[1]}</strong></span>${icon('arrow')}</a>`:''}<div class="save-panel${total ? ' is-dirty':''}"><div class="aside-heading"><h2>${icon('save')}${t("Конфигурация")}</h2></div><strong data-dirty-count>${total ? t("{0} несохранённых изменений", total):t('Изменений нет')}</strong><p>${t("Сохрани настройки перед перезапуском генератора.")}</p><button class="button" data-action="save">${t("Сохранить")} <kbd>Ctrl S</kbd></button></div><section class="config-file" aria-label="${t("Файл настроек")}"><button class="text-button" data-action="openConfigFolder">${icon('folder')}${t("Открыть папку конфигурации")}</button><label for="config-file-path">${t("Путь к файлу настроек")}</label><textarea id="config-file-path" class="config-path" rows="3" readonly spellcheck="false">${esc(state.remote.configPath || '')}</textarea><button class="text-button" data-action="openConfig">${t("Открыть файл")} ${icon('arrow')}</button></section></aside>`;
   }
   function defaultsSummary() {
     const offer=state.remote?.defaultsUpdate,count=offer?.changes?.length || 0;
@@ -1116,7 +1120,10 @@
       case 'help':showHelp();break;
       case 'force-restart':confirm(t('Прервать крафт и перезапустить?'),t('Активный и ожидающий крафт будет прерван. Это не подтверждает возврат материалов в игре. Используй только если безопасный перезапуск недоступен.'),'forceRestart',{confirm:true},t('Прервать и перезапустить'));break;
       case 'stop':confirm(t('Остановить генератор?'),t('Проверим активный крафт перед остановкой собственного запущенного сервера. Черновик адреса не меняет цель; чужие процессы не изменяются.'),'stop',{},t('Остановить безопасно'));break;
-      case 'exit':confirm(t('Закрыть студию?'),t('Закроется только локальный интерфейс. Это действие не останавливает генератор. Несохранённые изменения в этой вкладке будут потеряны.'),'exitStudio',{},t('Закрыть студию'));break;
+      case 'exit':confirm(
+        state.remote?.managed ? t('Закрыть студию и генератор?') : t('Закрыть студию?'),
+        state.remote?.managed ? t('Если Studio запустила генератор, он остановится вместе с ней, а текущий крафт прервётся. Несохранённые изменения в этой вкладке будут потеряны.') : t('Закроется только локальный интерфейс. Это действие не останавливает генератор. Несохранённые изменения в этой вкладке будут потеряны.'),
+        'exitStudio',{},t('Закрыть студию'));break;
       case 'clear-trace':confirm(t('Очистить локальный журнал?'),t('Будут удалены диагностические записи сохранённой конфигурации. Черновик пути не меняет цель. Готовые игровые предметы и рецепты не меняются. Это действие нельзя отменить.'),'clearTrace',{confirm:true},t('Очистить журнал'));break;
       case 'clear-lora':confirm(t('Отключить адаптер?'),t('Сбросим настройки LoRA. Сам файл на диске не удаляется.'),'clearLora',{},t('Отключить LoRA'));break;
       case 'reset-sprite':confirm(t('Вернуть базовый resize?'),t('Фильтр станет BOX, premultiplied resize будет включён. Остальные параметры спрайта остаются.'),'resetSprite',{},t('Вернуть BOX'));break;

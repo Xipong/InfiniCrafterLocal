@@ -13,7 +13,7 @@ let source=fs.readFileSync(require('node:path').join(__dirname,'../infini_local/
 source=source.replace('  navigate();poll();',`
   poll=()=>{};setMenu=()=>{};render=()=>{globalThis.renderCount++;};renderOperate=()=>{};syncInputs=()=>{};updateDiagnostics=()=>{};updateActionButtons=()=>{};
   const originalToast=toast;toast=(message,error)=>{originalToast(message,error);if(!state.suppressToast) globalThis.messages.push({message,error});};
-  globalThis.studio={state,acceptSnapshot,recomputeDirty,heading,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,refreshDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog,restoreActionFocus};
+  globalThis.studio={state,acceptSnapshot,recomputeDirty,heading,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,refreshDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog,restoreActionFocus,aside};
 `);
 global.messages=messages;global.renderCount=0;
 vm.runInThisContext(source);
@@ -420,6 +420,15 @@ assert.equal(inactiveReason({key:limitKey}), '');
 assert.equal(state.draft[limitKey],'4');
 state.draft.INFINI_IMAGE_BACKEND='off';
 assert.match(inactiveReason(parallelField), /выключены/);
+
+// The active config path is a copyable read-only control beside Save, not a
+// disclosure-only destination. Rendering must escape OS filenames as data.
+state.remote.configPath='C:/Folder & <fixture>/config.env';
+const configAside=studio.aside('configure');
+assert(configAside.includes('data-action="save"'));
+assert(configAside.includes('data-action="openConfigFolder"'));
+assert(!configAside.includes('<details class="config-file"'));
+assert.match(configAside, /<textarea[^>]*id="config-file-path"[^>]*readonly[^>]*>C:\/Folder &amp; &lt;fixture&gt;\/config.env<\/textarea>/);
 
 // Adjacent hints must render without opening the full-help disclosure.
 state.helpFields.delete(parallelKey);
