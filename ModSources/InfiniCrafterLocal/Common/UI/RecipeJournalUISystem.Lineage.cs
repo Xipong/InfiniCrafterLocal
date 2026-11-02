@@ -16,8 +16,20 @@ namespace InfiniCrafterLocal.Common.UI;
 public sealed partial class RecipeJournalUISystem
 {
     private static bool _lineageOpen, _lineageDragging, _lineageBrowserPending;
-    private static RecipeLineageGraph? _lineage;
+    private static RecipeLineageGraph? _lineage, _preparedLineage;
     private static GeneratedItemData[]? _lineageSnapshot;
+    private readonly record struct LineageInput(GeneratedItemData Data, string Id, string World,
+        bool Scoped, bool ReferenceOnly, string Name, string ParentA, string ParentB, string[]? Parents)
+    {
+        internal bool Matches(GeneratedItemData data) => ReferenceEquals(Data, data)
+            && Id == data.Id && World == data.RecipeMeta.WorldId && Scoped == data.RecipeMeta.WorldScoped
+            && ReferenceOnly == GeneratedItemData.IsPlayerSaveReferenceOnly(data)
+            && Name == data.Name && ParentA == data.ParentA && ParentB == data.ParentB
+            && (Parents is null ? data.RecipeMeta.ParentIdentities is null
+                : data.RecipeMeta.ParentIdentities is { } ids && Parents.SequenceEqual(ids));
+    }
+    private static LineageInput[] _lineageInputs = Array.Empty<LineageInput>();
+    private static int _lineageWorld;
     private static string _lineageRoot = "";
     private static float[] _lineageCaptionWidths = Array.Empty<float>();
     private static string[] _lineageCaptions = Array.Empty<string>();
@@ -34,8 +46,8 @@ public sealed partial class RecipeJournalUISystem
 
     private static void ResetLineage()
     {
-        ClearLineageHover(); _lineageOpen = _lineageDragging = _lineageBrowserPending = false; _lineage = null;
-        _lineageSnapshot = null; _lineageRoot = ""; _nativeNodes = Array.Empty<Item?>(); _lineageCaptions = Array.Empty<string>(); _lineageCaptionWidths = Array.Empty<float>();
+        ClearLineageHover(); _lineageOpen = _lineageDragging = _lineageBrowserPending = false; _lineage = _preparedLineage = null;
+        _lineageSnapshot = null; _lineageInputs = Array.Empty<LineageInput>(); _lineageWorld = 0; _lineageRoot = ""; _nativeNodes = Array.Empty<Item?>(); _lineageCaptions = Array.Empty<string>(); _lineageCaptionWidths = Array.Empty<float>();
         _highlightEdges = _highlightAncestors = _highlightDescendants = Array.Empty<bool>();
         _edgeMultiplicityLabels = Array.Empty<string>(); _highlightHover = -2;
         _lineagePan = Vector2.Zero; _lineageZoom = 1f; _lineageCanvas = Rectangle.Empty;
@@ -119,15 +131,31 @@ public sealed partial class RecipeJournalUISystem
         var view = FitLineageView(canvas.Size(), new Vector2(_lineage.Width, _lineage.Height), _lineage.Nodes[_lineage.RootIndex].Position);
         _lineageZoom = view.Zoom; _lineagePan = view.Pan;
     }
-    private static void EnsureLineage(Rectangle canvas)
+    private static void EnsureLineageGraph()
     {
-        if (_lineageRoot == _selected && (ReferenceEquals(_lineageSnapshot, _known)
-            || (_lineageSnapshot is not null && _lineageSnapshot.SequenceEqual(_known))))
-        { _lineageSnapshot = _known; return; }
+        if (_lineageRoot == _selected && _lineageWorld == Main.worldID)
+        {
+            if (ReferenceEquals(_lineageSnapshot, _known)) return;
+            // Registry snapshots refresh every 60 ticks; reference equality alone
+            // misses in-place ancestry edits, while rebuilding each refresh hitches deep graphs.
+            bool unchanged = _lineageInputs.Length == _known.Length;
+            for (int i = 0; unchanged && i < _known.Length; i++) unchanged = _lineageInputs[i].Matches(_known[i]);
+            if (unchanged) { _lineageSnapshot = _known; return; }
+        }
         var selected = _known.FirstOrDefault(d => d.Id == _selected && d.RecipeMeta.WorldId == Main.worldID.ToString());
         bool rootChanged = _lineageRoot != _selected;
-        _lineageRoot = _selected; _lineageSnapshot = _known;
+        _lineageRoot = _selected; _lineageSnapshot = _known; _lineageWorld = Main.worldID;
+        _lineageInputs = _known.Select(d => new LineageInput(d, d.Id, d.RecipeMeta.WorldId,
+            d.RecipeMeta.WorldScoped, GeneratedItemData.IsPlayerSaveReferenceOnly(d), d.Name, d.ParentA, d.ParentB,
+            d.RecipeMeta.ParentIdentities?.ToArray())).ToArray();
         _lineage = selected is null ? null : RecipeLineageGraph.Build(selected, _known);
+        if (rootChanged) _lineageCanvas = Rectangle.Empty;
+    }
+    private static void EnsureLineage()
+    {
+        EnsureLineageGraph();
+        if (ReferenceEquals(_preparedLineage, _lineage)) return;
+        _preparedLineage = _lineage;
         _nativeNodes = new Item?[_lineage?.Nodes.Length ?? 0];
         _lineageCaptions = new string[_nativeNodes.Length];
         _lineageCaptionWidths = new float[_nativeNodes.Length];
@@ -142,7 +170,6 @@ public sealed partial class RecipeJournalUISystem
                 if (_lineage.Nodes[i].Kind == RecipeLineageGraph.NodeKind.Native)
                     _nativeNodes[i] = RecipeNativeItemResolver.Resolve(_lineage.Nodes[i].Identity);
             }
-        if (rootChanged) FitLineage(canvas);
     }
     private static bool DrawLineage(SpriteBatch sb)
     {
@@ -160,7 +187,7 @@ public sealed partial class RecipeJournalUISystem
         LineageLabel(sb, Text("Lineage"), new Vector2(book.X + 96, book.Y + 17), new Color(216, 185, 115), .9f, Math.Max(0, book.Width - 340));
         if (LineageButton(sb, new Rectangle(book.Right - 48, book.Y + 16, 30, 28), "×", click, cursor)) { Close(); Main.mouseLeftRelease = false; return true; }
         if (canvas.Width < 60 || canvas.Height < 60) return true;
-        EnsureLineage(canvas);
+        EnsureLineage();
         if (_lineageCanvas != canvas) { _lineageCanvas = canvas; FitLineage(canvas); }
         Vector2 anchor = canvas.Size() * .5f;
         if (book.Width >= 340)

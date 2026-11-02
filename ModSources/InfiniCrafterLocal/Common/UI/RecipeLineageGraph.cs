@@ -30,6 +30,7 @@ internal sealed class RecipeLineageGraph
     internal int RootIndex => 0;
     internal float Width, Height;
     internal bool IsTruncated;
+    internal int? GenerationDepth { get; private set; }
 
     internal static RecipeLineageGraph Build(GeneratedItemData selected, IEnumerable<GeneratedItemData> known, int maxNodes = 512)
     {
@@ -114,6 +115,9 @@ internal sealed class RecipeLineageGraph
         Visit(rootIdentity, selected.Name, 0);
         graph.Nodes = nodes.ToArray(); graph.Edges = edges.ToArray();
         graph.Arrange();
+        if (!graph.IsTruncated && graph.Nodes.All(n => n.Kind == NodeKind.Generated
+                || n.Kind == NodeKind.Native && RecipeNativeItemResolver.TryGetStableName(n.Identity, out _)))
+            graph.GenerationDepth = graph.Nodes[graph.RootIndex].Level;
         return graph;
     }
 

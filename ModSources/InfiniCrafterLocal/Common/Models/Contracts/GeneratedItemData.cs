@@ -253,8 +253,8 @@ public sealed partial class GeneratedItemData
         }
         if (clone.RecipeMeta is not null)
         {
-            clone.RecipeMeta.ParentIdentities = Array.Empty<string>();
-            clone.RecipeMeta.ParentCategories = Array.Empty<string>();
+            // Exact recipe lineage is runtime presentation data, not authoring bulk.
+            // Clones, registry sync and embedded placement definitions all need it.
             clone.RecipeMeta.AssetBaseUrl = SafeText(clone.RecipeMeta.AssetBaseUrl, 200);
             clone.RecipeMeta.AssetFiles = (clone.RecipeMeta.AssetFiles ?? Array.Empty<string>())
                 .Select(FileNameOnly)

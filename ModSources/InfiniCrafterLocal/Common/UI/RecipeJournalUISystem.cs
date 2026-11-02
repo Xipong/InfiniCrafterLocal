@@ -309,7 +309,8 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         bool compact = area.Width < 360 || area.Bottom - y < 28 + 148 + 26;
         if (!compact)
         {
-            Label(sb, Text("Generation", data.RecipeMeta.GenerationDepth), new Vector2(x, y), Muted, 0.58f, w);
+            EnsureLineageGraph();
+            Label(sb, Text("Generation", _lineage?.GenerationDepth is int depth ? (object)depth : "?"), new Vector2(x, y), Muted, 0.58f, w);
             y += 28;
         }
         int inputSize = compact ? 36 : 44, outputSize = compact ? 48 : 72;
