@@ -906,6 +906,8 @@ body:has(#save-tray:not([hidden])) .draft-indicator { background: var(--accent);
 .setup-item small { display: block; color: var(--muted); font-size: 10px; margin-top: 5px; }
 .setup-item svg { width: 15px; height: 15px; flex-shrink: 0; }
 .pipeline { grid-column: auto; margin-top: 28px; padding: 0; border: 0; background: none; }
+.pipeline .section-heading { flex-wrap: wrap; }
+.dashboard-config-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .pipeline-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; list-style: none; padding: 0; margin: 0; }
 .pipeline-list > li { position: relative; min-width: 0; }
 .pipeline-list > li:not(:last-child)::after { content: '→'; position: absolute; z-index: 3; top: 50%; right: -12px; background: var(--canvas); color: #84965b; width: 12px; font: 15px/1 var(--sans); text-align: center; }

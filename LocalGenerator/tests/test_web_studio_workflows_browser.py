@@ -46,22 +46,24 @@ def browser_studio():
 
 
 @pytest.mark.parametrize('viewport', [{'width': 1440, 'height': 1000}, {'width': 390, 'height': 844}])
-def test_config_folder_is_visible_and_preserves_draft_after_action(browser_studio, viewport):
+@pytest.mark.parametrize('route', ['operate', 'configure'])
+def test_config_folder_is_visible_and_preserves_draft_after_action(browser_studio, viewport, route):
     page, server, snapshot = browser_studio
     expect = pytest.importorskip('playwright.sync_api').expect
     config_path = 'C:/Folder with spaces/Override/config.env'
     snapshot['configPath'] = config_path
     server.publish(snapshot)
     page.set_viewport_size(viewport)
-    page.goto(server.url + '#configure')
+    page.goto(server.url + '#' + route)
     folder = page.get_by_role('button', name='Открыть папку конфигурации', exact=True)
     expect(folder).to_be_visible()
     assert folder.evaluate('(element) => !element.closest("details")')
-    path = page.get_by_label('Путь к файлу настроек', exact=True)
-    expect(path).to_have_value(config_path)
-    assert path.get_attribute('readonly') is not None
-    path.select_text()
-    assert path.evaluate('(element) => element.value.slice(element.selectionStart, element.selectionEnd)') == config_path
+    if route == 'configure':
+        path = page.get_by_label('Путь к файлу настроек', exact=True)
+        expect(path).to_have_value(config_path)
+        assert path.get_attribute('readonly') is not None
+        path.select_text()
+        assert path.evaluate('(element) => element.value.slice(element.selectionStart, element.selectionEnd)') == config_path
     page.locator('#language-select').select_option('en')
     expect(page.get_by_role('button', name='Open config folder', exact=True)).to_be_visible()
     expect(page.locator('#save-tray')).to_be_visible()
@@ -74,7 +76,9 @@ def test_config_folder_is_visible_and_preserves_draft_after_action(browser_studi
     expect(page.get_by_role('button', name='Open config folder', exact=True)).to_be_enabled()
     expect(page.locator('#language-select')).to_have_value('en')
     expect(page.locator('#save-tray')).to_be_visible()
-    expect(page.get_by_label('Config file path', exact=True)).to_have_value(config_path)
+    assert page.url.endswith('#' + route), 'Opening the folder must not navigate to another settings page'
+    if route == 'configure':
+        expect(page.get_by_label('Config file path', exact=True)).to_have_value(config_path)
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     assert server.commands.empty()
 
