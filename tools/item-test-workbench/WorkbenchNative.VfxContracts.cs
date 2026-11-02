@@ -15,8 +15,9 @@ internal static partial class EngineRuntimeChecks
     private static void WValidateShape(VfxSlotSpec slot,bool fullNativeDraw)
     {
         if(!fullNativeDraw || !(slot.Shape is {Kind:"arc",Attachment:"world" or "source",RotationFrame:"world" or "source"}
-            or {Kind:"orbit",Attachment:"source",RotationFrame:"world",MoteOrientation:"world"}))
-            throw new NotSupportedException("shape currently requires proven world/source arc or source-bound world-frame orbit and full native draw with original MagicPixel");
+            or {Kind:"orbit",Attachment:"source",RotationFrame:"world",MoteOrientation:"world"}
+            or {Kind:"orbit",Attachment:"world",RotationFrame:"world",MoteOrientation:"orbit"}))
+            throw new NotSupportedException("shape currently requires proven world/source arc, source-bound world-frame orbit with world-oriented motes, or world-fixed world-frame orbit with orbit-oriented motes, plus full native draw with original MagicPixel");
     }
 
     // Part of --check-assertions: actual stand policies, not a GPU/gameplay claim.
@@ -48,6 +49,7 @@ internal static partial class EngineRuntimeChecks
         Refused(()=>WValidateShape(new VfxSlotSpec{RendererKind="shape"},true),"Missing shape admitted");
         var orbit=new VfxSlotSpec{RendererKind="shape",Shape=new VfxShapeSpec{Kind="orbit",Attachment="source",RotationFrame="world",MoteOrientation="world"}};
         WValidateShape(orbit,true);
+        orbit.Shape.Attachment="world";orbit.Shape.MoteOrientation="orbit";WValidateShape(orbit,true);
         orbit.Shape.RotationFrame="source";Refused(()=>WValidateShape(orbit,true),"Unproven orbit source rotation admitted");
         orbit.Shape.RotationFrame="world";orbit.Shape.MoteOrientation="radial";Refused(()=>WValidateShape(orbit,true),"Unproven orbit mote orientation admitted");
         var trail=new VfxSlotSpec{RendererKind="historyTrail",Trail=new VfxHistoryTrailSpec{Draw="stroke",Source="center"}};
