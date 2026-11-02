@@ -398,6 +398,7 @@ Configs: {
 }
 
 Studio: {
+	MenuOpen: Open InfiniCrafter Studio
 	Starting: Preparing Studio…
 	Opened: Studio is open in your browser. Click again to reopen it. Studio launched from the mod closes when the mod unloads.
 	UnsupportedPlatform: Bundled Studio currently supports Windows x64. Use the external Studio launcher on this platform.

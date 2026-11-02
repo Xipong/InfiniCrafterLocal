@@ -398,6 +398,7 @@ Configs: {
 }
 
 Studio: {
+	MenuOpen: Открыть InfiniCrafter Studio
 	Starting: Подготовка Studio…
 	Opened: Studio открыта в браузере. Нажми ещё раз, чтобы открыть её повторно. Запущенная из мода Studio закрывается при выгрузке мода.
 	UnsupportedPlatform: Встроенная Studio пока поддерживает Windows x64. На этой платформе используй внешнюю открывалку Studio.

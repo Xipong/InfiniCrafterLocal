@@ -44,6 +44,7 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("studio menu native visibility scale and launch admission", StudioMenuAdmission),
             ("projectile angle fresh remote hydration", ProjectileAngleFreshRemoteHydration),
             ("projectile raw impact native pose witness", ProjectileRawImpactKeepsLiteralNativePose),
             ("projectile angle boundary native storage and authored forward", ProjectileAngleBoundaryPreservesNativeStorage),
