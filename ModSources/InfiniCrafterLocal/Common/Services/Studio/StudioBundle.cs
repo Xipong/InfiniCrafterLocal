@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
@@ -17,6 +16,7 @@ internal sealed record StudioBundleSpec(string Archive, string Sha256, string Py
 internal static class StudioBundle
 {
     private const string CompleteMarker = ".complete";
+    private const string OwnedFiles = ".owned-files.json";
 
     internal static StudioBundleSpec ReadManifest(byte[] manifest, string platform)
     {
@@ -43,13 +43,17 @@ internal static class StudioBundle
 
     internal static string Install(byte[] payload, StudioBundleSpec spec, string runtimesDirectory, CancellationToken cancellationToken)
     {
+        Directory.CreateDirectory(runtimesDirectory);
+        using FileStream installationLock = AcquireInstallationLock(runtimesDirectory, cancellationToken);
+        return InstallLocked(payload, spec, runtimesDirectory, cancellationToken);
+    }
+
+    internal static string InstallLocked(byte[] payload, StudioBundleSpec spec, string runtimesDirectory, CancellationToken cancellationToken)
+    {
         cancellationToken.ThrowIfCancellationRequested();
         string digest = Convert.ToHexString(SHA256.HashData(payload)).ToLowerInvariant();
         if (!string.Equals(digest, spec.Sha256, StringComparison.Ordinal))
             throw new InvalidDataException("The bundled Studio archive is damaged (SHA-256 mismatch). Reinstall the mod.");
-
-        Directory.CreateDirectory(runtimesDirectory);
-        using FileStream installationLock = AcquireInstallationLock(runtimesDirectory, cancellationToken);
         string destination = Path.Combine(runtimesDirectory, digest);
         if (IsComplete(destination, spec))
             return destination;
@@ -58,6 +62,7 @@ internal static class StudioBundle
         try
         {
             Directory.CreateDirectory(staging);
+            var owned = new SortedDictionary<string, string>(StringComparer.Ordinal);
             using (var memory = new MemoryStream(payload, writable: false))
             using (var archive = new ZipArchive(memory, ZipArchiveMode.Read))
             {
@@ -68,6 +73,8 @@ internal static class StudioBundle
                     cancellationToken.ThrowIfCancellationRequested();
                     string relative = entry.FullName.TrimEnd('/');
                     ValidateRelativePath(relative);
+                    if (relative == CompleteMarker || relative == OwnedFiles)
+                        throw new InvalidDataException("Reserved Studio installation metadata path.");
                     if (!seen.Add(relative))
                         throw new InvalidDataException($"Duplicate path in the Studio archive: {relative}");
                     if (((entry.ExternalAttributes >> 16) & 0xF000) == 0xA000)
@@ -82,12 +89,15 @@ internal static class StudioBundle
                     using Stream source = entry.Open();
                     using FileStream target = new FileStream(output, FileMode.CreateNew, FileAccess.Write);
                     source.CopyTo(target);
+                    target.Close();
+                    owned.Add(relative, Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(output))).ToLowerInvariant());
                 }
             }
 
             if (!HasEntryPoints(staging, spec))
                 throw new InvalidDataException("The Studio archive is missing its Python runtime or launcher.");
             cancellationToken.ThrowIfCancellationRequested();
+            File.WriteAllText(Path.Combine(staging, OwnedFiles), JsonSerializer.Serialize(owned), new UTF8Encoding(false));
             File.WriteAllText(Path.Combine(staging, CompleteMarker), digest, new UTF8Encoding(false));
             // A previous interrupted installation never replaces a complete runtime.
             if (Directory.Exists(destination))
@@ -95,7 +105,7 @@ internal static class StudioBundle
                 if (IsComplete(destination, spec))
                     return destination;
                 RejectLinkedDirectory(destination);
-                Directory.Delete(destination, recursive: true);
+                throw new IOException($"The Studio runtime is incomplete and was preserved at '{destination}'. Move this directory aside before reinstalling; keep any personal files.");
             }
             Directory.Move(staging, destination);
             return destination;
@@ -107,10 +117,111 @@ internal static class StudioBundle
         }
     }
 
-    private static FileStream AcquireInstallationLock(string runtimesDirectory, CancellationToken cancellationToken)
+    // Caller holds the installation lock through launch readiness and this best-effort cleanup.
+    internal static void RetirePreviousRuntimesLocked(string runtimesDirectory, StudioBundleSpec current)
+    {
+        RejectLinkedDirectory(runtimesDirectory);
+        if (!IsComplete(Path.Combine(runtimesDirectory, current.Sha256), current))
+            return;
+        foreach (string directory in Directory.GetDirectories(runtimesDirectory))
+        {
+            string name = Path.GetFileName(directory);
+            if (name == current.Sha256 || name.Length != 64 || !Array.TrueForAll(name.ToCharArray(), Uri.IsHexDigit))
+                continue;
+            var handles = new List<FileStream>();
+            try
+            {
+                RejectLinkedDirectory(directory);
+                string inventory = Path.Combine(directory, OwnedFiles);
+                if (!File.Exists(inventory))
+                    continue; // Legacy packages have no authority over user-added files.
+                var found = new Dictionary<string, FileStream>(StringComparer.Ordinal);
+                var folders = new List<string>();
+                var pending = new Stack<string>();
+                pending.Push(directory);
+                while (pending.Count > 0)
+                {
+                    string folder = pending.Pop();
+                    RejectLinkedDirectory(folder);
+                    folders.Add(folder);
+                    foreach (string entry in Directory.GetFileSystemEntries(folder))
+                    {
+                        FileAttributes attributes = File.GetAttributes(entry);
+                        if ((attributes & FileAttributes.ReparsePoint) != 0)
+                            throw new IOException("Linked files are not managed Studio runtime content.");
+                        if ((attributes & FileAttributes.Directory) != 0)
+                            pending.Push(entry);
+                        else
+                        {
+                            // ReadWrite rejects mapped executables on Windows. Retain handles
+                            // until deletion so ordinary opens cannot race the verified bytes.
+                            var handle = new FileStream(entry, FileMode.Open, FileAccess.ReadWrite, FileShare.Delete);
+                            handles.Add(handle);
+                            found.Add(Path.GetRelativePath(directory, entry).Replace('\\', '/'), handle);
+                        }
+                    }
+                }
+                if (!found.TryGetValue(CompleteMarker, out FileStream? marker)
+                    || !found.TryGetValue(OwnedFiles, out FileStream? inventoryHandle))
+                    continue;
+                var expected = JsonSerializer.Deserialize<Dictionary<string, string>>(inventoryHandle);
+                if (expected == null || expected.Count == 0 || found.Count != expected.Count + 2)
+                    continue;
+                foreach (string relative in expected.Keys)
+                {
+                    ValidateRelativePath(relative);
+                    if (relative == CompleteMarker || relative == OwnedFiles)
+                        throw new InvalidDataException("Reserved Studio inventory path.");
+                }
+                using (var reader = new StreamReader(marker, Encoding.UTF8, true, 1024, leaveOpen: true))
+                    if (reader.ReadToEnd().Trim() != name)
+                        continue;
+                bool matches = true;
+                foreach (var entry in expected)
+                    if (!found.TryGetValue(entry.Key, out FileStream? file)
+                        || Convert.ToHexString(SHA256.HashData(file)).ToLowerInvariant() != entry.Value)
+                    { matches = false; break; }
+                var expectedFolders = new HashSet<string>(StringComparer.Ordinal) { directory };
+                foreach (string relative in expected.Keys)
+                {
+                    string? folder = Path.GetDirectoryName(Path.Combine(directory, relative));
+                    while (folder != null && folder != directory)
+                    {
+                        expectedFolders.Add(folder);
+                        folder = Path.GetDirectoryName(folder);
+                    }
+                }
+                if (!matches || folders.Count != expectedFolders.Count || folders.Exists(folder => !expectedFolders.Contains(folder)))
+                    continue;
+                // Never recursively remove an unchecked file that appeared after validation.
+                foreach (string relative in expected.Keys)
+                    File.Delete(Path.Combine(directory, relative));
+                File.Delete(inventory);
+                File.Delete(Path.Combine(directory, CompleteMarker));
+                // Windows completes delete-pending files when their last handle closes.
+                foreach (FileStream handle in handles)
+                    handle.Dispose();
+                handles.Clear();
+                for (int index = folders.Count - 1; index >= 0; index--)
+                    Directory.Delete(folders[index], recursive: false);
+            }
+            catch (IOException) { /* Busy or changed: retry on a later successful launch. */ }
+            catch (UnauthorizedAccessException) { /* Do not force deletion. */ }
+            catch (JsonException) { /* Unknown metadata is not deletion authority. */ }
+            catch (InvalidDataException) { /* Invalid paths never authorize cleanup. */ }
+            finally
+            {
+                foreach (FileStream handle in handles)
+                    handle.Dispose();
+            }
+        }
+    }
+
+    internal static FileStream AcquireInstallationLock(string runtimesDirectory, CancellationToken cancellationToken, TimeProvider? clock = null)
     {
         string path = Path.Combine(runtimesDirectory, ".install.lock");
-        var elapsed = Stopwatch.StartNew();
+        clock ??= TimeProvider.System;
+        long started = clock.GetTimestamp();
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -120,7 +231,8 @@ internal static class StudioBundle
                 // lock a new inode while an existing installer still owns the old one.
                 return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
             }
-            catch (IOException) when (elapsed.Elapsed < TimeSpan.FromSeconds(30))
+            // Includes the first launch's 45-second readiness window and extraction/cleanup.
+            catch (IOException) when (clock.GetElapsedTime(started) < TimeSpan.FromSeconds(120))
             {
                 cancellationToken.WaitHandle.WaitOne(100);
             }
