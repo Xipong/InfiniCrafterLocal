@@ -7,6 +7,25 @@ from infini_local.pipelines.transport import client as llm_transport
 from infini_local.pipelines.transport import profiles as llm_profiles
 
 
+@pytest.mark.parametrize("selected_model", ["gpt-6-sol", ""])
+def test_exported_trace_names_the_selected_codex_model(monkeypatch, tmp_path, selected_model):
+    from infini_local.web import server
+
+    auth = {"provider": "openai_codex", "model": selected_model, "status": "signed_in_unverified"}
+    monkeypatch.setattr(server, "active_llm_provider", lambda: "openai_codex")
+    monkeypatch.setattr(server, "llm_auth_snapshot", lambda: auth)
+    monkeypatch.setattr(server, "LMSTUDIO_MODEL", "unused-local-model")
+    monkeypatch.setattr(server, "sdcpp_debug_snapshot", lambda **_kwargs: {})
+    monkeypatch.setattr(server, "tail_ndjson", lambda *_args: [])
+    monkeypatch.setattr(server.generation_debug, "last_combine_failure_summary", lambda: {})
+    monkeypatch.setattr(server.generation_debug, "LAST_COMBINE_FAILURE_FILE", tmp_path / "missing-failure.json")
+
+    pipeline = server.trace_snapshot()["pipeline"]
+    assert pipeline["llmProvider"] == "openai_codex"
+    assert pipeline["llmModel"] == selected_model
+    assert pipeline["llmAuth"] == auth
+
+
 def test_openrouter_auth_diagnostics_are_exposed_and_fail_fast(monkeypatch):
     # Config-only boundary: exercise actual health shaping, not a source literal.
     from infini_local.web import server

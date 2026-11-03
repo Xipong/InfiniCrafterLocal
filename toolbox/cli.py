@@ -41,7 +41,14 @@ def main(argv: list[str] | None = None) -> int:
     if values[0] == 'verify':
         return subprocess.run([sys.executable, str(BASE_ROOT / 'tools/agentctl.py'), 'verify', *values[1:]], cwd=BASE_ROOT).returncode
     if values[0] == 'replay':
-        child = subprocess.run([sys.executable, '-m', 'toolbox.testing.replay', *values[1:]], cwd=BASE_ROOT, text=True, capture_output=True)
+        from toolbox.testing.replay import build_parser as replay_parser
+        args = replay_parser().parse_args(values[1:])
+        forwarded = [str(args.case.expanduser().resolve())]
+        if args.compare:
+            forwarded.append('--compare')
+        if args.project is not None:
+            forwarded.extend(['--project', str(args.project.expanduser().resolve())])
+        child = subprocess.run([sys.executable, '-m', 'toolbox.testing.replay', *forwarded], cwd=BASE_ROOT, text=True, capture_output=True)
         print(child.stdout, end='')
         print(child.stderr, end='', file=sys.stderr)
         return child.returncode

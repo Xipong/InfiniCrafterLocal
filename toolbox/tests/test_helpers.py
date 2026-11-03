@@ -51,6 +51,26 @@ def test_replay_refuses_live_flags(monkeypatch, capsys, tmp_path):
     assert 'unrecognized' in output.err
 
 
+def test_replay_preserves_caller_relative_case_and_project(monkeypatch, capsys, tmp_path):
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+    from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+
+    case = tmp_path / 'saved'
+    case.mkdir()
+    source = json.dumps(compile_runtime_program(build_runtime_fixture('workbench_blade')))
+    (case / 'final_item.json').write_text(source)
+    for cwd, path, project in ((tmp_path, case, ROOT), (tmp_path, Path('saved'), ROOT),
+                               (ROOT.parent, case, Path(ROOT.name))):
+        monkeypatch.chdir(cwd)
+        code, output = cli(monkeypatch, capsys, 'replay', path, '--project', project)
+        assert code == 0, output
+        report = json.loads(output.out)
+        assert report['ok'] is True
+        assert Path(report['caseDir']) == case
+    assert (case / 'final_item.json').read_text() == source
+    assert sorted(p.name for p in case.iterdir()) == ['final_item.json']
+
+
 def test_doctor_resolves_moved_tool_and_manifest_native_path(monkeypatch, capsys, tmp_path):
     (tmp_path / 'LocalGenerator/infini_local').mkdir(parents=True)
     (tmp_path / 'tools/testing').mkdir(parents=True)

@@ -13,12 +13,16 @@ from toolbox.infini_toolbox import discover_project
 from toolbox.testing.discovery import find_tool
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description='Validate saved final_item.json and optional snapshot; never rerun inference.')
     parser.add_argument('case', type=Path)
     parser.add_argument('--compare', action='store_true')
     parser.add_argument('--project', type=Path)
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
     project = discover_project(args.project)
     owner = find_tool(project, 'replay_generation_case.py')
 
@@ -38,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
             raise RuntimeError('Cannot load canonical replay owner')
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        report = module.build_replay_report(args.case.resolve(), compare=args.compare, rerun=False, replay_raw=None)
+        report = module.build_replay_report(args.case.expanduser().resolve(), compare=args.compare, rerun=False, replay_raw=None)
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0 if report['ok'] else 1
 

@@ -443,6 +443,9 @@ def test_vfx_comfy_placeholder_preserves_the_accepted_nonce_digest_calls(adapter
     monkeypatch.setattr(generation.uuid, 'uuid4', lambda: SimpleNamespace(hex=nonce))
     monkeypatch.setattr(generation, 'IMAGE_BACKEND', 'comfyui')
     monkeypatch.setattr(generation, 'SPRITE_RETRIES', 1)
+    # This case isolates retry identity; best-of-N variants are a separate
+    # contract and can salvage the first attempt without triggering a retry.
+    monkeypatch.setattr(backend, 'GENERATE_VARIANTS', 1)
     downloads = []
 
     def corrupt_then_valid(req, **kwargs):

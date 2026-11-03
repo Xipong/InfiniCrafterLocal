@@ -79,3 +79,35 @@ def test_summary_missing_lane_is_unknown_not_zero_success(monkeypatch, capsys, t
     report = json.loads(output.out)
     assert report['missingFiles'] == ['logical_llm.ndjson']
     assert report['logicalRequests'] is None
+
+
+def test_summary_requires_correlated_runtime_evidence_for_each_case(monkeypatch, capsys, tmp_path):
+    lanes = saved_run(tmp_path)
+    for lane in ('logical_llm', 'http_llm', 'harness_events'):
+        write_rows(tmp_path / (lane + '.ndjson'), [row for row in lanes[lane] if row['case'] == 'a'])
+    code, output = cli(monkeypatch, capsys, 'summary', tmp_path)
+    assert code == 1
+    report = json.loads(output.out)
+    assert report['missingCaseEvidence'] == {'logical_llm': ['b'], 'http_llm': ['b'], 'harness_events': ['b']}
+
+    # A response from another planned case cannot complete this case's request.
+    for lane in ('logical_llm', 'http_llm'):
+        rows = [{**row, 'case': 'b' if row['case'] == 'a' else 'a'}
+                if row['phase'] == 'response' else row for row in lanes[lane]]
+        write_rows(tmp_path / (lane + '.ndjson'), rows)
+    write_rows(tmp_path / 'harness_events.ndjson', lanes['harness_events'])
+    code, output = cli(monkeypatch, capsys, 'summary', tmp_path)
+    assert code == 1
+    assert json.loads(output.out)['terminalCoverage'] is False
+
+
+def test_summary_accepts_multiple_correlated_stage_calls_per_case(monkeypatch, capsys, tmp_path):
+    lanes = saved_run(tmp_path)
+    for lane in ('logical_llm', 'http_llm'):
+        write_rows(tmp_path / (lane + '.ndjson'), lanes[lane] + [
+            dict(case='a', sequence=3, phase=phase) for phase in ('request', 'response')])
+    code, output = cli(monkeypatch, capsys, 'summary', tmp_path)
+    assert code == 0, output
+    report = json.loads(output.out)
+    assert report['logicalRequests'] == report['httpRequests'] == 3
+    assert not any(report['missingCaseEvidence'].values())
