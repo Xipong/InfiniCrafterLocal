@@ -87,7 +87,8 @@ internal static partial class EngineRuntimeChecks
         if(itemBoundary is not ("fresh" or "local_cache")) throw new ArgumentException("item-boundary must be fresh or local_cache");
         GeneratedItemData? data = itemPath is null ? null : (itemBoundary=="local_cache"?GeneratedItemData.FromLocalCacheJson(File.ReadAllText(itemPath)):GeneratedItemData.FromJson(File.ReadAllText(itemPath))) ?? throw new InvalidDataException("Item rejected by actual "+(itemBoundary=="local_cache"?"GeneratedItemData.FromLocalCacheJson":"GeneratedItemData.FromJson")+": " + ContractJsonDiagnostics.LastError);
         var scenario = JsonNode.Parse(File.ReadAllText(scenarioPath))!.AsObject();
-        WKeys(scenario,"scenario","ticks","seed","player","dummy","tiles","actions","assertions","playerUpdate","inventory","worldId","nativeRender","itemStack","hostiles","world","vanillaAssetRoot","recallSpawn","worldWidthTiles","fishing");
+        WKeys(scenario,"scenario","ticks","seed","player","dummy","tiles","actions","assertions","playerUpdate","inventory","worldId","nativeRender","itemStack","hostiles","world","vanillaAssetRoot","recallSpawn","worldWidthTiles","fishing","vanillaUtilityEmission");
+        bool utilityEmission=scenario["vanillaUtilityEmission"]?.GetValue<bool>()??false;
         int worldId=WInt(scenario,"worldId",0);
         WValidateAmmoInventory(scenario);
         WValidateHostiles(scenario["hostiles"]);
@@ -105,6 +106,8 @@ internal static partial class EngineRuntimeChecks
         bool drawPlacedBodies=scenario["nativeRender"]?["drawPlacedBodies"]?.GetValue<bool>()??false;
         bool drawArtwork=scenario["nativeRender"]?["drawArtwork"]?.GetValue<bool>()??false;
         bool drawPlayer=scenario["nativeRender"]?["drawPlayer"]?.GetValue<bool>()??false;
+        int? backpackTexture=scenario["nativeRender"]?["backpackTexture"]?.GetValue<int>();
+        if(backpackTexture.HasValue && (!drawPlayer || backpackTexture!=2))throw new ArgumentException("backpackTexture requires drawPlayer=true and pinned index2");
         bool drawZombie=scenario["nativeRender"]?["drawZombie"]?.GetValue<bool>()??false;
         bool drawProjectileVfx=scenario["nativeRender"]?["drawProjectileVfx"]?.GetValue<bool>()??false;
         bool historyRibbon=data?.VfxManifest.Slots.Any(s=>s.RendererKind=="historyRibbon")==true;
@@ -314,7 +317,8 @@ internal static partial class EngineRuntimeChecks
                     int registeredItemType=(int)typeof(ItemLoader).GetMethod("Register",PersistenceStatic)!.Invoke(null,new object[]{host})!;
                     item.type=registeredItemType; WRegisterItemSingleton(host);
                 }
-                WValidateVanillaPerformance(item,data,clientPlayer,fullPlayer && actions.Any(a=>a!["kind"]!.GetValue<string>() is "equip" or "vanity" or "unequip") && !actions.Any(a=>a!["kind"]!.GetValue<string>() is "primary" or "alt"),fullPlayer);
+                WValidateVanillaPerformance(item,data,clientPlayer,fullPlayer && actions.Any(a=>a!["kind"]!.GetValue<string>() is "equip" or "vanity" or "unequip") && !actions.Any(a=>a!["kind"]!.GetValue<string>() is "primary" or "alt"),fullPlayer,utilityEmission);
+                if(utilityEmission)report["coverage"]!["utilityEmissionScope"]="Native solution use, emission, trajectory and pose only; not a damage benchmark or world-conversion certification";
                 owner.inventory[0]=item; owner.selectedItem=0; owner.releaseUseItem=true;
                 using var npcGlobals=new WNpcGlobals();
                 NPC dummy=null!;int initialLife=0;
@@ -443,7 +447,7 @@ internal static partial class EngineRuntimeChecks
                 using var nativeRenderer=renderClient?new WNativeVfxRenderer(graphics!,scenario["nativeRender"]!.AsObject(),Path.Combine(Path.GetDirectoryName(outputPath!)!,"native-frames"),data):null;
                 if(renderClient){Terraria.TimeLogger.Initialize();Terraria.Main.gameMenu=false;Terraria.Main.mapEnabled=false;
                 for(int lightingPhase=0;lightingPhase<4;lightingPhase++){nativeRenderer!.StepLighting();}}
-                using var playerAssets=(drawPlayer||drawProjectileVfx)?new WNativePlayerAssets(graphics!,scenario["nativeRender"]?["playerAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR")??throw new ArgumentException("Native procedural/player draw requires playerAssetRoot or INFINI_PLAYER_ASSET_DIR")):null;
+                using var playerAssets=(drawPlayer||drawProjectileVfx)?new WNativePlayerAssets(graphics!,scenario["nativeRender"]?["playerAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR")??throw new ArgumentException("Native procedural/player draw requires playerAssetRoot or INFINI_PLAYER_ASSET_DIR"),backpackTexture):null;
                 using var zombie=drawZombie?new WNativeZombieRender(graphics!,dummy,scenario["nativeRender"]?["playerAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR")??throw new ArgumentException("drawZombie requires playerAssetRoot or INFINI_PLAYER_ASSET_DIR")):null;
                 using var pixelAssets=renderClient&&!drawPlayer&&!drawProjectileVfx?new WNativeMagicPixelAssets(graphics!,scenario["nativeRender"]?["playerAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR")??throw new ArgumentException("Native VFX requires playerAssetRoot or INFINI_PLAYER_ASSET_DIR for genuine MagicPixel")):null;
                 if(pixelAssets is not null)nativeRenderer!.Report["magicPixelResource"]=pixelAssets.Report.DeepClone();

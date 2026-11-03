@@ -88,6 +88,24 @@ class PlayerAssetsTests(unittest.TestCase):
         target = Path(self.tmp.name) / 'source.png'; target.write_bytes(self.data)
         path.symlink_to(target)
         with self.assertRaises(ValueError): self.provision()
+    def test_optional_backpack_download_and_default_unchanged(self):
+        name = "BackPack_2.png"
+        self.manifest["backpackFiles"] = [dict(path="Images/" + name, sourceURL=fetcher.PREFIX + name,
+            sha256=hashlib.sha256(self.data).hexdigest(), bytes=len(self.data), width=1, height=1)]
+        self.assertEqual(self.provision()["verifiedFiles"], 20)
+        result = fetcher.provision(self.root, self.manifest, self.download, include_backpack=True)
+        self.assertEqual((result["downloaded"], result["reused"], result["verifiedFiles"]), (1, 20, 21))
+        self.assertTrue(result["includesBackpack"])
+        self.assertEqual(self.provision()["verifiedFiles"], 20)
+
+    def test_optional_backpack_missing_or_wrong_manifest(self):
+        with self.assertRaises(ValueError):
+            fetcher.provision(self.root, self.manifest, self.download, include_backpack=True)
+        self.manifest["backpackFiles"] = self.manifest["files"][:1]
+        with self.assertRaises(ValueError):
+            fetcher.provision(self.root, self.manifest, self.download, include_backpack=True)
+        self.assertEqual(self.calls, [])
+
     def test_optional_dummy_download_and_default_unchanged(self):
         self.manifest['trainingDummyFiles'] = [dict(path='Images/' + name, sourceURL=fetcher.PREFIX + name, sha256=hashlib.sha256(self.data).hexdigest(), bytes=len(self.data), width=1, height=1) for name in sorted(fetcher.DUMMY_REQUIRED)]
         self.assertEqual(self.provision()['verifiedFiles'], 20)

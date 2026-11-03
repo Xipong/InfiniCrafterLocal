@@ -203,5 +203,15 @@
       "height": 144
     }
   ],
-  "zombieScope": "Optional community NPC3 source artwork for native controlled zombie rendering; no complete NPC/world parity."
+  "zombieScope": "Optional community NPC3 source artwork for native controlled zombie rendering; no complete NPC/world parity.",
+  "backpackFiles": [
+    {
+      "path": "Images/BackPack_2.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/BackPack_2.png",
+      "sha256": "d11d04bc7994ee9ae064ad6be0f4ee774741fbe9695957411c0b24fb4f92d89c",
+      "bytes": 436,
+      "width": 14,
+      "height": 32
+    }
+  ]
 }
