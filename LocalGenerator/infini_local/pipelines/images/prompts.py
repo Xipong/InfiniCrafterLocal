@@ -208,8 +208,15 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
                 targets = [row for row in entities if action.get("targetId") and row.get("id") == action["targetId"]]
                 target = targets[0] if len(targets) == 1 else None
                 if target is not None and isinstance(target.get("spawn"), Mapping):
+                    spawn = target["spawn"]
+                    placement = {key: copy.deepcopy(spawn[key]) for key in ("placement", "offsetPx") if key in spawn}
+                    if spawn.get("offsetPx") and "aim" in spawn:
+                        placement["aim"] = copy.deepcopy(spawn["aim"])
+                    above = spawn.get("overTarget")
+                    if isinstance(above, Mapping) and above.get("heightTiles"):
+                        placement["overTarget"] = {"heightTiles": copy.deepcopy(above["heightTiles"])}
                     uses.append({"bindingId": binding.get("id"), "input": binding.get("input"),
-                                 "action": copy.deepcopy(dict(action)), "targetSpawn": copy.deepcopy(dict(target["spawn"]))})
+                                 "action": copy.deepcopy(dict(action)), "targetPlacement": placement})
         if uses:
             facts["itemUseSpawnsReadOnly"] = {"itemEntityId": item["id"], "bindings": uses}
         shared = []
@@ -234,8 +241,6 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
         if shared:
             facts["sharedEntityMultipliers"] = shared
     elif entity is not None:
-        if sum(row.get("id") == entity_id for row in entities) == 1 and isinstance(entity.get("spawn"), Mapping):
-            facts["spawnReadOnly"] = copy.deepcopy(dict(entity["spawn"]))
         raw_hitbox = entity.get("hitbox")
         hitbox = raw_hitbox if isinstance(raw_hitbox, Mapping) else {}
         if "drawScale" in hitbox:
