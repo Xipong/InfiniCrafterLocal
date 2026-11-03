@@ -54,10 +54,12 @@ internal sealed class BundledStudio : IDisposable
         CancellationToken cancellationToken = _lifetime.Token;
         StudioBundleSpec spec = StudioBundle.ReadManifest(ReadResource("Studio/manifest.json"), "win-x64");
         string studioDirectory = Path.Combine(_saveDirectory, "InfiniCrafterLocal", "Studio");
-        string runtime = StudioBundle.Install(ReadResource(spec.Archive), spec, Path.Combine(studioDirectory, "runtimes"), cancellationToken);
+        string runtimes = Path.Combine(studioDirectory, "runtimes");
+        Directory.CreateDirectory(runtimes);
+        using FileStream installationLock = StudioBundle.AcquireInstallationLock(runtimes, cancellationToken);
+        string runtime = StudioBundle.InstallLocked(ReadResource(spec.Archive), spec, runtimes, cancellationToken);
         string dataDirectory = Path.Combine(studioDirectory, "data");
         Directory.CreateDirectory(dataDirectory);
-        StudioBundle.WriteExternalLauncher(studioDirectory, spec);
 
         var start = new ProcessStartInfo
         {
@@ -135,7 +137,15 @@ internal sealed class BundledStudio : IDisposable
             }
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
-            return await ready.Task.WaitAsync(TimeSpan.FromSeconds(45), cancellationToken).ConfigureAwait(false);
+            Uri address = await ready.Task.WaitAsync(TimeSpan.FromSeconds(45), cancellationToken).ConfigureAwait(false);
+            try
+            {
+                StudioBundle.WriteExternalLauncher(studioDirectory, spec);
+                StudioBundle.RetirePreviousRuntimesLocked(runtimes, spec);
+            }
+            catch (IOException) { Trace.TraceWarning("Studio started, but runtime housekeeping could not finish."); }
+            catch (UnauthorizedAccessException) { Trace.TraceWarning("Studio started, but runtime housekeeping was denied."); }
+            return address;
         }
         catch
         {
