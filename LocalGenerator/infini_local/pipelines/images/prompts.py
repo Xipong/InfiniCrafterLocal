@@ -193,6 +193,25 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
         for field in ("inventoryScale", "worldScale"):
             if field in root:
                 multipliers["visual." + field] = root[field]
+        # Item-use links describe accepted actions, not an emission point on
+        # this PNG. Resolve only explicit item and action target identities.
+        item_id = runtime.get("itemEntityId")
+        items = [row for row in entities if item_id and row.get("id") == item_id]
+        item = items[0] if len(items) == 1 and items[0].get("kind") == "item_body" else None
+        uses = []
+        if item is not None:
+            for binding in runtime.get("bindings") or []:
+                policy = binding.get("usePolicy") if isinstance(binding, Mapping) else None
+                action = policy.get("action") if isinstance(policy, Mapping) else None
+                if not isinstance(action, Mapping) or action.get("kind") != "spawn_entity":
+                    continue
+                targets = [row for row in entities if action.get("targetId") and row.get("id") == action["targetId"]]
+                target = targets[0] if len(targets) == 1 else None
+                if target is not None and isinstance(target.get("spawn"), Mapping):
+                    uses.append({"bindingId": binding.get("id"), "input": binding.get("input"),
+                                 "action": copy.deepcopy(dict(action)), "targetSpawn": copy.deepcopy(dict(target["spawn"]))})
+        if uses:
+            facts["itemUseSpawnsReadOnly"] = {"itemEntityId": item["id"], "bindings": uses}
         shared = []
         for row in entities:
             raw_visual = row.get("visual")
@@ -215,6 +234,8 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
         if shared:
             facts["sharedEntityMultipliers"] = shared
     elif entity is not None:
+        if sum(row.get("id") == entity_id for row in entities) == 1 and isinstance(entity.get("spawn"), Mapping):
+            facts["spawnReadOnly"] = copy.deepcopy(dict(entity["spawn"]))
         raw_hitbox = entity.get("hitbox")
         hitbox = raw_hitbox if isinstance(raw_hitbox, Mapping) else {}
         if "drawScale" in hitbox:

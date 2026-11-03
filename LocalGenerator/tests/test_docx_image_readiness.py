@@ -123,6 +123,13 @@ def test_captured_image_facts_have_current_final_offline_projection(offline_back
     current_facts = frame_facts(outgoing["visual"]["imagePrompt"])
     from infini_local.core.images.contracts import native_held_frame_facts
     assert current_facts.pop("nativeHeldCanvas") == native_held_frame_facts(outgoing, current_facts["canvasSizePx"])
+    # New read-only use context must identify the explicit bound child, not
+    # every entity sharing this PNG. The archived frame facts stay unchanged.
+    binding, = outgoing["runtimeProgram"]["bindings"]
+    target = next(row for row in outgoing["runtimeProgram"]["entities"] if row["id"] == "workbench_blade")
+    assert current_facts.pop("itemUseSpawnsReadOnly") == {
+        "itemEntityId": "item", "bindings": [{"bindingId": binding["id"], "input": binding["input"],
+        "action": {"kind": "spawn_entity", "targetId": "workbench_blade"}, "targetSpawn": target["spawn"]}]}
     assert current_facts == frame_facts(retained["visual"]["imagePrompt"])
     assert retained["vfxManifest"] == outgoing["vfxManifest"]
     def entity_images(payload):
