@@ -3249,6 +3249,7 @@
       "minimum": null,
       "name": "INFINI_PARTICLE_ASSET_DIR",
       "owners": [
+        "tools/item-test-workbench/test_performance_review.py",
         "tools/item-test-workbench/verify_contours.py",
         "tools/item-test-workbench/verify_history_ribbon.py"
       ],
@@ -5502,7 +5503,7 @@
   ],
   "errors": [],
   "fieldCount": 224,
-  "fingerprint": "fa2367a89f309327a73408e45f623bc0a6433e788400816e1f381e7b13c00962",
+  "fingerprint": "ade98346b57ce5bc1cd8db84689e9460756c4b402d42946e515bd5e3601c3550",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",
