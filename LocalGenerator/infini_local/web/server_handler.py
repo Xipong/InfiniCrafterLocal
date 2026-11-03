@@ -77,7 +77,11 @@ def build_handler(
 
         def log_message(self, fmt: str, *args: Any) -> None:
             if trace_runtime.TRACE_PROMPTS_ENABLED:
-                print(trace_tools._redact_diagnostic(f"[{time.strftime('%H:%M:%S')}] {self.address_string()} {fmt % args}"))
+                try:
+                    print(trace_tools._redact_diagnostic(f"[{time.strftime('%H:%M:%S')}] {self.address_string()} {fmt % args}"))
+                except (OSError, ValueError):
+                    # An invalid or closed console must not prevent HTTP responses.
+                    pass
 
         def do_GET(self) -> None:
             try:

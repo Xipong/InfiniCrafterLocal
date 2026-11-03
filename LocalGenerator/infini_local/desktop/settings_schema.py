@@ -532,8 +532,8 @@ FIELD_HELP = {
     "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args = GUI/server.py собирают argv сами и не дают pipeline preset сломать флаги. template = использовать ручной шаблон команды для нестандартных форков sd.cpp.",
     "INFINI_SDCPP_SERVER_COMMAND_TEMPLATE": "Шаблон команды запуска sd.cpp. В safe_args режиме хранится как reference/fallback; реально используется только command mode = template.",
     "INFINI_SDCPP_SERVER_EXTRA_ARGS": "Только дополнительные флаги sd.cpp: -v, --backend/--params-backend, --offload-to-cpu, cache и т.п. VAE/Qwen лучше задавать отдельными полями.",
-    "INFINI_SDCPP_SERVER_SHOW_CONSOLE": "1 — открыть видимое окно sd-server.exe на Windows; 0 — писать stdout/stderr в лог.",
-    "INFINI_SDCPP_SERVER_LOG_FILE": "Куда писать лог sd.cpp, если консоль выключена.",
+    "INFINI_SDCPP_SERVER_SHOW_CONSOLE": "1 — открыть окно просмотра лога sd.cpp на Windows; вывод сохраняется в файл в обоих режимах.",
+    "INFINI_SDCPP_SERVER_LOG_FILE": "Куда сохранять лог sd.cpp при включённой диагностике.",
     "INFINI_SDCPP_WIDTH": "Ширина сырого image gen. Для Terraria-иконок обычно 512 достаточно.",
     "INFINI_SDCPP_HEIGHT": "Высота сырого image gen. Обычно квадрат 512x512.",
     "INFINI_SDCPP_STEPS": "Количество шагов генерации. У turbo-моделей обычно мало шагов: 6–12.",
@@ -624,7 +624,7 @@ OPTION_HELP = {
         "0": "sd.cpp должен быть уже запущен руками или отдельным bat-файлом.",
     },
     "INFINI_SDCPP_SERVER_SHOW_CONSOLE": {
-        "1": "Показывать отдельное окно sd-server.exe с живым логом.",
+        "1": "Показывать отдельное окно с живым логом sd.cpp.",
         "0": "Не показывать консоль, писать лог в файл.",
     },
     "INFINI_SDCPP_SERVER_COMMAND_MODE": {

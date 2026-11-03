@@ -460,3 +460,68 @@ def test_disabled_failure_preserves_in_memory_error_without_debug_artifact(monke
     assert result["ok"] is False and "craft failed" in result["error"]
     assert generation_debug.last_combine_failure_summary()["stage"] == "author"
     assert list(tmp_path.iterdir()) == []
+
+
+def test_health_response_survives_unusable_stdout(monkeypatch):
+    import sys
+    import threading
+    from http.server import ThreadingHTTPServer
+    from urllib.request import urlopen
+    from test_provider_http_contract import boundary_handler
+
+    class BrokenOutput:
+        def write(self, _text):
+            raise OSError(22, "Invalid argument")
+        def flush(self):
+            pass
+
+    handler, _ = boundary_handler(path="/health")
+    server = ThreadingHTTPServer(("127.0.0.1", 0), type(handler))
+    worker = threading.Thread(target=server.serve_forever)
+    worker.start()
+    try:
+        monkeypatch.setattr(trace_runtime, "TRACE_PROMPTS_ENABLED", True)
+        with monkeypatch.context() as patch:
+            patch.setattr(sys, "stdout", BrokenOutput())
+            with urlopen(f"http://127.0.0.1:{server.server_port}/health", timeout=5) as response:
+                assert response.status == 200
+                assert json.load(response) == {"ok": True, "route": "health"}
+    finally:
+        server.shutdown()
+        worker.join(timeout=5)
+        server.server_close()
+
+
+def test_visible_sdcpp_console_also_persists_startup_failure(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    from pathlib import Path
+    from infini_local.services import sdcpp_service as service
+
+    state = service.SdcppServerState()
+    monkeypatch.setattr(service, "os", SimpleNamespace(name="nt", environ={}))
+    monkeypatch.setattr(service, "install_cleanup_handlers", lambda *args: None)
+    calls = []
+    class Process:
+        returncode = 1
+        def poll(self):
+            return 1
+    def spawn(command, **kwargs):
+        calls.append((command, kwargs))
+        if len(calls) == 1:
+            kwargs["stdout"].write("sd.cpp failed to load model\n")
+            kwargs["stdout"].flush()
+        return Process()
+    monkeypatch.setattr(service.subprocess, "Popen", spawn)
+    cleanup = lambda reason: service.cleanup_server_process(state, lambda *_: None, reason)
+    result = service.ensure_server(
+        state=state, root=tmp_path, cache_dir=tmp_path, server_url="http://127.0.0.1:1",
+        server_autostart=True, startup_timeout=5, show_console=True, server_log_file="",
+        server_is_alive=lambda: False, build_command=lambda: (["sd-server"], False),
+        stringify_cmd=lambda cmd: " ".join(cmd), cleanup_process=cleanup,
+        log_event=lambda *_: None, tail_text_file=lambda path, size: Path(path).read_text()[-size:],
+    )
+    assert result is False
+    assert state.last_exit["returncode"] == 1
+    assert "sd.cpp failed to load model" in state.last_exit["logTail"]
+    assert "sd.cpp failed to load model" in (tmp_path / "sdcpp_server.log").read_text()
+    assert len(calls) == 2  # sd-server and the live log viewer
