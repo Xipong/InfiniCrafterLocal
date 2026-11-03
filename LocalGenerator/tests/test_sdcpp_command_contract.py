@@ -179,6 +179,11 @@ def _check_shutdown_releases_the_owned_sdcpp_process(monkeypatch) -> None:
 
     state = visual_config.SDCPP_SERVER_STATE
     process = OwnedProcess()
+    def completed_wait(**_kwargs):
+        # Popen.wait() returning an exit code also makes subsequent poll terminal.
+        monkeypatch.setattr(process, "poll", lambda: 0)
+        return 0
+    monkeypatch.setattr(process, "wait", completed_wait)
     log_handle = io.StringIO()
     process._infini_log_handle = log_handle
     monkeypatch.setattr(state, "process", process)
@@ -209,7 +214,8 @@ def _check_shutdown_releases_the_owned_sdcpp_process(monkeypatch) -> None:
         assert all(not worker.is_alive() for worker in workers), "shutdown leaked a worker"
     assert replies[0]["ok"] is True
     assert process.actions == ["terminate"]
-    assert state.process is None
+    assert state.process is None and process.poll() == 0
+    assert state.lifecycle == "stopped"
     assert log_handle.closed
 
 
