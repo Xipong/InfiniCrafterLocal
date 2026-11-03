@@ -110,6 +110,22 @@ internal static partial class EngineRuntimeChecks
                     var lines = new List<TooltipLine>(); host.ModifyTooltips(lines);
                     Equal(true, lines.Single(l => l.Name == "InfiniMobilityCooldownRemaining").Text.Contains("30"), "hybrid pickaxe gets live shared mobility countdown");
                     Equal(false, lines.Any(l => l.Name == "InfiniExhaustionRemaining"), "recall cooldown is not generated-buff exhaustion");
+                    foreach ((int remaining, decimal seconds) in new[]
+                    { (157, 2.7m), (156, 2.6m), (155, 2.6m), (61, 1.1m), (60, 1.0m),
+                      (59, 1.0m), (7, 0.2m), (6, 0.1m), (1, 0.1m), (0, 0.0m) })
+                    {
+                        while (owner.GeneratedMobilityCooldownTicks > remaining)
+                            typeof(InfiniCraftPlayer).GetMethod("TickGeneratedUtilityCooldowns", TestInstance)!.Invoke(owner, null);
+                        lines.Clear(); host.ModifyTooltips(lines);
+                        string displayed = lines.SingleOrDefault(l => l.Name == "InfiniMobilityCooldownRemaining")?.Text ?? "";
+                        string expected = remaining == 0 ? "" : Language.GetTextValue(
+                            "Mods.InfiniCrafterLocal.RuntimeTooltip.MobilityCooldownRemaining",
+                            Language.GetTextValue("Mods.InfiniCrafterLocal.RuntimeTooltip.Time",
+                                seconds.ToString("0.0", Language.ActiveCulture.CultureInfo)));
+                        Equal(expected, displayed, locale + " actual mobility tooltip tenth boundary " + remaining);
+                        Equal(remaining, owner.GeneratedMobilityCooldownTicks, "tooltip read cannot advance gameplay clock");
+                    }
+                    Equal(true, owner.TryReserveGeneratedMobilityCooldown(1800), "restore later controls after exact expiry");
                     recall.UsePolicy.Action.Kind = RuntimeBindingAction.UseItemBody;
                     lines.Clear(); host.ModifyTooltips(lines);
                     Equal(false, lines.Any(l => l.Name == "InfiniMobilityCooldownRemaining"), "body-only/mining action does not advertise a mobility lock");

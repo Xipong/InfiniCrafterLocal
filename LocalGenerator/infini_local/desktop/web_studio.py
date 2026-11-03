@@ -350,6 +350,7 @@ class StudioController:
                          'defaultEffort': model.default_effort if model.default_effort in EFFORTS else ''}
             for model in islice(self.app.__dict__.get('_codex_text_models', {}).values(), 256)
         }
+        self.app.observe_runtime_notifications()
         self.app.refresh_home()
         return {
             'values': values, 'savedValues': saved_values, 'savedLanEnabled': saved_lan, 'savedRevision': saved_revision,

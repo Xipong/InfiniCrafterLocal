@@ -2,8 +2,8 @@
 'use strict';
 const fs=require('node:fs'), vm=require('node:vm'), assert=require('node:assert/strict');
 const nodes=new Map(), events={};
-function node() {return {hidden:false,open:false,dataset:{},textContent:'',innerHTML:'',value:'',disabled:false,append(){},focus(){},replaceChildren(){},remove(){},classList:{toggle(){},add(){},remove(){},contains(){return false;}},setAttribute(){},addEventListener(){},close(){this.open=false;},showModal(){this.open=true;},querySelector(){return node();}};}
-global.setTimeout=()=>0;
+function node() {return {children:[],attributes:{},queries:{},get firstElementChild(){return this.children[0];},hidden:false,open:false,dataset:{},textContent:'',innerHTML:'',value:'',disabled:false,append(child){child.parent=this;this.children.push(child);},focus(){},replaceChildren(...children){this.children=[];children.forEach(child=>this.append(child));},remove(){if(this.parent) this.parent.children=this.parent.children.filter(child=>child!==this);},classList:{toggle(){},add(){},remove(){},contains(){return false;}},setAttribute(key,value){this.attributes[key]=value;},addEventListener(){},close(){this.open=false;},showModal(){this.open=true;},querySelector(selector){return this.queries[selector] ||= node();}};}
+const timers=[];global.setTimeout=(fn)=>{timers.push(fn);return timers.length;};
 // Single- and multi-node queries must see the same mounted fixture nodes.
 global.document={documentElement:{lang:'ru'},createElement:()=>node(),activeElement:null,dispatchEvent(){},addEventListener(name,fn){events[name]=fn;},querySelectorAll(selector){return nodes.has(selector) ? [nodes.get(selector)] : [];},querySelector(selector){if(selector === 'dialog[open]') return nodes.get('#utility-dialog')?.open ? nodes.get('#utility-dialog') : nodes.get('#search-dialog')?.open ? nodes.get('#search-dialog') : null;if(!nodes.has(selector)) nodes.set(selector,node());return nodes.get(selector);}};
 global.window={INFINI_BOOTSTRAP:{token:'test-only'},addEventListener(){}};
@@ -14,13 +14,54 @@ source=source.replace('  navigate();poll();',`
   const renderMainDashboard=renderOperate;
   poll=()=>{};setMenu=()=>{};render=()=>{globalThis.renderCount++;};renderOperate=()=>{};syncInputs=()=>{};updateDiagnostics=()=>{};updateActionButtons=()=>{};
   const originalToast=toast;toast=(message,error)=>{originalToast(message,error);if(!state.suppressToast) globalThis.messages.push({message,error});};
-  globalThis.studio={state,acceptSnapshot,recomputeDirty,heading,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,refreshDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog,restoreActionFocus,aside,renderMainDashboard,showFilePicker,showPresetPreview,showSavePreset,renderConfigure,setAction(fn){action=fn;}};
+  globalThis.studio={imageSummary,serviceConnections,state,acceptSnapshot,recomputeDirty,heading,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,refreshDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog,restoreActionFocus,aside,renderMainDashboard,showFilePicker,showPresetPreview,showSavePreset,renderConfigure,toast,setAction(fn){action=fn;}};
 `);
 global.messages=messages;global.renderCount=0;
 vm.runInThisContext(source);
 const {state,acceptSnapshot,recomputeDirty,inactiveReason,fieldGroups,showDocument}=studio;
 const key='INFINI_PROMPT_STYLE';
 const snapshot=(values={},extra={})=>({values,defaults:{},savedValues:values,fields:[],presets:{},userPresets:{},lanEnabled:false,savedLanEnabled:false,...extra});
+// Old notices seed the cursor silently. New IDs are delivered once, together.
+const oldNotice={id:'old',title:'old',message:'old',level:'info'};
+acceptSnapshot(snapshot({}, {notifications:[oldNotice]}));
+assert.equal(messages.length,0);
+const freshNotices=[oldNotice,{id:'ready',title:'Ready',message:'Generator',level:'info'},
+  {id:'image',title:'Ready',message:'Image server',level:'info'}];
+acceptSnapshot(snapshot({}, {notifications:freshNotices}));
+assert.equal(messages.length,2);assert.equal(document.querySelector('#toasts').children.length,2);
+acceptSnapshot(snapshot({}, {notifications:freshNotices}));
+assert.equal(messages.length,2);
+for(let i=0;i<5;i++) studio.toast('bounded '+i);
+assert.equal(document.querySelector('#toasts').children.length,4);
+timers.splice(0).forEach(fn=>fn());
+assert.equal(document.querySelector('#toasts').children.length,0);
+studio.toast('visible error',true);
+const alert=document.querySelector('#toasts').firstElementChild;
+assert.equal(alert.attributes.role,'alert');
+timers.splice(0).forEach(fn=>fn());
+assert.equal(document.querySelector('#toasts').children.length,1);
+alert.querySelector('button').onclick();
+assert.equal(document.querySelector('#toasts').children.length,0);
+messages.length=0;
+// Startup ownership is configuration, not an assertion that HTTP is ready.
+for (const language of ['ru','en']) {
+  window.InfiniI18n.setLanguage(language);
+  const rendered=[];
+  for (const autostart of ['0','1']) {
+    const samples=[];
+    for (const health of [null,{ok:true,image:{serverAlive:true,serverAliveProbed:true}}]) {
+      acceptSnapshot(snapshot({INFINI_IMAGE_BACKEND:'sdcpp',INFINI_SDCPP_SERVER_AUTOSTART:autostart,INFINI_SDCPP_SERVER_URL:'http://localhost:8080'}, {health}));
+      const field=studio.fieldHTML({key:'INFINI_SDCPP_SERVER_AUTOSTART'});
+      assert(field.includes(`value="${autostart}" selected`));
+      samples.push({field,summary:studio.imageSummary(),services:studio.serviceConnections()});
+    }
+    assert.deepEqual(samples[0],samples[1]);
+    rendered.push(samples[0]);
+  }
+  assert.notEqual(rendered[0].summary.name,rendered[1].summary.name);
+  assert.notEqual(rendered[0].services,rendered[1].services);
+}
+window.InfiniI18n.setLanguage('ru');
 // Pipeline choices show user profiles first, with the last builtin example last.
 acceptSnapshot(snapshot({}, {presets:{Local:{},Example:{}},userPresets:{'123':{}}}));
 studio.renderConfigure();

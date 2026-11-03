@@ -106,7 +106,7 @@ class PlannerUnavailable(Exception):
     pass
 
 
-def boundary_handler(*, path="/combine", body=b"{}", length=None, address="127.0.0.1", internal_error=False, utility=None):
+def boundary_handler(*, path="/combine", body=b"{}", length=None, address="127.0.0.1", internal_error=False, utility=None, event_logger=None):
     capture = Capture()
     endpoint = SimpleNamespace(handle_combine_request=(
         lambda *_args, **_kw: (_ for _ in ()).throw(ValueError("internal invariant failed"))
@@ -116,7 +116,7 @@ def boundary_handler(*, path="/combine", body=b"{}", length=None, address="127.0
         vfx_debug_routes=lambda: SimpleNamespace(handle_get=lambda *_: False, handle_post=lambda *_: False),
         combine_endpoint=endpoint, combine_cache_lookup=lambda *_a, **_k: None,
         sanitize_recipe_for_delivery=lambda *_a, **_k: None, combine=lambda *_a, **_k: None,
-        trace_event=lambda *_a, **_k: None, log_event=lambda *_a, **_k: None,
+        trace_event=lambda *_a, **_k: None, log_event=event_logger or (lambda *_a, **_k: None),
         is_client_disconnect=lambda _e: False, world_scope_missing=WorldScopeMissing,
         visual_delivery_blocked=VisualDeliveryBlocked, planner_unavailable=PlannerUnavailable,
         clear_combine_failure=lambda _r: None,
@@ -873,3 +873,40 @@ def test_control_requests_reject_browser_csrf_and_rebinding_before_mutation(tmp_
         assert combine_endpoint._GENERATION_ACCEPTING is False
         assert capture.payload["forced"] is True
         assert stopped.wait(2)
+
+
+@pytest.mark.parametrize("error", [OSError(22, "Invalid argument"), ValueError("I/O operation on closed file")])
+@pytest.mark.parametrize("method,path,status", [("GET", "/health", 200), ("GET", "/missing", 404), ("POST", "/combine", 200)])
+def test_broken_access_log_console_preserves_http_delivery(monkeypatch, tmp_path, error, method, path, status):
+    from infini_local.storage import trace_runtime, trace_tools
+    from contextlib import redirect_stdout
+
+    handler, _ = boundary_handler(path=path, utility=utility_routes(tmp_path),
+        event_logger=lambda *args: trace_tools.log_event(tmp_path, *args, echo_levels=("warn",)))
+    # Exercise the real response writer, including BaseHTTPRequestHandler.log_request.
+    for name in ("json", "json_status", "json_error", "send_error"):
+        delattr(handler, name)
+    handler.request_version = "HTTP/1.1"
+    handler.command = method
+    handler.requestline = f"{method} {path} HTTP/1.1"
+    writes = []
+    class UnavailableConsole:
+        def write(self, text):
+            writes.append(text)
+            raise error
+    monkeypatch.setattr(trace_runtime, "TRACE_PROMPTS_ENABLED", True)
+
+    with redirect_stdout(UnavailableConsole()):
+        getattr(handler, "do_" + method)()
+
+    headers, body = handler.wfile.getvalue().split(b"\r\n\r\n", 1)
+    assert headers.splitlines()[0].split()[1] == str(status).encode()
+    assert len(writes) == 2  # Access log and the existing file logger's best-effort echo.
+    if status == 200:
+        assert json.loads(body)["ok"] is True
+    else:
+        assert body
+    events = [json.loads(line) for line in (tmp_path / "events.ndjson").read_text().splitlines()]
+    assert len(events) == 1
+    assert events[0]["payload"]["error"] == repr(error)
+    assert path in events[0]["payload"]["accessLog"]
