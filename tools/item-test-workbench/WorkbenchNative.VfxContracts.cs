@@ -16,8 +16,8 @@ internal static partial class EngineRuntimeChecks
     {
         if(!fullNativeDraw || !(slot.Shape is {Kind:"arc" or "sector",Attachment:"world" or "source",RotationFrame:"world" or "source"}
             or {Kind:"orbit",Attachment:"source",RotationFrame:"world",MoteOrientation:"world" or "orbit"}
-            or {Kind:"orbit",Attachment:"world",RotationFrame:"world",MoteOrientation:"orbit"}))
-            throw new NotSupportedException("shape currently requires proven world/source arc or sector, source-bound world-frame orbit with world- or orbit-oriented motes, or world-fixed world-frame orbit with orbit-oriented motes, plus full native draw with original MagicPixel");
+            or {Kind:"orbit",Attachment:"world",RotationFrame:"world" or "source",MoteOrientation:"orbit"}))
+            throw new NotSupportedException("shape currently requires proven world/source arc or sector, source-bound world-frame orbit with world- or orbit-oriented motes, or world-fixed world/source-frame orbit with orbit-oriented motes, plus full native draw with original MagicPixel");
     }
 
     // Part of --check-assertions: actual stand policies, not a GPU/gameplay claim.
@@ -55,7 +55,10 @@ internal static partial class EngineRuntimeChecks
         WValidateShape(orbit,true);
         orbit.Shape.MoteOrientation="orbit";WValidateShape(orbit,true);
         orbit.Shape.Attachment="world";orbit.Shape.MoteOrientation="orbit";WValidateShape(orbit,true);
-        orbit.Shape.RotationFrame="source";Refused(()=>WValidateShape(orbit,true),"Unproven orbit source rotation admitted");
+        orbit.Shape.RotationFrame="source";WValidateShape(orbit,true);
+        Refused(()=>WValidateShape(orbit,false),"World/source orbit admitted without full native draw");
+        orbit.Shape.Attachment="source";Refused(()=>WValidateShape(orbit,true),"Unproven source-bound source-frame orbit admitted");
+        orbit.Shape.Attachment="world";
         orbit.Shape.RotationFrame="world";orbit.Shape.MoteOrientation="radial";Refused(()=>WValidateShape(orbit,true),"Unproven orbit mote orientation admitted");
         var trail=new VfxSlotSpec{RendererKind="historyTrail",Trail=new VfxHistoryTrailSpec{Draw="stroke",Source="center"}};
         WValidateHistoryTrail(trail,true);
