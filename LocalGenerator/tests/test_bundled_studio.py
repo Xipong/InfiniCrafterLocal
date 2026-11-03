@@ -9,8 +9,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import queue
-import urllib.request
 from pathlib import Path
 import shutil
 import subprocess
@@ -370,28 +368,43 @@ class StartupReadinessTests(unittest.TestCase):
                        "--managed", "--no-browser"]
             environment = isolated_environment()
             environment["PYTHONDONTWRITEBYTECODE"] = "1"
+            # One bounded child runs the real packaged entrypoint. Observe its
+            # READY output, query its real listener, then close a real ownership
+            # pipe. No grandchild can survive subprocess.run's timeout cleanup.
+            probe = r"""
+import builtins, json, os, runpy, sys, urllib.request
+read_fd, write_fd = os.pipe()
+sys.stdin = os.fdopen(read_fd, "r")
+original_print = builtins.print
+observed = []
+def inspect_ready(*values, **kwargs):
+    original_print(*values, **kwargs)
+    if values and str(values[0]).startswith("IFC_STUDIO_READY "):
+        url = json.loads(str(values[0]).partition(" ")[2])["url"]
+        with urllib.request.urlopen(url, timeout=5) as response:
+            assert response.status == 200
+            assert b"<html" in response.read().lower()
+        origin = url.split("?", 1)[0].rstrip("/")
+        for asset in ("studio.js", "studio.css", "studio-i18n.js", "studio-motion.js"):
+            with urllib.request.urlopen(origin + "/" + asset, timeout=5) as response:
+                assert response.status == 200 and response.read()
+        observed.append("ready")
+        os.close(write_fd)  # Actual EOF drives the production parent watcher.
+builtins.print = inspect_ready
+sys.argv = sys.argv[1:]
+try:
+    runpy.run_path(sys.argv[0], run_name="__main__")
+except SystemExit as exc:
+    assert exc.code == 0, exc.code
+assert observed == ["ready"]
+original_print("STUDIO_PROBE_OK")
+"""
             for _ in range(2):
-                process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                           stderr=subprocess.PIPE, text=True, env=environment)
-                try:
-                    lines = queue.Queue()
-                    threading.Thread(target=lambda: lines.put(process.stdout.readline()), daemon=True).start()
-                    ready = lines.get(timeout=15)
-                    self.assertTrue(ready.startswith("IFC_STUDIO_READY "), ready)
-                    url = json.loads(ready.partition(" ")[2])["url"]
-                    with urllib.request.urlopen(url, timeout=5) as response:
-                        self.assertEqual(response.status, 200)
-                        self.assertIn(b"<html", response.read().lower())
-                    origin = url.split("?", 1)[0].rstrip("/")
-                    for asset in ("studio.js", "studio.css", "studio-i18n.js", "studio-motion.js"):
-                        with urllib.request.urlopen(origin + "/" + asset, timeout=5) as response:
-                            self.assertTrue(response.read())
-                    process.communicate(timeout=10)  # EOF is the actual managed shutdown protocol.
-                    self.assertEqual(process.returncode, 0)
-                finally:
-                    if process.poll() is None:
-                        process.kill()
-                        process.communicate()
+                result = subprocess.run([sys.executable, "-B", "-c", probe, *command[2:]],
+                                        capture_output=True, text=True, env=environment, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("IFC_STUDIO_READY ", result.stdout)
+                self.assertIn("STUDIO_PROBE_OK", result.stdout)
             self.assertEqual(personal.read_text(), '{"personal": true}')
             for asset in ("index.html", "studio.js"):
                 path = runtime / "infini_local/desktop/webui" / asset
