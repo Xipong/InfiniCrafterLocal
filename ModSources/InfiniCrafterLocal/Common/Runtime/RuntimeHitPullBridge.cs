@@ -85,10 +85,12 @@ internal static class RuntimeHitPullBridge
         Retired[projectile.whoAmI] = new RetiredProjectile(projectile, generated, projectile.identity, Main.GameUpdateCount);
     }
 
-    private static Projectile? FindProjectile(int owner, int identity)
+    // The same bounded retirement fence also admits delayed owner VFX hit
+    // claims. It never returns a recycled slot or an ambiguous identity.
+    internal static Projectile? FindProjectile(int owner, int identity)
     {
         Projectile? match = null;
-        for (int slot = 0; slot < Main.maxProjectiles; slot++)
+        for (int slot = 0; slot < Math.Min(Main.maxProjectiles, Main.projectile.Length); slot++)
         {
             Projectile? projectile = Main.projectile[slot];
             if (projectile is not { active: true } || projectile.owner != owner || projectile.identity != identity)
@@ -96,7 +98,7 @@ internal static class RuntimeHitPullBridge
             if (match is not null) return null; // ambiguous network identity, not a slot hint
             match = projectile;
         }
-        for (int slot = 0; slot < Retired.Length; slot++)
+        for (int slot = 0; slot < Math.Min(Retired.Length, Main.projectile.Length); slot++)
         {
             RetiredProjectile retired = Retired[slot];
             Projectile? projectile = retired.Host;
