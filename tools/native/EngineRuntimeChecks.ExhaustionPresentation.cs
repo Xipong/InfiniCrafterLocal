@@ -126,7 +126,7 @@ internal static partial class EngineRuntimeChecks
             Terraria.Main.gameMenu = false; Terraria.Main.dedServ = false;
             try
             {
-                var a = PresentationExhaustionData(0, 61); var b = PresentationExhaustionData(1, 122);
+                var a = PresentationExhaustionData(0, 157); var b = PresentationExhaustionData(1, 122);
                 peers.Register(a); peers.Register(b);
                 Equal(true, PresentationExhaustionApply(owner, a), "A starts its own timer");
                 List<TooltipLine> Lines(GeneratedItemData data)
@@ -157,12 +157,27 @@ internal static partial class EngineRuntimeChecks
                 typeof(ModType).GetProperty("Mod", TestInstance)!.SetValue(nativeHost, new TooltipProbeMod());
                 var nativeLines = new List<TooltipLine> { vanilla }; nativeHost.ModifyTooltips(nativeLines);
                 Equal(true, ReferenceEquals(vanilla, nativeLines[0]) && vanilla.Text == "native damage control", "exhaustion never replaces native hit feedback");
-                Equal(Language.GetTextValue("Mods.InfiniCrafterLocal.RuntimeTooltip.ExhaustionRemaining", Time(61)),
+                Equal(Language.GetTextValue("Mods.InfiniCrafterLocal.RuntimeTooltip.ExhaustionRemaining",
+                    Language.GetTextValue("Mods.InfiniCrafterLocal.RuntimeTooltip.Time", 2.7m.ToString("0.0", Language.ActiveCulture.CultureInfo))),
                     Line(aLines, "InfiniExhaustionRemaining"), locale + " exact localized current timer and block meaning");
                 Equal("", Line(bLines, "InfiniExhaustionRemaining"), "A exhaustion must not advertise B as blocked");
                 Equal(Language.GetTextValue("Mods.InfiniCrafterLocal.RuntimeTooltip.ExhaustionDeclared",
                     Language.GetTextValue("Mods.InfiniCrafterLocal.RuntimeTooltip.InputPrimary"), Time(122)),
                     Line(bLines, "InfiniExhaustionPrimary"), "B own declared policy, independent of A countdown");
+                foreach ((int remaining, decimal seconds) in new[]
+                    { (157, 2.7m), (156, 2.6m), (155, 2.6m), (61, 1.1m), (60, 1.0m),
+                      (59, 1.0m), (7, 0.2m), (6, 0.1m), (1, 0.1m), (0, 0.0m) })
+                {
+                    MaterialClock((uint)(100 + 157 - remaining));
+                    string countdown = Line(Lines(a), "InfiniExhaustionRemaining");
+                    string expected = remaining == 0 ? "" : Language.GetTextValue(
+                        "Mods.InfiniCrafterLocal.RuntimeTooltip.ExhaustionRemaining",
+                        Language.GetTextValue("Mods.InfiniCrafterLocal.RuntimeTooltip.Time",
+                            seconds.ToString("0.0", Language.ActiveCulture.CultureInfo)));
+                    Equal(expected, countdown, locale + " live tenths boundary " + remaining);
+                    Equal(remaining > 0, owner.HasGeneratedItemExhaustion(a), "tooltip never advances actual lockout");
+                }
+                MaterialClock(100);
                 // Same Id with a different real definition hash is not the exhausted item.
                 var changed = GeneratedItemData.FromJson(a.ToNetworkJson())!;
                 changed.Gameplay.GeneratedBuff!.JumpBoost = 2f;
