@@ -354,5 +354,92 @@ class ManagedGeneratorTests(unittest.TestCase):
         self.assertEqual(process.events, ["terminate", ("wait", 2), "kill", ("wait", 2)])
 
 
+class StartupReadinessTests(unittest.TestCase):
+    def test_packaged_readiness_restart_and_startup_failure(self):
+        with tempfile.TemporaryDirectory(prefix="ifc-ready-") as temporary:
+            root = Path(temporary)
+            runtime = copy_runtime(root / "runtime")
+            data = root / "data"
+            data.mkdir()
+            personal = data / "custom-presets.json"
+            personal.write_text('{"personal": true}')
+            command = [sys.executable, "-B", str(runtime / "scripts/bundled_studio.py"),
+                       "--data-dir", str(data), "--tml-save-dir", str(root / "save"),
+                       "--managed", "--no-browser"]
+            environment = isolated_environment()
+            environment["PYTHONDONTWRITEBYTECODE"] = "1"
+            # One bounded child runs the real packaged entrypoint. Observe its
+            # READY output, query its real listener, then close a real ownership
+            # pipe. No grandchild can survive subprocess.run's timeout cleanup.
+            probe = r"""
+import builtins, json, os, runpy, sys, urllib.request
+read_fd, write_fd = os.pipe()
+sys.stdin = os.fdopen(read_fd, "r")
+original_print = builtins.print
+observed = []
+def inspect_ready(*values, **kwargs):
+    original_print(*values, **kwargs)
+    if values and str(values[0]).startswith("IFC_STUDIO_READY "):
+        url = json.loads(str(values[0]).partition(" ")[2])["url"]
+        with urllib.request.urlopen(url, timeout=5) as response:
+            assert response.status == 200
+            assert b"<html" in response.read().lower()
+        origin = url.split("?", 1)[0].rstrip("/")
+        for asset in ("studio.js", "studio.css", "studio-i18n.js", "studio-motion.js"):
+            with urllib.request.urlopen(origin + "/" + asset, timeout=5) as response:
+                assert response.status == 200 and response.read()
+        observed.append("ready")
+        os.close(write_fd)  # Actual EOF drives the production parent watcher.
+builtins.print = inspect_ready
+sys.argv = sys.argv[1:]
+try:
+    runpy.run_path(sys.argv[0], run_name="__main__")
+except SystemExit as exc:
+    assert exc.code == 0, exc.code
+assert observed == ["ready"]
+original_print("STUDIO_PROBE_OK")
+"""
+            for _ in range(2):
+                result = subprocess.run([sys.executable, "-B", "-c", probe, *command[2:]],
+                                        capture_output=True, text=True, env=environment, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("IFC_STUDIO_READY ", result.stdout)
+                self.assertIn("STUDIO_PROBE_OK", result.stdout)
+            self.assertEqual(personal.read_text(), '{"personal": true}')
+            for asset in ("index.html", "studio.js"):
+                path = runtime / "infini_local/desktop/webui" / asset
+                contents = path.read_bytes()
+                path.unlink()
+                failure = subprocess.run(command, input="", capture_output=True, text=True,
+                                         env=environment, timeout=15)
+                self.assertNotEqual(failure.returncode, 0)
+                self.assertNotIn("IFC_STUDIO_READY", failure.stdout)
+                self.assertIn(asset, failure.stderr)
+                path.write_bytes(contents)
+
+    def test_first_pump_failure_never_announces_ready(self):
+        with tempfile.TemporaryDirectory(prefix="ifc-pump-") as temporary:
+            root = Path(temporary)
+            runtime = copy_runtime(root / "runtime")
+            code = """
+import runpy, sys
+from infini_local.desktop.settings_controller import SettingsController
+def failed_pump(self):
+    raise RuntimeError('injected first pump failure')
+SettingsController.pump = failed_pump
+sys.argv = sys.argv[1:]
+runpy.run_path(sys.argv[0], run_name='__main__')
+"""
+            environment = isolated_environment()
+            environment["PYTHONPATH"] = str(runtime)
+            result = subprocess.run([sys.executable, "-B", "-c", code,
+                                     str(runtime / "scripts/bundled_studio.py"),
+                                     "--data-dir", str(root / "data"), "--managed", "--no-browser"],
+                                    input="", capture_output=True, text=True, env=environment, timeout=15)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("injected first pump failure", result.stderr)
+            self.assertNotIn("IFC_STUDIO_READY", result.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

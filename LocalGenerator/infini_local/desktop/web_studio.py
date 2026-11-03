@@ -650,6 +650,17 @@ def _stop_owned_generator(app) -> None:
             process.wait(timeout=2)
 
 
+def _validate_startup_assets(assets: Path):
+    # READY means the browser can load the application, not merely an open socket.
+    for name in ('index.html', *(entry[0] for entry in STATIC_FILES.values())):
+        try:
+            if not (assets / name).read_bytes():
+                raise OSError('empty file')
+        except OSError as exc:
+            raise RuntimeError(f'Studio frontend is incomplete: {name}. '
+                               'Restore the packaged runtime before opening Studio again.') from exc
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Open the local Infinicraft Studio.')
     parser.add_argument('--no-browser', action='store_true')
@@ -667,7 +678,12 @@ def main(argv=None):
     controller = StudioController(app, server)
     shutdown = threading.Event()
     try:
+        _validate_startup_assets(server.assets)
         server.publish(controller.snapshot())
+        app.after(0, controller.tick)
+        app.pump()
+        if app._gui_closed:
+            raise RuntimeError('Studio closed during startup.')
         server.start()
         # The private URL goes only to the controlling pipe/user's console.
         if args.managed:
@@ -679,7 +695,6 @@ def main(argv=None):
             print('Close this console to exit Studio. The generator has its own Stop control.', flush=True)
         if not args.no_browser:
             webbrowser.open(server.url)
-        app.after(0, controller.tick)
         while not app._gui_closed and not shutdown.is_set():
             app.pump()
             shutdown.wait(0.02)

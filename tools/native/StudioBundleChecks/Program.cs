@@ -4,6 +4,14 @@ using System.Text;
 using System.Text.Json;
 using InfiniCrafterLocal.Common.Services;
 
+if (args.Length == 2 && args[0] == "--hold-install-lock")
+{
+    using var held = StudioBundle.AcquireInstallationLock(args[1], CancellationToken.None);
+    Console.WriteLine("LOCKED");
+    Console.ReadLine();
+    return;
+}
+
 string temporary = Path.Combine(Path.GetTempPath(), "ifc-studio-checks-" + Guid.NewGuid().ToString("N"));
 try
 {
@@ -28,6 +36,32 @@ try
 
     string installed = StudioBundle.Install(payload, spec, runtimes, CancellationToken.None);
     Require(File.ReadAllText(Path.Combine(installed, "LocalGenerator/webui/icon.png")) == "PNG bytes", "asset bytes preserved");
+    // A valid cache marker must not authorize damaged executable/package bytes.
+    File.WriteAllText(Path.Combine(installed, spec.Python), "damaged interpreter");
+    Reject<IOException>(() => StudioBundle.Install(payload, spec, runtimes, CancellationToken.None));
+    Require(File.ReadAllText(Path.Combine(installed, spec.Python)) == "damaged interpreter", "modified runtime is preserved, never silently overwritten");
+    string originalInventory = File.ReadAllText(Path.Combine(installed, ".owned-files.json"));
+    var editedInventory = JsonSerializer.Deserialize<Dictionary<string, string>>(originalInventory)!;
+    editedInventory[spec.Python] = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("damaged interpreter"))).ToLowerInvariant();
+    File.WriteAllText(Path.Combine(installed, ".owned-files.json"), JsonSerializer.Serialize(editedInventory));
+    Reject<IOException>(() => StudioBundle.Install(payload, spec, runtimes, CancellationToken.None));
+    File.WriteAllText(Path.Combine(installed, ".owned-files.json"), originalInventory);
+    File.WriteAllText(Path.Combine(installed, spec.Python), "interpreter");
+    if (!OperatingSystem.IsWindows())
+    {
+        string linkedRoot = Path.Combine(temporary, "linked-runtimes");
+        Directory.CreateSymbolicLink(linkedRoot, runtimes);
+        Reject<IOException>(() => StudioBundle.Install(payload, spec, linkedRoot, CancellationToken.None));
+        Directory.Delete(linkedRoot);
+        string pythonDirectory = Path.Combine(installed, "python");
+        string externalPython = Path.Combine(temporary, "external-python");
+        Directory.Move(pythonDirectory, externalPython);
+        Directory.CreateSymbolicLink(pythonDirectory, externalPython);
+        Reject<IOException>(() => StudioBundle.Install(payload, spec, runtimes, CancellationToken.None));
+        Require(File.ReadAllText(Path.Combine(externalPython, "python.exe")) == "interpreter", "linked cache bytes are untouched");
+        Directory.Delete(pythonDirectory);
+        Directory.Move(externalPython, pythonDirectory);
+    }
     DateTime modified = File.GetLastWriteTimeUtc(Path.Combine(installed, spec.Python));
     Require(StudioBundle.Install(payload, spec, runtimes, CancellationToken.None) == installed, "completed runtime reused");
     Require(File.GetLastWriteTimeUtc(Path.Combine(installed, spec.Python)) == modified, "reuse does not overwrite installed files");
@@ -113,12 +147,12 @@ try
     Require(File.ReadAllText(Path.Combine(installed, spec.Python)) == "modified by user", "modified content prevents retirement");
     File.WriteAllText(Path.Combine(installed, spec.Python), "interpreter");
     string inventoryBytes = File.ReadAllText(Path.Combine(installed, ".owned-files.json"));
-    foreach (string invalid in new[] { "{", "../outside", ".complete" })
+    foreach (string invalid in new[] { "{", "../outside", ".complete", "null-digest" })
     {
         var invalidInventory = JsonSerializer.Deserialize<Dictionary<string, string>>(inventoryBytes)!;
         string firstPath = invalidInventory.Keys.First();
-        invalidInventory.Remove(firstPath);
-        invalidInventory.Add(invalid, "bad");
+        if (invalid == "null-digest") invalidInventory[firstPath] = null!;
+        else { invalidInventory.Remove(firstPath); invalidInventory.Add(invalid, "bad"); }
         File.WriteAllText(Path.Combine(installed, ".owned-files.json"), invalid == "{" ? invalid : JsonSerializer.Serialize(invalidInventory));
         using var guard = StudioBundle.AcquireInstallationLock(runtimes, CancellationToken.None);
         StudioBundle.RetirePreviousRuntimesLocked(runtimes, Spec(update));
@@ -129,11 +163,32 @@ try
         StudioBundle.RetirePreviousRuntimesLocked(runtimes, Spec(update));
     Require(Directory.Exists(installed), "legacy runtime without inventory retained");
     File.WriteAllText(Path.Combine(installed, ".owned-files.json"), inventoryBytes);
+    // Simulate a process dying midway through deletion: remaining verified payload
+    // still belongs to this installer, while absent expected folders are harmless.
+    File.Delete(Path.Combine(installed, spec.EntryPoint));
+    Directory.Delete(Path.GetDirectoryName(Path.Combine(installed, spec.EntryPoint))!);
+    string abandoned = Path.Combine(runtimes, ".install-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(abandoned);
+    File.WriteAllText(Path.Combine(abandoned, ".owned-files.json"), inventoryBytes);
+    File.WriteAllText(Path.Combine(abandoned, ".installing"), spec.Sha256);
+    Directory.CreateDirectory(Path.Combine(abandoned, "python"));
+    File.WriteAllText(Path.Combine(abandoned, spec.Python), "interpreter");
+    string truncatedStage = Path.Combine(runtimes, ".install-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(Path.Combine(truncatedStage, "python"));
+    File.WriteAllText(Path.Combine(truncatedStage, ".owned-files.json"), inventoryBytes);
+    File.WriteAllText(Path.Combine(truncatedStage, ".installing"), spec.Sha256);
+    File.WriteAllText(Path.Combine(truncatedStage, spec.Python), "inter");
+    string unknownStage = Path.Combine(runtimes, ".install-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(unknownStage);
+    File.WriteAllText(Path.Combine(unknownStage, "personal.txt"), "preserve");
     using (var guard = StudioBundle.AcquireInstallationLock(runtimes, CancellationToken.None))
     {
         StudioBundle.WriteExternalLauncher(studio, Spec(update));
         StudioBundle.RetirePreviousRuntimesLocked(runtimes, Spec(update));
     }
+    Require(!Directory.Exists(abandoned), "verified interrupted extraction between completed files is retired");
+    Require(File.ReadAllText(Path.Combine(truncatedStage, spec.Python)) == "inter", "truncated or modified stage payload cannot authorize cleanup");
+    Require(File.ReadAllText(Path.Combine(unknownStage, "personal.txt")) == "preserve", "stage name alone never authorizes deletion");
     Require(!Directory.Exists(installed) && Directory.Exists(updated), "verified previous version retired after replacement readiness boundary");
     Require(StudioBundle.Install(update, Spec(update), runtimes, CancellationToken.None) == updated, "restart reuses surviving replacement");
     Require(File.ReadAllText(Path.Combine(models, "weights.gguf")) == "external model bytes", "external model bytes unchanged");
@@ -153,6 +208,48 @@ try
         Require(entered.Wait(TimeSpan.FromSeconds(5)), "contending launch entered installer");
         blocked.Cancel();
         Require(contender.Wait(TimeSpan.FromSeconds(5)), "contending launch cancellation bounded");
+    }
+    var childStart = new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!)
+    { UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+    if (Path.GetFileNameWithoutExtension(Environment.ProcessPath) == "dotnet")
+        childStart.ArgumentList.Add(typeof(StudioBundleSpec).Assembly.Location);
+    childStart.ArgumentList.Add("--hold-install-lock");
+    childStart.ArgumentList.Add(runtimes);
+    using (var child = System.Diagnostics.Process.Start(childStart)!)
+    {
+        try
+        {
+            Require(child.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult() == "LOCKED", "second process owns installer lock");
+            using var waitCancellation = new CancellationTokenSource(250);
+            Reject<OperationCanceledException>(() => StudioBundle.Install(update, Spec(update), runtimes, waitCancellation.Token));
+            child.StandardInput.Close();
+            Require(child.WaitForExit(10000) && child.ExitCode == 0, "second process releases lock on EOF");
+            Require(StudioBundle.Install(update, Spec(update), runtimes, CancellationToken.None) == updated, "restart works after independent process releases lock");
+        }
+        finally { if (!child.HasExited) child.Kill(entireProcessTree: true); }
+    }
+    foreach (var reply in new[] { (200, "text/html", "<html>Studio</html>", true), (503, "text/plain", "missing", false), (200, "text/html", "", false) })
+    {
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        Task serve = Task.Run(async () =>
+        {
+            using var socket = await listener.AcceptTcpClientAsync();
+            using var stream = socket.GetStream();
+            using var reader = new StreamReader(stream, leaveOpen: true);
+            string? line;
+            do { line = await reader.ReadLineAsync(); } while (!string.IsNullOrEmpty(line));
+            byte[] bytes = Encoding.UTF8.GetBytes($"HTTP/1.1 {reply.Item1} Status\r\nContent-Type: {reply.Item2}\r\nContent-Length: {Encoding.UTF8.GetByteCount(reply.Item3)}\r\nConnection: close\r\n\r\n{reply.Item3}");
+            await stream.WriteAsync(bytes);
+        });
+        try
+        {
+            Action verify = () => BundledStudio.VerifyReadyEndpoint(new Uri($"http://127.0.0.1:{port}/?token=test"), CancellationToken.None).GetAwaiter().GetResult();
+            if (reply.Item4) verify(); else Reject<IOException>(verify);
+            Require(serve.Wait(TimeSpan.FromSeconds(5)), "readiness endpoint request finished");
+        }
+        finally { listener.Stop(); }
     }
     using (var firstLaunch = StudioBundle.AcquireInstallationLock(runtimes, CancellationToken.None))
     {
