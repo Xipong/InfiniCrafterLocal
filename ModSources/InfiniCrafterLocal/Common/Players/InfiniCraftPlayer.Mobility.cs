@@ -334,7 +334,9 @@ public sealed partial class InfiniCraftPlayer
         float max = rangeTiles * 16f;
         if (delta.Length() > max)
             target = Player.Center + delta.SafeNormalize(Vector2.UnitX * Player.direction) * max;
-        Vector2 destination = new(target.X - Player.width / 2f, target.Y - Player.height / 2f);
+        // Main.MouseWorld already mirrors the cursor under inverted gravity.
+        // Match the native teleport rod's gravity-relative feet, not body centre.
+        Vector2 destination = new(target.X - Player.width / 2, target.Y - (Player.gravDir == 1f ? Player.height : 0));
         if (!IsBlinkWithinWorld(destination) || gameplay.MobilitySafeTileOnly && !IsSafeBlinkDestination(destination))
         {
             _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityUnsafe");

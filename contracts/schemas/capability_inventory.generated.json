@@ -4123,7 +4123,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Run a bounded blink-to-cursor action on successful use; home recall has its own operation.",
+      "purpose": "Blink on successful use with gravity-relative feet at the range-limited cursor, like the native teleport rod. No nearby-space search; home recall has its own operation.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {

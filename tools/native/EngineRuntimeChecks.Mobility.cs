@@ -73,7 +73,7 @@ internal static partial class EngineRuntimeChecks
                         }
                         Equal(true, generated.TryRunGeneratedMobility(data.Gameplay), label + " accepted");
                         Equal(1f, player.teleportTime, label + " real Teleport completed, no swallowed partial failure");
-                        Equal(start + new Vector2(Math.Min(distance, bounded * 16f), 0f), player.Center, label + " actual player center");
+                        Equal(start + new Vector2(Math.Min(distance, bounded * 16f), 0f), player.Bottom, label + " actual player feet");
                         if (wire) Equal(bounded, data.Gameplay.MobilityRangeTiles, label + " DTO range");
                         Equal(60, generated.GeneratedMobilityCooldownTicks, label + " successful cooldown");
                         Vector2 arrived = player.Center;

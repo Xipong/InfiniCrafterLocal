@@ -1735,7 +1735,7 @@ _CAPS: list[CapabilitySpec] = [
         lowering=("gameplay.holdLightStrength", "gameplay.holdLightColorName"), persisted_name='add_hold_light'),
     _cap(
         "blink_on_use",
-        "Run a bounded blink-to-cursor action on successful use; home recall has its own operation.",
+        "Blink on successful use with gravity-relative feet at the range-limited cursor, like the native teleport rod. No nearby-space search; home recall has its own operation.",
         "item_utility",
         ("item_body",),
         {
