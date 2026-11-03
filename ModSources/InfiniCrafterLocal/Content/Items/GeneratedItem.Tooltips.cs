@@ -69,7 +69,7 @@ public partial class GeneratedItem
                     && program.TryGetEntity(binding.UsePolicy.Action.TargetId)?.Kind == RuntimeEntityKind.ItemBody
                     && (data.EffectsForBinding(binding).MobilityMode is "recall_home" or "blink_to_cursor"))
                 {
-                    Add("MobilityCooldownRemaining", "MobilityCooldownRemaining", RuntimeTooltipTime(mobilityTicks));
+                    Add("MobilityCooldownRemaining", "MobilityCooldownRemaining", RuntimeTooltipText("Time", GeneratedStatusTooltipView.CountdownTenths(mobilityTicks, RuntimeTooltipCulture)));
                     break;
                 }
             }
@@ -81,7 +81,7 @@ public partial class GeneratedItem
                 {
                     if (entry.RemainingTicks <= 0 || !string.Equals(entry.ItemId, data.Id, StringComparison.Ordinal)
                         || !string.Equals(entry.DefinitionIdentity, definition, StringComparison.Ordinal)) continue;
-                    Add("ExhaustionRemaining", "ExhaustionRemaining", RuntimeTooltipTime(entry.RemainingTicks));
+                    Add("ExhaustionRemaining", "ExhaustionRemaining", RuntimeTooltipText("Time", GeneratedStatusTooltipView.CountdownTenths(entry.RemainingTicks, RuntimeTooltipCulture)));
                     break;
                 }
             }
