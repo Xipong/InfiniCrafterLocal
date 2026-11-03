@@ -14,13 +14,32 @@ source=source.replace('  navigate();poll();',`
   const renderMainDashboard=renderOperate;
   poll=()=>{};setMenu=()=>{};render=()=>{globalThis.renderCount++;};renderOperate=()=>{};syncInputs=()=>{};updateDiagnostics=()=>{};updateActionButtons=()=>{};
   const originalToast=toast;toast=(message,error)=>{originalToast(message,error);if(!state.suppressToast) globalThis.messages.push({message,error});};
-  globalThis.studio={state,acceptSnapshot,recomputeDirty,heading,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,refreshDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog,restoreActionFocus,aside,renderMainDashboard,showFilePicker,showPresetPreview,showSavePreset,setAction(fn){action=fn;}};
+  globalThis.studio={state,acceptSnapshot,recomputeDirty,heading,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,refreshDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog,restoreActionFocus,aside,renderMainDashboard,showFilePicker,showPresetPreview,showSavePreset,renderConfigure,setAction(fn){action=fn;}};
 `);
 global.messages=messages;global.renderCount=0;
 vm.runInThisContext(source);
 const {state,acceptSnapshot,recomputeDirty,inactiveReason,fieldGroups,showDocument}=studio;
 const key='INFINI_PROMPT_STYLE';
 const snapshot=(values={},extra={})=>({values,defaults:{},savedValues:values,fields:[],presets:{},userPresets:{},lanEnabled:false,savedLanEnabled:false,...extra});
+// Pipeline choices show user profiles first, with the last builtin example last.
+acceptSnapshot(snapshot({}, {presets:{Local:{},Example:{}},userPresets:{'123':{}}}));
+studio.renderConfigure();
+const chooser=document.querySelector('#workspace').innerHTML;
+assert(chooser.indexOf('value="Мой: 123"') < chooser.indexOf('value="Local"'));
+assert(chooser.indexOf('value="Local"') < chooser.indexOf('value="Example"'));
+const extra='INFINI_SDCPP_SERVER_EXTRA_ARGS';
+state.draft={INFINI_LLM_PROVIDER:'openrouter',INFINI_SDCPP_MODEL:'/my/model',INFINI_SDCPP_STEPS:'23',[extra]:'--custom'};
+state.baseline={...state.draft};
+const originalDraft={...state.draft},originalDisk={...state.baseline};
+const fieldMarkup=studio.fieldHTML({key:extra,multiline:true});
+const resetAction=fieldMarkup.match(/data-ui="([^"]+)"/)[1];
+const resetButton={dataset:{ui:resetAction}};
+events.click({target:{closest:selector=>selector==='button,[data-ui],[data-search-key]'?resetButton:null}});
+assert.deepEqual(state.draft,{...originalDraft,[extra]:''});
+assert.deepEqual(state.baseline,originalDisk);
+assert.deepEqual([...state.dirty],[extra]);
+state.draft={...state.baseline};recomputeDirty();
+assert.equal(state.draft[extra],'--custom');
 // Heading status follows typing, reversion, confirmed Save, and LAN-only drafts
 // without rebuilding the page or disturbing the current input. Presentation
 // details such as parameter-count markup are not part of this contract.

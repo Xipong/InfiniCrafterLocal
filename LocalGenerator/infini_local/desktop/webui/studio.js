@@ -578,6 +578,7 @@
       if (field.secret) control += `<button class="reveal" data-reveal="${key}" type="button" aria-label="${t("Показать ключ")}" aria-pressed="false">${icon('eye')}</button>`;
       if (browse && !field.synthetic) control += `<button class="browse" data-browse="${key}" data-browse-type="${browse}" type="button" title="${t("Выбрать на этом компьютере")}" aria-label="${t("Выбрать файл:")} ${esc(title)}">${icon('folder')}</button>`;
     }
+    if (key === 'INFINI_SDCPP_SERVER_EXTRA_ARGS') control += `<button class="text-button" type="button" data-ui="clear-sdcpp-args">${t('Сбросить доп. аргументы')}</button>`;
     if (key === 'INFINI_SDCPP_SERVER_EXE') control += `<span class="field-note"><a class="text-button" href="https://github.com/leejet/stable-diffusion.cpp/releases/latest" target="_blank" rel="noopener noreferrer" title="${t('Официальные сборки sd.cpp на GitHub')}">${t('Скачать sd.cpp')} ${icon('arrow')}</a></span>`;
     return `<div class="field-row${state.dirty.has(key) ? ' is-dirty':''}" data-field-row="${key}"><div class="field-copy"><div class="field-label-line"><label for="${id}">${esc(title)}</label><button class="field-help-toggle" data-help-field="${key}" type="button" aria-label="${t("Подробности:")} ${esc(title)}" aria-expanded="${help}">?</button></div><div class="field-key${help ? '':' hidden-key'}">${key}</div><p class="field-help" id="help-${key}">${esc(t(help ? field.help || shortHelp[key] || t('Параметр локального генератора. Значение сохраняется без преобразования.') : shortHelp[key] || ''))}</p>${browse && !field.secret ? `<span class="field-file" data-file-basename="${key}" title="${esc(val)}" ${val.trim() ? '':'hidden'}>${esc(basename(val))}</span>`:''}</div><div class="field-control${field.secret || browse ? ' has-extra':''}">${control}${inactive && !derived ? `<span class="field-note" data-inactive-source>${esc(inactive)}</span>`:''}</div></div>`;
   }
@@ -716,7 +717,7 @@
   }
   function renderConfigure() {
     const selected=state.presetChoice ?? value('INFINI_GUI_PIPELINE_PRESET');
-    const presetEntries=[...Object.keys(state.remote.presets || {}),...Object.keys(state.remote.userPresets || {}).map(name=>`Мой: ${name}`)];
+    const presetEntries=[...Object.keys(state.remote.userPresets || {}).map(name=>`Мой: ${name}`),...Object.keys(state.remote.presets || {})];
     const cards=configureSummaryCards();
     $('#workspace').innerHTML=`${heading('configure')}<div class="settings-layout"><div class="settings-main"><section class="preset-sheet profile-sheet"><div class="profile-heading"><span class="profile-symbol">${icon('sliders')}</span><div><span class="eyebrow">${t("Текущая конфигурация")}</span><h2 id="current-profile-name">${esc(presetLabel(value('INFINI_GUI_PIPELINE_PRESET')))}</h2></div></div><div class="preset-selector"><select id="preset-select" aria-label="${t("Профиль настроек")}"><option value="">${t("Выбери профиль…")}</option>${presetEntries.map(name=>`<option value="${esc(name)}" ${name === selected ? 'selected':''}>${esc(presetLabel(name))}</option>`).join('')}</select><button class="button" data-ui="apply-preset">${t("Сравнить и применить")} ${icon('arrow')}</button></div><div class="profile-foot"><p>${t("Применение профиля меняет черновик. Ключи остаются твоими.")}</p><button class="text-button" data-ui="save-preset">${t("Сохранить как профиль")} ${icon('save')}</button></div></section><div class="section-heading"><h2>${t("Что настроено сейчас")}</h2><span class="meta" id="configure-selection-status">${state.dirty.size || state.lan !== state.baselineLan ? t('Черновик этой вкладки'):t('Сохранённая конфигурация')}</span></div><div class="configure-index">${cards.map(([glyph,route,title,summary,detail])=>`<a class="index-row" href="#${route}" data-flow-card><div class="index-card-top"><span class="index-number">${icon(glyph)}</span><h3>${title}</h3>${icon('arrow')}</div><strong data-config-value="${route}">${esc(summary)}</strong><p data-config-detail="${route}">${esc(detail)}</p></a>`).join('')}</div><section class="recommendation-row"><span class="recommendation-icon">${icon('refresh')}</span><div><h2>${t("Рекомендации к настройкам")}</h2><p id="defaults-summary">${esc(defaultsSummary())}</p></div><button class="text-button" data-ui="defaults-update">${t("Посмотреть")} ${icon('arrow')}</button></section>${disclosure('all-settings',t('Все параметры одним списком'),state.fields,t('Все настройки config.env, включая служебные поля и параметры других источников.'))}</div>${aside('configure')}</div>`;
   }
@@ -1118,6 +1119,11 @@
     if(button.dataset.sectionLink) {const heading=document.getElementById(button.dataset.sectionLink);if(heading) {heading.focus({preventScroll:true});heading.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant':'smooth'});}return;}
     if(button.dataset.traceTab) {state.traceTab=button.dataset.traceTab;$$('[data-trace-tab]').forEach(tab => {tab.classList.toggle('active',tab === button);tab.setAttribute('aria-selected',String(tab === button));tab.tabIndex=tab === button?0:-1;});$('#trace-view').setAttribute('aria-labelledby',button.id);updateDiagnostics();return;}
     switch(button.dataset.ui) {
+      case 'clear-sdcpp-args':{
+        const key='INFINI_SDCPP_SERVER_EXTRA_ARGS';
+        state.draft[key]='';state.edits[key]=++state.editClock;recomputeDirty();syncInputs();
+        break;
+      }
       case 'defaults-update':showDefaultsUpdate();break;
       case 'defaults-refresh':refreshDefaultsUpdate();break;
       case 'search':showSearch();break;

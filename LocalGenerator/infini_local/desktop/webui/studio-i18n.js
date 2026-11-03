@@ -2,6 +2,12 @@
 'use strict';
 (() => {
   const en = {
+  "Сбросить доп. аргументы": "Clear extra arguments",
+  "API (OpenAI-compatible) + локальные изображения sd.cpp": "API (OpenAI-compatible) + local sd.cpp images",
+  "API (OpenAI-compatible) + Image API": "API (OpenAI-compatible) + Image API",
+  "ChatGPT / Codex: текст и изображения": "ChatGPT / Codex: text and images",
+  "Пример: RX 6800 XT / FLUX.2 Klein 4B (только аргументы)": "Example: RX 6800 XT / FLUX.2 Klein 4B (arguments only)",
+
   "Ожидаем выбор в проводнике…": "Waiting for selection in Explorer…",
   "Выбрать папку через проводник": "Choose folder in Explorer",
   "Системное окно откроется на Windows-компьютере генератора. Ниже можно выбрать папку через список Studio.": "The system dialog opens on the generator's Windows computer. You can also use Studio's folder list below.",
@@ -13,8 +19,6 @@
   "Окно выбора папки уже открыто на компьютере генератора.": "A folder dialog is already open on the generator computer.",
   "Системный выбор папки доступен только на Windows-компьютере генератора. Используй список Studio.": "Native folder selection is only available on a Windows generator computer. Use Studio's list.",
   "Локалка: LM Studio + sd.cpp (универсальный)": "Local: LM Studio + sd.cpp (stock)",
-  "sd.cpp: стандартные аргументы": "sd.cpp: stock arguments",
-  "sd.cpp: FLUX.2 Klein 4B / RX 6800 XT hybrid (аргументы)": "sd.cpp: FLUX.2 Klein 4B / RX 6800 XT hybrid (arguments)",
   "Скачать sd.cpp": "Download sd.cpp",
   "Официальные сборки sd.cpp на GitHub": "Official sd.cpp builds on GitHub",
   "Закрыть студию и запущенный ею генератор": "Close Studio and the generator it started",
@@ -1107,9 +1111,6 @@
   "Код выхода: ": "Exit code: ",
   "Сохранённая ошибка запуска": "Saved startup error",
   "Крафт:": "Craft:",
-  "Локалка: LM Studio + FLUX.2 Klein 4B hybrid": "Local: LM Studio + FLUX.2 Klein 4B hybrid",
-  "Локалка: LM Studio + local Z-Image/sd.cpp": "Local: LM Studio + local Z-Image/sd.cpp",
-  "API LLM only: без картинок": "API LLM only: no images",
   "Последний снимок сервера: создаётся {0}, в очереди {1}. Для актуального состояния нажми «Проверить соединение».": "Last server snapshot: {0} crafting, {1} queued. Use “Check connection” for the latest status."
 };
   const ru = {

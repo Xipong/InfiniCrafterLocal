@@ -286,7 +286,7 @@ def test_stock_and_hybrid_arguments_preserve_paths_and_custom_profile(studio):
     assert saved['ok']
     preset_path = app.config_path.with_name('gui_user_presets.json')
     before = preset_path.read_bytes()
-    for name in ('sd.cpp: стандартные аргументы', 'sd.cpp: FLUX.2 Klein 4B / RX 6800 XT hybrid (аргументы)'):
+    for name in ('Пример: RX 6800 XT / FLUX.2 Klein 4B (только аргументы)',):
         result = apply(controller, 'applyPreset', custom, {'name': name})
         assert result['ok']
         assert all(result['values'][key] == val for key, val in paths.items())
@@ -311,9 +311,46 @@ def test_stock_and_hybrid_arguments_preserve_paths_and_custom_profile(studio):
 def test_universal_local_preset_preserves_selected_models(studio):
     app, controller = studio
     selected = {key: '/chosen/' + key for key in ('INFINI_SDCPP_MODEL', 'INFINI_SDCPP_VAE', 'INFINI_SDCPP_LLM', 'INFINI_SDCPP_SERVER_EXE')}
+    selected.update(INFINI_SDCPP_ROCM_COMPAT_ROOT='/chosen/rocm', INFINI_SDCPP_SERVER_EXTRA_ARGS='--custom', INFINI_SDCPP_SERVER_COMMAND_MODE='template')
     result = apply(controller, 'applyPreset', dict(selected, INFINI_LLM_PROVIDER='openrouter'), {'name': 'Локалка: LM Studio + sd.cpp (универсальный)'})
     assert result['ok']
     assert all(result['values'][key] == val for key, val in selected.items())
     assert result['values']['INFINI_LLM_PROVIDER'] == 'local'
-    assert result['values']['INFINI_SDCPP_SERVER_EXTRA_ARGS'] == ''
-    assert result['values']['INFINI_SDCPP_ROCM_COMPAT_ROOT'] == ''
+    assert result['values']['INFINI_SDCPP_SERVER_EXTRA_ARGS'] == '--custom'
+    assert result['values']['INFINI_SDCPP_ROCM_COMPAT_ROOT'] == '/chosen/rocm'
+
+
+@pytest.mark.parametrize('name,provider,backend', [
+    ('Локалка: LM Studio + sd.cpp (универсальный)', 'local', 'sdcpp'),
+    ('API (OpenAI-compatible) + локальные изображения sd.cpp', 'openai_compat', 'sdcpp'),
+    ('API (OpenAI-compatible) + Image API', 'openai_compat', 'image_api'),
+    ('ChatGPT / Codex: текст и изображения', 'openai_codex', 'openai_codex'),
+])
+def test_pipeline_presets_select_only_chain_and_keep_user_assets(studio, name, provider, backend):
+    app, controller = studio
+    owned = {key: '/chosen/' + key for key in (
+        'INFINI_SDCPP_MODEL', 'INFINI_SDCPP_VAE', 'INFINI_SDCPP_LLM', 'INFINI_SDCPP_SERVER_EXE',
+        'INFINI_SDCPP_LORA_FILE', 'INFINI_OPENAI_COMPAT_BASE_URL', 'INFINI_IMAGE_API_BASE_URL',
+        'INFINI_OPENAI_COMPAT_MODEL', 'INFINI_CODEX_LLM_MODEL', 'INFINI_CODEX_IMAGE_MODEL')}
+    owned.update(INFINI_SDCPP_STEPS='23', INFINI_SDCPP_CFG='2.5', INFINI_LLM_API_MODE='responses',
+                 INFINI_SDCPP_ROCM_COMPAT_ROOT='/chosen/rocm', INFINI_SDCPP_SERVER_EXTRA_ARGS='--my-flags',
+                 INFINI_SDCPP_SERVER_COMMAND_MODE='template')
+    apply(controller, 'savePreset', owned, {'name': '123'})
+    profiles = app.config_path.with_name('gui_user_presets.json')
+    before, config_before = profiles.read_bytes(), app.config_path.read_bytes()
+    saved_profile = dict(app.user_presets['123'])
+    result = apply(controller, 'applyPreset', owned, {'name': name})
+    assert result['ok']
+    assert (result['values']['INFINI_LLM_PROVIDER'], result['values']['INFINI_IMAGE_BACKEND']) == (provider, backend)
+    assert all(result['values'][key] == value for key, value in owned.items())
+    assert profiles.read_bytes() == before and app.config_path.read_bytes() == config_before
+    assert app.user_presets['123'] == saved_profile
+
+
+def test_retired_profile_identity_does_not_rewrite_or_mislabel_settings():
+    data = {'INFINI_GUI_PIPELINE_PRESET': 'Локалка: LM Studio + FLUX.2 Klein 4B hybrid',
+            'INFINI_LLM_PROVIDER': 'local', 'INFINI_IMAGE_BACKEND': 'sdcpp',
+            'INFINI_SDCPP_MODEL': '/my/model', 'INFINI_SDCPP_SERVER_EXTRA_ARGS': '--my-flags'}
+    original = dict(data)
+    assert SettingsController._pipeline_preset_from_config(data) == 'Custom'
+    assert data == original
