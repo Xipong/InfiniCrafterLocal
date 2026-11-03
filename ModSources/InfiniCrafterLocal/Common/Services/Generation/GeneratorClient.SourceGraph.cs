@@ -296,7 +296,6 @@ public sealed partial class GeneratorClient
 
         private void NativeProjectile(Projectile projectile, int? from, int? at)
         {
-            if (!NativeSourceModuleVerified.Value) { Gap("native_projectile_module_certificate_unavailable"); return; }
             foreach (string name in new[] { "VanillaAI", "Kill" })
             {
                 MethodInfo? method = typeof(Projectile).GetMethod(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -348,7 +347,7 @@ public sealed partial class GeneratorClient
                     Edge(from, node, "requested_buff_implementation", at, new JsonObject { ["buffId"] = id, ["receiver"] = receiver }, node is null ? "graph_limit" : null);
                 }
             else NativeBuff(id, receiver, from);
-            if (NativeSourceModuleVerified.Value)
+            // Read the actual loaded admission method, not a cached source certificate.
             {
                 Type target = receiver == "npc" ? typeof(NPC) : typeof(Player);
                 MethodInfo? admission = target.GetMethods(BindingFlags.Instance | BindingFlags.Public).FirstOrDefault(m => m.Name == "AddBuff");
