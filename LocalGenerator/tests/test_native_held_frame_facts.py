@@ -128,3 +128,106 @@ def test_actual_image_backend_and_retry_keep_native_frame_facts(monkeypatch, tmp
             entity.pop("visual", None)
     assert actual_runtime == frozen_runtime
     assert data["visualKit"] == frozen_kit
+
+
+@pytest.mark.parametrize("placement,offset,aim,height,expected", [
+    ("owner_center", 16, "cursor", 0, {"placement": "owner_center", "offsetPx": 16, "aim": "cursor"}),
+    ("cursor", 0, "cursor", 0, {"placement": "cursor", "offsetPx": 0}),
+    ("owner_center", 16, "none", 0, {"placement": "owner_center", "offsetPx": 16, "aim": "none"}),
+    ("cursor", 0, "facing", 3, {"placement": "cursor", "offsetPx": 0, "overTarget": {"heightTiles": 3}}),
+    ("owner_center", 16, None, 0, {"placement": "owner_center", "offsetPx": 16}),
+    ("owner_center", None, "cursor", 0, {"placement": "owner_center"}),
+    ("above_cursor", 0, "cursor", 0, {"placement": "above_cursor", "offsetPx": 0}),
+])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_image_requests_deliver_only_explicit_use_target_placement(monkeypatch, tmp_path, placement, offset, aim, height, expected, reverse):
+    data = _accepted_visual_data()
+    runtime = data["runtimeProgram"]
+    projectile = next(row for row in runtime["entities"] if row["id"] == "nail")
+    projectile["spawn"].update(placement=placement, offsetPx=offset, aim=aim,
+                               overTarget={"heightTiles": height, "delayTicks": 17})
+    if aim is None:
+        projectile["spawn"].pop("aim")
+    if offset is None:
+        projectile["spawn"].pop("offsetPx")
+    # Two explicit uses of the same target must remain two records, not a set.
+    bindings = [
+        {"id": "first", "input": "primary_use", "usePolicy": {"action": {"kind": "spawn_entity", "targetId": "nail"}}},
+        {"id": "second", "input": "alt_use", "usePolicy": {"action": {"kind": "spawn_entity", "targetId": "nail"}}},
+    ]
+    runtime["bindings"] = list(reversed(bindings)) if reverse else bindings
+    if reverse:
+        runtime["entities"].reverse()
+    frozen = deepcopy(data)
+    calls = _capture_backend(monkeypatch, tmp_path)
+    images.maybe_generate_visual_assets(data)
+    assert len(calls) == 2
+    delivered = [_framing(call["prompt"]) for call in calls]
+    roots = [row for row in delivered if "entityId" not in row]
+    projectiles = [row for row in delivered if row.get("entityId") == "nail"]
+    assert len(roots) == len(projectiles) == 1
+    assert roots[0]["itemUseSpawnsReadOnly"] == {
+        "itemEntityId": runtime["itemEntityId"],
+        "bindings": [{"bindingId": binding["id"], "input": binding["input"],
+                      "action": binding["usePolicy"]["action"], "targetPlacement": expected}
+                     for binding in frozen["runtimeProgram"]["bindings"]],
+    }
+    assert "spawnReadOnly" not in roots[0]
+    assert "spawnReadOnly" not in projectiles[0]
+    assert "itemUseSpawnsReadOnly" not in projectiles[0]
+    for call in calls:
+        owner = frozen["visual"] if "entityId" not in _framing(call["prompt"]) else projectile["visual"]
+        assert owner.get("imagePrompt", owner.get("prompt")) in call["prompt"]
+        assert frozen["visualKit"]["animationPlan"] not in call["prompt"]
+    for snapshot in (data, frozen):
+        for row in snapshot["runtimeProgram"]["entities"]:
+            row.pop("visual", None)
+    assert data["runtimeProgram"] == frozen["runtimeProgram"]
+    assert data["visualKit"] == frozen["visualKit"]
+
+
+@pytest.mark.parametrize("missing", ["item_id", "bindings", "target", "spawn", "action_kind"])
+def test_image_context_does_not_invent_missing_root_use_links(missing):
+    from infini_local.pipelines.images.prompts import normalize_asset_prompt
+    data = _accepted_visual_data()
+    runtime = data["runtimeProgram"]
+    runtime["bindings"] = [{"id": "use", "input": "primary_use", "usePolicy": {
+        "action": {"kind": "spawn_entity", "targetId": "nail"}}}]
+    projectile = next(row for row in runtime["entities"] if row["id"] == "nail")
+    if missing == "item_id":
+        runtime.pop("itemEntityId")
+    elif missing == "bindings":
+        runtime["bindings"] = []
+    elif missing == "target":
+        runtime["bindings"][0]["usePolicy"]["action"]["targetId"] = "absent"
+    elif missing == "spawn":
+        projectile.pop("spawn")
+    else:
+        runtime["bindings"][0]["usePolicy"]["action"]["kind"] = "none"
+    frozen = deepcopy(data)
+    root = _framing(normalize_asset_prompt(data, "item", "literal item", 48))
+    assert "itemUseSpawnsReadOnly" not in root
+    selected = _framing(normalize_asset_prompt(data, "runtime:child_projectile", "literal cloud", 32, entity_id="nail"))
+    assert "spawnReadOnly" not in selected
+    for role in ("impact", "vfx_strip", "vfx_cutout", "equip_overlay"):
+        prompt = normalize_asset_prompt(data, role, "literal special asset", 32, entity_id="nail")
+        assert "spawnReadOnly" not in prompt and "itemUseSpawnsReadOnly" not in prompt
+    assert data == frozen
+
+
+@pytest.mark.parametrize("duplicate", ["item", "target"])
+def test_ambiguous_entity_ids_do_not_produce_new_spawn_facts(duplicate):
+    from infini_local.pipelines.images.prompts import normalize_asset_prompt
+    data = _accepted_visual_data()
+    runtime = data["runtimeProgram"]
+    runtime["bindings"] = [{"id": "use", "input": "primary_use", "usePolicy": {
+        "action": {"kind": "spawn_entity", "targetId": "nail"}}}]
+    entity_id = runtime["itemEntityId"] if duplicate == "item" else "nail"
+    runtime["entities"].append(deepcopy(next(row for row in runtime["entities"] if row["id"] == entity_id)))
+    frozen = deepcopy(data)
+    root = _framing(normalize_asset_prompt(data, "item", "literal item", 48))
+    assert "itemUseSpawnsReadOnly" not in root
+    if duplicate == "target":
+        selected = _framing(normalize_asset_prompt(data, "runtime:child_projectile", "literal cloud", 32, entity_id="nail"))
+        assert "spawnReadOnly" not in selected
+    assert data == frozen

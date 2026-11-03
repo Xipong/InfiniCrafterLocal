@@ -193,6 +193,32 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
         for field in ("inventoryScale", "worldScale"):
             if field in root:
                 multipliers["visual." + field] = root[field]
+        # Item-use links describe accepted actions, not an emission point on
+        # this PNG. Resolve only explicit item and action target identities.
+        item_id = runtime.get("itemEntityId")
+        items = [row for row in entities if item_id and row.get("id") == item_id]
+        item = items[0] if len(items) == 1 and items[0].get("kind") == "item_body" else None
+        uses = []
+        if item is not None:
+            for binding in runtime.get("bindings") or []:
+                policy = binding.get("usePolicy") if isinstance(binding, Mapping) else None
+                action = policy.get("action") if isinstance(policy, Mapping) else None
+                if not isinstance(action, Mapping) or action.get("kind") != "spawn_entity":
+                    continue
+                targets = [row for row in entities if action.get("targetId") and row.get("id") == action["targetId"]]
+                target = targets[0] if len(targets) == 1 else None
+                if target is not None and isinstance(target.get("spawn"), Mapping):
+                    spawn = target["spawn"]
+                    placement = {key: copy.deepcopy(spawn[key]) for key in ("placement", "offsetPx") if key in spawn}
+                    if spawn.get("offsetPx") and "aim" in spawn:
+                        placement["aim"] = copy.deepcopy(spawn["aim"])
+                    above = spawn.get("overTarget")
+                    if isinstance(above, Mapping) and above.get("heightTiles"):
+                        placement["overTarget"] = {"heightTiles": copy.deepcopy(above["heightTiles"])}
+                    uses.append({"bindingId": binding.get("id"), "input": binding.get("input"),
+                                 "action": copy.deepcopy(dict(action)), "targetPlacement": placement})
+        if uses:
+            facts["itemUseSpawnsReadOnly"] = {"itemEntityId": item["id"], "bindings": uses}
         shared = []
         for row in entities:
             raw_visual = row.get("visual")
