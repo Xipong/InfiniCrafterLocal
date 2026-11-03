@@ -9,6 +9,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import queue
+import urllib.request
 from pathlib import Path
 import shutil
 import subprocess
@@ -352,6 +354,78 @@ class ManagedGeneratorTests(unittest.TestCase):
         _stop_owned_generator(app)
         self.assertEqual(requests, [])
         self.assertEqual(process.events, ["terminate", ("wait", 2), "kill", ("wait", 2)])
+
+
+class StartupReadinessTests(unittest.TestCase):
+    def test_packaged_readiness_restart_and_startup_failure(self):
+        with tempfile.TemporaryDirectory(prefix="ifc-ready-") as temporary:
+            root = Path(temporary)
+            runtime = copy_runtime(root / "runtime")
+            data = root / "data"
+            data.mkdir()
+            personal = data / "custom-presets.json"
+            personal.write_text('{"personal": true}')
+            command = [sys.executable, "-B", str(runtime / "scripts/bundled_studio.py"),
+                       "--data-dir", str(data), "--tml-save-dir", str(root / "save"),
+                       "--managed", "--no-browser"]
+            environment = isolated_environment()
+            environment["PYTHONDONTWRITEBYTECODE"] = "1"
+            for _ in range(2):
+                process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE, text=True, env=environment)
+                try:
+                    lines = queue.Queue()
+                    threading.Thread(target=lambda: lines.put(process.stdout.readline()), daemon=True).start()
+                    ready = lines.get(timeout=15)
+                    self.assertTrue(ready.startswith("IFC_STUDIO_READY "), ready)
+                    url = json.loads(ready.partition(" ")[2])["url"]
+                    with urllib.request.urlopen(url, timeout=5) as response:
+                        self.assertEqual(response.status, 200)
+                        self.assertIn(b"<html", response.read().lower())
+                    origin = url.split("?", 1)[0].rstrip("/")
+                    for asset in ("studio.js", "studio.css", "studio-i18n.js", "studio-motion.js"):
+                        with urllib.request.urlopen(origin + "/" + asset, timeout=5) as response:
+                            self.assertTrue(response.read())
+                    process.communicate(timeout=10)  # EOF is the actual managed shutdown protocol.
+                    self.assertEqual(process.returncode, 0)
+                finally:
+                    if process.poll() is None:
+                        process.kill()
+                        process.communicate()
+            self.assertEqual(personal.read_text(), '{"personal": true}')
+            for asset in ("index.html", "studio.js"):
+                path = runtime / "infini_local/desktop/webui" / asset
+                contents = path.read_bytes()
+                path.unlink()
+                failure = subprocess.run(command, input="", capture_output=True, text=True,
+                                         env=environment, timeout=15)
+                self.assertNotEqual(failure.returncode, 0)
+                self.assertNotIn("IFC_STUDIO_READY", failure.stdout)
+                self.assertIn(asset, failure.stderr)
+                path.write_bytes(contents)
+
+    def test_first_pump_failure_never_announces_ready(self):
+        with tempfile.TemporaryDirectory(prefix="ifc-pump-") as temporary:
+            root = Path(temporary)
+            runtime = copy_runtime(root / "runtime")
+            code = """
+import runpy, sys
+from infini_local.desktop.settings_controller import SettingsController
+def failed_pump(self):
+    raise RuntimeError('injected first pump failure')
+SettingsController.pump = failed_pump
+sys.argv = sys.argv[1:]
+runpy.run_path(sys.argv[0], run_name='__main__')
+"""
+            environment = isolated_environment()
+            environment["PYTHONPATH"] = str(runtime)
+            result = subprocess.run([sys.executable, "-B", "-c", code,
+                                     str(runtime / "scripts/bundled_studio.py"),
+                                     "--data-dir", str(root / "data"), "--managed", "--no-browser"],
+                                    input="", capture_output=True, text=True, env=environment, timeout=15)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("injected first pump failure", result.stderr)
+            self.assertNotIn("IFC_STUDIO_READY", result.stdout)
 
 
 if __name__ == "__main__":

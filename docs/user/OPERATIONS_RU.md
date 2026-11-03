@@ -59,7 +59,7 @@
 
 | Поле | Что ожидается |
 |---|---|
-| `version` | Версия установленного генератора; для этого релиза `0.5.5` |
+| `version` | Версия установленного генератора; для этого релиза `0.5.6` |
 | `serverRoot`, `configPath` | У встроенной поставки — `Studio/runtimes/<hash>/LocalGenerator` и `Studio/data/config.env`; у отдельной — папка и конфиг её `LocalGenerator` |
 | `llmProvider`, `imageBackend` | Выбранные источники текста и PNG |
 | `imageBackendConfigError` | Пустое значение; иначе исправь указанный источник |

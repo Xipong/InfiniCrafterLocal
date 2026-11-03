@@ -2,6 +2,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -55,7 +56,7 @@ internal sealed class BundledStudio : IDisposable
         StudioBundleSpec spec = StudioBundle.ReadManifest(ReadResource("Studio/manifest.json"), "win-x64");
         string studioDirectory = Path.Combine(_saveDirectory, "InfiniCrafterLocal", "Studio");
         string runtimes = Path.Combine(studioDirectory, "runtimes");
-        Directory.CreateDirectory(runtimes);
+        StudioBundle.PrepareRuntimeDirectory(runtimes);
         using FileStream installationLock = StudioBundle.AcquireInstallationLock(runtimes, cancellationToken);
         string runtime = StudioBundle.InstallLocked(ReadResource(spec.Archive), spec, runtimes, cancellationToken);
         string dataDirectory = Path.Combine(studioDirectory, "data");
@@ -138,6 +139,9 @@ internal sealed class BundledStudio : IDisposable
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
             Uri address = await ready.Task.WaitAsync(TimeSpan.FromSeconds(45), cancellationToken).ConfigureAwait(false);
+            await VerifyReadyEndpoint(address, cancellationToken).ConfigureAwait(false);
+            if (process.HasExited)
+                throw new IOException("Studio exited during startup; the previous launcher was preserved.");
             try
             {
                 StudioBundle.WriteExternalLauncher(studioDirectory, spec);
@@ -154,6 +158,29 @@ internal sealed class BundledStudio : IDisposable
                     _process = null;
             StopProcess(process);
             throw;
+        }
+    }
+
+    internal static async Task VerifyReadyEndpoint(Uri address, CancellationToken cancellationToken)
+    {
+        using var handler = new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false };
+        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(5) };
+        try
+        {
+            using HttpResponseMessage response = await client.GetAsync(address, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode || response.Content.Headers.ContentType?.MediaType != "text/html")
+                throw new IOException("Studio could not load its interface; the previous launcher was preserved.");
+            if (string.IsNullOrWhiteSpace(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false)))
+                throw new IOException("Studio returned an empty interface; the previous launcher was preserved.");
+        }
+        catch (HttpRequestException)
+        {
+            // Do not put the private token-bearing URL in diagnostics.
+            throw new IOException("Studio's interface could not be reached; the previous launcher was preserved.");
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new IOException("Studio's interface did not respond in time; the previous launcher was preserved.");
         }
     }
 
