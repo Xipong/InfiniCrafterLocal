@@ -20,6 +20,7 @@ import shlex
 import sys
 from typing import Any, Callable
 from urllib import request as urlrequest
+from urllib.parse import urlsplit, urlunsplit
 
 from infini_local.services.visual_asset_pipeline import ImageOutputIOError, write_image_bytes
 
@@ -263,37 +264,75 @@ def server_is_configured(cfg: SdcppBackendConfig, command_template: str = "") ->
     return bool(cfg.server_url)
 
 
-def server_is_alive(server_url: str, health_paths: list[str], timeout: int = 2) -> bool:
-    if not server_url:
-        return False
+def server_is_alive(server_url: str, health_paths: list[str], timeout: int = 2, *, observation: dict[str, Any] | None = None) -> bool:
     from urllib import error as urlerror
+    routes: list[dict[str, Any]] = []
+    attempts = 0
+
+    def finish(alive: bool) -> bool:
+        if observation is not None:
+            observation.update(outcome="ready" if alive else "not_ready", attempts=attempts, routes=routes)
+        return alive
+
+    if not server_url:
+        return finish(False)
     for path in health_paths:
+        attempts += 1
+        route: dict[str, Any] = {"url": "", "outcome": "transport_failed", "httpStatus": None, "bodyShape": "not_read", "errorCategory": ""}
+        routes.append(route)
+        del routes[:-3]
         try:
             url = server_url.rstrip("/") + (path if path.startswith("/") else "/" + path)
+            try:
+                parts = urlsplit(url)
+                host = parts.hostname or ""
+                if ":" in host:
+                    host = "[" + host + "]"
+                authority = host + (":" + str(parts.port) if parts.port else "")
+                safe_path = parts.path if parts.path in {"/", "/health", "/sdapi/v1/sd-models"} else "/[redacted]"
+                route["url"] = urlunsplit((parts.scheme, authority, safe_path, "", ""))[:256]
+            except ValueError:
+                pass  # Diagnostics must not alter acceptance by the actual HTTP owner.
             req = urlrequest.Request(url, headers={"Accept": "application/json,*/*"}, method="GET")
             with urlrequest.urlopen(req, timeout=timeout) as resp:
-                if not 200 <= int(getattr(resp, "status", 200)) < 300:
+                status = int(getattr(resp, "status", 200))
+                route.update(httpStatus=status, outcome="http_error")
+                if not 200 <= status < 300:
+                    route["errorCategory"] = "http_status"
                     continue
                 body = resp.read(16384).decode("utf-8", errors="ignore")
+                try:
+                    parsed = json.loads(body)
+                except (TypeError, ValueError, RecursionError):
+                    parsed = None
+                shape = "empty" if not body else "json_object" if isinstance(parsed, dict) else "json_array" if isinstance(parsed, list) else "text"
+                route.update(bodyShape=shape, outcome="unrecognized_body")
+                if isinstance(parsed, dict) and parsed.get("status") in ("loading", "initializing", "not_ready"):
+                    route["outcome"] = "not_ready"
+                    route["bodyShape"] = "json_status_not_ready"
                 normalized_path = "/" + path.strip("/").lower()
                 if normalized_path == "/sdapi/v1/sd-models":
                     try:
-                        return isinstance(json.loads(body), list)
+                        alive = isinstance(json.loads(body), list)
+                        if alive:
+                            route["outcome"] = "ready"
+                        return finish(alive)
                     except (TypeError, ValueError):
                         continue
                 signature = body.lower()
                 if any(token in signature for token in ("stable-diffusion", "stable diffusion", "sd.cpp", "sdapi", "txt2img")):
-                    return True
-        except urlerror.HTTPError as e:
-            try:
-                if 200 <= int(getattr(e, "code", 0)) < 300:
-                    continue
-            except Exception:
-                pass
+                    route["outcome"] = "ready"
+                    return finish(True)
+        except urlerror.HTTPError as error:
+            route.update(httpStatus=int(error.code), outcome="http_error", errorCategory="http_status")
+            continue
+        except (urlerror.URLError, TimeoutError, ConnectionError):
+            route["errorCategory"] = "transport_error"
             continue
         except Exception:
+            route.update(outcome="probe_error", errorCategory="request_or_response_error")
             continue
-    return False
+    return finish(False)
 
 
 def build_server_command(cfg: SdcppBackendConfig, command_template: str = "") -> tuple[list[str] | str, bool]:

@@ -34,7 +34,7 @@ exports.publish = async ({github, context, core}) => {
     if (uploaded.data.name !== name || uploaded.data.state !== 'uploaded' || uploaded.data.size !== data.length || uploaded.data.digest !== expectedDigest)
       throw new Error('Uploaded asset metadata/digest mismatch; draft remains unpublished');
   }
-  await github.rest.repos.updateRelease({...repo, release_id:release.data.id, draft:false});
+  await github.rest.repos.updateRelease({...repo, release_id:release.data.id, tag_name:tag, draft:false});
 };
 
 async function admitPackage({github, context, core}, tag) {
@@ -65,17 +65,17 @@ function replacementInput(context) {
       !/^v\d+\.\d+\.\d+$/.test(i.tag || '') || !/^[0-9a-f]{40}$/.test(i.expected_old_tag || '') ||
       !/^[0-9a-f]{40}$/.test(i.target_sha || '') || i.target_sha !== context.sha ||
       !/^[1-9]\d*$/.test(i.release_id || '') || !/^[0-9a-f]{64}$/.test(i.expected_snapshot || '') ||
-      !['true','false'].includes(String(i.apply))) throw new Error('Invalid explicit replacement identity');
+      !['true','false'].includes(String(i.apply)) || !['true','false'].includes(String(i.confirm_asset_replacement))) throw new Error('Invalid explicit replacement identity');
   return i;
 }
-async function readReplacement(github, repo, i) {
+async function readReplacement(github, repo, i, requireIdentity = true) {
   const main = (await github.rest.git.getRef({...repo,ref:'heads/main'})).data.object;
   const tag = (await github.rest.git.getRef({...repo,ref:`tags/${i.tag}`})).data.object;
   const release = (await github.rest.repos.getRelease({...repo,release_id:Number(i.release_id)})).data;
   const assets = await github.paginate(github.rest.repos.listReleaseAssets,{...repo,release_id:release.id,per_page:100});
-  if (main.sha !== i.target_sha || tag.type !== 'commit' || release.tag_name !== i.tag || release.immutable)
+  if (requireIdentity && (main.sha !== i.target_sha || tag.type !== 'commit' || release.tag_name !== i.tag || release.immutable))
     throw new Error('Replacement main/tag/release identity changed or immutable');
-  return {tag:tag.sha,state:releaseState(release,assets)};
+  return {main:main.sha,tag:tag.sha,tagType:tag.type,state:releaseState(release,assets)};
 }
 function canonicalNames(tag) {
   return ['InfiniCrafterLocal.tmod',`InfiniCrafterLocal_${tag.slice(1)}_Source_and_LocalGenerator.zip`,
@@ -87,7 +87,7 @@ function rebuildBody(body, repo, tag, sha, run) {
   if ((first<0)!==(last<0) || (first>=0 && (last<first || original.indexOf(begin,first+begin.length)>=0 || original.indexOf(end,last+end.length)>=0)))
     throw new Error('Malformed rebuild section markers; preserve notes and stop');
   const assets=`https://github.com/${repo.owner}/${repo.repo}/releases/download/${tag}`;
-  const section=`${begin}\n## Verified rebuild\nUpdated ${new Date().toISOString()} at commit ${sha}, exact main CI ${run}. This rebuild supersedes earlier build/tag notices below or above. The tag, official package, tracked sources and bundled Studio now refer to this commit.\n\n[Checksums](${assets}/SHA256SUMS.txt) · [Build provenance](${assets}/build-provenance.json) · [Release provenance](${assets}/release-provenance.json). Prior assets remain under archive-<asset-id>- and existing previous- names; archived checksum entries use original filenames. Existing clones may retain the old tag. Packaging checks do not certify a full in-game/multiplayer session.\n${end}`;
+  const section=`${begin}\n## Verified rebuild\nUpdated ${new Date().toISOString()} at commit ${sha}, exact main CI ${run}. This rebuild supersedes earlier build/tag notices below or above. The tag, official package, tracked sources and bundled Studio now refer to this commit.\n\n[Checksums](${assets}/SHA256SUMS.txt) · [Build provenance](${assets}/build-provenance.json) · [Release provenance](${assets}/release-provenance.json). The download list contains only the six current build assets. Existing clones may retain the old tag. Packaging checks do not certify a full in-game/multiplayer session.\n${end}`;
   const updated=first<0 ? original+(original?'\n\n':'')+section : original.slice(0,first)+section+original.slice(last+end.length);
   if(updated.length>60000) throw new Error('Preserved notes plus rebuild section exceed safe release body bound');
   return updated;
@@ -99,7 +99,8 @@ exports.inspectReplacement = async ({github,context,core}) => {
   if (current.tag !== i.expected_old_tag || current.state.draft || stateHash(current.state) !== i.expected_snapshot)
     throw new Error('Expected published release snapshot/tag differs');
   const names = canonicalNames(i.tag);
-  if (names.some(n=>current.state.assets.filter(a=>a.name===n).length!==1)) throw new Error('Missing/duplicate canonical old assets');
+  if (current.state.assets.length!==names.length || names.some(n=>current.state.assets.filter(a=>a.name===n).length!==1))
+    throw new Error('Expected only the six canonical old assets; reconcile foreign/missing/duplicate assets');
   const backup = path.join(process.env.RUNNER_TEMP,'release-backup');
   fs.mkdirSync(backup,{recursive:false});
   for (const asset of current.state.assets) {
@@ -117,9 +118,18 @@ exports.inspectReplacement = async ({github,context,core}) => {
 exports.replace = async ({github,context,core}) => {
   const i = replacementInput(context);
   if (String(i.apply) !== 'true') { core.info('Read-only replacement validation; no release/tag writes'); return; }
+  if (String(i.confirm_asset_replacement) !== 'true') throw new Error('Explicit old-asset replacement confirmation required');
   if (!/^[1-9]\d*$/.test(process.env.BACKUP_ARTIFACT_ID || '') || !/^[0-9a-f]{64}$/.test(process.env.BACKUP_ARTIFACT_DIGEST || ''))
     throw new Error('Durable backup upload receipt required before mutation');
   const repo=context.repo, directory=path.join(process.env.RUNNER_TEMP,'release-assets');
+  const backupArtifact=(await github.rest.actions.getArtifact({...repo,artifact_id:Number(process.env.BACKUP_ARTIFACT_ID)})).data;
+  if (String(backupArtifact.id)!==process.env.BACKUP_ARTIFACT_ID || backupArtifact.expired
+      || backupArtifact.name!==`release-backup-${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}`
+      || backupArtifact.workflow_run?.id!==context.runId
+      || backupArtifact.digest!==`sha256:${process.env.BACKUP_ARTIFACT_DIGEST}`
+      || !(Date.parse(backupArtifact.expires_at)>Date.now()))
+    throw new Error('Backup artifact identity, digest or retention not verified');
+  core.info(`Verified recovery artifact ${backupArtifact.id}, expires ${backupArtifact.expires_at}; repository access rules apply.`);
   const backup=JSON.parse(fs.readFileSync(path.join(process.env.RUNNER_TEMP,'release-backup','snapshot.json'),'utf8'));
   const names=canonicalNames(i.tag);
   if (JSON.stringify(fs.readdirSync(directory).sort())!==JSON.stringify(names)) throw new Error('Unexpected new asset set');
@@ -130,7 +140,7 @@ exports.replace = async ({github,context,core}) => {
   const body=rebuildBody(backup.state.body,repo,i.tag,context.sha,process.env.CI_RUN);
   let expected=backup.state, expectedTag=i.expected_old_tag;
   const receipt={old:backup,target:context.sha,backupArtifactId:process.env.BACKUP_ARTIFACT_ID,
-    backupArtifactDigest:process.env.BACKUP_ARTIFACT_DIGEST,operations:[],status:'prepared'};
+    backupArtifactDigest:process.env.BACKUP_ARTIFACT_DIGEST,backupArtifactExpiresAt:backupArtifact.expires_at,operations:[],status:'prepared'};
   const save=()=>fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'replacement-recovery.json'),JSON.stringify(receipt,null,2));
   const guard=async()=>{
     const now=await readReplacement(github,repo,i);
@@ -141,7 +151,7 @@ exports.replace = async ({github,context,core}) => {
   };
   const updateRelease=async fields=>{
     await guard();
-    const result=(await github.rest.repos.updateRelease({...repo,release_id:expected.id,...fields})).data;
+    const result=(await github.rest.repos.updateRelease({...repo,release_id:expected.id,tag_name:i.tag,...fields})).data;
     const anticipated={...expected,updated:result.updated_at};
     for(const [key,value] of Object.entries(fields)) anticipated[key==='target_commitish'?'target':key]=value;
     const observed=releaseState(result,expected.assets.map(a=>({...a,updated_at:a.updated})));
@@ -150,19 +160,21 @@ exports.replace = async ({github,context,core}) => {
   };
   try {
     if(stateHash(expected)!==i.expected_snapshot || backup.tag!==expectedTag) throw new Error('Backup snapshot mismatch');
-    // Check all archive names before taking the release temporarily offline.
-    for(const name of names){const old=expected.assets.find(a=>a.name===name);if(!old || expected.assets.some(a=>a.name===`archive-${old.id}-${name}`))throw new Error('Archive name/asset collision');}
+    // Temporary names exist only in the maintenance draft, never in a published release.
+    if(expected.assets.length!==names.length || names.some(name=>expected.assets.filter(a=>a.name===name).length!==1))
+      throw new Error('Expected only canonical old assets before maintenance');
+    const oldAssets=expected.assets.map(a=>({...a}));
     save();
     await updateRelease({draft:true});receipt.operations.push('maintenance-draft');save();
     for(const name of names){
       await guard();const old=expected.assets.find(a=>a.name===name);
-      const renamed=(await github.rest.repos.updateReleaseAsset({...repo,asset_id:old.id,name:`archive-${old.id}-${name}`})).data;
-      if(renamed.id!==old.id || renamed.name!==`archive-${old.id}-${name}` || renamed.digest!==old.digest || renamed.size!==old.size)throw new Error('Archive rename mismatch');
+      const renamed=(await github.rest.repos.updateReleaseAsset({...repo,asset_id:old.id,name:`replacement-old-${old.id}-${name}`})).data;
+      if(renamed.id!==old.id || renamed.name!==`replacement-old-${old.id}-${name}` || renamed.digest!==old.digest || renamed.size!==old.size)throw new Error('Temporary old-asset rename mismatch');
       expected.assets=expected.assets.map(a=>a.id===old.id?releaseState({},[renamed]).assets[0]:a);
       // Asset mutations can update the parent timestamp; compare all other fields.
       const now=await readReplacement(github,repo,i);expected.updated=now.state.updated;
-      if(now.tag!==expectedTag || stateHash(now.state)!==stateHash(expected))throw new Error('Unexpected mutation during archive rename');
-      receipt.operations.push({archive:old.id,name:renamed.name});save();
+      if(now.tag!==expectedTag || stateHash(now.state)!==stateHash(expected))throw new Error('Unexpected mutation during temporary rename');
+      receipt.operations.push({stagedOld:old.id,name:renamed.name});save();
     }
     for(const asset of prepared){
       await guard();const uploaded=(await github.rest.repos.uploadReleaseAsset({...repo,release_id:expected.id,name:asset.name,data:asset.bytes,
@@ -173,6 +185,19 @@ exports.replace = async ({github,context,core}) => {
       if(now.tag!==expectedTag || stateHash(now.state)!==stateHash(expected))throw new Error('Unexpected mutation during upload');
       receipt.operations.push({upload:uploaded.id,name:asset.name,digest:asset.digest});save();
     }
+    // New bytes are all verified before deleting exactly the snapshotted old IDs.
+    // An uncertain result is observed in the catch receipt; never repeat the deletion.
+    for(const old of oldAssets){
+      await guard();
+      receipt.operations.push({deleteRequested:old.id,digest:old.digest});save();
+      await github.rest.repos.deleteReleaseAsset({...repo,asset_id:old.id});
+      expected.assets=expected.assets.filter(a=>a.id!==old.id);
+      const now=await readReplacement(github,repo,i);expected.updated=now.state.updated;
+      if(now.tag!==expectedTag || stateHash(now.state)!==stateHash(expected))throw new Error('Unexpected mutation during old-asset deletion');
+      receipt.operations.push({deleted:old.id});save();
+    }
+    if(expected.assets.length!==prepared.length || prepared.some(a=>expected.assets.filter(b=>b.name===a.name && b.digest===a.digest && b.size===a.size).length!==1))
+      throw new Error('Final canonical asset set differs');
     await guard();
     receipt.status='tag-move-requested';save();
     await github.rest.git.updateRef({...repo,ref:`tags/${i.tag}`,sha:context.sha,force:true});
@@ -183,7 +208,7 @@ exports.replace = async ({github,context,core}) => {
     await guard();receipt.status='published';save();
   } catch(error) {
     receipt.status='stopped-needs-reconciliation';receipt.error=error.message;
-    try { receipt.observedAfterFailure=await readReplacement(github,repo,i); }
+    try { receipt.observedAfterFailure=await readReplacement(github,repo,i,false); }
     catch(observationError) { receipt.observationError=observationError.message; }
     save();throw error;
   }

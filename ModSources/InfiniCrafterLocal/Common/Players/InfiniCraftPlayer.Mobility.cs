@@ -274,15 +274,25 @@ public sealed partial class InfiniCraftPlayer
             _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityAuthority");
             return false;
         }
-        int sx = Player.SpawnX >= 0 ? Player.SpawnX : Main.spawnTileX;
-        int sy = Player.SpawnY >= 0 ? Player.SpawnY : Main.spawnTileY;
-        if (sx <= 0 || sy <= 0)
+        bool validBed = Player.SpawnX > 0 && Player.SpawnY > 0
+            && Player.SpawnX < Main.maxTilesX - 1 && Player.SpawnY < Main.maxTilesY - 1
+            && Terraria.Player.CheckSpawn(Player.SpawnX, Player.SpawnY);
+        int sx = validBed ? Player.SpawnX : Main.spawnTileX;
+        int sy = validBed ? Player.SpawnY : Main.spawnTileY;
+        if (sx <= 0 || sy <= 0 || sx >= Main.maxTilesX - 1 || sy >= Main.maxTilesY - 1)
         {
             _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilitySpawnMissing");
             return false;
         }
         Vector2 destination = new(sx * 16f + 8f - Player.width / 2f, sy * 16f - Player.height);
+        if (!IsBlinkWithinWorld(destination))
+        {
+            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilitySpawnMissing");
+            return false;
+        }
         Player.Teleport(destination, 0);
+        Player.velocity = Vector2.Zero;
+        Player.fallStart2 = Player.fallStart;
         InfiniCrafterLocal.Common.Services.InfiniRuntimeAuthority.SyncTeleport(Player, destination);
         return true;
     }
@@ -314,13 +324,18 @@ public sealed partial class InfiniCraftPlayer
             _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityRangeMissing");
             return false;
         }
+        if (!float.IsFinite(target.X) || !float.IsFinite(target.Y))
+        {
+            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityUnsafe");
+            return false;
+        }
         int rangeTiles = Math.Clamp(gameplay.MobilityRangeTiles, 1, 120);
         Vector2 delta = target - Player.Center;
         float max = rangeTiles * 16f;
         if (delta.Length() > max)
             target = Player.Center + delta.SafeNormalize(Vector2.UnitX * Player.direction) * max;
         Vector2 destination = new(target.X - Player.width / 2f, target.Y - Player.height / 2f);
-        if (gameplay.MobilitySafeTileOnly && !IsSafeBlinkDestination(destination))
+        if (!IsBlinkWithinWorld(destination) || gameplay.MobilitySafeTileOnly && !IsSafeBlinkDestination(destination))
         {
             _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityUnsafe");
             return false;
@@ -329,6 +344,12 @@ public sealed partial class InfiniCraftPlayer
         InfiniCrafterLocal.Common.Services.InfiniRuntimeAuthority.SyncTeleport(Player, destination);
         return true;
     }
+
+    internal bool IsBlinkWithinWorld(Vector2 destination)
+        => float.IsFinite(destination.X) && float.IsFinite(destination.Y)
+            && destination.X >= 16f && destination.Y >= 16f
+            && destination.X + Player.width < (Main.maxTilesX - 1) * 16f
+            && destination.Y + Player.height < (Main.maxTilesY - 1) * 16f;
 
     private bool IsSafeBlinkDestination(Vector2 destination)
     {

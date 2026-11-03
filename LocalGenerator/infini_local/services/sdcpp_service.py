@@ -53,6 +53,9 @@ class SdcppServerState:
     last_log_file: str = ""
     last_start_error: str = ""
     last_exit: dict[str, Any] = field(default_factory=dict)
+    probe_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    last_probe_started: float = 0.0
+    last_probe: dict[str, Any] = field(default_factory=lambda: {"outcome": "not_probed", "attempts": 0, "routes": []})
 
 
 LogEvent = Callable[[str, str, Any], None]
@@ -242,6 +245,7 @@ def debug_snapshot(
         "version": app_version,
         "serverUrl": server_url,
         "serverAlive": server_is_alive,
+        "lastProbe": dict(state.last_probe),
         "serverConfigured": server_is_configured,
         "autostart": server_autostart,
         "showConsole": show_console,

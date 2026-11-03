@@ -44,6 +44,12 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("sustain admission beam cancellation before native events", () => SustainCancellationPrecedesNativeEvents(true)),
+            ("sustain admission composed cancellation before native events", () => SustainCancellationPrecedesNativeEvents(false)),
+            ("sustain admission beam payment before periodic damage", () => SustainPaymentPrecedesNativePeriodicDamage(true)),
+            ("sustain admission composed payment before periodic damage", () => SustainPaymentPrecedesNativePeriodicDamage(false)),
+            ("sustain admission clock and authority", SustainSuccessfulPaymentKeepsClockAndAuthority),
+            ("sustain admission uncontrolled event positive", SustainFreeProjectileKeepsUncontrolledEvents),
             ("parent metadata native item clone", ParentMetadataSurvivesNativeClone),
             ("parent metadata definition transport", ParentMetadataSurvivesDefinitionTransport),
             ("parent metadata placed world save", ParentMetadataSurvivesPlacedWorldSave),
@@ -533,6 +539,9 @@ internal static partial class EngineRuntimeChecks
             ("current authored equipment values reach runtime", CurrentAuthoredEquipmentValuesReachRuntime),
             ("signed accessory defense reaches player", SignedAccessoryDefenseReachesPlayer),
             ("blink authored range reaches teleport", BlinkAuthoredRangeReachesTeleport),
+            ("mobility bounds native consumption", MobilityBoundsRejectBeforeNativeConsumption),
+            ("mobility event bounds and unsafe semantics", EventMobilityBoundsPreserveCooldownAndUnsafeSolids),
+            ("mobility recall native bed validity", RecallUsesNativeBedValidityAndRejectsInvalidSpawn),
             ("mobility consumption pure native outcome", NativePureMobilityConsumptionFollowsUseOutcome),
             ("mobility consumption mixed native effects once", NativeMixedMobilityRefusalPreservesOtherEffectsOnce),
             ("named item effects select native use and quick use", NamedItemEffectsSelectNativeUseAndQuickUse),
