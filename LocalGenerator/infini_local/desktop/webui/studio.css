@@ -544,6 +544,8 @@ body:has(.save-tray:not([hidden])) #workspace { padding-bottom: 124px; }
   transition: opacity var(--motion-panel) var(--ease-out), transform var(--motion-panel) var(--ease-out);
 }
 .toast > svg { width: 17px; height: 17px; margin-top: 3px; color: var(--accent-ink); }
+.toast { border-left: 5px solid #247a42; background: #e9f8d8; color: #193320; font-weight: 600; }
+.toast.error { border-left-color: #bd3030; background: #ffe1dc; color: #681d1d; }
 .toast.error > svg { color: var(--danger); }
 .toast button { min-width: 28px; min-height: 28px; padding: 0; margin: -2px -4px 0 auto; background: transparent; color: var(--muted); border-radius: 5px; font-size: 20px; }
 .toast-copy { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }

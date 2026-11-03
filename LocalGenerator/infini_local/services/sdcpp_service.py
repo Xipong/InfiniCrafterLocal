@@ -48,6 +48,7 @@ class SdcppServerState:
     cleanup_registered: bool = False
     signal_handlers_registered: bool = False
     previous_signal_handlers: dict[int, Any] = field(default_factory=dict, repr=False)
+    lifecycle: str = "unknown"
     last_command: str = ""
     last_log_file: str = ""
     last_start_error: str = ""
@@ -134,7 +135,7 @@ def cleanup_server_process(state: SdcppServerState, log_event: LogEvent, reason:
         proc = state.process
         if proc is None:
             return
-        state.process = None
+        state.lifecycle = "stopping"
         try:
             if proc.poll() is None:
                 log_event("info", "terminating stable-diffusion.cpp server", {"reason": reason, "pid": getattr(proc, "pid", None)})
@@ -151,7 +152,15 @@ def cleanup_server_process(state: SdcppServerState, log_event: LogEvent, reason:
         except (OSError, subprocess.SubprocessError) as e:
             log_event("warn", "stable-diffusion.cpp cleanup failed", {"reason": reason, "error": repr(e)})
         finally:
-            _close_process_log_handle(proc)
+            # Do not forget a child whose termination is unconfirmed.
+            try:
+                exited = proc.poll() is not None
+            except (OSError, subprocess.SubprocessError):
+                exited = False
+            state.lifecycle = ("failed" if reason in {"startup_exited", "startup_timeout"} else "stopped") if exited else "unknown"
+            if exited:
+                state.process = None
+                _close_process_log_handle(proc)
 
 
 def install_cleanup_handlers(state: SdcppServerState, cleanup_process: CleanupProcess) -> None:
@@ -237,6 +246,7 @@ def debug_snapshot(
         "autostart": server_autostart,
         "showConsole": show_console,
         "processAlive": proc_alive,
+        "processLifecycle": ("exited" if proc_returncode is not None else state.lifecycle),
         "processReturncode": proc_returncode,
         "serverExe": server_exe,
         "model": model,
@@ -282,6 +292,7 @@ def ensure_server(
     with state.lock:
         state.last_start_error = ""
         if server_is_alive():
+            state.lifecycle = "ready" if state.process is not None else "external"
             return True
         if not server_autostart:
             return False
@@ -293,10 +304,14 @@ def ensure_server(
                     # Process exists but health failed; give it a brief moment before restarting.
                     time.sleep(0.5)
                     if server_is_alive():
+                        state.lifecycle = "ready"
                         return True
             except Exception:
                 pass
             cleanup_process("restart_unhealthy")
+            if state.process is not None:
+                return False  # No replacement before confirmed exit.
+        state.lifecycle = "starting"
         cmd, shell = build_command()
         state.last_command = stringify_cmd(cmd)
         log_path = Path(server_log_file) if server_log_file else (cache_dir / "sdcpp_server.log")
@@ -369,12 +384,14 @@ def ensure_server(
                     log_handle.close()
                 except (OSError, ValueError):
                     pass
+            state.lifecycle = "failed"
             state.last_start_error = repr(e)
             log_event("warn", "failed to start stable-diffusion.cpp server", {"error": state.last_start_error, "cmd": state.last_command, "logFile": state.last_log_file})
             return False
         deadline = time.time() + max(5, startup_timeout)
         while time.time() < deadline:
             if server_is_alive():
+                state.lifecycle = "ready"
                 log_event("info", "stable-diffusion.cpp server is ready", {"url": server_url, "logFile": state.last_log_file})
                 return True
             if state.process is not None and state.process.poll() is not None:
