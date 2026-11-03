@@ -27,7 +27,7 @@
   const shortHelp = {
     INFINI_IMAGE_PARALLEL:'Для облака: изображения одновременно с VFX Designer. Выключи при нехватке видеопамяти локальной модели. Если сохранён лимит 1, изображения идут по одному — поставь 2–4 ниже. Сохранить → перезапустить сервер.',
     INFINI_IMAGE_MAX_CONCURRENCY:'1–4 одновременных изображения, по умолчанию 4. Выключенная галочка всегда ограничивает запросы одним.',
-    INFINI_LLM_PROVIDER:'Кто придумывает свойства и пишет механику предмета.', INFINI_LMSTUDIO_URL:'Локальный OpenAI-compatible сервер. Обычно порт 1234.', INFINI_LMSTUDIO_MODEL:'Точное имя модели или auto — выбор на стороне сервера.', INFINI_OPENROUTER_API_KEY:'При сохранении ключ записывается в локальный config.env. В профили не копируется.', INFINI_OPENAI_COMPAT_API_KEY:'Не API-ключ Codex. Только для выбранного совместимого сервиса.', INFINI_PROMPT_STYLE:'Меняет художественное направление, а не модель или механику.', INFINI_LLM_REASONING_MODE:'Дополнительная самопроверка. Доступность зависит от модели.', INFINI_IMAGE_BACKEND:'Локальный движок, подписка или внешний API.', INFINI_SDCPP_SERVER_URL:'Адрес локального сервера изображений, не этой студии.', INFINI_SDCPP_SERVER_AUTOSTART:'Внешний — только URL. Управляемый — программа и файлы моделей на этом ПК.', INFINI_SDCPP_SERVER_EXE:'Путь к sd-server.exe на этом компьютере.', INFINI_SDCPP_MODEL:'Файл основной FLUX / Z-Image модели, обычно GGUF.', INFINI_SDCPP_LLM:'Текстовый энкодер, совместимый с основной моделью.', INFINI_SDCPP_VAE:'Декодер, совместимый с основной моделью.', INFINI_SDCPP_LORA_FILE:'Выбери существующий файл художественного адаптера.', INFINI_SDCPP_LORA_WEIGHT:'Для pixel-art адаптера начни с 0.20–0.30.', INFINI_BG_COLOR:'Прозрачный — native alpha. Другие цвета — chroma-key.', INFINI_SPRITE_DOWNSCALE_FILTER:'BOX — базовый фильтр. Сброс также включит premultiplied resize.', INFINI_HOST:'127.0.0.1 — этот ПК; 0.0.0.0 — принимать подключения из сети.', INFINI_MP_ASSET_TRANSPORT:'Внутри Terraria — без отдельного публичного HTTP-адреса.', INFINI_TRACE_PROMPTS:'Полный локальный журнал растёт до ручной очистки.'
+    INFINI_LLM_PROVIDER:'Кто придумывает свойства и пишет механику предмета.', INFINI_LMSTUDIO_URL:'Локальный OpenAI-compatible сервер. Обычно порт 1234.', INFINI_LMSTUDIO_MODEL:'Точное имя модели или auto — выбор на стороне сервера.', INFINI_OPENROUTER_API_KEY:'При сохранении ключ записывается в локальный config.env. В профили не копируется.', INFINI_OPENAI_COMPAT_API_KEY:'Не API-ключ Codex. Только для выбранного совместимого сервиса.', INFINI_PROMPT_STYLE:'Меняет художественное направление, а не модель или механику.', INFINI_LLM_REASONING_MODE:'Дополнительная самопроверка. Доступность зависит от модели.', INFINI_IMAGE_BACKEND:'Локальный движок, подписка или внешний API.', INFINI_SDCPP_SERVER_URL:'Адрес локального сервера изображений, не этой студии.', INFINI_SDCPP_SERVER_AUTOSTART:'Самостоятельный запуск: Studio подключается к указанному адресу и не запускает сервер. Управляемый запуск: генератор запускает сервер сам.', INFINI_SDCPP_SERVER_EXE:'Путь к sd-server.exe на этом компьютере.', INFINI_SDCPP_MODEL:'Файл основной FLUX / Z-Image модели, обычно GGUF.', INFINI_SDCPP_LLM:'Текстовый энкодер, совместимый с основной моделью.', INFINI_SDCPP_VAE:'Декодер, совместимый с основной моделью.', INFINI_SDCPP_LORA_FILE:'Выбери существующий файл художественного адаптера.', INFINI_SDCPP_LORA_WEIGHT:'Для pixel-art адаптера начни с 0.20–0.30.', INFINI_BG_COLOR:'Прозрачный — native alpha. Другие цвета — chroma-key.', INFINI_SPRITE_DOWNSCALE_FILTER:'BOX — базовый фильтр. Сброс также включит premultiplied resize.', INFINI_HOST:'127.0.0.1 — этот ПК; 0.0.0.0 — принимать подключения из сети.', INFINI_MP_ASSET_TRANSPORT:'Внутри Terraria — без отдельного публичного HTTP-адреса.', INFINI_TRACE_PROMPTS:'Полный локальный журнал растёт до ручной очистки.'
   };
   const optionNames = {
     INFINI_LANGUAGE:{ru:'Русский',en:'English'},
@@ -287,6 +287,7 @@
     for (const notice of remote.notifications || []) {
       if (state.seenNotifications.has(notice.id)) continue;
       state.seenNotifications.add(notice.id);
+      if (first) continue; // Do not replay old lifecycle notifications on opening.
       toast([notice.title,notice.message].filter(Boolean).map(text => t(text)).join(' · '), notice.level !== 'info');
     }
     state.fields=makeFields(remote);
@@ -411,7 +412,8 @@
     }
     const div = document.createElement('div'); div.setAttribute('role',error ? 'alert':'status'); div.className = `toast${error ? ' error':''}`;
     div.innerHTML = `${icon(error ? 'alert':'check')}<span class="toast-copy">${esc(message)}</span><button aria-label="${t("Закрыть уведомление")}">×</button>`;
-    div.querySelector('button').onclick = () => div.remove(); $('#toasts').replaceChildren(div);
+    div.querySelector('button').onclick = () => div.remove(); const stack=$('#toasts');stack.append(div);
+    while(stack.children.length > 4) stack.firstElementChild.remove();
     if (!error) setTimeout(() => div.remove(),9000);
   }
   function heading(page) {
@@ -436,7 +438,7 @@
     const backend = value('INFINI_IMAGE_BACKEND','sdcpp');
     const modelKey = {sdcpp:'INFINI_SDCPP_MODEL',image_api:'INFINI_IMAGE_API_MODEL',openai_codex:'INFINI_CODEX_IMAGE_MODEL'}[backend];
     const model = backend === 'sdcpp' ? basename(value(modelKey)):value(modelKey).trim();
-    if (backend === 'sdcpp' && value('INFINI_SDCPP_SERVER_AUTOSTART') !== '1') return {name:t('sd.cpp · внешний сервер'),detail:addressLabel(value('INFINI_SDCPP_SERVER_URL'))};
+    if (backend === 'sdcpp' && value('INFINI_SDCPP_SERVER_AUTOSTART') !== '1') return {name:t('sd.cpp — запускаете самостоятельно'),detail:addressLabel(value('INFINI_SDCPP_SERVER_URL'))};
     if (backend === 'a1111' || backend === 'comfyui') return {name:t(optionNames.INFINI_IMAGE_BACKEND[backend]),detail:addressLabel(value(backend === 'a1111' ? 'INFINI_A1111_URL':'INFINI_COMFYUI_URL'))};
     return {name:t(optionNames.INFINI_IMAGE_BACKEND[backend]) || backend,detail:backend === 'off' ? t('Генерация рисунка отключена'):model || t('Модель не указана')};
   }
@@ -485,7 +487,7 @@
       if(value('INFINI_SDCPP_SERVER_AUTOSTART') === '1') {
         if(!value('INFINI_SDCPP_SERVER_EXE')) gaps.push({title:t('Не выбрана программа sd.cpp'),detail:t('Указать путь к sd-server'),key:'INFINI_SDCPP_SERVER_EXE'});
         if(!value('INFINI_SDCPP_MODEL')) gaps.push({title:t('Не выбрана модель изображения'),detail:t('Указать файл локальных весов'),key:'INFINI_SDCPP_MODEL'});
-      } else if(!value('INFINI_SDCPP_SERVER_URL')) gaps.push({title:t('Не указан адрес sd.cpp'),detail:t('Подключить внешний сервер изображений'),key:'INFINI_SDCPP_SERVER_URL'});
+      } else if(!value('INFINI_SDCPP_SERVER_URL')) gaps.push({title:t('Не указан адрес sd.cpp'),detail:t('Укажите адрес sd.cpp, который запускаете самостоятельно'),key:'INFINI_SDCPP_SERVER_URL'});
     }
     if(backend === 'image_api' && !value('INFINI_IMAGE_API_BASE_URL')) gaps.push({title:t('Не указан адрес Image API'),detail:t('Настроить источник изображений'),key:'INFINI_IMAGE_API_BASE_URL'});
     return gaps;
@@ -567,7 +569,7 @@
     let control;
     if (derived) control=`<output id="${id}" data-derived="${key}" tabindex="0" aria-describedby="help-${key}">${esc(derived.value)}</output><span class="field-note">${esc(derived.note)}</span>`;
     else if (field.secret) control = `<input id="${id}" data-field="${key}" type="password" value="${esc(val)}" autocomplete="off" spellcheck="false" data-secret="true" aria-describedby="help-${key}"><button class="reveal" data-reveal="${key}" type="button" aria-label="${t("Показать ключ")}" aria-pressed="false">${icon('eye')}</button>`;
-    else if (key === 'INFINI_SDCPP_SERVER_AUTOSTART') control = `<select id="${id}" data-field="${key}" aria-describedby="help-${key}"><option value="0" ${val === '0' ? 'selected':''}>${t("Внешний · уже запущен")}</option><option value="1" ${val === '1' ? 'selected':''}>${t("Управляемый · запускать здесь")}</option>${!['0','1'].includes(val) ? `<option selected value="${esc(val)}">${esc(val)}</option>`:''}</select>`;
+    else if (key === 'INFINI_SDCPP_SERVER_AUTOSTART') control = `<select id="${id}" data-field="${key}" aria-describedby="help-${key}"><option value="0" ${val === '0' ? 'selected':''}>${t("sd.cpp — запускаете самостоятельно")}</option><option value="1" ${val === '1' ? 'selected':''}>${t("Управляемый · запускать здесь")}</option>${!['0','1'].includes(val) ? `<option selected value="${esc(val)}">${esc(val)}</option>`:''}</select>`;
     else if (isBool) control = `<label class="toggle-control"><input id="${id}" type="checkbox" data-field="${esc(key)}" ${val === '1' ? 'checked':''} aria-describedby="help-${key}"><span class="toggle-track"></span><span class="toggle-label">${val === '1' ? t('Включено'):t('Выключено')}</span></label>`;
     else if (field.multiline || /COMMAND_TEMPLATE|EXTRA_ARGS/.test(key)) control = `<textarea id="${id}" data-field="${key}" spellcheck="false" aria-describedby="help-${key}">${esc(val)}</textarea>`;
     else if (options.length && !/_MODEL$/.test(key)) {
@@ -578,6 +580,7 @@
       if (field.secret) control += `<button class="reveal" data-reveal="${key}" type="button" aria-label="${t("Показать ключ")}" aria-pressed="false">${icon('eye')}</button>`;
       if (browse && !field.synthetic) control += `<button class="browse" data-browse="${key}" data-browse-type="${browse}" type="button" title="${t("Выбрать на этом компьютере")}" aria-label="${t("Выбрать файл:")} ${esc(title)}">${icon('folder')}</button>`;
     }
+    if (key === 'INFINI_SDCPP_SERVER_EXTRA_ARGS') control += `<button class="text-button" type="button" data-ui="clear-sdcpp-args">${t('Сбросить доп. аргументы')}</button>`;
     if (key === 'INFINI_SDCPP_SERVER_EXE') control += `<span class="field-note"><a class="text-button" href="https://github.com/leejet/stable-diffusion.cpp/releases/latest" target="_blank" rel="noopener noreferrer" title="${t('Официальные сборки sd.cpp на GitHub')}">${t('Скачать sd.cpp')} ${icon('arrow')}</a></span>`;
     return `<div class="field-row${state.dirty.has(key) ? ' is-dirty':''}" data-field-row="${key}"><div class="field-copy"><div class="field-label-line"><label for="${id}">${esc(title)}</label><button class="field-help-toggle" data-help-field="${key}" type="button" aria-label="${t("Подробности:")} ${esc(title)}" aria-expanded="${help}">?</button></div><div class="field-key${help ? '':' hidden-key'}">${key}</div><p class="field-help" id="help-${key}">${esc(t(help ? field.help || shortHelp[key] || t('Параметр локального генератора. Значение сохраняется без преобразования.') : shortHelp[key] || ''))}</p>${browse && !field.secret ? `<span class="field-file" data-file-basename="${key}" title="${esc(val)}" ${val.trim() ? '':'hidden'}>${esc(basename(val))}</span>`:''}</div><div class="field-control${field.secret || browse ? ' has-extra':''}">${control}${inactive && !derived ? `<span class="field-note" data-inactive-source>${esc(inactive)}</span>`:''}</div></div>`;
   }
@@ -654,7 +657,7 @@
         summaryMetric(t('Палитра'),sprite.colors,value('INFINI_PIXEL_POSTERIZE') === '1' ? t('Постеризация включена'):t('Исходные цвета сохраняются'),'sliders');
     } else if(page === 'models') {
       const managed=backend === 'sdcpp' && value('INFINI_SDCPP_SERVER_AUTOSTART') === '1',lora=basename(value('INFINI_SDCPP_LORA_FILE'));
-      metrics=summaryMetric(t('Управление моделями'),managed ? t('Из этой студии'):backend === 'sdcpp' ? t('Внешний sd.cpp'):t('Другой источник'),managed ? basename(value('INFINI_SDCPP_MODEL')) || t('Основная модель не указана'):backend === 'sdcpp' ? t('Основные веса выбирает сервер'):image.name,'stack',' summary-primary')+
+      metrics=summaryMetric(t('Управление моделями'),managed ? t('Из этой студии'):backend === 'sdcpp' ? t('Самостоятельный запуск sd.cpp'):t('Другой источник'),managed ? basename(value('INFINI_SDCPP_MODEL')) || t('Основная модель не указана'):backend === 'sdcpp' ? t('Основные веса выбирает сервер'):image.name,'stack',' summary-primary')+
         summaryMetric(t('Адаптер LoRA'),backend !== 'sdcpp' ? t('Не используется'):lora || t('Не выбран'),backend !== 'sdcpp' ? lora ? t("Сохранено: {0}", lora):t('sd.cpp не используется') : lora ? t("Сила: {0}", chosen('INFINI_SDCPP_LORA_WEIGHT','—')):t('Без художественного адаптера'),'sliders')+
         summaryMetric(t('Сервер изображений'),backend === 'sdcpp' ? addressLabel(value('INFINI_SDCPP_SERVER_URL')):image.name,t('Выбор источника — в разделе «Изображения»'),'network');
     } else if(page === 'multiplayer') {
@@ -696,7 +699,7 @@
       ['text','providers',t('Текст и механика'),provider.name,provider.detail],
       ['image','images',t('Источник изображения'),image.name,image.detail],
       ['pixel','sprites',t('Спрайты и цвет'),sprite.name,sprite.detail],
-      ['stack','models',t('Модели и LoRA'),value('INFINI_IMAGE_BACKEND') !== 'sdcpp' ? t('sd.cpp не используется'):basename(value('INFINI_SDCPP_LORA_FILE')) || t('LoRA не выбрана'),value('INFINI_IMAGE_BACKEND') !== 'sdcpp' ? t("Текущий источник: {0}", image.name):value('INFINI_SDCPP_SERVER_AUTOSTART') === '1' ? t('Управляемый запуск sd.cpp'):t('Основные модели выбирает внешний sd.cpp')],
+      ['stack','models',t('Модели и LoRA'),value('INFINI_IMAGE_BACKEND') !== 'sdcpp' ? t('sd.cpp не используется'):basename(value('INFINI_SDCPP_LORA_FILE')) || t('LoRA не выбрана'),value('INFINI_IMAGE_BACKEND') !== 'sdcpp' ? t("Текущий источник: {0}", image.name):value('INFINI_SDCPP_SERVER_AUTOSTART') === '1' ? t('Управляемый запуск sd.cpp'):t('Основные модели выбираете при самостоятельном запуске sd.cpp')],
       ['network','multiplayer',t('Совместная игра'),state.lan ? 'LAN / Radmin':t('Этот компьютер'),value('INFINI_MP_ASSET_TRANSPORT') === 'http' ? t('Доставка спрайтов по HTTP'):t('Доставка спрайтов внутри Terraria')],
       ['pulse','diagnostics',t('Диагностика'),value('INFINI_TRACE_PROMPTS') === '1' ? t('Запись промптов включена'):t('Запись промптов выключена'),t("Лимит просмотра: {0} событий", chosen('INFINI_TRACE_EVENTS_TAIL','—'))]
     ];
@@ -716,15 +719,15 @@
   }
   function renderConfigure() {
     const selected=state.presetChoice ?? value('INFINI_GUI_PIPELINE_PRESET');
-    const presetEntries=[...Object.keys(state.remote.presets || {}),...Object.keys(state.remote.userPresets || {}).map(name=>`Мой: ${name}`)];
+    const presetEntries=[...Object.keys(state.remote.userPresets || {}).map(name=>`Мой: ${name}`),...Object.keys(state.remote.presets || {})];
     const cards=configureSummaryCards();
     $('#workspace').innerHTML=`${heading('configure')}<div class="settings-layout"><div class="settings-main"><section class="preset-sheet profile-sheet"><div class="profile-heading"><span class="profile-symbol">${icon('sliders')}</span><div><span class="eyebrow">${t("Текущая конфигурация")}</span><h2 id="current-profile-name">${esc(presetLabel(value('INFINI_GUI_PIPELINE_PRESET')))}</h2></div></div><div class="preset-selector"><select id="preset-select" aria-label="${t("Профиль настроек")}"><option value="">${t("Выбери профиль…")}</option>${presetEntries.map(name=>`<option value="${esc(name)}" ${name === selected ? 'selected':''}>${esc(presetLabel(name))}</option>`).join('')}</select><button class="button" data-ui="apply-preset">${t("Сравнить и применить")} ${icon('arrow')}</button></div><div class="profile-foot"><p>${t("Применение профиля меняет черновик. Ключи остаются твоими.")}</p><button class="text-button" data-ui="save-preset">${t("Сохранить как профиль")} ${icon('save')}</button></div></section><div class="section-heading"><h2>${t("Что настроено сейчас")}</h2><span class="meta" id="configure-selection-status">${state.dirty.size || state.lan !== state.baselineLan ? t('Черновик этой вкладки'):t('Сохранённая конфигурация')}</span></div><div class="configure-index">${cards.map(([glyph,route,title,summary,detail])=>`<a class="index-row" href="#${route}" data-flow-card><div class="index-card-top"><span class="index-number">${icon(glyph)}</span><h3>${title}</h3>${icon('arrow')}</div><strong data-config-value="${route}">${esc(summary)}</strong><p data-config-detail="${route}">${esc(detail)}</p></a>`).join('')}</div><section class="recommendation-row"><span class="recommendation-icon">${icon('refresh')}</span><div><h2>${t("Рекомендации к настройкам")}</h2><p id="defaults-summary">${esc(defaultsSummary())}</p></div><button class="text-button" data-ui="defaults-update">${t("Посмотреть")} ${icon('arrow')}</button></section>${disclosure('all-settings',t('Все параметры одним списком'),state.fields,t('Все настройки config.env, включая служебные поля и параметры других источников.'))}</div>${aside('configure')}</div>`;
   }
   function pageExtras(page) {
     if(page === 'providers' && value('INFINI_LLM_PROVIDER') === 'openai_codex' || page === 'images' && value('INFINI_IMAGE_BACKEND') === 'openai_codex') return `<section class="account-panel"><div class="account-panel-heading"><h2>${icon('work')}${t("Аккаунт ChatGPT / Codex")}</h2><span class="small-badge" data-account-auth>${state.remote.account?.authenticated ? t('Вход выполнен'):t('Требуется вход')}</span></div><p>${t("Вход по подписке. Текст и изображения используют отдельные модели.")}</p><div class="page-actions"><button class="button" data-action="codexLogin">${t("Войти в Codex")} ${icon('arrow')}</button><button class="button" data-action="codexStatus">${t("Статус аккаунта")}</button><button class="text-button" data-action="codexLogout">${t("Выйти")}</button>${page === 'providers' ? `<button class="button" data-action="codexCatalog">${t("Обновить модели")}</button>`:`<button class="button" data-action="codexPing">${t("Проверить аккаунт")}</button>`}</div><div class="account-status-panel"><p id="account-status">${esc(accountText(page))}</p></div></section>`;
-    if(page === 'images' && value('INFINI_IMAGE_BACKEND') === 'sdcpp') return `<div class="context-banner">${icon('stack')}<p>${value('INFINI_SDCPP_SERVER_AUTOSTART') === '1' ? t('Управляемый запуск: программа и веса выбираются в разделе «Модели и LoRA».'):t('Внешний sd.cpp запускается отдельно. Здесь настраиваются его адрес и параметры запросов.')}</p><a class="text-button" href="#models">${t("Модели и LoRA")} ${icon('arrow')}</a></div>`;
+    if(page === 'images' && value('INFINI_IMAGE_BACKEND') === 'sdcpp') return `<div class="context-banner">${icon('stack')}<p>${value('INFINI_SDCPP_SERVER_AUTOSTART') === '1' ? t('Управляемый запуск: программа и веса выбираются в разделе «Модели и LoRA».'):t('Studio подключается к указанному адресу sd.cpp и не запускает сервер. Запускайте его самостоятельно.')}</p><a class="text-button" href="#models">${t("Модели и LoRA")} ${icon('arrow')}</a></div>`;
     if(page === 'sprites') return `<div class="page-actions sprite-actions"><button class="button" data-ui="reset-sprite">${icon('refresh')}${t("Вернуть базовый BOX")}</button><button class="text-button" data-action="openCache" title="${t("Открыть папку кеша на компьютере генератора")}">${icon('folder')}${t("Папка спрайтов и кеша")}</button>${value('INFINI_IMAGE_BACKEND') === 'off' ? `<span class="small-badge">${t("Обработка неактивна: изображения выключены")}</span>`:''}</div>`;
-    if(page === 'models') return `<div class="context-banner">${icon('stack')}<p>${value('INFINI_IMAGE_BACKEND') !== 'sdcpp' ? t('Сейчас выбран другой источник изображений. Эти файлы используются только с sd.cpp.'):value('INFINI_SDCPP_SERVER_AUTOSTART') !== '1' ? t('Внешний sd.cpp выбирает основные модели при своём запуске. Для управления файлами здесь включи управляемый запуск.'):t('Генератор использует эти файлы при запуске sd.cpp. Проверка путей не запускает создание изображения.')}</p><button class="button" data-action="validate">${icon('check')}${t("Проверить пути")}</button></div>`;
+    if(page === 'models') return `<div class="context-banner">${icon('stack')}<p>${value('INFINI_IMAGE_BACKEND') !== 'sdcpp' ? t('Сейчас выбран другой источник изображений. Эти файлы используются только с sd.cpp.'):value('INFINI_SDCPP_SERVER_AUTOSTART') !== '1' ? t('При самостоятельном запуске sd.cpp модели выбираете вне Studio. Для управления файлами здесь включите управляемый запуск.'):t('Генератор использует эти файлы при запуске sd.cpp. Проверка путей не запускает создание изображения.')}</p><button class="button" data-action="validate">${icon('check')}${t("Проверить пути")}</button></div>`;
     if(page === 'multiplayer') return `<div class="network-mode"><div><h2 id="lan-title">${t("Режим LAN / Radmin")}</h2><p>${t("Доступ по сети к генератору. Студия остаётся на этом компьютере.")}</p></div><label class="toggle-control"><input id="lan-enabled" type="checkbox" aria-labelledby="lan-title" data-lan ${state.lan ? 'checked':''}><span class="toggle-track"></span><span class="toggle-label">${state.lan ? t('Включено'):t('Выключено')}</span></label></div>`;
     return '';
   }
@@ -788,7 +791,7 @@
             alive === true ? 'positive' : alive === false && managed === false ? 'attention' : 'neutral'),
           readout(t('Управляемый процесс'), process === true ? t('Работает') : exited ? t('Завершён') : process === false ? t('Не работает') : t('Нет данных'),
             exited ? t('Код выхода: ') + data.processReturncode : t('Отдельно от HTTP-ответа')),
-          readout(t('Запуск'), managed === true ? t('По требованию') : managed === false ? t('Внешний сервер') : t('Нет данных'),
+          readout(t('Запуск'), managed === true ? t('По требованию') : managed === false ? t('Самостоятельный запуск') : t('Нет данных'),
             managed === true ? t('Автозапуск включён') : managed === false ? t('Запускается отдельно') : '')
         ];
         if (managed === true && typeof data.serverConfigured === 'boolean') {
@@ -1118,6 +1121,11 @@
     if(button.dataset.sectionLink) {const heading=document.getElementById(button.dataset.sectionLink);if(heading) {heading.focus({preventScroll:true});heading.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant':'smooth'});}return;}
     if(button.dataset.traceTab) {state.traceTab=button.dataset.traceTab;$$('[data-trace-tab]').forEach(tab => {tab.classList.toggle('active',tab === button);tab.setAttribute('aria-selected',String(tab === button));tab.tabIndex=tab === button?0:-1;});$('#trace-view').setAttribute('aria-labelledby',button.id);updateDiagnostics();return;}
     switch(button.dataset.ui) {
+      case 'clear-sdcpp-args':{
+        const key='INFINI_SDCPP_SERVER_EXTRA_ARGS';
+        state.draft[key]='';state.edits[key]=++state.editClock;recomputeDirty();syncInputs();
+        break;
+      }
       case 'defaults-update':showDefaultsUpdate();break;
       case 'defaults-refresh':refreshDefaultsUpdate();break;
       case 'search':showSearch();break;

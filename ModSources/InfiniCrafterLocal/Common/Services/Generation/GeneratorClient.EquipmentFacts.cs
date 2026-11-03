@@ -15,16 +15,22 @@ public sealed partial class GeneratorClient
     private static readonly Lazy<JsonArray?> ArmorSetFactRows = new(() => ReadEquipmentCatalog("Player.UpdateArmorSets", ArmorSetFactCertificate.Value));
 
     private static JsonArray? ReadEquipmentCatalog(string method, string? certificate)
-        => certificate is not null && NativeEquipmentFactsCatalog.Sources.TryGetValue(method + ":" + certificate, out var json)
+        => certificate is not null && NativeEquipmentFactsCatalog.Sources.TryGetValue(method + ":" + AuditedNativeCertificate(certificate, "equipment"), out var json)
             ? JsonNode.Parse(json) as JsonArray : null;
 
     internal static JsonObject? CaptureNativeEquipmentReference(Item item)
     {
         // Never call UpdateEquip/UpdateArmorSet, inspect the current player's
         // equipment, or attribute generated/modded proxy behavior to native IDs.
-        if (item.IsAir || item.ModItem is not null || !NativeSourceModuleVerified.Value) return null;
+        if (item.IsAir || item.ModItem is not null || !NativeCatalogVerified("equipment")) return null;
         var result = VerifiedNativeEquipmentReference(item.type, true, item.headSlot, item.bodySlot, item.legSlot,
             EquipmentFactRows.Value, EquipmentFactCertificate.Value, ArmorSetFactRows.Value, ArmorSetFactCertificate.Value);
+        if (result is not null)
+        {
+            result["observedModuleVersionId"] = typeof(Terraria.Player).Module.ModuleVersionId.ToString();
+            result["auditedModuleVersionId"] = NativeSourceCertificates.Methods.First(e => e.Group == "equipment").AuditedCertificate.Split(':')[1];
+            result["verification"] = "audited_source_semantic_dependency_match";
+        }
         if (result?["conditionalArmorSets"] is JsonArray sets)
             foreach (JsonObject set in sets.OfType<JsonObject>())
             {

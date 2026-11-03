@@ -20,6 +20,14 @@ Parent context: `context/cards.py.raw_parent_card_for_llm` собирает Auth
 
 Orchestration owner — [combine_pipeline.combine](../../../LocalGenerator/infini_local/pipelines/combine_pipeline.py); assets — [image lifecycle](IMAGE_ASSET_LIFECYCLE_RU.md) / [VFX materials](../../reference/presentation/VFX_MATERIAL_ELEMENTS_RU.md). Cache/dev path отдельно от fresh LLM craft.
 
+## Сохранение принятых стадий
+
+`combine` под существующим recipe-generation lock сохраняет accepted compiled Author, Visual kit и VFX manifest через `storage/craft_progress.py`, до image hydration. Это persistence принятого wire, не migration, Repair или новый authored fallback. Snapshot проверяется checksum всего envelope, exact identity (полные родители/world/lane/contracts), текущими wire/Visual/VFX validators и accounting. Принятый Author повторно не компилируется и не запрашивается. Смена connection/model settings не инвалидирует принятый дизайн; `USE_LLM`/dev mode и stamps контрактов входят в identity. Перестановка родителей восстанавливает исходный порядок.
+
+`atomic_write_json` завершает запись до следующей стадии; I/O ошибки не преобразуются в новые платные запросы. Неподдерживаемый/повреждённый checkpoint сохраняется с явной ошибкой; несовпадение целых входов/контрактов начинает новый дизайн. Committed cache читается первым, cleanup checkpoint после commit best-effort. `.checkpoint` и атомарные `.tmp` не допускаются asset filename boundary. PNG receipts и reuse здесь отсутствуют; существующие image workers/retries/joins не меняются. Локальный lock сериализует потоки одного генератора, не несколько процессов.
+
+Behavioral tests: `test_generation_resume.py` проверяет реальные stages, transport-only doubles, restart в независимых интерпретаторах, Repair/cancellation, cache precedence, private delivery boundary и I/O отказ без reauthor. Неуспешная запись первой стадии не может обещать восстановление результата после потери процесса.
+
 <a id="repairs-accounting"></a>
 ## Conditional repairs и accounting
 

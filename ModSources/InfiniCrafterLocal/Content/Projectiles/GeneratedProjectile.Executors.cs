@@ -47,6 +47,11 @@ public sealed partial class GeneratedProjectile
             Projectile.netUpdate = true;
         }
 
+        // Cancellation and recurring payment admit the whole active update,
+        // including on_spawn and periodic actions, not only motion/contact.
+        if (!AdmitControlledGameplayBeforeEvents())
+            return;
+
         if (!_spawnEventRan)
         {
             // Waiting suppresses movement, not the authored launch. Replay its
@@ -101,6 +106,35 @@ public sealed partial class GeneratedProjectile
             RunRuntimeEvent(RuntimeEventKind.OnExpire, null, 0);
             EmitAndSyncVfxEvent(RuntimeEventKind.OnExpire, Projectile.Center);
         }
+    }
+
+    private bool AdmitControlledGameplayBeforeEvents()
+    {
+        RuntimeEntitySpec entity = _entity!;
+        bool channelBeam = entity.Controller.Code == RuntimeControllerCode.ChannelBeam;
+        var control = entity.OwnerControl;
+        bool sustain = entity.ManaSustain is not null
+            || channelBeam && entity.Controller.Params.ManaPayment == "each_use_time";
+        if (!channelBeam && control is null && !sustain)
+            return true; // Free projectiles never acquire implicit held-input cancellation.
+
+        Player owner = Owner();
+        // Preserve each existing cancellation authority: channel_beam already
+        // checks control on every peer; composable owner control is owner-local.
+        bool cancelled = channelBeam && (!OwnerCanControl(owner) || !owner.channel || !HoldingGeneratedItem(owner))
+            || control is not null && InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile)
+                && (!OwnerCanControl(owner) || control.RequireHeldItem && !HoldingGeneratedItem(owner)
+                    || control.RequireChannel && !owner.channel
+                    || control.RequireItemAnimation && owner.itemAnimation <= 0);
+        // PaySustainedMana owns authority, native item cost and world-tick cadence.
+        // Its later motion/controller call cannot debit the same tick again.
+        if (cancelled || sustain && !PaySustainedMana(owner))
+        {
+            Projectile.friendly = false;
+            Projectile.Kill();
+            return false;
+        }
+        return true;
     }
 
     private void EmitSpawnEvent()

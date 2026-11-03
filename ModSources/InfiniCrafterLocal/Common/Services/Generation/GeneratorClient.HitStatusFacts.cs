@@ -45,8 +45,9 @@ public sealed partial class GeneratorClient
     {
         // Capture never executes hooks. Method identity, module, source kind and
         // vanilla host must agree: item contact cannot borrow projectile facts.
-        string key = certificate + ":" + moduleVersionId;
-        if (!vanilla || certificate is null || moduleVersionId is null
+        string current = certificate + ":" + moduleVersionId;
+        string? key = AuditedNativeCertificate(current, "hit_status");
+        if (!vanilla || certificate is null || moduleVersionId is null || key is null
             || !NativeHitStatusCatalog.SourceKinds.TryGetValue(key, out string? kind) || kind != sourceKind
             || !NativeHitStatusCatalog.Sources.TryGetValue(key, out var catalog)
             || !catalog.TryGetValue(type, out var facts))
@@ -71,6 +72,7 @@ public sealed partial class GeneratorClient
         {
             source = sourceKind == "contact" ? "verified_native_StatusToNPC_reference" : "verified_native_StatusNPC_reference",
             sourceKind,
+            sourceVerification = NativeMethodProvenance(current, key),
             fullName = fullName.Length > 0 ? fullName : "Terraria/" + (sourceKind == "contact" ? ItemID.Search.GetName(type) : ProjectileID.Search.GetName(type)),
             sourceMethodSha256 = certificate,
             sourceModuleVersionId = moduleVersionId,

@@ -579,3 +579,35 @@ def test_defaults_refresh_does_not_reopen_or_replace_dismissed_dialog(browser_st
         if dismissal == 'reopen':
             expect(page.locator('#defaults-refresh')).to_be_focused()
     assert server.commands.empty(), 'Refreshing or dismissing must never apply recommendations'
+
+
+@pytest.mark.parametrize('viewport', [{'width': 1440, 'height': 1000}, {'width': 390, 'height': 844}])
+def test_lifecycle_toasts_stack_deduplicate_and_close(browser_studio, viewport):
+    page, server, snapshot = browser_studio
+    expect = pytest.importorskip('playwright.sync_api').expect
+    page.set_viewport_size(viewport)
+    snapshot['notifications'] = [{'id': 'historical', 'level': 'info', 'title': 'Old', 'message': 'Historical'}]
+    server.publish(snapshot)
+    page.goto(server.url + '#operate')
+    page.wait_for_selector('.station')
+    expect(page.locator('#toasts .toast')).to_have_count(0)
+    snapshot['notifications'] += [
+        {'id': 'generator-ready', 'level': 'info', 'title': 'Генератор готов', 'message': 'Соединение с генератором подтверждено.'},
+        {'id': 'sdcpp-ready', 'level': 'info', 'title': 'sd.cpp готов', 'message': 'Управляемый сервер изображений подтвердил готовность.'},
+    ]
+    server.publish(snapshot)
+    expect(page.locator('#toasts .toast')).to_have_count(2)
+    for toast in page.locator('#toasts .toast').all():
+        expect(toast).to_be_visible()
+        assert toast.get_attribute('role') == 'status'
+        box = toast.bounding_box()
+        assert box and box['x'] >= 0 and box['x'] + box['width'] <= viewport['width']
+    output = os.environ.get('INFINI_TEST_TOAST_SCREENSHOTS')
+    if output:
+        page.screenshot(path=str(Path(output) / f"toast-{viewport['width']}.png"))
+    page.locator('#toasts .toast button').first.click()
+    expect(page.locator('#toasts .toast')).to_have_count(1)
+    server.publish(snapshot)
+    # Wait for the next real poll: the dismissed notice must not reappear.
+    page.wait_for_timeout(1800)
+    expect(page.locator('#toasts .toast')).to_have_count(1)

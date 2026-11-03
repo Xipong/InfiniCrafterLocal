@@ -5914,7 +5914,7 @@
                       },
                       "safeTileOnly": {
                         "type": "boolean",
-                        "description": "Blink bounds, solid-tile overlap and nearby lava checks; false skips them; not a general hazard check",
+                        "description": "Check solid-tile overlap and nearby lava; false skips these hazard checks. Finite in-world destinations are always required; not a general hazard check",
                         "x-infini-semanticType": "bounded_text"
                       },
                       "effectGroupId": {
@@ -11218,7 +11218,7 @@
                       },
                       "safeTileOnly": {
                         "type": "boolean",
-                        "description": "Check destination solid-tile overlap only; false skips it. No world-bounds or lava check in this event action; not a general hazard check",
+                        "description": "Check destination solid-tile overlap only; false skips it. Finite in-world destinations are always required. No lava check in this event action; not a general hazard check",
                         "x-infini-semanticType": "bounded_text"
                       },
                       "delay": {

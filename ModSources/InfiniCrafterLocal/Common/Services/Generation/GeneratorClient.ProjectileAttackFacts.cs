@@ -22,7 +22,8 @@ public sealed partial class GeneratorClient
         => AttackSourceCode.GetOrAdd(method, m => new Lazy<List<AmmoIl>>(() => ReadAmmoIl(m, preserveStructure: true, sourceGraph: true))).Value;
 
     internal static JsonObject CaptureProjectileAttackReference(Projectile projectile)
-        => VerifiedProjectileAttackReference(projectile, NativeSourceModuleVerified.Value);
+        // This reader inspects the currently loaded native IL; it does not borrow a frozen catalog.
+        => VerifiedProjectileAttackReference(projectile, true);
 
     internal static JsonObject VerifiedProjectileAttackReference(Projectile projectile, bool moduleVerified)
     {
@@ -41,7 +42,7 @@ public sealed partial class GeneratorClient
         => AttackSourcePrograms.GetOrAdd((type, style), key => new Lazy<ProjectileAttackCapture>(() => BuildProjectileAttackSource(key.Type, key.Style))).Value;
 
     private static JsonArray ProjectileSpawnReferences(Projectile projectile)
-        => NativeSourceModuleVerified.Value && projectile.ModProjectile is null
+        => projectile.ModProjectile is null
             && projectile.type > ProjectileID.None && projectile.type < ProjectileID.Count
             ? JsonNode.Parse(ProjectileAttackSource(projectile.type, projectile.aiStyle).Spawns)!.AsArray() : new JsonArray();
 

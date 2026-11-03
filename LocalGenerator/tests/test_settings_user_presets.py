@@ -192,9 +192,9 @@ def test_existing_profile_requires_explicit_replace(tmp_path):
 
 def test_stock_profile_leaves_model_paths_and_user_profiles_owned_by_user():
     stock = settings_schema.PRESETS['Локалка: LM Studio + sd.cpp (универсальный)']
-    assert stock['INFINI_SDCPP_SERVER_EXTRA_ARGS'] == ''
-    assert stock['INFINI_SDCPP_ROCM_COMPAT_ROOT'] == ''
+    assert 'INFINI_SDCPP_SERVER_EXTRA_ARGS' not in stock
+    assert 'INFINI_SDCPP_ROCM_COMPAT_ROOT' not in stock
     for key in ('INFINI_SDCPP_SERVER_EXE', 'INFINI_SDCPP_MODEL', 'INFINI_SDCPP_VAE', 'INFINI_SDCPP_LLM'):
         assert key not in stock
         assert settings_schema.DEFAULTS[key] == ''
-    assert settings_schema.PRESETS['Локалка: LM Studio + FLUX.2 Klein 4B hybrid']['INFINI_SDCPP_SERVER_EXTRA_ARGS'] == settings_schema.SDCPP_EXTRA_PROFILES['flux2_klein4b_rx6800xt_hybrid']
+    assert settings_schema.PRESETS['Пример: RX 6800 XT / FLUX.2 Klein 4B (только аргументы)']['INFINI_SDCPP_SERVER_EXTRA_ARGS'] == settings_schema.SDCPP_EXTRA_PROFILES['flux2_klein4b_rx6800xt_hybrid']

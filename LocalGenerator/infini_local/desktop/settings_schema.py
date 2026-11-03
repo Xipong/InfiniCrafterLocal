@@ -158,14 +158,6 @@ SDCPP_EXTRA_PROFILES = {
     # VAE, Qwen/LLM and LoRA paths in dedicated GUI rows; these profiles are only
     # runtime/performance flags.
     "flux2_klein4b_rx6800xt_hybrid": "-v --backend diffusion=rocm0,vae=vulkan0,te=rocm0 --params-backend te=cpu --rng cuda --flow-shift 3 --eager-load --diffusion-conv-direct --vae-conv-direct",
-    "zimage_amd_safe": "-v --backend diffusion=vulkan0,vae=vulkan0,te=vulkan0 --params-backend te=cpu --rng cuda --flow-shift 3 --eager-load --diffusion-conv-direct --vae-conv-direct",
-    "zimage_amd_low_vram": "-v --backend diffusion=vulkan0,vae=cpu,te=cpu --rng cuda --flow-shift 3",
-    "zimage_amd_full_gpu": "-v --backend diffusion=vulkan0,vae=vulkan0,te=vulkan0 --rng cuda --flow-shift 3 --eager-load --diffusion-conv-direct --vae-conv-direct",
-    "zimage_amd_disk_params": "-v --backend diffusion=vulkan0,vae=vulkan0,te=vulkan0 --params-backend te=disk --rng cuda --flow-shift 3 --eager-load --diffusion-conv-direct --vae-conv-direct",
-    "zimage_cpu_compat": "-v --backend cpu --rng cpu --flow-shift 3",
-    "compat_offload": "-v --offload-to-cpu --flow-shift 3",
-    "basic_verbose": "-v --flow-shift 3",
-    "vulkan_te_vae_cpu_dbcache": "-v --backend diffusion=vulkan0,vae=vulkan0,te=vulkan0 --params-backend te=cpu --rng cuda --flow-shift 3 --eager-load --diffusion-conv-direct --vae-conv-direct --cache-mode dbcache --cache-option \"threshold=0.08,warmup=2\"",
 }
 
 
@@ -326,126 +318,38 @@ DEFAULTS = {
 }
 
 PRESETS = {
-    # Paths and model-specific sampling choices remain user-owned. No optional
-    # device/module/backend flags are needed for the stock server command.
+    # Pipeline choices do not own model paths, credentials or sampling settings.
     "Локалка: LM Studio + sd.cpp (универсальный)": {
+        "INFINI_USE_LLM": "1",
+        "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "1",
         "INFINI_LLM_PROVIDER": "local",
         "INFINI_IMAGE_BACKEND": "sdcpp",
         "INFINI_SDCPP_SERVER_AUTOSTART": "1",
-        "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
-        "INFINI_SDCPP_SERVER_EXTRA_ARGS": "",
-        "INFINI_SDCPP_ROCM_COMPAT_ROOT": "",
     },
-    "sd.cpp: стандартные аргументы": {
-        "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
-        "INFINI_SDCPP_SERVER_EXTRA_ARGS": "",
-    },
-    "sd.cpp: FLUX.2 Klein 4B / RX 6800 XT hybrid (аргументы)": {
-        "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
-        "INFINI_SDCPP_SERVER_EXTRA_ARGS": SDCPP_EXTRA_PROFILES["flux2_klein4b_rx6800xt_hybrid"],
-    },
-    "OpenAI-compatible + FLUX.2 Klein 4B hybrid": {
-        "INFINI_SPRITE_DOWNSCALE_FILTER": "box",
-        "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "1",
+    "API (OpenAI-compatible) + локальные изображения sd.cpp": {
+        "INFINI_USE_LLM": "1",
         "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "1",
         "INFINI_LLM_PROVIDER": "openai_compat",
-        "INFINI_LLM_REASONING_MODE": "prompt_light",
-        # Большая strict JSON Schema Gameplay Author не принимается частью
-        # OpenAI-compatible провайдеров (в том числе Google Gemini: 400
-        # INVALID_ARGUMENT ещё до чтения промпта), а /responses у них может
-        # отсутствовать. Форму запроса, которая реально проходит, задаём явно;
-        # json_schema остаётся доступным выбором в строке настройки.
-        "INFINI_LLM_RESPONSE_FORMAT": "json_object",
-        "INFINI_LLM_API_MODE": "chat_completions",
-        "INFINI_IMAGE_BACKEND": "sdcpp",
-        "INFINI_SDCPP_SERVER_EXE": r"C:\Games\sdcpp-hybrid-gfx1030-134c821\sd-server.exe",
-        "INFINI_SDCPP_ROCM_COMPAT_ROOT": r"C:\Games\sdcpp-hybrid-gfx1030-134c821",
-        "INFINI_SDCPP_MODEL": r"C:\Games\sdcpp-hybrid-gfx1030-134c821\models\Flux 2 4B\flux-2-klein-4b-Q8_0.gguf",
-        "INFINI_SDCPP_VAE": r"C:\Games\sdcpp-hybrid-gfx1030-134c821\models\Flux 2 4B\ae.safetensors",
-        "INFINI_SDCPP_LLM": r"C:\Games\sdcpp-hybrid-gfx1030-134c821\models\Flux 2 4B\Qwen 3\Qwen3-4B-UD-Q5_K_XL.gguf",
-        "INFINI_SDCPP_LORA_DIR": "",
-        "INFINI_SDCPP_LORA_FILE": "",
-        "INFINI_SDCPP_LORA_PROMPT_TAGS": "",
-        "INFINI_SDCPP_SERVER_AUTOSTART": "1",
-        "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
-        "INFINI_SDCPP_SERVER_EXTRA_ARGS": SDCPP_EXTRA_PROFILES["flux2_klein4b_rx6800xt_hybrid"],
-        "INFINI_SDCPP_STEPS": "4",
-        "INFINI_SDCPP_CFG": "1.0",
-        "INFINI_SDCPP_SAMPLER": "euler",
-        "INFINI_ZIMAGE_PROMPT_CONTRACT": "0",
-        "INFINI_ZIMAGE_POSITIVE_ONLY": "1",
-    },
-    "Локалка: LM Studio + FLUX.2 Klein 4B hybrid": {
-        "INFINI_SPRITE_DOWNSCALE_FILTER": "box",
-        "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "1",
-        "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "1",
-        "INFINI_LLM_PROVIDER": "local",
-        "INFINI_IMAGE_BACKEND": "sdcpp",
-        "INFINI_SDCPP_SERVER_EXE": r"C:\Games\sdcpp-hybrid-gfx1030-134c821\sd-server.exe",
-        "INFINI_SDCPP_ROCM_COMPAT_ROOT": r"C:\Games\sdcpp-hybrid-gfx1030-134c821",
-        "INFINI_SDCPP_MODEL": r"C:\Games\sdcpp-hybrid-gfx1030-134c821\models\Flux 2 4B\flux-2-klein-4b-Q8_0.gguf",
-        "INFINI_SDCPP_VAE": r"C:\Games\sdcpp-hybrid-gfx1030-134c821\models\Flux 2 4B\ae.safetensors",
-        "INFINI_SDCPP_LLM": r"C:\Games\sdcpp-hybrid-gfx1030-134c821\models\Flux 2 4B\Qwen 3\Qwen3-4B-UD-Q5_K_XL.gguf",
-        "INFINI_SDCPP_LORA_DIR": "",
-        "INFINI_SDCPP_LORA_FILE": "",
-        "INFINI_SDCPP_LORA_PROMPT_TAGS": "",
-        "INFINI_SDCPP_SERVER_AUTOSTART": "1",
-        "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
-        "INFINI_SDCPP_SERVER_EXTRA_ARGS": SDCPP_EXTRA_PROFILES["flux2_klein4b_rx6800xt_hybrid"],
-        "INFINI_SDCPP_STEPS": "4",
-        "INFINI_SDCPP_CFG": "1.0",
-        "INFINI_SDCPP_SAMPLER": "euler",
-        "INFINI_ZIMAGE_PROMPT_CONTRACT": "0",
-        "INFINI_ZIMAGE_POSITIVE_ONLY": "1",
-    },
-    "Локалка: LM Studio + local Z-Image/sd.cpp": {
-        "INFINI_SPRITE_DOWNSCALE_FILTER": "box",
-        "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "1",
-        "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "1",
-        "INFINI_LLM_PROVIDER": "local",
         "INFINI_IMAGE_BACKEND": "sdcpp",
         "INFINI_SDCPP_SERVER_AUTOSTART": "1",
-        "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
-        "INFINI_SDCPP_SERVER_EXTRA_ARGS": SDCPP_EXTRA_PROFILES["zimage_amd_safe"],
-        "INFINI_SDCPP_STEPS": "8",
-        "INFINI_SDCPP_CFG": "1.0",
-        "INFINI_SDCPP_SAMPLER": "euler",
     },
-    "OpenRouter + local Z-Image/sd.cpp": {
-        "INFINI_SPRITE_DOWNSCALE_FILTER": "box",
-        "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "1",
+    "API (OpenAI-compatible) + Image API": {
+        "INFINI_USE_LLM": "1",
         "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "1",
-        "INFINI_LLM_PROVIDER": "openrouter",
-        "INFINI_LLM_RESPONSE_FORMAT": "json_object",
-        "INFINI_LLM_API_MODE": "chat_completions",
-        "INFINI_IMAGE_BACKEND": "sdcpp",
-        "INFINI_SDCPP_SERVER_AUTOSTART": "1",
-        "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
-        "INFINI_SDCPP_SERVER_EXTRA_ARGS": SDCPP_EXTRA_PROFILES["zimage_amd_safe"],
-        "INFINI_SDCPP_STEPS": "8",
-        "INFINI_SDCPP_CFG": "1.0",
-        "INFINI_SDCPP_SAMPLER": "euler",
-    },
-    "OpenRouter + Image API": {
-        "INFINI_SPRITE_DOWNSCALE_FILTER": "box",
-        "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "1",
-        "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "1",
-        "INFINI_LLM_PROVIDER": "openrouter",
-        "INFINI_LLM_RESPONSE_FORMAT": "json_object",
-        "INFINI_LLM_API_MODE": "chat_completions",
+        "INFINI_LLM_PROVIDER": "openai_compat",
         "INFINI_IMAGE_BACKEND": "image_api",
         "INFINI_SDCPP_SERVER_AUTOSTART": "0",
     },
-    "API LLM only: без картинок": {
-        "INFINI_SPRITE_DOWNSCALE_FILTER": "box",
-        "INFINI_SPRITE_PREMULTIPLIED_RESIZE": "1",
-        "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "0",
-        "INFINI_VISUAL_REQUIRE_ZIMAGE_BACKEND": "0",
-        "INFINI_LLM_PROVIDER": "openrouter",
-        "INFINI_LLM_RESPONSE_FORMAT": "json_object",
-        "INFINI_LLM_API_MODE": "chat_completions",
-        "INFINI_IMAGE_BACKEND": "off",
+    "ChatGPT / Codex: текст и изображения": {
+        "INFINI_USE_LLM": "1",
+        "INFINI_VISUAL_REQUIRE_ITEM_SPRITE": "1",
+        "INFINI_LLM_PROVIDER": "openai_codex",
+        "INFINI_IMAGE_BACKEND": "openai_codex",
         "INFINI_SDCPP_SERVER_AUTOSTART": "0",
+    },
+    "Пример: RX 6800 XT / FLUX.2 Klein 4B (только аргументы)": {
+        "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
+        "INFINI_SDCPP_SERVER_EXTRA_ARGS": SDCPP_EXTRA_PROFILES["flux2_klein4b_rx6800xt_hybrid"],
     },
 }
 
@@ -527,8 +431,8 @@ FIELD_HELP = {
     "INFINI_SDCPP_LORA_FILE": "Конкретный файл LoRA (*.safetensors/*.ckpt/*.pt/*.pth). GUI возьмёт родительскую папку для --lora-model-dir и точное имя файла для структурированного lora[] payload.",
     "INFINI_SDCPP_LORA_WEIGHT": "Вес выбранной LoRA в структурированном HTTP payload. Для проверенной pixel-art LoRA безопасная отправная точка 0.20-0.30; 0.45+ может заметно менять форму.",
     "INFINI_SDCPP_LORA_PROMPT_TAGS": "Совместимый ввод <lora:name:weight>. Перед HTTP-вызовом теги удаляются из текста prompt и переводятся в структурированное поле lora[].",
-    "INFINI_SDCPP_SERVER_URL": "URL уже запущенного sd.cpp server. Если autostart=1, GUI/server.py стартует его сам.",
-    "INFINI_SDCPP_SERVER_AUTOSTART": "1 — server.py сам поднимет sd.cpp перед генерацией. 0 — считаем, что sd.cpp уже запущен вручную.",
+    "INFINI_SDCPP_SERVER_URL": "Адрес sd.cpp server. При autostart=0 запускайте сервер самостоятельно; при autostart=1 его запускает генератор.",
+    "INFINI_SDCPP_SERVER_AUTOSTART": "1 — генератор запускает sd.cpp перед генерацией. 0 — запускайте sd.cpp самостоятельно; Studio только подключается к указанному адресу.",
     "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args = GUI/server.py собирают argv сами и не дают pipeline preset сломать флаги. template = использовать ручной шаблон команды для нестандартных форков sd.cpp.",
     "INFINI_SDCPP_SERVER_COMMAND_TEMPLATE": "Шаблон команды запуска sd.cpp. В safe_args режиме хранится как reference/fallback; реально используется только command mode = template.",
     "INFINI_SDCPP_SERVER_EXTRA_ARGS": "Только дополнительные флаги sd.cpp: -v, --backend/--params-backend, --offload-to-cpu, cache и т.п. VAE/Qwen лучше задавать отдельными полями.",
@@ -621,7 +525,7 @@ OPTION_HELP = {
     },
     "INFINI_SDCPP_SERVER_AUTOSTART": {
         "1": "server.py сам запускает sd-server.exe перед генерацией.",
-        "0": "sd.cpp должен быть уже запущен руками или отдельным bat-файлом.",
+        "0": "Запускайте sd.cpp самостоятельно, например отдельным bat-файлом. Studio не запускает сервер в этом режиме.",
     },
     "INFINI_SDCPP_SERVER_SHOW_CONSOLE": {
         "1": "Показывать отдельное окно с живым логом sd.cpp.",

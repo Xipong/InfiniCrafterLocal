@@ -105,7 +105,8 @@
     {
       "id": "storage-network-boundary",
       "patterns": [
-        "LocalGenerator/infini_local/storage/**"
+        "LocalGenerator/infini_local/storage/**",
+        "LocalGenerator/infini_local/pipelines/combine_pipeline.py"
       ],
       "checks": [
         "delivery_contract"
@@ -118,6 +119,7 @@
       "area": "storage",
       "tests": [
         "LocalGenerator/tests/test_world_recipe_cache_admission.py",
+        "LocalGenerator/tests/test_generation_resume.py",
         "LocalGenerator/tests/test_asset_transfer_cache_contracts.py"
       ],
       "entrypoints": [

@@ -528,12 +528,14 @@ internal static class RuntimeProgramExecutor
 
     private static void MoveOwner(RuntimeEventActionSpec action, Player owner, Vector2 eventPosition)
     {
+        if (!float.IsFinite(eventPosition.X) || !float.IsFinite(eventPosition.Y)) return;
         Vector2 delta = eventPosition - owner.Center;
         float maxDistance = Math.Max(16f, action.RangeTiles * 16f);
         if (delta.LengthSquared() > maxDistance * maxDistance)
             eventPosition = owner.Center + delta.SafeNormalize(Vector2.UnitX) * maxDistance;
         Vector2 topLeft = eventPosition - owner.Size * 0.5f;
-        if (action.SafeTileOnly && Collision.SolidCollision(topLeft, owner.width, owner.height))
+        if (!owner.GetModPlayer<InfiniCraftPlayer>().IsBlinkWithinWorld(topLeft)
+            || action.SafeTileOnly && Collision.SolidCollision(topLeft, owner.width, owner.height))
             return;
         if (!owner.GetModPlayer<InfiniCraftPlayer>().TryReserveGeneratedMobilityCooldown(action.CooldownTicks))
             return;

@@ -270,7 +270,15 @@ def http_json_get(url: str, timeout: float = 5, *, deadline: float | None = None
         return raw
 
 def sdcpp_server_is_alive() -> bool:
-    return sdcpp_backend.server_is_alive(SDCPP_SERVER_URL, SDCPP_SERVER_HEALTH_PATHS, timeout=2)
+    started = time.monotonic()
+    observation: dict[str, Any] = {}
+    alive = sdcpp_backend.server_is_alive(SDCPP_SERVER_URL, SDCPP_SERVER_HEALTH_PATHS, timeout=2, observation=observation)
+    observation["observedAtUnix"] = time.time()
+    with SDCPP_SERVER_STATE.probe_lock:
+        if started >= SDCPP_SERVER_STATE.last_probe_started:
+            SDCPP_SERVER_STATE.last_probe_started = started
+            SDCPP_SERVER_STATE.last_probe = observation
+    return alive
 
 def build_sdcpp_server_command() -> tuple[list[str] | str, bool]:
     return sdcpp_backend.build_server_command(_sdcpp_config(), SDCPP_SERVER_COMMAND_TEMPLATE)
