@@ -44,7 +44,14 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("atlas header visible glyph centering and safe inset", AtlasHeaderUsesVisibleGlyphsAndInsetControls),
             ("atlas packaged skin alpha matches PNG loading", AtlasPackagedSkinPixelsMatchPngAlpha),
+            ("atlas unload graphics stay on main thread across reload", AtlasUnloadRetiresOwnedGraphicsOnMainThread),
+            ("atlas unload disposal failures preserve later cleanup", AtlasUnloadIsolatesDisposalFailures),
+            ("atlas recovery legacy sidecar exact read only", AtlasRecoveryReadsExactLegacyLineageSidecar),
+            ("atlas recovery legacy sidecar negative boundaries", AtlasRecoveryRefusesInvalidLegacyLineageSidecar),
+            ("atlas recovery legacy sidecar native detail drawing", AtlasRecoveryRestoresNativeIngredientDrawing),
+            ("atlas recovery self-bound historical parent cards", AtlasRecoveryReadsOnlySelfBoundHistoricalParentCards),
             ("atlas recovery committed bundled recipes", AtlasRecoveryReadsCommittedBundledRecipes),
             ("atlas recovery exact historical metadata read only", AtlasRecoveryReadsExactHistoricalMetadata),
             ("atlas recovery conflicting and foreign evidence", AtlasRecoveryRefusesAmbiguousOrForeignEvidence),
@@ -94,6 +101,10 @@ internal static partial class EngineRuntimeChecks
             ("parent attack source certificates match native shooting collision", ParentAttackCertificatesMatchNativeShootingAndCollision),
             ("parent quantified snapshots and ammo observation identity", ParentQuantifiedFactsKeepSnapshotsAndObservationIdentity),
             ("parent native item scale penetration and use limit", ParentNativeItemStatsSurviveCaptureAndNormalization),
+            ("runtime dump incremental capture main thread bounded queue and publication", RuntimeDumpIncrementalCaptureAndPublication),
+            ("runtime dump incremental budget cancellation and IO failure", RuntimeDumpIncrementalBudgetCancellationAndFailure),
+            ("parent source graph empty watched fields skip unrelated consumer scan", ParentSourceGraphSkipsUnneededConsumerScan),
+            ("parent source graph export cache preserves source and refusals", ParentSourceGraphCacheReusesOnlyCompiledSource),
             ("runtime dump Nebula Rainbow available content roundtrip", RuntimeDumpNebulaRainbowAvailableContentRoundTrip),
             ("runtime dump atomic paired manifest and failed publication", RuntimeDumpPublishesImmutablePairAndPreservesPreviousOnFailure),
             ("runtime dump shares complete parent and projectile capture", RuntimeDumpSharesCompleteParentAndProjectileCapture),

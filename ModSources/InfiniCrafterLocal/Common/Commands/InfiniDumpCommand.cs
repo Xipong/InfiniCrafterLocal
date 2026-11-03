@@ -20,30 +20,33 @@ public sealed partial class InfiniDumpCommand : ModCommand
     public override string Command => "infinidump";
     public override string Description => "Dump loaded Terraria/tModLoader item and projectile runtime snapshots for InfiniCrafter analysis.";
 
+    public override string Usage => "/infinidump [textures|status|cancel]";
+
     public override void Action(CommandCaller caller, string input, string[] args)
     {
-        string dir = Path.Combine(Main.SavePath, "InfiniCrafterLocal");
-        JsonObject manifest = PublishSnapshot(dir, itemWriter =>
-        {
-            for (int type = InfiniTerrariaSentinels.FirstValidItemType; type < ItemLoader.ItemCount; type++)
-            {
-                WriteSnapshot(itemWriter, type, () =>
-                {
-                    Item item = new();
-                    item.SetDefaults(type);
-                    return item.IsAir || string.IsNullOrWhiteSpace(item.Name) ? null : CaptureItemSnapshot(item);
-                }, DumpJsonOptions);
-            }
-        }, projectileWriter =>
-        {
-            for (int type = InfiniTerrariaSentinels.FirstValidProjectileType; type < ProjectileLoader.ProjectileCount; type++)
-                WriteSnapshot(projectileWriter, type, () => CaptureProjectileSnapshot(type), DumpJsonOptions);
-        }, CaptureDumpEnvironment());
+        string option = args.Length == 0 ? "" : args[0].ToLowerInvariant();
+        if (args.Length > 1 || option is not ("" or "textures" or "status" or "cancel"))
+        { caller.Reply(Usage); return; }
+        if (option == "cancel") { CancelExport(notify: true); return; }
+        if (activeExport is not null)
+        { caller.Reply("InfiniCraft dump: " + activeExport.Progress + ". /infinidump cancel to stop."); return; }
+        if (option == "status") { caller.Reply("InfiniCraft: no dump is running."); return; }
 
-        Main.NewText($"InfiniCraft snapshot: {Path.Combine(dir, DumpManifestName)}", 120, 220, 255);
-        foreach (string kind in new[] { "items", "projectiles" })
-            Main.NewText(Path.Combine(dir, manifest["files"]![kind]!["path"]!.GetValue<string>()), 120, 220, 255);
-        Main.NewText("Restart LocalGenerator to read this snapshot; previous snapshots were kept.", 120, 220, 255);
+        bool textures = option == "textures";
+        string dir = Path.Combine(Main.SavePath, "InfiniCrafterLocal");
+        // Capture identity metadata now, but hash files only on the writer thread.
+        JsonObject environment = CaptureDumpEnvironmentCore(includeFileHash: false);
+        sourceGraphCache = new GeneratorClient.ParentSourceGraphCache();
+        activeExport = new RuntimeDumpExport(dir, ItemLoader.ItemCount, ProjectileLoader.ProjectileCount,
+            type =>
+            {
+                Item item = new();
+                item.SetDefaults(type);
+                return item.IsAir || string.IsNullOrWhiteSpace(item.Name) ? null : CaptureItemSnapshotForExport(item, textures);
+            }, type => CaptureProjectileSnapshotForExport(type, textures), environment);
+        nextProgressAt = DateTime.UtcNow.AddSeconds(5);
+        caller.Reply("InfiniCraft dump started in small steps. /infinidump status or /infinidump cancel."
+            + (textures ? " Texture diagnostics enabled; individual GPU reads may pause a frame." : " Texture diagnostics skipped; use /infinidump textures to include them."));
     }
 
     internal static void WriteSnapshot(TextWriter writer, int type, Func<JsonObject?> capture, JsonSerializerOptions options)
@@ -61,27 +64,33 @@ public sealed partial class InfiniDumpCommand : ModCommand
 
     // Dump rows are the same complete source observations used by live crafting.
     // Only dump-specific identity aliases, flags and graphics metrics are added here.
-    internal static JsonObject CaptureItemSnapshot(Item item)
+    internal static JsonObject CaptureItemSnapshot(Item item) => CaptureItemSnapshotForExport(item, true);
+
+    private static JsonObject CaptureItemSnapshotForExport(Item item, bool textures)
     {
         JsonObject snapshot = GeneratorClient.ToWireItem(item);
         snapshot["type"] = item.type;
         snapshot["questItem"] = item.questItem;
         snapshot["expert"] = item.expert;
         snapshot["master"] = item.master;
-        snapshot["textureMetrics"] = JsonSerializer.SerializeToNode(TryItemTextureMetrics(item.type));
+        snapshot["textureMetrics"] = JsonSerializer.SerializeToNode(textures ? TryItemTextureMetrics(item.type) : SkippedTextureMetrics());
         if (snapshot["directProjectileRaw"] is JsonObject projectile)
-            projectile["textureMetrics"] = JsonSerializer.SerializeToNode(TryProjectileTextureMetrics(item.shoot));
+            projectile["textureMetrics"] = JsonSerializer.SerializeToNode(textures ? TryProjectileTextureMetrics(item.shoot) : SkippedTextureMetrics());
         return snapshot;
     }
 
-    internal static JsonObject CaptureProjectileSnapshot(int type)
+    internal static JsonObject CaptureProjectileSnapshot(int type) => CaptureProjectileSnapshotForExport(type, true);
+
+    private static JsonObject CaptureProjectileSnapshotForExport(int type, bool textures)
     {
         object? facts = GeneratorClient.ProjectileRawSnapshot(type, 0f, "runtime_dump", null, -1);
         JsonObject snapshot = JsonSerializer.SerializeToNode(facts) as JsonObject
             ?? throw new InvalidOperationException("Projectile capture was unavailable");
-        snapshot["textureMetrics"] = JsonSerializer.SerializeToNode(TryProjectileTextureMetrics(type));
+        snapshot["textureMetrics"] = JsonSerializer.SerializeToNode(textures ? TryProjectileTextureMetrics(type) : SkippedTextureMetrics());
         return snapshot;
     }
+
+    private static TextureMetrics SkippedTextureMetrics() => new() { unavailable = true, note = "not_requested; use /infinidump textures" };
 
     private sealed class TextureMetrics
     {

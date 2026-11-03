@@ -773,11 +773,19 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
                     if (!lineageSources.TryGetValue(data.Id, out var sources))
                         lineageSources[data.Id] = sources = new List<ParentMetadata>();
                     sources.Add(ParentMetadata.Capture(data));
+                    if (HistoricalKnowledgeMetadata(json, data) is { } historical)
+                        sources.Add(historical);
                 }
                 catch { }
             }
             foreach (var pair in bundledDefinitions)
                 if (!bundledConflicts.Contains(pair.Key)) _byId[pair.Key] = pair.Value.Data;
+            foreach (ParentMetadata source in LegacyLineageMetadata())
+            {
+                if (!lineageSources.TryGetValue(source.Id, out var sources))
+                    lineageSources[source.Id] = sources = new List<ParentMetadata>();
+                sources.Add(source);
+            }
             foreach (var pair in _byId)
             {
                 RestoreMissingParentMetadata(pair.Value, lineageSources[pair.Key]);

@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using ReLogic.Content;
@@ -12,7 +13,7 @@ namespace InfiniCrafterLocal.Common.UI;
 // One cached material set for the collection, recipe page, and genealogy map.
 public sealed partial class RecipeJournalUISystem
 {
-    private static Asset<Texture2D>? _bookSkin, _wellSkin, _waxSkin, _bookmarkSkin, _foldSkin;
+    private static Asset<Texture2D>? _bookSkin, _wellSkin, _waxSkin, _bookmarkSkin;
     private static readonly Dictionary<Asset<Texture2D>, (Texture2D Source, Texture2D Prepared)> BookSkinTextures = new();
 
     internal static bool PrepareBookSkinPixels(Color[] pixels, string? extension)
@@ -63,13 +64,25 @@ public sealed partial class RecipeJournalUISystem
         _wellSkin = ModContent.Request<Texture2D>(path + "NodeWell");
         _waxSkin = ModContent.Request<Texture2D>(path + "WaxSeal");
         _bookmarkSkin = ModContent.Request<Texture2D>(path + "Bookmark");
-        _foldSkin = ModContent.Request<Texture2D>(path + "PaperFold");
     }
     private static void UnloadBookSkin()
     {
-        foreach (var cached in BookSkinTextures.Values) cached.Prepared.Dispose();
+        // Unload runs on tML's loader worker. Detach only our prepared copies
+        // now; the callback must not read cache/assets from a later load.
+        var retiredTextures = BookSkinTextures.Values.Select(cached => cached.Prepared).ToArray();
         BookSkinTextures.Clear();
-        _bookSkin = _wellSkin = _waxSkin = _bookmarkSkin = _foldSkin = null;
+        _bookSkin = _wellSkin = _waxSkin = _bookmarkSkin = null;
+        if (retiredTextures.Length != 0)
+            Main.QueueMainThreadAction(() => {
+                foreach (var texture in retiredTextures) DisposeRetiredJournalGraphics(texture);
+            });
+    }
+    private static void DisposeRetiredJournalGraphics(GraphicsResource resource)
+    {
+        // Cleanup must keep draining even if one retired GPU resource fails.
+        // Mod may already be unloaded when this callback runs; use tML's logger.
+        try { resource.Dispose(); }
+        catch (Exception error) { Logging.PublicLogger.Warn("InfiniCrafterLocal: failed to dispose a retired journal graphics resource.", error); }
     }
     private static void DrawBook(SpriteBatch sb, Rectangle book)
     {
@@ -106,10 +119,5 @@ public sealed partial class RecipeJournalUISystem
         // Translucent paper lets the single authored parchment remain continuous.
         Fill(sb, rect, new Color(255, 245, 214, focused ? 85 : 40));
         Fill(sb, new Rectangle(rect.X, rect.Bottom - 1, rect.Width, 1), focused ? Ink : Rule);
-    }
-    private static void DrawBookFold(SpriteBatch sb, Rectangle book)
-    {
-        if (_foldSkin is not null && book.Width >= 260 && book.Height >= 240)
-            sb.Draw(BookSkinTexture(_foldSkin), new Rectangle(book.Right - 58, book.Bottom - 60, 40, 38), Color.White);
     }
 }
