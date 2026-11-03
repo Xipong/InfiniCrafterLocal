@@ -5,12 +5,14 @@ Provider calls are offline doubles; this proves transport, not image quality.
 from copy import deepcopy
 from pathlib import Path
 import struct
+import json
 
 import pytest
 from prompt_packet_helpers import request_dossier
 from infini_local.core import llm_config
 from infini_local.core.images.contracts import native_held_frame_facts, sprite_contract_for
 from infini_local.pipelines.visual import request as visual_request
+from infini_local.pipelines.visual.context import _presentation_packet_context, _runtime_card
 from infini_local.pipelines.images import stage as images
 from infini_local.pipelines.images import retry as image_retry
 from test_low_level_three_stage_pipeline import wire_transport  # noqa: F401
@@ -51,21 +53,52 @@ def test_projection_preserves_only_actual_accepted_fields_and_is_detached(hidden
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("repair", [False, True])
-def test_visual_outgoing_request_contains_shared_facts_without_changing_gameplay(wire_transport, monkeypatch, mode, repair):
+@pytest.mark.parametrize("repair_path", [None, "renderSizePx", "prompt"])
+@pytest.mark.parametrize("placement,offset", [("owner_center", 16), ("cursor", 0)])
+def test_visual_outgoing_request_preserves_emission_and_scoped_guidance(
+        wire_transport, monkeypatch, mode, repair_path, placement, offset):
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     responses, sent = wire_transport
     data = _accepted_visual_data()
+    # Both attached-origin and deliberately detached emission remain explicit
+    # accepted inputs to the real request builder, not inferred from the art.
+    projectile = next(row for row in data["runtimeProgram"]["entities"] if row["id"] == "nail")
+    projectile["spawn"].update(placement=placement, offsetPx=offset)
     frozen = deepcopy(data)
+    presentation = _presentation_packet_context(data, _runtime_card(data))
     responses.append({})
-    kwargs = {} if not repair else {
-        "repair_errors": [{"path": "$.item.renderSizePx", "message": "invalid"}],
+    kwargs = {} if repair_path is None else {
+        "repair_errors": [{"path": "$.item." + repair_path, "message": "invalid"}],
         "previous": data["visualKit"],
-        "repair_scope": {"fieldPermissions": {"itemPaths": ["renderSizePx"]}},
+        "repair_scope": {"fieldPermissions": {"itemPaths": [repair_path]}},
     }
     visual_request._request_visual_kit(data, {}, {}, **kwargs)
+    assert len(sent) == 1
     packet = request_dossier(sent[-1])
+    rows = packet["runtimeEntities" if repair_path is None else "runtimeEntitiesReadOnly"]
+    assert next(row["spawn"] for row in rows if row["id"] == "nail") == projectile["spawn"]
     assert packet["nativeHeldCanvasReadOnly"] == native_held_frame_facts(data)
+    if repair_path is not None:
+        assert packet["repairScope"] == kwargs["repair_scope"]
+    # Observe actual serialized message delivery, including multiplicity, without
+    # pinning particular advice words or replacing the context/request owners.
+    delivered = []
+    def collect(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key == "sourceCalibration":
+                    delivered.append(child)
+                collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+    for message in sent[-1]["messages"]:
+        try:
+            collect(json.loads(message["content"]))
+        except json.JSONDecodeError:
+            pass
+    expected = [] if repair_path == "prompt" else [presentation["spritePresentationReadOnly"]["sourceCalibration"]]
+    assert delivered == expected
     assert data == frozen
 
 
