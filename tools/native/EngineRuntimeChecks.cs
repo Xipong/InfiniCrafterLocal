@@ -44,6 +44,11 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("atlas packaged skin alpha matches PNG loading", AtlasPackagedSkinPixelsMatchPngAlpha),
+            ("atlas recovery committed bundled recipes", AtlasRecoveryReadsCommittedBundledRecipes),
+            ("atlas recovery exact historical metadata read only", AtlasRecoveryReadsExactHistoricalMetadata),
+            ("atlas recovery conflicting and foreign evidence", AtlasRecoveryRefusesAmbiguousOrForeignEvidence),
+            ("atlas recovery prevents later metadata downgrade", AtlasRecoveryPreventsLaterMetadataDowngrade),
             ("sustain admission beam cancellation before native events", () => SustainCancellationPrecedesNativeEvents(true)),
             ("sustain admission composed cancellation before native events", () => SustainCancellationPrecedesNativeEvents(false)),
             ("sustain admission beam payment before periodic damage", () => SustainPaymentPrecedesNativePeriodicDamage(true)),

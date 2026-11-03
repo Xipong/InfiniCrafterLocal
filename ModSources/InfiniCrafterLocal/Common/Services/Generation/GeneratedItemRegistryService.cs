@@ -40,7 +40,7 @@ public sealed class GeneratedHydrationDebugSnapshot
 /// - Combat/projectile packets only carry compact runtime state + generated item id.
 /// - Remote clients restore visuals/VFX from this local registry/cache, not from per-shot JSON.
 /// </summary>
-public sealed class GeneratedItemRegistryService : IDisposable
+public sealed partial class GeneratedItemRegistryService : IDisposable
 {
     public const byte PacketNotifyGeneratedItem = InfiniNetPacketIds.NotifyGeneratedItem;
     public const byte PacketRequestGeneratedRegistry = InfiniNetPacketIds.RequestGeneratedRegistry;
@@ -115,6 +115,8 @@ public sealed class GeneratedItemRegistryService : IDisposable
         lock (_lock)
         {
             _byId.Clear();
+            _parentMetadata.Clear();
+            _lineageRecoveryReceipts.Clear();
             _incomingDefinitions.Clear();
             _inFlightGeneratedItemHydration.Clear();
             _lastGeneratedItemHydrationRequestTick.Clear();
@@ -137,6 +139,8 @@ public sealed class GeneratedItemRegistryService : IDisposable
         lock (_lock)
         {
             _byId.Clear();
+            _parentMetadata.Clear();
+            _lineageRecoveryReceipts.Clear();
             _incomingDefinitions.Clear();
             _inFlightGeneratedItemHydration.Clear();
             _lastGeneratedItemHydrationRequestTick.Clear();
@@ -197,6 +201,9 @@ public sealed class GeneratedItemRegistryService : IDisposable
 
         lock (_lock)
         {
+            if (_parentMetadata.TryGetValue(data.Id, out var ancestry))
+                RestoreMissingParentMetadata(data, new[] { ancestry });
+            _parentMetadata[data.Id] = ParentMetadata.Capture(data);
             _byId[data.Id] = data;
             _inFlightGeneratedItemHydration.Remove(data.Id);
             _lastGeneratedItemHydrationRequestTick.Remove(data.Id);
@@ -726,18 +733,18 @@ public sealed class GeneratedItemRegistryService : IDisposable
     {
         try
         {
-            if (!Directory.Exists(StoreRoot)) return;
-            // Current scoped records take precedence; historical files remain read-only
-            // and still pass the exact schema/world ownership gate below.
-            string scopedRoot = WorldStoreRoot(CurrentWorldIdString());
-            var files = Directory.Exists(scopedRoot)
-                ? Directory.EnumerateFiles(scopedRoot, "*.json").Concat(Directory.EnumerateFiles(StoreRoot, "*.json"))
-                : Directory.EnumerateFiles(StoreRoot, "*.json");
-            foreach (string file in files)
+            // Current scoped records take precedence. Historical definitions and
+            // the bundled generator's committed recipes are read-only evidence,
+            // never a request to regenerate or rewrite an old craft.
+            var files = LocalDefinitionFiles();
+            var lineageSources = new Dictionary<string, List<ParentMetadata>>(StringComparer.Ordinal);
+            var bundledDefinitions = new Dictionary<string, (GeneratedItemData Data, string Identity)>(StringComparer.Ordinal);
+            var bundledConflicts = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var file in files)
             {
                 try
                 {
-                    string json = File.ReadAllText(file);
+                    string json = File.ReadAllText(file.Path);
                     // Local cache files for every world share this directory. Do a
                     // schema-exact world-id prefilter before strict deserialization so
                     // stale records from unrelated worlds cannot flood diagnostics.
@@ -747,10 +754,34 @@ public sealed class GeneratedItemRegistryService : IDisposable
                     if (!CacheJsonTargetsCurrentWorld(json))
                         continue;
                     var data = GeneratedItemData.FromLocalCacheJson(json);
-                    if (data is not null && !string.IsNullOrWhiteSpace(data.Id) && IsCurrentWorldData(data) && !_byId.ContainsKey(data.Id))
-                        _byId[data.Id] = data;
+                    if (data is null || string.IsNullOrWhiteSpace(data.Id) || !IsCurrentWorldData(data)
+                        || string.Equals(data.Id, "placeholder", StringComparison.OrdinalIgnoreCase)
+                        || GeneratedItemData.IsPlayerSaveReferenceOnly(data)) continue;
+                    if (!file.Bundled)
+                    {
+                        if (!_byId.ContainsKey(data.Id)) _byId[data.Id] = data;
+                    }
+                    else if (!_byId.ContainsKey(data.Id))
+                    {
+                        // Recovery selects a full local definition, not its lossy
+                        // network projection (which drops paths and has a wire budget).
+                        string identity = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(data.ToLocalCacheJson())));
+                        if (bundledDefinitions.TryGetValue(data.Id, out var previous)
+                            && previous.Identity != identity) bundledConflicts.Add(data.Id);
+                        else bundledDefinitions[data.Id] = (data, identity);
+                    }
+                    if (!lineageSources.TryGetValue(data.Id, out var sources))
+                        lineageSources[data.Id] = sources = new List<ParentMetadata>();
+                    sources.Add(ParentMetadata.Capture(data));
                 }
                 catch { }
+            }
+            foreach (var pair in bundledDefinitions)
+                if (!bundledConflicts.Contains(pair.Key)) _byId[pair.Key] = pair.Value.Data;
+            foreach (var pair in _byId)
+            {
+                RestoreMissingParentMetadata(pair.Value, lineageSources[pair.Key]);
+                _parentMetadata[pair.Key] = ParentMetadata.Capture(pair.Value);
             }
         }
         catch { }
