@@ -42,10 +42,10 @@ _GENERATION_MAX_ROWS = 32
 _CURRENT_GENERATION: ContextVar["_GenerationAdmission | None"] = ContextVar("infini_generation_admission", default=None)
 _GENERATION_WAIT_REASONS = frozenset({"none", "generation_slot", "profile_slot", "rate_queue", "provider_cooldown", "provider_quota", "token_window", "pacing", "retry_backoff"})
 _GENERATION_STAGES = frozenset({
-    "admission", "00_prepare", "00_llm_lease", "01_gameplay_author", "01_dev_only_low_level_fixture",
+    "admission", "00_prepare", "00_resume_saved_design", "00_llm_lease", "01_gameplay_author", "01_dev_only_low_level_fixture",
     "02_strict_runtime_program", "02_compile_runtime_program", "02_wire_boundary",
     "02r_conditional_gameplay_repair", "02r_strict_runtime_program", "02r_compile_runtime_program", "02r_wire_boundary",
-    "04_visual_technical_init", "05_visual_director", "06_vfx_director",
+    "03_save_author", "04_visual_technical_init", "05_visual_director", "05_save_visual", "06_vfx_director", "06_save_vfx",
     "07_visual_asset_runtime_gates", "08_visual_asset_generation", "09_visual_delivery_gate",
     "10_generated_parent_summary", "11_final_normalize", "12_final_runtime_wire_gate", "13_stage_accounting",
 })
