@@ -116,14 +116,21 @@ def _terminate_process_tree(proc: subprocess.Popen | Any, *, hard: bool) -> None
 
 def cleanup_server_process(state: SdcppServerState, log_event: LogEvent, reason: str = "cleanup") -> None:
     with state.lock:
-        viewer, state.log_viewer = state.log_viewer, None
+        viewer = state.log_viewer
         if viewer is not None:
             try:
                 if viewer.poll() is None:
-                    viewer.terminate()
-                    viewer.wait(timeout=3)
-            except (OSError, subprocess.SubprocessError):
-                pass
+                    try:
+                        viewer.terminate()
+                        viewer.wait(timeout=3)
+                    except (OSError, subprocess.TimeoutExpired):
+                        viewer.kill()
+                        viewer.wait(timeout=3)
+                if viewer.poll() is not None:
+                    state.log_viewer = None
+            except (OSError, subprocess.SubprocessError) as error:
+                # Retain a still-owned viewer for a later cleanup retry.
+                log_event("warn", "sd.cpp log viewer cleanup failed", {"reason": reason, "error": repr(error)})
         proc = state.process
         if proc is None:
             return
@@ -333,7 +340,7 @@ def ensure_server(
             # Store it as a private attribute so logs keep flowing while the process lives.
             if log_handle is not None:
                 setattr(spawned_process, "_infini_log_handle", log_handle)
-            if os.name == "nt" and show_console and diagnostics_enabled:
+            if os.name == "nt" and show_console and diagnostics_enabled and state.log_viewer is None:
                 # A separate viewer tails the same file; sd-server remains the owned
                 # process, so its actual return code and process tree are preserved.
                 viewer_env = dict(os.environ)
