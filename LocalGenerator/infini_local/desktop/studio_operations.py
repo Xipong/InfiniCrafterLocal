@@ -482,6 +482,7 @@ class StudioOperations:
             else:
                 self.proc = None
                 self._server_lifecycle = "stopped"
+                self._sdcpp_lifecycle = "unknown"
                 self.__dict__.pop('_owned_launch_settings', None)
                 self.__dict__.pop('_owned_server_base_url', None)
                 self.__dict__.pop('_owned_server_launch_id', None)
@@ -493,6 +494,7 @@ class StudioOperations:
                     self._health_after_id = None
                 self._update_applied_config_feedback("Stopped")
                 self.status = ("Server stopped through guarded /shutdown.")
+                self.observe_runtime_notifications(poll=False)
                 return {"ok": True, "message": self.status}
 
         self._run_gui_task("server-action", work, apply)
@@ -530,6 +532,7 @@ class StudioOperations:
             self._owned_server_base_url = launch_url
             self._owned_server_launch_id = launch_id
             self._server_lifecycle = "starting"
+            self.observe_runtime_notifications(poll=False)
             self.status = ("server.py запущен. Runtime config ещё не подтверждён.")
             previous = self.__dict__.get("_health_after_id")
             if previous is not None:
@@ -675,14 +678,62 @@ class StudioOperations:
             lines.append(f"{omitted} rows omitted")
         return "\n".join(lines)
 
+    def observe_runtime_notifications(self, *, poll=True):
+        """Use the existing owner-loop poll and bounded health worker."""
+        proc = self.proc
+        lifecycle = self.__dict__.get("_server_lifecycle", "unknown")
+        try:
+            code = proc.poll() if proc is not None else None
+            alive = proc is not None and code is None
+        except (OSError, subprocess.SubprocessError):
+            code, alive = None, False
+            self._server_lifecycle = lifecycle = "unknown"
+            self._applied_config_ack = None
+            self._sdcpp_lifecycle = "unknown"
+        if proc is not None and code is not None and lifecycle != "stopped":
+            self._server_lifecycle = lifecycle = "exited"
+            self._applied_config_ack = None
+            self._sdcpp_lifecycle = "unknown"
+        current = (lifecycle, self.__dict__.get("_sdcpp_lifecycle", "unknown"))
+        previous = self.__dict__.get("_notified_runtime")
+        self._notified_runtime = current
+        if previous is not None:
+            generator = {
+                "starting": ("info", "Генератор запускается", "Процесс запущен; ожидаем подтверждения готовности."),
+                "responding": ("info", "Генератор готов", "Соединение с генератором подтверждено."),
+                "stopped": ("info", "Генератор остановлен", "Остановка подтверждена."),
+                "exited": ("error", "Генератор завершился", "Процесс больше не работает. Проверь журнал, если остановка была неожиданной."),
+                "unknown": ("warning", "Соединение с генератором потеряно", "Это не означает, что процесс остановлен."),
+            }
+            image = {
+                "ready": ("info", "sd.cpp готов", "Управляемый сервер изображений подтвердил готовность."),
+                "starting": ("info", "sd.cpp запускается", "Ожидаем готовности сервера изображений."),
+                "stopped": ("info", "sd.cpp остановлен", "Завершение управляемого процесса подтверждено."),
+                "exited": ("warning", "sd.cpp завершился", "Управляемый процесс больше не работает."),
+                "unknown": ("warning", "Состояние sd.cpp не подтверждено", "Не считаем процесс остановленным или память освобождённой."),
+                "failed": ("error", "Не удалось запустить sd.cpp", "Подробности доступны в журнале."),
+            }
+            for index, messages in enumerate((generator, image)):
+                if index == 1 and current[1] == "unknown" and current[0] != "responding":
+                    continue  # The generator transition already explains lost observability.
+                if current[index] != previous[index] and current[index] in messages:
+                    notify(self, *messages[current[index]])
+        now = time.monotonic()
+        if (poll and alive and self.__dict__.get("_health_after_id") is None and lifecycle != "stopped" and not self.__dict__.get("_gui_closed", False)
+                and not any(key in self.__dict__.get("_gui_tasks", {}) for key in ("health-config", "server-action"))
+                and now >= self.__dict__.get("_runtime_health_after", 0)):
+            self._runtime_health_after = now + 5
+            self._delayed_health_check()
+
     def _delayed_health_check(self):
         # Called by the owner loop, never a background thread. Capture plain launch
         # inputs here and return results through the same bounded queue pattern.
         if self.__dict__.get("_gui_closed", False):
             return
         studio_request = bool(self.__dict__.get("_studio_command_id"))
-        base_url = self._saved_or_owned_server_base_url() if studio_request else self._server_base_url()
         observed_proc = self.proc
+        owned = observed_proc is not None and observed_proc.poll() is None
+        base_url = self._saved_or_owned_server_base_url() if studio_request or owned else self._server_base_url()
         observed_launch_id = self.__dict__.get('_owned_server_launch_id')
         expected_pid = observed_proc.pid if observed_proc is not None and observed_proc.poll() is None else None
         expected_launch_id = observed_launch_id
@@ -704,11 +755,17 @@ class StudioOperations:
             safe = self._safe_effective_config(snap)
             if safe is None:
                 return None
-            return {"pid": snap.get("pid"), "baseUrl": base_url, "effectiveConfig": safe,
+            image = snap.get("sdcpp")
+            image_state = image.get("processLifecycle") if isinstance(image, dict) else None
+            if not isinstance(image_state, str) or image_state not in {"ready", "starting", "stopped", "exited", "failed", "unknown", "external", "stopping"}:
+                image_state = "unknown"
+            if image_state == "ready" and image.get("processAlive") is not True:
+                image_state = "unknown"
+            return {"sdcppLifecycle": image_state, "pid": snap.get("pid"), "baseUrl": base_url, "effectiveConfig": safe,
                     "activityText": self._generation_activity_text(snap.get("generationActivity"))}
 
         def apply(ok, ack):
-            current_target = self._saved_or_owned_server_base_url() if studio_request else self._server_base_url()
+            current_target = self._saved_or_owned_server_base_url() if studio_request or owned else self._server_base_url()
             if (ack is not None and (ack["baseUrl"] != current_target
                     or self.proc is not observed_proc
                     or self.__dict__.get('_owned_server_launch_id') != observed_launch_id
@@ -718,10 +775,13 @@ class StudioOperations:
             if not ok or ack is None:
                 self._applied_config_ack = None
                 self._server_lifecycle = "unknown"
+                self._sdcpp_lifecycle = "unknown"
                 self.applied_config = ("Runtime config unconfirmed: health/projection unavailable or другая копия (partial; secrets/pools unverified).")
                 return {"ok": False, "message": self.applied_config}
             self._applied_config_ack = ack
+            self._sdcpp_lifecycle = ack["sdcppLifecycle"]
             self._server_lifecycle = "responding"
+            self.observe_runtime_notifications(poll=False)
             self._update_applied_config_feedback()
             self.status = (self.applied_config)
             return {"ok": True, "message": self.applied_config}

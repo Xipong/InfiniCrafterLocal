@@ -587,6 +587,7 @@ internal static partial class EngineRuntimeChecks
             ("placed light footprint persistence break unload", PlacedLightOwnsFootprintNotPlayerAndPersists),
             ("placed light server mirror exact definition quarantine", PlacedLightMirrorAuthenticatesServerAndExactDefinition),
             ("placed body native profile hash shape and lifecycle", PlacedNativeProfileKeepsExactHashShapeAndLifecycle),
+            ("native semantic catalogs dependency-specific admission", NativeSemanticCatalogsMatchLoadedContracts),
             ("native chest SP native callback outcome", NativeChestSinglePlayerOutcome),
             ("native chest callback fault bounded rollback", NativeChestCallbackFaultRollsBack),
             ("native chest break native contents removal authority", NativeChestBreakWaitsForNativeRemoval),

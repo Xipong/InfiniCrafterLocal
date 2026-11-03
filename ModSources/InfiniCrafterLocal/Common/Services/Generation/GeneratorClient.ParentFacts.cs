@@ -22,23 +22,12 @@ namespace InfiniCrafterLocal.Common.Services;
 // Native facts are captured once; player-dependent ammo remains a separate observation.
 public sealed partial class GeneratorClient
 {
-    // Read-only source certificate, not generated behavior or AI dispatch. A
-    // different native method declines the observation instead of guessing it.
-    private const string MotionSourceMethodSha256 = "5ce22f6374b8b786ee332454aa0bb136ebd20c57520929b41fe4f328dca56d9b";
-    private const string InstalledMotionSourceMethodSha256 = "cf0488832f92e43e699ae307df6f73d90f88f17194250f0a39ca5715a9e0631b";
+    // Read-only source certificate; the audited AI_001 body is compared by
+    // resolved semantics, never executed or inherited as generated behavior.
     private static readonly Lazy<string?> MotionSourceCertificate = new(() =>
     {
-        try
-        {
-            byte[]? il = typeof(Projectile).GetMethod("AI_001", System.Reflection.BindingFlags.Instance
-                | System.Reflection.BindingFlags.NonPublic)?.GetMethodBody()?.GetILAsByteArray();
-            if (il is null) return null;
-            string hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(il)).ToLowerInvariant();
-            // Both exact implementations were independently executed through
-            // native AI (delay/increment/cap). This is not an inferred IL alias.
-            return hash is MotionSourceMethodSha256 or InstalledMotionSourceMethodSha256 ? hash : null;
-        }
-        catch { return null; }
+        string? current = NativeAttackCertificate(typeof(Projectile), "AI_001");
+        return AuditedNativeCertificate(current, "motion") is not null ? current!.Split(':')[0] : null;
     });
 
     internal static JsonObject ToWireItem(Item item, Player? player = null)
@@ -441,16 +430,16 @@ public sealed partial class GeneratorClient
                 : !certified ? "native_binary_or_method_certificate_unavailable"
                 : (catalogRecord ?? facts[key] is not null) ? "partial_certified_source_record"
                 : "no_supported_catalog_record; absence_not_proved";
-            bool contactCertificate = ContactHitStatusCertificate.Value is string contactKey
+            bool contactCertificate = AuditedNativeCertificate(ContactHitStatusCertificate.Value, "hit_status") is string contactKey
                 && NativeHitStatusCatalog.Sources.TryGetValue(contactKey, out _);
-            bool contactRecord = ContactHitStatusCertificate.Value is string recordKey
+            bool contactRecord = AuditedNativeCertificate(ContactHitStatusCertificate.Value, "hit_status") is string recordKey
                 && NativeHitStatusCatalog.Sources.TryGetValue(recordKey, out var contactRows) && contactRows.ContainsKey(item.type);
             graph["nativeCatalogCoverage"] = new JsonObject
             {
                 ["shoot"] = Coverage("nativeShootReference", item.ModItem is null, ShootFactCertificate.Value is not null
-                    && NativeAttackFactsCatalog.Sources.ContainsKey("Player.ItemCheck_Shoot:" + ShootFactCertificate.Value)),
+                    && NativeAttackFactsCatalog.Sources.ContainsKey("Player.ItemCheck_Shoot:" + AuditedNativeCertificate(ShootFactCertificate.Value, "attack"))),
                 ["contactStatus"] = Coverage("nativeContactHitStatusReference", item.ModItem is null, contactCertificate, contactRecord),
-                ["equipment"] = Coverage("nativeEquipmentReference", item.ModItem is null, NativeSourceModuleVerified.Value
+                ["equipment"] = Coverage("nativeEquipmentReference", item.ModItem is null, NativeCatalogVerified("equipment")
                     && (EquipmentFactRows.Value is not null || ArmorSetFactRows.Value is not null)),
                 ["environment"] = Coverage("nativeEnvironmentReference", item.ModItem is null, NativeSourceModuleVerified.Value),
             };
@@ -721,7 +710,8 @@ public sealed partial class GeneratorClient
         return new
         {
             source = "verified_native_AI_001_reference", fullName = "Terraria/WoodenArrowFriendly",
-            sourceMethodSha256 = certificate, firstGravityUpdate = 15,
+            sourceMethodSha256 = certificate, sourceModuleVersionId = typeof(Projectile).Module.ModuleVersionId.ToString(),
+            auditedSourceCertificate = AuditedNativeCertificate(certificate + ":" + typeof(Projectile).Module.ModuleVersionId, "motion"), firstGravityUpdate = 15,
             verticalVelocityIncrementPerUpdate = 0.1f, maxDownwardVelocityPxPerUpdate = 16f,
             units = "velocity in pixels/projectile update; start counts native AI invocations",
             scope = "Native dry initial flight with default AI state; not collision/liquid/global-mod behavior. Read-only reference, not inherited execution. Generated move_gravity_arc starts immediately and is not an exact delayed native-AI replica. Author chooses the trajectory explicitly."
