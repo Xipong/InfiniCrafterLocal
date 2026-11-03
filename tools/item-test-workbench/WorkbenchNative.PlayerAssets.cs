@@ -18,6 +18,7 @@ using Terraria.ID;
 internal sealed class WNativePlayerAssets:IDisposable
 {
  static readonly Dictionary<string,string> ExpectedHashes=new(StringComparer.Ordinal){
+  ["BackPack_2.png"]="d11d04bc7994ee9ae064ad6be0f4ee774741fbe9695957411c0b24fb4f92d89c",
   ["Player_0_0.png"]="95e272aefac3ab5eda8f2bad352f404442820b952872365d444d8c2973c8a5df",
   ["Player_0_1.png"]="ac7f437365b5fdd5bc3025cda82904364ebe68f8d766baba95e12bc5e8999a84",
   ["Player_0_2.png"]="e9ed6edbd5efdb701ea09c1d90e533eb6bddea2f0a9b94c44557f57f1bb6990e",
@@ -43,18 +44,20 @@ internal sealed class WNativePlayerAssets:IDisposable
  readonly AssetRepository assets;
  readonly IAssetRepository oldAssets;
  readonly Asset<Texture2D>[,] oldPlayers;
- readonly Asset<Texture2D>[] oldHair,oldHairAlt;
+ readonly Asset<Texture2D>[] oldHair,oldHairAlt,oldBackpacks;
  readonly Asset<Texture2D> oldPixel,oldDust;
  readonly Effect oldShader;
  readonly Asset<Effect> shader;
  public JsonObject Report {get;}
- public WNativePlayerAssets(WorkbenchGraphicsContext graphics,string assetRoot)
+ public WNativePlayerAssets(WorkbenchGraphicsContext graphics,string assetRoot,int? backpackTexture=null)
  {
+  if(backpackTexture is not null and not 2)throw new NotSupportedException("Only pinned backpackTexture=2 is admitted");
   assetRoot=Path.GetFullPath(assetRoot);
   string content=Environment.GetEnvironmentVariable("INFINI_TML_CONTENT_DIR")??throw new InvalidOperationException("Set INFINI_TML_CONTENT_DIR to the matching installed tModLoader Content directory");
   string shaderPath=Path.Combine(content,"PixelShader.xnb");
   if(!File.Exists(shaderPath))throw new FileNotFoundException("Actual tModLoader PixelShader.xnb required; set INFINI_TML_CONTENT_DIR",shaderPath);
   string[] names=Enumerable.Range(0,14).Append(15).Select(i=>"Player_0_"+i).Concat(new[]{"Player_Hair_1","Player_HairAlt_1","MagicPixel","Dust"}).ToArray();
+  if(backpackTexture.HasValue)names=names.Append("BackPack_"+backpackTexture.Value).ToArray();
   var verifiedBytes=new Dictionary<string,byte[]>(StringComparer.Ordinal);
   foreach(string name in names)verifiedBytes.Add(name,VerifiedSourcePng(assetRoot,name));
   byte[] shaderBytes=File.ReadAllBytes(shaderPath);
@@ -77,7 +80,7 @@ internal sealed class WNativePlayerAssets:IDisposable
    receipts.Add(new JsonObject{["asset"]=name,["file"]=path,["sha256"]=Hash(verifiedBytes[name]),["stagedSha256"]=stagedHash,["nativeContentSource"]="Private staging of exactly verified source bytes",["state"]=asset.State.ToString(),["width"]=texture.Width,["height"]=texture.Height,["gpuPremultipliedRgbaSha256"]=Hash(rgba),["partialAlphaPixels"]=pixels.Count(p=>p.A>0&&p.A<255),["loader"]="Original ReLogic PngReader with native alpha premultiplication"});
   }
   using(var stream=new MemoryStream(shaderBytes,writable:false))shader=assets.CreateUntracked<Effect>(stream,"PixelShader.xnb",AssetRequestMode.ImmediateLoad);
-  oldAssets=Main.Assets;oldPlayers=TextureAssets.Players;oldHair=TextureAssets.PlayerHair;oldHairAlt=TextureAssets.PlayerHairAlt;oldPixel=TextureAssets.MagicPixel;oldDust=TextureAssets.Dust;oldShader=Main.pixelShader;globalsCaptured=true;
+  oldAssets=Main.Assets;oldPlayers=TextureAssets.Players;oldHair=TextureAssets.PlayerHair;oldHairAlt=TextureAssets.PlayerHairAlt;oldPixel=TextureAssets.MagicPixel;oldDust=TextureAssets.Dust;oldBackpacks=TextureAssets.BackPack;oldShader=Main.pixelShader;globalsCaptured=true;
   Main.Assets=assets;
   TextureAssets.Players=new Asset<Texture2D>[PlayerVariantID.Count,PlayerTextureID.Count];
   // Real restricted initializer sets exact15parts plus native Empty slot14; no copied pose/frame logic.
@@ -85,9 +88,10 @@ internal sealed class WNativePlayerAssets:IDisposable
   TextureAssets.PlayerHair=(Asset<Texture2D>[])oldHair.Clone();TextureAssets.PlayerHairAlt=(Asset<Texture2D>[])oldHairAlt.Clone();
   TextureAssets.PlayerHair[0]=assets.Request<Texture2D>("Images/Player_Hair_1",AssetRequestMode.ImmediateLoad);TextureAssets.PlayerHairAlt[0]=assets.Request<Texture2D>("Images/Player_HairAlt_1",AssetRequestMode.ImmediateLoad);
   TextureAssets.MagicPixel=assets.Request<Texture2D>("Images/MagicPixel",AssetRequestMode.ImmediateLoad);TextureAssets.Dust=assets.Request<Texture2D>("Images/Dust",AssetRequestMode.ImmediateLoad);Main.PixelShaderRef.Value=shader.Value;
-  Report=new JsonObject{["scope"]="Native starter male skinVariant0/hair0 assets; no armor, accessories, alternate skins or hairstyle selection",["source"]="Community-extracted Terraria source PNGs, not official byte-certified game assets",["upstreamRepository"]="https://github.com/sullerandras/terraria-hd-textures",["referenceCommit"]="c835594415e31ed88734dc778661014b48ffb648",["referenceVersionClaim"]="Textures from Terraria 1.4.4.9",["officialByteIdentityVerified"]=false,["pinnedCommunityPngHashesVerified"]=true,["pixelMutation"]="No source pixels edited; original native PngReader performs normal premultiplication",["alphaScope"]="Starter player/hair and MagicPixel have binary alpha in verified reference; Dust has partial alpha, upstream straight/premultiplied extraction semantics not independently certified",["pixelShaderPath"]=shaderPath,["pixelShaderSha256"]=Hash(shaderBytes),["textures"]=receipts};
+  if(backpackTexture.HasValue){TextureAssets.BackPack=(Asset<Texture2D>[])oldBackpacks.Clone();TextureAssets.BackPack[backpackTexture.Value]=assets.Request<Texture2D>("Images/BackPack_"+backpackTexture.Value,AssetRequestMode.ImmediateLoad);}
+  Report=new JsonObject{["backpackTexture"]=backpackTexture,["scope"]="Native starter male skinVariant0/hair0 assets; no armor, accessories, alternate skins or hairstyle selection",["source"]="Community-extracted Terraria source PNGs, not official byte-certified game assets",["upstreamRepository"]="https://github.com/sullerandras/terraria-hd-textures",["referenceCommit"]="c835594415e31ed88734dc778661014b48ffb648",["referenceVersionClaim"]="Textures from Terraria 1.4.4.9",["officialByteIdentityVerified"]=false,["pinnedCommunityPngHashesVerified"]=true,["pixelMutation"]="No source pixels edited; original native PngReader performs normal premultiplication",["alphaScope"]="Starter player/hair and MagicPixel have binary alpha in verified reference; Dust has partial alpha, upstream straight/premultiplied extraction semantics not independently certified",["pixelShaderPath"]=shaderPath,["pixelShaderSha256"]=Hash(shaderBytes),["textures"]=receipts};
   } catch {
-   if(globalsCaptured){Main.Assets=oldAssets;TextureAssets.Players=oldPlayers;TextureAssets.PlayerHair=oldHair;TextureAssets.PlayerHairAlt=oldHairAlt;TextureAssets.MagicPixel=oldPixel;TextureAssets.Dust=oldDust;Main.PixelShaderRef.Value=oldShader;}
+   if(globalsCaptured){Main.Assets=oldAssets;TextureAssets.Players=oldPlayers;TextureAssets.PlayerHair=oldHair;TextureAssets.PlayerHairAlt=oldHairAlt;TextureAssets.MagicPixel=oldPixel;TextureAssets.Dust=oldDust;TextureAssets.BackPack=oldBackpacks;Main.PixelShaderRef.Value=oldShader;}
    try { shader?.Dispose();assets?.Dispose(); } catch { }
    try {Directory.Delete(stagedRoot,true);} catch { }
    throw;
@@ -104,7 +108,7 @@ internal sealed class WNativePlayerAssets:IDisposable
   return sourceBytes;
  }
  static string Hash(byte[] data)=>Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
- public void Dispose(){Main.Assets=oldAssets;TextureAssets.Players=oldPlayers;TextureAssets.PlayerHair=oldHair;TextureAssets.PlayerHairAlt=oldHairAlt;TextureAssets.MagicPixel=oldPixel;TextureAssets.Dust=oldDust;Main.PixelShaderRef.Value=oldShader;shader.Dispose();assets.Dispose();if(Directory.Exists(stagedRoot))Directory.Delete(stagedRoot,true);}
+ public void Dispose(){Main.Assets=oldAssets;TextureAssets.Players=oldPlayers;TextureAssets.PlayerHair=oldHair;TextureAssets.PlayerHairAlt=oldHairAlt;TextureAssets.MagicPixel=oldPixel;TextureAssets.Dust=oldDust;TextureAssets.BackPack=oldBackpacks;Main.PixelShaderRef.Value=oldShader;shader.Dispose();assets.Dispose();if(Directory.Exists(stagedRoot))Directory.Delete(stagedRoot,true);}
 }
 
 // Current detached DrawLayer consumes genuine MagicPixel even in VFX-only mode.

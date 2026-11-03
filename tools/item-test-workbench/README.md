@@ -1150,3 +1150,46 @@ bobber, line and caught fish. Existing 600-tick/pixel GPU limits are unchanged.
 actual native loading plus missing/corrupt texture, duplicate/over-budget IDs and
 incompatible render-mode refusals. Its 12-tick positive does not claim a catch:
 explicitly loading a fish texture must not grant that fish to inventory.
+
+### Explicit native solution-emission observations
+
+The default vanilla performance path still refuses non-damaging items. For
+emission, trajectory, ammunition and pose observations, opt in with
+`--set vanillaUtilityEmission=true`. This requires a native non-damaging
+solution-ammo shoot item, no melee contact or placement, and full Player.Update.
+Generated items and damage weapons refuse the utility flag. The trace records
+`coverage.utilityEmissionScope`; it does not certify damage or world conversion.
+Native negative damage sentinels are preserved, not replaced with fabricated damage.
+
+The Clentaminator's native player layer also requires its real backpack texture:
+
+```sh
+python tools/item-test-workbench/fetch_player_assets.py \
+  --out /path/to/player-assets --include-backpack
+export INFINI_PLAYER_ASSET_DIR=/path/to/player-assets
+python -m toolbox workbench probe --vanilla-item Clentaminator --gif \
+  --vanilla-assets /path/to/vanilla-assets --ammo 780:100 \
+  --set vanillaUtilityEmission=true --set nativeRender.backpackTexture=2 \
+  --set nativeRender.drawVanillaProjectiles=false
+```
+
+`backpackTexture=2` explicitly loads the pinned original community BackPack_2 PNG
+through the existing native ReLogic loader. Missing, changed or unsupported
+textures refuse; no placeholder is substituted. The optional fetch leaves the
+20-file default unchanged. Vanilla projectile sprite drawing remains disabled in
+this pose/dust scene, and the trace discloses that omission. PureSpray uses an
+invisible projectile and native dust; do not generalize that fact to other
+projectiles or claim full-world visual parity. `probe` preserves an explicitly
+false `drawVanillaProjectiles` setting; its ordinary vanilla GIF default stays true.
+
+Behavioral admission/ammo regressions:
+
+```sh
+python tools/item-test-workbench/verify_utility_emission.py \
+  --native-dll /path/to/ItemTestWorkbench.dll \
+  --generated-item /path/to/accepted-item.json --out /fresh/evidence/path
+```
+
+Add `--player-assets /path/to/player-assets --vanilla-assets /path/to/vanilla-assets`
+to that regression command to also execute real native refusals for missing,
+corrupt and unsupported backpack assets. These tests alter only private copies.

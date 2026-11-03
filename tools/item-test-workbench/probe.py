@@ -289,7 +289,7 @@ def plan_probe(args):
             if "vanillaItem" in source:
                 scenes[scene_key]["vanillaAssetRoot"] = str(args.vanilla_assets.expanduser().resolve())
                 scenes[scene_key]["nativeRender"]["artworkFiles"] = []
-                scenes[scene_key]["nativeRender"]["drawVanillaProjectiles"] = True
+                scenes[scene_key]["nativeRender"].setdefault("drawVanillaProjectiles", True)
             else:
                 scenes[scene_key]["nativeRender"]["artworkFiles"] = source["artworkFiles"]
             if "worldId" in source:

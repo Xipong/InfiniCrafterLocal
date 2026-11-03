@@ -35,8 +35,19 @@ internal static partial class EngineRuntimeChecks
         ["nativeBuffs"]=new JsonArray(Enumerable.Range(0,npc.buffType.Length).Where(i=>npc.buffType[i]>0&&npc.buffTime[i]>0).Select(i=>(JsonNode?)new JsonObject{["id"]=npc.buffType[i],["ticks"]=npc.buffTime[i]}).ToArray()),
         ["scope"]="Native state at snapshot boundary. Generated effect totals are active modifiers, not proof of a hit, damage, or contact; defenseDelta is applied via ModifyIncomingHit, not npc.defense. Buff presence is sampled uptime; read aiStyle/noTileCollide and scene intervention receipts for controlled versus genuine training-dummy behavior."};
     }
-    private static void WValidateVanillaPerformance(Item item,GeneratedItemData? data,bool client,bool passiveEquipmentScene=false,bool fullPlayer=false)
+    private static void WValidateVanillaPerformance(Item item,GeneratedItemData? data,bool client,bool passiveEquipmentScene=false,bool fullPlayer=false,bool utilityEmission=false)
     {
+        if(utilityEmission)
+        {
+            // Explicit observational scope, not a zero-damage performance benchmark.
+            // Solution provisioning already executes native PickAmmo. Keep other
+            // noncombat lifecycles refused until independently admitted.
+            if(data is not null || !fullPlayer || item.damage>0 || !item.noMelee ||
+                item.useStyle!=ItemUseStyleID.Shoot || item.shoot<=0 || item.useAmmo!=AmmoID.Solution ||
+                item.accessory || item.createTile>=0 || item.createWall>=0)
+                throw new NotSupportedException("Utility emission requires a vanilla non-damaging solution shoot item and full player lifecycle");
+            return;
+        }
         if(data is not null)return;
         if(item.fishingPole>0 && item.shoot==ProjectileID.BobberWooden && item.useAmmo==0){if(!fullPlayer)throw new NotSupportedException("Native fishing requires full player lifecycle");return;}
         if(item.accessory && passiveEquipmentScene && !client)return;

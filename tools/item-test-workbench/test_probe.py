@@ -21,6 +21,14 @@ def arguments(*values):
 
 
 class ProbeTests(unittest.TestCase):
+    def test_vanilla_projectile_render_override_preserves_explicit_false(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = ("--vanilla-item", "Clentaminator", "--gif", "--vanilla-assets", directory)
+            default = probe.plan_probe(arguments(*base))
+            explicit = probe.plan_probe(arguments(*base, "--set", "nativeRender.drawVanillaProjectiles=false"))
+            self.assertTrue(default["scenes"]["001-primary"]["nativeRender"]["drawVanillaProjectiles"])
+            self.assertFalse(explicit["scenes"]["001-primary"]["nativeRender"]["drawVanillaProjectiles"])
+
     def test_single_tick_equipment_and_idle_do_not_require_release(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

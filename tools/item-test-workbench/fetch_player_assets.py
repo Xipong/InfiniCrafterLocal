@@ -38,7 +38,7 @@ def verify_png(data: bytes, entry: dict, label: str) -> None:
         raise ValueError(f"PNG geometry mismatch: {label}")
 
 
-def provision(out: Path, manifest: dict, fetch=download, *, include_dummy: bool = False, include_zombie: bool = False) -> dict:
+def provision(out: Path, manifest: dict, fetch=download, *, include_dummy: bool = False, include_zombie: bool = False, include_backpack: bool = False) -> dict:
     if manifest["commit"] != COMMIT:
         raise ValueError("Unsupported community source commit")
     entries = list(manifest["files"])
@@ -53,6 +53,11 @@ def provision(out: Path, manifest: dict, fetch=download, *, include_dummy: bool 
         extra = manifest.get("zombieFiles", [])
         if len(extra) != 1 or {e["path"] for e in extra} != {"Images/" + name for name in ZOMBIE_REQUIRED}:
             raise ValueError("Optional zombie manifest must contain exactly NPC_3")
+        entries += extra
+    if include_backpack:
+        extra = manifest.get("backpackFiles", [])
+        if len(extra) != 1 or {e["path"] for e in extra} != {"Images/BackPack_2.png"}:
+            raise ValueError("Optional backpack manifest must contain exactly BackPack_2")
         entries += extra
     out = out.absolute()
     if any(part.is_symlink() for part in (out, *out.parents)) or (out.exists() and not out.is_dir()):
@@ -88,7 +93,7 @@ def provision(out: Path, manifest: dict, fetch=download, *, include_dummy: bool 
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
     return {"status": "verified", "output": str(out), "downloaded": fetched, "reused": reused,
-            "verifiedFiles": len(entries), "includesTrainingDummy": include_dummy, "includesZombie": include_zombie, "communityCommit": COMMIT, "versionClaim": "1.4.4.9",
+            "verifiedFiles": len(entries), "includesTrainingDummy": include_dummy, "includesZombie": include_zombie, "includesBackpack": include_backpack, "communityCommit": COMMIT, "versionClaim": "1.4.4.9",
             "officialByteIdentityVerified": False, "nativeRuntimeReady": False,
             "scope": "Pinned community source PNG integrity and dimensions verified; original native rendering is checked separately."}
 
@@ -98,9 +103,10 @@ def main() -> int:
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--include-dummy", action="store_true", help="Also fetch the two pinned native training-dummy textures (default: 20 player/empty-item textures)")
     parser.add_argument("--include-zombie", action="store_true", help="Also fetch the pinned controlled zombie texture")
+    parser.add_argument("--include-backpack", action="store_true", help="Also fetch pinned BackPack_2 for explicit native backpackTexture=2")
     args = parser.parse_args()
     try:
-        result = provision(args.out, json.loads(MANIFEST.read_text(encoding="utf-8")), include_dummy=args.include_dummy, include_zombie=args.include_zombie)
+        result = provision(args.out, json.loads(MANIFEST.read_text(encoding="utf-8")), include_dummy=args.include_dummy, include_zombie=args.include_zombie, include_backpack=args.include_backpack)
     except (OSError, ValueError, KeyError, TypeError) as error:
         print(json.dumps({"status": "error", "error": str(error)})); return 2
     print(json.dumps(result, indent=2)); return 0
