@@ -7,6 +7,10 @@ on:
         description: Apply guarded replacement (false only validates/downloads)
         type: boolean
         default: false
+      confirm_asset_replacement:
+        description: Delete the six old release assets after verified backup and new uploads
+        type: boolean
+        default: false
       tag:
         description: Existing version tag
         required: true
