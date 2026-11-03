@@ -326,3 +326,14 @@ DPS, multiplayer, arbitrary C# semantics или доказательство в�
 AI, tile/buff/banner и всех остальных contact-status hooks. Новые equipment/set
 checks сравнивают source-факты с реальными GrantArmorBenefits/UpdateArmorSets,
 включая mixed/incomplete slots и отсутствие изменения владельца при Prepare. Непокрытое остаётся неизвестным.
+
+
+### Совместимость нативных исходников между сборками
+
+SHA всего tModLoader — диагностическая идентичность, а не запрет механики при любом обновлении. Placed-body adapter предупреждает о незнакомой сборке один раз и по-прежнему проверяет все 19 типизированных IL-контрактов и текущую цепочку hooks до включения.
+
+Кэшированные native facts допускаются по семантическим сертификатам конкретных методов и явно используемых зависимостей: разрешённые типы/члены, инструкции, операнды, переходы, локальные типы и EH. Перенумерация metadata tokens/MVID не меняет сертификат; изменение значимой зависимости оставляет неизвестными только факты соответствующего каталога. Метаданные читаются один раз; MVID и IL-байты сверяются с реально загруженным методом. Это не доказательство поведения произвольных mod hooks. Live source graph читает текущий IL независимо от доступности frozen catalogs и сохраняет свои partial/unknown границы.
+
+В provenance различаются исходная проверенная экстракция (audited certificate и сохранённые данные экстракции) и текущая наблюдаемая сборка (`observed*`); старые signature tokens не объявляются токенами новой сборки. Existing registry values остаются текущими наблюдениями, а не константами из прошлого DLL.
+
+Карта сертификатов генерируется metadata-only инструментом `tools/generate/native_source_certificates/NativeSourceCertificates.csproj` из официального DLL и существующих `contracts/reports/native_*_sources.generated.json`; общий `NativeSourceFingerprint` используется и генератором, и runtime. Аргументы: `<assembly> <reports directory> <output NativeSourceCertificates.g.cs> [--check]`, MSBuild property `InfiniTmlReferenceDir` указывает существующие tML reference assemblies. Неразрешённый или неоднозначный обязательный source key прерывает генерацию, а не создаёт частичный сертификат.

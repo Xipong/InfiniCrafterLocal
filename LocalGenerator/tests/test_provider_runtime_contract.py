@@ -295,3 +295,37 @@ def test_failure_record_keeps_each_exception_snapshot_isolated(monkeypatch: pyte
 
     snapshots[0]["payload"]["request"] = "mutated"
     assert getattr(errors[0], "_infini_failure_snapshot")["payload"]["request"] == 0
+
+
+@pytest.mark.parametrize('exit_confirmed', [False, True])
+@pytest.mark.parametrize('reason', ['cleanup', 'startup_exited', 'startup_timeout'])
+def test_sdcpp_cleanup_retains_unconfirmed_process(monkeypatch, exit_confirmed, reason):
+    from types import SimpleNamespace
+    calls = []
+    code = [None]
+    def wait(timeout):
+        calls.append(timeout)
+        if exit_confirmed:
+            code[0] = 0
+            return 0
+        raise subprocess.TimeoutExpired('owned-test-process', timeout)
+    proc = SimpleNamespace(poll=lambda: code[0], wait=wait)
+    state = sdcpp_service.SdcppServerState(process=proc)
+    state.lifecycle = 'ready'
+    monkeypatch.setattr(sdcpp_service, '_terminate_process_tree', lambda *_a, **_k: None)
+    monkeypatch.setattr(sdcpp_service, '_close_process_log_handle', lambda _p: calls.append('closed'))
+    sdcpp_service.cleanup_server_process(state, lambda *_args: None, reason)
+    assert state.process is (None if exit_confirmed else proc)
+    assert state.lifecycle == (('stopped' if reason == 'cleanup' else 'failed') if exit_confirmed else 'unknown')
+    assert calls == ([5, 'closed'] if exit_confirmed else [5, 3])
+
+
+def test_sdcpp_ready_is_owned_or_external_without_guessing(service_options):
+    from types import SimpleNamespace
+    state = service_options['state']
+    options = {**service_options, 'server_is_alive': lambda: True}
+    assert sdcpp_service.ensure_server(**options)
+    assert state.lifecycle == 'external'
+    state.process = SimpleNamespace(poll=lambda: None)
+    assert sdcpp_service.ensure_server(**options)
+    assert state.lifecycle == 'ready'

@@ -242,3 +242,62 @@ def test_repeated_account_requests_use_one_worker_and_one_pending(host, monkeypa
     assert len(calls) == 2
     assert len(host.receipts) == 21
     assert not host._studio_async_ids
+
+
+def test_owned_lifecycle_notifications_are_transition_only_and_health_is_bounded(host, monkeypatch):
+    from types import SimpleNamespace
+    notices, polls = [], []
+    host._ui_notification_sink = lambda *row: notices.append(row)
+    clock = [10.0]
+    monkeypatch.setattr(operations.time, 'monotonic', lambda: clock[0])
+    monkeypatch.setattr(host, '_delayed_health_check', lambda: polls.append(clock[0]))
+    host.observe_runtime_notifications()
+    assert notices == [] and polls == []
+    code = [None]
+    host.proc = SimpleNamespace(poll=lambda: code[0])
+    host._server_lifecycle = 'starting'
+    host.observe_runtime_notifications()
+    assert len(notices) == 1 and polls == [10.0]
+    host.observe_runtime_notifications()
+    assert len(notices) == 1 and polls == [10.0]
+    host._server_lifecycle, host._sdcpp_lifecycle = 'responding', 'ready'
+    host.observe_runtime_notifications()
+    assert len(notices) == 3
+    clock[0] = 16
+    host._gui_tasks = {'health-config': {}}
+    host.observe_runtime_notifications()
+    assert polls == [10.0]
+    host._gui_tasks = {}
+    host.observe_runtime_notifications()
+    assert polls == [10.0, 16]
+    host._server_lifecycle, host._sdcpp_lifecycle = 'unknown', 'unknown'
+    host.observe_runtime_notifications()
+    assert host.proc.poll() is None and len(notices) == 4
+    host._server_lifecycle, host._sdcpp_lifecycle = 'responding', 'ready'
+    host.observe_runtime_notifications()
+    assert len(notices) == 6
+    code[0] = 1
+    host.observe_runtime_notifications()
+    assert host._server_lifecycle == 'exited' and host._sdcpp_lifecycle == 'unknown'
+    assert len(notices) == 7
+    host.observe_runtime_notifications()
+    assert len(notices) == 7 and polls == [10.0, 16]
+    host.proc = None
+    host._server_lifecycle = 'stopped'
+    host.observe_runtime_notifications()
+    assert len(notices) == 8
+    host.observe_runtime_notifications()
+    assert len(notices) == 8
+
+
+def test_owned_process_poll_failure_is_unknown_not_exit(host):
+    from types import SimpleNamespace
+    def unavailable():
+        raise OSError('not observable')
+    host.proc = SimpleNamespace(poll=unavailable)
+    host._server_lifecycle = 'responding'
+    host._sdcpp_lifecycle = 'ready'
+    host.observe_runtime_notifications()
+    assert host._server_lifecycle == 'unknown'
+    assert host._sdcpp_lifecycle == 'unknown'
+    assert not host.jobs
