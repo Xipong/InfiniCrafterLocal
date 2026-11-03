@@ -41,11 +41,13 @@ public sealed partial class GeneratorClient
         foreach (var (method, certificate) in new[] { ("Player.PickAmmo", AmmoPickCertificate.Value), ("Player.ItemCheck_Shoot", ShootFactCertificate.Value) })
         {
             var stage = new JsonObject { ["method"] = method, ["rules"] = new JsonArray(), ["spawnSites"] = new JsonArray() };
-            if (certificate is not null && NativeAmmoFactsCatalog.Sources.TryGetValue(method + ":" + certificate, out var catalog))
+            string? audited = AuditedNativeCertificate(certificate, "ammo");
+            if (certificate is not null && audited is not null && NativeAmmoFactsCatalog.Sources.TryGetValue(method + ":" + audited, out var catalog))
             {
-                stage["sourceMethodSha256"] = certificate.Split(':')[0];
-                stage["sourceModuleVersionId"] = certificate.Split(':')[1];
-                var baseline = JsonNode.Parse(NativeAmmoFactsCatalog.Selection[method + ":" + certificate])!;
+                stage["sourceVerification"] = NativeMethodProvenance(certificate, audited);
+                stage["sourceMethodSha256"] = audited.Split(':')[0];
+                stage["sourceModuleVersionId"] = audited.Split(':')[1];
+                var baseline = JsonNode.Parse(NativeAmmoFactsCatalog.Selection[method + ":" + audited])!;
                 stage["defaultProjectileSelection"] = baseline["defaultProjectileSelection"]?.DeepClone();
                 stage["sourceStageCallSites"] = baseline["sourceStageCallSites"]!.DeepClone();
                 if (method == "Player.PickAmmo")
@@ -54,8 +56,8 @@ public sealed partial class GeneratorClient
                     bool verified = dispatch.OfType<JsonObject>().All(row => {
                         string name = row["method"]!.GetValue<string>();
                         Type owner = name.StartsWith("Terraria.ModLoader.ItemLoader.") ? typeof(ItemLoader) : typeof(CombinedHooks);
-                        return NativeAttackCertificate(owner, name.Substring(name.LastIndexOf('.') + 1))
-                            == row["sourceMethodSha256"]!.GetValue<string>() + ":" + certificate.Split(':')[1];
+                        return AuditedNativeCertificate(NativeAttackCertificate(owner, name.Substring(name.LastIndexOf('.') + 1)), "ammo")
+                            == row["sourceMethodSha256"]!.GetValue<string>() + ":" + audited.Split(':')[1];
                     });
                     if (verified) stage["hookDispatchTrace"] = dispatch.DeepClone();
                     else unknowns.Add("Native hook dispatch source certificate differs; generated dispatcher trace withheld.");
@@ -168,7 +170,7 @@ public sealed partial class GeneratorClient
             {
                 if (stage["defaultProjectileSelection"] is not JsonObject selection
                     || selection["specificMatchLookupFirst"]?.GetValue<bool>() != true
-                    || AmmoSpecificMatchCertificate.Value != selection["specificMatchLookupCertificate"]?.GetValue<string>())
+                    || AuditedNativeCertificate(AmmoSpecificMatchCertificate.Value, "ammo") != selection["specificMatchLookupCertificate"]?.GetValue<string>())
                     known = false;
                 else try
                 {

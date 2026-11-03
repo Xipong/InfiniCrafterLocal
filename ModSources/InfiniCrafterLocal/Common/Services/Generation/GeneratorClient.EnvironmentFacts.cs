@@ -13,22 +13,9 @@ namespace InfiniCrafterLocal.Common.Services;
 
 public sealed partial class GeneratorClient
 {
-    // A module-wide file certificate covers the property getters and banner
-    // helpers as well as the extracted methods. Read once; this certifies the
-    // original binary, not in-memory detours or arbitrary mod behavior.
-    private static readonly Lazy<bool> NativeSourceModuleVerified = new(() =>
-    {
-        try
-        {
-            var assembly = typeof(Player).Assembly;
-            if (typeof(Player).Module.ModuleVersionId.ToString() != NativeEnvironmentFactsCatalog.ModuleVersionId)
-                return false;
-            using var stream = File.OpenRead(assembly.Location);
-            return Convert.ToHexString(SHA256.HashData(stream)).Equals(
-                NativeEnvironmentFactsCatalog.AssemblySha256, StringComparison.OrdinalIgnoreCase);
-        }
-        catch { return false; }
-    });
+    // Frozen environment facts require only their explicit semantic dependency
+    // closure, not an exact whole-file build identity.
+    private static readonly Lazy<bool> NativeSourceModuleVerified = new(() => NativeCatalogVerified("environment"));
 
     internal static JsonObject? CaptureNativeEnvironmentReference(Item item)
         => VerifiedNativeEnvironmentReference(item, NativeSourceModuleVerified.Value);
@@ -100,6 +87,8 @@ public sealed partial class GeneratorClient
         facts["source"] = "certified_native_environment_reference";
         facts["sourceAssemblySha256"] = NativeEnvironmentFactsCatalog.AssemblySha256;
         facts["sourceModuleVersionId"] = NativeEnvironmentFactsCatalog.ModuleVersionId;
+        facts["observedModuleVersionId"] = typeof(Player).Module.ModuleVersionId.ToString();
+        facts["verification"] = "audited_source_semantic_dependency_match; current_registry_observations";
         facts["scope"] = "Conditional partial native-source reference plus current registry settings, not current-world observation, complete buff semantics, arbitrary mod hooks, or inherited generated execution. Unknown effects remain unknown; Author chooses generated behavior explicitly.";
         return facts;
     }

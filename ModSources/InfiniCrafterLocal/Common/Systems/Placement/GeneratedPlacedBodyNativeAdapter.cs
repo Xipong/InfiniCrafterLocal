@@ -126,17 +126,31 @@ internal static partial class GeneratedPlacedBodyNativeAdapter
         }
         return failures.Count==0 ? string.Empty : "; cleanup: "+string.Join(" | ",failures);
     }
+    private static string? WarnedNativeProfile;
     private static void ValidateNativeProfile()
     {
-        string path=typeof(TileDrawing).Assembly.Location;
-        if (string.IsNullOrEmpty(path)) throw Guard("native assembly has no literal byte identity");
-        using var file=File.OpenRead(path);
-        string hash=Convert.ToHexString(SHA256.HashData(file)).ToLowerInvariant();
+        string hash;
+        try
+        {
+            string path=typeof(TileDrawing).Assembly.Location;
+            using var file=File.OpenRead(path);
+            hash=Convert.ToHexString(SHA256.HashData(file)).ToLowerInvariant();
+        }
+        catch (Exception e) { hash="unavailable ("+e.GetType().Name+")"; }
         if (hash != "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5"
             // tModLoader 2026.7.3.0 SDK release; all 19 exact method shapes below
             // are still preflighted, then rechecked against the live hook chain.
             && hash != "d530e508b2841e66d880ce279a609624b5ab66ce8093eedfa04f47c3d12d485c")
-            throw Guard("unsupported native assembly SHA256 "+hash);
+        {
+            // A rebuilt native module is not itself an incompatible draw contract.
+            // The exact typed method shapes and current hook chain below remain mandatory.
+            if (WarnedNativeProfile != hash)
+            {
+                WarnedNativeProfile = hash;
+                global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance?.Logger?.Warn(
+                    "Unrecognized native assembly SHA256 " + hash + "; validating placed-body method contracts.");
+            }
+        }
     }
 
     // Explicit bounded admission. Parent calls this BEFORE placement mutation
