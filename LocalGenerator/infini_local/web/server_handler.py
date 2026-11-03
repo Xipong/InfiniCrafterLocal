@@ -77,7 +77,12 @@ def build_handler(
 
         def log_message(self, fmt: str, *args: Any) -> None:
             if trace_runtime.TRACE_PROMPTS_ENABLED:
-                print(trace_tools._redact_diagnostic(f"[{time.strftime('%H:%M:%S')}] {self.address_string()} {fmt % args}"))
+                line = trace_tools._redact_diagnostic(f"[{time.strftime('%H:%M:%S')}] {self.address_string()} {fmt % args}")
+                try:
+                    print(line)
+                except (OSError, ValueError) as error:
+                    # A detached/closed console must not abort an HTTP response.
+                    log_event("warn", "HTTP access log console unavailable", {"accessLog": line, "error": repr(error)})
 
         def do_GET(self) -> None:
             try:

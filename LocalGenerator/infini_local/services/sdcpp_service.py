@@ -43,6 +43,7 @@ class SdcppServerState:
     """
 
     process: subprocess.Popen | None = None
+    log_viewer: subprocess.Popen | None = None
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     cleanup_registered: bool = False
     signal_handlers_registered: bool = False
@@ -115,6 +116,21 @@ def _terminate_process_tree(proc: subprocess.Popen | Any, *, hard: bool) -> None
 
 def cleanup_server_process(state: SdcppServerState, log_event: LogEvent, reason: str = "cleanup") -> None:
     with state.lock:
+        viewer = state.log_viewer
+        if viewer is not None:
+            try:
+                if viewer.poll() is None:
+                    try:
+                        viewer.terminate()
+                        viewer.wait(timeout=3)
+                    except (OSError, subprocess.TimeoutExpired):
+                        viewer.kill()
+                        viewer.wait(timeout=3)
+                if viewer.poll() is not None:
+                    state.log_viewer = None
+            except (OSError, subprocess.SubprocessError) as error:
+                # Retain a still-owned viewer for a later cleanup retry.
+                log_event("warn", "sd.cpp log viewer cleanup failed", {"reason": reason, "error": repr(error)})
         proc = state.process
         if proc is None:
             return
@@ -294,11 +310,8 @@ def ensure_server(
             stderr_target = None
             if not diagnostics_enabled:
                 stdout_target = stderr_target = subprocess.DEVNULL
-            elif os.name == "nt" and show_console:
-                # Let sd-server own a visible console. This prevents stdout PIPE deadlocks and gives the user live logs.
-                creationflags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
             else:
-                # Headless mode: redirect logs to a file, never to PIPE. PIPE can block verbose model startup.
+                # Always persist both streams, including when a console is requested.
                 log_path.parent.mkdir(parents=True, exist_ok=True)
                 log_handle = open(log_path, "a", encoding="utf-8", errors="replace")
                 log_handle.write("\n\n===== sd.cpp start " + time.strftime("%Y-%m-%d %H:%M:%S") + " =====\n")
@@ -307,8 +320,9 @@ def ensure_server(
                 stdout_target = log_handle
                 stderr_target = subprocess.STDOUT
             start_new_session = os.name != "nt"
-            if os.name == "nt" and not show_console:
+            if os.name == "nt":
                 creationflags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                creationflags |= getattr(subprocess, "CREATE_NO_WINDOW", 0)
             spawned_process = subprocess.Popen(
                 cmd,
                 shell=shell,
@@ -326,6 +340,20 @@ def ensure_server(
             # Store it as a private attribute so logs keep flowing while the process lives.
             if log_handle is not None:
                 setattr(spawned_process, "_infini_log_handle", log_handle)
+            if os.name == "nt" and show_console and diagnostics_enabled and state.log_viewer is None:
+                # A separate viewer tails the same file; sd-server remains the owned
+                # process, so its actual return code and process tree are preserved.
+                viewer_env = dict(os.environ)
+                viewer_env["INFINI_SDCPP_LOG_VIEW"] = str(log_path.resolve())
+                try:
+                    state.log_viewer = subprocess.Popen(
+                        ["powershell.exe", "-NoProfile", "-Command",
+                         "Get-Content -LiteralPath $env:INFINI_SDCPP_LOG_VIEW -Wait"],
+                        env=viewer_env,
+                        creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
+                    )
+                except OSError as e:
+                    log_event("warn", "could not open sd.cpp log viewer", {"error": repr(e), "logFile": state.last_log_file})
         except Exception as e:
             state.process = None
             if spawned_process is not None:
