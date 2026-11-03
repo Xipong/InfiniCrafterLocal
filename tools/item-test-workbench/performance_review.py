@@ -11,7 +11,6 @@ from collections import Counter
 import copy
 import hashlib
 import json
-import os
 from pathlib import Path
 import re
 import subprocess
@@ -230,6 +229,7 @@ def run(args):
     out.mkdir(parents=True, exist_ok=True)
     if not args.native_dll:
         w.build()
+    env, _ = w.native_environment()
     dll = (args.native_dll or w.HERE / 'bin/Release/net8.0/ItemTestWorkbench.dll').resolve()
     dll_hash = sha(dll)
     rows = []
@@ -256,7 +256,7 @@ def run(args):
                     row.update(status='notRun', reason='Vanilla client contact requires --vanilla-assets'); continue
                 chosen['vanillaAssetRoot'] = str(args.vanilla_assets.resolve())
             scene_path = directory / 'scenario.json'; scene_path.write_text(json.dumps(chosen, indent=2))
-            command = [os.environ.get('DOTNET', 'dotnet'), str(dll)]
+            command = [env.get('DOTNET', 'dotnet'), str(dll)]
             if 'item' in candidate:
                 original = Path(candidate['item']); archived = directory / 'item.json'; archived.write_bytes(original.read_bytes())
                 command += ['--item', str(archived), '--item-boundary', args.item_boundary]
@@ -266,7 +266,7 @@ def run(args):
             command += ['--scenario', str(scene_path), '--output', str(directory/'native.json')]
             row.update(scenarioSha256=sha(scene_path), mechanicalSceneSha256=hashlib.sha256(json.dumps(mechanical_scene(chosen), sort_keys=True).encode()).hexdigest(), executionMode=chosen['playerUpdate'])
             try:
-                result = subprocess.run(command, cwd=w.ROOT, capture_output=True, text=True, timeout=args.timeout)
+                result = subprocess.run(command, cwd=w.ROOT, env=env, capture_output=True, text=True, timeout=args.timeout)
                 (directory/'stdout.log').write_text(result.stdout); (directory/'stderr.log').write_text(result.stderr)
                 row['exitCode'] = result.returncode
                 trace = w.read_json(directory/'native.json')

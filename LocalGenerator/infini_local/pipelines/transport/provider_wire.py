@@ -567,6 +567,20 @@ def _ensure_json_input_marker(messages: list[dict[str, Any]]) -> None:
     messages.append({"role": "user", "content": "JSON response."})
 
 
+def _project_openai_chat_reasoning(payload: dict[str, Any], context: dict[str, Any]) -> None:
+    """Use the Platform Chat field; other compatible providers keep their wire."""
+    if (profiles.active_llm_provider(context) != "openai_compat"
+            or profiles.llm_chat_completions_url(context) != "https://api.openai.com/v1/chat/completions"):
+        return
+    reasoning = payload.pop("reasoning", None)
+    if not isinstance(reasoning, dict):
+        return
+    if reasoning.get("max_tokens") is not None:
+        raise ValueError("OpenAI Chat Completions does not support a numeric reasoning budget; select a reasoning effort")
+    if reasoning.get("effort") is not None:
+        payload["reasoning_effort"] = reasoning["effort"]
+
+
 def _responses_payload_from_chat(payload: dict[str, Any], previous_response_id: str = "", *,
                                  cache_source: dict[str, Any] | None = None,
                                  context: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -605,7 +619,7 @@ def _responses_payload_from_chat(payload: dict[str, Any], previous_response_id: 
     reasoning: dict[str, Any] = reasoning_raw if isinstance(reasoning_raw, dict) else {}
     effort = str(payload.get("reasoning_effort") or reasoning.get("effort") or "").strip()
     if effort:
-        out["reasoning"] = {"effort": "high" if effort == "xhigh" else effort}
+        out["reasoning"] = {"effort": effort}
     if cache_source is not None and context is not None:
         _cache_wire_options(out, cache_source, context, api_mode="responses")
     if (context is not None and profiles.active_llm_provider(context) == "openai_compat"

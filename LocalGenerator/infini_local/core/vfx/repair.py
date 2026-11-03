@@ -22,6 +22,7 @@ from infini_local.core.vfx.contract import (
 )
 from infini_local.core.vfx.materials import ASSET_ID_PATTERN
 from infini_local.core.vfx.schema import _director_schema
+from infini_local.core.vfx.validation import vfx_png_dependencies
 
 
 def vfx_repair_schema(data: Mapping[str, Any]) -> dict[str, Any]:
@@ -35,6 +36,11 @@ def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str,
     slot_paths: dict[str, set[str]] = {}
     slot_deletions: dict[str, set[str]] = {}
     delete_indices: set[int] = set()
+    duplicate_slot_indices = {
+        int(match.group(1)) for error in errors
+        if error.get("message") == "duplicate id"
+        and (match := re.fullmatch(r"\$\.slots\[(\d+)\]\.id", str(error.get("path") or "")))
+    }
     assets = _rows(source, "assets")
     asset_paths: dict[str, set[str]] = {}
     asset_deletions: dict[str, set[str]] = {}
@@ -64,7 +70,11 @@ def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str,
         relative = json_path_relative(path, match.group(0)) if match else None
         if match and relative is not None:
             index = int(match.group(1))
-            if 0 <= index < len(slots) and isinstance(slots[index], Mapping):
+            if index in duplicate_slot_indices:
+                # A repeated ID cannot address this occurrence. Its other
+                # diagnostics must not grant changes to the first valid cue.
+                delete_indices.add(index)
+            elif 0 <= index < len(slots) and isinstance(slots[index], Mapping):
                 slot_id = str(slots[index].get("id") or "")
                 if slot_id:
                     if relative:
@@ -90,7 +100,9 @@ def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str,
                 allow_create_slots = True
             if "at most" in message:
                 for index, row in enumerate(slots):
-                    if isinstance(row, Mapping) and str(row.get("id") or ""):
+                    if index in duplicate_slot_indices:
+                        delete_indices.add(index)
+                    elif isinstance(row, Mapping) and str(row.get("id") or ""):
                         grant_slot(str(row.get("id") or ""), "")
                     else:
                         delete_indices.add(index)
@@ -125,10 +137,25 @@ def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str,
             else:
                 delete_asset_indices.add(index)
         for index, row in enumerate(slots):
-            if isinstance(row, Mapping) and str(row.get("id") or ""):
+            if index in duplicate_slot_indices:
+                delete_indices.add(index)
+            elif isinstance(row, Mapping) and str(row.get("id") or ""):
                 grant_slot(str(row.get("id") or ""), "")
             else:
                 delete_indices.add(index)
+    if duplicate_slot_indices:
+        # Deleting a repeated cue can orphan its own generated texture. Use
+        # the canonical dependency projection so all renderer selectors agree;
+        # asset-source references do not require gameplay/entity resolution.
+        consumers: dict[str, set[int]] = {}
+        for dependency in vfx_png_dependencies({}, source)["dependencies"]:
+            if dependency["source"] != "asset":
+                continue
+            match = re.match(r"^\$\.slots\[(\d+)\]", dependency["selectorPath"])
+            if match:
+                consumers.setdefault(dependency["role"].removeprefix("vfx:"), set()).add(int(match.group(1)))
+        removable_duplicates = duplicate_slot_indices & delete_indices
+        delete_asset_ids.update(asset_id for asset_id, indices in consumers.items() if indices <= removable_duplicates)
     return {
         "schema": "infini.vfx-repair-scope.v3",
         "mutableGlobals": [],
@@ -153,20 +180,26 @@ def _vfx_repair_context(raw: Any, scope: Mapping[str, Any]) -> dict[str, Any]:
     source = raw if isinstance(raw, Mapping) else {}
     mutable_slot_ids = set(str(value) for value in scope.get("mutableSlotIds") or [])
     slots = _rows(source, "slots")
+    deletable_slot_indices = set(scope.get("deletableSlotIndices") or [])
     mutable_asset_ids = set(scope.get("mutableAssetIds") or [])
+    deletable_asset_ids = set(scope.get("deletableAssetIds") or [])
     assets = _rows(source, "assets")
     return {
         # This is Repair's design source, not a bounded diagnostic preview.
         "malformedRawText": raw.raw_text if isinstance(raw, MalformedVfxDirectorOutput) else "",
         "broken": {
             "globals": {},
-            "slots": [copy.deepcopy(row) for row in slots if isinstance(row, Mapping) and str(row.get("id") or "") in mutable_slot_ids],
-            "assets": [copy.deepcopy(row) for row in assets if isinstance(row, Mapping) and isinstance(row.get("id"), str) and row["id"] in mutable_asset_ids],
+            "slots": [copy.deepcopy(row) for index, row in enumerate(slots) if isinstance(row, Mapping)
+                      and (index in deletable_slot_indices or str(row.get("id") or "") in mutable_slot_ids)],
+            "assets": [copy.deepcopy(row) for row in assets if isinstance(row, Mapping) and isinstance(row.get("id"), str)
+                       and row["id"] in mutable_asset_ids | deletable_asset_ids],
         },
         "validReadOnly": {
             "globals": {},
-            "slots": [copy.deepcopy(row) for row in slots if isinstance(row, Mapping) and str(row.get("id") or "") not in mutable_slot_ids],
-            "assets": [copy.deepcopy(row) for row in assets if isinstance(row, Mapping) and isinstance(row.get("id"), str) and row["id"] not in mutable_asset_ids],
+            "slots": [copy.deepcopy(row) for index, row in enumerate(slots) if isinstance(row, Mapping)
+                      and index not in deletable_slot_indices and str(row.get("id") or "") not in mutable_slot_ids],
+            "assets": [copy.deepcopy(row) for row in assets if isinstance(row, Mapping) and isinstance(row.get("id"), str)
+                       and row["id"] not in mutable_asset_ids | deletable_asset_ids],
         },
     }
 
@@ -245,6 +278,8 @@ def _filter_vfx_repair_patch(
     accepted: list[str] = []
 
     slots = _rows(source, "slots")
+    if not isinstance(source.get("slots"), list) and scope.get("allowCreateSlots") and "slotsUpsert" in patch_mapping:
+        accepted.append("$.slots")  # An explicit empty correction is not an omitted patch.
     for index, slot_id in enumerate(patch_mapping.get("slotIdsDelete") or []):
         path = f"$.slotIdsDelete[{index}]"
         if str(slot_id) in deletable_slot_ids:
@@ -262,7 +297,7 @@ def _filter_vfx_repair_patch(
             preserved = slots[numeric] if 0 <= numeric < len(slots) else None
             ignored.append(_vfx_filter_ignored(path, numeric, preserved, "valid_slot_index_delete_ignored"))
 
-    by_id = {str(row.get("id") or ""): row for row in slots if isinstance(row, Mapping) and str(row.get("id") or "")}
+    by_id = {str(row.get("id") or ""): row for row in reversed(slots) if isinstance(row, Mapping) and str(row.get("id") or "")}
     for index, candidate in enumerate(patch_mapping.get("slotsUpsert") or []):
         slot_id = str(candidate.get("id") or "")
         path = f"$.slotsUpsert[{index}]"
@@ -357,7 +392,7 @@ def _apply_vfx_repair_patch(
     source = previous if isinstance(previous, Mapping) else {}
     out = copy.deepcopy(dict(source))
     out["schema"] = VFX_DIRECTOR_SCHEMA
-    if any(filtered.get(key) for key in ("slotsUpsert", "slotIdsDelete", "slotIndicesDelete")):
+    if any(filtered.get(key) for key in ("slotsUpsert", "slotIdsDelete", "slotIndicesDelete")) or "$.slots" in audit["acceptedPaths"]:
         slots = _rows(out, "slots")
         doomed_indices = set(filtered["slotIndicesDelete"])
         doomed_ids = set(filtered["slotIdsDelete"])
@@ -500,11 +535,9 @@ def _vfx_scoped_repair_schema(packet: Mapping[str, Any], previous: Any, scope: M
         if scope.get(create):
             continue  # New rows retain the complete real capability domain.
         canonical = properties[upsert]["items"]
-        # Match each existing filter's ID ownership: assets reserve the first
-        # occurrence; duplicate rows can only be removed by original index.
-        source_rows = _rows(previous, rows_key)
-        if rows_key == "assets":
-            source_rows = reversed(source_rows)
+        # Both filters reserve the first occurrence; later duplicates can only
+        # be removed by their original index.
+        source_rows = reversed(_rows(previous, rows_key))
         old_rows = {row.get("id"): row for row in source_rows if isinstance(row, Mapping) and isinstance(row.get("id"), str)}
         branches = []
         for permission in permissions.get(rows_key) or []:

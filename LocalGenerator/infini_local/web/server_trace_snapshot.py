@@ -57,6 +57,9 @@ def build_trace_snapshot(
     except Exception:
         pass
     provider = active_llm_provider()
+    auth = llm_auth_snapshot()
+    legacy_model = (openrouter_model if provider == "openrouter" else openai_compat_model
+                    if provider == "openai_compat" else lmstudio_model if provider == "local" else "")
     return {
         "ok": True,
         "version": app_version,
@@ -76,8 +79,8 @@ def build_trace_snapshot(
         "pipeline": {
             "useLLM": use_llm,
             "llmProvider": provider,
-            "llmModel": (openrouter_model if provider == "openrouter" else openai_compat_model if provider == "openai_compat" else lmstudio_model),
-            "llmAuth": llm_auth_snapshot(),
+            "llmModel": str(auth.get("model", legacy_model) or ""),
+            "llmAuth": auth,
             "imageBackend": image_backend,
             "visualAssetMode": visual_asset_mode,
             "visualDirectorLLM": visual_director_llm,

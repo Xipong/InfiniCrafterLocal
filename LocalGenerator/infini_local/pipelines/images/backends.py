@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import random
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -133,21 +134,23 @@ def json_deep_replace(obj: Any, mapping: dict[str, Any]) -> Any:
         stripped = obj.strip()
         if stripped in mapping:
             return mapping[stripped]
-        out = obj
-        for key, value in mapping.items():
-            out = out.replace(key, str(value))
-        return out
+        # Only the workflow is a template. Inserted authored text can itself
+        # contain literal tokens and must not be rescanned as another template.
+        return re.sub(r"\{\{[^{}]+\}\}", lambda match: str(mapping.get(match[0], match[0])), obj)
     return obj
 
 def resolve_comfyui_workflow_path() -> Path | None:
     """Pick a ComfyUI workflow template.
-    - explicit INFINI_COMFYUI_WORKFLOW path wins;
+    - explicit INFINI_COMFYUI_WORKFLOW path is authoritative (missing is failure);
     - auto selects LoRA template when a LoRA name is configured, otherwise no-LoRA template.
     """
     candidates: list[str] = []
     explicit = (COMFYUI_WORKFLOW or "auto").strip()
     if explicit and explicit.lower() not in {"auto", "default"}:
-        candidates.append(explicit)
+        path = Path(explicit)
+        if not path.is_absolute():
+            path = STATE_ROOT / path
+        return path if path.is_file() else None
     if COMFYUI_LORA_NAME:
         if COMFYUI_WORKFLOW_LORA:
             candidates.append(COMFYUI_WORKFLOW_LORA)
@@ -161,7 +164,7 @@ def resolve_comfyui_workflow_path() -> Path | None:
         p = Path(c)
         if not p.is_absolute():
             p = STATE_ROOT / p
-        if p.exists():
+        if p.is_file():
             return p
     return None
 
@@ -189,21 +192,38 @@ def comfyui_mapping(prompt: str, negative: str, sprite_id: str, seed: int | None
     }
 
 def poll_comfyui_history(prompt_id: str, timeout: int | None = None) -> dict[str, Any]:
-    timeout = int(timeout or COMFYUI_TIMEOUT)
-    deadline = time.time() + timeout
+    timeout = COMFYUI_TIMEOUT if timeout is None else timeout
+    deadline = time.monotonic() + timeout
     last: dict[str, Any] = {}
-    while time.time() < deadline:
+    while (remaining := deadline - time.monotonic()) > 0:
         try:
-            hist = http_get_json(f"{COMFYUI_URL}/history/{prompt_id}", timeout=10)
+            hist = http_get_json(f"{COMFYUI_URL}/history/{prompt_id}", timeout=min(10, remaining))
+        except Exception as e:
+            last = {"error": repr(e)}
+        else:
             if isinstance(hist, dict):
                 last = hist
                 entry = hist.get(prompt_id) if prompt_id in hist else hist
+                status = entry.get("status") if isinstance(entry, dict) else None
+                if isinstance(status, dict):
+                    failure = ""
+                    for message in status.get("messages") or []:
+                        if isinstance(message, (list, tuple)) and len(message) >= 2 and message[0] in {"execution_error", "execution_interrupted"}:
+                            detail = message[1] if isinstance(message[1], dict) else {}
+                            failure = str(detail.get("exception_message") or message[0])[:1000]
+                            break
+                    # An error may still have preview images or earlier saved
+                    # outputs. They do not establish successful execution.
+                    if status.get("status_str") == "error" or failure:
+                        raise RuntimeError(f"ComfyUI prompt {prompt_id} failed: {failure or 'execution error'}")
                 outputs = entry.get("outputs") if isinstance(entry, dict) else None
                 if outputs:
                     return hist
-        except Exception as e:
-            last = {"error": repr(e)}
-        time.sleep(max(0.1, COMFYUI_POLL_INTERVAL))
+                if isinstance(status, dict) and (status.get("completed") is True or status.get("status_str") == "success"):
+                    raise RuntimeError(f"ComfyUI prompt {prompt_id} completed without image outputs")
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            time.sleep(min(max(0.1, COMFYUI_POLL_INTERVAL), remaining))
     raise TimeoutError(f"ComfyUI prompt {prompt_id} did not finish within {timeout}s; last={last}")
 
 def extract_comfyui_images(history: dict[str, Any], prompt_id: str) -> list[dict[str, Any]]:
@@ -681,28 +701,29 @@ def generate_comfyui(prompt: str, negative: str, sprite_id: str, *, output_dir: 
         log_event("warn", "ComfyUI selected but no workflow template was found", {"workflow": COMFYUI_WORKFLOW, "spriteId": sprite_id})
         return []
     workflow = json.loads(workflow_path.read_text(encoding="utf-8-sig"))
-    seed = random.randint(1, 2**31 - 1)
-    workflow = json_deep_replace(workflow, comfyui_mapping(prompt, negative, sprite_id, seed))
-    payload = {"prompt": workflow, "client_id": COMFYUI_CLIENT_ID}
-    queued = http_json(f"{COMFYUI_URL}/prompt", payload, timeout=30)
-    prompt_id = str(queued.get("prompt_id") or "").strip()
-    if not prompt_id:
-        raise RuntimeError(f"ComfyUI did not return prompt_id: {queued}")
-    log_event("info", "ComfyUI prompt queued", {"promptId": prompt_id, "spriteId": sprite_id, "workflow": str(workflow_path), "seed": seed, "width": COMFYUI_WIDTH, "height": COMFYUI_HEIGHT, "steps": COMFYUI_STEPS, "cfg": COMFYUI_CFG, "lora": COMFYUI_LORA_NAME})
-    history = poll_comfyui_history(prompt_id, COMFYUI_TIMEOUT)
-    metas = extract_comfyui_images(history, prompt_id)
     out: list[str] = []
-    for i, meta in enumerate(metas):
-        p = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_comfy_{i}.png"
-        try:
-            out.append(fetch_comfyui_image(meta, p))
-        except ImageOutputIOError:
-            raise
-        except Exception as e:
-            log_event("warn", "ComfyUI image fetch failed", {"spriteId": sprite_id, "meta": meta, "error": repr(e)})
-    log_event("info", "ComfyUI images downloaded", {"spriteId": sprite_id, "count": len(out), "promptId": prompt_id, "removeBg": REMOVE_BG,
-                        "requirePillow": REQUIRE_PILLOW,
-                        "pillowAvailable": Image is not None, "bgMode": BG_REMOVE_MODE})
+    for variant in range(max(1, int(GENERATE_VARIANTS))):
+        seed = random.randint(1, 2**31 - 1)
+        variant_workflow = json_deep_replace(workflow, comfyui_mapping(prompt, negative, sprite_id, seed))
+        payload = {"prompt": variant_workflow, "client_id": COMFYUI_CLIENT_ID}
+        queued = http_json(f"{COMFYUI_URL}/prompt", payload, timeout=30)
+        prompt_id = str(queued.get("prompt_id") or "").strip()
+        if not prompt_id:
+            raise RuntimeError(f"ComfyUI did not return prompt_id: {queued}")
+        log_event("info", "ComfyUI prompt queued", {"promptId": prompt_id, "spriteId": sprite_id, "workflow": str(workflow_path), "seed": seed, "width": COMFYUI_WIDTH, "height": COMFYUI_HEIGHT, "steps": COMFYUI_STEPS, "cfg": COMFYUI_CFG, "lora": COMFYUI_LORA_NAME})
+        history = poll_comfyui_history(prompt_id, COMFYUI_TIMEOUT)
+        metas = extract_comfyui_images(history, prompt_id)
+        for i, meta in enumerate(metas):
+            p = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_comfy_{variant}_{i}.png"
+            try:
+                out.append(fetch_comfyui_image(meta, p))
+            except ImageOutputIOError:
+                raise
+            except Exception as e:
+                log_event("warn", "ComfyUI image fetch failed", {"spriteId": sprite_id, "meta": meta, "error": repr(e)})
+        log_event("info", "ComfyUI images downloaded", {"spriteId": sprite_id, "count": len(out), "promptId": prompt_id, "removeBg": REMOVE_BG,
+                            "requirePillow": REQUIRE_PILLOW,
+                            "pillowAvailable": Image is not None, "bgMode": BG_REMOVE_MODE})
     return out
 
 # Local config reader: image backend owns sd.cpp command construction now.

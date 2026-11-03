@@ -8,9 +8,11 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+import hashlib
 import threading
 import time
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from infini_local.core import llm_config as config
 from infini_local.core.env_utils import env_str
@@ -117,7 +119,14 @@ def _llm_context_key(context: dict[str, Any] | None) -> str:
         str(ctx.get("api_mode") or "chat_completions"),
     ])
     upstream = _openrouter_provider(ctx)
-    return f"{key}|{upstream}" if upstream else key
+    if upstream:
+        key = f"{key}|{upstream}"
+    # Model catalogs and format support can differ between accounts sharing an
+    # endpoint. Keep credentials out of the cache key while separating owners.
+    credential = str(ctx.get("api_key") or "")
+    if credential:
+        key += "|account=" + hashlib.sha256(credential.encode("utf-8")).hexdigest()
+    return key
 
 
 def _legacy_primary_llm_context() -> dict[str, Any]:
@@ -342,9 +351,11 @@ def _join_openai_compat_url(base: str, endpoint: str) -> str:
     endpoint = "/" + endpoint.strip("/")
     if not base:
         return endpoint
-    if base.endswith("/v1") or base.endswith("/api/v1"):
-        return base + endpoint
-    return base + "/v1" + endpoint
+    parsed = urlsplit(base)
+    # Bare local server origins retain the /v1 convenience. An explicit API
+    # path (for example Google's /v1beta/openai) already names the API root.
+    path = parsed.path.rstrip("/") or "/v1"
+    return urlunsplit((parsed.scheme, parsed.netloc, path + endpoint, parsed.query, parsed.fragment))
 
 
 def llm_base_url(context: dict[str, Any] | None = None) -> str:
