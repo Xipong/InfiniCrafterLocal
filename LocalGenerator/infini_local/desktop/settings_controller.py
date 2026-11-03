@@ -219,28 +219,8 @@ class SettingsController(StudioOperations):
                 for key, value in saved_preset.items()
             ):
                 return saved
-        provider = str(data.get("INFINI_LLM_PROVIDER", "") or "").strip().lower()
-        backend = str(data.get("INFINI_IMAGE_BACKEND", "") or "").strip().lower()
-        extra_args = str(data.get("INFINI_SDCPP_SERVER_EXTRA_ARGS", "") or "").strip().lower()
-        steps = str(data.get("INFINI_SDCPP_STEPS", "") or "").strip()
-        if (
-            provider == "openai_compat"
-            and backend == "sdcpp"
-            and "diffusion=rocm0,vae=vulkan0,te=rocm0" in extra_args
-            and steps == "4"
-        ):
-            return "OpenAI-compatible + FLUX.2 Klein 4B hybrid"
-        if provider == "local" and backend == "sdcpp":
-            return "Локалка: LM Studio + local Z-Image/sd.cpp"
-        if provider == "openrouter" and backend == "sdcpp":
-            return "OpenRouter + local Z-Image/sd.cpp"
-        if provider == "openrouter" and backend == "image_api":
-            return "OpenRouter + Image API"
-        if provider == "openrouter" and backend in {"off", "none", "disabled", "0"}:
-            return "API LLM only: без картинок"
-
-        # Shared sprite controls do not establish provider/backend identity.
-        # Never present a nearest-score preset as the user's active pipeline.
+        # An obsolete or undeclared preset name is not evidence of a pipeline.
+        # Keep its actual settings untouched and show them as custom.
         return CUSTOM_PRESET
 
     def refresh_home(self):

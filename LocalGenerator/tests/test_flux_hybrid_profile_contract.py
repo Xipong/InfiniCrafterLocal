@@ -44,13 +44,10 @@ def _contract_check_flux2_klein4b_hybrid_profile_matches_measured_winner() -> No
     assert "--vae-conv-direct" in profile
     assert "--diffusion-fa" not in profile
 
-    preset = settings_schema.PRESETS["Локалка: LM Studio + FLUX.2 Klein 4B hybrid"]
-    assert preset["INFINI_SDCPP_SERVER_EXE"] == r"C:\Games\sdcpp-hybrid-gfx1030-134c821\sd-server.exe"
-    assert preset["INFINI_SDCPP_STEPS"] == "4"
-    assert preset["INFINI_SDCPP_CFG"] == "1.0"
-    assert preset["INFINI_SDCPP_SAMPLER"] == "euler"
-    assert preset["INFINI_SDCPP_LORA_PROMPT_TAGS"] == ""
-    assert preset["INFINI_ZIMAGE_PROMPT_CONTRACT"] == "0"
+    preset = settings_schema.PRESETS["Пример: RX 6800 XT / FLUX.2 Klein 4B (только аргументы)"]
+    assert preset == {"INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
+                      "INFINI_SDCPP_SERVER_EXTRA_ARGS": profile}
+
 
 
 def _contract_check_rocm_compat_environment_is_scoped_to_sd_server_child() -> None:
