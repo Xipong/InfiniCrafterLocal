@@ -34,6 +34,11 @@ internal static class GeneratedStatusTooltipView
         // avoid overflow even for a malformed diagnostic input, without clamping it.
         => (Math.Max(0L, ticks) / 60 + (ticks > 0 && ticks % 60 != 0 ? 1 : 0)).ToString(culture);
 
+    internal static string CountdownTenths(int ticks, CultureInfo culture)
+        // Six game ticks per displayed tenth. Ceiling keeps active timers
+        // positive; integer bucketing and fixed precision avoid display jitter.
+        => ((Math.Max(0L, ticks) + 5) / 6 / 10m).ToString("0.0", culture);
+
     internal static string Number(double value, CultureInfo culture)
         // Three fractional places remove float32 display noise. Small nonzero
         // authored contributions keep significant digits instead of becoming "0".

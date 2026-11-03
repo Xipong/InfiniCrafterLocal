@@ -747,7 +747,12 @@ def test_owned_image_cleanup_health_to_notice_uses_verified_exit(applied_gui, mo
     assert gui._sdcpp_lifecycle == 'ready' and len(notices) == 2
     assert 'PRIVATE-COMMAND' not in str(gui._applied_config_ack) + str(notices)
     monkeypatch.setattr(sdcpp_service, '_terminate_process_tree', lambda *_a, **_k: None)
+    def viewer_denied():
+        raise OSError('viewer exit unconfirmed')
+    viewer = SimpleNamespace(poll=lambda: None, terminate=viewer_denied, kill=viewer_denied)
+    state.log_viewer = viewer
     sdcpp_service.cleanup_server_process(state, lambda *_a: None)
+    assert state.log_viewer is viewer  # Viewer failure is not server failure.
     assert state.process is None and code[0] == 0
     gui._delayed_health_check()
     gui.drain_until(lambda: not gui._gui_tasks)
