@@ -140,6 +140,12 @@ internal static partial class EngineRuntimeChecks
             Equal("unavailable",JsonSerializer.SerializeToElement(foreign.Source).GetProperty("hookContext").GetString()!,"foreign player is not substituted");
             Equal(calls,TooltipProbeItem.Calls,"foreign context never invokes local hooks");
 
+            Terraria.Main.netMode=NetmodeID.MultiplayerClient;
+            var captured = GeneratorClient.CaptureClientTooltip(item, player);
+            Equal("item-7-global,global-added", string.Join(",", captured!.Lines), "client captures actual hook output");
+            Equal("ru-RU", captured.Language, "client capture records locale");
+            Equal(true, GeneratorClient.CaptureClientTooltip(item, new Player{active=true}) is null, "foreign client context is never captured");
+
             TooltipProbeItem.ThrowAfterChange=true;
             var failed=GeneratorClient.CaptureLiteralParentTooltip(item,null,"Probe/Wood",player);
             Equal("[DYNAMIC]",string.Join(",",failed.Lines),"failed hook preserves only the untouched literal, not partial mutations");
@@ -147,8 +153,36 @@ internal static partial class EngineRuntimeChecks
             TooltipProbeItem.ThrowAfterChange=false;
             Terraria.Main.netMode=NetmodeID.Server;
             var server=GeneratorClient.CaptureLiteralParentTooltip(item,null,"Probe/Wood",player);
+            Equal(true, GeneratorClient.CaptureClientTooltip(item, player) is null, "server cannot impersonate client capture");
             Equal("[DYNAMIC]",string.Join(",",server.Lines),"server observes literal without calling client hooks");
             Equal("unavailable",JsonSerializer.SerializeToElement(server.Source).GetProperty("hookContext").GetString()!,"server context honest");
+            int serverBaseDamage = item.damage;
+            var clientReport = new ClientTooltipObservation(new[] { "client-observed" }, "ru-RU");
+            using (var report = JsonDocument.Parse(new GeneratorClient().Prepare(item, new Item(ItemID.DirtBlock), player,
+                "", false, clientReport, null).PayloadJson))
+            {
+                var root = report.RootElement.GetProperty("itemA");
+                Equal("client-observed", string.Join(",", root.GetProperty("tooltipLines").EnumerateArray().Select(x => x.GetString())), "admitted report reaches author");
+                var provenance = root.GetProperty("tooltipSource");
+                Equal("client_reported", provenance.GetProperty("source").GetString()!, "client report is not called a server observation");
+                Equal(false, provenance.GetProperty("verified").GetBoolean(), "client report is explicitly unverified");
+                Equal("ru-RU", provenance.GetProperty("language").GetString()!, "client language preserved");
+                Equal(serverBaseDamage, root.GetProperty("damage").GetInt32(), "server native facts unchanged");
+            }
+            using (var report = JsonDocument.Parse(new GeneratorClient().Prepare(item, new Item(ItemID.DirtBlock), player,
+                "", false, new ClientTooltipObservation(Array.Empty<string>(), "en-US"), null).PayloadJson))
+            {
+                var root = report.RootElement.GetProperty("itemA");
+                Equal(0, root.GetProperty("tooltipLines").GetArrayLength(), "intentionally empty client tooltip is retained");
+                Equal("client_reported", root.GetProperty("tooltipSource").GetProperty("status").GetString()!, "empty report is not replaced with a server literal");
+            }
+            using (var report = JsonDocument.Parse(new GeneratorClient().Prepare(item, new Item(ItemID.DirtBlock), player,
+                "", false, new ClientTooltipObservation(Array.Empty<string>(), "en-US", "refused_utf8_bound"), null).PayloadJson))
+            {
+                var root = report.RootElement.GetProperty("itemA");
+                Equal("[DYNAMIC]", string.Join(",", root.GetProperty("tooltipLines").EnumerateArray().Select(x => x.GetString())), "refused client report keeps the independent server literal");
+                Equal("refused_utf8_bound", root.GetProperty("tooltipSource").GetProperty("clientObservationStatus").GetString()!, "wire-size refusal is visible");
+            }
         }
         finally
         {

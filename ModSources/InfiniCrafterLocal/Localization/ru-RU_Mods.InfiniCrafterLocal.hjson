@@ -298,6 +298,13 @@ Items: {
 // Projectiles.GeneratedProjectile.DisplayName: Generated Projectile
 
 Configs: {
+            InfiniParentTooltipServerConfig: {
+                DisplayName: Тултипы родительских предметов
+                TrustClientParentTooltips: {
+                    Label: Использовать тултипы от клиента
+                    Tooltip: "Принимать непроверенный текст от игрока. Новые рецепты общие для мира и сохраняются после отключения; существующие рецепты не пересоздаются. Включайте только для доверенных игроков. На одиночную игру настройка не влияет."
+                }
+            }
 	InfiniStudioConfig: {
 		DisplayName: Studio и настройка генератора
 		OpenStudio: {

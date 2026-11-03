@@ -65,6 +65,9 @@ public sealed class GeneratedStationEscrowStateSystem : ModSystem
         public Item[] Slots { get; set; } = NewAirSlots();
         // Transient bearer-token pin. This is not authenticated player identity.
         public InfiniCraftPlayer? SessionOwner { get; set; }
+        // World-clock admission budget, retained when this owner reconnects.
+        // Not persisted: the clock is not durable across world/process reloads.
+        public uint?[] LastCraftRecoveryTicks { get; } = new uint?[3];
     }
 
     private sealed class CraftTransactionState
@@ -296,6 +299,21 @@ public sealed class GeneratedStationEscrowStateSystem : ModSystem
         if (key.Length == 0 || laneIndex is < 0 or > 2 || CraftTransactions.ContainsKey(key) || CraftTransactions.Count >= MaxCraftTransactions)
             return false;
         CraftTransactions[key] = new CraftTransactionState { LaneIndex = laneIndex, Pending = true };
+        return true;
+    }
+
+    internal static bool TryBeginCraftCancellationRecovery(string clientId, string requestId,
+        int laneIndex, InfiniCraftPlayer player)
+    {
+        if (laneIndex is < 0 or > 2 || !IsBoundOwner(clientId, player)) return false;
+        OwnerState owner = Owners[NormalizeClientId(clientId)];
+        uint now = Main.GameUpdateCount;
+        uint? previous = owner.LastCraftRecoveryTicks[laneIndex];
+        // Same-ID replay is handled before this new-entry admission gate. A
+        // transient refusal leaves the client's ordinary cancellation retry live.
+        if (previous.HasValue && unchecked(now - previous.Value) < 60u) return false;
+        if (!TryBeginCraft(clientId, requestId, laneIndex)) return false;
+        owner.LastCraftRecoveryTicks[laneIndex] = now;
         return true;
     }
 

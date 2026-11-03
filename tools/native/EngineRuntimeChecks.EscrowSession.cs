@@ -42,7 +42,7 @@ internal static partial class EngineRuntimeChecks
                             cursor.EmitDelegate<Action<bool>>(value => { sends++; success = value; });
                             cursor.Emit(Mono.Cecil.Cil.OpCodes.Ret); // Only suppress the native socket boundary.
                         });
-                        void Cancel(string requestId, string authorityScope, int version = 2)
+                        void Cancel(string requestId, string authorityScope, int version = 3)
                         {
                             using var bytes = new MemoryStream();
                             using (var writer = new BinaryWriter(bytes, System.Text.Encoding.UTF8, true)) {
@@ -109,7 +109,7 @@ internal static partial class EngineRuntimeChecks
         using (var writer = new BinaryWriter(wire, System.Text.Encoding.UTF8, true))
         {
             writer.Write(craft ? InfiniNetPacketIds.RequestServerCraft : InfiniNetPacketIds.RequestStationEscrow);
-            writer.Write(2); writer.Write(scope); writer.Write(token); writer.Write(new string('f', 32));
+            writer.Write(3); writer.Write(scope); writer.Write(token); writer.Write(new string('f', 32));
             if (craft)
             {
                 writer.Write((byte)0);
@@ -118,6 +118,7 @@ internal static partial class EngineRuntimeChecks
                     writer.Write((int)ItemID.CopperShortsword); writer.Write(0); writer.Write(1);
                     writer.Write(""); writer.Write("");
                 }
+                writer.Write((ushort)0); writer.Write((ushort)0);
             }
             else { writer.Write((byte)4); writer.Write((sbyte)-1); }
         }

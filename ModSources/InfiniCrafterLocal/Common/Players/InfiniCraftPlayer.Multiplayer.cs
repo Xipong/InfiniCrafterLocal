@@ -24,8 +24,9 @@ namespace InfiniCrafterLocal.Common.Players;
 // Never add a client-authored GeneratedItemData commit path here.
 public sealed partial class InfiniCraftPlayer
 {
-    // Version 2 adds the stable owner token to cancellation replay after reconnect.
-    private const int RemoteStationProtocolVersion = 2;
+    // Version 3 adds bounded client tooltip observations and optional exact
+    // lane/ingredient identity on cancellation before initial craft admission.
+    private const int RemoteStationProtocolVersion = 3;
 
     private void WriteRemoteStationScope(System.IO.BinaryWriter writer)
     {
@@ -74,6 +75,7 @@ public sealed partial class InfiniCraftPlayer
             RefundA = refundA,
             RefundB = refundB
         };
+        CaptureClientParentTooltips(_request, a, b);
         _label = $"{parentA} + {parentB}";
         _ticksLeft = CraftDurationTicks;
         _elapsedTicks = 0;
@@ -89,7 +91,7 @@ public sealed partial class InfiniCraftPlayer
         _serverCraftWaitTicks = 0;
         _task = null;
 
-        if (!SendServerCraftRequest(requestId, 0, a, b))
+        if (!SendServerCraftRequest(requestId, 0, a, b, _request.ClientTooltipA, _request.ClientTooltipB))
         {
             ClearCraft();
             return false;
@@ -133,14 +135,14 @@ public sealed partial class InfiniCraftPlayer
         if (_awaitingServerCommit && _request is not null && HasCraftRequestId(_serverRequestId))
         {
             if (_remoteCraftCancelRequested[0]) SendRemoteServerCraftCancel("client cancel");
-            else SendServerCraftRequest(_serverRequestId, 0, _request.RefundA, _request.RefundB);
+            else SendServerCraftRequest(_serverRequestId, 0, _request.RefundA, _request.RefundB, _request.ClientTooltipA, _request.ClientTooltipB);
         }
         foreach (MultiDevCraftJob? job in _multiDevJobs)
         {
             if (job is not null && job.AwaitingServerCommit && HasCraftRequestId(job.RequestId))
             {
                 if (_remoteCraftCancelRequested[job.LaneIndex]) SendExtraCraftCancel(job, "client cancel");
-                else SendServerCraftRequest(job.RequestId, job.LaneIndex, job.Request.RefundA, job.Request.RefundB);
+                else SendServerCraftRequest(job.RequestId, job.LaneIndex, job.Request.RefundA, job.Request.RefundB, job.Request.ClientTooltipA, job.Request.ClientTooltipB);
             }
         }
     }
@@ -915,6 +917,20 @@ public sealed partial class InfiniCraftPlayer
             SendCraftCommitResult(whoAmI, requestId, false, "", interrupted);
             return;
         }
+        // Existing journal state is authoritative even if a retry's optional
+        // observation is damaged. Never send a conflicting terminal failure.
+        ClientTooltipObservation? clientTooltipA;
+        ClientTooltipObservation? clientTooltipB;
+        try
+        {
+            clientTooltipA = ClientTooltipWire.Read(reader);
+            clientTooltipB = ClientTooltipWire.Read(reader);
+        }
+        catch (Exception ex) when (ex is System.IO.InvalidDataException or System.IO.EndOfStreamException or System.Text.DecoderFallbackException)
+        {
+            SendCraftCommitResult(whoAmI, requestId, false, "", "invalid client tooltip observation");
+            return;
+        }
         if (!modPlayer.IsCraftLaneVisible(laneIndex))
         {
             LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", $"reason=lane_locked lane={laneIndex}");
@@ -960,7 +976,9 @@ public sealed partial class InfiniCraftPlayer
                 itemB,
                 player,
                 modPlayer.MultiDevCraftEnabled ? $"llm_{laneIndex + 1}" : "",
-                multiDevCraft: modPlayer.MultiDevCraftEnabled);
+                modPlayer.MultiDevCraftEnabled,
+                InfiniParentTooltipServerConfig.Enabled ? clientTooltipA : null,
+                InfiniParentTooltipServerConfig.Enabled ? clientTooltipB : null);
         }
         catch (Exception ex)
         {
@@ -1011,15 +1029,35 @@ public sealed partial class InfiniCraftPlayer
         if (player is null || !player.active)
             return;
         var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
-        // A cancel carries the same bearer claim as a craft request, but cannot
-        // create a new transaction (or start generation) for an unknown request.
         bool completed = GeneratedStationEscrowStateSystem.TryReplayCraft(clientId, requestId, out var replay);
-        if (!completed && !GeneratedStationEscrowStateSystem.IsCraftPending(clientId, requestId)) return;
+        bool pending = GeneratedStationEscrowStateSystem.IsCraftPending(clientId, requestId);
+        int cancelLane = -1;
+        CraftItemRef cancelA = default, cancelB = default;
+        if (!completed && !pending)
+        {
+            // A bare cancellation cannot claim an unknown request. Version 3
+            // senders can also identify the exact station inputs when their first
+            // craft packet was lost (including a damaged saved observation).
+            if (reader.BaseStream.Position == reader.BaseStream.Length) return;
+            cancelLane = reader.ReadByte();
+            cancelA = ReadCraftItemRef(reader);
+            cancelB = ReadCraftItemRef(reader);
+            if (cancelLane is < 0 or > 2 || reader.BaseStream.Position != reader.BaseStream.Length) return;
+        }
         if (!modPlayer.RestoreServerCraftOwner(clientId, scope)) return;
         if (completed)
         {
             SendCraftCommitResult(whoAmI, requestId, replay.Success, replay.ItemName, replay.Message);
             return;
+        }
+        if (!pending)
+        {
+            if (!modPlayer.TrySnapshotServerEscrowInput(cancelLane * 2, cancelA, out _, out _)
+                || !modPlayer.TrySnapshotServerEscrowInput(cancelLane * 2 + 1, cancelB, out _, out _)
+                || !GeneratedStationEscrowStateSystem.TryBeginCraftCancellationRecovery(clientId, requestId, cancelLane, modPlayer)) return;
+            // Main-thread journal-only transition: no generation or material
+            // mutation. The bounded durable terminal entry also blocks a late
+            // initial craft packet from starting this cancelled request.
         }
         if (!modPlayer.HasActiveServerCraftRequest(requestId))
         {
@@ -1034,6 +1072,15 @@ public sealed partial class InfiniCraftPlayer
             modPlayer.TryCancelExtraServerCraft(requestId, "client cancelled/timeout");
     }
 
+    private static void WriteRemoteCraftCancelIdentity(System.IO.BinaryWriter writer, int laneIndex,
+        GeneratorClient.PreparedGenerationRequest? request)
+    {
+        if (request?.RefundA is null || request.RefundB is null) return;
+        writer.Write((byte)laneIndex);
+        WriteCraftItemRef(writer, request.RefundA);
+        WriteCraftItemRef(writer, request.RefundB);
+    }
+
     private void SendRemoteServerCraftCancel(string reason)
     {
         if (Main.netMode != NetmodeID.MultiplayerClient || !EnsureRemoteStationAuthority() || !_awaitingServerCommit || !HasCraftRequestId(_serverRequestId))
@@ -1046,6 +1093,7 @@ public sealed partial class InfiniCraftPlayer
             packet.Write(_stationEscrowClientId);
             packet.Write(_serverRequestId);
             packet.Write(reason ?? "client_cancel");
+            WriteRemoteCraftCancelIdentity(packet, 0, _request);
             packet.Send();
         }
         catch { }
