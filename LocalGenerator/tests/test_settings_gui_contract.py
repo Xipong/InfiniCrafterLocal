@@ -718,3 +718,60 @@ def test_shutdown_wait_honors_cancellation(gui_workflow, monkeypatch):
         raise ConnectionResetError()
     monkeypatch.setattr(gui, '_fetch_health_snapshot', probe)
     assert gui._wait_until_helper_stops(timeout=4, cancel=cancel) is False
+
+
+def test_owned_image_cleanup_health_to_notice_uses_verified_exit(applied_gui, monkeypatch):
+    from types import SimpleNamespace
+    from infini_local.services import sdcpp_service
+    gui, root, _config, effective = applied_gui
+    notices = []
+    gui._ui_notification_sink = lambda *row: notices.append(row)
+    gui.observe_runtime_notifications(poll=False)
+    code = [None]
+    child = SimpleNamespace(poll=lambda: code[0], wait=lambda timeout: code.__setitem__(0, 0))
+    state = sdcpp_service.SdcppServerState(process=child)
+    state.lifecycle = 'ready'
+    def health(**_kwargs):
+        image = sdcpp_service.debug_snapshot(
+            state=state, app_version='test', server_url='', server_autostart=True,
+            show_console=False, server_exe='', model='', vae='', llm='', lora_dir='',
+            lora_prompt_tags='', command_mode='', command_template='',
+            template_repair=('', False, ''), manual_extra_args='', effective_extra_args='',
+            command='PRIVATE-COMMAND', server_log_file='', server_is_alive=None,
+            server_is_configured=True, tail_text_file=lambda *_a: '', include_log_tail=False)
+        return {'ok': True, 'serverRoot': str(root), 'pid': gui.proc.pid,
+                'effectiveConfig': effective, 'sdcpp': image}
+    monkeypatch.setattr(gui, '_fetch_health_snapshot', health)
+    gui._delayed_health_check()
+    gui.drain_until(lambda: not gui._gui_tasks)
+    assert gui._sdcpp_lifecycle == 'ready' and len(notices) == 2
+    assert 'PRIVATE-COMMAND' not in str(gui._applied_config_ack) + str(notices)
+    monkeypatch.setattr(sdcpp_service, '_terminate_process_tree', lambda *_a, **_k: None)
+    sdcpp_service.cleanup_server_process(state, lambda *_a: None)
+    assert state.process is None and code[0] == 0
+    gui._delayed_health_check()
+    gui.drain_until(lambda: not gui._gui_tasks)
+    assert gui._sdcpp_lifecycle == 'stopped' and len(notices) == 3
+    gui._delayed_health_check()
+    gui.drain_until(lambda: not gui._gui_tasks)
+    assert len(notices) == 3
+    state.lifecycle = 'external'
+    gui._delayed_health_check()
+    gui.drain_until(lambda: not gui._gui_tasks)
+    assert gui._sdcpp_lifecycle == 'external' and len(notices) == 3
+    # Malformed and old health packets cannot certify managed readiness.
+    for invalid in ({'secret': 'UNTRUSTED'}, ['ready'], None, 'unsupported', 'ready'):
+        state.lifecycle = invalid
+        gui._delayed_health_check()
+        gui.drain_until(lambda: not gui._gui_tasks)
+        assert gui._sdcpp_lifecycle == 'unknown'
+        assert gui._server_lifecycle == 'responding'
+    def legacy_health(**kwargs):
+        packet = health(**kwargs)
+        packet['sdcpp'].pop('processLifecycle')
+        return packet
+    monkeypatch.setattr(gui, '_fetch_health_snapshot', legacy_health)
+    gui._delayed_health_check()
+    gui.drain_until(lambda: not gui._gui_tasks)
+    assert gui._sdcpp_lifecycle == 'unknown'
+    assert 'UNTRUSTED' not in str(gui._applied_config_ack) + str(notices)
