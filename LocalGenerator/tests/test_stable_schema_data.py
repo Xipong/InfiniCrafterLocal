@@ -1,10 +1,11 @@
 """Canonical grammar is application instructions; case constraints stay USER."""
 import copy
 import json
+import time
 
+import infini_local.pipelines.transport.http as transport_http
 import pytest
-
-from infini_local.pipelines import llm_transport as transport
+from infini_local.pipelines.transport import client as transport
 from test_craft_instruction_segments import stage_packets
 
 
@@ -15,19 +16,23 @@ def no_network(monkeypatch):
 
 
 def capture_wire(monkeypatch, packet, context):
-    from test_craft_instruction_segments import Captured
-    from infini_local.services import codex_auth as auth
     from types import SimpleNamespace
+
+    from infini_local.services import codex_auth as auth
+    from test_craft_instruction_segments import Captured
     wires = []
     def stop(url, wire, **kwargs):
         wires.append(copy.deepcopy(wire))
         if context["provider"] == "openai_codex":
             assert kwargs["headers"]["session-id"] == wire["prompt_cache_key"]
         raise Captured()
-    monkeypatch.setattr(transport, "http_json", stop)
+    monkeypatch.setattr(transport_http, "http_json", stop)
     monkeypatch.setattr(auth, "get_credentials", lambda: SimpleNamespace(access_token="offline", account_id="offline"))
     monkeypatch.setattr(auth, "post_sse", stop)
-    with pytest.raises(Captured):
+    # This fixture proves serialization, not wall-clock CPU speed. Captured is a
+    # BaseException, so the first fake send exits without entering retry logic.
+    with monkeypatch.context() as clock, pytest.raises(Captured):
+        clock.setattr(time, "monotonic", lambda: 100.0)
         transport._llm_json_single_context(packet, 3, context)
     assert len(wires) == 1
     return wires[0]
@@ -67,7 +72,12 @@ def test_actual_senders_cache_grammar_instructions_and_preserve_author(monkeypat
         source = first["messages"][1:]
     else:
         source = first["messages"]
-    assert [(r["role"], wire_text(r)) for r in authored] == [(r["role"], r["content"]) for r in source]
+    if provider == "local":
+        expected = [("system", source[0]["content"] + "\n\nDeveloper instructions:\n" + source[1]["content"])]
+        expected.extend((r["role"], r["content"]) for r in source[2:])
+    else:
+        expected = [(r["role"], r["content"]) for r in source]
+    assert [(r["role"], wire_text(r)) for r in authored] == expected
     assert first == before
     assert "_infini_prompt_cache" not in wires[0]
     if mode == "json_schema":
@@ -93,16 +103,16 @@ def test_actual_senders_cache_grammar_instructions_and_preserve_author(monkeypat
 @pytest.mark.parametrize("fixture,stage,mode", [
     pytest.param("door_on_chain", "visual", "json_schema", id="visual-door"),
     pytest.param("returning_potion", "visual_repair", "json_object", id="visual-repair-potion"),
-    pytest.param("set_projectile_beam_geometry", "vfx", "json_object", id="vfx-beam"),
-    pytest.param("set_projectile_lash_geometry", "vfx_repair", "json_schema", id="vfx-repair-whip"),
+    pytest.param("beam_geometry", "vfx", "json_object", id="vfx-beam"),
+    pytest.param("lash_geometry", "vfx_repair", "json_schema", id="vfx-repair-whip"),
 ])
 def test_static_definitions_remain_case_independent_across_runtime_domains(monkeypatch, fixture, stage, mode):
-    from vfx_material_fixtures import _data
     import vfx_material_fixtures
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+    from vfx_material_fixtures import _data
     ordinary, = stage_packets(monkeypatch, stage, format_mode=mode, labels=("novel-a",))
-    if fixture in {"set_projectile_beam_geometry", "set_projectile_lash_geometry"}:
+    if fixture in {"beam_geometry", "lash_geometry"}:
         data = _data(fixture)
     else:
         data = compile_runtime_program(build_runtime_fixture(fixture))
@@ -110,8 +120,12 @@ def test_static_definitions_remain_case_independent_across_runtime_domains(monke
     other, = stage_packets(monkeypatch, stage, format_mode=mode, labels=("novel-a",))
     assert ordinary["messages"][:2] == other["messages"][:2]
     assert ordinary["messages"][2] != other["messages"][2] or fixture == "workbench_blade"
-    # Full provider schema remains exact and inline, regardless of affinity.
+    # Provider schema stays inline; VFX transport defers local-only constraints.
     from prompt_packet_helpers import request_dossier
     schema_key = "responseSchema" if stage.startswith("visual") else "outputSchema"
     if mode == "json_schema":
-        assert other["response_format"]["json_schema"]["schema"] == request_dossier(other)[schema_key]
+        expected = request_dossier(other)[schema_key]
+        if stage.startswith("vfx"):
+            from infini_local.core.provider_schema import _provider_strict_projection, defer_provider_cross_field_constraints
+            expected = _provider_strict_projection(defer_provider_cross_field_constraints(expected), omit_annotations=True)
+        assert other["response_format"]["json_schema"]["schema"] == expected

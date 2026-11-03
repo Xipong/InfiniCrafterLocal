@@ -277,7 +277,7 @@ internal static partial class EngineRuntimeChecks
             using (var binary = new BinaryReader(stream, System.Text.Encoding.UTF8, true)) {
                 Equal((byte)player.whoAmI, binary.ReadByte(), "current snapshot exact owner");
                 reader.Invoke(receiver, new object[] { binary });
-                Equal(stream.Length, stream.Position, "current v5 entries and exhaustion fully consumed");
+                Equal(stream.Length, stream.Position, "current entries, initial durations and exhaustion fully consumed");
             }
             Equal(1, ((System.Collections.ICollection)entries.GetValue(receiver)!).Count, "current snapshot has exact entries");
             Terraria.Main.netMode = NetmodeID.MultiplayerClient; Terraria.Main.myPlayer = 0;
@@ -289,6 +289,10 @@ internal static partial class EngineRuntimeChecks
             Equal(3, (int)ticks.GetValue(mirror)!, "current mirror contains positive aggregate without entries");
             tick.Invoke(mirror, null);
             Equal(2, (int)ticks.GetValue(mirror)!, "retained aggregate fallback supports current copied remote mirror");
+            receiver.ApplyGeneratedUtilityBuff(new GeneratedBuffSpec { DurationTicks = 0, MovementSpeed = .5f });
+            receiver.CopyClientState(mirror);
+            tick.Invoke(mirror, null);
+            Equal(int.MaxValue, (int)ticks.GetValue(mirror)!, "permanent copied remote mirror does not count down");
         });
     }
 }

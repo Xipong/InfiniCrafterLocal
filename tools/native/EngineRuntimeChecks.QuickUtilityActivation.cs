@@ -190,8 +190,13 @@ internal static partial class EngineRuntimeChecks
             Equal(0, f.ServerItem.UseCalls, "bridge never replays UseItem/spawn/VFX");
             byte[] snapshot = f.Peers.Sent.Single(p => p[0] == InfiniCrafterLocal.Common.InfiniNetPacketIds.SyncGeneratedUtilityBuff);
             f.Mode(3); f.Peers.Receive(snapshot, 256); Equal(120, f.Ticks(f.RemoteBuff), "real remote decoder retains entries");
-            f.Mode(1); f.Peers.Receive(snapshot, 256); f.Owner.jumpSpeedBoost = 0;
-            f.OwnerBuff.PostUpdateEquips(); Equal(1.5f, f.Owner.jumpSpeedBoost, "authoritative owner snapshot not a second contribution");
+            WithLighting((_, lights) =>
+            {
+                f.Mode(1); f.Peers.Receive(snapshot, 256); f.Owner.jumpSpeedBoost = 0;
+                f.OwnerBuff.PostUpdateEquips();
+                Equal(1.5f, f.Owner.jumpSpeedBoost, "authoritative owner snapshot not a second contribution");
+                Equal(1, lights.Count, "owner snapshot emits one native utility light sample");
+            });
             // An exact replay after countdown must not refresh the utility duration.
             f.Mode(2); typeof(InfiniCraftPlayer).GetMethod("TickGeneratedUtilityBuff", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(f.ServerBuff, null); int before = f.Ticks(f.ServerBuff);
             f.ReceiveServer(commit); Equal(before, f.Ticks(f.ServerBuff), "commit replay cannot refresh");

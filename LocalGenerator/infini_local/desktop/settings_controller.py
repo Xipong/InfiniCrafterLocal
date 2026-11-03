@@ -114,6 +114,10 @@ class SettingsController(StudioOperations):
         # Unknown/manual extension settings are opaque wire values, not widgets.
         data.update({key: value.strip() if key in editable_keys else value
                      for key, value in self.values.items()})
+        language = data.get("INFINI_LANGUAGE", DEFAULTS["INFINI_LANGUAGE"]).strip().lower()
+        if language not in {"ru", "en"}:
+            raise ValueError("INFINI_LANGUAGE must be ru or en")
+        data["INFINI_LANGUAGE"] = language
         data["INFINI_GUI_PIPELINE_PRESET"] = self.preset.strip()
         data["INFINI_SDCPP_SERVER_EXTRA_ARGS"] = " ".join(data.get("INFINI_SDCPP_SERVER_EXTRA_ARGS", "").split())
         template, repaired, reason = repair_sdcpp_command_template(data.get("INFINI_SDCPP_SERVER_COMMAND_TEMPLATE", ""))
@@ -141,7 +145,7 @@ class SettingsController(StudioOperations):
             data["INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK"] = "0"
         # Only canonicalized launch fields change draft state, never unrelated
         # disk values that were read to preserve extension keys.
-        for key in ("INFINI_SDCPP_SERVER_COMMAND_TEMPLATE", "INFINI_SDCPP_SERVER_COMMAND_MODE",
+        for key in ("INFINI_LANGUAGE", "INFINI_SDCPP_SERVER_COMMAND_TEMPLATE", "INFINI_SDCPP_SERVER_COMMAND_MODE",
                     "INFINI_MP_ASSET_TRANSPORT", "INFINI_HOST", "INFINI_ASSET_PUBLIC_BASE_URL",
                     "INFINI_SDCPP_LORA_DIR", "INFINI_SDCPP_LORA_PROMPT_TAGS", "INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK"):
             if key in data:
@@ -215,28 +219,8 @@ class SettingsController(StudioOperations):
                 for key, value in saved_preset.items()
             ):
                 return saved
-        provider = str(data.get("INFINI_LLM_PROVIDER", "") or "").strip().lower()
-        backend = str(data.get("INFINI_IMAGE_BACKEND", "") or "").strip().lower()
-        extra_args = str(data.get("INFINI_SDCPP_SERVER_EXTRA_ARGS", "") or "").strip().lower()
-        steps = str(data.get("INFINI_SDCPP_STEPS", "") or "").strip()
-        if (
-            provider == "openai_compat"
-            and backend == "sdcpp"
-            and "diffusion=rocm0,vae=vulkan0,te=rocm0" in extra_args
-            and steps == "4"
-        ):
-            return "OpenAI-compatible + FLUX.2 Klein 4B hybrid"
-        if provider == "local" and backend == "sdcpp":
-            return "Локалка: LM Studio + local Z-Image/sd.cpp"
-        if provider == "openrouter" and backend == "sdcpp":
-            return "OpenRouter + local Z-Image/sd.cpp"
-        if provider == "openrouter" and backend == "image_api":
-            return "OpenRouter + Image API"
-        if provider == "openrouter" and backend in {"off", "none", "disabled", "0"}:
-            return "API LLM only: без картинок"
-
-        # Shared sprite controls do not establish provider/backend identity.
-        # Never present a nearest-score preset as the user's active pipeline.
+        # An obsolete or undeclared preset name is not evidence of a pipeline.
+        # Keep its actual settings untouched and show them as custom.
         return CUSTOM_PRESET
 
     def refresh_home(self):

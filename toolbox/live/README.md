@@ -1,4 +1,7 @@
-# Live10 / Live20 без image inference
+# Live10 / Live20 и явные real-image итерации
+
+Исторический режим ниже по умолчанию жёстко блокирует image inference.
+Отдельный `--real-images` не меняет старые панели и не использует synthetic PNG.
 
 ## Сначала offline
 
@@ -124,3 +127,47 @@ author budget и полный accounting по-прежнему обязател�
   PNG bytes/serving root/selected owner по-прежнему проверяются настоящими gates.
 
 Общий каталог команд: [../README.md](../README.md).
+
+
+## Восстановленный real-image runner
+
+`--real-images --run` использует только canonical `openai_codex` Responses и image
+backend, без agent bridge. Нужны все обычные `--expected-*` аргументы, дополнительно
+`--expected-image-model`, `--expected-image-quality`, `--expected-image-size`,
+`--expected-reasoning-effort`, `--attempt-budget` и `--parallel-crafts 1`.
+Endpoint expectation: `https://chatgpt.com/backend-api/codex/`.
+`INFINI_LLM_FALLBACK_NETWORK_FAILS=1`; `INFINI_SPRITE_RETRIES` должен совпасть с явным
+`--image-retries` (по умолчанию0). Автоматических whole-craft повторов нет.
+
+Ledger должен быть заранее инициализирован владельцем кампании: CLI не создаёт и
+не сбрасывает бюджет. Восстановленная кампания имеет отдельный явно записанный
+opening debit51, а не выдуманные исторические строки. Каждый новый combine сначала
+получает атомарную reservation; ошибки и crash не возвращают её автоматически.
+
+Для точного native request custom case может дополнительно содержать
+`"inputJson": "relative/path/to/native.input.json"`. Путь разрешается относительно
+cases file. Оба полных parent snapshots обязаны совпасть с `--runtime-dump`.
+Root context сохраняется, SHA исходного файла проверяется до execution; сохраняются
+исходные bytes и фактически переданный payload. Без inputJson используется стабильный
+case-derived QA worldId, не позиция кейса в subset. Это новый контекст, не обещание
+равенства потерянному историческому запросу.
+
+`real_run.py` сохраняет canonical image processing, delivery/asset roster и storage
+owners; все cache/world recipe roots изолированы внутри нового `--output`.
+Физические POST наблюдаются через существующий `codex_auth.generation_observations`,
+без headers, токенов или response body в metadata ledger. Незавершённые calls,
+потерянные observations и отсутствующие обязательные стадии не превращаются в PASS.
+Codex не отправляет logical temperature/output-token budget в wire: это не cost cap.
+
+Каждая попытка имеет input, admission, logical requests, physical metadata,
+final DTO (если получен) и terminal receipt. Существующий output не перезаписывается.
+Pipeline PASS не является art/native gameplay PASS. Exact image reuse и VFX-only
+replay пока не восстановлены: соответствующие flags явно отклоняются, а не молча
+подменяются новой полной генерацией. Старые тестовые результаты не относятся
+автоматически к этой реконструкции.
+
+Effective projected text model/effort/format также проверяются перед canonical SSE send;
+Visual reasoning override не может незаметно поменять выбранный effort.
+`--require-zero-transport-retries` проверяет фактически наблюдаемые повторные POST,
+включая изображения; разрешённый image retry всё равно виден и при этом flag даёт RED.
+Незавершённые physical attempts не скрываются completed call envelope.

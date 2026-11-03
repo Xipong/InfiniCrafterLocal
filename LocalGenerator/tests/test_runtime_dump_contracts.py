@@ -56,7 +56,7 @@ def test_startup_dump_snapshot_feeds_parent_context(tmp_path):
     env = {**os.environ, "INFINI_ITEMS_RUNTIME_DUMP": str(items), "INFINI_PROJECTILES_RUNTIME_DUMP": str(projectiles)}
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
     result = subprocess.run([sys.executable, "-c", '''
-from infini_local.pipelines.parent_context_pipeline import ammo_profile_of, projectile_profile_of
+from infini_local.pipelines.context.parents import ammo_profile_of, projectile_profile_of
 from infini_local.services.runtime_dump_service import runtime_projectile_lookup
 profile = projectile_profile_of({"shoot": 42})
 assert profile["tileCollide"] is True and profile["fromRuntimeDump"] is True

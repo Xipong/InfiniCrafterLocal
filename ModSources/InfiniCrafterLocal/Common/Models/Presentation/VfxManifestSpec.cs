@@ -86,13 +86,14 @@ public sealed class VfxManifestSpec
             throw new InvalidDataException("VFX slot count exceeds 12");
         var declaredAssets = new HashSet<string>(StringComparer.Ordinal);
         if (Assets is not null) {
-            if (Assets.Length > 4) throw new InvalidDataException("VFX asset count exceeds 4");
+            if (Assets.Length > 16) throw new InvalidDataException("VFX asset count exceeds 16");
             foreach (var asset in Assets) {
                 if (asset is null) throw new InvalidDataException("null VFX asset");
                 asset.Validate();
                 if (!declaredAssets.Add(asset.Id)) throw new InvalidDataException("duplicate VFX asset id");
             }
         }
+        int requiredContourDraws=0;
         var usedAssets = new HashSet<string>(StringComparer.Ordinal);
         var ids = new HashSet<string>(StringComparer.Ordinal);
         var impactEntityIds = new HashSet<string>(StringComparer.Ordinal);
@@ -100,15 +101,26 @@ public sealed class VfxManifestSpec
         {
             if (slot is null) throw new InvalidDataException("VFX manifest contains null slot");
             slot.NormalizeAndValidate();
-            var texture = slot.Element?.Texture ?? slot.Path?.Texture;
+            if (slot.NativeEffect is { } nativeEffect)
+            {
+                int cost = VfxNativeEffects.Cost(nativeEffect.Type);
+                if (Budget.MaxParticlesPerTick < cost || Budget.MaxParticlesTotal < cost)
+                    throw new InvalidDataException("nativeEffect whole burst exceeds manifest particle budget");
+            }
+            var texture = slot.Element?.Texture ?? slot.Path?.Texture ?? slot.Trail?.Texture;
             if (texture?.Source == "asset") {
                 if (!declaredAssets.Contains(texture.AssetId)) throw new InvalidDataException("dangling VFX asset reference");
                 usedAssets.Add(texture.AssetId);
+            }
+            if(slot.Geometry is {} budgetGeometry)requiredContourDraws+=budgetGeometry.RequiredDrawBudget();
+            if(slot.Geometry is {} geometry)foreach(var draw in geometry.Draws)if(draw.Material.Texture.Source=="asset"){
+                string id=draw.Material.Texture.AssetId;if(!declaredAssets.Contains(id))throw new InvalidDataException("dangling contour asset reference");usedAssets.Add(id);
             }
             if (!ids.Add(slot.Id)) throw new InvalidDataException($"duplicate VFX slot id '{slot.Id}'");
             if (slot.RendererKind == "impactSprite" && !impactEntityIds.Add(slot.EntityId))
                 throw new InvalidDataException($"duplicate impactSprite entity '{slot.EntityId}'");
         }
+        if(requiredContourDraws>2048||Budget.MaxDrawCalls<requiredContourDraws)throw new InvalidDataException("contour composition exceeds manifest draw budget");
         if (!declaredAssets.SetEquals(usedAssets)) throw new InvalidDataException("unused VFX asset request");
     }
 }
@@ -122,7 +134,7 @@ public sealed class VfxQualityBudgetSpec
     {
         MaxParticlesPerTick = Math.Clamp(MaxParticlesPerTick, 0, 256);
         MaxParticlesTotal = Math.Clamp(MaxParticlesTotal, 0, 12000);
-        MaxDrawCalls = Math.Clamp(MaxDrawCalls, 0, 512);
+        MaxDrawCalls = Math.Clamp(MaxDrawCalls, 0, 2048);
     }
 }
 
@@ -181,7 +193,10 @@ public sealed class VfxSlotSpec
     private float? _spread;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public float? Spread { get => _spread; set => _spread = value ?? throw new InvalidDataException("Spread cannot be null"); }
-    public float PhaseOffset { get; set; }
+    private float _phaseOffset;
+    private bool _hasPhaseOffset;
+    [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingDefault)]
+    public float PhaseOffset { get => _phaseOffset; set { _phaseOffset=value; _hasPhaseOffset=true; } }
 
     private RuntimeRgbSpec? _color;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -201,6 +216,30 @@ public sealed class VfxSlotSpec
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public VfxScreenShakeSpec? ScreenShake { get => _screenShake; set => _screenShake = value ?? throw new InvalidDataException("screenShake cannot be null"); }
 
+    private VfxContourSpec? _geometry;
+    [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)] public VfxContourSpec? Geometry {get=>_geometry;set=>_geometry=value??throw new InvalidDataException("geometry cannot be null");}
+    private VfxShapeSpec? _shape;
+    [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
+    public VfxShapeSpec? Shape { get => _shape; set => _shape=value ?? throw new InvalidDataException("shape cannot be null"); }
+
+    private VfxNativeEffectSpec? _nativeEffect;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public VfxNativeEffectSpec? NativeEffect
+    {
+        get => _nativeEffect;
+        set => _nativeEffect = value ?? throw new InvalidDataException("nativeEffect cannot be null");
+    }
+    private VfxNativeDustSpec? _dust;
+    private VfxNativeLightSpec? _light;
+    [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
+    public VfxNativeDustSpec? Dust { get => _dust; set => _dust=value ?? throw new InvalidDataException("dust cannot be null"); }
+    [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
+    public VfxNativeLightSpec? Light { get => _light; set => _light=value ?? throw new InvalidDataException("light cannot be null"); }
+
+    private VfxHistoryTrailSpec? _trail;
+    [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
+    public VfxHistoryTrailSpec? Trail { get=>_trail; set=>_trail=value??throw new InvalidDataException("trail cannot be null"); }
+
     public void Normalize() => NormalizeAndValidate();
     public void NormalizeAndValidate()
     {
@@ -216,9 +255,16 @@ public sealed class VfxSlotSpec
         {
             if (RuntimeId(PlacementBindingId,"placement binding id") != PlacementBindingId
                 || Event != RuntimeEventKind.Periodic || Anchor != "self" || RepeatEvery is null or < 1
-                || rendererKind is not (InfiniVfxRendererKind.SpriteElement or InfiniVfxRendererKind.LibraryParticle or InfiniVfxRendererKind.LightCue))
+                || rendererKind is not (InfiniVfxRendererKind.SpriteElement or InfiniVfxRendererKind.LibraryParticle or InfiniVfxRendererKind.LightCue or InfiniVfxRendererKind.NativeLight))
                 throw new InvalidDataException("placed VFX requires exact binding, periodic/self and spriteElement/libraryParticle/lightCue cadence");
         }
+        if(rendererKind!=InfiniVfxRendererKind.Contours&&Geometry is not null)throw new InvalidDataException("foreign geometry payload");
+        VfxNativeEffectSpec.ValidateSlot(this, _hasPhaseOffset);
+        if (rendererKind == InfiniVfxRendererKind.NativeEffect) return;
+        VfxHistoryTrailSpec.ValidateSlot(this,_hasPhaseOffset);
+        if(rendererKind==InfiniVfxRendererKind.HistoryTrail)return;
+        VfxNativeCueValidation.Validate(this,_hasPhaseOffset);
+        if (rendererKind is InfiniVfxRendererKind.NativeDust or InfiniVfxRendererKind.NativeLight) return;
         if (rendererKind == InfiniVfxRendererKind.SoundCue && (SoundId is null || Sound is null))
             throw new InvalidDataException("soundCue requires explicit soundId and sound playback controls");
         if (SoundId is not null) {
@@ -230,9 +276,18 @@ public sealed class VfxSlotSpec
             if (SoundId is null) throw new InvalidDataException("explicit sound requires an exact soundId");
             Sound.NormalizeAndValidate();
         }
+        if(rendererKind==InfiniVfxRendererKind.Shape) {
+            if(_hasPhaseOffset)throw new InvalidDataException("shape forbids legacy phaseOffset");
+            if(Shape is null)throw new InvalidDataException("shape renderer requires shape");
+            Shape.Validate(this);
+        } else if(Shape is not null)throw new InvalidDataException("foreign shape payload");
+        if(rendererKind==InfiniVfxRendererKind.Contours){if(_hasPhaseOffset||Geometry is null)throw new InvalidDataException("contours requires geometry and forbids phaseOffset");Geometry.Validate();
+            if(Geometry.Attachment=="source"&&Event is "on_expire" or "on_kill")throw new InvalidDataException("terminal contour requires world attachment");
+            if(Event==RuntimeEventKind.Periodic?RepeatEvery is null or <1:RepeatEvery!=0)throw new InvalidDataException("invalid contour cadence");
+        }
         VfxLibraryValidation.Validate(this,rendererKind);
         bool ownsColor = rendererKind is not (InfiniVfxRendererKind.SoundCue or InfiniVfxRendererKind.ScreenShakeCue
-            or InfiniVfxRendererKind.SpriteElement or InfiniVfxRendererKind.TexturedPath or InfiniVfxRendererKind.LibraryParticle);
+            or InfiniVfxRendererKind.SpriteElement or InfiniVfxRendererKind.TexturedPath or InfiniVfxRendererKind.LibraryParticle or InfiniVfxRendererKind.Shape or InfiniVfxRendererKind.Contours);
         if (ownsColor ? Color is null : Color is not null)
             throw new InvalidDataException(ownsColor ? "VFX renderer requires explicit local color" : "VFX renderer forbids common color");
         Color?.Validate();
@@ -244,7 +299,8 @@ public sealed class VfxSlotSpec
             if (Path is null || Element is not null) throw new InvalidDataException("texturedPath requires only path payload");
             Path.Validate(this);
         } else if (Element is not null || Path is not null) throw new InvalidDataException("foreign VFX material payload");
-        bool nestedBranch = materialBranch || rendererKind is InfiniVfxRendererKind.LibraryParticle or InfiniVfxRendererKind.ScreenShakeCue;
+        bool shape = rendererKind is InfiniVfxRendererKind.Shape or InfiniVfxRendererKind.Contours;
+        bool nestedBranch = shape || materialBranch || rendererKind is InfiniVfxRendererKind.LibraryParticle or InfiniVfxRendererKind.ScreenShakeCue;
         bool shake = rendererKind == InfiniVfxRendererKind.ScreenShakeCue;
         bool sound = rendererKind == InfiniVfxRendererKind.SoundCue;
         bool path = rendererKind == InfiniVfxRendererKind.TexturedPath;
@@ -277,9 +333,9 @@ public sealed class VfxSlotSpec
             if (Alpha is not null || Blend is not null || Layer is not null)
                 throw new InvalidDataException("screenShakeCue forbids unconsumed draw controls");
         } else {
-            if (Alpha is null || Blend is null || Layer is null)
+            if ((shape ? Alpha is not null : Alpha is null) || Blend is null || Layer is null)
                 throw new InvalidDataException("VFX renderer requires alpha, blend and layer");
-            Alpha = Math.Clamp(Alpha.Value, 0f, 1f);
+            if(!shape) Alpha = Math.Clamp(Alpha!.Value, 0f, 1f);
             Blend = ExactEnumText(Blend, "blend", "alpha", "additive");
             Layer = ExactEnumText(Layer, "layer", "BeforeProjectiles", "AfterProjectiles");
         }
@@ -307,9 +363,10 @@ public sealed class VfxSlotSpec
         } else {
             if (Duration is null || RepeatEvery is null)
                 throw new InvalidDataException("VFX renderer requires duration and repeatEvery");
-            if (nestedBranch && (Duration is < 3 or > 120 || RepeatEvery is < 0 or > 120))
+            int minimumDuration=shape?1:3;
+            if (nestedBranch && (Duration < minimumDuration || Duration > 120 || RepeatEvery is < 0 or > 120))
                 throw new InvalidDataException("invalid VFX nested timing");
-            Duration = Math.Clamp(Duration.Value, 3, 120); RepeatEvery = Math.Clamp(RepeatEvery.Value, 0, 120);
+            Duration = Math.Clamp(Duration.Value, minimumDuration, 120); RepeatEvery = Math.Clamp(RepeatEvery.Value, 0, 120);
         }
         if (nestedBranch && StartTick is < 0 or > 120) throw new InvalidDataException("invalid VFX nested startTick");
         if (rendererKind == InfiniVfxRendererKind.ImpactSprite && TextureRole != "impact")
@@ -319,7 +376,7 @@ public sealed class VfxSlotSpec
         Anchor = ExactEnumText(Anchor, "anchor", "self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field");
         if (!cadenceOnly && StartTick is null) throw new InvalidDataException("VFX renderer requires startTick");
         if (StartTick is { } startTick) StartTick = Math.Clamp(startTick, 0, 120);
-        PhaseOffset = Math.Clamp(PhaseOffset, -1f, 1f);
+        _phaseOffset = Math.Clamp(_phaseOffset, -1f, 1f);
     }
 
     // Shared playback projection for item, projectile and detached occurrences.

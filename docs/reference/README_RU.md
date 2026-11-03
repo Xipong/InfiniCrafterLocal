@@ -14,6 +14,7 @@
 ## Использование предмета и экипировка
 
 - [Основное, альтернативное и удерживаемое действие](items/NAMED_ITEM_EFFECT_GROUPS_RU.md).
+- [Общие эффекты игрока: экипировка, временные баффы и реакции](items/PLAYER_EFFECT_PRIMITIVES_RU.md).
 - [Эффекты экипировки](items/NATIVE_EQUIPMENT_UTILITIES_RU.md).
 - [Вероятность расхода собственного стека](items/OWN_STACK_CHANCE_RU.md) и [расход боеприпасов](items/WEAPON_AMMO_CONSUMPTION_RU.md).
 - [Готовность сохранённых рецептов и health](items/RECIPE_HEALTH_AND_CONTRACTS_RU.md).

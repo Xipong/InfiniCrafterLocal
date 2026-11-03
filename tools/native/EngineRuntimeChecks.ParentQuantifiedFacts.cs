@@ -13,6 +13,65 @@ using System.Collections.Generic;
 
 internal static partial class EngineRuntimeChecks
 {
+    private sealed class NativeStatParentProbe : ModItem
+    {
+        public override void SetDefaults()
+        {
+            Item.damage = 19;
+            Item.DamageType = DamageClass.Melee;
+            Item.knockBack = 2f;
+            Item.useStyle = ItemUseStyleID.Swing;
+            Item.useTime = 6;
+            Item.useAnimation = 25;
+            Item.scale = 1.375f;
+            Item.ArmorPenetration = 13;
+            Item.useLimitPerAnimation = 2;
+        }
+    }
+
+    private static void ParentNativeItemStatsSurviveCaptureAndNormalization()
+    {
+        using var state = new NativeActorState();
+        Terraria.Main.netMode = NetmodeID.SinglePlayer;
+        Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(31);
+        var owner = new Player();
+        var packets = new List<JsonElement>();
+        void Check(int type, bool prefix = false)
+        {
+            var baseline = new Item(type);
+            var item = new Item(type);
+            if (prefix)
+            {
+                Equal(true, item.Prefix(PrefixID.Legendary), "real mod item receives native prefix");
+                Equal(false, baseline.scale == item.scale, "prefix control actually changes native scale");
+            }
+            float originalScale = item.scale;
+            using var request = JsonDocument.Parse(new GeneratorClient().Prepare(item, item, owner).PayloadJson);
+            packets.Add(request.RootElement.Clone());
+            foreach (string parent in new[] { "itemA", "itemB" })
+            {
+                var root = request.RootElement.GetProperty(parent);
+                foreach (var facts in new[] { root, root.GetProperty("runtimeFacts"), root.GetProperty("fingerprint") })
+                {
+                    Equal(baseline.scale, facts.GetProperty("itemScale").GetSingle(), "literal base Item.scale survives every envelope");
+                    Equal(baseline.ArmorPenetration, facts.GetProperty("armorPenetration").GetInt32(), "native Item armor penetration is independent of projectile defaults");
+                    var limit = facts.GetProperty("useLimitPerAnimation");
+                    Equal(baseline.useLimitPerAnimation, limit.ValueKind == JsonValueKind.Null ? (int?)null : limit.GetInt32(), "native nullable use limit is not inferred from animation cadence");
+                }
+                Equal(prefix, root.GetProperty("prefixIgnored").GetBoolean(), "only native prefix is normalized");
+                if (baseline.ModItem is not null)
+                    Equal(baseline.ModItem.FullName, root.GetProperty("fullName").GetString()!, "actual loader-registered mod parent identity");
+            }
+            Equal(originalScale, item.scale, "capture cannot change consumed parent scale");
+            Equal(baseline.ArmorPenetration, item.ArmorPenetration, "capture cannot change consumed parent penetration");
+        }
+        foreach (int type in new[] { ItemID.WoodenSword, ItemID.SpaceGun, ItemID.BookStaff, ItemID.FairyQueenMagicItem, ItemID.FairyQueenRangedItem })
+            Check(type);
+        WithNativeChestRegisteredItem(type => { Check(type); Check(type, prefix: true); }, new NativeStatParentProbe());
+        string? path = Environment.GetEnvironmentVariable("INFINI_PARENT_NATIVE_STATS_PACKET");
+        if (!string.IsNullOrEmpty(path)) System.IO.File.WriteAllText(path, JsonSerializer.Serialize(packets));
+    }
+
     private static void ParentQuantifiedFactsKeepSnapshotsAndObservationIdentity()
     {
         using var state = new NativeActorState();

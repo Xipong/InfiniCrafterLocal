@@ -1,38 +1,39 @@
 """Independent equipment flags, not source-item presets."""
-from copy import deepcopy
 import json
+from copy import deepcopy
 from pathlib import Path
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import filter_repair_patch_scope
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
+
 import pytest
-from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
 def periodic_equipment_fixture(kind="accessory"):
     """Fresh Author composition used by the native equipment hook regression."""
-    doc = build_capability_witness("configure_" + kind)
-    source = build_capability_witness("spawn_entity_on_event")["runtimeProgram"]
+    doc = build_capability_witness(kind)
+    source = build_capability_witness("spawn_on_event")["runtimeProgram"]
     program = doc["runtimeProgram"]
     program["entities"].extend(deepcopy(row) for row in source["entities"] if row["id"] == "witness_child")
     program["calls"].extend(deepcopy(row) for row in source["calls"] if row.get("target") == "witness_child")
-    event = deepcopy(next(row for row in source["calls"] if row["fn"] == "spawn_entity_on_event"))
+    event = deepcopy(next(row for row in source["calls"] if row["fn"] == "spawn_on_event"))
     event.update(id="periodic_spawn", target="item")
     event["params"]["when"] = {'everySeconds': (6) / 60}
     program["calls"].append(event)
-    next(row for row in program["calls"] if row["id"] == "child_configure_spawn")["params"]["aim"] = "facing"
+    next(row for row in program["calls"] if row["id"] == "child_spawn")["params"]["aim"] = "facing"
     return doc
 
 
 @pytest.mark.parametrize("kind", ["accessory", "armor"])
 def test_equipped_only_periodic_spawn_reaches_strict_delivery(kind):
+    from infini_local.pipelines.author.item_contract import author_item_response_schema
     from jsonschema import Draft202012Validator
-    from infini_local.pipelines.author_item_contract import author_item_response_schema
 
     doc = periodic_equipment_fixture(kind)
     assert Draft202012Validator(author_item_response_schema()).is_valid(doc)
@@ -68,11 +69,11 @@ def test_equipped_only_periodic_spawn_reaches_strict_delivery(kind):
 
 @pytest.mark.parametrize("field,valid,invalid", [
     ("rocketBoots", [0, 1, 2, 3, 4, 5], [-1, 6, 1.5, True, None]),
-    ("accRunSpeedBlocksPerSecond", [0, 3, 6.75, 20], [-1, 20.00001, True, None]),
+    ("sprintSpeedFloor", [0, 3, 6.75, 20], [-1, 20.00001, True, None]),
 ])
 def test_bounded_native_number(field, valid, invalid):
     for value in valid:
-        spec = CAPABILITY_REGISTRY["configure_accessory"].params[field]
+        spec = CAPABILITY_REGISTRY["accessory"].params[field]
         author_value = spec.from_wire(value) if spec.predecessor_names and type(value) in (int, float) else value
         doc, _ = fixture({field: author_value, "defensePoints": 1})
         assert validate_runtime_program(doc)["ok"], "bounded native number must be authorable"
@@ -92,7 +93,7 @@ def test_bounded_native_number(field, valid, invalid):
         corrupt["accessory"][wire_field] = invalid[0]
         assert not validate_runtime_wire(corrupt)["ok"]
     for value in invalid:
-        spec = CAPABILITY_REGISTRY["configure_accessory"].params[field]
+        spec = CAPABILITY_REGISTRY["accessory"].params[field]
         author_value = spec.from_wire(value) if spec.predecessor_names and type(value) in (int, float) else value
         doc, _ = fixture({field: author_value, "defensePoints": 1})
         assert not validate_runtime_program(doc)["ok"]
@@ -102,15 +103,15 @@ def test_bounded_native_number(field, valid, invalid):
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_serialized_author_and_frozen_leaf_repair(monkeypatch, mode):
-    from test_source_unit_guidance import _author_request, _repair_request, _source, _offline
+    from test_source_unit_guidance import _author_request, _offline, _repair_request, _source
     getattr(_offline, "__wrapped__")(monkeypatch)
     params = {"wireVision": True, "iceSkate": True, "noKnockback": True, "fireWalk": True,
-              "rocketBoots": 3, "accRunSpeedBlocksPerSecond": 25.3125, "moveSpeedBonusPercent": 8,
+              "rocketBoots": 3, "sprintSpeedFloor": 25.3125, "moveSpeedBonus": 8,
               "defensePoints": 2}
     doc, call = fixture(params)
+    from infini_local.pipelines.author import item_contract as contract
     from jsonschema import Draft202012Validator
     from test_codex_subscription_contract import _encode_nullable_fixture
-    from infini_local.pipelines import author_item_contract as contract
     schema = contract.author_item_response_schema()
     provider = contract.author_item_provider_response_schema()
     encoded = _encode_nullable_fixture(doc, schema)
@@ -118,7 +119,7 @@ def test_serialized_author_and_frozen_leaf_repair(monkeypatch, mode):
     restored = contract.project_provider_author_item_to_local(encoded, response_format={"type": "json_schema", "json_schema": {"schema": provider}})
     assert restored == doc
     _, packet = _author_request(monkeypatch, mode, _source())
-    card = next(c for c in packet["runtimeCapabilityContract"]["catalog"]["capabilities"] if c["fn"] == "configure_accessory")
+    card = next(c for c in packet["runtimeCapabilityContract"]["catalog"]["capabilities"] if c["fn"] == "accessory")
     for field in params:
         assert field in card["params"]
     call["params"]["rocketBoots"] = 6
@@ -127,7 +128,7 @@ def test_serialized_author_and_frozen_leaf_repair(monkeypatch, mode):
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
     assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.rocketBoots"]}]
     assert repair_packet["repairScope"] == scope
-    repair_card = next(c for c in repair_packet["existingBrokenCapabilityCards"] if c["fn"] == "configure_accessory")
+    repair_card = next(c for c in repair_packet["existingBrokenCapabilityCards"] if c["fn"] == "accessory")
     assert repair_card["params"]["rocketBoots"]["max"] == 5
     candidate = deepcopy(call)
     candidate["params"].update(rocketBoots=3, wireVision=False, defensePoints=200)
@@ -159,8 +160,8 @@ def test_omitted_utilities_and_names_do_not_author_mechanics():
 
 
 def fixture(params):
-    doc = build_capability_witness("configure_accessory")
-    call = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_accessory")
+    doc = build_capability_witness("accessory")
+    call = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "accessory")
     call["params"] = params
     return doc, call
 

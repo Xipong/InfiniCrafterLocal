@@ -10,6 +10,8 @@
 
 Применяй правила и проверки только к затронутому владельцу и обещанному результату, а не как общий чеклист перед началом работы. Сделай рабочую версию, затем проверь реальные инварианты; не повторяй чтение и проверки неизменённого без новой причины. Тестовый хардкод оформления или реализации можно менять вместе с новым решением, сохраняя проверку существенного поведения. Пустой `verify --plan` — не подтверждение результата.
 
+Перед исправлением установи фактический путь сбоя по логам и конфигурации: версию, provider/API mode и вызываемый entrypoint, а не только похожий симптом. Воспроизведи отказ именно на этом пути и обозначь соседние пути с тем же контрактом; после правки покажи RED→GREEN исходного пути и ограниченные проверки соседних. Исправление Chat не закрывает Responses автоматически. В отчёте различай исправленное, реально проверенное и NotRun; неизвестный путь явно оставляй неизвестным, без заявления о полном устранении сбоя.
+
 ## Приоритеты проекта
 
 **Архитектура обслуживает создание предметов, а не наоборот.** Три равноправные цели:
@@ -43,7 +45,7 @@ Gameplay Author непосредственно составляет bounded `run
 
 Найди затронутый owner по известному symbol/caller либо [карте](docs/development/CODE_MAP_RU.md#fast-start) и читай только соответствующие контракт, consumer и документы. Для **новой capability** используй [инструкцию по добавлению](docs/development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md) и полный vertical slice ниже; локальная правка не требует предварительного чтения всего runtime-каталога.
 
-Owners: authored shape — `program_schema.py`; mechanical/event facts — `capability_registry.py`; lossless projections/receipts — `technical_lowering.py`; model-facing prose — `author_item_contract.py`. Для новой capability нельзя создавать facade/shadow contract или вручную добавлять её лишь в один слой.
+Owners: authored shape — `program_schema.py`; mechanical/event facts — `capability_registry.py`; lossless projections/receipts — `technical_lowering.py`; model-facing prose — `pipelines/author/item_contract.py`. Для новой capability нельзя создавать facade/shadow contract или вручную добавлять её лишь в один слой.
 
 ## Запрещено
 

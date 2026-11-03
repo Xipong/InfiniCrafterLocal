@@ -9,7 +9,7 @@ from types import FunctionType
 from typing import Any, Callable
 import zlib
 
-from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+from infini_local.pipelines.visual.assets import build_visual_asset_plan
 
 
 def write_no_image_fixture_png(path: Path, *, size: int = 32, ingredient: bool = False) -> Path:
@@ -153,7 +153,7 @@ def _verify_no_image_fixture_identity(
     fixture: Path, selected_fixture: Path, fixture_sha: str,
 ) -> None:
     """Bind one QA observation to exact bytes and canonical serving selection."""
-    from infini_local.pipelines import visual_delivery_gate as gate
+    from infini_local.pipelines.visual import delivery as gate
 
     try:
         paths = {fixture, selected_fixture}
@@ -203,9 +203,9 @@ def synthetic_no_image_execution_control(
     Clone the projector's globals rather than patching its module: concurrent
     crafts and production callers must not see these backend substitutions.
     """
-    from infini_local.core.vfx_manifest import vfx_png_dependencies
-    from infini_local.pipelines import visual_delivery_gate as gate
-    from infini_local.pipelines import visual_sprite_generation as sprites
+    from infini_local.core.vfx.validation import vfx_png_dependencies
+    from infini_local.pipelines.visual import delivery as gate
+    from infini_local.pipelines.images import stage as sprites
     from infini_local.services.asset_sync_service import is_complete_png_file
 
     control = copy.deepcopy(data)
@@ -244,7 +244,7 @@ def synthetic_no_image_execution_control(
         if row["code"] == "required_vfx_texture_not_ready":
             continue
         if row["code"] == "required_vfx_sprite_missing_or_invalid" and row.get("status") == "qa_no_image_fixture":
-            from infini_local.pipelines.sprite_postprocess import sprite_validation_fatal
+            from infini_local.pipelines.images.validation import sprite_validation_fatal
             if not sprite_validation_fatal(row.get("validation")):
                 continue
         return control

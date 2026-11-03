@@ -2,15 +2,15 @@
 from __future__ import annotations
 
 from infini_local.core import llm_config
-from infini_local.pipelines import llm_provider_wire
-from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
+from infini_local.pipelines.transport import provider_wire as llm_provider_wire
+from infini_local.pipelines.vfx import request as vfx_transport
 from prompt_packet_helpers import request_dossier, dossier_text
 
 import json
 
 import pytest
 
-from infini_local.pipelines import llm_authoring_pipeline as author
+from infini_local.pipelines.author import request as author
 
 
 @pytest.mark.parametrize("mode", ["json_object", "off"])
@@ -70,7 +70,7 @@ def test_author_has_no_host_damage_recommendation(monkeypatch, mode, source_a, s
     assert "damage" not in corridor["broadEnvelope"]
     assert corridor["parentDamage"] == [source_a["damage"], source_b["damage"]]
     catalog = payload["runtimeCapabilityContract"]["catalog"]
-    for fn in ("configure_item_stats", "set_projectile_damage"):
+    for fn in ("item_stats", "projectile_damage"):
         card = next(row for row in catalog["capabilities"] if row["fn"] == fn)
         assert card["params"]["damage"]["min"] == 0
         assert card["params"]["damage"]["max"] == 2000
@@ -101,8 +101,8 @@ def test_author_declares_exact_recipe_independent_prefix(monkeypatch, mode):
     assert static == other_static
     assert prefix == other_prefix
     assert len(prefix) > 65000
-    assert set(static) == {"priorityHeader", "runtimeProgramInvariants", "runtimeCapabilityContract", "requiredJsonShape", "diagnosticReport"}
-    assert set(full) - set(static) == {"recipeKey", "parents", "balanceCorridor", "sourceWireUnits"}
+    assert set(static) == {"priorityHeader", "runtimeProgramInvariants", "runtimeCapabilityContract", "requiredJsonShape"}
+    assert set(full) - set(static) == {"recipeKey", "parentBriefRule", "parentBriefs", "parents", "balanceCorridor", "sourceWireUnits"}
     assert full["recipeKey"] != other_full["recipeKey"]
     capabilities = static["runtimeCapabilityContract"]["catalog"]["capabilities"]
     visible = {name for name, cap in author.CAPABILITY_REGISTRY.items() if cap.author_visible}
@@ -110,7 +110,7 @@ def test_author_declares_exact_recipe_independent_prefix(monkeypatch, mode):
     assert {card["fn"] for card in capabilities} == visible
     assert first["messages"][:2] == second["messages"][:2]
     assert first.get("response_format") == second.get("response_format")
-    assert "present_placed_item_sprite" in {card["fn"] for card in capabilities}
+    assert "placed_sprite" in {card["fn"] for card in capabilities}
     assert dossier_text(first) == first_user
     assert dossier_text(second) == second_user
 
@@ -146,7 +146,7 @@ def test_repair_declares_only_static_guidance_as_cacheable(monkeypatch, syntax_o
             else:
                 item = build_runtime_fixture("workbench_blade")
                 item["name"] = label
-                use = next(c for c in item["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")
+                use = next(c for c in item["runtimeProgram"]["calls"] if c["fn"] == "item_use")
                 del use["params"]["useStyle"]
                 report = validate_runtime_program(item)
                 author.repair_author_item_after_failure(item, {"name": label}, {}, label, failure_report=report)
@@ -168,7 +168,8 @@ def test_repair_declares_only_static_guidance_as_cacheable(monkeypatch, syntax_o
 
 @pytest.mark.parametrize("repair", [False, True])
 def test_vfx_cache_boundary_survives_production_transport_helper(monkeypatch, repair):
-    from infini_local.core import vfx_manifest as vfx
+    import infini_local.pipelines.vfx.prompt as vfx_prompt
+    import infini_local.pipelines.vfx.stage as vfx_stage
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
@@ -185,9 +186,9 @@ def test_vfx_cache_boundary_survives_production_transport_helper(monkeypatch, re
     for name in ("workbench_blade", "throwing_axe"):
         data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
         data["name"] = name
-        packet = vfx._prompt_packet(data, {"name": name}, {})
+        packet = vfx_prompt._prompt_packet(data, {"name": name}, {})
         with pytest.raises(_RequestCaptured):
-            vfx._request(vfx_transport.call_llm_vfx_director, packet,
+            vfx_stage._request(vfx_transport.call_llm_vfx_director, packet,
                          repair_errors=[] if repair else None, previous={}, repair_scope={})
     static, prefix, full = _marked_prefix(requests[0])
     other_static, other_prefix, other_full = _marked_prefix(requests[1])

@@ -2,23 +2,85 @@
 'use strict';
 const fs=require('node:fs'), vm=require('node:vm'), assert=require('node:assert/strict');
 const nodes=new Map(), events={};
-function node() {return {hidden:false,open:false,dataset:{},textContent:'',innerHTML:'',value:'',disabled:false,append(){},focus(){},replaceChildren(){},remove(){},classList:{toggle(){},add(){},remove(){},contains(){return false;}},setAttribute(){},addEventListener(){},close(){this.open=false;},showModal(){this.open=true;},querySelector(){return node();}};}
-global.setTimeout=()=>0;
+function node() {return {children:[],attributes:{},queries:{},get firstElementChild(){return this.children[0];},hidden:false,open:false,dataset:{},textContent:'',innerHTML:'',value:'',disabled:false,append(child){child.parent=this;this.children.push(child);},focus(){},replaceChildren(...children){this.children=[];children.forEach(child=>this.append(child));},remove(){if(this.parent) this.parent.children=this.parent.children.filter(child=>child!==this);},classList:{toggle(){},add(){},remove(){},contains(){return false;}},setAttribute(key,value){this.attributes[key]=value;},addEventListener(){},close(){this.open=false;},showModal(){this.open=true;},querySelector(selector){return this.queries[selector] ||= node();}};}
+const timers=[];global.setTimeout=(fn)=>{timers.push(fn);return timers.length;};
 // Single- and multi-node queries must see the same mounted fixture nodes.
-global.document={createElement:()=>node(),activeElement:null,addEventListener(name,fn){events[name]=fn;},querySelectorAll(selector){return nodes.has(selector) ? [nodes.get(selector)] : [];},querySelector(selector){if(selector === 'dialog[open]') return nodes.get('#utility-dialog')?.open ? nodes.get('#utility-dialog') : nodes.get('#search-dialog')?.open ? nodes.get('#search-dialog') : null;if(!nodes.has(selector)) nodes.set(selector,node());return nodes.get(selector);}};
+global.document={documentElement:{lang:'ru'},createElement:()=>node(),activeElement:null,dispatchEvent(){},addEventListener(name,fn){events[name]=fn;},querySelectorAll(selector){return nodes.has(selector) ? [nodes.get(selector)] : [];},querySelector(selector){if(selector === 'dialog[open]') return nodes.get('#utility-dialog')?.open ? nodes.get('#utility-dialog') : nodes.get('#search-dialog')?.open ? nodes.get('#search-dialog') : null;if(!nodes.has(selector)) nodes.set(selector,node());return nodes.get(selector);}};
 global.window={INFINI_BOOTSTRAP:{token:'test-only'},addEventListener(){}};
+vm.runInThisContext(fs.readFileSync(require('node:path').join(__dirname,'../infini_local/desktop/webui/studio-i18n.js'),'utf8'));
 const messages=[];
 let source=fs.readFileSync(require('node:path').join(__dirname,'../infini_local/desktop/webui/studio.js'),'utf8');
 source=source.replace('  navigate();poll();',`
+  const renderMainDashboard=renderOperate;
   poll=()=>{};setMenu=()=>{};render=()=>{globalThis.renderCount++;};renderOperate=()=>{};syncInputs=()=>{};updateDiagnostics=()=>{};updateActionButtons=()=>{};
   const originalToast=toast;toast=(message,error)=>{originalToast(message,error);if(!state.suppressToast) globalThis.messages.push({message,error});};
-  globalThis.studio={state,acceptSnapshot,recomputeDirty,heading,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,refreshDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog,restoreActionFocus};
+  globalThis.studio={imageSummary,serviceConnections,state,acceptSnapshot,recomputeDirty,heading,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,refreshDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog,restoreActionFocus,aside,renderMainDashboard,showFilePicker,showPresetPreview,showSavePreset,renderConfigure,toast,setAction(fn){action=fn;}};
 `);
 global.messages=messages;global.renderCount=0;
 vm.runInThisContext(source);
 const {state,acceptSnapshot,recomputeDirty,inactiveReason,fieldGroups,showDocument}=studio;
 const key='INFINI_PROMPT_STYLE';
 const snapshot=(values={},extra={})=>({values,defaults:{},savedValues:values,fields:[],presets:{},userPresets:{},lanEnabled:false,savedLanEnabled:false,...extra});
+// Old notices seed the cursor silently. New IDs are delivered once, together.
+const oldNotice={id:'old',title:'old',message:'old',level:'info'};
+acceptSnapshot(snapshot({}, {notifications:[oldNotice]}));
+assert.equal(messages.length,0);
+const freshNotices=[oldNotice,{id:'ready',title:'Ready',message:'Generator',level:'info'},
+  {id:'image',title:'Ready',message:'Image server',level:'info'}];
+acceptSnapshot(snapshot({}, {notifications:freshNotices}));
+assert.equal(messages.length,2);assert.equal(document.querySelector('#toasts').children.length,2);
+acceptSnapshot(snapshot({}, {notifications:freshNotices}));
+assert.equal(messages.length,2);
+for(let i=0;i<5;i++) studio.toast('bounded '+i);
+assert.equal(document.querySelector('#toasts').children.length,4);
+timers.splice(0).forEach(fn=>fn());
+assert.equal(document.querySelector('#toasts').children.length,0);
+studio.toast('visible error',true);
+const alert=document.querySelector('#toasts').firstElementChild;
+assert.equal(alert.attributes.role,'alert');
+timers.splice(0).forEach(fn=>fn());
+assert.equal(document.querySelector('#toasts').children.length,1);
+alert.querySelector('button').onclick();
+assert.equal(document.querySelector('#toasts').children.length,0);
+messages.length=0;
+// Startup ownership is configuration, not an assertion that HTTP is ready.
+for (const language of ['ru','en']) {
+  window.InfiniI18n.setLanguage(language);
+  const rendered=[];
+  for (const autostart of ['0','1']) {
+    const samples=[];
+    for (const health of [null,{ok:true,image:{serverAlive:true,serverAliveProbed:true}}]) {
+      acceptSnapshot(snapshot({INFINI_IMAGE_BACKEND:'sdcpp',INFINI_SDCPP_SERVER_AUTOSTART:autostart,INFINI_SDCPP_SERVER_URL:'http://localhost:8080'}, {health}));
+      const field=studio.fieldHTML({key:'INFINI_SDCPP_SERVER_AUTOSTART'});
+      assert(field.includes(`value="${autostart}" selected`));
+      samples.push({field,summary:studio.imageSummary(),services:studio.serviceConnections()});
+    }
+    assert.deepEqual(samples[0],samples[1]);
+    rendered.push(samples[0]);
+  }
+  assert.notEqual(rendered[0].summary.name,rendered[1].summary.name);
+  assert.notEqual(rendered[0].services,rendered[1].services);
+}
+window.InfiniI18n.setLanguage('ru');
+// Pipeline choices show user profiles first, with the last builtin example last.
+acceptSnapshot(snapshot({}, {presets:{Local:{},Example:{}},userPresets:{'123':{}}}));
+studio.renderConfigure();
+const chooser=document.querySelector('#workspace').innerHTML;
+assert(chooser.indexOf('value="Мой: 123"') < chooser.indexOf('value="Local"'));
+assert(chooser.indexOf('value="Local"') < chooser.indexOf('value="Example"'));
+const extra='INFINI_SDCPP_SERVER_EXTRA_ARGS';
+state.draft={INFINI_LLM_PROVIDER:'openrouter',INFINI_SDCPP_MODEL:'/my/model',INFINI_SDCPP_STEPS:'23',[extra]:'--custom'};
+state.baseline={...state.draft};
+const originalDraft={...state.draft},originalDisk={...state.baseline};
+const fieldMarkup=studio.fieldHTML({key:extra,multiline:true});
+const resetAction=fieldMarkup.match(/data-ui="([^"]+)"/)[1];
+const resetButton={dataset:{ui:resetAction}};
+events.click({target:{closest:selector=>selector==='button,[data-ui],[data-search-key]'?resetButton:null}});
+assert.deepEqual(state.draft,{...originalDraft,[extra]:''});
+assert.deepEqual(state.baseline,originalDisk);
+assert.deepEqual([...state.dirty],[extra]);
+state.draft={...state.baseline};recomputeDirty();
+assert.equal(state.draft[extra],'--custom');
 // Heading status follows typing, reversion, confirmed Save, and LAN-only drafts
 // without rebuilding the page or disturbing the current input. Presentation
 // details such as parameter-count markup are not part of this contract.
@@ -312,6 +374,82 @@ assert.equal(state.shutdown,false);
 acceptSnapshot(snapshot({}, {actionResults:[{id:'exit',status:'succeeded',ok:true}]}));
 assert.equal(state.shutdown,true);
 
+async function testMainDashboardConfigFolder() {
+  state.remote=null;state.draft={};state.dirty.clear();state.edits={};
+  state.shutdown=false;state.connected=true;state.pending=null;state.submission=null;state.posting=false;state.page='operate';state.operateSignature=null;
+  document.activeElement=null;
+  const disk=snapshot({[key]:'saved',INFINI_LANGUAGE:'ru'}, {savedRevision:'dashboard-config',home:{}});
+  acceptSnapshot(disk);
+  state.draft[key]='unsaved dashboard draft';recomputeDirty();
+  studio.renderMainDashboard();
+  const markup=document.querySelector('#workspace').innerHTML;
+  const buttons=[...markup.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)];
+  const folder=buttons.find(([,attrs])=>/\bdata-action="openConfigFolder"/.test(attrs));
+  assert(folder,'main Generator dashboard must expose its own direct config-folder button');
+  assert(folder[2].replace(/<[^>]*>/g,'').trim(),'folder button needs a readable accessible label');
+  const actionName=folder[1].match(/data-action="([^"]+)"/)?.[1];
+  assert.equal(actionName,'openConfigFolder');
+  const requests=[];
+  global.fetch=async(url,options)=>{requests.push({url,options,body:JSON.parse(options.body)});return {ok:true,json:async()=>({ok:true,id:'dashboard-folder'})};};
+  const button={dataset:{action:actionName},tagName:'BUTTON'};
+  const click=()=>events.click({target:{closest:selector=>selector==='button,[data-ui],[data-search-key]' ? button:null}});
+  state.connected=false;click();assert.equal(requests.length,0,'disconnected bridge must remain refused');
+  state.connected=true;click();await new Promise(setImmediate);
+  assert.equal(requests.length,1,'one main-dashboard click sends one existing action');
+  assert.equal(requests[0].url,'/api/action');
+  assert.equal(requests[0].options.headers['X-Infini-Token'],'test-only');
+  assert.equal(requests[0].body.action,'openConfigFolder');
+  assert(!Object.hasOwn(requests[0].body.extra,'path'));
+  acceptSnapshot({...disk,actionResults:[{id:'dashboard-folder',action:actionName,ok:true,status:'succeeded'}]});
+  assert.equal(state.page,'operate','folder action must not navigate to another settings page');
+  assert.equal(state.draft[key],'unsaved dashboard draft');
+  assert.equal(state.baseline[key],'saved');assert(state.dirty.has(key));
+}
+
+
+async function testNativeFolderPicker() {
+  const folderKey='INFINI_SDCPP_ROCM_COMPAT_ROOT', other='INFINI_PORT';
+  for(const outcome of ['success','cancel','error','close','reopen','edit','wrong-key']) {
+    state.shutdown=false;state.connected=true;state.remote=null;state.draft={};state.dirty.clear();state.edits={};state.pending=null;state.submission=null;state.posting=false;state.page='images';
+    const saved={[folderKey]:'C:/old folder',[other]:'5055'};
+    const metadata={nativeFolderPicker:true,fields:[{key:folderKey,browse:'folder'}]};
+    acceptSnapshot(snapshot(saved,metadata));state.draft[other]='6000';recomputeDirty();
+    let submitted, acknowledge, requests=0;
+    global.fetch=async(url,options)=>{
+      if(url.startsWith('/api/files?')) return {ok:true,json:async()=>({path:'C:/old folder',entries:[],parent:'C:/'})};
+      requests++;submitted=JSON.parse(options.body);
+      assert.equal(options.headers['X-Infini-Token'],'test-only');
+      return new Promise(resolve=>{acknowledge=resolve;});
+    };
+    await studio.showFilePicker(folderKey,'folder');
+    assert.match(document.querySelector('#utility-body').innerHTML, /<button[^>]*data-native-folder[^>]*>[^<]+<\/button>/);
+    const originalPicker=state.picker,dialog=document.querySelector('#utility-dialog');
+    const button={dataset:{nativeFolder:''}};
+    const click=()=>events.click({target:{closest:selector=>selector==='button,[data-ui],[data-search-key]'?button:null}});
+    click();click();assert.equal(requests,1,'repeat click cannot duplicate the native dialog command');
+    assert.equal(submitted.action,'browse');assert.equal(submitted.extra.key,folderKey);assert.equal(submitted.extra.path,'C:/old folder');
+    if(outcome === 'close') dialog.close();
+    if(outcome === 'reopen') await studio.showFilePicker(folderKey,'folder');
+    if(outcome === 'edit') {state.draft[folderKey]='C:/newer edit';state.edits[folderKey]=++state.editClock;recomputeDirty();}
+    acknowledge({ok:true,json:async()=>({ok:true,id:'folder-choice'})});
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(state.pending.picker,originalPicker,'capture picker before POST acknowledgment, not a replacement dialog');
+    const receipt={id:'folder-choice',ok:outcome !== 'error',status:outcome === 'cancel'?'cancelled':outcome === 'error'?'failed':'succeeded',message:'synthetic outcome'};
+    if(!['cancel','error'].includes(outcome)) receipt.result={kind:'folderSelection',key:outcome === 'wrong-key'?other:folderKey,path:'C:/Chosen folder Юникод'};
+    acceptSnapshot(snapshot(saved,{...metadata,actionResults:[receipt]}));
+    assert.equal(state.draft[folderKey],outcome === 'success'?'C:/Chosen folder Юникод':outcome === 'edit'?'C:/newer edit':'C:/old folder');
+    assert.equal(state.draft[other],'6000','picker does not adopt shared controller values over another draft field');
+    assert.deepEqual(state.baseline,saved);assert.equal(state.page,'images');assert.equal(state.pending,null);
+    if(outcome === 'success') assert(!dialog.open);
+    if(outcome === 'reopen') assert(dialog.open);
+  }
+  state.remote.nativeFolderPicker=false;state.pending=null;state.posting=false;
+  global.fetch=async()=>({ok:true,json:async()=>({path:'C:/list alternative',entries:[],parent:'C:/'})});
+  await studio.showFilePicker(folderKey,'folder');
+  assert(!document.querySelector('#utility-body').innerHTML.includes('data-native-folder'));
+  assert.equal(document.querySelector('#file-select').disabled,false,'browser folder selection still works without Windows');
+  document.querySelector('#file-select').onclick();assert.equal(state.draft[folderKey],'C:/list alternative');
+}
 async function testRepeatedSubmission() {
   state.shutdown=false;state.connected=true;state.pending=null;state.submission=null;state.posting=false;
   let calls=0,release;
@@ -402,7 +540,7 @@ async function testInterruptedDefaultsRefresh() {
   assert.equal(state.lan,false);assert.equal(state.savedRevision,'discard-disk');
 }
 
-testRepeatedSubmission().then(testCatalogAutoload).then(testInterruptedDefaultsRefresh).then(()=>console.log('Studio frontend regressions passed')).catch(error=>{console.error(error);process.exitCode=1;});
+testNativeFolderPicker().then(testRepeatedSubmission).then(testCatalogAutoload).then(testInterruptedDefaultsRefresh).then(testMainDashboardConfigFolder).then(testProfileConsent).then(()=>console.log('Studio frontend regressions passed')).catch(error=>{console.error(error);process.exitCode=1;});
 
 // The image checkbox is a real checked boolean, and disabling it preserves the limit.
 const parallelKey='INFINI_IMAGE_PARALLEL', limitKey='INFINI_IMAGE_MAX_CONCURRENCY';
@@ -420,6 +558,15 @@ assert.equal(state.draft[limitKey],'4');
 state.draft.INFINI_IMAGE_BACKEND='off';
 assert.match(inactiveReason(parallelField), /выключены/);
 
+// The active config path is a copyable read-only control beside Save, not a
+// disclosure-only destination. Rendering must escape OS filenames as data.
+state.remote.configPath='C:/Folder & <fixture>/config.env';
+const configAside=studio.aside('configure');
+assert(configAside.includes('data-action="save"'));
+assert(configAside.includes('data-action="openConfigFolder"'));
+assert(!configAside.includes('<details class="config-file"'));
+assert.match(configAside, /<textarea[^>]*id="config-file-path"[^>]*readonly[^>]*>C:\/Folder &amp; &lt;fixture&gt;\/config.env<\/textarea>/);
+
 // Adjacent hints must render without opening the full-help disclosure.
 state.helpFields.delete(parallelKey);
 const parallelHTML=studio.fieldHTML(parallelField);
@@ -427,3 +574,34 @@ assert.match(parallelHTML, /Если сохранён лимит 1/);
 assert.match(parallelHTML, /поставь 2–4 ниже/);
 assert.match(parallelHTML, /перезапустить сервер/);
 assert.match(studio.fieldHTML({key:limitKey}), /по умолчанию 4/);
+
+function testProfileConsent() {
+// Profile preview/cancel is draft-only; replacement requires the second consent.
+const profileActions=[];
+studio.setAction((name,extra)=>profileActions.push({name,extra}));
+state.remote={...state.remote,presets:{Stock:{INFINI_SDCPP_SERVER_EXTRA_ARGS:''}},userPresets:{Mine:{INFINI_SDCPP_SERVER_EXTRA_ARGS:'--keep'}}};
+state.draft.INFINI_SDCPP_SERVER_EXTRA_ARGS='--keep';
+document.querySelector('#preset-select').value='Stock';
+const beforePreset=JSON.stringify(state.draft);
+studio.showPresetPreview();
+assert.equal(profileActions.length,0);
+document.querySelector('#utility-dialog').close();
+assert.equal(JSON.stringify(state.draft),beforePreset);
+assert.equal(profileActions.length,0);
+studio.showPresetPreview();
+document.querySelector('#confirm-submit').onclick();
+assert.deepEqual(profileActions.pop(),{name:'applyPreset',extra:{name:'Stock'}});
+studio.showSavePreset();
+document.querySelector('#new-preset-name').value='Mine';
+document.querySelector('#confirm-submit').onclick();
+assert.equal(profileActions.length,0);
+document.querySelector('#utility-dialog').close();
+assert.equal(profileActions.length,0);
+studio.showSavePreset();
+document.querySelector('#new-preset-name').value='Mine';
+document.querySelector('#confirm-submit').onclick();
+document.querySelector('#confirm-submit').onclick();
+assert.deepEqual(profileActions.pop(),{name:'savePreset',extra:{name:'Mine',overwrite:true}});
+
+studio.setAction(studio.action);
+}

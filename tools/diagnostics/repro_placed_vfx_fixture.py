@@ -19,8 +19,9 @@ from test_vfx_material_admission_contracts import _library_particle
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
-from infini_local.core import vfx_manifest as vfx
-from infini_local.pipelines.visual_generation_pipeline import _apply_kit
+import infini_local.core.vfx.validation as vfx_validation
+import infini_local.pipelines.vfx.stage as vfx_stage
+from infini_local.pipelines.visual.stage import _apply_kit
 from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png, synthetic_no_image_execution_control
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery, is_deliverable_recipe_payload
 
@@ -39,9 +40,9 @@ def build_fixture():
     library=_library_particle(data)['slots'][0]
     library.update(entityId='item',event='periodic',placementBindingId='alternate_install',startTick=0,repeatEvery=3)
     raw['slots'].extend([right,library,light_slot()])
-    data=vfx.attach_vfx_manifest(data,'placed-vfx-cpu-fixture',llm_director=lambda *_a,**_kw:raw)
+    data=vfx_stage.attach_vfx_manifest(data,'placed-vfx-cpu-fixture',llm_director=lambda *_a,**_kw:raw)
     with tempfile.TemporaryDirectory(prefix='placed-vfx-') as directory:
-        from infini_local.pipelines import visual_delivery_gate as gate
+        from infini_local.pipelines.visual import delivery as gate
         prior_sprite_dir=gate.SPRITE_DIR;gate.SPRITE_DIR=Path(directory)
         try:
             fixture=write_no_image_fixture_png(Path(directory)/'synthetic.png')
@@ -67,7 +68,7 @@ def build_fixture():
             for value in node: portable(value)
     portable(delivered)
     assert validate_runtime_wire(delivered)['ok'],validate_runtime_wire(delivered)
-    assert vfx.validate_vfx_manifest_wire(delivered)['ok']
+    assert vfx_validation.validate_vfx_manifest_wire(delivered)['ok']
     return delivered
 
 

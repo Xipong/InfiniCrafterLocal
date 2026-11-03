@@ -13,15 +13,22 @@ false: the utility initializes a controlled scene instead of running all of Main
 | Native sentries | Full-player scene uses native sentry spawning and `Player.UpdateMaxTurrets`; `verify_sentry.py` checks replacement at the default cap | Item-check-only mode refuses sentries; the controlled single-player scene does not certify multiplayer, arbitrary equipment or every sentry composition |
 | Equipment | Single-instance accessory and head/body/legs native equip/unequip/vanity; registered on-hurt/on-enemy-kill generated-buff reactions; original five equip-overlay draw layers and exact authored overlay PNGs | Not armor sets, multi-accessory interactions, enemy AI/loot tables, full armor atlases or multiplayer; draw dispatch alone does not prove visible pixels |
 | Ammo | Native arrow/bullet/flare/fallen-star selection, source identity, consumption, slot priority and depletion | Generated ammo and other categories are not certified; fixtures are synthetic |
+| Solution ammo | Native Green Solution selection, source identity and payment; empty/wrong-category refusal and optional intact authored-item control | No terrain-conversion or generated-ammo certification; other solution colors are not individually tested |
 | Stack/long lifecycles | Native stack consumption, configured entity counts/caps, exact exhaustion checkpoints and up to 14,400 headless ticks | Assertions are scenario-specific; rendered captures remain capped at 600 ticks |
 | Placement/mining | Native ItemCheck placement/mining, ledger commit/retirement and canonical-definition-preserving material return | Explicit tile scenarios only; break_tile is external native stimulus; no world save/ecology parity |
 | Item-body contact | Original client use-style/contact and supported use/hit/crit events | Requires explicit client modes; unsupported effect combinations refuse |
 | Authored VFX | Original supported ParticleLibrary resources, updates and draw wrapper | Not all visual-slot kinds, shaders, sound output or mod content |
+| History ribbon | Original InfiniVfxRuntime.Draw/DrawTrail with live native projectile history; full PreDraw or explicit procedural-only pass; recorded segment submissions | Native MagicPixel assets required; procedural-only mode does not draw missing authored/player artwork; zero-motion histories need not emit geometry |
+| Current history trail | Original full GeneratedProjectile.PreDraw/DrawExplicitTrail with live native samples; per-slot SpriteBatch segment counts | Only stroke/center with drawPlayer, exact artwork and native MagicPixel assets; sprite/tip and partial/procedural-only routes remain refused |
+| Controlled hostiles | Native NPC.UpdateNPC and native projectile damage/hit callbacks; explicit dedicated-update phase events | Invisible controlled NPCs, AI disabled by scene setup; only NPC update uses dedServ=true to omit client FindFrame, restored before client damage/render; no visible enemy/client parity |
+| Vanilla item geometry | Exact PNG lookup from complete pinned source inventory; Git blob/size/IHDR checks and original native PngReader | Assets must be supplied explicitly; source availability is not all-weapon gameplay certification or official-byte identity |
 | Authored PNGs | Original sprite resolver and item/projectile drawing paths; publication identity checks | Baked/reused PNG subset; no silent geometry/asset fallback |
 | Player artwork | Original player renderer/layer ordering, starter skin/hair, generated held layer once | No arbitrary armor, appearance variants, mounts, world background or complete Main.Draw |
 | Training dummy | Original tile378 placement, tile entity, linked NPC488, native AI/frame and tile renderer | Native immortal target differs from damageable fixture; reactivation/respawn not certified |
 | Vanilla projectile artwork | Opt-in original Main.DrawProj; pinned types1/14/91/92/357/485, actual sprite submissions and native dust trails | Default pose mode still omits sprites; unknown types/special draw passes refuse; Pulse Bolt is dust-rendered; no complete Main.Draw/world or Gore pass |
-| Native dust | Original Dust.UpdateDust and Main.DrawDust with recorded state | Draw can deactivate particles; only exercised atlas/shader cases are evidenced |
+| Shape geometry | Original arc and filled-sector renderers with world/source attachment and rotation; original source-bound/world-frame orbit with world- or orbit-oriented motes; world-fixed/world-frame orbit with orbit-oriented motes | Explicit full native draw and original MagicPixel; other shape kinds/orbit modes refuse; actual count/pixel/lifecycle controls; sectors additionally cover signed sweep, radius and full circle; not whole-item quality |
+| Native light | Original periodic/self nativeLight → Lighting.AddLight, native LightTiles and sampled/visible player illumination | Full client draw/lighting required; native ambient/viewport fill can mask authored light; other event/anchor combinations refuse |
+| Native dust | Original authored nativeDust → native Dust creation/update/Main.DrawDust; TintableDustLighted, Glass, GemDiamond and Electric selectors, individually exercised real atlas and pixel/lifetime controls | Explicit drawNativeDust plus full player/projectile draw required; other authored selectors refuse. Draw can deactivate particles; fresh-process reset, not same-process unload or universal shader coverage |
 | Vision | Real PNGs with hashes and tick-aligned HTML/GIF review | Schematic replay is separately labelled; no interpolated game frames |
 | Determinism | Seeded input and recorded native state/draw-RNG comparisons | No multiplayer, arbitrary mods or universal cross-platform determinism claim |
 
@@ -71,8 +78,9 @@ loaded-world appearance. Fixed camera framing remains an explicit scenario input
 
 Authored material paths/elements and impact sprites use the original detached
 renderer with exact selected publication assets. Their native state is recorded
-separately from particle state. `impactRing` requires the original full projectile
-and dust paths. Source-only admission or a successful scenario with no matching
+separately from particle state. `impactRing` requires the original active projectile
+and dust paths, through full artwork or explicit `drawProjectileVfx` mode.
+`historyRibbon` requires the active native history/draw context. Source-only admission or a successful scenario with no matching
 emission does not certify that visual lane. Full-player held-projectile rendering
 must be checked separately from the partial authored-art lane.
 
@@ -96,3 +104,12 @@ as a player mining action. Reusable synthetic matrix: `verify_world.py`.
 | Requested vanilla controls | Explicit stable identity, separate from authored parents; genuine PlayerRenderer/item PNG and native firing | No invented vanilla grip; projectile sprites omitted in default pose mode, bounded opt-in Main.DrawProj available; hold vs repeated native input distinguished |
 
 The configured render camera applies before native gameplay updates as well as drawing. Original dust-emission culling remains active. Native Gore allocations required by Holy Arrow impacts are provisioned, but Gore update/rendering is not certified. A native draw attempt outside the camera is recorded separately from observed SpriteBatch submissions; neither alone is visual approval.
+
+Contour support is limited to the world/world polyline stroke subset documented in `VERIFICATION.md`; actual source paths, triangle counts and on/off GPU pixels are checked. Other geometry/texture branches are not certified.
+
+`recall_home` may execute through its original native Teleport owner when the
+scene explicitly provides `recallSpawn`. Player/world spawn selection and
+cooldown are observed; Player.Spawn, actual bed validation, arbitrary destination
+safety and multiplayer are not certified.
+
+Native torch light providers are initialized through the original `TorchID.Initialize` before scene/content setup, matching the native Main bootstrap owner. `verify_status_dust.py` exercises on-hit Shadowflame/Frostburn2 through NPC and Dust update, real dust pixels, expiry, fresh-process reset and no-hit/no-buff/no-draw controls. This does not expand the authored `nativeDust` selector admission or certify arbitrary mod torch providers.

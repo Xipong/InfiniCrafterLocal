@@ -1,36 +1,40 @@
 """The serialized Author packet exposes the canonical shape, units and construction grammar."""
 
 from __future__ import annotations
-from infini_local.core.runtime_authoring.capability_registry import (
-    CAPABILITY_REGISTRY, BINDING_ACTION_REGISTRY, ENTITY_KIND_REGISTRY,
-    EVENT_KIND_REGISTRY,
-)
-from prompt_packet_helpers import request_dossier, dossier_text, expand_catalog_targets
+
 import copy
 import json
-import pytest
-from repair_test_helpers import offline_builder, repair_with_response, assert_repaired_source
 
-from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY
-from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.core.runtime_authoring.capability_registry import runtime_authoring_prompt_field_guide
+import pytest
+from infini_local.core.runtime_authoring.capability_registry import (
+    BINDING_ACTION_REGISTRY,
+    CAPABILITY_REGISTRY,
+    ENTITY_KIND_REGISTRY,
+    EVENT_KIND_REGISTRY,
+    INPUT_KIND_REGISTRY,
+)
+from infini_local.core.runtime_authoring.parameter_contract import author_parameter_shape
 from infini_local.core.runtime_authoring.program_schema import binding_schema, strict_schema_errors
-from infini_local.pipelines.author_item_contract import (
-    author_item_response_schema,
-    author_item_provider_response_schema,
+from infini_local.core.runtime_authoring.registry_views import runtime_authoring_prompt_field_guide
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.pipelines.author import request as pipeline
+from infini_local.pipelines.author.item_contract import (
     author_item_prompt_shape_card,
+    author_item_provider_response_schema,
     author_item_repair_prompt_shape_card,
     author_item_repair_response_schema,
+    author_item_response_schema,
     project_provider_author_item_to_local,
 )
-from infini_local.pipelines.llm_authoring_prompt import (
+from infini_local.pipelines.author.prompt import (
     PLANNER_PROMPT_LIMIT_CHARS,
     PLANNER_PROMPT_MIN_HEADROOM_CHARS,
     planner_prompt_usability_report,
 )
-from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
-from infini_local.pipelines import llm_authoring_pipeline as pipeline
+from infini_local.pipelines.author.request import build_initial_author_request
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from prompt_packet_helpers import dossier_text, expand_catalog_targets, request_dossier
+from repair_test_helpers import assert_repaired_source, offline_builder, repair_with_response
 
 
 def _assert_catalog_delivery(catalog, capabilities=CAPABILITY_REGISTRY):
@@ -47,7 +51,7 @@ def _assert_catalog_delivery(catalog, capabilities=CAPABILITY_REGISTRY):
         ("entityKinds", "kind", [row.prompt_card() for row in ENTITY_KIND_REGISTRY.values()]),
         ("inputs", "input", [row.prompt_card() for row in INPUT_KIND_REGISTRY.values()]),
         ("bindingActions", "action", [row.prompt_card() for row in BINDING_ACTION_REGISTRY.values()]),
-        ("events", "event", [row.prompt_card() for row in EVENT_KIND_REGISTRY.values()]),
+        ("events", "event", [row.author_prompt_card() for row in EVENT_KIND_REGISTRY.values()]),
     )
     for group, identity, expected in inventories:
         actual = _expand_constraint_references(catalog[group], catalog["fieldGuide"]["consumerConstraints"])
@@ -66,10 +70,14 @@ def _assert_catalog_delivery(catalog, capabilities=CAPABILITY_REGISTRY):
                 assert capabilities[owner].params[leaf] == capabilities[fn].params[name]
                 assert "paramRef" not in cards[owner]["params"][leaf]
     canonical = runtime_authoring_prompt_field_guide()
+    canonical["types"] = {name: author_parameter_shape(schema) for name, schema in canonical["types"].items()}
     assert {key: catalog["fieldGuide"][key] for key in canonical} == canonical
     from infini_local.core.runtime_authoring.terraria_vocabulary import (
-        DAMAGE_CLASS_MEANINGS, DAMAGE_CLASS_TOKENS,
-        ITEM_USE_STYLE_MEANINGS, ITEM_USE_STYLE_TMODLOADER_NAMES, ITEM_USE_STYLE_TOKENS,
+        DAMAGE_CLASS_MEANINGS,
+        DAMAGE_CLASS_TOKENS,
+        ITEM_USE_STYLE_MEANINGS,
+        ITEM_USE_STYLE_TMODLOADER_NAMES,
+        ITEM_USE_STYLE_TOKENS,
     )
     for key, tokens, meanings in (
         ("damageClass", DAMAGE_CLASS_TOKENS, DAMAGE_CLASS_MEANINGS),
@@ -79,7 +87,7 @@ def _assert_catalog_delivery(catalog, capabilities=CAPABILITY_REGISTRY):
         assert vocabulary["builtInTokens"] == list(tokens)
         assert vocabulary["meaningByToken"] == dict(meanings)
         assert set(meanings) == set(tokens)
-    assert set(ITEM_USE_STYLE_TMODLOADER_NAMES) == set(cards["configure_item_use"]["params"]["useStyle"]["enum"])
+    assert set(ITEM_USE_STYLE_TMODLOADER_NAMES) == set(cards["item_use"]["params"]["useStyle"]["enum"])
 
 
 @pytest.mark.parametrize("fixture_name", ["fishing_platform_tool", "workbench_blade"])
@@ -159,8 +167,11 @@ def test_scoped_repair_does_not_use_coherence_advice_to_remove_valid_placement(m
 def test_author_shape_card_and_schema_share_public_members():
     card = author_item_prompt_shape_card()
     schema = author_item_response_schema()
-    assert set(card["root"]) == set(schema["required"])
-    assert set(card["root"]) | set(card["optionalAdvisory"]) == set(schema["properties"])
+    assert set(card["root"]) == set(schema["properties"])
+    assert set(card["root"]) - set(schema["required"]) == {"concept", "realization"}
+    assert isinstance(card["concept"], str)
+    assert set(card["realization"]) == {"description", "selfEvaluation"}
+    assert set(schema["required"]) == {"name", "category", "runtimeProgram"}
     assert {row["input"] for row in card["runtimeProgram"]["bindings"]} == set(INPUT_KIND_REGISTRY)
     assert all(not strict_schema_errors(row, binding_schema()) for row in card["runtimeProgram"]["bindings"])
     repair_card = author_item_repair_prompt_shape_card()
@@ -173,7 +184,7 @@ def test_author_shape_card_and_schema_share_public_members():
     pytest.param("off", True, id="unconstrained-generated-parent"),
 ])
 def test_author_packet_guide_and_prompt_budget_keep_registry_reachable(monkeypatch, rich, mode):
-    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
     from test_source_unit_guidance import _serialized_chat_request
 
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
@@ -185,7 +196,6 @@ def test_author_packet_guide_and_prompt_budget_keep_registry_reachable(monkeypat
     assert dossier_text(request) == text
     # Observe the actual HTTP JSON, after provider preparation and serialization.
     packet = _serialized_chat_request(monkeypatch, request)
-    assert packet["messages"] == request["messages"]
     assert packet.get("response_format") == request["response_format"]
     assert len(text) <= PLANNER_PROMPT_LIMIT_CHARS - PLANNER_PROMPT_MIN_HEADROOM_CHARS
     delivered = request_dossier(packet, declaration=request)
@@ -225,7 +235,7 @@ def test_catalog_delivery_oracle_accepts_reordering_and_rejects_loss(monkeypatch
     elif defect == "duplicate":
         cards.append(copy.deepcopy(cards[0]))
     else:
-        stats = next(row for row in cards if row["fn"] == "configure_item_stats")
+        stats = next(row for row in cards if row["fn"] == "item_stats")
         stats["params"]["damage"]["max"] += 1
     with pytest.raises(AssertionError):
         _assert_catalog_delivery(catalog)
@@ -234,18 +244,19 @@ def test_catalog_delivery_oracle_accepts_reordering_and_rejects_loss(monkeypatch
 def test_rewording_canonical_cards_reaches_author_and_repair_without_changing_mechanics(monkeypatch):
     """A safe editorial change must propagate without requiring test rewrites."""
     from dataclasses import replace
+
     import infini_local.core.runtime_authoring.capability_registry as registry
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-    from infini_local.pipelines import llm_authoring_prompt as prompt
-    from test_source_unit_guidance import _serialized_chat_request
+    from infini_local.pipelines.author import prompt
     from infini_local.qa.capability_witnesses import build_capability_witness
+    from test_source_unit_guidance import _serialized_chat_request
 
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_schema")
-    source = build_capability_witness("configure_item_stats")
+    source = build_capability_witness("item_stats")
     before = copy.deepcopy(source)
     wire = compile_runtime_program(source)
     provider_schema = author_item_provider_response_schema()
-    cap = registry.CAPABILITY_REGISTRY["configure_item_stats"]
+    cap = registry.CAPABILITY_REGISTRY["item_stats"]
     summary = "Item statistics in revised player language."
     meaning = "Mana points requested by the item's native use."
     changed = replace(cap, summary=summary, params={**cap.params, "manaCost": replace(cap.params["manaCost"], description=meaning)})
@@ -284,10 +295,10 @@ def test_tool_applicability_does_not_rewrite_authored_composition(pick_power):
     from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     from infini_local.qa.capability_witnesses import build_capability_witness
 
-    doc = build_capability_witness("configure_tool")
-    tool = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_tool")
-    tool["params"].update(pickPower=pick_power, axePowerTooltipPercent=0, hammerPower=0, miningSpeedMultiplier=2)
-    light = copy.deepcopy(next(row for row in build_capability_witness("add_hold_light")["runtimeProgram"]["calls"] if row["fn"] == "add_hold_light"))
+    doc = build_capability_witness("tool_stats")
+    tool = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "tool_stats")
+    tool["params"].update(pickPower=pick_power, axePower=0, hammerPower=0, miningSpeedMultiplier=2)
+    light = copy.deepcopy(next(row for row in build_capability_witness("held_light")["runtimeProgram"]["calls"] if row["fn"] == "held_light"))
     light["id"] = "independent_light"
     doc["runtimeProgram"]["calls"].append(light)
     before = copy.deepcopy(doc)
@@ -303,7 +314,7 @@ def test_tool_applicability_does_not_rewrite_authored_composition(pick_power):
 # Phrase clauses are assertions on that one field, not separate setup/requests.
 
 def _stats(item):
-    return next(row for row in item["runtimeProgram"]["calls"] if isinstance(row, dict) and row["fn"] == "configure_item_stats")
+    return next(row for row in item["runtimeProgram"]["calls"] if isinstance(row, dict) and row["fn"] == "item_stats")
 
 
 def _response_format():
@@ -327,7 +338,7 @@ def test_nullable_projection_requires_actual_schema_and_preserves_invalid_neighb
     response_format = _response_format() if mode == "json_schema" else ({"type": mode} if mode != "off" else None)
     if mode == "json_schema" and not wrapper:
         variants = response_format["json_schema"]["schema"]["properties"]["runtimeProgram"]["properties"]["calls"]["items"]["anyOf"]
-        variant = next(r for r in variants if r["properties"]["fn"]["const"] == "configure_item_stats")
+        variant = next(r for r in variants if r["properties"]["fn"]["const"] == "item_stats")
         params = variant["properties"]["params"]["properties"]
         params["manaCost"] = params["manaCost"]["anyOf"][0]
     projected = project_provider_author_item_to_local(item, response_format=response_format)

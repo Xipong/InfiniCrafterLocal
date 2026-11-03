@@ -4,7 +4,7 @@ import threading
 
 import pytest
 
-from infini_local.pipelines import llm_profiles
+from infini_local.pipelines.transport import profiles as llm_profiles
 from provider_test_support import reset_llm_runtime
 from infini_local.pipelines import combine_pipeline
 from infini_local.services import combine_endpoint

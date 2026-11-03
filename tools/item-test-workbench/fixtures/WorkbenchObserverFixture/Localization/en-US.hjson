@@ -1,0 +1,7 @@
+Mods: {
+  WorkbenchObserverFixture: {
+    GameTips: {
+      Test: A native workbench fixture game tip.
+    }
+  }
+}

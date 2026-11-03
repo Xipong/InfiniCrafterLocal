@@ -1,19 +1,21 @@
 """Authored composition ownership, non-archetypal runtime programs and engine seams."""
 
 from __future__ import annotations
+
 import copy
-from copy import deepcopy
 import json
+from copy import deepcopy
+
 import pytest
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-from infini_local.pipelines.generated_parent_summary import generated_parent_summary_from_data
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
-from infini_local.pipelines.parent_context_pipeline import projectile_profile_of, effective_projectile_profile_of
-from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
+from infini_local.pipelines.author.prompt import build_llm_author_payload
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
+from infini_local.pipelines.context.generated_summary import generated_parent_summary_from_data
+from infini_local.pipelines.context.parents import effective_projectile_profile_of, projectile_profile_of
 from infini_local.qa.runtime_program_fixtures import NON_ARCHETYPAL_FIXTURES, build_runtime_fixture
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 
@@ -54,8 +56,8 @@ def test_canonical_synthetic_fixtures_validate_compile_and_deliver_current_wire(
 
 
 def test_current_schema_export_renders_accepted_fixture_without_writing_artifacts():
-    from pathlib import Path
     import runpy
+    from pathlib import Path
 
     exporter = Path(__file__).resolve().parents[2] / "tools/generate/export_contract_schemas.py"
     rows = runpy.run_path(str(exporter))["render"]()
@@ -156,7 +158,7 @@ def test_author_context_contains_only_source_backed_parent_packets_and_numeric_b
     assert "primarycategory" not in encoded_parents
     corridor = payload["balanceCorridor"]
     assert corridor["authority"] == "source_numeric_facts_only"
-    assert corridor["parentProgressionFacts"] == [
+    assert corridor["parentCraftDepthFacts"] == [
         {
             "parent": "A",
             "path": "generatedData.recipeMeta.generationDepth",
@@ -339,7 +341,7 @@ def test_hidden_item_body_without_contact_requires_exact_spawn_target_ownership(
     program = hidden_projectile_form["runtimeProgram"]
     item_id = next(row["id"] for row in program["entities"] if row["kind"] == "item_body")
     spawn_target = program["bindings"][0]["action"]["targetId"]
-    item_use = next(row for row in program["calls"] if row["fn"] == "configure_item_use")
+    item_use = next(row for row in program["calls"] if row["fn"] == "item_use")
     item_use["params"]["hideUseGraphic"] = True
     program["primaryEntityId"] = item_id
 
@@ -389,7 +391,7 @@ def test_invalid_composition_is_rejected_without_synthesis(mutation, code):
         calls.extend(
             {
                 "id": "nail_returns_blade" if mutation == "cycle" else f"extra_spawn_{i}",
-                "fn": "spawn_entity_on_event",
+                "fn": "spawn_on_event",
                 "role": "secondary",
                 "target": "nail" if mutation == "cycle" else "workbench_blade",
                 "params": {
@@ -398,7 +400,7 @@ def test_invalid_composition_is_rejected_without_synthesis(mutation, code):
                     "count": 1 if mutation == "cycle" else 12,
                     "spreadRadians": 0.0,
                     "damageMultiplier": 1.0 if mutation == "cycle" else 0.2,
-                    'delaySeconds': (i) / 60,
+                    'delay': (i) / 60,
                  "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
             }
             for i in range(1 if mutation == "cycle" else 3)
@@ -413,7 +415,7 @@ def test_invalid_composition_is_rejected_without_synthesis(mutation, code):
     else:
         assert any(c.startswith("shape_") or c == "unknown_capability" for c in _codes(report))
     if mutation == "missing-movement":
-        assert all(c.get("fn") != "attach_projectile" or c.get("target") != "workbench_blade" for c in program["calls"])
+        assert all(c.get("fn") != "attach" or c.get("target") != "workbench_blade" for c in program["calls"])
 
 
 @pytest.mark.parametrize(
@@ -464,8 +466,8 @@ def test_item_contact_and_spawn_lane_do_not_infer_held_ownership():
     tool["runtimeProgram"]["calls"].append(
         {
             "id": "tool_heads",
-            "fn": "configure_tool",
-            "params": {"pickPower": 35, "axePowerTooltipPercent": 0, "hammerPower": 20, "miningSpeedMultiplier": 0.9},
+            "fn": "tool_stats",
+            "params": {"pickPower": 35, "axePower": 0, "hammerPower": 20, "miningSpeedMultiplier": 0.9},
         }
     )
     assert validate_runtime_program(tool)["ok"]
@@ -492,9 +494,9 @@ def test_item_contact_and_spawn_lane_do_not_infer_held_ownership():
 def test_spawn_budget_counts_disjoint_use_lanes_without_raising_activation_limit(inputs, expected, accepted):
     from infini_local.qa.capability_witnesses import build_capability_witness
 
-    doc = build_capability_witness("spawn_entity_on_event")
+    doc = build_capability_witness("spawn_on_event")
     program = doc["runtimeProgram"]
-    event = next(c for c in program["calls"] if c["fn"] == "spawn_entity_on_event")
+    event = next(c for c in program["calls"] if c["fn"] == "spawn_on_event")
     program["calls"].remove(event)
     item_id = next(e["id"] for e in program["entities"] if e["kind"] == "item_body")
     alternate = deepcopy(program["bindings"][0])

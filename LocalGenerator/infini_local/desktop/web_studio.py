@@ -13,6 +13,8 @@ import queue
 import re
 import secrets
 import stat
+import subprocess
+import sys
 import threading
 import time
 from urllib.parse import parse_qs, urlsplit
@@ -26,11 +28,12 @@ ACTION_BODY_TIMEOUT_SECONDS = 10
 ACTIONS = frozenset({
     'save', 'start', 'stop', 'health', 'validate', 'trace', 'applyPreset', 'savePreset',
     'codexLogin', 'codexStatus', 'codexCatalog', 'codexPing', 'clearLora', 'useLora',
-    'resetSprite', 'openConfig', 'openCache', 'clearTrace', 'browse', 'help', 'exitStudio',
+    'resetSprite', 'openConfig', 'openConfigFolder', 'openCache', 'clearTrace', 'browse', 'help', 'exitStudio',
     'forceRestart', 'cancelTrace', 'codexLogout', 'acceptDefaults', 'declineDefaults',
 })
 STATIC_FILES = {'/studio.css': ('studio.css', 'text/css; charset=utf-8'),
                 '/studio.js': ('studio.js', 'text/javascript; charset=utf-8'),
+                '/studio-i18n.js': ('studio-i18n.js', 'text/javascript; charset=utf-8'),
                 '/studio-motion.js': ('studio-motion.js', 'text/javascript; charset=utf-8')}
 
 
@@ -38,8 +41,9 @@ class StudioServer:
     def __init__(self, assets: Path, *, port: int = 0):
         self.assets = assets
         self.token = secrets.token_urlsafe(32)
-        from infini_local.desktop.settings_paths import ROOT
-        self.file_root = ROOT
+        from infini_local.desktop.settings_paths import ROOT, STATE_ROOT
+        self.file_root = STATE_ROOT
+        self.guide_path = ROOT.parent / 'START_HERE.html'
         self.commands: queue.Queue[dict] = queue.Queue(maxsize=32)
         self.accepting_actions = True
         self._lock = threading.Lock()
@@ -87,7 +91,7 @@ class StudioServer:
                         self.reply(403, {'error': 'Session access required'})
                         return
                     try:
-                        guide = (owner.file_root.parent / 'START_HERE.html').read_bytes()
+                        guide = owner.guide_path.read_bytes()
                         self.reply(200, guide, 'text/html; charset=utf-8')
                     except OSError:
                         self.reply(404, {'error': 'Локальная инструкция не найдена'})
@@ -308,6 +312,7 @@ class StudioController:
         CONFIG_PATH, EXAMPLE_PATH = self.app.config_path, self.app.example_path
         from infini_local.services.codex_auth import auth_status
         from infini_local.services.codex_text_backend import EFFORTS
+        from infini_local.desktop.windows_folder_picker import is_available
         values = self.app._current_profile_settings()
         values['INFINI_GUI_PIPELINE_PRESET'] = self.app.preset
         # Controller values include unsaved edits from non-saving actions. A fresh
@@ -345,6 +350,7 @@ class StudioController:
                          'defaultEffort': model.default_effort if model.default_effort in EFFORTS else ''}
             for model in islice(self.app.__dict__.get('_codex_text_models', {}).values(), 256)
         }
+        self.app.observe_runtime_notifications()
         self.app.refresh_home()
         return {
             'values': values, 'savedValues': saved_values, 'savedLanEnabled': saved_lan, 'savedRevision': saved_revision,
@@ -357,7 +363,9 @@ class StudioController:
             'traceStatus': self.app.trace_status,
             'notifications': self.notifications, 'actionResults': list(self.action_results.values()),
             'trace': dict(self.app.trace),
-            'configPath': str(CONFIG_PATH), 'version': APP_VERSION, 'lastAction': self.last_action,
+            'configPath': str(CONFIG_PATH.absolute()), 'version': APP_VERSION, 'lastAction': self.last_action,
+            'managed': bool(self.app.__dict__.get('_managed_by_tmodloader', False)),
+            'nativeFolderPicker': is_available(),
             'revision': self.revision, 'busy': list(self.app._gui_tasks), 'lanEnabled': bool(self.app.lan_enabled),
             'account': {'status': self.app.__dict__.get('_codex_account_status', ''), 'catalog': self.app.codex_catalog,
                         'images': self.app.codex_image_account, 'authenticated': auth_status()['authenticated'],
@@ -477,7 +485,7 @@ class StudioController:
             target = dict(DEFAULTS, **saved)
             target['INFINI_GUI_PIPELINE_PRESET'] = app._pipeline_preset_from_config(target, app.user_presets)
             self._values(target, {'lanEnabled': target.get('INFINI_HOST') == '0.0.0.0' or bool(target.get('INFINI_ASSET_PUBLIC_BASE_URL'))})
-        elif action not in {'acceptDefaults', 'declineDefaults', 'help', 'openConfig', 'exitStudio', 'codexLogin', 'codexStatus', 'codexCatalog', 'codexPing', 'codexLogout', 'stop', 'cancelTrace'}:
+        elif action not in {'acceptDefaults', 'declineDefaults', 'help', 'openConfig', 'openConfigFolder', 'browse', 'exitStudio', 'codexLogin', 'codexStatus', 'codexCatalog', 'codexPing', 'codexLogout', 'stop', 'cancelTrace'}:
             self._values(command.get('values', {}), extra)
         callbacks = {'save': app.save, 'start': app.start_server, 'stop': app.stop_server,
                      'health': app._delayed_health_check, 'validate': app.validate_paths,
@@ -485,7 +493,8 @@ class StudioController:
                      'codexStatus': app.codex_status, 'codexCatalog': app.refresh_codex_text_catalog,
                      'codexPing': app.ping_codex_image_account, 'clearLora': app.clear_lora_settings,
                      'useLora': app.use_selected_lora, 'resetSprite': app.reset_sprite_resize,
-                     'openCache': app.open_cache_folder, 'cancelTrace': app.cancel_trace_refresh,
+                     'openCache': app.open_cache_folder, 'openConfigFolder': app.open_config_folder,
+                     'cancelTrace': app.cancel_trace_refresh,
                      'codexLogout': app.codex_logout}
         if action in {'acceptDefaults', 'declineDefaults'}:
             from infini_local.desktop.settings_defaults import decide_defaults
@@ -506,12 +515,41 @@ class StudioController:
             app.apply_preset()
         elif action == 'savePreset':
             name = str(extra.get('name', '')).strip()
-            app.user_presets = save_user_preset(CONFIG_PATH.with_name('gui_user_presets.json'), name, app._current_profile_settings())
+            app.user_presets = save_user_preset(CONFIG_PATH.with_name('gui_user_presets.json'), name, app._current_profile_settings(), overwrite=extra.get('overwrite') is True)
             app.preset = USER_PRESET_PREFIX + name
             app._capture_profile_baseline()
             app.status = f'Профиль «{name}» сохранён. config.env не изменён.'
         elif action == 'browse':
-            raise ValueError('Выбери путь в браузерном списке файлов или введи его вручную.')
+            from infini_local.desktop.windows_folder_picker import choose_folder, is_available
+            key, path = extra.get('key'), extra.get('path', '')
+            field = next((field for field in self.fields if field['key'] == key), None)
+            if field is None or field.get('browse') != 'folder' or field.get('secret') or not isinstance(path, str):
+                raise ValueError('Native folder selection requires a registered folder setting')
+            if not is_available():
+                raise ValueError('Системный выбор папки доступен только на Windows-компьютере генератора. Используй список Studio.')
+            if 'native-folder-picker' in app._gui_tasks:
+                raise ValueError('Окно выбора папки уже открыто на компьютере генератора.')
+            # Existing local-path admission rejects UNC, mapped drives and links
+            # before seeding the OS dialog, and validates the returned selection.
+            initial = self.server.list_files(path, 'folder')['path']
+            def work(cancel):
+                if cancel.is_set():
+                    return None
+                selected = choose_folder(initial)
+                if selected is None:
+                    return None
+                listing = self.server.list_files(selected, 'folder')
+                if listing['warning'] or not Path(selected).is_dir():
+                    raise ValueError('Selected folder is unavailable')
+                return listing['path']
+            def completed(ok, selected):
+                if not ok:
+                    return {'ok': False, 'message': 'Не удалось выбрать локальную папку. Используй список Studio или введи путь.'}
+                if selected is None:
+                    return {'ok': True, 'cancelled': True, 'message': 'Выбор папки отменён. Черновик не изменён.'}
+                return {'ok': True, 'message': 'Папка выбрана. Изменён только черновик в этой вкладке.',
+                        'result': {'kind': 'folderSelection', 'key': key, 'path': selected}}
+            app._run_gui_task('native-folder-picker', work, completed)
         elif action == 'help':
             from infini_local.desktop.settings_paths import ROOT
             if not (ROOT.parent / 'START_HERE.html').is_file():
@@ -568,10 +606,66 @@ class StudioController:
             self.server.publish(final_state)
 
 
+def _watch_parent(descriptor: int, shutdown: threading.Event) -> None:
+    """Only the managed launcher uses stdin as a lifetime/control pipe."""
+    pending = b''
+    try:
+        while not shutdown.is_set():
+            chunk = os.read(descriptor, 1024)
+            if not chunk:
+                break
+            pending += chunk
+            while b'\n' in pending:
+                line, pending = pending.split(b'\n', 1)
+                if line.strip().upper() == b'STOP':
+                    shutdown.set()
+                    return
+            if len(pending) > 4096:
+                break
+    except OSError:
+        pass
+    shutdown.set()
+
+
+def _stop_owned_generator(app) -> None:
+    """Managed shutdown never adopts or terminates an external generator."""
+    process = app.proc
+    if process is None or process.poll() is not None:
+        return
+    url = app.__dict__.get('_owned_server_base_url')
+    if url:
+        try:
+            health = app._fetch_health_snapshot(timeout=1, base_url=url)
+            if health.get('pid') == process.pid and app._health_matches_this_gui(health):
+                app._try_http_shutdown_current_server(timeout=1, base_url=url, force=True)
+                process.wait(timeout=3)
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            pass
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=2)
+
+
+def _validate_startup_assets(assets: Path):
+    # READY means the browser can load the application, not merely an open socket.
+    for name in ('index.html', *(entry[0] for entry in STATIC_FILES.values())):
+        try:
+            if not (assets / name).read_bytes():
+                raise OSError('empty file')
+        except OSError as exc:
+            raise RuntimeError(f'Studio frontend is incomplete: {name}. '
+                               'Restore the packaged runtime before opening Studio again.') from exc
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Open the local Infinicraft Studio.')
     parser.add_argument('--no-browser', action='store_true')
     parser.add_argument('--port', type=int, default=0)
+    parser.add_argument('--managed', action='store_true', help='Stop when the owning tModLoader process closes stdin.')
     args = parser.parse_args(argv)
     from infini_local.desktop.settings_controller import SettingsController
     try:
@@ -580,27 +674,43 @@ def main(argv=None):
         raise SystemExit(f'Не удалось прочитать config.env: {exc} '
                          'Исправь указанную строку в редакторе или восстанови резервную копию, затем открой Studio снова.') from None
     server = StudioServer(Path(__file__).with_name('webui'), port=args.port)
+    app._managed_by_tmodloader = args.managed
     controller = StudioController(app, server)
-    server.publish(controller.snapshot())
-    server.start()
-    # Token URL is needed once to attach the user's browser; do not write it to log files.
-    print('Infinicraft Studio: ' + server.url, flush=True)
-    print('Close this console to exit Studio. The generator has its own Stop control.', flush=True)
-    if not args.no_browser:
-        webbrowser.open(server.url)
-    app.after(0, controller.tick)
+    shutdown = threading.Event()
     try:
-        while not app._gui_closed:
+        _validate_startup_assets(server.assets)
+        server.publish(controller.snapshot())
+        app.after(0, controller.tick)
+        app.pump()
+        if app._gui_closed:
+            raise RuntimeError('Studio closed during startup.')
+        server.start()
+        # The private URL goes only to the controlling pipe/user's console.
+        if args.managed:
+            threading.Thread(target=_watch_parent, args=(sys.stdin.fileno(), shutdown),
+                             daemon=True, name='infini-studio-parent').start()
+            print('IFC_STUDIO_READY ' + json.dumps({'url': server.url}), flush=True)
+        else:
+            print('Infinicraft Studio: ' + server.url, flush=True)
+            print('Close this console to exit Studio. The generator has its own Stop control.', flush=True)
+        if not args.no_browser:
+            webbrowser.open(server.url)
+        while not app._gui_closed and not shutdown.is_set():
             app.pump()
-            time.sleep(0.02)
+            shutdown.wait(0.02)
     except KeyboardInterrupt:
         app.on_close()
     finally:
+        app.on_close()
         # Let polling clients observe the terminal close receipt before the
-        # loopback listener disappears. No callbacks run after closure.
+        # loopback listener disappears. Parent EOF interrupts this grace period
+        # immediately, preserving the mod unload shutdown budget.
         if server._state.get('closed'):
-            time.sleep(5)
+            shutdown.wait(5)
+        shutdown.set()
         server.close()
+        if args.managed:
+            _stop_owned_generator(app)
 
 
 if __name__ == '__main__':

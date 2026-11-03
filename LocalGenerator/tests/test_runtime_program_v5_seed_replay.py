@@ -31,7 +31,11 @@ def test_frozen_seed_keeps_wire_identity_without_migrating_old_author():
         assert ("$.tooltip", "unknown_final_wire_field") in {
             (error["path"], error["code"]) for error in report["errors"]
         }
-        remaining = [error for error in report["errors"] if error["path"] != "$.tooltip"]
+        assert ("$.runtimeProgram.itemUse.releaseTiming", "unknown_final_wire_field") in {
+            (error["path"], error["code"]) for error in report["errors"]
+        }
+        remaining = [error for error in report["errors"] if error["path"] not in {
+            "$.tooltip", "$.runtimeProgram.itemUse.releaseTiming"}]
         if row["caseId"] in {"held_and_deployed", "workbench_blade"}:
             assert remaining
             assert {error["code"] for error in remaining} == {"required_field"}

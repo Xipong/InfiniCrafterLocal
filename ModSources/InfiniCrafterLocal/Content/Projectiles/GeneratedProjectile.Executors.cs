@@ -47,6 +47,11 @@ public sealed partial class GeneratedProjectile
             Projectile.netUpdate = true;
         }
 
+        // Cancellation and recurring payment admit the whole active update,
+        // including on_spawn and periodic actions, not only motion/contact.
+        if (!AdmitControlledGameplayBeforeEvents())
+            return;
+
         if (!_spawnEventRan)
         {
             // Waiting suppresses movement, not the authored launch. Replay its
@@ -89,7 +94,7 @@ public sealed partial class GeneratedProjectile
         InfiniVfxRuntime.OnTick(Projectile, _data, _entity.Id, _data.VfxManifest, ref _vfxState);
 
         if (_entity.Rotation is null && _entity.Movement.Code is not (14 or 16 or 17 or 18) && Projectile.velocity.LengthSquared() > 0.01f)
-            Projectile.rotation = Projectile.velocity.ToRotation() + MathHelper.PiOver2;
+            Projectile.rotation = SpritePresentation.ProjectileNativeRotation(_entity!, Projectile.velocity.ToRotation());
 
         ApplyMotionRotation();
 
@@ -101,6 +106,35 @@ public sealed partial class GeneratedProjectile
             RunRuntimeEvent(RuntimeEventKind.OnExpire, null, 0);
             EmitAndSyncVfxEvent(RuntimeEventKind.OnExpire, Projectile.Center);
         }
+    }
+
+    private bool AdmitControlledGameplayBeforeEvents()
+    {
+        RuntimeEntitySpec entity = _entity!;
+        bool channelBeam = entity.Controller.Code == RuntimeControllerCode.ChannelBeam;
+        var control = entity.OwnerControl;
+        bool sustain = entity.ManaSustain is not null
+            || channelBeam && entity.Controller.Params.ManaPayment == "each_use_time";
+        if (!channelBeam && control is null && !sustain)
+            return true; // Free projectiles never acquire implicit held-input cancellation.
+
+        Player owner = Owner();
+        // Preserve each existing cancellation authority: channel_beam already
+        // checks control on every peer; composable owner control is owner-local.
+        bool cancelled = channelBeam && (!OwnerCanControl(owner) || !owner.channel || !HoldingGeneratedItem(owner))
+            || control is not null && InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile)
+                && (!OwnerCanControl(owner) || control.RequireHeldItem && !HoldingGeneratedItem(owner)
+                    || control.RequireChannel && !owner.channel
+                    || control.RequireItemAnimation && owner.itemAnimation <= 0);
+        // PaySustainedMana owns authority, native item cost and world-tick cadence.
+        // Its later motion/controller call cannot debit the same tick again.
+        if (cancelled || sustain && !PaySustainedMana(owner))
+        {
+            Projectile.friendly = false;
+            Projectile.Kill();
+            return false;
+        }
+        return true;
     }
 
     private void EmitSpawnEvent()
@@ -156,7 +190,7 @@ public sealed partial class GeneratedProjectile
         Vector2 direction = AimDirection(owner);
         Projectile.Center = owner.MountedCenter + direction * 18f;
         Projectile.velocity = direction;
-        Projectile.rotation = direction.ToRotation();
+        Projectile.rotation = SpritePresentation.ProjectileNativeRotation(_entity!, direction.ToRotation());
         Projectile.timeLeft = 2;
         Projectile.tileCollide = _entity!.Collision.TileCollide;
         ApplyOwnerLiveness(owner, true, "keep_alive", false);
@@ -455,7 +489,7 @@ public sealed partial class GeneratedProjectile
         if (_whipPoints.Count > 0) Projectile.Center = _whipPoints[^1];
         Vector2 direction = Projectile.Center - owner.MountedCenter;
         Projectile.velocity = direction.SafeNormalize(_initialDirection);
-        Projectile.rotation = Projectile.velocity.ToRotation() + MathHelper.PiOver2;
+        Projectile.rotation = SpritePresentation.ProjectileNativeRotation(_entity!, Projectile.velocity.ToRotation());
         Projectile.timeLeft = 2;
         Projectile.tileCollide = _entity!.Collision.TileCollide;
         ApplyOwnerLiveness(owner, true, "match_lifetime", false);
@@ -481,7 +515,7 @@ public sealed partial class GeneratedProjectile
         Vector2 direction = AimDirection(owner);
         Projectile.Center = owner.MountedCenter + direction * (18f + reachProgress * p.RangeTiles * 16f);
         Projectile.velocity = direction;
-        Projectile.rotation = direction.ToRotation() + MathHelper.PiOver2;
+        Projectile.rotation = SpritePresentation.ProjectileNativeRotation(_entity!, direction.ToRotation());
         Projectile.timeLeft = Math.Max(2, duration - _age + 1);
         Projectile.tileCollide = false;
         ClaimHeldProjectile(owner);

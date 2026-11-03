@@ -42,8 +42,9 @@ failures, and matrix continuation. Synthetic boundary tests are labelled as such
 they do not stand in for running the native smoke matrix.
 
 The shared manifest includes `item_workbench_python` in the Python CI group and
-`item_workbench_build` in the build group. The latter compiles this linked-source
-project; it does not run Linux graphics on the Windows build worker. Missing
+`item_workbench_build` in the build group. The latter compiles the host and its
+separate production-mod project, including the host's embedded vanilla PNG index;
+it does not run Linux graphics on the Windows build worker. Missing
 prerequisites are reported as `notRun`, not a passing native build.
 
 After the native prerequisites in [README.md](README.md) are configured, run the
@@ -72,7 +73,64 @@ Specialized `verify_*.py` scripts provide additional scenario matrices. Inspect
 corpora or explicit local inputs beyond the minimal public example. They are not
 unconditional installation checks or proof of all-item parity.
 
+## Current VFX contract regression controls
+
+`workbench test` includes synthetic detectors in `test_verify_history_ribbon.py`:
+zero submissions, wrong draw source, missing/substituted texture readiness, empty
+particles, leaked dedicated state and a hit on the wrong NPC/entity cannot satisfy
+the new controls. These are offline detector tests, **not native execution**.
+
+After building the current candidate, run:
+
+```sh
+dotnet /path/to/ItemTestWorkbench.dll --check-assertions
+python tools/item-test-workbench/verify_history_ribbon.py --no-build --out /fresh/history-controls
+```
+
+The first command adds stand-only policy checks for historyTrail admission,
+production texture mapping/deduplication, per-texture queue drain/readiness failure
+and dedicated NPC scope restoration after normal/exceptional exits. Its queued
+resource controls are synthetic; the second command exercises actual GPU resources,
+full native PreDraw, invisible hostile updates and client hits. The native matrix
+requires player/dummy assets and ParticleLibrary resources from the documented
+setup. Preserve partial/procedural and missing-selected-texture refusals; do not
+remove VFX from an authored input to pass admission. Existing `verify_vfx.py`
+retains the legacy Star emission, blank/miss, timing and no-capture controls,
+asserts the genuine MagicPixel receipt in VFX-only mode, and refuses a missing
+MagicPixel without substituting texels. The missing-selected-particle control
+copies the complete resource root and removes only WhitePixel, preserving
+ParticleLibrary's EmptyPixel and other required bootstrap resources.
+
+The linked native contour checks use explicit LINQ `Enumerable.Reverse` so newer
+SDK span extensions cannot bind to a void in-place reverse. Existing winding,
+descending trim and reversed-band assertions remain unchanged semantically.
+Compile the candidate and run the registered `contour` native checks to establish
+SDK compatibility; offline Python success does not establish it.
+
+Source-only changes do not refresh any previous native receipts. Native build,
+`--check-assertions`, GPU replay and unchanged authored-item replay must be reported
+separately as passed/failed/notRun for the candidate under review. No private
+generated JSON, captures, dependencies or historical media belong in the PR.
+
 ## Evidence reviewed during development
+
+Native geometry/ribbon extension (2026-10-27): Wooden Sword and a second native
+item outside the previous control set loaded exact pinned PNGs and recorded real
+hits. Missing, wrong-length, byte-tampered and symlinked item PNGs were refused by
+the native loader. The complete source index contains 5414 item PNGs; source facts
+are embedded in the checked executable and included in build freshness checks.
+The unchanged archived contact weapon previously refused for `historyRibbon`
+recorded one item-body and one projectile hit, 1064 original native ribbon segments
+and 90 native PNGs in the explicit procedural VFX-only scene. The original native
+SpriteBatch submissions were observed and a recorded frame visually inspected.
+No authored image was substituted. Reusable history controls cover full native
+PreDraw, stationary samples, capture-disabled GPU execution, repeat gameplay/pixels,
+and missing draw-context/resources. Authored/player artwork remains unrendered in
+procedural-only mode; full-game parity remains unclaimed.
+The final native executable passed 70 existing native regression checks and all
+27 history-ribbon checks, including the unchanged archived item. The affected
+owner checks passed: C# build, 104 offline workbench tests and 8 executable CI
+workflow tests; the 9 public CLI tests and all shared static gates also passed.
 
 Real-item probe usability verification (2026-10-27): 20 archived IFC items and 8
 vanilla identities were exercised in 55 native process runs. The default primary
@@ -271,3 +329,56 @@ the native matrix or human inspection of the captured PNGs. Current source and
 installed tML changes require rerunning the affected cases; prior development
 numbers above remain historical. The new lane initializes native Gore allocation,
 not Gore update/rendering or full world parity.
+
+### Native world/source arcs
+
+`verify_shapes.py --native-dll <built ItemTestWorkbench.dll> --out <fresh directory>`
+runs explicit synthetic controls through the original production shape renderer.
+The admitted slice is `shape.kind=arc`, `attachment=world|source`,
+`rotationFrame=world|source`, with `drawPlayer` or `drawProjectileVfx` and the original
+MagicPixel. Other shape kinds and partial draw contexts remain refused; this is
+not blanket shape admission.
+
+The verifier compares actual on/off PNG pixels against identical native gameplay,
+checks delayed visibility and expiry, no-capture lifecycle parity, fresh-process
+repeat hashes and refusal controls. Fresh-process replay is not a same-process
+unload/reset claim. `nativeRender.snapshots[].shapes` is a read-only observation
+of production `ShapeEmissions`, not a stand-side shape simulation. The synthetic
+control does not edit authored item effects or certify their artistic quality.
+
+### Authored native dust
+
+`verify_authored_dust.py --native-dll tools/item-test-workbench/bin/Release/net8.0/ItemTestWorkbench.dll --out <fresh-directory>` uses a synthetic on-spawn slot, original production emitter and native dust update/draw. Use `--dust-type TintableDustLighted|Glass|GemDiamond|Electric` to exercise each admitted selector separately (native types43/13/91/226). Each run checks real atlas state, actual PNG differences against a blank slot control, scale change and expiry without draw-culling, fresh-process deterministic reset, capture-off lifecycle parity, missing Dust atlas refusal and unproven Smoke selector refusal. Build with the canonical workbench wrapper first. This does not replace any authored item's slots or establish item quality; only these separately exercised selectors are admitted and full native player/projectile rendering plus `drawNativeDust=true` remain mandatory.
+
+### Gallery source-frame arc controls
+
+`verify_shapes.py` also exercises world/source attachment and rotation independently on an explicitly diagonally aimed moving synthetic projectile. It verifies actual source records, source-bound position changes, distinct pixels from the world-frame control, delay/expiry, unchanged gameplay, deterministic fresh-process reset, and capture-off parity. Full native draw and the original MagicPixel remain required. Sector, line and orbit admission are not implied by this arc proof. These controls never rewrite an authored item.
+
+### Source-bound native orbit
+
+`verify_orbit.py --native-dll <built ItemTestWorkbench.dll> --out <fresh-directory>` exercises the original shape renderer for `kind=orbit`, `attachment=source`, `rotationFrame=world`, `moteOrientation=world`. The synthetic scene checks actual one/three/eight separate rendered motes, visible authored angular speed against a fixed-angle control, movement with the actual source frame, delayed visibility and expiry, unchanged gameplay, capture-off lifecycle and fresh-process reset. Partial draw and unproven source-rotation modes still refuse. This is not admission for other shape kinds or orbit orientation modes, and does not change any archived item's slots.
+
+### Bounded contour strokes
+
+`verify_contours.py --native-dll <built ItemTestWorkbench.dll> --out <fresh-directory>`
+executes original contour emission, production stroke resolution and GPU drawing.
+The admitted subset is world-attached/world-rotated polylines with bevel/butt
+strokes, stretch mapping and point-sampled library `solidPixel`. Points, scale,
+translation, rotation, width and colors remain authored values; there is no
+square/item-name routing. Other textures, node kinds and attachment modes remain
+refused until their own proof.
+
+The resource owner initializes the production `VfxNativeTextureCache`, drains its
+real queued load and requires readiness before capture; this is distinct from
+ParticleLibrary instancing readiness. Its lifecycle ends before resource assets
+are disposed. The verifier checks two distinct polyline pixel outputs versus a
+blank control, start/expiry, capture-off lifecycle, fresh-process reset, missing
+WhitePixel and unsupported variants. Snapshot contour paths and triangle counts
+come from production records; they are not final GPU vertex capture. A retained
+record or green `no_nonfinite` alone is not evidence of visible contour pixels.
+
+### Authored periodic native light
+
+`verify_native_light.py --native-dll <built ItemTestWorkbench.dll> --out <fresh-directory>` checks the original periodic/self `nativeLight` emitter with RGB80/178/195 and intensity0.35. A synthetic native source and actual native player are placed below the existing world surface, because the normal surface ambient light (and `viewport_fill`) can mask such modest additive illumination. The test compares native `Lighting.GetColor` samples and actual rendered player pixels with identical no-slot and zero-intensity controls, including native attenuation after the source expires, deterministic fresh-process reset, capture-off lifecycle and viewport-fill gameplay controls. No fake glow, brightness multiplier or authored item edit is used.
+
+Per tick the stand now executes its existing single `Lighting.LightTiles` phase **after** `InfiniDetachedVfxSystem.PostUpdateEverything`, so queued native light from that phase is not delayed by an additional stand-side frame. Four native warmup phases and `Dust.UpdateDust` ordering remain unchanged. Native lighting itself may update across multiple phases; the test does not demand instantaneous illumination or extinction. Other `nativeLight` event/anchor combinations remain unadmitted.

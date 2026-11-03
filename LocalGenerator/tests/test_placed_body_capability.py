@@ -1,25 +1,30 @@
 """Explicit placed-body Author -> compiler -> wire tracer bullets (offline)."""
 from __future__ import annotations
 
-from prompt_packet_helpers import request_dossier
 import copy
 import hashlib
 import json
 from pathlib import Path
+
 import pytest
 from infini_local.core import llm_config
-from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+from infini_local.pipelines.visual import contract as visual_contract
+from infini_local.pipelines.visual import request as visual_request
+from infini_local.pipelines.visual import stage as visual_stage
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from prompt_packet_helpers import request_dossier
 from test_dual_use_placeable_contract import _dual_use_placeable
 from test_low_level_three_stage_pipeline import wire_transport as wire_transport
 
-FN = "present_placed_item_sprite"
+FN = "placed_sprite"
 TRANSFORM = dict(renderSizePx=96, footprintAnchorX=0.25, footprintAnchorY=1,
                  imagePivotX=0.75, imagePivotY=1, offsetXPx=-13, offsetYPx=7,
                  rotationDegrees=-30.5, flipX=True, flipY=False)
@@ -78,9 +83,8 @@ def test_bad_placement_association_rejects_without_rewriting(fault):
     assert json.dumps(document, sort_keys=True) == before
 
 def test_real_author_and_visual_requests_carry_capability_readonly(wire_transport):
-    from infini_local.pipelines import llm_authoring_pipeline as gameplay
-    from infini_local.pipelines import visual_generation_pipeline as visual
-    from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+    from infini_local.pipelines.author import request as gameplay
+    from infini_local.pipelines.visual.assets import build_visual_asset_plan
     from test_low_level_three_stage_pipeline import _visual_kit
     responses, requests = wire_transport
     document = placed()
@@ -98,8 +102,8 @@ def test_real_author_and_visual_requests_carry_capability_readonly(wire_transpor
     before = json.dumps(wire, sort_keys=True)
     kit = _visual_kit(wire)
     for repair in (False, True):
-        responses.append(kit if not repair else {"schema":visual.VISUAL_REPAIR_PATCH_SCHEMA, "note":"offline no-op"})
-        visual._request_visual_kit(wire, {}, {}, **({"repair_errors":[], "previous":kit, "repair_scope":{}} if repair else {}))
+        responses.append(kit if not repair else {"schema":visual_contract.VISUAL_REPAIR_PATCH_SCHEMA, "note":"offline no-op"})
+        visual_request._request_visual_kit(wire, {}, {}, **({"repair_errors":[], "previous":kit, "repair_scope":{}} if repair else {}))
         packet = request_dossier(requests[-1])
         assert packet["acceptedPresentationMechanicsReadOnly"]["bindings"] == wire["runtimeProgram"]["bindings"]
         guidance = packet["spritePresentationReadOnly"]["placedBody"]
@@ -108,7 +112,7 @@ def test_real_author_and_visual_requests_carry_capability_readonly(wire_transpor
         assert guidance["meaning"] == CAPABILITY_REGISTRY[FN].summary
         packet["acceptedPresentationMechanicsReadOnly"]["bindings"].clear()
     assert json.dumps(wire, sort_keys=True) == before
-    with_body = visual._apply_kit(wire, kit)
+    with_body = visual_stage._apply_kit(wire, kit)
     without_body = copy.deepcopy(with_body)
     placement(without_body).pop("placedBody")
     assert build_visual_asset_plan(with_body) == build_visual_asset_plan(without_body)
@@ -116,7 +120,7 @@ def test_real_author_and_visual_requests_carry_capability_readonly(wire_transpor
 
 
 def test_explicit_placed_png_is_required_even_with_legacy_optional_policy(monkeypatch):
-    from infini_local.pipelines import visual_delivery_gate as gate
+    from infini_local.pipelines.visual import delivery as gate
     from infini_local.storage.world_storage import _cache_assets_ready
     wire = compile_runtime_program(placed())
     monkeypatch.setattr(gate, "VISUAL_REQUIRE_ITEM_SPRITE", False)
@@ -278,7 +282,7 @@ def test_present_bad_container_is_not_absence(body):
 
 
 def test_real_gameplay_repair_request_retains_frozen_transform_and_native_call(wire_transport):
-    from infini_local.pipelines import llm_authoring_pipeline as gameplay
+    from infini_local.pipelines.author import request as gameplay
     responses, requests = wire_transport
     document = placed()
     document["runtimeProgram"]["calls"][-1]["params"]["placementCallId"] = "wrong"
@@ -299,16 +303,16 @@ def test_real_gameplay_repair_request_retains_frozen_transform_and_native_call(w
 
 
 def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_path, monkeypatch):
-    from PIL import Image
-    from infini_local.pipelines import visual_generation_pipeline as visual
-    from infini_local.pipelines import visual_delivery_gate as gate
+    import infini_local.pipelines.visual.stage as visual_stage
+    from infini_local.pipelines.visual import delivery as gate
     from infini_local.storage.world_storage import is_deliverable_recipe_payload, sanitize_recipe_for_delivery
+    from PIL import Image
     from test_low_level_three_stage_pipeline import _visual_kit
     png = tmp_path / "placed.png"
     Image.new("RGBA", (32,32), (240,90,20,255)).save(png)
     wire = compile_runtime_program(placed())
-    wire = visual._apply_kit(wire, _visual_kit(wire))
-    from infini_local.core.vfx_manifest import attach_vfx_manifest
+    wire = visual_stage._apply_kit(wire, _visual_kit(wire))
+    from infini_local.pipelines.vfx.stage import attach_vfx_manifest
     from test_low_level_three_stage_pipeline import _vfx_output
     wire = attach_vfx_manifest(wire, "offline-placed-delivery", llm_director=lambda *_args, **_kwargs: _vfx_output(wire))
     wire.update(id="explicit_placed_fixture", sourceMode="llm", schemaVersion=5, runtimeApiVersion="infini.runtime-program.v5")
@@ -320,7 +324,7 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
     report = gate.visual_delivery_report(wire, check_backend_config=False)
     assert report["ok"], report["problems"]
     assert validate_runtime_wire(wire)["ok"], validate_runtime_wire(wire)["errors"]
-    from infini_local.core.vfx_manifest import validate_vfx_manifest_wire
+    from infini_local.core.vfx.validation import validate_vfx_manifest_wire
     assert validate_vfx_manifest_wire(wire)["ok"], validate_vfx_manifest_wire(wire)
     assert is_deliverable_recipe_payload(wire)
     sanitized = sanitize_recipe_for_delivery(wire)
@@ -355,32 +359,35 @@ def test_absent_placed_member_preserves_current_wire_without_migrating_archive()
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire_transport, monkeypatch, format_mode):
     """Current-main additions coexist with this feature through real offline callers."""
-    from copy import deepcopy
     import json
-    from jsonschema import Draft202012Validator
+    from copy import deepcopy
+
+    from infini_local.pipelines.author import item_contract as contract
+    from infini_local.pipelines.author import request as author
     from infini_local.qa.capability_witnesses import build_capability_witness
-    from infini_local.pipelines import author_item_contract as contract
-    from infini_local.pipelines import llm_authoring_pipeline as author
+    from jsonschema import Draft202012Validator
     from test_codex_subscription_contract import _encode_nullable_fixture
     from test_repair_gameplay_contract import _offline_gameplay_repair
 
     doc = placed()
     calls = doc["runtimeProgram"]["calls"]
-    owner = next(row["target"] for row in calls if row["fn"] == "set_projectile_hitbox")
-    for fn in ("set_projectile_hitbox_curve", "configure_weapon_ammo", "refresh_generated_effect_group_while_held"):
+    owner = next(row["target"] for row in calls if row["fn"] == "projectile_hitbox")
+    for fn in ("hitbox_curve", "weapon_ammo", "refresh_held_effect"):
         for row in build_capability_witness(fn)["runtimeProgram"]["calls"]:
-            if row["fn"] not in {fn, "apply_generated_buff_on_use"}:
+            if row["fn"] not in {fn, "generated_buff_on_use"}:
                 continue
             row["id"] = "combined_" + str(len(calls))
-            if fn == "set_projectile_hitbox_curve":
+            if fn == "hitbox_curve":
                 row["target"] = owner
             else:
                 row.pop("target", None)
             calls.append(row)
+    doc = {key: value for key, value in doc.items() if key in {"name", "category", "runtimeProgram"}}
     before = json.dumps(doc, sort_keys=True)
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", format_mode)
     responses, requests = wire_transport
-    payload = _encode_nullable_fixture(doc, contract.author_item_response_schema()) if format_mode == "json_schema" else doc
+    local_schema = contract.author_item_response_schema()
+    payload = _encode_nullable_fixture(doc, local_schema) if format_mode == "json_schema" else doc
     responses.append(payload)
     accepted = author.try_llm_plan({"name": "A"}, {"name": "B"}, "combined-offline")
     assert accepted is not None and len(requests) == 1 and not responses
@@ -398,14 +405,14 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     assert next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == owner)["hitboxCurve"]["endScale"] == 0.25
 
     broken = deepcopy(accepted)
-    curve = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "set_projectile_hitbox_curve")
+    curve = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "hitbox_curve")
     curve["params"]["endScale"] = 9
     candidate = deepcopy(curve)
     candidate["params"].update(endScale=0.25, startScale=7)
-    frozen = deepcopy(next(row for row in calls if row["fn"] == "configure_weapon_ammo"))
+    frozen = deepcopy(next(row for row in calls if row["fn"] == "weapon_ammo"))
     frozen["params"]["ammoCategory"] = "bullet"
     repaired, dossier = _offline_gameplay_repair(monkeypatch, broken,
-        {"note": "exact curve correction with hostile frozen companions", "realizationReplacement": broken["realization"],
+        {"note": "exact curve correction with hostile frozen companions",
          "callsUpsert": [candidate, frozen]}, format_mode, out_of_scope_response=True)
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": curve["id"], "paths": ["params.endScale"]}]
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]

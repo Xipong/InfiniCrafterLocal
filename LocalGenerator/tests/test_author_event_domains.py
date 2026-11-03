@@ -1,24 +1,23 @@
 """Exact event naming and fresh-vs-retained targeting domains share one owner."""
-from copy import deepcopy
 import hashlib
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
-
-from infini_local.core.runtime_authoring.capability_registry import (
-    CAPABILITY_REGISTRY,
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, EVENT_ACTION_OPCODE, EVENT_CAPABILITIES
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.registry_views import (
     capability_inventory_rows,
     capability_provider_union,
     compact_capability_catalog,
 )
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
-from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.capability_registry import EVENT_ACTION_OPCODE, EVENT_CAPABILITIES
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 NEW = "damage_nearby_on_event"
@@ -52,12 +51,12 @@ def test_nearest_alias_preserves_exact_event_opcode_parameters_and_authority(whe
     document = build_capability_witness(NEW)
     call = witness(document)
     if item_body:
-        document = build_capability_witness("configure_item_contact_hitbox")
+        document = build_capability_witness("item_hitbox")
         witness(document)["id"] = "contact"
-        next(row for row in document["runtimeProgram"]["calls"] if row["fn"] == "configure_item_use")["params"]["disableMeleeHitbox"] = False
+        next(row for row in document["runtimeProgram"]["calls"] if row["fn"] == "item_use")["params"]["disableMeleeHitbox"] = False
         call["target"] = "item"
         document["runtimeProgram"]["calls"].append(call)
-    call["params"].update(when=when, maxTargets=count, radiusTiles=7.125, damageMultiplier=0.625, delaySeconds=(37) / 60)
+    call["params"].update(when=when, maxTargets=count, radius=7.125, damageMultiplier=0.625, delay=(37) / 60)
     wire, entity = compile_and_check(document)
     assert entity["events"][0] == {
         "id": "witness_call", "action": NEW, "actionCode": 10, "event": when,
@@ -77,7 +76,7 @@ def test_nearest_alias_preserves_exact_event_opcode_parameters_and_authority(whe
 
 @pytest.mark.parametrize("name,value", [
     ("maxTargets", 0), ("maxTargets", 17), ("maxTargets", 1.5), ("maxTargets", True),
-    ("maxTargets", None), ("count", 2), ("radiusTiles", 0.49), ("radiusTiles", 61),
+    ("maxTargets", None), ("count", 2), ("radius", 0.49), ("radius", 61),
     ("damageMultiplier", 0.049), ("damageMultiplier", 4.01),
     ("when", "periodic"), ("when", {"everySeconds": 1}), ("event", "on_hit"),
 ])
@@ -207,7 +206,7 @@ def test_leaf_repair_keeps_valid_neighbors_and_accepts_only_current_domain(fn, l
     scope = build_runtime_repair_scope(document, validate_runtime_program(document)["errors"])
     assert next(row["paths"] for row in scope["fieldPermissions"]["calls"] if row["id"] == call["id"]) == ["params." + leaf]
     candidate = deepcopy(call)
-    neighbor = "radiusTiles" if fn == NEW else "rangeTiles"
+    neighbor = "radius" if fn == NEW else "range"
     candidate["params"].update({leaf: good, neighbor: 999})
     patch, audit = filter_repair_patch_scope(document, {"note": "correct one domain leaf", "callsUpsert": [candidate]}, scope)
     assert audit["ok"], audit
@@ -257,8 +256,8 @@ def test_nearest_alias_receipts_bind_final_event_identity_even_for_equal_values(
 
 
 @pytest.mark.parametrize("mode,impulses", [
-    ("target_to_owner", {"impulseBlocksPerSecond": 8, "radiusTiles": 10}),
-    ("target_to_entity", {"impulseBlocksPerSecond": 14, "radiusTiles": 10}),
+    ("target_to_owner", {"impulseBlocksPerSecond": 8, "radius": 10}),
+    ("target_to_entity", {"impulseBlocksPerSecond": 14, "radius": 10}),
     ("owner_to_target", {"impulseBlocksPerSecond": 8}),
     ("both", {"ownerImpulseBlocksPerSecond": 8, "targetImpulseBlocksPerSecond": 14}),
 ])
@@ -272,7 +271,7 @@ def test_unified_pull_compiles_only_explicit_selected_branch(mode, impulses):
     if mode == "both":
         assert action["ownerStrength"] == 8 * 16 / 60
         assert action["targetStrength"] == 14 * 16 / 60
-        assert "strength" not in action and "radiusTiles" not in action
+        assert "strength" not in action and "radius" not in action
     else:
         assert action["strength"] == impulses["impulseBlocksPerSecond"] * 16 / 60
         assert "ownerStrength" not in action and "targetStrength" not in action
@@ -283,7 +282,7 @@ def test_unified_pull_compiles_only_explicit_selected_branch(mode, impulses):
 @pytest.mark.parametrize("change", [
     {"targetImpulseBlocksPerSecond": None}, {"targetImpulseBlocksPerSecond": True},
     {"targetImpulseBlocksPerSecond": 0}, {"targetImpulseBlocksPerSecond": 15.01},
-    {"radiusTiles": 5}, {"impulseBlocksPerSecond": 2},
+    {"radius": 5}, {"impulseBlocksPerSecond": 2},
     {"when": {"everySeconds": 1}}, {"when": "on_expire"},
 ])
 def test_both_pull_rejects_missing_wrong_branch_or_targetless_events(change):
@@ -331,19 +330,32 @@ def test_nearby_delivery_strict_native_domain_without_diagnostics(field, value):
     assert not validate_runtime_wire(wire)["ok"]
 
 
-def test_saved_pre_simplification_events_and_receipts_keep_their_original_contract():
+def test_saved_event_facts_survive_in_current_envelope_without_accepting_retired_item_fields():
     corpus = json.loads(FIXTURE.with_name("event_api_pre_simplification.json").read_text())
     assert corpus["sourceHead"] == "723f0e1b07a79b3621f40e61c4d9ee30690ced8a"
     for case in corpus["cases"]:
         wire = case["wire"]
         before = deepcopy(wire)
-        assert validate_runtime_wire(wire)["ok"], case["fn"]
-        for source in (None, case["source"]):
-            assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
-                authored_document=source, final_document=wire)["ok"], case["fn"]
+        report = validate_runtime_wire(wire)
+        assert not report["ok"] and any(
+            e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
+        assert not audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+            final_document=wire)["ok"], case["fn"]
+        # Saved receipts remain readable; historical Author syntax is not a
+        # second authenticated input grammar for new v7 compilation.
+        assert not audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+            authored_document=case["source"], final_document=wire)["ok"], case["fn"]
+        assert not validate_runtime_program(case["source"])["ok"]
         assert wire == before
-        delivery = deepcopy(wire); delivery.pop("runtimeContract")
+        # Current envelope; only the archived event is transplanted, with no
+        # old item presentation or authentication receipts silently migrated.
+        delivery = compile_runtime_program(build_capability_witness(NEW))
+        delivery.pop("runtimeContract")
+        target = next(e for e in delivery["runtimeProgram"]["entities"] if e.get("events"))
+        saved_events = next(e["events"] for e in wire["runtimeProgram"]["entities"] if e.get("events"))
+        target["events"] = deepcopy(saved_events)
         assert validate_runtime_wire(delivery)["ok"]
+        assert target["events"] == saved_events
         if case["fn"] != "pull_on_event":
             assert not validate_runtime_program(case["source"])["ok"]
             assert not CAPABILITY_REGISTRY[case["fn"]].author_visible
@@ -353,16 +365,16 @@ def test_both_pull_foreign_radius_repair_deletes_only_invalid_leaf():
     source = build_capability_witness("pull_on_event")
     call = witness(source)
     call["params"] = {"when": "on_hit", "mode": "both", "ownerImpulseBlocksPerSecond": 8,
-                      "targetImpulseBlocksPerSecond": 14, "radiusTiles": 8}
+                      "targetImpulseBlocksPerSecond": 14, "radius": 8}
     scope = build_runtime_repair_scope(source, validate_runtime_program(source)["errors"])
     assert next(row["paths"] for row in scope["fieldPermissions"]["calls"]
-                if row["id"] == call["id"]) == ["params.radiusTiles"]
+                if row["id"] == call["id"]) == ["params.radius"]
     candidate = deepcopy(call)
-    candidate["params"].pop("radiusTiles")
+    candidate["params"].pop("radius")
     candidate["params"]["ownerImpulseBlocksPerSecond"] = 12
     patch, audit = filter_repair_patch_scope(source, {"note": "delete foreign radius", "callsUpsert": [candidate],
         "callParamKeysDelete": [{"callId": call["id"], "key": name}
-                               for name in ("radiusTiles", "ownerImpulseBlocksPerSecond")]}, scope)
+                               for name in ("radius", "ownerImpulseBlocksPerSecond")]}, scope)
     assert audit["ok"], audit
     repaired = apply_repair_patch(source, patch)
     assert witness(repaired)["params"] == {"when": "on_hit", "mode": "both",
@@ -375,7 +387,7 @@ def test_both_pull_foreign_radius_repair_deletes_only_invalid_leaf():
     patch, audit = filter_repair_patch_scope(source, {"note": "try replacing branch", "callsUpsert": [hostile]}, scope)
     if audit["ok"]:
         actual = witness(apply_repair_patch(source, patch))["params"]
-        assert actual == {key: value for key, value in call["params"].items() if key != "radiusTiles"}
+        assert actual == {key: value for key, value in call["params"].items() if key != "radius"}
 
 
 @pytest.mark.parametrize("invalid_selector", ["oops", None, 7, {}])

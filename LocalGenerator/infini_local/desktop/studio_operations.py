@@ -16,6 +16,7 @@ import time
 import urllib.error
 import urllib.request
 from urllib.parse import urlsplit
+import uuid
 import webbrowser
 from pathlib import Path, PureWindowsPath
 
@@ -24,6 +25,7 @@ from infini_local.core import http_io
 from infini_local.services.sdcpp_backend import lora_dir_from_file
 from infini_local.desktop.settings_paths import (
     ROOT,
+    STATE_ROOT,
 )
 
 
@@ -82,7 +84,8 @@ class StudioOperations:
                     outcome = on_result(*result)
                     if isinstance(outcome, dict):
                         finish_action(self, state["command_id"], outcome.get("ok", result[0]), outcome.get("message", ""),
-                                      saved=outcome.get("saved", False))
+                                      saved=outcome.get("saved", False), cancelled=outcome.get("cancelled", False),
+                                      result=outcome.get("result"))
                     else:
                         finish_action(self, state["command_id"], result[0], "Действие завершено." if result[0] else "Действие не выполнено.")
                 except Exception:
@@ -479,8 +482,10 @@ class StudioOperations:
             else:
                 self.proc = None
                 self._server_lifecycle = "stopped"
+                self._sdcpp_lifecycle = "unknown"
                 self.__dict__.pop('_owned_launch_settings', None)
                 self.__dict__.pop('_owned_server_base_url', None)
+                self.__dict__.pop('_owned_server_launch_id', None)
                 self._cancel_gui_task("health-config")
                 self._applied_config_ack = None
                 scheduled = self.__dict__.get("_health_after_id")
@@ -489,6 +494,7 @@ class StudioOperations:
                     self._health_after_id = None
                 self._update_applied_config_feedback("Stopped")
                 self.status = ("Server stopped through guarded /shutdown.")
+                self.observe_runtime_notifications(poll=False)
                 return {"ok": True, "message": self.status}
 
         self._run_gui_task("server-action", work, apply)
@@ -504,15 +510,29 @@ class StudioOperations:
         launch_url = self._server_base_url()
         env = os.environ.copy()
         env.update(launch_values)
-        cmd = [sys.executable, str(ROOT / "server.py")]
+        # Correlate readiness through Windows venv redirectors: Popen.pid may
+        # belong to the launcher, not the Python child serving /health. This is
+        # not an auth secret and never becomes a persisted config setting.
+        launch_id = uuid.uuid4().hex
+        env["INFINI_STUDIO_LAUNCH_ID"] = launch_id
+        self.__dict__.pop('_owned_server_launch_id', None)
+        # The launcher's selected data directory is process configuration, not
+        # an editable generator setting from config.env.
+        env["INFINI_DATA_DIR"] = str(STATE_ROOT)
+        # Embedded Python ignores PYTHON* environment options: pass these flags
+        # to the child too, so generator imports never write into the runtime.
+        cmd = [sys.executable, "-X", "utf8", "-u", "-B", str(ROOT / "server.py")]
         try:
-            options = {"cwd": str(ROOT), "env": env}
+            options = {"cwd": str(STATE_ROOT), "env": env, "stdin": subprocess.DEVNULL}
             if os.name == "nt":
-                options["creationflags"] = subprocess.CREATE_NEW_CONSOLE
+                options["creationflags"] = (subprocess.CREATE_NO_WINDOW if self.__dict__.get("_managed_by_tmodloader")
+                                            else subprocess.CREATE_NEW_CONSOLE)
             self.proc = subprocess.Popen(cmd, **options)
             self._owned_launch_settings = dict(launch_values)
             self._owned_server_base_url = launch_url
+            self._owned_server_launch_id = launch_id
             self._server_lifecycle = "starting"
+            self.observe_runtime_notifications(poll=False)
             self.status = ("server.py запущен. Runtime config ещё не подтверждён.")
             previous = self.__dict__.get("_health_after_id")
             if previous is not None:
@@ -541,6 +561,10 @@ class StudioOperations:
             "cacheDir", "worldRecipesDir", "imageBackend", "llmProvider", "llmModel", "openrouterProvider",
         )}
         types["sdcppAutostart"] = bool
+        # A running server from before the language setting remains restartable;
+        # its missing language is unconfirmed, never a claimed default.
+        if "language" in effective:
+            types["language"] = str
         if any(type(effective.get(key)) is not kind for key, kind in types.items()):
             return None
         return {key: effective[key] for key in types}
@@ -552,7 +576,7 @@ class StudioOperations:
         env.update(self.collect())
         cache = self._cache_dir_from_environment(env)
         worlds = Path(env.get("INFINI_WORLD_RECIPES_DIR", str(cache / "world_recipes")).strip())
-        worlds = (worlds if worlds.is_absolute() else ROOT / worlds).resolve()
+        worlds = (worlds if worlds.is_absolute() else STATE_ROOT / worlds).resolve()
         provider = env.get("INFINI_LLM_PROVIDER", "").strip().lower().replace("-", "_")
         # Read-only comparison normalization from llm_transport's main-profile
         # rules; never import runtime bootstrap (which creates cache folders).
@@ -586,6 +610,7 @@ class StudioOperations:
                      "" if provider == "openai_codex" else "auto")
         return {
             "cacheDir": str(cache), "worldRecipesDir": str(worlds),
+            "language": env.get("INFINI_LANGUAGE", "ru").strip().lower(),
             "imageBackend": backend,
             "llmProvider": provider,
             "llmModel": model,
@@ -653,40 +678,110 @@ class StudioOperations:
             lines.append(f"{omitted} rows omitted")
         return "\n".join(lines)
 
+    def observe_runtime_notifications(self, *, poll=True):
+        """Use the existing owner-loop poll and bounded health worker."""
+        proc = self.proc
+        lifecycle = self.__dict__.get("_server_lifecycle", "unknown")
+        try:
+            code = proc.poll() if proc is not None else None
+            alive = proc is not None and code is None
+        except (OSError, subprocess.SubprocessError):
+            code, alive = None, False
+            self._server_lifecycle = lifecycle = "unknown"
+            self._applied_config_ack = None
+            self._sdcpp_lifecycle = "unknown"
+        if proc is not None and code is not None and lifecycle != "stopped":
+            self._server_lifecycle = lifecycle = "exited"
+            self._applied_config_ack = None
+            self._sdcpp_lifecycle = "unknown"
+        current = (lifecycle, self.__dict__.get("_sdcpp_lifecycle", "unknown"))
+        previous = self.__dict__.get("_notified_runtime")
+        self._notified_runtime = current
+        if previous is not None:
+            generator = {
+                "starting": ("info", "Генератор запускается", "Процесс запущен; ожидаем подтверждения готовности."),
+                "responding": ("info", "Генератор готов", "Соединение с генератором подтверждено."),
+                "stopped": ("info", "Генератор остановлен", "Остановка подтверждена."),
+                "exited": ("error", "Генератор завершился", "Процесс больше не работает. Проверь журнал, если остановка была неожиданной."),
+                "unknown": ("warning", "Соединение с генератором потеряно", "Это не означает, что процесс остановлен."),
+            }
+            image = {
+                "ready": ("info", "sd.cpp готов", "Управляемый сервер изображений подтвердил готовность."),
+                "starting": ("info", "sd.cpp запускается", "Ожидаем готовности сервера изображений."),
+                "stopped": ("info", "sd.cpp остановлен", "Завершение управляемого процесса подтверждено."),
+                "exited": ("warning", "sd.cpp завершился", "Управляемый процесс больше не работает."),
+                "unknown": ("warning", "Состояние sd.cpp не подтверждено", "Не считаем процесс остановленным или память освобождённой."),
+                "failed": ("error", "Не удалось запустить sd.cpp", "Подробности доступны в журнале."),
+            }
+            for index, messages in enumerate((generator, image)):
+                if index == 1 and current[1] == "unknown" and current[0] != "responding":
+                    continue  # The generator transition already explains lost observability.
+                if current[index] != previous[index] and current[index] in messages:
+                    notify(self, *messages[current[index]])
+        now = time.monotonic()
+        if (poll and alive and self.__dict__.get("_health_after_id") is None and lifecycle != "stopped" and not self.__dict__.get("_gui_closed", False)
+                and not any(key in self.__dict__.get("_gui_tasks", {}) for key in ("health-config", "server-action"))
+                and now >= self.__dict__.get("_runtime_health_after", 0)):
+            self._runtime_health_after = now + 5
+            self._delayed_health_check()
+
     def _delayed_health_check(self):
         # Called by the owner loop, never a background thread. Capture plain launch
         # inputs here and return results through the same bounded queue pattern.
         if self.__dict__.get("_gui_closed", False):
             return
         studio_request = bool(self.__dict__.get("_studio_command_id"))
-        base_url = self._saved_or_owned_server_base_url() if studio_request else self._server_base_url()
-        expected_pid = self.proc.pid if self.proc is not None and self.proc.poll() is None else None
+        observed_proc = self.proc
+        owned = observed_proc is not None and observed_proc.poll() is None
+        base_url = self._saved_or_owned_server_base_url() if studio_request or owned else self._server_base_url()
+        observed_launch_id = self.__dict__.get('_owned_server_launch_id')
+        expected_pid = observed_proc.pid if observed_proc is not None and observed_proc.poll() is None else None
+        expected_launch_id = observed_launch_id
         self.applied_config = ("Checking runtime config (partial non-secret projection)…")
 
         def work(cancel):
             snap = self._fetch_health_snapshot(timeout=3, base_url=base_url)
-            if not self._shutdown_identity_is_safe(snap) or (expected_pid is not None and snap.get("pid") != expected_pid):
+            if not self._shutdown_identity_is_safe(snap):
+                return None
+            if expected_launch_id is not None:
+                if expected_pid is None or snap.get("studioLaunchId") != expected_launch_id:
+                    return None
+            elif expected_pid is not None and snap.get("pid") != expected_pid:
+                # Preserve legacy owned-process checks and external attachment
+                # policy; a new launch never silently falls back to PID equality.
                 return None
             # Drop all other health/config/auth metadata before it enters the UI
             # queue or cached acknowledgement; unexpected fields cannot leak.
             safe = self._safe_effective_config(snap)
             if safe is None:
                 return None
-            return {"pid": snap.get("pid"), "baseUrl": base_url, "effectiveConfig": safe,
+            image = snap.get("sdcpp")
+            image_state = image.get("processLifecycle") if isinstance(image, dict) else None
+            if not isinstance(image_state, str) or image_state not in {"ready", "starting", "stopped", "exited", "failed", "unknown", "external", "stopping"}:
+                image_state = "unknown"
+            if image_state == "ready" and image.get("processAlive") is not True:
+                image_state = "unknown"
+            return {"sdcppLifecycle": image_state, "pid": snap.get("pid"), "baseUrl": base_url, "effectiveConfig": safe,
                     "activityText": self._generation_activity_text(snap.get("generationActivity"))}
 
         def apply(ok, ack):
-            current_target = self._saved_or_owned_server_base_url() if studio_request else self._server_base_url()
-            if ack is not None and ack["baseUrl"] != current_target:
+            current_target = self._saved_or_owned_server_base_url() if studio_request or owned else self._server_base_url()
+            if (ack is not None and (ack["baseUrl"] != current_target
+                    or self.proc is not observed_proc
+                    or self.__dict__.get('_owned_server_launch_id') != observed_launch_id
+                    or (expected_pid is not None and observed_proc.poll() is not None))):
                 ack = None
             self.activity = ack["activityText"] if ok and ack is not None else "Backend activity unknown (health unavailable or foreign server)."
             if not ok or ack is None:
                 self._applied_config_ack = None
                 self._server_lifecycle = "unknown"
+                self._sdcpp_lifecycle = "unknown"
                 self.applied_config = ("Runtime config unconfirmed: health/projection unavailable or другая копия (partial; secrets/pools unverified).")
                 return {"ok": False, "message": self.applied_config}
             self._applied_config_ack = ack
+            self._sdcpp_lifecycle = ack["sdcppLifecycle"]
             self._server_lifecycle = "responding"
+            self.observe_runtime_notifications(poll=False)
             self._update_applied_config_feedback()
             self.status = (self.applied_config)
             return {"ok": True, "message": self.applied_config}
@@ -722,8 +817,8 @@ class StudioOperations:
     def _cache_dir_from_environment(env: dict[str, str]) -> Path:
         # Match env_path() and the GUI launch cwd, including an explicit blank
         # override (Path("") == cwd). Do not expand ~ or reinterpret saved keys.
-        cache = Path(env.get("INFINI_CACHE_DIR", str(ROOT / "cache")).strip())
-        return (cache if cache.is_absolute() else ROOT / cache).resolve()
+        cache = Path(env.get("INFINI_CACHE_DIR", str(STATE_ROOT / "cache")).strip())
+        return (cache if cache.is_absolute() else STATE_ROOT / cache).resolve()
 
     def _effective_cache_dir(self) -> Path:
         env = os.environ.copy()
@@ -840,6 +935,20 @@ class StudioOperations:
         self._set_trace_text("failure", self._pretty(snap.get("lastCombineFailure")))
 
 
+    def open_config_folder(self):
+        folder = self.config_path.absolute().parent
+        if not folder.is_dir():
+            return {"ok": False, "message": "Папка конфигурации недоступна. Скопируй путь к файлу настроек из Studio."}
+        try:
+            if os.name == "nt":
+                os.startfile(folder)
+            elif not webbrowser.open(folder.as_uri()):
+                raise OSError("No folder opener available")
+        except OSError:
+            return {"ok": False, "message": "Не удалось открыть папку конфигурации. Скопируй путь к файлу настроек из Studio."}
+        self.status = "Открываем папку конфигурации."
+        return {"ok": True, "message": self.status}
+
     def open_cache_folder(self):
         cache = self._effective_cache_dir()
         cache.mkdir(parents=True, exist_ok=True)
@@ -884,7 +993,7 @@ class StudioOperations:
                     for value in cleared:
                         if isinstance(value, str):
                             path = Path(value)
-                            path = (path if path.is_absolute() else ROOT / path).resolve()
+                            path = (path if path.is_absolute() else STATE_ROOT / path).resolve()
                             acknowledged.add(self._norm_path_for_compare(path))
                 if reply.get("ok") is not True or not expected.issubset(acknowledged):
                     return "Trace clear unavailable; server did not confirm all selected trace files."

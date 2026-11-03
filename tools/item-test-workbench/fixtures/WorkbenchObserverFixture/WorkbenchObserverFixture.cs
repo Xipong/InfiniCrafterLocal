@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using ReLogic.Content;
 using Terraria;
 using Terraria.DataStructures;
 using Terraria.ID;
@@ -13,7 +15,33 @@ using Terraria.ModLoader;
 // workbench does not refer to these types: the fixture owns its observations.
 namespace WorkbenchObserverFixture;
 
-public sealed class WorkbenchObserverFixture : Mod { }
+public sealed class WorkbenchObserverFixture : Mod
+{
+    public static bool Loaded { get; private set; }
+    public override void Load()
+    {
+        // tML dedicated servers accept requests without decoding assets; the
+        // returned Asset must remain unloaded even with ImmediateLoad.
+        var deferred = ModContent.Request<Texture2D>("WorkbenchObserverFixture/ServerAssetRequest", AssetRequestMode.ImmediateLoad);
+        if (deferred.IsLoaded) throw new InvalidOperationException("Server unexpectedly loaded a client texture");
+        if (Environment.GetEnvironmentVariable("IFC_FIXTURE_EXPECT_SERVER") == "1" && (Main.netMode != NetmodeID.Server || Main.myPlayer != 255))
+            throw new InvalidOperationException("Fixture expected server network mode during Load");
+        if (Environment.GetEnvironmentVariable("IFC_FIXTURE_EXPECT_SERVER") == "1")
+            AddContent(new ProbeMount());
+        if (!Terraria.Localization.Language.Exists("Mods.WorkbenchObserverFixture.GameTips.Test"))
+            throw new InvalidOperationException("Native mod game tip localization was not registered");
+        if (Environment.GetEnvironmentVariable("IFC_FIXTURE_REQUIRE_ARCHIVE") == "1" &&
+            System.Text.Encoding.UTF8.GetString(GetFileBytes("workbench-original.txt") ?? Array.Empty<byte>()) != "fixture archive bytes")
+            throw new InvalidOperationException("Original archive content is unavailable through Mod.GetFileBytes");
+        Loaded = true;
+    }
+    public override void Unload() => Loaded = false;
+}
+
+// Only the explicit server-mode control registers this native ModMount. Its
+// Register path must initialize vanilla mount data without client textures.
+[Autoload(false)]
+public sealed class ProbeMount : ModMount { }
 
 internal static class Observation
 {
@@ -60,6 +88,11 @@ public sealed class ProbeItem : ModItem
     public override string Texture => "Terraria/Images/Item_98";
     public override void SetDefaults()
     {
+        // A real mod can first touch this vanilla factory during SetupContent.
+        // It must already have been initialized and resized for modded IDs.
+        var prefixes = Terraria.GameContent.Prefixes.PrefixLegacy.ItemSets.ItemsThatCanHaveLegendary2;
+        if (Type >= prefixes.Length) throw new InvalidOperationException("Native item prefix sets were not resized");
+        prefixes[Type] = true;
         Item.width = 20;
         Item.height = 20;
         Item.damage = 20;
@@ -157,6 +190,11 @@ public sealed class ProbeNpc : ModNPC
 
 public sealed class ProbeGlobalNpc : GlobalNPC
 {
+    public override void SetDefaults(NPC npc)
+    {
+        if (Main.npc[0] is null) throw new InvalidOperationException("Native NPC slots were not initialized before SetDefaults");
+        Observation.Hit("GlobalNPC.SetDefaults.NpcSlotReady");
+    }
     public override void OnSpawn(NPC npc, IEntitySource source)
     {
         if (npc.type == ModContent.NPCType<ProbeNpc>()) Observation.Hit("GlobalNPC.OnSpawn");
@@ -191,6 +229,16 @@ public sealed class ProbeSystem : ModSystem
     public override void OnWorldLoad() => Observation.Reset();
     public override void PostUpdateEverything()
     {
+        if (Environment.GetEnvironmentVariable("IFC_FIXTURE_EXPECT_SERVER") == "1" && (Main.netMode != NetmodeID.Server || Main.myPlayer != 255))
+            throw new InvalidOperationException("Fixture expected server network mode during the scene");
+        if (Environment.GetEnvironmentVariable("IFC_FIXTURE_EXPECT_SERVER") == "1") {
+            int npc = Array.FindIndex(Main.npc, value => value.active && value.type == ModContent.NPCType<ProbeNpc>());
+            if (npc >= 0) {
+                NetMessage.SendData(MessageID.SyncNPC, number: npc);
+                if (NetMessage.buffer[256].writer is null) throw new InvalidOperationException("Native server packet was not serialized");
+                Observation.Hit("ModSystem.ServerPacketSerialized");
+            }
+        }
         Observation.Hit("ModSystem.PostUpdateEverything");
         if (Main.GameUpdateCount % 10 == 0) Observation.Flush();
     }

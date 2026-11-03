@@ -9,27 +9,35 @@ from pathlib import Path
 
 import pytest
 
-from infini_local.pipelines import visual_delivery_gate as delivery
-from infini_local.pipelines import visual_sprite_generation as generation
+from infini_local.pipelines.visual import delivery
+from infini_local.pipelines.images import stage as generation
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 from tests.vfx_image_fixtures import _data, _request, _existing_texture_data, offline_backend
 
 
-def _retained_delivery():
-    from infini_local.core.vfx_manifest import _compile_manifest, VFX_DIRECTOR_SCHEMA
+def _current_image_control_delivery():
+    from infini_local.core.vfx.projection import _compile_manifest
+    from infini_local.core.vfx.contract import VFX_DIRECTOR_SCHEMA
     from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     import json
-    from infini_local.pipelines import visual_generation_pipeline as visual
+    import infini_local.pipelines.visual.stage as visual_stage
     from tests.test_low_level_three_stage_pipeline import _visual_kit
 
-    # Replay unchanged saved wire through existing presentation adapters. Fresh
-    # Author now emits independent motion fields, which legitimately alter its
-    # read-only image facts; this control protects the historical delivery ABI.
+    # Explicit current-envelope image control, not saved-item compatibility.
+    # The captured body/art facts remain fixed; only retired visibility leaves
+    # are projected into the sole native visibility flag for this test.
     fixture = Path(__file__).resolve().parents[2] / "tools/fixtures/docx-image-ready-delivered.json"
-    saved = json.loads(fixture.read_text(encoding="utf-8"))
+    raw = fixture.read_bytes()
+    saved = json.loads(raw)
+    report = validate_runtime_wire(saved)
+    assert not report["ok"] and any(e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
+    assert saved["gameplay"].pop("releaseTiming") == "immediate"
+    assert saved["runtimeProgram"]["itemUse"].pop("releaseTiming") == "immediate"
+    saved["runtimeProgram"]["itemUse"]["hideUseGraphic"] = True
     assert validate_runtime_wire(saved)["ok"]
+    assert fixture.read_bytes() == raw
     mechanics = copy.deepcopy(saved["runtimeProgram"])
-    data = visual._apply_kit(saved, _visual_kit(saved))
+    data = visual_stage._apply_kit(saved, _visual_kit(saved))
     data.update(id="docx_image_ready_offline", sourceMode="generated", schemaVersion=5,
                 runtimeApiVersion="infini.runtime-program.v5", recipeKey="docx_readiness_offline")
     data["vfxManifest"] = _compile_manifest(data, {"schema": VFX_DIRECTOR_SCHEMA, "slots": []}, "offline_recipe")
@@ -78,25 +86,50 @@ def test_qa_execution_control_authenticates_fixture_without_admitting_pending(of
     assert not delivery.visual_delivery_report(refused, check_backend_config=False)["ok"]
 
 
-def test_retained_native_fixture_is_real_final_offline_projection(offline_backend):
+def test_captured_image_facts_have_current_final_offline_projection(offline_backend):
     import json
-    outgoing, raw = _retained_delivery()
+    outgoing, raw = _current_image_control_delivery()
     root = Path(__file__).resolve().parents[2] / "tools/fixtures"
     retained = json.loads((root / "docx-image-ready-delivered.json").read_text(encoding="utf-8"))
     from collections import Counter
     from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-    from infini_local.core.vfx_manifest import validate_vfx_manifest_wire
+    from infini_local.core.vfx.validation import validate_vfx_manifest_wire
     # This native witness fixes image delivery, not every later gameplay field.
-    # Preserve its historical bytes and prove both payloads remain consumable.
+    # Preserve archived bytes: their retired full envelope is refused, while
+    # independent image/VFX subcontracts remain valid in both payloads.
+    report = validate_runtime_wire(retained)
+    assert not report["ok"] and any(e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
+    assert validate_runtime_wire(outgoing)["ok"]
     for payload in (retained, outgoing):
-        assert validate_runtime_wire(payload)["ok"]
         assert validate_vfx_manifest_wire(payload)["ok"]
         assert delivery.visual_delivery_report(payload, check_backend_config=False)["ok"]
-    # Historical delivery remains readable, but current master-sampled refits
+    # Historical artwork remains usable, but current master-sampled refits
     # legitimately change PNG bytes and their content-addressed publication URL.
-    # No authored visual field may change as a consequence of that normalization.
-    assert {k: v for k, v in retained["visual"].items() if k != "spriteUrl"} == {
-        k: v for k, v in outgoing["visual"].items() if k != "spriteUrl"}
+    # imagePrompt is the derived backend request, including current renderer
+    # guidance, not the immutable authored appearance. Preserve every authored
+    # field below, and check that delivery records the actual request verbatim.
+    derived_fields = {"spriteUrl", "imagePrompt"}
+    assert {k: v for k, v in retained["visual"].items() if k not in derived_fields} == {
+        k: v for k, v in outgoing["visual"].items() if k not in derived_fields}
+    image_requests, _events = offline_backend
+    assert len(image_requests) == 1
+    assert outgoing["visual"]["imagePrompt"] == image_requests[0]["prompt"]
+    item = next(entity for entity in outgoing["runtimeProgram"]["entities"] if entity["kind"] == "item_body")
+    assert outgoing["visual"]["imagePrompt"].startswith(item["visual"]["prompt"] + ".")
+    # Renderer prose may evolve, but the same historical source must still send
+    # the same concrete frame/axis/grip/scale facts to the image backend.
+    def frame_facts(prompt):
+        return json.JSONDecoder().raw_decode(prompt.split("Read-only final-frame facts: ", 1)[1])[0]
+    current_facts = frame_facts(outgoing["visual"]["imagePrompt"])
+    from infini_local.core.images.contracts import native_held_frame_facts
+    assert current_facts.pop("nativeHeldCanvas") == native_held_frame_facts(outgoing, current_facts["canvasSizePx"])
+    # New read-only use context must identify the explicit bound child, not
+    # every entity sharing this PNG. The archived frame facts stay unchanged.
+    binding, = outgoing["runtimeProgram"]["bindings"]
+    assert current_facts.pop("itemUseSpawnsReadOnly") == {
+        "itemEntityId": "item", "bindings": [{"bindingId": binding["id"], "input": binding["input"],
+        "action": {"kind": "spawn_entity", "targetId": "workbench_blade"}, "targetPlacement": {"placement": "item_use_origin", "offsetPx": 0}}]}
+    assert current_facts == frame_facts(retained["visual"]["imagePrompt"])
     assert retained["vfxManifest"] == outgoing["vfxManifest"]
     def entity_images(payload):
         rows = []

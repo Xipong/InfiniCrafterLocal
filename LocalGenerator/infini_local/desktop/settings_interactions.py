@@ -9,11 +9,11 @@ def notify(app, level: str, title: str, message: str) -> None:
         app.status = message
 
 
-def finish_action(app, identifier, ok: bool, message: str, *, cancelled=False, saved=False) -> None:
+def finish_action(app, identifier, ok: bool, message: str, *, cancelled=False, saved=False, result=None) -> None:
     app.__dict__.get('_studio_async_ids', set()).discard(identifier)
     sink = app.__dict__.get('_ui_action_sink')
     if sink is not None and identifier:
-        sink(identifier, ok, message, cancelled=cancelled, saved=saved)
+        sink(identifier, ok, message, cancelled=cancelled, saved=saved, **({'result': result} if result is not None else {}))
 
 
 def begin_action(app):

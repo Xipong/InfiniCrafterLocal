@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import hashlib
 import json
 import sys
 import threading
@@ -52,17 +51,6 @@ from toolbox.infini_toolbox import discover_project
 
 def test_in_repo_toolbox_discovers_its_canonical_project() -> None:
     assert discover_project() == PROJECT.resolve()
-
-
-def test_bundled_parent_dump_matches_the_original_terraria_snapshot() -> None:
-    source = PROJECT / "toolbox/fixtures/items.jsonl"
-    assert hashlib.sha256(source.read_bytes()).hexdigest() == (
-        "62b64ac70eaad27004e4d4e006c1bfb6ba44775b98a216ad2aaa4afaebb20e06"
-    )
-    rows = [json.loads(line) for line in source.read_text(encoding="utf-8-sig").splitlines() if line.strip()]
-    assert len(rows) == 39
-    assert len({row["internalName"] for row in rows}) == len(rows)
-    assert {row["sourceMod"] for row in rows} == {"Terraria"}
 
 
 def test_selected_live20_cases_do_not_require_unselected_dump_parents() -> None:

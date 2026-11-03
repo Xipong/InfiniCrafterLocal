@@ -11,7 +11,7 @@ from infini_local.core.runtime_authoring.wire_validator import validate_runtime_
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
-@pytest.mark.parametrize("fn", ["spawn_entity_on_event", "configure_spawn"])
+@pytest.mark.parametrize("fn", ["spawn_on_event", "spawn"])
 def test_count_one_fan_omission_is_exact_zero_with_its_own_proof(fn):
     source = build_capability_witness(fn)
     call = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == fn)
@@ -48,7 +48,7 @@ def test_count_one_fan_omission_is_exact_zero_with_its_own_proof(fn):
         assert any("outside its declared inactive consumer branch" in r["reason"] for r in report["violations"]), report
 
 
-@pytest.mark.parametrize("fn", ["spawn_entity_on_event", "configure_spawn"])
+@pytest.mark.parametrize("fn", ["spawn_on_event", "spawn"])
 def test_multi_spawn_fan_omission_stays_red_and_explicit_nonzero_is_not_rewritten(fn):
     source = build_capability_witness(fn)
     call = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == fn)
@@ -64,7 +64,7 @@ def test_multi_spawn_fan_omission_stays_red_and_explicit_nonzero_is_not_rewritte
 
 
 def test_hit_target_spawn_does_not_acquire_another_event_capabilitys_neutral_receipt():
-    source = build_capability_witness("spawn_entity_from_hit_target")
+    source = build_capability_witness("spawn_at_hit")
     wire = compile_runtime_program(source)
     assert validate_runtime_wire(wire)["ok"]
     report = audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)

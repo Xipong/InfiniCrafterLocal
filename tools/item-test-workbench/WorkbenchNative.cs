@@ -87,7 +87,8 @@ internal static partial class EngineRuntimeChecks
         if(itemBoundary is not ("fresh" or "local_cache")) throw new ArgumentException("item-boundary must be fresh or local_cache");
         GeneratedItemData? data = itemPath is null ? null : (itemBoundary=="local_cache"?GeneratedItemData.FromLocalCacheJson(File.ReadAllText(itemPath)):GeneratedItemData.FromJson(File.ReadAllText(itemPath))) ?? throw new InvalidDataException("Item rejected by actual "+(itemBoundary=="local_cache"?"GeneratedItemData.FromLocalCacheJson":"GeneratedItemData.FromJson")+": " + ContractJsonDiagnostics.LastError);
         var scenario = JsonNode.Parse(File.ReadAllText(scenarioPath))!.AsObject();
-        WKeys(scenario,"scenario","ticks","seed","player","dummy","tiles","actions","assertions","playerUpdate","inventory","worldId","nativeRender","itemStack","hostiles","world","vanillaAssetRoot");
+        WKeys(scenario,"scenario","ticks","seed","player","dummy","tiles","actions","assertions","playerUpdate","inventory","worldId","nativeRender","itemStack","hostiles","world","vanillaAssetRoot","recallSpawn","worldWidthTiles","fishing","vanillaUtilityEmission");
+        bool utilityEmission=scenario["vanillaUtilityEmission"]?.GetValue<bool>()??false;
         int worldId=WInt(scenario,"worldId",0);
         WValidateAmmoInventory(scenario);
         WValidateHostiles(scenario["hostiles"]);
@@ -95,7 +96,7 @@ internal static partial class EngineRuntimeChecks
         string dummyMode=scenario["dummy"]?["mode"]?.GetValue<string>()??"controlled";
         if(dummyMode is not ("controlled" or "native_training_dummy"))throw new ArgumentException("dummy.mode must be controlled or native_training_dummy");
         bool nativeDummy=dummyMode=="native_training_dummy";
-        if(nativeDummy)WKeys(scenario["dummy"],"native training dummy","mode","tileX","tileY");else WKeys(scenario["dummy"],"dummy","mode","x","y","width","height","life","noTileCollide","nativeType","defense","vx","vy");
+        if(nativeDummy)WKeys(scenario["dummy"],"native training dummy","mode","tileX","tileY");else WKeys(scenario["dummy"],"dummy","mode","x","y","width","height","life","noTileCollide","nativeType","defense","vx","vy","knockBackResist");
         WValidateTarget(scenario["dummy"]);
         bool dummyNoTileCollide=scenario["dummy"]?["noTileCollide"]?.GetValue<bool>() ?? true;
         foreach(var rect in scenario["tiles"]?.AsArray() ?? new JsonArray()) WKeys(rect,"tile rectangle","tileX","tileY","width","height");
@@ -105,13 +106,24 @@ internal static partial class EngineRuntimeChecks
         bool drawPlacedBodies=scenario["nativeRender"]?["drawPlacedBodies"]?.GetValue<bool>()??false;
         bool drawArtwork=scenario["nativeRender"]?["drawArtwork"]?.GetValue<bool>()??false;
         bool drawPlayer=scenario["nativeRender"]?["drawPlayer"]?.GetValue<bool>()??false;
+        int? backpackTexture=scenario["nativeRender"]?["backpackTexture"]?.GetValue<int>();
+        if(backpackTexture.HasValue && (!drawPlayer || backpackTexture!=2))throw new ArgumentException("backpackTexture requires drawPlayer=true and pinned index2");
+        bool drawZombie=scenario["nativeRender"]?["drawZombie"]?.GetValue<bool>()??false;
+        bool drawProjectileVfx=scenario["nativeRender"]?["drawProjectileVfx"]?.GetValue<bool>()??false;
+        bool historyRibbon=data?.VfxManifest.Slots.Any(s=>s.RendererKind=="historyRibbon")==true;
+        bool historyTrail=data?.VfxManifest.Slots.Any(s=>s.RendererKind=="historyTrail")==true;
+        if(drawProjectileVfx && (!renderClient || drawArtwork || data is null))throw new ArgumentException("drawProjectileVfx requires a generated item, client_vfx and drawArtwork=false; artwork mode owns its full PreDraw");
         bool drawVanillaProjectiles=scenario["nativeRender"]?["drawVanillaProjectiles"]?.GetValue<bool>()??false;
-        if(drawVanillaProjectiles && (data is not null || !drawPlayer))throw new NotSupportedException("drawVanillaProjectiles requires a vanilla item and drawPlayer=true");
-        if((scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false)&&!drawPlayer)throw new ArgumentException("drawNativeDust requires drawPlayer=true");
+        int[] nativeItemTextures=(scenario["nativeRender"]?["vanillaItemTextures"]?.AsArray()??new JsonArray()).Select(n=>n!.GetValue<int>()).ToArray();
+        if(nativeItemTextures.Length>16 || nativeItemTextures.Distinct().Count()!=nativeItemTextures.Length || nativeItemTextures.Any(id=>id<1||id>=ItemID.Count) || nativeItemTextures.Length>0&&!drawVanillaProjectiles)throw new ArgumentException("vanillaItemTextures requires at most16 unique native IDs and drawVanillaProjectiles");
+        if(drawVanillaProjectiles && ((data is not null && !data.RuntimeProgram.Bindings.Any(b=>b.UsePolicy.Action.Kind==RuntimeBindingAction.NativeFishing)) || !drawPlayer))throw new NotSupportedException("drawVanillaProjectiles requires a vanilla item or explicit native_fishing binding and drawPlayer=true");
+        if((scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false)&&!drawPlayer&&!drawProjectileVfx)throw new ArgumentException("drawNativeDust requires drawPlayer or drawProjectileVfx with verified native assets");
         if(nativeDummy&&!drawPlayer)throw new ArgumentException("native_training_dummy requires nativeRender.drawPlayer=true");
+        if(drawZombie && (!renderClient || !drawPlayer || nativeDummy || scenario["dummy"]?["nativeType"]?.GetValue<string>()!="zombie"))
+            throw new ArgumentException("drawZombie requires client_vfx, drawPlayer=true and dummy.nativeType=zombie");
         if(!nativeDummy&&scenario["nativeRender"]?["dummyAssetRoot"] is not null)throw new ArgumentException("dummyAssetRoot requires native_training_dummy");
         if(drawPlayer&&!drawArtwork)throw new ArgumentException("drawPlayer requires drawArtwork=true");
-        if(!drawPlayer&&scenario["nativeRender"]?["playerAssetRoot"] is not null)throw new ArgumentException("playerAssetRoot requires drawPlayer=true");
+        if(!drawPlayer&&!drawProjectileVfx&&scenario["nativeRender"]?["playerAssetRoot"] is not null)throw new ArgumentException("playerAssetRoot requires drawPlayer or drawProjectileVfx");
         if(drawPlacedBodies && (!drawArtwork || scenario["world"] is null))throw new ArgumentException("drawPlacedBodies requires drawArtwork and explicit world scene");
         if(drawArtwork && !renderClient) throw new ArgumentException("drawArtwork requires client_vfx");
         if(!drawArtwork && scenario["nativeRender"]?["artworkFiles"] is not null) throw new ArgumentException("artworkFiles requires drawArtwork=true");
@@ -123,8 +135,10 @@ internal static partial class EngineRuntimeChecks
         if(initialGravity is not (-1 or 1) || initialGravity==-1 && !gravityPotion)throw new ArgumentException("gravityDirection must be +/-1; inverted gravity requires explicit gravitationPotion=true");
         if(initialDirection is not (-1 or 1)) throw new ArgumentException("player.direction must be -1 or1");
         if(data is null && drawArtwork && !drawPlayer)throw new NotSupportedException("Vanilla artwork requires actual native drawPlayer; partial generated layer cannot substitute it");
-        if(scenario["vanillaAssetRoot"] is not null && (data is not null || !clientPlayer))throw new ArgumentException("vanillaAssetRoot applies only to vanilla client/client_hybrid contact");
+        if(scenario["vanillaAssetRoot"] is not null && (data is not null && !drawVanillaProjectiles || !clientPlayer))throw new ArgumentException("vanillaAssetRoot applies only to vanilla client/client_hybrid contact");
         bool fullPlayer=playerUpdate is "full" or "client" or "client_hybrid" or "client_vfx";
+        int worldWidthTiles=WInt(scenario,"worldWidthTiles",100);
+        if(worldWidthTiles is <100 or >400 || !fullPlayer && worldWidthTiles!=100)throw new ArgumentException("worldWidthTiles must be100..400 and requires full Player.Update outside default100");
         using var graphics=clientPlayer?new WorkbenchGraphicsContext(Path.Combine(AppContext.BaseDirectory,"native-assets","GeneratedItem.png"),outputPath is null?null:Path.Combine(Path.GetDirectoryName(Path.GetFullPath(outputPath))!,"native-proxy-preview.png")):null;
         foreach(string actor in new[]{"player","dummy"}) foreach(string coordinate in new[]{"x","y"}) WFloat(scenario[actor],coordinate,0);
         int manaCrystals=WInt(scenario["player"],"manaCrystals",9);
@@ -141,16 +155,17 @@ internal static partial class EngineRuntimeChecks
         if(WInt(scenario["dummy"],"width",32) is < 1 or > 512 || WInt(scenario["dummy"],"height",48) is < 1 or > 512 || WInt(scenario["dummy"],"life",10000) is < 1 or > 10000000)
             throw new ArgumentException("dummy requires width/height1..512 and life1..10000000");
         WValidateWorld(scenario,fullPlayer,clientPlayer);
+        WValidateRecallSpawn(scenario["recallSpawn"],fullPlayer);
         var actions = scenario["actions"]?.AsArray() ?? throw new ArgumentException("actions array is required");
         foreach(var action in actions) {
             string kind=action?["kind"]?.GetValue<string>() ?? throw new ArgumentException("Action kind required");
             if(kind=="aim") { WKeys(action,"aim action","kind","tick","x","y"); if(action!["x"]==null||action["y"]==null) throw new ArgumentException("aim requires x and y"); if(Math.Abs(WFloat(action,"x",0))>1000000 || Math.Abs(WFloat(action,"y",0))>1000000) throw new ArgumentException("Aim coordinates must be within +/-1000000px"); }
             else if(clientPlayer && !drawPlayer && kind is "select_slot" or "equip" or "unequip" or "vanity") throw new NotSupportedException("Client item mode does not yet load native empty-item/equipment presentation contexts");
             else if(kind=="select_slot") { WKeys(action,"slot action","kind","tick","slot"); if(!fullPlayer || WInt(action,"slot",-1) is < 0 or > 1) throw new ArgumentException("select_slot requires full player and slot0 or1"); }
-            else if(kind is "equip" or "unequip" or "vanity") { WKeys(action,"equipment action","kind","tick"); if(!fullPlayer || data is null || (!data.Accessory.Enabled && !data.Armor.Enabled) || data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped)?.UsePolicy.Action.Kind!=RuntimeBindingAction.EquipPassive) throw new NotSupportedException("Equipment commands require full player and generated passive accessory or armor"); }
+            else if(kind is "equip" or "unequip" or "vanity") { WKeys(action,"equipment action","kind","tick"); if(!fullPlayer || data is not null && ((!data.Accessory.Enabled && !data.Armor.Enabled) || data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped)?.UsePolicy.Action.Kind!=RuntimeBindingAction.EquipPassive)) throw new NotSupportedException("Equipment commands require full player and generated passive accessory or armor"); }
             else if(kind is "tile_target" or "break_tile") WValidateWorldAction(action!,scenario);
             else if(kind=="controls") WValidateControls(action!,fullPlayer);
-            else if(WReactionAction(kind)) WValidateReactionAction(action!,fullPlayer,clientPlayer);
+            else if(WReactionAction(kind)) WValidateReactionAction(action!,fullPlayer,clientPlayer,drawPlayer && (scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false));
             else if(kind is "primary" or "alt" or "release") WKeys(action,"input action","kind","tick");
             else throw new ArgumentException("Unknown action kind: "+kind);
         }
@@ -174,17 +189,27 @@ internal static partial class EngineRuntimeChecks
         if(hybridClient && !renderClient && data is not null && data.VfxManifest.Slots.Length!=0) throw new NotSupportedException("Client hybrid currently requires an empty VFX manifest; global VFX update/render lifecycle is not validated");
         if(hybridClient && data is not null) WValidateHybridEvents(data,renderClient);
         if(renderClient && data is not null) {
-            if(data.VfxManifest.Slots.Any(s=>s.RendererKind is not ("libraryParticle" or "soundCue" or "spriteElement" or "texturedPath" or "impactSprite" or "impactRing")))
+            if(data.VfxManifest.Slots.Any(s=>s.RendererKind is not ("libraryParticle" or "soundCue" or "spriteElement" or "texturedPath" or "impactSprite" or "impactRing" or "historyRibbon" or "historyTrail" or "shape" or "nativeDust" or "contour" or "nativeLight")))
                 throw new NotSupportedException("client_vfx requires an explicitly admitted original renderer; unsupported VFX renderer kind");
+            foreach(var slot in data.VfxManifest.Slots.Where(s=>s.RendererKind=="historyTrail")) WValidateHistoryTrail(slot,drawPlayer,data);
+            foreach(var slot in data.VfxManifest.Slots.Where(s=>s.RendererKind=="nativeDust")) WValidateNativeDust(slot, (drawPlayer||drawProjectileVfx) && (scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false));
+            foreach(var slot in data.VfxManifest.Slots.Where(s=>s.RendererKind=="shape")) WValidateShape(slot,drawPlayer||drawProjectileVfx);
+            foreach(var slot in data.VfxManifest.Slots.Where(s=>s.RendererKind=="contour")) WValidateContour(slot,drawPlayer||drawProjectileVfx);
+
+            foreach(var slot in data.VfxManifest.Slots.Where(s=>s.RendererKind=="nativeLight"))
+                if(!(drawPlayer||drawProjectileVfx) || slot.Light is null || slot.Event!="periodic" || slot.Anchor!="self")
+                    throw new NotSupportedException("nativeLight requires proven periodic/self source and full native draw/lighting");
             if(data.VfxManifest.Slots.Any(s=>s.RendererKind is "spriteElement" or "texturedPath" or "impactSprite") && !drawArtwork)
                 throw new NotSupportedException("Authored material/impact VFX require drawArtwork=true with every exact publication PNG");
-            if(data.VfxManifest.Slots.Any(s=>s.RendererKind=="impactRing") && (!drawPlayer || !(scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false)))
-                throw new NotSupportedException("impactRing requires drawPlayer=true and drawNativeDust=true with original MagicPixel/Dust assets and full native projectile hooks");
+            if(historyRibbon && !drawPlayer && !drawProjectileVfx)
+                throw new NotSupportedException("historyRibbon requires drawPlayer or drawProjectileVfx with original MagicPixel and live native history");
+            if(data.VfxManifest.Slots.Any(s=>s.RendererKind=="impactRing") && (!(drawPlayer||drawProjectileVfx) || !(scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false)))
+                throw new NotSupportedException("impactRing requires drawPlayer or drawProjectileVfx, plus drawNativeDust=true and original MagicPixel/Dust assets");
         }
         if(clientPlayer && data?.RuntimeProgram.BindingForInput(RuntimeInputKind.Hold)?.UsePolicy.Action.Kind==RuntimeBindingAction.SpawnEntity) throw new NotSupportedException("Client item contact mode currently refuses held projectile spawning");
         if(data is not null) {
-        if (data.Gameplay.AmmoCategory.Length != 0 || (data.RuntimeProgram.WeaponAmmo is { } ammoSpec && ammoSpec.AmmoCategory is not ("arrow" or "bullet" or "flare" or "fallen_star")))
-            throw new NotSupportedException("Only generated weapons with vanilla arrow/bullet/flare/fallen-star ammo are admitted; generated ammo items and other categories remain unsupported");
+        if (data.Gameplay.AmmoCategory.Length != 0 || (data.RuntimeProgram.WeaponAmmo is { } ammoSpec && ammoSpec.AmmoCategory is not ("arrow" or "bullet" or "flare" or "fallen_star" or "solution")))
+            throw new NotSupportedException("Only generated weapons with vanilla arrow/bullet/flare/fallen-star/solution ammo are admitted; generated ammo items and other categories remain unsupported");
         if (!hybridClient && data.RuntimeProgram.TryGetEntity(data.RuntimeProgram.ItemEntityId)?.Events.Length > 0 && !(fullPlayer && WEquipmentBodyEventsSupported(data)))
             throw new NotSupportedException("Item-body events require complete item update hooks; projectile-only scene refuses them");
         if (!fullPlayer && data.RuntimeProgram.HeldEffectGroupId is not null)
@@ -201,6 +226,7 @@ internal static partial class EngineRuntimeChecks
         foreach(var input in testedInputs) {
             if(data.RuntimeProgram.BindingForInput(input)?.UsePolicy.Action.Kind==RuntimeBindingAction.PlaceItem && scenario["world"] is null) throw new NotSupportedException("Placement requires explicit world scene with native ledger lifecycle");
             WRequireBinding(data,input,fullPlayer,clientPlayer,hybridClient,renderClient);
+            if(data.RuntimeProgram.BindingForInput(input)?.UsePolicy.Action.Kind==RuntimeBindingAction.ApplyItemEffects && data.EffectsForBinding(data.RuntimeProgram.BindingForInput(input)).MobilityMode=="recall_home" && scenario["recallSpawn"] is null)throw new NotSupportedException("recall_home requires explicit recallSpawn scene coordinates");
         }
         }
         if (scenario["assertions"] is not JsonArray { Count: > 0 }) throw new ArgumentException("At least one explicit assertion is required");
@@ -237,13 +263,16 @@ internal static partial class EngineRuntimeChecks
             report["execution"]!["clientGraphics"]!["scope"]=report["execution"]!["scope"]!.DeepClone();
         }
         report["execution"]!["vfxCoverage"]=new JsonObject{["authoredRendererKinds"]=new JsonArray((data?.VfxManifest.Slots ?? Array.Empty<VfxSlotSpec>()).Select(x=>x.RendererKind).Distinct().Select(x=>(JsonNode?)JsonValue.Create(x)).ToArray()),["globalVfxUpdateExecuted"]=renderClient,["vfxRenderingValidated"]=false,["callbackDispatch"]="Canonical callbacks run normally when triggered; individual VFX slot execution is not separately asserted"};
+        if(scenario["hostiles"] is JsonArray {Count:>0})report["execution"]!["controlledHostiles"]=new JsonObject{
+            ["artworkRendered"]=false,["NPC.UpdateNPC.dedServ"]=true,
+            ["scope"]="Native controlled NPC update with dedicated presentation branch; prior dedServ restored before projectile/damage/render phases. NPC AI remains disabled by scene setup; no client NPC FindFrame or artwork claim"};
         var terrain = new JsonArray();
         foreach (var rect in scenario["tiles"]?.AsArray() ?? new JsonArray()) {
             int x=WInt(rect,"tileX",-1), y=WInt(rect,"tileY",-1), width=WInt(rect,"width",0), height=WInt(rect,"height",0);
-            if (x<1 || y<1 || width<1 || height<1 || x+width>=99 || y+height>=(fullPlayer?599:99)) throw new ArgumentException("Tile rectangles must fit inside the declared native tilemap margin");
+            if (x<1 || y<1 || width<1 || height<1 || x+width>=worldWidthTiles-1 || y+height>=(fullPlayer?599:99)) throw new ArgumentException("Tile rectangles must fit inside the declared native tilemap margin");
             terrain.Add(new JsonObject { ["x"]=x*16,["y"]=y*16,["width"]=width*16,["height"]=height*16,["nativeTileType"]=TileID.Dirt });
         }
-        report["scene"] = new JsonObject { ["worldWidth"]=1600,["worldHeight"]=fullPlayer?9600:1600,["worldSurfaceTiles"]=fullPlayer?80:null,["rockLayerTiles"]=fullPlayer?200:null,["tiles"]=terrain };
+        report["scene"] = new JsonObject { ["worldWidth"]=worldWidthTiles*16,["worldHeight"]=fullPlayer?9600:1600,["worldSurfaceTiles"]=fullPlayer?80:null,["rockLayerTiles"]=fullPlayer?200:null,["tiles"]=terrain };
         WorkbenchSpawnSequences.Clear(); WSourceParentIds.Clear();
         int spawned = 0, hitCount = 0, itemHitCount=0, contactQueries=0, naturalExpiries = 0, tileCollisions = 0, manaPaid=0, healed=0, teleports=0, heldNativeTicks=0;
         WithPersistenceTilemap((_, worldLedger) => {
@@ -254,8 +283,10 @@ internal static partial class EngineRuntimeChecks
             report["scene"]!["sourceWorldScoped"]=data?.RecipeMeta.WorldScoped;
             report["scene"]!["currentWorldSource"]=data is null?null:InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.IsCurrentWorldData(data);
             typeof(Terraria.Main).GetMethod("Initialize_TileAndNPCData1",PersistenceStatic)!.Invoke(null,null);
+            TorchID.Initialize(); // Main.Initialize_AlmostEverything normally owns native torch light providers.
             foreach(var player in Terraria.Main.player) player.active=false;
-            if(fullPlayer) WPrepareFullWorld();
+            WFishingScene.Validate(scenario["fishing"],fullPlayer,worldWidthTiles);
+            if(fullPlayer) WPrepareFullWorld(worldWidthTiles);
             Terraria.Main.tileSolid[TileID.Dirt] = true;
             foreach (var rect in terrain) {
                 int x=WInt(rect,"x",0)/16,y=WInt(rect,"y",0)/16,w=WInt(rect,"width",0)/16,h=WInt(rect,"height",0)/16;
@@ -266,6 +297,7 @@ internal static partial class EngineRuntimeChecks
                 report["scene"]!["activePlayerCount"]=Terraria.Main.player.Count(p=>p.active);
                 if(Terraria.Main.player.Count(p=>p.active)!=1) throw new InvalidOperationException("Workbench must contain exactly one active player");
                 owner.position = new Vector2(WFloat(scenario["player"], "x", fullPlayer?800:640), WFloat(scenario["player"], "y", fullPlayer?700:640));
+                using var recallSpawn=new WRecallSpawn(owner,scenario["recallSpawn"],report["scene"]!.AsObject());
                 owner.statLifeMax = owner.statLifeMax2 = WInt(scenario["player"], "maxLife", 100);
                 owner.statLife = WInt(scenario["player"], "life", owner.statLifeMax);
                 if(owner.statLife<1 || owner.statLife>owner.statLifeMax) throw new ArgumentException("Player life must be positive and <= maxLife");
@@ -285,7 +317,8 @@ internal static partial class EngineRuntimeChecks
                     int registeredItemType=(int)typeof(ItemLoader).GetMethod("Register",PersistenceStatic)!.Invoke(null,new object[]{host})!;
                     item.type=registeredItemType; WRegisterItemSingleton(host);
                 }
-                WValidateVanillaPerformance(item,data,clientPlayer);
+                WValidateVanillaPerformance(item,data,clientPlayer,fullPlayer && actions.Any(a=>a!["kind"]!.GetValue<string>() is "equip" or "vanity" or "unequip") && !actions.Any(a=>a!["kind"]!.GetValue<string>() is "primary" or "alt"),fullPlayer,utilityEmission);
+                if(utilityEmission)report["coverage"]!["utilityEmissionScope"]="Native solution use, emission, trajectory and pose only; not a damage benchmark or world-conversion certification";
                 owner.inventory[0]=item; owner.selectedItem=0; owner.releaseUseItem=true;
                 using var npcGlobals=new WNpcGlobals();
                 NPC dummy=null!;int initialLife=0;
@@ -349,6 +382,7 @@ internal static partial class EngineRuntimeChecks
                 using var useObserver=WObserveUseCadence(owner,e=>events.Add(e));
                 using var configureObserver=WObserveConfiguration(e=>events.Add(e));
                 using var directDamageObserver=WObserveDirectNpcDamage(e=>events.Add(e));
+                using var hitFeedbackObserver=renderClient && (scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false)?new WNativeHitFeedback(e=>events.Add(e)):null;
                 using var hitObserver = new Hook(typeof(CombinedHooks).GetMethod(nameof(CombinedHooks.OnHitNPCWithProj))!,
                     (WorkbenchHitObserver)((WorkbenchHitOriginal orig,Projectile projectile,NPC target,in NPC.HitInfo hit,int damageDone) => {
                         hitCount++; events.Add(new JsonObject { ["kind"]="hit", ["projectileId"]=WProjectileId(projectile),["entityId"]=WProjectileEntity(projectile),["childDepth"]=WProjectileDepth(projectile),["npcId"]=target.whoAmI,["damageDone"]=damageDone,["lifeAfterDamage"]=target.life,["crit"]=hit.Crit,["hitKnockback"]=hit.Knockback,["targetOwnerImmunity"]=target.immune[projectile.owner],["projectileLocalImmunity"]=projectile.localNPCImmunity[target.whoAmI],["playerMeleeCooldown"]=Terraria.Main.player[projectile.owner].meleeNPCHitCooldown[target.whoAmI],["nativeDamage"]=projectile.damage,["dedServ"]=Terraria.Main.dedServ,["netMode"]=Terraria.Main.netMode,["observationStage"]="after_native_damage_before_mod_hit_callbacks" });
@@ -408,24 +442,36 @@ internal static partial class EngineRuntimeChecks
                         events.Add(new JsonObject{["kind"]="native_ui_message",["text"]=text,["r"]=r,["g"]=g,["b"]=b,["gameUpdateCount"]=(long)Terraria.Main.GameUpdateCount,["source"]=achievementFeedbackActive?"Native AchievementInitializer.OnAchievementCompleted -> Main.NewText -> RemadeChatMonitor.NewText":"InfiniCraftPlayer.NotifyGeneratedUseRefusal -> Main.NewText -> RemadeChatMonitor.NewText",["chatRendered"]=false,["unresolvedLocalizationKey"]=text.StartsWith("Mods.InfiniCrafterLocal.",StringComparison.Ordinal),["adapter"]="Text-only chat sink; original Main.NewText continues native sound call"});
                     })):null;
                 if(fullPlayer) WPrepareFullPlayer(owner,modPlayer,manaCrystals);
+                using var fishingScene=scenario["fishing"] is JsonNode fishingSettings?new WFishingScene(owner,fishingSettings,report):null;
                 using var worldScene=scenario["world"] is JsonObject worldSettings?new WWorldScene(worldSettings,worldLedger,data,report):null;
-                using var nativeRenderer=renderClient?new WNativeVfxRenderer(graphics!,scenario["nativeRender"]!.AsObject(),Path.Combine(Path.GetDirectoryName(outputPath!)!,"native-frames")):null;
+                using var nativeRenderer=renderClient?new WNativeVfxRenderer(graphics!,scenario["nativeRender"]!.AsObject(),Path.Combine(Path.GetDirectoryName(outputPath!)!,"native-frames"),data):null;
                 if(renderClient){Terraria.TimeLogger.Initialize();Terraria.Main.gameMenu=false;Terraria.Main.mapEnabled=false;
                 for(int lightingPhase=0;lightingPhase<4;lightingPhase++){nativeRenderer!.StepLighting();}}
-                using var playerAssets=drawPlayer?new WNativePlayerAssets(graphics!,scenario["nativeRender"]?["playerAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR")??throw new ArgumentException("drawPlayer requires playerAssetRoot or INFINI_PLAYER_ASSET_DIR")):null;
+                using var playerAssets=(drawPlayer||drawProjectileVfx)?new WNativePlayerAssets(graphics!,scenario["nativeRender"]?["playerAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR")??throw new ArgumentException("Native procedural/player draw requires playerAssetRoot or INFINI_PLAYER_ASSET_DIR"),backpackTexture):null;
+                using var zombie=drawZombie?new WNativeZombieRender(graphics!,dummy,scenario["nativeRender"]?["playerAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR")??throw new ArgumentException("drawZombie requires playerAssetRoot or INFINI_PLAYER_ASSET_DIR")):null;
+                using var pixelAssets=renderClient&&!drawPlayer&&!drawProjectileVfx?new WNativeMagicPixelAssets(graphics!,scenario["nativeRender"]?["playerAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR")??throw new ArgumentException("Native VFX requires playerAssetRoot or INFINI_PLAYER_ASSET_DIR for genuine MagicPixel")):null;
+                if(pixelAssets is not null)nativeRenderer!.Report["magicPixelResource"]=pixelAssets.Report.DeepClone();
                 if(trainingDummy is not null)trainingDummy.InitializeGraphics(graphics!,scenario["nativeRender"]?["dummyAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_DUMMY_ASSET_DIR")??scenario["nativeRender"]?["playerAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR")??throw new ArgumentException("native_training_dummy requires dummyAssetRoot or playerAssetRoot containing genuine dummy assets"));
                 using var artwork=drawArtwork?new WNativeArtwork(data!,owner,(scenario["nativeRender"]?["artworkFiles"]?.AsArray()??throw new ArgumentException("drawArtwork requires artworkFiles")).Select(f=>f!.GetValue<string>()).ToArray(),WProjectileId):null;
-                using var vanillaProjectileAssets=drawVanillaProjectiles?new WNativeVanillaProjectileAssets(graphics!,scenario["vanillaAssetRoot"]!.GetValue<string>()):null;
+                using var activeVfx=(drawProjectileVfx||(historyRibbon||historyTrail)&&drawPlayer)?new WNativeActiveVfx(artwork is not null):null;
+                if(activeVfx is not null)nativeRenderer!.SetActiveVfx(activeVfx,drawProjectileVfx);
+                using var vanillaProjectileAssets=drawVanillaProjectiles?new WNativeVanillaProjectileAssets(graphics!,scenario["vanillaAssetRoot"]?.GetValue<string>()??throw new ArgumentException("Native projectile rendering requires explicit vanillaAssetRoot"),nativeItemTextures):null;
                 using var placedBodies=drawPlacedBodies?new WNativePlacedBodies():null;
                 if(placedBodies is not null)nativeRenderer!.SetPlacedBodies(placedBodies);
                 if(nativeRenderer!=null) {
-                    if(artwork is not null) {if(drawPlayer){artwork.EnableNativePlayer();if(drawVanillaProjectiles)artwork.EnableNativeVanillaProjectiles();report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create(data is null?"Main.PlayerRenderer.DrawPlayers / native vanilla held-item DrawData":"Main.PlayerRenderer.DrawPlayers / PlayerDrawLayerLoader / GeneratedItem.ModifyItemDraw / ProjectileLoader.PreDraw/PostDraw"));}nativeRenderer.SetArtwork(artwork);if(playerAssets is not null)nativeRenderer.Report["playerAssets"]=playerAssets.Report;report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create(data is null?"PlayerDrawLayers.DrawPlayer_27_HeldItem / Dust.UpdateDust / Lighting.LightTiles":"GeneratedHeldItemDrawLayer.Draw / GeneratedItem.PreDrawInInventory / GeneratedProjectile.DrawAuthoredEntityVisual / InfiniDetachedVfxSystem.DrawProjectiles / Dust.UpdateDust / Lighting.LightTiles"));}
+                    if(playerAssets is not null)nativeRenderer.Report["playerAssets"]=playerAssets.Report;
+                    if(activeVfx is not null)report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create("InfiniVfxRuntime.Draw under/over passes with native GeneratedProjectile history; DrawTrail/SpriteBatch submissions observed"));
+                    if(artwork is not null) {if(drawPlayer){artwork.EnableNativePlayer();if(drawVanillaProjectiles)artwork.EnableNativeVanillaProjectiles(vanillaProjectileAssets!);report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create(data is null?"Main.PlayerRenderer.DrawPlayers / native vanilla held-item DrawData":"Main.PlayerRenderer.DrawPlayers / PlayerDrawLayerLoader / GeneratedItem.ModifyItemDraw / ProjectileLoader.PreDraw/PostDraw"));}nativeRenderer.SetArtwork(artwork);if(playerAssets is not null)nativeRenderer.Report["playerAssets"]=playerAssets.Report;report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create(data is null?"PlayerDrawLayers.DrawPlayer_27_HeldItem / Dust.UpdateDust / Lighting.LightTiles":"GeneratedItem.ModifyItemDraw / GeneratedItem.PreDrawInInventory / GeneratedProjectile.DrawAuthoredEntityVisual / InfiniDetachedVfxSystem.DrawProjectiles / Dust.UpdateDust / Lighting.LightTiles"));}
                     if(scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false){
                         report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create("Main.DrawDust (original stateful native rendering; capture controls PNG export only)"));
                         var unsupported=report["execution"]!["unsupported"]!.AsArray();for(int u=0;u<unsupported.Count;u++)unsupported[u]=unsupported[u]!.GetValue<string>().Replace(" and native dust sprites","").Replace("native dust sprites, ","").Replace("native dust sprite rendering", "complete world rendering").Replace("/dust rendering", "/world rendering");
                     }
                     if(drawVanillaProjectiles){nativeRenderer.Report["vanillaProjectileAssets"]=vanillaProjectileAssets!.Report;report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create("Main.DrawProj (original vanilla projectile rendering)"));}
                     report["nativeRender"]=nativeRenderer.Report;if(trainingDummy is not null)nativeRenderer.SetTrainingDummy(trainingDummy);
+                    if(zombie is not null){nativeRenderer.SetZombie(zombie);report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create("NPC.FindFrame / Main.DrawNPC (original controlled zombie)"));
+                        report["execution"]!["scope"]="Actual client Player.Update, projectile simulation and controlled zombie NPC.UpdateNPC with AI disabled; original NPC.FindFrame and Main.DrawNPC; no full world or NPC AI parity";
+                        report["execution"]!["clientGraphics"]!["scope"]=report["execution"]!["scope"]!.DeepClone();
+                        var unsupported=report["execution"]!["unsupported"]!.AsArray();for(int u=0;u<unsupported.Count;u++)unsupported[u]=unsupported[u]!.GetValue<string>().Replace("tile/NPC/world","tile/world and other NPC").Replace("world/NPCs/","world/other NPCs/");}
                     report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create("InfiniDetachedVfxSystem.PostUpdateEverything / BeginDrawBudgetFrame / DrawLayer (BeforeProjectiles,AfterProjectiles)"));
                     if(!drawArtwork) nativeRenderer.Report["unrenderedArtwork"]=new JsonArray((data?.RuntimeProgram.Entities ?? Array.Empty<RuntimeEntitySpec>()).Select(e=>(JsonNode?)new JsonObject{["entityId"]=e.Id,["kind"]=e.Kind,["path"]=e.Visual.SpritePath,["reason"]="VFX-only draw scope; authored entity artwork is not rendered or substituted"}).ToArray());
                 }
@@ -466,6 +512,7 @@ internal static partial class EngineRuntimeChecks
                                 events.Add(new JsonObject { ["kind"]="input", ["input"]=kind });
                             } else if(!WReactionAction(kind)) throw new NotSupportedException("Unknown action: " + kind);
                         }
+                        fishingScene?.BeforeUpdate(tick);
                         if (alternateHeld && owner.controlUseItem) owner.altFunctionUse = 1;
                         if (events.Count > 0) { var before = WSnapshot(tick,owner,dummy,events); before["phase"]="after_input_before_update"; frames.Add(before); events = new JsonArray(); }
                         if(ReferenceEquals(owner.HeldItem,item)) heldNativeTicks++;
@@ -476,11 +523,19 @@ internal static partial class EngineRuntimeChecks
                         }
                         if(clientPlayer && !hybridClient && Terraria.Main.projectile.Any(p=>p.active)) throw new NotSupportedException("Pure client contact scene unexpectedly spawned a projectile; hybrid scope not admitted");
                         WRequireFinite(owner,"player",owner.whoAmI,"after Player update",events,report);
-                        foreach(var stimulus in actions.Where(a=>WInt(a,"tick",-1)==tick && WReactionAction(a!["kind"]!.GetValue<string>()))) reactionScene!.Apply(owner,stimulus!);
+                        foreach(var stimulus in actions.Where(a=>WInt(a,"tick",-1)==tick && WReactionAction(a!["kind"]!.GetValue<string>()))) {
+                            bool previousDedServ=Terraria.Main.dedServ;
+                            try {
+                                if(clientPlayer)Terraria.Main.dedServ=false;
+                                events.Add(new JsonObject{["kind"]="native_phase",["phase"]="reaction stimulus",["dedServ"]=Terraria.Main.dedServ,["netMode"]=Terraria.Main.netMode});
+                                reactionScene!.Apply(owner,stimulus!);
+                            } finally {Terraria.Main.dedServ=previousDedServ;}
+                        }
                         if(nativeDummy)Terraria.Main.dedServ=false;
                         if(clientPlayer) events.Add(new JsonObject{["kind"]="native_phase",["phase"]="NPC.UpdateNPC",["dedServ"]=Terraria.Main.dedServ,["netMode"]=Terraria.Main.netMode,["active"]=dummy.active});
                         if(dummy.active) dummy.UpdateNPC(dummy.whoAmI);
-                        for(int hostileSlot=2;hostileSlot<10;hostileSlot++)if(Terraria.Main.npc[hostileSlot].active){Terraria.Main.npc[hostileSlot].UpdateNPC(hostileSlot);WRequireFinite(Terraria.Main.npc[hostileSlot],"hostile",hostileSlot,"after NPC.UpdateNPC",events,report);}
+                        zombie?.UpdateFrame();
+                        WUpdateControlledHostiles(events,report);
                         WRequireFinite(dummy,"npc",dummy.whoAmI,"after NPC.UpdateNPC",events,report);
                         if(hybridClient) Terraria.Main.dedServ=false;
                         try {
@@ -489,13 +544,13 @@ internal static partial class EngineRuntimeChecks
                                 if (Terraria.Main.projectile[slot].active) { Terraria.Main.projectile[slot].Update(slot); WRequireFinite(Terraria.Main.projectile[slot],"projectile",WProjectileId(Terraria.Main.projectile[slot]),"after Projectile.Update",events,report); }
                             if(clientPlayer) events.Add(new JsonObject{["kind"]="native_phase",["phase"]="RuntimeDelayedActionScheduler.Update",["dedServ"]=Terraria.Main.dedServ,["netMode"]=Terraria.Main.netMode});
                             RuntimeDelayedActionScheduler.Update();
-                            if(renderClient){events.Add(new JsonObject{["kind"]="native_phase",["phase"]="Dust.UpdateDust / Lighting.LightTiles",["dedServ"]=Terraria.Main.dedServ,["netMode"]=Terraria.Main.netMode});Dust.UpdateDust();
-                            nativeRenderer!.StepLighting();}
+                            if(renderClient){events.Add(new JsonObject{["kind"]="native_phase",["phase"]="Dust.UpdateDust",["dedServ"]=Terraria.Main.dedServ,["netMode"]=Terraria.Main.netMode});Dust.UpdateDust();}
                             if(trainingDummy is not null){events.Add(new JsonObject{["kind"]="native_phase",["phase"]="TileEntity.UpdateStart / TETrainingDummy.Update / TileEntity.UpdateEnd",["dedServ"]=Terraria.Main.dedServ,["netMode"]=Terraria.Main.netMode});trainingDummy.UpdateNativeTileEntity();if(!ReferenceEquals(dummy,trainingDummy.Npc))throw new NotSupportedException("Native target reactivation changed NPC identity; dynamic respawn scene not yet admitted");}
                             nativeRenderer?.Step(tick);
                         } finally {if(hybridClient) Terraria.Main.dedServ=true;}
                         for(int hostileSlot=2;hostileSlot<10;hostileSlot++)if(Terraria.Main.npc[hostileSlot].type==NPCID.Zombie)WRequireFinite(Terraria.Main.npc[hostileSlot],"hostile",hostileSlot,"after projectile/delayed/render updates",events,report);
                         worldScene?.Update();
+                        fishingScene?.Observe(tick,tick==ticks-1);
                         frames.Add(WSnapshot(tick, owner, dummy, events)); events = new JsonArray();
                         report["timeline"]!["completedTicks"]=tick+1;
                     }
@@ -531,7 +586,7 @@ internal static partial class EngineRuntimeChecks
             JsonObject? chargeStatus=generated is not null && generated.TryCaptureChargeStatus(owner,out var charge)?new JsonObject{["chargeUpdates"]=charge.ChargeUpdates,["durationUpdates"]=charge.DurationUpdates,["progress"]=charge.Progress,["ready"]=charge.Ready,["source"]= "GeneratedProjectile.TryCaptureChargeStatus"}:null;
             projectiles.Add(new JsonObject { ["chargeStatus"]=chargeStatus,["id"]=WProjectileId(p),["nativeIdentity"]=p.identity,["slot"]=p.whoAmI,["entityId"]=entityId,["childDepth"]=WProjectileDepth(p),["x"]=WFinite(p.position.X),["y"]=WFinite(p.position.Y),["width"]=p.width,["height"]=p.height,["vx"]=WFinite(p.velocity.X),["vy"]=WFinite(p.velocity.Y),["active"]=p.active,["timeLeft"]=p.timeLeft,["rotation"]=WFinite(p.rotation),["nonFinite"]=!WEntityFinite(p),["damage"]=p.damage,["usesLocalNPCImmunity"]=p.usesLocalNPCImmunity,["localNpcImmunityTarget"]=p.localNPCImmunity[dummy.whoAmI], ["nativeType"]=p.type, ["nativeImmunityOwner0"]=dummy.immune[0], ["released"]=generated is null?(bool?)null:WState<bool>(generated,"_released"), ["returning"]=generated is null?(bool?)null:WState<bool>(generated,"_returning"), ["chargeTicks"]=generated is null?(int?)null:WState<int>(generated,"_chargeTicks"), ["age"]=generated is null?(int?)null:WState<int>(generated,"_age") });
         }
-        return new JsonObject { ["world"]=WActiveWorld?.Snapshot(),["tick"]=tick,["substep"]=-1,["hostiles"]=WHostileSnapshots(),["nativeActiveDust"]=Terraria.Main.dust.Count(d=>d!=null && d.active),["player"]=new JsonObject { ["x"]=WFinite(owner.position.X),["y"]=WFinite(owner.position.Y),["vx"]=WFinite(owner.velocity.X),["vy"]=WFinite(owner.velocity.Y),["nonFinite"]=!WEntityFinite(owner),["width"]=owner.width,["height"]=owner.height,["life"]=owner.statLife,["meleeNpcHitCooldownTarget"]=owner.meleeNPCHitCooldown[dummy.whoAmI],["dead"]=owner.dead,["mana"]=owner.statMana,["itemPose"]=new JsonObject{["x"]=WFinite(owner.itemLocation.X),["y"]=WFinite(owner.itemLocation.Y),["rotation"]=WFinite(owner.itemRotation),["direction"]=owner.direction,["useStyle"]=owner.HeldItem.useStyle,["itemAnimation"]=owner.itemAnimation,["itemTime"]=owner.itemTime},["maxMana"]=owner.statManaMax2,["manaCost"]=owner.manaCost,["maxLife"]=owner.statLifeMax2,["defense"]=(int)owner.statDefense,["genericCrit"]=owner.GetCritChance(DamageClass.Generic),["inventory"]=WInventory(owner.inventory,false),["armor"]=WInventory(owner.armor,true),["generatedBuffTicks"]=WBuffTicks(owner),["generatedItemExhaustion"]=WExhaustion(owner),["itemProjection"]=WItemProjection(owner.HeldItem),["lifeRegen"]=owner.lifeRegen,["mobilityCooldownTicks"]=owner.GetModPlayer<InfiniCrafterLocal.Common.Players.InfiniCraftPlayer>().GeneratedMobilityCooldownTicks,["jumpSpeedBoost"]=owner.jumpSpeedBoost,["moveSpeed"]=owner.moveSpeed,["pickSpeed"]=owner.pickSpeed,["nativeBuffs"]=nativeBuffs,["channel"]=owner.channel,["itemAnimation"]=owner.itemAnimation,["itemTime"]=owner.itemTime,["controlUseItem"]=owner.controlUseItem,["movementControls"]=WControls(owner),["selectedSlot"]=owner.selectedItem,["aimX"]=Terraria.Main.MouseWorld.X,["aimY"]=Terraria.Main.MouseWorld.Y },["dummy"]=new JsonObject { ["slot"]=dummy.whoAmI,["nativeType"]=dummy.type,["aiStyle"]=dummy.aiStyle,["immortal"]=dummy.immortal,["dontTakeDamage"]=dummy.dontTakeDamage,["frameX"]=dummy.frame.X,["frameY"]=dummy.frame.Y,["frameWidth"]=dummy.frame.Width,["frameHeight"]=dummy.frame.Height,["localAI"]=new JsonArray(dummy.localAI.Select(x=>(JsonNode?)JsonValue.Create(x)).ToArray()),["x"]=WFinite(dummy.position.X),["y"]=WFinite(dummy.position.Y),["vx"]=WFinite(dummy.velocity.X),["vy"]=WFinite(dummy.velocity.Y),["nonFinite"]=!WEntityFinite(dummy),["width"]=dummy.width,["height"]=dummy.height,["life"]=dummy.life,["active"]=dummy.active,["targetState"]=WTargetState(dummy),["noTileCollide"]=dummy.noTileCollide,["ownerImmunity"]=dummy.immune[owner.whoAmI] },["projectiles"]=projectiles,["events"]=events };
+        return new JsonObject { ["world"]=WActiveWorld?.Snapshot(),["nativeWorldWidthTiles"]=Terraria.Main.maxTilesX,["nativeTilemapWidth"]=Terraria.Main.tile.Width,["tick"]=tick,["substep"]=-1,["hostiles"]=WHostileSnapshots(),["nativeActiveDust"]=Terraria.Main.dust.Count(d=>d!=null && d.active),["player"]=new JsonObject { ["x"]=WFinite(owner.position.X),["y"]=WFinite(owner.position.Y),["vx"]=WFinite(owner.velocity.X),["vy"]=WFinite(owner.velocity.Y),["nonFinite"]=!WEntityFinite(owner),["width"]=owner.width,["height"]=owner.height,["life"]=owner.statLife,["meleeNpcHitCooldownTarget"]=owner.meleeNPCHitCooldown[dummy.whoAmI],["dead"]=owner.dead,["mana"]=owner.statMana,["itemPose"]=new JsonObject{["x"]=WFinite(owner.itemLocation.X),["y"]=WFinite(owner.itemLocation.Y),["rotation"]=WFinite(owner.itemRotation),["direction"]=owner.direction,["useStyle"]=owner.HeldItem.useStyle,["itemAnimation"]=owner.itemAnimation,["itemTime"]=owner.itemTime},["maxMana"]=owner.statManaMax2,["manaCost"]=owner.manaCost,["maxLife"]=owner.statLifeMax2,["defense"]=(int)owner.statDefense,["genericCrit"]=owner.GetCritChance(DamageClass.Generic),["inventory"]=WInventory(owner.inventory,false),["armor"]=WInventory(owner.armor,true),["generatedBuffTicks"]=WBuffTicks(owner),["generatedItemExhaustion"]=WExhaustion(owner),["itemProjection"]=WItemProjection(owner.HeldItem),["lifeRegen"]=owner.lifeRegen,["mobilityCooldownTicks"]=owner.GetModPlayer<InfiniCrafterLocal.Common.Players.InfiniCraftPlayer>().GeneratedMobilityCooldownTicks,["jumpSpeedBoost"]=owner.jumpSpeedBoost,["moveSpeed"]=owner.moveSpeed,["pickSpeed"]=owner.pickSpeed,["movementStats"]=new JsonObject{["accRunSpeed"]=owner.accRunSpeed,["maxRunSpeed"]=owner.maxRunSpeed,["runAcceleration"]=owner.runAcceleration,["runSlowdown"]=owner.runSlowdown},["nativeBuffs"]=nativeBuffs,["nativeBuffFlags"]=new JsonObject{["gravitation"]=owner.gravControl,["sonar"]=owner.sonarPotion,["gravityDirection"]=owner.gravDir},["channel"]=owner.channel,["itemAnimation"]=owner.itemAnimation,["itemTime"]=owner.itemTime,["controlUseItem"]=owner.controlUseItem,["movementControls"]=WControls(owner),["selectedSlot"]=owner.selectedItem,["aimX"]=Terraria.Main.MouseWorld.X,["aimY"]=Terraria.Main.MouseWorld.Y },["dummy"]=new JsonObject { ["slot"]=dummy.whoAmI,["nativeType"]=dummy.type,["aiStyle"]=dummy.aiStyle,["immortal"]=dummy.immortal,["dontTakeDamage"]=dummy.dontTakeDamage,["frameX"]=dummy.frame.X,["frameY"]=dummy.frame.Y,["frameWidth"]=dummy.frame.Width,["frameHeight"]=dummy.frame.Height,["localAI"]=new JsonArray(dummy.localAI.Select(x=>(JsonNode?)JsonValue.Create(x)).ToArray()),["x"]=WFinite(dummy.position.X),["y"]=WFinite(dummy.position.Y),["vx"]=WFinite(dummy.velocity.X),["vy"]=WFinite(dummy.velocity.Y),["nonFinite"]=!WEntityFinite(dummy),["width"]=dummy.width,["height"]=dummy.height,["life"]=dummy.life,["active"]=dummy.active,["targetState"]=WTargetState(dummy),["noTileCollide"]=dummy.noTileCollide,["ownerImmunity"]=dummy.immune[owner.whoAmI] },["projectiles"]=projectiles,["events"]=events };
     }
     private static JsonObject WBeforeKill(Projectile p,Player owner){
         var result=new JsonObject{["centerX"]=WFinite(p.Center.X),["centerY"]=WFinite(p.Center.Y),["ownerCenterX"]=WFinite(owner.Center.X),["ownerCenterY"]=WFinite(owner.Center.Y),["ownerMountedX"]=WFinite(owner.MountedCenter.X),["ownerMountedY"]=WFinite(owner.MountedCenter.Y),["damage"]=p.damage,["causeInferred"]=false};

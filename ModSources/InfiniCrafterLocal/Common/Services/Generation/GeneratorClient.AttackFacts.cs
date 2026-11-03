@@ -34,14 +34,16 @@ public sealed partial class GeneratorClient
 
     private static JsonObject? VerifiedNativeAttackReference(int type, bool vanilla, string method, string? certificate)
     {
-        if (!vanilla || certificate is null
-            || !NativeAttackFactsCatalog.Sources.TryGetValue(method + ":" + certificate, out var catalog)
+        string? audited = AuditedNativeCertificate(certificate, "attack");
+        if (!vanilla || certificate is null || audited is null
+            || !NativeAttackFactsCatalog.Sources.TryGetValue(method + ":" + audited, out var catalog)
             || !catalog.TryGetValue(type, out var json))
             return null;
         var facts = (JsonObject)JsonNode.Parse(json)!;
+        facts["sourceVerification"] = NativeMethodProvenance(certificate, audited);
         facts["source"] = "verified_native_" + method + "_reference";
-        facts["sourceMethodSha256"] = certificate.Split(':')[0];
-        facts["sourceModuleVersionId"] = certificate.Split(':')[1];
+        facts["sourceMethodSha256"] = audited.Split(':')[0];
+        facts["sourceModuleVersionId"] = audited.Split(':')[1];
         if (method == "Player.ItemCheck_Shoot")
             facts["scope"] = "Explicit spawn calls inside this native item-type branch, on terminating paths once that branch is reached. External use/player/ammo/mod gates and other hooks are unknown; not cadence, guaranteed hits, total attack count or inherited execution. damageMultiplierAtSpawn multiplies the current native shot-damage local after ammo/player/mod and any branch-local changes, not item base damage. Native contact damage remains separate when noMelee is false. Author chooses generated behavior explicitly.";
         return facts;

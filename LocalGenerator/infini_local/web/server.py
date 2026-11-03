@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import os
+import re
 from http.server import ThreadingHTTPServer
 from typing import Any
 
@@ -22,27 +22,14 @@ from infini_local.core.config_bootstrap import (
 from infini_local.core.contract_versions import TMODLOADER_GREY_ZONE_NOTES
 from infini_local.core.llm_config import (
     ALLOW_DETERMINISTIC_DEV_FALLBACK,
-    LLM_MAX_TOKENS,
-    LLM_PROVIDER,
-    LLM_REASONING_EXCLUDE,
-    LLM_REASONING_MAX_TOKENS,
-    LLM_REASONING_MODE,
-    LLM_LOCAL_REASONING_PROMPT,
-    LLM_RESPONSE_FORMAT_MODE,
+    LANGUAGE,
     LMSTUDIO_MODEL,
-    LMSTUDIO_URL,
-    OPENAI_COMPAT_API_KEY,
-    OPENAI_COMPAT_BASE_URL,
     OPENAI_COMPAT_MODEL,
-    OPENROUTER_API_KEY,
-    OPENROUTER_APP_TITLE,
-    OPENROUTER_BASE_URL,
-    OPENROUTER_HTTP_REFERER,
     OPENROUTER_MODEL,
     USE_LLM,
 )
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
-from infini_local.core.vfx_manifest_config import (
+from infini_local.core.vfx.config import (
     VFX_EMERGENCY_MAX_DRAW_CALLS,
     VFX_EMERGENCY_MAX_PARTICLES_PER_TICK,
     VFX_EMERGENCY_MAX_PARTICLES_TOTAL,
@@ -53,22 +40,20 @@ from infini_local.pipelines.combine_pipeline import (
     combine,
     combine_cache_lookup,
 )
-from infini_local.pipelines.image_backend_pipeline import (
+from infini_local.pipelines.images.backends import (
     ensure_sdcpp_server,
     resolve_comfyui_workflow_path,
     sdcpp_debug_snapshot,
 )
-from infini_local.pipelines.llm_profiles import active_llm_provider
-from infini_local.pipelines.llm_transport import (
+from infini_local.pipelines.transport.profiles import active_llm_provider
+from infini_local.pipelines.transport.client import (
     llm_auth_snapshot,
     resolve_llm_model,
 )
-from infini_local.pipelines.sprite_postprocess import (
-    alpha_stats,
-)
-from infini_local.pipelines.visual_delivery_gate import VisualDeliveryBlocked
-from infini_local.pipelines.visual_prompt_contracts import asset_negative_prompt, normalize_asset_prompt
-from infini_local.pipelines.visual_sprite_generation import generate_visual_asset, maybe_generate_sprite
+from infini_local.pipelines.images.validation import alpha_stats
+from infini_local.pipelines.visual.delivery import VisualDeliveryBlocked
+from infini_local.pipelines.images.prompts import asset_negative_prompt, normalize_asset_prompt
+from infini_local.pipelines.images.stage import generate_visual_asset, maybe_generate_sprite
 from infini_local.services import (
     asset_sync_service,
     combine_endpoint,
@@ -115,9 +100,9 @@ from infini_local.web.vfx_debug_routes import (
 )
 from infini_local.web.server_handler import build_handler
 from infini_local.pipelines import generation_debug
-from infini_local.pipelines import pipeline_visual_config as visual_config
+from infini_local.core.images import config as visual_config
 from infini_local.pipelines.final_normalize import final_normalize
-from infini_local.pipelines.pipeline_visual_config import cleanup_sdcpp_server_process
+from infini_local.core.images.config import cleanup_sdcpp_server_process
 
 
 # =============================================================================
@@ -143,7 +128,7 @@ def _multiplayer_connect_info() -> dict[str, Any]:
 
 
 
-# Visual/image/sd.cpp config and lifecycle are owned by pipelines/pipeline_visual_config.py.
+# Visual/image/sd.cpp config and lifecycle are owned by core/images/config.py.
 
 
 
@@ -290,6 +275,7 @@ def _health_payload() -> dict[str, Any]:
     vfx_llm_director_configured = bool(VFX_LLM_DIRECTOR_ENABLED)
     vfx_llm_director_active = bool(USE_LLM and VFX_LLM_DIRECTOR_ENABLED)
     auth = llm_auth_snapshot()
+    launch_id = env_str("INFINI_STUDIO_LAUNCH_ID", "", strip=False)
     return {
         "ok": True,
         "version": APP_VERSION,
@@ -299,6 +285,7 @@ def _health_payload() -> dict[str, Any]:
         "effectiveConfig": {
             "cacheDir": str(CACHE_DIR.resolve()),
             "worldRecipesDir": str(WORLD_RECIPES_DIR.resolve()),
+            "language": LANGUAGE,
             "imageBackend": visual_config.IMAGE_BACKEND,
             "llmProvider": str(auth.get("provider") or ""),
             "llmModel": str(auth.get("model") or ""),
@@ -308,6 +295,8 @@ def _health_payload() -> dict[str, Any]:
         "serverRoot": str(ROOT),
         "configPath": str(CONFIG_PATH),
         "pid": os.getpid(),
+        # Readiness correlation only, not authorization or persisted config.
+        "studioLaunchId": launch_id if re.fullmatch(r"[0-9a-f]{32}", launch_id) else None,
         "useLLM": USE_LLM,
         "llmProvider": active_llm_provider(),
         "llmAuth": auth,

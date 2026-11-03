@@ -5,17 +5,15 @@ invent authored fields, replace validators, or authenticate synthetic art.
 """
 from __future__ import annotations
 
-from collections import Counter
-from copy import deepcopy
 import json
+from collections import Counter
 from pathlib import Path
 
 import pytest
-
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.pipelines import visual_delivery_gate
+from infini_local.pipelines.visual import delivery as visual_delivery_gate
 from infini_local.services import asset_sync_service
 
 
@@ -37,7 +35,7 @@ class RepairTransaction:
         self.scope = build_runtime_repair_scope(current, errors) if scope is None else scope
 
     def apply(self, patch, *, accepted=True):
-        from infini_local.core.runtime_authoring.repair_scope import filter_repair_patch_scope
+        from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
 
         patch_before = frozen_json(patch)
         filtered, audit = filter_repair_patch_scope(self.current, patch, self.scope)
@@ -59,7 +57,7 @@ def isolated_serving_roots(monkeypatch, tmp_path):
 
 @pytest.fixture
 def png_assessments(monkeypatch):
-    from infini_local.pipelines import sprite_postprocess
+    import infini_local.pipelines.images.validation as sprite_postprocess_validation
 
     calls = Counter()
     real = asset_sync_service.is_complete_png_file
@@ -69,7 +67,7 @@ def png_assessments(monkeypatch):
         return real(path)
 
     monkeypatch.setattr(asset_sync_service, "is_complete_png_file", counted)
-    monkeypatch.setattr(sprite_postprocess, "is_complete_png_file", counted)
+    monkeypatch.setattr(sprite_postprocess_validation, "is_complete_png_file", counted)
     return calls
 
 

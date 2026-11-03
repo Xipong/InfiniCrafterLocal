@@ -49,6 +49,7 @@ internal sealed partial class WNativeVfxRenderer
         ["pointLightRgb"] = new JsonArray(1, 1, 1),
         ["fillSpacingTiles"] = lightingMode == "viewport_fill" ? JsonValue.Create(4) : null,
         ["warmupNativePhases"] = 4, ["nativePhasesPerTick"] = 1,
+        ["perTickOrder"] = "Projectile.Update / Dust.UpdateDust / PostUpdateEverything / Lighting.LightTiles / native draw",
         ["drawAndNoDrawIdenticalUpdate"] = true, ["nativeDustUpdatePerTick"] = true
     };
 

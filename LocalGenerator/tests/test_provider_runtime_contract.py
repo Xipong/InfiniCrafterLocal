@@ -140,19 +140,19 @@ def test_sdcpp_readiness_identifies_the_actual_image_service(monkeypatch, path, 
 @pytest.mark.parametrize("probe,overrides,code,expected", [
     pytest.param("bounded-env", {"INFINI_SDCPP_WIDTH": "-5", "INFINI_SDCPP_HEIGHT": "99999",
         "INFINI_SDCPP_STEPS": "0", "INFINI_SDCPP_CFG": "-2", "INFINI_SDCPP_SERVER_PORT": "70000"},
-        "from infini_local.pipelines import pipeline_visual_config as v, image_backend_pipeline as i; print(json.dumps([v.SDCPP_WIDTH,v.SDCPP_HEIGHT,v.SDCPP_STEPS,v.SDCPP_CFG,v.SDCPP_SERVER_PORT,i.SDCPP_WIDTH,i.SDCPP_HEIGHT]))",
+        "from infini_local.core.images import config as v; from infini_local.pipelines.images import backends as i; print(json.dumps([v.SDCPP_WIDTH,v.SDCPP_HEIGHT,v.SDCPP_STEPS,v.SDCPP_CFG,v.SDCPP_SERVER_PORT,i.SDCPP_WIDTH,i.SDCPP_HEIGHT]))",
         [64, 2048, 1, 0.0, 65535, 64, 2048], id="bounded-env-shared-backend"),
     pytest.param("lora-file", {
         "INFINI_SDCPP_LORA_FILE": r"D:\Art\loras\terraria_items.safetensors",
         "INFINI_SDCPP_LORA_DIR": r"C:\stale\wrong_loras", "INFINI_SDCPP_LORA_PROMPT_TAGS": "",
         "INFINI_SDCPP_LORA_WEIGHT": "0.55", "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
         "INFINI_SDCPP_SERVER_EXTRA_ARGS": ""},
-        "from infini_local.pipelines import pipeline_visual_config as v, image_backend_pipeline as i; "
+        "from infini_local.core.images import config as v; from infini_local.pipelines.images import backends as i; "
         "cmd,shell=i.build_sdcpp_server_command(); print(json.dumps([shell,v.SDCPP_LORA_DIR,"
         "cmd[cmd.index('--lora-model-dir')+1],v.SDCPP_LORA_PROMPT_TAGS]))",
         [False, r"D:\Art\loras", r"D:\Art\loras", "<lora:terraria_items:0.55>"], id="selected-lora-file-overrides-stale-directory"),
     pytest.param("signal-import", {},
-        "import signal; signals=[s for s in (getattr(signal,'SIGINT',None),getattr(signal,'SIGTERM',None)) if s is not None]; before=[signal.getsignal(s) for s in signals]; import infini_local.pipelines.pipeline_visual_config; after=[signal.getsignal(s) for s in signals]; print(json.dumps([a is b for a,b in zip(before,after)]))",
+        "import signal; signals=[s for s in (getattr(signal,'SIGINT',None),getattr(signal,'SIGTERM',None)) if s is not None]; before=[signal.getsignal(s) for s in signals]; import infini_local.core.images.config; after=[signal.getsignal(s) for s in signals]; print(json.dumps([a is b for a,b in zip(before,after)]))",
         [True, True], id="import-does-not-own-process-signals"),
 ])
 def test_visual_configuration_is_bounded_and_import_inert(probe, overrides, code, expected):
@@ -162,6 +162,22 @@ def test_visual_configuration_is_bounded_and_import_inert(probe, overrides, code
     result = subprocess.run([sys.executable, "-c", "import json; " + code], env=env, text=True,
                             capture_output=True, check=True, timeout=30)
     assert json.loads(result.stdout.strip().splitlines()[-1]) == expected
+
+
+@pytest.mark.parametrize("language", ["ru", "en", "unsupported"])
+def test_server_startup_reads_and_validates_selected_language(language):
+    env = {**os.environ, "INFINI_LANGUAGE": language, "INFINI_SKIP_CONFIG_FILE": "1"}
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
+    result = subprocess.run(
+        [sys.executable, "-c", "import json; from infini_local.web import server; print(json.dumps(server.LANGUAGE))"],
+        env=env, text=True, capture_output=True, timeout=30,
+    )
+    if language == "unsupported":
+        assert result.returncode != 0
+        assert "INFINI_LANGUAGE" in result.stderr
+    else:
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout.strip().splitlines()[-1]) == language
 
 
 @pytest.fixture
@@ -279,3 +295,37 @@ def test_failure_record_keeps_each_exception_snapshot_isolated(monkeypatch: pyte
 
     snapshots[0]["payload"]["request"] = "mutated"
     assert getattr(errors[0], "_infini_failure_snapshot")["payload"]["request"] == 0
+
+
+@pytest.mark.parametrize('exit_confirmed', [False, True])
+@pytest.mark.parametrize('reason', ['cleanup', 'startup_exited', 'startup_timeout'])
+def test_sdcpp_cleanup_retains_unconfirmed_process(monkeypatch, exit_confirmed, reason):
+    from types import SimpleNamespace
+    calls = []
+    code = [None]
+    def wait(timeout):
+        calls.append(timeout)
+        if exit_confirmed:
+            code[0] = 0
+            return 0
+        raise subprocess.TimeoutExpired('owned-test-process', timeout)
+    proc = SimpleNamespace(poll=lambda: code[0], wait=wait)
+    state = sdcpp_service.SdcppServerState(process=proc)
+    state.lifecycle = 'ready'
+    monkeypatch.setattr(sdcpp_service, '_terminate_process_tree', lambda *_a, **_k: None)
+    monkeypatch.setattr(sdcpp_service, '_close_process_log_handle', lambda _p: calls.append('closed'))
+    sdcpp_service.cleanup_server_process(state, lambda *_args: None, reason)
+    assert state.process is (None if exit_confirmed else proc)
+    assert state.lifecycle == (('stopped' if reason == 'cleanup' else 'failed') if exit_confirmed else 'unknown')
+    assert calls == ([5, 'closed'] if exit_confirmed else [5, 3])
+
+
+def test_sdcpp_ready_is_owned_or_external_without_guessing(service_options):
+    from types import SimpleNamespace
+    state = service_options['state']
+    options = {**service_options, 'server_is_alive': lambda: True}
+    assert sdcpp_service.ensure_server(**options)
+    assert state.lifecycle == 'external'
+    state.process = SimpleNamespace(poll=lambda: None)
+    assert sdcpp_service.ensure_server(**options)
+    assert state.lifecycle == 'ready'

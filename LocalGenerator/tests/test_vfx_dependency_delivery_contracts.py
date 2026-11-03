@@ -6,21 +6,26 @@ import json
 import os
 from pathlib import Path
 import pytest
-from infini_local.core import vfx_manifest as vfx
+import infini_local.core.vfx.contract as vfx_contract
+import infini_local.core.vfx.projection as vfx_projection
+import infini_local.core.vfx.validation as vfx_validation
+import infini_local.pipelines.vfx.stage as vfx_stage
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.pipelines import vfx_generation_pipeline as stage
-from infini_local.pipelines import visual_delivery_gate, visual_sprite_generation
-from infini_local.pipelines.visual_generation_pipeline import _apply_kit, _validate_kit
+from infini_local.pipelines.vfx import request as stage
+from infini_local.pipelines.visual import delivery as visual_delivery_gate
+from infini_local.pipelines.images import stage as visual_sprite_generation
+from infini_local.pipelines.visual.stage import _apply_kit
+from infini_local.pipelines.visual.contract import _validate_kit, VISUAL_KIT_SCHEMA
 from infini_local.services import asset_sync_service
 from infini_local.storage import world_storage
 from tests.test_repair_vfx_contract import _offline_transport
 from tests.vfx_image_fixtures import _data, _request, _slot, _existing_texture_data, offline_backend
 
 BAD_SELECTORS = [
-    ("spriteStampTrail", "runtime_geometry", "entity"),
-    ("spriteStampTrail", "no_asset", "entity"),
-    ("spriteStampTrail", "no_asset", "projectile"),
-    ("spriteStampTrail", "reuse_item_icon", "field"),
+    ("historyTrail", "runtime_geometry", "entity"),
+    ("historyTrail", "no_asset", "entity"),
+    ("historyTrail", "no_asset", "projectile"),
+    ("historyTrail", "reuse_item_icon", "field"),
 ]
 
 def visual_data(mode: str) -> dict:
@@ -30,9 +35,12 @@ def visual_data(mode: str) -> dict:
             "preferredCanvasSize": 32, "renderSizePx": 40, "forwardAngleDegrees": 45, "inventoryScale": 1.0, "worldScale": 1.0}
     entity = {"entityId": "orb", "assetMode": mode,
               "visualProjectRef": "item" if mode == "reuse_item_icon" else "none", "scale": 1.0}
+    if mode == "runtime_geometry":
+        from tests.visual_geometry_fixtures import segment_geometry
+        entity["geometry"] = segment_geometry()
     if mode == "baked_sprite":
         entity.update(visualProjectRef="entity", prompt="one exact separate amber orb", silhouette="orb", visualIdentity="amber orb", preferredCanvasSize=64, renderSizePx=24, forwardAngleDegrees=0)
-    kit = {"schema": "infini.visual-kit.runtime-entities.v2", "item": item,
+    kit = {"schema": VISUAL_KIT_SCHEMA, "item": item,
            "entities": [{"entityId": "item", "assetMode": "baked_sprite", "visualProjectRef": "item",
                          "scale": 1.0}, entity],
            "animationPlan": "Keep accepted movement, do not add gameplay."}
@@ -42,10 +50,21 @@ def visual_data(mode: str) -> dict:
     return _apply_kit(data, accepted)
 
 def authored_vfx(renderer: str, texture: str = "entity") -> dict:
+    if renderer == "historyTrail":
+        from tests.vfx_material_fixtures import _history
+        raw = _history({"runtimeProgram": {"itemEntityId": "orb"}}, texture)
+        raw["slots"][0]["id"] = "selected"
+        return raw
     slot = _slot("selected", "")
+    if renderer in {"shape", "nativeDust", "nativeLight"}:
+        from tests.vfx_material_fixtures import _shape, _native
+        data = {"runtimeProgram": {"itemEntityId": "item"}}
+        raw = _shape(data) if renderer == "shape" else _native(data, renderer)
+        raw["slots"][0].update(id="selected", entityId="orb", event="periodic", repeatEvery=4)
+        return raw
     if renderer in {"spriteElement", "texturedPath"}:
         slot = _slot("selected", "", renderer=renderer)
-        slot["element" if renderer == "spriteElement" else "path"]["texture"] = {"source": texture, "assetId": ""}
+        slot["element" if renderer == "spriteElement" else "path"]["texture"] = {"source": texture, "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
     else:
         from tests.vfx_material_fixtures import _legacy
         slot = _legacy({"runtimeProgram": {"itemEntityId": "item"}})["slots"][0]
@@ -66,7 +85,7 @@ def authored_vfx(renderer: str, texture: str = "entity") -> dict:
         slot.pop("textureRole", None)
     if renderer in {"lightCue", "impactSprite"}:  # explicit projectile periodic repeatEvery=4
         slot.pop("density", None)
-    return {"schema": vfx.VFX_DIRECTOR_SCHEMA,
+    return {"schema": vfx_contract.VFX_DIRECTOR_SCHEMA,
              "slots": [slot]}
 
 def roundtrip(data, tmp_path):
@@ -82,16 +101,16 @@ def roundtrip(data, tmp_path):
         case = tmp_path.parent.name
         (target / (case + ".json")).write_text(json.dumps({
             "case": case, "data": world_storage.sanitize_recipe_for_delivery(cached),
-            "dependencies": vfx.vfx_png_dependencies(data), "cacheReadAccepted": True,
+            "dependencies": vfx_validation.vfx_png_dependencies(data), "cacheReadAccepted": True,
         }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return cached
 
 def test_item_body_entity_texture_requires_its_actual_projected_png(offline_backend, monkeypatch, tmp_path):
     data = visual_data("no_asset")
-    raw = authored_vfx("spriteStampTrail", "entity")
+    raw = authored_vfx("spriteElement", "entity")
     raw["slots"][0]["entityId"] = "item"
     sent = _offline_transport(monkeypatch, "item_body_png", [raw])
-    final = vfx.attach_vfx_manifest(data, "item_body_dependency", llm_director=stage.call_llm_vfx_director)
+    final = vfx_stage.attach_vfx_manifest(data, "item_body_dependency", llm_director=stage.call_llm_vfx_director)
     final = visual_sprite_generation.maybe_generate_visual_assets(final)
     assert len(sent) == 1
     assert visual_delivery_gate.visual_delivery_report(final, check_backend_config=False)["ok"]
@@ -115,24 +134,24 @@ def test_item_body_entity_texture_requires_its_actual_projected_png(offline_back
 @pytest.mark.parametrize("selector", [None, ["entity"], "Entity"])
 def test_persisted_png_selector_rejects_untyped_or_normalized_tokens(selector):
     data = visual_data("reuse_item_icon")
-    raw = authored_vfx("spriteStampTrail")
-    raw["slots"][0]["textureRole"] = selector
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "invalid_saved_selector")
+    raw = authored_vfx("historyTrail")
+    raw["slots"][0]["trail"]["texture"]["source"] = selector
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "invalid_saved_selector")
     before = copy.deepcopy(data)
-    report = vfx.validate_vfx_manifest_wire(data)
+    report = vfx_validation.validate_vfx_manifest_wire(data)
     assert not report["ok"]
-    assert {error["path"] for error in report["errors"]} == {"$.vfxManifest.slots[0].textureRole"}
+    assert {error["path"] for error in report["errors"]} == {"$.vfxManifest.slots[0].trail.texture.source"}
     assert data == before
 
 @pytest.mark.parametrize("renderer,mode,selector,kind,role,jobs", [
-    ("spriteStampTrail", "baked_sprite", "entity", "free_projectile", "entity:orb", 2),
-    ("spriteStampTrail", "reuse_item_icon", "entity", "free_projectile", "item", 1),
-    ("spriteStampTrail", "baked_sprite", "entity", "field", "entity:orb", 2),
+    ("historyTrail", "baked_sprite", "entity", "free_projectile", "entity:orb", 2),
+    ("historyTrail", "reuse_item_icon", "entity", "free_projectile", "item", 1),
+    ("historyTrail", "baked_sprite", "entity", "field", "entity:orb", 2),
     ("spriteElement", "reuse_item_icon", "entity", "free_projectile", "item", 1),
     ("texturedPath", "baked_sprite", "entity", "free_projectile", "entity:orb", 2),
-    ("impactRing", "runtime_geometry", "entity", "free_projectile", "", 1),
-    ("childMotes", "no_asset", "impact", "free_projectile", "", 1),
-    ("lightCue", "no_asset", "none", "free_projectile", "", 1),
+    ("shape", "runtime_geometry", "entity", "free_projectile", "", 1),
+    ("nativeDust", "no_asset", "impact", "free_projectile", "", 1),
+    ("nativeLight", "no_asset", "none", "free_projectile", "", 1),
     ("soundCue", "runtime_geometry", "impact", "free_projectile", "", 1),
 ])
 def test_valid_png_or_untextured_renderer_retains_existing_producers(
@@ -145,11 +164,11 @@ def test_valid_png_or_untextured_renderer_retains_existing_producers(
         entity.update(kind=kind, visualRole="field")
         entity["visual"]["role"] = "field"
     before = copy.deepcopy(data)
-    projected = vfx.vfx_png_dependencies(data, raw, require_used=True)
+    projected = vfx_validation.vfx_png_dependencies(data, raw, require_used=True)
     assert projected["errors"] == [] and data == before
     assert [row["role"] for row in projected["dependencies"]] == ([role] if role else [])
     sent = _offline_transport(monkeypatch, "positive_" + renderer + "_" + selector, [raw])
-    final = vfx.attach_vfx_manifest(data, "valid_dependencies", llm_director=stage.call_llm_vfx_director)
+    final = vfx_stage.attach_vfx_manifest(data, "valid_dependencies", llm_director=stage.call_llm_vfx_director)
     assert len(sent) == 1 and final["debug"]["llmStageAccounting"]["vfxRepairCalls"] == 0
     assert final["debug"]["vfxDirectorRaw"] == raw and final["runtimeProgram"] == before["runtimeProgram"]
     final = visual_sprite_generation.maybe_generate_visual_assets(final)
@@ -196,9 +215,18 @@ def test_shared_png_producer_stays_one_owned_request_through_delivery(offline_ba
         for slot in raw["slots"]:
             slot["element" if slot["rendererKind"] == "spriteElement" else "path"]["texture"]["assetId"] = "shared"
     before = copy.deepcopy(data["runtimeProgram"])
-    sent = _offline_transport(monkeypatch, "shared_" + producer, [raw])
-    final = vfx.attach_vfx_manifest(data, "shared_dependency", llm_director=stage.call_llm_vfx_director)
-    assert len(sent) == 1
+    if producer == "impact":
+        # Persisted impact producer/consumers remain executable; never fresh-admit
+        # this retired authoring shorthand.
+        assert not vfx_validation.validate_vfx_director_output(raw, data)["ok"]
+        vfx_projection._hydrate_vfx_asset_prompts(data, raw)
+        data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "saved-shared-impact")
+        assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
+        final = data
+    else:
+        sent = _offline_transport(monkeypatch, "shared_" + producer, [raw])
+        final = vfx_stage.attach_vfx_manifest(data, "shared_dependency", llm_director=stage.call_llm_vfx_director)
+        assert len(sent) == 1
     final = visual_sprite_generation.maybe_generate_visual_assets(final)
     report = visual_delivery_gate.visual_delivery_report(final, check_backend_config=False)
     assert report["ok"], report["problems"]
@@ -240,11 +268,11 @@ def test_storage_cache_roundtrip_preserves_assets_refs_pixels_and_runtime(offlin
     assert originals[0].read_bytes() == stored
 
 def test_storage_requires_ready_nested_existing_texture_even_without_new_requests():
-    from infini_local.core.vfx_manifest import validate_vfx_manifest_wire
+    from infini_local.core.vfx.validation import validate_vfx_manifest_wire
     from infini_local.storage import world_storage
     data = _data([])
     slot = _slot("reuse", "")
-    slot["element"]["texture"] = {"source": "item", "assetId": ""}
+    slot["element"]["texture"] = {"source": "item", "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
     data["vfxManifest"]["slots"] = [slot]
     assert validate_vfx_manifest_wire(data)["ok"]
     assert world_storage.is_deliverable_recipe_payload(data) is False
@@ -253,7 +281,7 @@ def test_storage_requires_ready_nested_existing_texture_even_without_new_request
 @pytest.mark.parametrize("renderer", ["spriteElement", "texturedPath"])
 @pytest.mark.parametrize("damage", ["missing", "pending"])
 def test_nested_existing_texture_requires_ready_exact_producer(offline_backend, monkeypatch, source, renderer, damage):
-    from infini_local.core.vfx_manifest import validate_vfx_manifest_wire
+    from infini_local.core.vfx.validation import validate_vfx_manifest_wire
     from infini_local.storage import world_storage
     monkeypatch.setattr(visual_sprite_generation, "VISUAL_ASSET_MODE", "full")
     monkeypatch.setattr(visual_delivery_gate, "VISUAL_REQUIRE_ITEM_SPRITE", False)
@@ -277,7 +305,7 @@ def test_nested_existing_texture_requires_ready_exact_producer(offline_backend, 
 
 @pytest.mark.parametrize("status", ["pending", "failed", "fallback", "fallback_after_failed_generation", "prompt_only"])
 def test_ready_pixels_do_not_allow_pending_or_fallback_ingredient_admission(offline_backend, tmp_path, status):
-    from infini_local.core.vfx_manifest import validate_vfx_manifest_wire
+    from infini_local.core.vfx.validation import validate_vfx_manifest_wire
     from infini_local.pipelines.combine_pipeline import _cached_payload_report
     from infini_local.storage import world_storage
     out = visual_sprite_generation.maybe_generate_visual_assets(_data())
@@ -299,7 +327,7 @@ def test_ready_pixels_do_not_allow_pending_or_fallback_ingredient_admission(offl
 
 def test_network_stripped_caption_fixture_retains_ready_pngs_refs_and_metadata(offline_backend):
     """Python admission of an ABI transport fixture, not a C# ToNetworkJson claim."""
-    from infini_local.core.vfx_manifest import validate_vfx_manifest_wire
+    from infini_local.core.vfx.validation import validate_vfx_manifest_wire
     from infini_local.pipelines.combine_pipeline import _cached_payload_report
     from infini_local.storage import world_storage
     full = visual_sprite_generation.maybe_generate_visual_assets(_data([_request(), _request("band", layout="strip")]))

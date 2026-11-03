@@ -49,11 +49,19 @@ public sealed class VfxAssetSpec
 
 public sealed class VfxTextureSpec
 {
+    private VfxUvTransformSpec? _uv;
+    [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
+    public VfxUvTransformSpec? Uv { get=>_uv; set=>_uv=value??throw new InvalidDataException("texture.uv cannot be null"); }
     [JsonRequired] public string Source { get; set; } = "";
     [JsonRequired] public string AssetId { get; set; } = "";
     internal void Validate()
     {
-        VfxMaterialValidation.Choice(Source, "texture source", "item", "entity", "impact", "asset");
+        Uv?.Validate();
+        VfxMaterialValidation.Choice(Source, "texture source", "item", "entity", "impact", "asset", "library");
+        if (Source == "library") {
+            if (!InfiniCrafterLocal.Common.VFX.VfxLibraryTextures.TryGetPath(AssetId,out _)) throw new InvalidDataException("invalid native library texture id");
+            return;
+        }
         if (Source == "asset" ? !VfxMaterialValidation.AssetId(AssetId) : AssetId != "") throw new InvalidDataException("invalid VFX texture assetId");
     }
 }
@@ -89,6 +97,10 @@ public sealed class VfxColorProfileSpec
 
 public sealed class VfxSpriteElementSpec
 {
+    private VfxSpawnSpec? _spawn;
+    [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
+    public VfxSpawnSpec? Spawn {get=>_spawn;set=>_spawn=value??throw new InvalidDataException("spawn cannot be null");}
+
     [JsonRequired] public VfxTextureSpec Texture { get; set; } = null!;
     [JsonRequired] public string Attachment { get; set; } = "";
     [JsonRequired] public int Count { get; set; }
@@ -111,6 +123,7 @@ public sealed class VfxSpriteElementSpec
     [JsonRequired] public VfxColorProfileSpec ColorProfile { get; set; } = null!;
     internal void Validate(VfxSlotSpec slot)
     {
+        Spawn?.Validate();
         if (Texture is null || WidthProfile is null || HeightProfile is null || OpacityProfile is null || ColorProfile is null)
             throw new InvalidDataException("spriteElement requires texture and all profiles");
         Texture.Validate(); WidthProfile.Validate(4); HeightProfile.Validate(4); OpacityProfile.Validate(1); ColorProfile.Validate();
@@ -123,7 +136,7 @@ public sealed class VfxSpriteElementSpec
         VfxMaterialValidation.Range(Drag, 0, 1, "drag");
         VfxMaterialValidation.Range(AccelerationXPxPerTickSquared, -2, 2, "acceleration X"); VfxMaterialValidation.Range(AccelerationYPxPerTickSquared, -2, 2, "acceleration Y");
         VfxMaterialValidation.Range(RotationRadians, -MathF.PI * 2, MathF.PI * 2, "rotation"); VfxMaterialValidation.Range(RotationSpeedRadiansPerTick, -1, 1, "rotation speed");
-        VfxMaterialValidation.Range(WidthPx, 0, 128, "widthPx"); VfxMaterialValidation.Range(HeightPx, 0, 128, "heightPx");
+        VfxMaterialValidation.Range(WidthPx, 0, 1024, "widthPx"); VfxMaterialValidation.Range(HeightPx, 0, 1024, "heightPx");
         if (slot.Event == "periodic" ? slot.RepeatEvery < 1 : slot.RepeatEvery != 0) throw new InvalidDataException("invalid spriteElement cadence");
     }
 }

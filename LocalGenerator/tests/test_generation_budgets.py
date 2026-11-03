@@ -1,17 +1,16 @@
 """Generation defaults observed through real callers with offline HTTP only."""
 from __future__ import annotations
 
-from infini_local.core import llm_config
-from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
-
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
+import infini_local.pipelines.transport.http as transport_http
 import pytest
-
+from infini_local.core import llm_config
+from infini_local.pipelines.vfx import request as vfx_transport
 
 GENERATOR_ROOT = Path(__file__).resolve().parents[1]
 
@@ -43,18 +42,20 @@ def observe(overrides=None, *, stages="author", repair="none", corrupt_budget=Fa
 
 
 def _observe(*, stages, repair, corrupt_budget):
-    from collections import deque
     import copy
+    from collections import deque
     from unittest.mock import patch
 
-    from infini_local.pipelines import llm_authoring_pipeline as author
-    from infini_local.pipelines import llm_transport as transport
-    from infini_local.pipelines import gameplay_stage as combine
-    from infini_local.pipelines import visual_generation_pipeline as visual
+    import infini_local.pipelines.visual.contract as visual_contract
+    import infini_local.pipelines.visual.stage as visual_stage
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-    from infini_local.core.vfx_manifest import attach_vfx_manifest, VFX_REPAIR_PATCH_SCHEMA
+    from infini_local.core.vfx.contract import VFX_REPAIR_PATCH_SCHEMA
+    from infini_local.core.vfx.materials import vfx_model_payload
+    from infini_local.pipelines.author import request as author
+    from infini_local.pipelines.author import stage as combine
+    from infini_local.pipelines.vfx.stage import attach_vfx_manifest
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-    from test_low_level_three_stage_pipeline import _visual_kit, _visual_patch, _vfx_output
+    from test_low_level_three_stage_pipeline import _vfx_output, _visual_kit, _visual_patch
 
     calls, replies = [], deque()
     if corrupt_budget:
@@ -89,7 +90,7 @@ def _observe(*, stages, repair, corrupt_budget):
     else:
         replies.append(authored)
 
-    with patch.object(transport, "http_json", http_reply), patch.object(transport, "http_get_json", refuse_discovery):
+    with patch.object(transport_http, "http_json", http_reply), patch.object(transport_http, "http_get_json", refuse_discovery):
         data = author.try_llm_plan({}, {}, "budget-observer")
         assert data is not None
         if repair == "semantic":
@@ -102,22 +103,22 @@ def _observe(*, stages, repair, corrupt_budget):
         if stages == "all":
             kit = _visual_kit(data)
             if repair != "none":
-                replies.extend([{"schema": visual.VISUAL_KIT_SCHEMA, "item": {}, "entities": [],
+                replies.extend([{"schema": visual_contract.VISUAL_KIT_SCHEMA, "item": {}, "entities": [],
                                  "animationPlan": "frozen animation"}, _visual_patch(data)])
             else:
                 replies.append(kit)
-            data = visual.apply_visual_director(data, {}, {})
+            data = visual_stage.apply_visual_director(data, {}, {})
             if repair != "none":
                 assert data["visualKit"]["animationPlan"] == "frozen animation"
             vfx = _vfx_output(data)
             if repair != "none":
                 broken_vfx = copy.deepcopy(vfx)
                 broken_vfx["slots"][0]["alpha"] = 2.0
-                replies.extend([broken_vfx, {
+                replies.extend([vfx_model_payload(broken_vfx), vfx_model_payload({
                     "schema": VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": vfx["slots"],
-                    "note": "restore only invalid alpha"}])
+                    "note": "restore only invalid alpha"})])
             else:
-                replies.append(vfx)
+                replies.append(vfx_model_payload(vfx))
             data = attach_vfx_manifest(data, "budget-observer", llm_director=vfx_transport.call_llm_vfx_director)
             assert data["vfxManifest"]["slots"][0]["id"] == vfx["slots"][0]["id"]
         assert not replies

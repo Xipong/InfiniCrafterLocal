@@ -14,9 +14,12 @@ from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-from infini_local.pipelines.visual_generation_pipeline import _validate_kit, _apply_kit
-from infini_local.pipelines.visual_sprite_generation import _runtime_publication_identity
-from infini_local.core.vfx_manifest import validate_vfx_director_output, _compile_manifest, validate_vfx_manifest_wire
+from infini_local.pipelines.visual.contract import _validate_kit
+from infini_local.pipelines.visual.stage import _apply_kit
+from infini_local.pipelines.images.stage import _runtime_publication_identity
+from infini_local.core.vfx.materials import vfx_model_payload
+from infini_local.core.vfx.validation import validate_vfx_director_output, validate_vfx_manifest_wire
+from infini_local.core.vfx.projection import _compile_manifest
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 
 ASSET_SHA256 = "8e9bd54774fc16081d709d82c37cabd9c5b994c2d02dad0e3cf5ca5dd9018463"
@@ -58,7 +61,7 @@ def main():
     data["visual"].update(spritePath=str(asset), spriteUrl="", spriteStatus="generated", spriteTechnicalScore=0)
     for entity in data["runtimeProgram"]["entities"]:
         entity["visual"].update(spritePath=str(asset), spriteUrl="", spriteStatus="generated", spriteTechnicalScore=0)
-    vfx = read(HERE / "vfx-author-source.json")
+    vfx = vfx_model_payload(read(HERE / "vfx-author-source.json"), to_wire=True)
     write(args.out / "vfx-author-validation.json", require(validate_vfx_director_output(vfx, data)))
     data["vfxManifest"] = _compile_manifest(data, vfx, data["id"])
     require(validate_vfx_manifest_wire(data))

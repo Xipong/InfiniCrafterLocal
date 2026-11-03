@@ -11,10 +11,11 @@ def _field(key, label, page, *, options=(), hint='', secret=False, multiline=Fal
     return {'key': key, 'label': label, 'help': hint or FIELD_HELP.get(key, ''),
             'options': list(options), 'secret': secret, 'page': page,
             'advanced': key not in _BASIC_FIELDS and not key.startswith('INFINI_LLM_POOL_'),
-            'multiline': multiline}
+            'multiline': multiline, 'browse': 'folder' if key.endswith(('_DIR', '_ROOT')) else ''}
 
 
 FIELDS = [
+    _field('INFINI_LANGUAGE', 'Язык', 'configure', options=['ru', 'en']),
     _field('INFINI_HOST', 'Адрес сервера', 'configure', hint='127.0.0.1 — только ты; 0.0.0.0 — принимать подключения из Radmin/LAN.'),
     _field('INFINI_PORT', 'Порт сервера', 'configure'),
     _field('INFINI_CRAFT_HTTP_TIMEOUT_SECONDS', 'Ожидание крафта (сек.)', 'configure', hint='240 секунд: если крафт не готов, tModLoader попробует retry.'),
@@ -104,8 +105,8 @@ FIELDS = [
     _field('INFINI_SDCPP_SERVER_COMMAND_MODE', 'sd.cpp command mode', 'images', options=['safe_args', 'template'], hint='safe_args = рекомендуемый безопасный запуск без shell/template; template нужен только для нестандартного sd.cpp.'),
     _field('INFINI_SDCPP_SERVER_COMMAND_TEMPLATE', 'sd.cpp command', 'images'),
     _field('INFINI_SDCPP_SERVER_EXTRA_ARGS', 'sd.cpp extra args', 'images', hint='Только доп. флаги: -v, --diffusion-fa, --offload-to-cpu и т.п. VAE/Qwen лучше задавать полями выше.', multiline=True),
-    _field('INFINI_SDCPP_SERVER_SHOW_CONSOLE', 'sd.cpp show console', 'images', options=['1', '0'], hint='1 = открыть отдельное окно sd-server.exe с живым логом. Полезно для отлова Z-Image крашей.'),
-    _field('INFINI_SDCPP_SERVER_LOG_FILE', 'sd.cpp log file', 'images', hint='Если show console=0, stdout/stderr sd-server пишутся сюда. /sdcpp_debug покажет хвост.'),
+    _field('INFINI_SDCPP_SERVER_SHOW_CONSOLE', 'sd.cpp show console', 'images', options=['1', '0'], hint='1 = открыть окно с живым логом sd.cpp. Вывод также сохраняется в файл.'),
+    _field('INFINI_SDCPP_SERVER_LOG_FILE', 'sd.cpp log file', 'images', hint='При включённой диагностике сюда пишется вывод sd-server; /sdcpp_debug покажет хвост.'),
     _field('INFINI_SDCPP_WIDTH', 'sd width', 'images'),
     _field('INFINI_SDCPP_HEIGHT', 'sd height', 'images'),
     _field('INFINI_SDCPP_STEPS', 'sd steps', 'images'),

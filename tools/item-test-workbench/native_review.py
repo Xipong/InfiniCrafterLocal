@@ -90,6 +90,28 @@ def observed_bookmarks(trace):
     return result
 
 
+def close_crop(trace, frame):
+    """A fixed player-centered window using the renderer's recorded screen bounds."""
+    bounds = (frame.get("scene") or {}).get("player") or {}
+    try:
+        left, right, top, bottom = (float(bounds[k]) for k in ("screenLeft", "screenRight", "screenTop", "screenBottom"))
+        width, height = frame["width"], frame["height"]
+        import math
+        if not all(math.isfinite(v) for v in (left, right, top, bottom)) or width < 128 or height < 128:
+            return None
+        if right <= left or bottom <= top or right < 0 or left >= width or bottom < 0 or top >= height:
+            return None
+        crop_width, crop_height = width // 2, height // 2
+        player = next((s.get("player", {}) for s in trace.get("snapshots", []) if s.get("tick") == frame["tick"]), {})
+        direction = player.get("direction", 1)
+        anchor = 1 / 3 if direction != -1 else 2 / 3
+        x = max(0, min(width - crop_width, round((left + right) / 2 - crop_width * anchor)))
+        y = max(0, min(height - crop_height, round((top + bottom) / 2 - crop_height / 2)))
+        return (x, y, x + crop_width, y + crop_height)
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
+
+
 def export_native_review(trace,trace_path,output,gif=False,gif_stride=1):
     if type(gif_stride) is not int or not 1<=gif_stride<=600:raise ValueError("GIF stride must be an integer1..600")
     trace_bytes=Path(trace_path).read_bytes()
@@ -122,6 +144,18 @@ def export_native_review(trace,trace_path,output,gif=False,gif_stride=1):
         durations=[max(10,(b-a)*10) for a,b in zip(times,times[1:])]+[800]
         images[0].save(output/'native.gif',save_all=True,append_images=images[1:],duration=durations,loop=0)
         metadata['gif']={'path':'native.gif','frameDurationsMs':durations,'sourceTicks':[f['tick'] for f,_ in gif_frames],'stride':gif_stride,'omittedFrames':len(frames)-len(gif_frames),'note':'Original PNG samples only; optional stride omits GIF frames, never HTML/native data. Palette/timing quantized; last frame pause800ms.'}
+        # Keep the full capture and additionally enlarge a bounded crop of the same
+        # original pixels. The native screen bounds are recorded by the renderer.
+        crop = close_crop(trace, gif_frames[0][0])
+        if crop is not None:
+            del images
+            images = []
+            for _, path in gif_frames:
+                with Image.open(path) as im:
+                    images.append(im.convert('RGB').crop(crop).resize((gif_frames[0][0]['width'], gif_frames[0][0]['height']), Image.Resampling.NEAREST))
+            images[0].save(output/'native-close.gif', save_all=True, append_images=images[1:], duration=durations, loop=0)
+            metadata['closeGif'] = {'path':'native-close.gif', 'crop':list(crop), 'sourceTicks':metadata['gif']['sourceTicks'],
+                'resize':'nearest-neighbor', 'note':'Fixed crop of recorded PNGs around the initial player; action outside the crop is omitted. Full native.gif retains the complete frame.'}
     (output/'native-review.json').write_text(json.dumps(metadata,separators=(',',':')))
     data=json.dumps({'bookmarks':bookmarks,'frames':descriptors,'status':trace['status'],'render':{k:v for k,v in trace['nativeRender'].items() if k!='frames'},'coverage':trace.get('coverage'),'execution':trace.get('execution'),'states':trace['snapshots'],'resources':trace.get('resources'),'scene':trace.get('scene'),'assertions':trace.get('assertions'),'input':trace.get('input')},ensure_ascii=False).replace('<','\\u003c').replace('>','\\u003e').replace('&','\\u0026')
     page='''<!doctype html><meta charset="utf-8"><title>Original native VFX pixels</title><style>body{background:#111827;color:#e5e7eb;font:16px system-ui;max-width:1100px;margin:28px auto;padding:12px}h1{font-size:23px;color:#fbbf24}button,input{margin:8px}img{display:block;max-width:100%;image-rendering:pixelated;border:1px solid #64748b}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#1f2937;padding:14px}a{color:#7dd3fc}</style><h1 id="title">ORIGINAL NATIVE MOD PIXELS</h1><p>Native drawing on a neutral background. Not a complete Terraria world render. Raw PNG pixels, no JS physics or redraw.</p><p id="draw-scope" style="color:#fbbf24"></p><p id="status"></p><p id="input-boundary" style="color:#fbbf24"></p><button id="back">Previous</button><button id="play">Play</button><button id="next">Next</button><button id="restart">Restart</button><label>Playback <select id="speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label><input id="seek" type="range" min="0" value="0"><p id="frame"></p><div id="event-jumps"></div><details><summary>Recorded state transitions (not synthetic engine events)</summary><div id="state-jumps"></div></details><a id="raw" target="_blank">Open exact native PNG</a><img id="native" alt="Original native render target pixels"><p>Display may scale to fit; PNG dimensions and camera zoom are recorded below. Missing artwork is not silently replaced.</p><h2>Exact same-tick telemetry</h2><p id="state-summary"></p><details open><summary>Recorded state, phase/input commands, events and native particles (no interpolation)</summary><pre id="state"></pre></details><details><summary>Native scope / missing artwork / resource readiness / end-of-run totals</summary><pre id="scope"></pre></details><p><a href="native-review.json">Frame hashes and original native rendering metadata</a></p><script>
@@ -137,4 +171,4 @@ seek.oninput=()=>{stop();show(+seek.value)};document.getElementById('next').oncl
 </script>'''.replace('TRACE_DATA',data)
     if hashlib.sha256(Path(trace_path).read_bytes()).hexdigest()!=trace_hash:raise ValueError('Native trace changed during export')
     (output/'native.html').write_text(page,encoding='utf-8')
-    return {'nativeReplay':str(output/'native.html'),'nativeFrames':len(frames),'nativeGif':str(output/'native.gif') if gif else None,'sourceTraceSha256':metadata['sourceTraceSha256']}
+    return {'nativeReplay':str(output/'native.html'),'nativeFrames':len(frames),'nativeGif':str(output/'native.gif') if gif else None,'nativeCloseGif':str(output/'native-close.gif') if (output/'native-close.gif').is_file() else None,'sourceTraceSha256':metadata['sourceTraceSha256']}

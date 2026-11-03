@@ -2,6 +2,7 @@
 using InfiniCrafterLocal.Common;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Content.Items;
+using InfiniCrafterLocal.Content.Projectiles;
 using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
@@ -21,26 +22,15 @@ namespace InfiniCrafterLocal.Common.Services;
 // Native facts are captured once; player-dependent ammo remains a separate observation.
 public sealed partial class GeneratorClient
 {
-    // Read-only source certificate, not generated behavior or AI dispatch. A
-    // different native method declines the observation instead of guessing it.
-    private const string MotionSourceMethodSha256 = "5ce22f6374b8b786ee332454aa0bb136ebd20c57520929b41fe4f328dca56d9b";
-    private const string InstalledMotionSourceMethodSha256 = "cf0488832f92e43e699ae307df6f73d90f88f17194250f0a39ca5715a9e0631b";
+    // Read-only source certificate; the audited AI_001 body is compared by
+    // resolved semantics, never executed or inherited as generated behavior.
     private static readonly Lazy<string?> MotionSourceCertificate = new(() =>
     {
-        try
-        {
-            byte[]? il = typeof(Projectile).GetMethod("AI_001", System.Reflection.BindingFlags.Instance
-                | System.Reflection.BindingFlags.NonPublic)?.GetMethodBody()?.GetILAsByteArray();
-            if (il is null) return null;
-            string hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(il)).ToLowerInvariant();
-            // Both exact implementations were independently executed through
-            // native AI (delay/increment/cap). This is not an inferred IL alias.
-            return hash is MotionSourceMethodSha256 or InstalledMotionSourceMethodSha256 ? hash : null;
-        }
-        catch { return null; }
+        string? current = NativeAttackCertificate(typeof(Projectile), "AI_001");
+        return AuditedNativeCertificate(current, "motion") is not null ? current!.Split(':')[0] : null;
     });
 
-    private static object ToWireItem(Item item, Player? player = null, ClientTooltipObservation? clientTooltip = null)
+    internal static JsonObject ToWireItem(Item item, Player? player = null, ClientTooltipObservation? clientTooltip = null)
     {
         GeneratedItemData? existing = item.ModItem is GeneratedItem generated ? generated.Data : null;
         if (GeneratedItemData.IsPlayerSaveReferenceOnly(existing))
@@ -394,12 +384,15 @@ public sealed partial class GeneratorClient
             // Base Item.crit only: CraftIdentityItem already removed the reforge.
             // Player/equipment-effective crit remains a separate observation.
             ["crit"] = item.crit,
+            ["armorPenetration"] = item.ArmorPenetration,
+            ["itemScale"] = item.scale,
             ["damageClass"] = DamageClassName(item),
             ["shootProjectileFullName"] = ProjectileFullName(item.shoot),
             ["useStyle"] = item.useStyle,
             ["useStyleName"] = TerrariaRuntimeVocabulary.CanonicalItemUseStyleToken(item.useStyle),
             ["useTime"] = item.useTime,
             ["useAnimation"] = item.useAnimation,
+            ["useLimitPerAnimation"] = item.useLimitPerAnimation,
             ["reuseDelay"] = item.reuseDelay,
             ["channel"] = item.channel,
             ["noMelee"] = item.noMelee,
@@ -469,16 +462,16 @@ public sealed partial class GeneratorClient
                 : !certified ? "native_binary_or_method_certificate_unavailable"
                 : (catalogRecord ?? facts[key] is not null) ? "partial_certified_source_record"
                 : "no_supported_catalog_record; absence_not_proved";
-            bool contactCertificate = ContactHitStatusCertificate.Value is string contactKey
+            bool contactCertificate = AuditedNativeCertificate(ContactHitStatusCertificate.Value, "hit_status") is string contactKey
                 && NativeHitStatusCatalog.Sources.TryGetValue(contactKey, out _);
-            bool contactRecord = ContactHitStatusCertificate.Value is string recordKey
+            bool contactRecord = AuditedNativeCertificate(ContactHitStatusCertificate.Value, "hit_status") is string recordKey
                 && NativeHitStatusCatalog.Sources.TryGetValue(recordKey, out var contactRows) && contactRows.ContainsKey(item.type);
             graph["nativeCatalogCoverage"] = new JsonObject
             {
                 ["shoot"] = Coverage("nativeShootReference", item.ModItem is null, ShootFactCertificate.Value is not null
-                    && NativeAttackFactsCatalog.Sources.ContainsKey("Player.ItemCheck_Shoot:" + ShootFactCertificate.Value)),
+                    && NativeAttackFactsCatalog.Sources.ContainsKey("Player.ItemCheck_Shoot:" + AuditedNativeCertificate(ShootFactCertificate.Value, "attack"))),
                 ["contactStatus"] = Coverage("nativeContactHitStatusReference", item.ModItem is null, contactCertificate, contactRecord),
-                ["equipment"] = Coverage("nativeEquipmentReference", item.ModItem is null, NativeSourceModuleVerified.Value
+                ["equipment"] = Coverage("nativeEquipmentReference", item.ModItem is null, NativeCatalogVerified("equipment")
                     && (EquipmentFactRows.Value is not null || ArmorSetFactRows.Value is not null)),
                 ["environment"] = Coverage("nativeEnvironmentReference", item.ModItem is null, NativeSourceModuleVerified.Value),
             };
@@ -749,14 +742,39 @@ public sealed partial class GeneratorClient
         return new
         {
             source = "verified_native_AI_001_reference", fullName = "Terraria/WoodenArrowFriendly",
-            sourceMethodSha256 = certificate, firstGravityUpdate = 15,
+            sourceMethodSha256 = certificate, sourceModuleVersionId = typeof(Projectile).Module.ModuleVersionId.ToString(),
+            auditedSourceCertificate = AuditedNativeCertificate(certificate + ":" + typeof(Projectile).Module.ModuleVersionId, "motion"), firstGravityUpdate = 15,
             verticalVelocityIncrementPerUpdate = 0.1f, maxDownwardVelocityPxPerUpdate = 16f,
             units = "velocity in pixels/projectile update; start counts native AI invocations",
             scope = "Native dry initial flight with default AI state; not collision/liquid/global-mod behavior. Read-only reference, not inherited execution. Generated move_gravity_arc starts immediately and is not an exact delayed native-AI replica. Author chooses the trajectory explicitly."
         };
     }
 
-    private static object? ProjectileRawSnapshot(int projectileType, float itemShootSpeed, string source, Item? sourceItem, int inventorySlot)
+    private sealed record ProjectileSpriteReference(string Source, int TextureWidthPx, int TextureHeightPx,
+        string FrameLayout);
+
+    private static ProjectileSpriteReference? TryCaptureProjectileSpriteReference(Projectile projectile)
+    {
+        // Atlas pixels only: projFrames and projectile.frame do not describe arbitrary
+        // PreDraw/native draw slices. Never infer a current rectangle or world extent.
+        if (projectile.ModProjectile is GeneratedProjectile || Main.dedServ || Main.netMode == NetmodeID.Server)
+            return null;
+        try
+        {
+            var assets = Terraria.GameContent.TextureAssets.Projectile;
+            if (assets is null || projectile.type <= ProjectileID.None || projectile.type >= assets.Length)
+                return null;
+            var asset = assets[projectile.type];
+            if (asset is null || asset.IsDisposed || !asset.IsLoaded) return null;
+            var texture = asset.Value;
+            if (texture is null || texture.IsDisposed || texture.Width <= 0 || texture.Height <= 0) return null;
+            return new ProjectileSpriteReference("TextureAssets.Projectile", texture.Width, texture.Height,
+                "unknown_custom_draw_possible");
+        }
+        catch { return null; } // Optional request-local observation; never force asset loading.
+    }
+
+    internal static object? ProjectileRawSnapshot(int projectileType, float itemShootSpeed, string source, Item? sourceItem, int inventorySlot, bool includeChildReferences = true)
     {
         if (projectileType <= ProjectileID.None)
             return null;
@@ -782,7 +800,7 @@ public sealed partial class GeneratorClient
             }
             catch { }
 
-            return new
+            var snapshot = new
             {
                 source,
                 inventorySlot,
@@ -837,9 +855,17 @@ public sealed partial class GeneratorClient
                 damageClass = DamageClassName(p.DamageType),
                 framesRaw = SafeProjFrames(projectileType),
                 setsRaw = ProjectileSetsRaw(projectileType),
+                attackReference = CaptureProjectileAttackReference(p),
                 motionReference = VerifiedSourceMotionReference(p),
                 onHitStatusReference = CaptureNativeHitStatusReference(p)
             };
+            var sprite = TryCaptureProjectileSpriteReference(p);
+            var children = includeChildReferences ? ReferencedProjectileSnapshots(ProjectileSpawnReferences(p)) : null;
+            if (sprite is null && children is null) return snapshot;
+            var observed = JsonSerializer.SerializeToNode(snapshot, WireJsonOptions)!.AsObject();
+            if (sprite is not null) observed["spriteReferenceRaw"] = JsonSerializer.SerializeToNode(sprite, WireJsonOptions);
+            if (children is not null) observed["referencedProjectiles"] = children;
+            return observed;
         }
         catch
         {
@@ -852,6 +878,42 @@ public sealed partial class GeneratorClient
                 unavailable = true
             };
         }
+    }
+
+    private static JsonObject? ReferencedProjectileSnapshots(JsonArray calls)
+    {
+        if (calls.Count == 0) return null;
+        // Source-observation work bound, not a runtime spawn/design limit. Keep
+        // every callsite and omitted identity; never truncate a connected profile.
+        const int ProfileLimit = 8;
+        var references = new JsonArray();
+        var identities = new Dictionary<int, JsonArray>();
+        for (int index = 0; index < calls.Count; index++)
+            foreach (var candidate in calls[index]!["projectileTypes"]!.AsArray())
+            {
+                int id = candidate!.GetValue<int>();
+                if (!identities.TryGetValue(id, out var sites)) identities[id] = sites = new JsonArray();
+                sites.Add(index);
+            }
+        int captured = 0;
+        foreach (var (id, sites) in identities)
+        {
+            var reference = new JsonObject { ["type"] = id, ["sourceCallIndices"] = sites };
+            if (id <= ProjectileID.None || id >= ProjectileLoader.ProjectileCount)
+                reference["unresolved"] = "spawn_projectile_identity_not_registered";
+            else if (captured >= ProfileLimit) reference["unresolved"] = "single_hop_profile_count_bound";
+            else
+            {
+                captured++;
+                // Defaults/source only; actual spawn arguments stay in parent.
+                reference["profile"] = JsonSerializer.SerializeToNode(ProjectileRawSnapshot(id, 0f,
+                    "conditional_native_spawn_candidate", null, -1, includeChildReferences: false), WireJsonOptions);
+            }
+            references.Add(reference);
+        }
+        return new JsonObject { ["source"] = "native_single_hop_projectile_references", ["version"] = 1,
+            ["scope"] = "Conditional literal source candidates, not executed spawns or inherited mechanics. Child profiles are native defaults/source only; actual damage, velocity, owner and AI arguments belong to the parent call. One hop; dynamic IDs and opaque effects remain unknown.",
+            ["profileLimit"] = ProfileLimit, ["sourceCalls"] = calls, ["references"] = references };
     }
 
     private static object ProjectileSetsRaw(int projectileType)

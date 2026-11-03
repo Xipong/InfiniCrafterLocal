@@ -72,7 +72,7 @@ def test_named_profiles_roundtrip_and_update_without_losing_neighbors(tmp_path: 
     save(path, "Сосед", neighbor)
     changed = {**original, "INFINI_LLM_MAX_TOKENS": "24680", "INFINI_BG_COLOR": "green"}
     expected = {name: changed, "Сосед": neighbor}
-    assert save(path, name, changed) == expected
+    assert save(path, name, changed, overwrite=True) == expected
     assert load(path) == expected
     # A returned profile can be selected verbatim; no defaults/coercion are added.
     assert load(path)[name] == changed
@@ -175,3 +175,26 @@ def test_loaded_neighbors_are_sanitized_but_token_limits_and_bounded_names_survi
     assert settings_env.save_user_preset(path, name, expected[name]) == expected
     assert settings_env.load_user_presets(path) == expected
     assert "CANARY" not in path.read_text(encoding="utf-8"), "resave retained a neighbor's secret"
+
+
+def test_existing_profile_requires_explicit_replace(tmp_path):
+    path = tmp_path / 'profiles.json'
+    first = {'INFINI_SDCPP_SERVER_EXTRA_ARGS': '--first'}
+    settings_env.save_user_preset(path, 'GPU', first)
+    before = path.read_bytes()
+    for consent in (None, False, 'true', 1):
+        with pytest.raises(ValueError):
+            settings_env.save_user_preset(path, 'GPU', {'INFINI_SDCPP_SERVER_EXTRA_ARGS': '--other'}, overwrite=consent)
+    assert path.read_bytes() == before
+    settings_env.save_user_preset(path, 'GPU', {'INFINI_SDCPP_SERVER_EXTRA_ARGS': '--other'}, overwrite=True)
+    assert settings_env.load_user_presets(path)['GPU']['INFINI_SDCPP_SERVER_EXTRA_ARGS'] == '--other'
+
+
+def test_stock_profile_leaves_model_paths_and_user_profiles_owned_by_user():
+    stock = settings_schema.PRESETS['Локалка: LM Studio + sd.cpp (универсальный)']
+    assert 'INFINI_SDCPP_SERVER_EXTRA_ARGS' not in stock
+    assert 'INFINI_SDCPP_ROCM_COMPAT_ROOT' not in stock
+    for key in ('INFINI_SDCPP_SERVER_EXE', 'INFINI_SDCPP_MODEL', 'INFINI_SDCPP_VAE', 'INFINI_SDCPP_LLM'):
+        assert key not in stock
+        assert settings_schema.DEFAULTS[key] == ''
+    assert settings_schema.PRESETS['Пример: RX 6800 XT / FLUX.2 Klein 4B (только аргументы)']['INFINI_SDCPP_SERVER_EXTRA_ARGS'] == settings_schema.SDCPP_EXTRA_PROFILES['flux2_klein4b_rx6800xt_hybrid']

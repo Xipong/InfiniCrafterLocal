@@ -105,6 +105,8 @@ internal static partial class EngineRuntimeChecks
         original.SourceMode = "test_fixture";
         original.GeneratedParentSummary.Description = "  " + boundary + "overflow  ";
         original.GeneratedParentSummary.PlayerExperience = supplementary;
+        string debug = "Only the contact attack is implemented; intended dash is absent. " + new string('д', 5500);
+        original.Realization = JsonSerializer.SerializeToElement(new { description = boundary, selfEvaluation = debug });
         // Serialize without pre-normalization: exercise actual incoming JSON admission.
         string input = JsonSerializer.Serialize(original, new JsonSerializerOptions {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -129,6 +131,8 @@ internal static partial class EngineRuntimeChecks
             Equal(boundary, summary.GetProperty("description").GetString(), "description clips at 4000 code points without splitting surrogate");
             Equal(supplementary, summary.GetProperty("playerExperience").GetString(), "accepted supplementary advisory prose is retained");
             Equal(false, summary.TryGetProperty("notableEffects", out _), "no retired behavior report projection");
+            Equal(debug, next.RootElement.GetProperty(side).GetProperty("generatedData")
+                .GetProperty("realization").GetProperty("selfEvaluation").GetString(), "full raw debug survives next-craft transport separately");
         }
         Equal("  " + boundary + "overflow  ", original.GeneratedParentSummary.Description, "incoming source unchanged");
     }
@@ -340,6 +344,52 @@ internal static partial class EngineRuntimeChecks
             return Rectangle;
         }
         public override void Update() { Updates++; throw new InvalidOperationException("snapshot cannot update animation"); }
+    }
+
+    private static void ParentProjectileAtlasMetadataIsObservedOnly()
+    {
+        WithParentSpriteMetadata((source, texture, asset) =>
+        {
+            var old = TextureAssets.Projectile;
+            try
+            {
+                var projectile = new Terraria.Projectile();
+                projectile.SetDefaults(Terraria.ID.ProjectileID.WoodenArrowFriendly);
+                TextureAssets.Projectile = new Asset<Texture2D>[projectile.type + 1];
+                TextureAssets.Projectile[projectile.type] = asset;
+                var capture = typeof(GeneratorClient).GetMethod("TryCaptureProjectileSpriteReference", BindingFlags.Static | BindingFlags.NonPublic)!;
+                JsonElement Read() => JsonSerializer.SerializeToElement(capture.Invoke(null, new object[] { projectile }),
+                    new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                foreach (var dimensions in new[] { (14, 32), (137, 553), (1, 1) })
+                {
+                    typeof(Texture2D).GetProperty("Width")!.SetValue(texture, dimensions.Item1);
+                    typeof(Texture2D).GetProperty("Height")!.SetValue(texture, dimensions.Item2);
+                    var observed = Read();
+                    Equal(dimensions.Item1, observed.GetProperty("textureWidthPx").GetInt32(), "actual atlas width, never collider");
+                    Equal(dimensions.Item2, observed.GetProperty("textureHeightPx").GetInt32(), "nonstandard atlas height preserved");
+                    Equal("unknown_custom_draw_possible", observed.GetProperty("frameLayout").GetString()!, "default one frame does not prove draw layout");
+                    Equal(false, observed.TryGetProperty("currentFrame", out _), "no guessed frame rectangle");
+                }
+                JsonElement Snapshot() => JsonSerializer.SerializeToElement(
+                    GeneratorClient.ProjectileRawSnapshot(projectile.type, 3f, "test", source, -1),
+                    new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                var loadedSnapshot = Snapshot();
+                typeof(Asset<Texture2D>).GetProperty("State")!.SetValue(asset, AssetState.NotLoaded);
+                Equal(JsonValueKind.Null, Read().ValueKind, "unloaded placeholder is not evidence");
+                var unloadedSnapshot = Snapshot();
+                Equal(false, unloadedSnapshot.TryGetProperty("spriteReferenceRaw", out _), "missing observation omitted");
+                Equal(unloadedSnapshot.EnumerateObject().Count() + 1, loadedSnapshot.EnumerateObject().Count(), "only optional visual metadata added");
+                foreach (var field in unloadedSnapshot.EnumerateObject())
+                    Equal(field.Value.GetRawText(), loadedSnapshot.GetProperty(field.Name).GetRawText(), "all gameplay/collision/source facts unchanged: " + field.Name);
+                typeof(Asset<Texture2D>).GetProperty("State")!.SetValue(asset, AssetState.Loaded);
+                Terraria.Main.dedServ = true;
+                Equal(JsonValueKind.Null, Read().ValueKind, "server has no visual observation");
+                Terraria.Main.dedServ = false;
+                typeof(Terraria.Projectile).GetProperty("ModProjectile")!.SetValue(projectile, new InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile());
+                Equal(JsonValueKind.Null, Read().ValueKind, "shared generated proxy never becomes reference art");
+            }
+            finally { TextureAssets.Projectile = old; }
+        });
     }
 
     private static void ParentNativeSpriteReferenceReachesPreparedRequest()

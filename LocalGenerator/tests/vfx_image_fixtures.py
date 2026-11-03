@@ -7,9 +7,14 @@ import copy
 import pytest
 from pathlib import Path
 from PIL import Image, ImageDraw
-from infini_local.pipelines import sprite_postprocess, visual_asset_manifest, visual_sprite_generation, visual_delivery_gate, pipeline_visual_config
+from infini_local.pipelines.images import postprocess as sprite_postprocess
+from infini_local.pipelines.images import manifest as visual_asset_manifest
+from infini_local.pipelines.images import stage as visual_sprite_generation
+from infini_local.pipelines.visual import delivery as visual_delivery_gate
+from infini_local.core.images import config as pipeline_visual_config
 from infini_local.services.sdcpp_service import ImageRequestGate
-from infini_local.core.vfx_manifest import VFX_DIRECTOR_SCHEMA, _compile_manifest
+from infini_local.core.vfx.contract import VFX_DIRECTOR_SCHEMA
+from infini_local.core.vfx.projection import _compile_manifest
 from infini_local.web.vfx_debug_routes import _sample_data
 
 def _request(asset_id: str = "grain", *, layout: str = "cutout", canvas: int = 32) -> dict:
@@ -29,11 +34,11 @@ def _slot(slot_id: str, asset_id: str, *, renderer: str = "spriteElement") -> di
         "alpha": 1.0, "startTick": 0,
         **({"duration": 12, "repeatEvery": 4} if renderer == "spriteElement" else {}),
     }
-    texture = {"source": "asset", "assetId": asset_id}
+    texture = {"source": "asset", "assetId": asset_id, "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
     color = {"start": {"r": 255, "g": 255, "b": 255}, "middle": {"r": 255, "g": 255, "b": 255}, "end": {"r": 255, "g": 255, "b": 255}, "curve": "linear"}
     if renderer == "spriteElement":
         slot["element"] = {
-            "texture": texture, "attachment": "world", "count": 1,
+            "spawn": {"shape": "point"}, "texture": texture, "attachment": "world", "count": 1,
             "offsetForwardPx": 0.0, "offsetSidePx": 0.0, "speedMinPxPerTick": 0.0,
             "speedMaxPxPerTick": 0.0, "spreadRadians": 0.0, "inheritVelocity": 0.0, "drag": 1.0,
             "accelerationXPxPerTickSquared": 0.0, "accelerationYPxPerTickSquared": 0.0,
@@ -117,12 +122,13 @@ def _existing_texture_data(source: str, renderer: str = "spriteElement") -> dict
     data = _data([])
     slot = _slot("existing", "", renderer=renderer)
     payload = "element" if renderer == "spriteElement" else "path"
-    slot[payload]["texture"] = {"source": source, "assetId": ""}
+    slot[payload]["texture"] = {"source": source, "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
     orb = next(row for row in data["runtimeProgram"]["entities"] if row["id"] == "orb")
     if source == "entity":
         orb["visual"].update(assetMode="baked_sprite", preferredCanvasSize=32, prompt="literal amber orb", renderSizePx=24, forwardAngleDegrees=0)
     data["vfxManifest"]["slots"] = [slot]
     if source == "impact":
+        # Historical saved producer: verify delivery compatibility, not fresh Director admission.
         from tests.vfx_material_fixtures import _legacy
         producer = _legacy(data)["slots"][0]
         producer.update(id="impact_source", entityId="orb", event="periodic", repeatEvery=4,

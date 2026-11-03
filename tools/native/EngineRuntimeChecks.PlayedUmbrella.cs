@@ -25,8 +25,17 @@ internal static partial class EngineRuntimeChecks
             foreach (int facing in new[] { 1, -1 })
             foreach (float gravity in new[] { 1f, -1f })
             {
-                var data = GeneratedItemData.FromJson(row!.ToJsonString())
-                    ?? throw new InvalidOperationException("played umbrella DTO refused: " + ContractJsonDiagnostics.LastError);
+                string archived = row!.ToJsonString();
+                Equal(true, GeneratedItemData.FromJson(archived) is null, "retired umbrella presentation is refused");
+                var control = row.DeepClone();
+                Equal("immediate", control["gameplay"]!["releaseTiming"]!.GetValue<string>(), "exact umbrella hidden override");
+                Equal("immediate", control["runtimeProgram"]!["itemUse"]!["releaseTiming"]!.GetValue<string>(), "exact umbrella item override");
+                Equal(true, control["runtimeProgram"]!["itemUse"]!["hideUseGraphic"]!.GetValue<bool>(), "umbrella native body already hidden");
+                control["gameplay"]!.AsObject().Remove("releaseTiming");
+                control["runtimeProgram"]!["itemUse"]!.AsObject().Remove("releaseTiming");
+                var data = GeneratedItemData.FromJson(control.ToJsonString())
+                    ?? throw new InvalidOperationException("umbrella geometry control refused: " + ContractJsonDiagnostics.LastError);
+                Equal(archived, row.ToJsonString(), "original played umbrella remains immutable");
                 var entity = data.RuntimeProgram.TryGetEntity(data.RuntimeProgram.PrimaryEntityId)!;
                 Equal(20, entity.Movement.Code, "saved explicit front-hand, never code19");
                 Equal("initial", entity.Movement.Params.AimMode, "accepted initial-axis design preserved");

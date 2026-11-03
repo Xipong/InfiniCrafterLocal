@@ -3,29 +3,32 @@ import copy
 import json
 from pathlib import Path
 
+import infini_local.pipelines.visual.contract as visual_contract
+import infini_local.pipelines.visual.repair as visual_repair
+import infini_local.pipelines.visual.repair_scope as visual_repair_scope
 import pytest
-
 from infini_local.core.repair_merge import merge_frozen_subtree
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.pipelines.llm_authoring_pipeline import build_gameplay_repair_dossier
-from infini_local.pipelines import visual_generation_pipeline as visual
-from tests.test_visual_presentation_metadata import kit
-from tests.captured_projectile_author import project_captured_projectile_call
+from infini_local.pipelines.author.request import build_gameplay_repair_dossier
 from tests.captured_parent_combat_author import captured_parent_combat_author
+from tests.captured_projectile_author import project_captured_projectile_call
 from tests.captured_spawn_velocity_author import captured_spawn_velocity_author
+from tests.test_visual_presentation_metadata import kit
 
 
 def test_saved_initial_projectile_lifetime_compiles_without_repair(monkeypatch):
     # Exact initial saved answer, not the campaign's later repaired/final output.
     import hashlib
-    from test_gameplay_repair_readonly_context import _offline_builder
-    from infini_local.pipelines import llm_authoring_pipeline as author
-    from infini_local.pipelines import gameplay_stage as combine
-    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+
     from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+    from infini_local.pipelines.author import request as author
+    from infini_local.pipelines.author import stage as combine
+    from test_gameplay_repair_readonly_context import _offline_builder
 
     path = Path(__file__).with_name("fixtures") / "projectile_lifetime_initial_author.json"
     raw = path.read_bytes()
@@ -96,20 +99,20 @@ def test_visual_literal_member_deletion_is_exact(domain):
         original["grip"][key] = "foreign"
         patch_edits = {"itemPatch": {"grip": {"normalizedX": 0.9, "normalizedY": 0.1}}}
     before = copy.deepcopy(raw)
-    _, errors = visual._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
+    _, errors = visual_contract._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
     assert errors
-    scope = visual._build_visual_repair_scope(raw, errors, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
+    scope = visual_repair_scope._build_visual_repair_scope(raw, errors, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
     assert (scope["fieldPermissions"]["entities"] if domain == "entity" else scope["fieldPermissions"]["itemPaths"]) == ([{"entityId": "opaque_id", "paths": [relative]}] if domain == "entity" else [relative])
     patch = {
-        "schema": visual.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": None, "equipOverlayPatch": None,
+        "schema": visual_contract.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": None, "equipOverlayPatch": None,
         "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [],
         "note": "remove literal member", **patch_edits}
-    repaired, audit = visual._apply_visual_repair_patch(raw, patch, scope, ["opaque_id"], return_audit=True)
+    repaired, audit = visual_repair._apply_visual_repair_patch(raw, patch, scope, ["opaque_id"], return_audit=True)
     expected = copy.deepcopy(raw)
     (expected["entities"][0] if domain == "entity" else expected["item"]["grip"]).pop(key)
     assert repaired == expected, "visual_literal_member_and_frozen_siblings"
     assert audit["ok"] and audit["ignoredChanges"]
-    assert not visual._validate_kit(repaired, ["opaque_id"], "opaque_id", equipment_overlay_required=True)[1]
+    assert not visual_contract._validate_kit(repaired, ["opaque_id"], "opaque_id", equipment_overlay_required=True)[1]
     assert raw == before
 
 
@@ -117,32 +120,41 @@ _FIXTURE = Path(__file__).with_name("fixtures") / "live20_repair_boundary_replay
 _REPLAY = json.loads(_FIXTURE.read_text(encoding="utf-8"))
 
 
-def _historical_names(document):
-    # Narrow test-only projection; archive and all unrelated values stay intact.
-    projected = copy.deepcopy(document)
-    renames = {"configure_item_use": ("releaseTiming", "customHeldSprite"),
-               "configure_spawn": ("speedPxPerTick", "speedPxPerUpdate"),
-               "set_projectile_collision": ("localNpcHitCooldownTicks", "localNpcHitCooldownEngineUnits")}
+def _current_grammar_scenario(document):
+    # Explicit test-only current-grammar counterpart, NOT raw historical replay
+    # or production migration. Preserve the original artifact for refusal checks.
+    from infini_local.core.runtime_authoring.capability_registry import capability_for_saved_receipt
+    projected = captured_parent_combat_author(copy.deepcopy(document))
+    renames = {"spawn": ("speedPxPerTick", "speedPxPerUpdate"),
+               "projectile_collision": ("localNpcHitCooldownTicks", "localNpcHitCooldownEngineUnits")}
     for row in projected.get("runtimeProgram", {}).get("calls", []) + projected.get("callsUpsert", []):
+        cap = capability_for_saved_receipt(row.get("fn"))
+        if cap is not None:
+            row["fn"] = cap.name
         pair = renames.get(row.get("fn"))
         if pair and pair[0] in row.get("params", {}):
             assert pair[1] not in row["params"]
             row["params"][pair[1]] = row["params"].pop(pair[0])
         params = row.get("params", {})
-        if row.get("fn") == "configure_item_use" and "customHeldSprite" in params:
-            value = params["customHeldSprite"]
-            mapping = {"": "inherit", "immediate": "hidden", "on_release": "visible", "after_charge": "visible"}
-            if isinstance(value, str) and value in mapping:
-                params["customHeldSprite"] = mapping[value]
+        if row.get("fn") == "item_use":
+            # Explicit test-only current visibility counterpart. The frozen
+            # capture keeps its obsolete notation and still fails admission.
+            visibility = params.pop("releaseTiming", params.pop("customHeldSprite", None))
+            if visibility in ("immediate", "hidden"):
+                params["hideUseGraphic"] = True
+            elif visibility in ("on_release", "after_charge", "visible"):
+                params["hideUseGraphic"] = False
+            else:
+                assert visibility in (None, "", "inherit")
         if row.get("fn") == "configure_placeable" and params.get("wallId") == -1:
-            row["fn"] = "configure_tile_placement"
+            row["fn"] = "place_tile"
             del params["wallId"]
         elif row.get("fn") == "configure_placeable" and params.get("tileId") == -1:
-            row["fn"] = "configure_wall_placement"
+            row["fn"] = "place_wall"
             del params["tileId"]
         project_captured_projectile_call(row)
     from tests.captured_projectile_author import project_captured_author_notation
-    return project_captured_author_notation(captured_spawn_velocity_author(captured_parent_combat_author(projected)))
+    return project_captured_author_notation(captured_spawn_velocity_author(projected))
 
 
 def test_replay_frozen_provenance():
@@ -162,24 +174,35 @@ def test_replay_frozen_provenance():
     pytest.param(section, case, False, id=case)
     for section in ("gameplayApplyCases", "gameplayDiagnosticCases") for case in _REPLAY[section]
 ] + [pytest.param("gameplayApplyCases", "ropebound_spear", True, id="ropebound_spear-independent-composition")])
-def test_captured_gameplay_repair_replay(section, case, fresh_motion):
+def test_current_grammar_gameplay_repair_scenario_from_capture(section, case, fresh_motion):
     archive_before = copy.deepcopy(_REPLAY[section][case])
+    # Archived answers are evidence, not fresh v7 Author/Repair input. The
+    # following executable scenario is independently named and projected.
+    assert not validate_runtime_program(archive_before["initialAuthor"])["ok"]
+    with pytest.raises(ValueError):
+        compile_runtime_program(archive_before["initialAuthor"])
+    if section == "gameplayApplyCases":
+        from infini_local.core.runtime_authoring.program_schema import strict_repair_shape_report
+        # The archived mandatory report tree also exceeds today's finite
+        # patch envelope; that explicit refusal is not replay acceptance.
+        with pytest.raises(RuntimeError, match="Author input exceeds schema-derived work bounds"):
+            strict_repair_shape_report(archive_before["repairPatch"])
     replay = copy.deepcopy(archive_before)
-    initial = _historical_names(replay["initialAuthor"])
+    initial = _current_grammar_scenario(replay["initialAuthor"])
     if fresh_motion:
         # A separate future Author control, NOT a migration or recompile of the
         # retired code19 capture. All choices are explicit and the RAW is frozen.
         old = next(row for row in initial["runtimeProgram"]["calls"] if row["fn"] == "move_forward_then_retract")
         initial["runtimeProgram"]["calls"].remove(old)
         initial["runtimeProgram"]["calls"].extend([
-            {"id": "explicit_axis", "fn": "set_projectile_aim", "target": old["target"],
+            {"id": "explicit_axis", "fn": "set_aim", "target": old["target"],
              "params": {"source": "cursor", "turnOwner": False}},
-            {"id": "explicit_anchor", "fn": "attach_projectile", "target": old["target"],
+            {"id": "explicit_anchor", "fn": "attach", "target": old["target"],
              "params": {"anchor": "owner_center", "axisOffsetBlocks": 0, "normalOffsetBlocks": 0,
-                        "reachCurve": {"durationSeconds": 31 / 60, "startOffsetBlocks": 1.125,
+                        "reachCurve": {"duration": 31 / 60, "startOffsetBlocks": 1.125,
                         "peakOffsetBlocks": 6.125, "endOffsetBlocks": 1.125, "peakProgress": 0.5}}},
         ])
-    historical_patch = _historical_names(replay["repairPatch"]) if section == "gameplayApplyCases" else None
+    historical_patch = _current_grammar_scenario(replay["repairPatch"]) if section == "gameplayApplyCases" else None
     if historical_patch is not None:
         # The old sparse-notation projector dropped valid fixed placement lanes.
         # They are legal again: retain the captured model's explicit correction,
@@ -193,14 +216,14 @@ def test_captured_gameplay_repair_replay(section, case, fresh_motion):
                         row[key] = copy.deepcopy(captured_policy[key])
     old_axe = None
     if case == "obsidian_pickaxe":
-        tool = next(row for row in initial["runtimeProgram"]["calls"] if row["fn"] == "configure_tool")
+        tool = next(row for row in initial["runtimeProgram"]["calls"] if row["fn"] == "tool_stats")
         old_axe = tool["params"].pop("axePower")
         assert type(old_axe) is int and 0 <= old_axe <= 100
-        tool["params"]["axePowerTooltipPercent"] = old_axe * 5
+        tool["params"]["axePower"] = old_axe * 5
         for row in historical_patch["callsUpsert"]:
-            if row["fn"] == "configure_tool":
+            if row["fn"] == "tool_stats":
                 assert row["params"].pop("axePower") == old_axe
-                row["params"]["axePowerTooltipPercent"] = old_axe * 5
+                row["params"]["axePower"] = old_axe * 5
     initial_before = copy.deepcopy(initial)
     report = validate_runtime_program(initial)
     expected_codes = set(replay["expectedInitialCodes"])
@@ -228,7 +251,7 @@ def test_captured_gameplay_repair_replay(section, case, fresh_motion):
     assert {str(row.get("code") or "") for row in report.get("errors") or []} == expected_codes
     scope = build_runtime_repair_scope(initial, report["errors"])
     if historical_patch is not None:
-        # Captured report ceremony is retired. Replay its exact executable
+        # Captured report ceremony is retired. Apply the projected executable
         # correction without making the historical advisory tree a current
         # provider requirement; fixture/archive bytes remain untouched.
         assert historical_patch.pop("realizationReplacement") is not None
@@ -262,8 +285,8 @@ def test_captured_gameplay_repair_replay(section, case, fresh_motion):
             assert lane["input"] == "alternate_use" and lane["stackCost"] == 1
             assert repaired["runtimeProgram"]["calls"] == initial_before["runtimeProgram"]["calls"]
             if fresh_motion:
-                from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
                 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+                from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
                 wire = compile_runtime_program(repaired)
                 assert validate_runtime_wire(wire)["ok"]
                 for source in (repaired, None):
@@ -301,15 +324,15 @@ def test_captured_visual_repair_replay(case, monkeypatch):
     # Declared test-only historical schema projection, not fresh v1 admission.
     # Saved RAW/patch bytes and all authored choices remain untouched. The v1
     # replay verifies its old frozen deletion only; no new sizing is invented.
-    current_item_schema = visual._visual_item_schema
+    current_item_schema = visual_contract._visual_item_schema
     def historical_item_schema():
         schema = current_item_schema()
         for field in ("renderSizePx", "forwardAngleDegrees"):
             del schema["properties"][field]
             schema["required"].remove(field)
         return schema
-    monkeypatch.setattr(visual, "_visual_item_schema", historical_item_schema)
-    current_entity_schema = visual._visual_entity_schema
+    monkeypatch.setattr(visual_contract, "_visual_item_schema", historical_item_schema)
+    current_entity_schema = visual_contract._visual_entity_schema
     def historical_entity_schema(entity_ids, item_body_id=None):
         schema = current_entity_schema(entity_ids, item_body_id)
         root = (schema.get("oneOf") or [schema])[0]
@@ -318,20 +341,25 @@ def test_captured_visual_repair_replay(case, monkeypatch):
             root["required"].append(field)
         return schema
     # Preserve the captured v1 grammar; this is not a production legacy reader.
-    monkeypatch.setattr(visual, "_visual_entity_schema", historical_entity_schema)
-    monkeypatch.setattr(visual, "VISUAL_KIT_SCHEMA", "infini.visual-kit.runtime-entities.v1")
-    monkeypatch.setattr(visual, "VISUAL_REPAIR_PATCH_SCHEMA", "infini.visual-kit-repair-patch.runtime-entities.v1")
+    monkeypatch.setattr(visual_contract, "_visual_entity_schema", historical_entity_schema)
+    monkeypatch.setattr(visual_contract, "VISUAL_KIT_SCHEMA", "infini.visual-kit.runtime-entities.v1")
+    monkeypatch.setattr(visual_contract, "VISUAL_REPAIR_PATCH_SCHEMA", "infini.visual-kit-repair-patch.runtime-entities.v1")
+    # Replay adapters must patch the filtering consumer as well as the grammar owner.
+    monkeypatch.setattr(visual_repair, "_visual_item_schema", historical_item_schema)
+    monkeypatch.setattr(visual_repair, "_visual_entity_schema", historical_entity_schema)
+    monkeypatch.setattr(visual_repair, "VISUAL_KIT_SCHEMA", "infini.visual-kit.runtime-entities.v1")
+    monkeypatch.setattr(visual_repair, "VISUAL_REPAIR_PATCH_SCHEMA", "infini.visual-kit-repair-patch.runtime-entities.v1")
     replay = copy.deepcopy(_REPLAY["visualApplyCases"][case])
     raw, entity_ids, item_id = replay["visualRaw"], replay["entityIds"], replay["itemBodyId"]
-    kit_before, errors = visual._validate_kit(raw, entity_ids, item_id)
+    kit_before, errors = visual_contract._validate_kit(raw, entity_ids, item_id)
     assert kit_before is None
     old_paths = replay["expectedInitialErrorPaths"]
     if "$.item.:palette" in old_paths:
         assert ":palette" in raw["item"]
     expected_paths = ['$.item[":palette"]' if path == "$.item.:palette" else path for path in old_paths]
     assert [row["path"] for row in errors] == expected_paths
-    scope = visual._build_visual_repair_scope(raw, errors, entity_ids, item_id)
-    repaired, audit = visual._apply_visual_repair_patch(raw, replay["visualRepairPatch"], scope, entity_ids, return_audit=True)
+    scope = visual_repair_scope._build_visual_repair_scope(raw, errors, entity_ids, item_id)
+    repaired, audit = visual_repair._apply_visual_repair_patch(raw, replay["visualRepairPatch"], scope, entity_ids, return_audit=True)
     assert audit["ok"], audit
-    final, final_errors = visual._validate_kit(repaired, entity_ids, item_id)
+    final, final_errors = visual_contract._validate_kit(repaired, entity_ids, item_id)
     assert final is not None, final_errors

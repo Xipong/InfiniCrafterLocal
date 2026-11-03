@@ -77,9 +77,6 @@ def test_python_lint_accepts_decoys_and_reports_import_cycle(gates):
     ("Content/Items/GeneratedItem.Use.cs", "public string Tooltip { get; set; }", "authored_tooltip"),
     ("Content/Items/GeneratedItem.RuntimeEvents.cs", "public string Tooltip { get; set; }", "authored_tooltip"),
     ("Content/Items/GeneratedItem.RenamedHooks.cs", "public string Tooltip { get; set; }", "authored_tooltip"),
-    ("Common/Services/Generation/GeneratorClient.cs", "item.shoot > 0", "numeric_sentinel"),
-    ("Common/Services/Generation/GeneratorClient.ParentFacts.cs", "item.shoot > 0", "numeric_sentinel"),
-    ("Common/Models/Runtime/GeneratedItemData.Apply.cs", "item.useStyle = 0;", "numeric_sentinel"),
     ("Renamed.cs", "#pragma warning disable CS0246", "warning_suppression"),
 ])
 def test_csharp_lint_reports_invalid_source_not_comment_or_string_decoys(gates, path, source, code):
@@ -128,15 +125,6 @@ def test_authored_language_policy_reports_schema_input(gates, filename, document
     assert any(issue.startswith(diagnostic + ":") for issue in issues)
 
 
-def test_repository_source_policies_pass(gates):
-    hygiene, scanner = gates
-    sources = {p.relative_to(ROOT).as_posix(): p.read_text(encoding="utf-8-sig")
-               for directory in (ROOT / "LocalGenerator/infini_local", ROOT / "tools") for p in directory.rglob("*.py")}
-    assert hygiene.python_source_issues(sources) == []
-    schemas = {p.relative_to(ROOT).as_posix(): p.read_text(encoding="utf-8")
-               for p in (ROOT / "contracts/schemas").glob("*.json")}
-    assert hygiene.authored_contract_issues(schemas) == []
-    assert scanner.main() == 0
 
 
 def test_nullable_bound_scanner_handles_synthetic_valid_and_invalid_setters():

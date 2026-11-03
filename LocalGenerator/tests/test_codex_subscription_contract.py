@@ -3,36 +3,43 @@ from __future__ import annotations
 
 import base64
 import copy
-from dataclasses import dataclass, field
 import hashlib
 import io
 import json
 import os
+import re
 import stat
 import time
+from dataclasses import dataclass, field
 from typing import Any
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 
+import infini_local.pipelines.transport.http as transport_http
 import pytest
-
 from infini_local.core import llm_config
-from infini_local.pipelines import llm_provider_wire
-from infini_local.pipelines import llm_transport as llm, pipeline_visual_config as config
-from infini_local.services import codex_auth as auth, codex_catalog as catalog, codex_text_backend as backend
-from test_provider_transport_contract import PIN, packet, wire  # noqa: F401 - imported pytest fixture
+from infini_local.core.images import config
+from infini_local.pipelines.transport import client as llm
+from infini_local.pipelines.transport import provider_wire as llm_provider_wire
+from infini_local.services import codex_auth as auth
+from infini_local.services import codex_catalog as catalog
+from infini_local.services import codex_text_backend as backend
 from provider_test_support import HttpReply, RecordingOpener
+from test_provider_transport_contract import PIN, packet, wire  # noqa: F401 - imported pytest fixture
 
 CODEX = "https://chatgpt.com/backend-api/codex"
 
 
 def _assert_structured_outputs_subset(schema):
     """Offline wire gate, independent of the projector (not remote acceptance)."""
-    unsupported = {"oneOf", "allOf", "not", "dependentRequired", "dependentSchemas", "if", "then", "else"}
+    unsupported = {"oneOf", "allOf", "not", "dependentRequired", "dependentSchemas", "if", "then", "else", "minProperties", "maxProperties", "patternProperties", "propertyNames", "unevaluatedProperties", "unevaluatedItems", "contains", "minContains", "maxContains", "uniqueItems"}
     types = {str: "string", int: "integer", bool: "boolean", float: "number", type(None): "null", list: "array", dict: "object"}
 
     def visit(node, path=()):
         assert not (unsupported & node.keys()), f"unsupported provider keyword at {path}: {unsupported & node.keys()}"
+        if "pattern" in node:
+            # Known unsupported regex features, independently checked on wire.
+            assert not re.search(r"\(\?(?:[=!]|<[=!]|P=)|\\[1-9]", node["pattern"]), path
         if "const" in node:
             assert node.get("type") == types[type(node["const"])], f"untyped provider const at {path}"
         if node.get("type") == "object":
@@ -51,7 +58,8 @@ def _assert_structured_outputs_subset(schema):
 
 @pytest.mark.parametrize("stage", ["author", "repair"])
 def test_subscription_sends_supported_schema_without_mutating_authored_packet(monkeypatch, subscription_sends, stage):
-    from infini_local.pipelines import author_item_contract as contract, llm_authoring_pipeline as author
+    from infini_local.pipelines.author import item_contract as contract
+    from infini_local.pipelines.author import request as author
 
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
     if stage == "author":
@@ -74,26 +82,31 @@ def test_subscription_sends_supported_schema_without_mutating_authored_packet(mo
     assert request == before
 
 
-def _encode_nullable_fixture(value: Any, local: dict[str, Any]) -> Any:
+def _encode_nullable_fixture(value: Any, local: dict[str, Any], *, definitions=None) -> Any:
     """Independent test encoder for valid sparse fixtures; never a production fallback."""
     from jsonschema import Draft202012Validator
 
+    definitions = local.get("$defs", {}) if definitions is None else definitions
+    if "$ref" in local:
+        assert local["$ref"].startswith("#/$defs/")
+        return _encode_nullable_fixture(value, definitions[local["$ref"].removeprefix("#/$defs/")], definitions=definitions)
     for union in ("oneOf", "anyOf"):
         if union in local:
-            matches = [branch for branch in local[union] if Draft202012Validator(branch).is_valid(value)]
+            matches = [branch for branch in local[union]
+                       if Draft202012Validator({"$defs": definitions, **branch}).is_valid(value)]
             assert len(matches) == 1
-            return _encode_nullable_fixture(value, matches[0])
+            return _encode_nullable_fixture(value, matches[0], definitions=definitions)
     if isinstance(value, dict):
         required = list(local.get("required", []))
-        if "if" in local and Draft202012Validator(local["if"]).is_valid(value):
+        if "if" in local and Draft202012Validator({"$defs": definitions, **local["if"]}).is_valid(value):
             required += local["then"]["required"]
         return {
-            key: (_encode_nullable_fixture(value[key], child) if key in value else None)
+            key: (_encode_nullable_fixture(value[key], child, definitions=definitions) if key in value else None)
             for key, child in local["properties"].items()
             if key in value or key not in required
         }
     if isinstance(value, list):
-        return [_encode_nullable_fixture(child, local["items"]) for child in value]
+        return [_encode_nullable_fixture(child, local["items"], definitions=definitions) for child in value]
     return copy.deepcopy(value)
 
 
@@ -102,19 +115,20 @@ def _sparse_event_item(event):
 
     item = build_runtime_fixture("workbench_blade")
     calls = item["runtimeProgram"]["calls"]
-    spawn = next(row for row in calls if row["fn"] == "spawn_entity_on_event")
+    spawn = next(row for row in calls if row["fn"] == "spawn_on_event")
     selected = {"id": "pull_case", "fn": "pull_on_event", "target": spawn["target"],
         "params": {"when": {'everySeconds': (6) / 60} if event == "periodic" else event,
-                   "mode": "target_to_entity", "impulseBlocksPerSecond": 3.75, "radiusTiles": 8}}
+                   "mode": "target_to_entity", "impulseBlocksPerSecond": 3.75, "radius": 8}}
     calls.append(selected)
-    next(row for row in calls if row["fn"] == "configure_item_stats")["params"].pop("manaCost", None)
+    next(row for row in calls if row["fn"] == "item_stats")["params"].pop("manaCost", None)
     return item, selected
 
 
 @pytest.mark.parametrize("control", ["nullable-valid", "required-null", "unknown-function"])
 def test_subscription_author_parse_preserves_nullable_optionals_and_refuses_invalid_authorship(monkeypatch, control):
-    from infini_local.pipelines import author_item_contract as contract, llm_authoring_pipeline as author
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
+    from infini_local.pipelines.author import item_contract as contract
+    from infini_local.pipelines.author import request as author
 
     item, _ = _sparse_event_item("on_hit")
     encoded = _encode_nullable_fixture(item, contract.author_item_response_schema())
@@ -150,9 +164,10 @@ def test_subscription_author_parse_preserves_nullable_optionals_and_refuses_inva
 
 
 def test_subscription_repair_wire_inverse_precedes_frozen_merge(monkeypatch):
-    from jsonschema import Draft202012Validator
-    from infini_local.pipelines import author_item_contract as contract, llm_authoring_pipeline as author
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
+    from infini_local.pipelines.author import item_contract as contract
+    from infini_local.pipelines.author import request as author
+    from jsonschema import Draft202012Validator
 
     item, selected = _sparse_event_item("periodic")
     expected = copy.deepcopy(item)
@@ -434,7 +449,7 @@ def test_subscription_dispatch_strips_foreign_pin_and_never_pays_for_fallback(wi
             raise auth.CodexError("OpenAI HTTP 429: quota")
         return response
     monkeypatch.setattr(auth, "post_sse", post)
-    monkeypatch.setattr(llm, "http_json", lambda *_a, **_k: pytest.fail("paid/legacy HTTP called"))
+    monkeypatch.setattr(transport_http, "http_json", lambda *_a, **_k: pytest.fail("paid/legacy HTTP called"))
     request = packet("visual_director")
     request["provider"] = {"only": [PIN], "allow_fallbacks": False}
     request["reasoning"] = {"effort": "high"}
@@ -590,8 +605,8 @@ def test_expired_session_refreshes_once_under_concurrent_requests(tmp_path, monk
 
 def test_browser_login_exchanges_pkce_once_and_saves_only_after_callback(tmp_path, monkeypatch):
     import threading
-    from urllib.request import urlopen
     from urllib.error import HTTPError
+    from urllib.request import urlopen
     path = tmp_path / "codex-auth.json"
     calls, threads, callback_results = [], [], []
     def post(url, payload, **kwargs):
@@ -718,7 +733,7 @@ def test_native_session_roundtrip_is_private_and_status_has_no_secrets(tmp_path)
     ("magenta", True, "off", "transparent"),
 ])
 def test_codex_dispatch_writes_verified_png_and_preserves_authored_prompt(tmp_path, monkeypatch, color, remove_bg, mode, background):
-    from infini_local.pipelines import pipeline_visual_config as visual_config
+    from infini_local.core.images import config as visual_config
     monkeypatch.setattr(visual_config, "BG_COLOR", color)
     monkeypatch.setattr(visual_config, "REMOVE_BG", remove_bg)
     monkeypatch.setattr(visual_config, "BG_REMOVE_MODE", mode)
@@ -728,9 +743,11 @@ def test_codex_dispatch_writes_verified_png_and_preserves_authored_prompt(tmp_pa
     import contextlib
     import io
     import time
-    from PIL import Image
-    from infini_local.pipelines import image_backend_pipeline as backend, visual_sprite_generation as visual
+
+    from infini_local.pipelines.images import backends as backend
+    from infini_local.pipelines.images import stage as visual
     from infini_local.services import codex_auth as auth
+    from PIL import Image
     assert hasattr(backend, "generate_openai_codex"), "Codex is not connected to sprite dispatch"
     stream = io.BytesIO()
     Image.new("RGBA", (64, 64), (15, 120, 240, 255)).save(stream, format="PNG")
@@ -768,7 +785,7 @@ def test_codex_dispatch_writes_verified_png_and_preserves_authored_prompt(tmp_pa
 
 
 def test_codex_auth_error_is_not_retried_or_replaced_by_procedural(monkeypatch):
-    from infini_local.pipelines import visual_sprite_generation as visual
+    from infini_local.pipelines.images import stage as visual
     from infini_local.services.codex_auth import CodexError
     calls, fallbacks = [], []
     def fail(*args, **kwargs):

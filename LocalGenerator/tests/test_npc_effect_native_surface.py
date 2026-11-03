@@ -6,7 +6,7 @@ import pytest
 from infini_local.qa import primitive_loss_audit as audit
 from infini_local.qa.capability_library_audit import _runtime_param_bound_rows
 
-FN = "apply_npc_effect_on_event"
+FN = "npc_effect_on_event"
 CLS = "RuntimeNpcEffectSpec"
 
 
@@ -15,7 +15,7 @@ def test_npc_component_has_per_destination_source_and_wire_coverage():
     assert report["ok"], report
     assert CLS in report["unclassifiedByClass"]
     rows = {r["param"]: r for r in _runtime_param_bound_rows() if r["capability"] == FN}
-    for name in ("damagePerSecond", "defenseDelta", "contactDamageMultiplier", "velocityRetentionPerTick", "chancePercent"):
+    for name in ("damagePerSecond", "defenseDelta", "contactDamageMultiplier", "retentionPerTick", "chancePercent"):
         assert rows[name]["csharpClass"] == CLS
         assert rows[name]["preserved"], rows[name]
         assert rows[name]["admission"] == "reject_without_clamp"

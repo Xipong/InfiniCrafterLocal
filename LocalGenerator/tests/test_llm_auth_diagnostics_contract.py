@@ -1,11 +1,29 @@
-
 import io
 from urllib.error import HTTPError
 
+import infini_local.pipelines.transport.http as transport_http
 import pytest
+from infini_local.pipelines.transport import client as llm_transport
+from infini_local.pipelines.transport import profiles as llm_profiles
 
-from infini_local.pipelines import llm_profiles
-from infini_local.pipelines import llm_transport
+
+@pytest.mark.parametrize("selected_model", ["gpt-6-sol", ""])
+def test_exported_trace_names_the_selected_codex_model(monkeypatch, tmp_path, selected_model):
+    from infini_local.web import server
+
+    auth = {"provider": "openai_codex", "model": selected_model, "status": "signed_in_unverified"}
+    monkeypatch.setattr(server, "active_llm_provider", lambda: "openai_codex")
+    monkeypatch.setattr(server, "llm_auth_snapshot", lambda: auth)
+    monkeypatch.setattr(server, "LMSTUDIO_MODEL", "unused-local-model")
+    monkeypatch.setattr(server, "sdcpp_debug_snapshot", lambda **_kwargs: {})
+    monkeypatch.setattr(server, "tail_ndjson", lambda *_args: [])
+    monkeypatch.setattr(server.generation_debug, "last_combine_failure_summary", lambda: {})
+    monkeypatch.setattr(server.generation_debug, "LAST_COMBINE_FAILURE_FILE", tmp_path / "missing-failure.json")
+
+    pipeline = server.trace_snapshot()["pipeline"]
+    assert pipeline["llmProvider"] == "openai_codex"
+    assert pipeline["llmModel"] == selected_model
+    assert pipeline["llmAuth"] == auth
 
 
 def test_openrouter_auth_diagnostics_are_exposed_and_fail_fast(monkeypatch):
@@ -50,7 +68,7 @@ def test_openrouter_unauthorized_request_reports_actionable_secret_free_diagnosi
         raise HTTPError(url, 401, "Unauthorized", {}, io.BytesIO(
             ('{"error":{"message":"invalid key ' + context["api_key"] + '"}}').encode()))
 
-    monkeypatch.setattr(llm_transport, "http_json", unauthorized)
+    monkeypatch.setattr(transport_http, "http_json", unauthorized)
     monkeypatch.setattr(llm_transport, "log_event", lambda *args: logs.append(args))
     monkeypatch.delenv("INFINI_LLM_REPLAY_RAW", raising=False)
     payload = {"model": "test-model", "messages": [{"role": "user", "content": "literal request"}]}

@@ -105,8 +105,9 @@ public sealed class GeneratedUtilityBuffUISystem : ModSystem
         Main.spriteBatch.Draw(texture, imagePoint, null, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
         if (remainingTicks > 2)
         {
-            string duration = Lang.LocalizedDuration(new TimeSpan(0, 0, itemSprite is null ? remainingTicks / 60 : (remainingTicks + 59) / 60),
-                abbreviated: true, showAllAvailableUnits: false);
+            string duration = remainingTicks == int.MaxValue ? "∞"
+                : Lang.LocalizedDuration(TimeSpan.FromSeconds(itemSprite is null ? remainingTicks / 60 : ((long)remainingTicks + 59) / 60),
+                    abbreviated: true, showAllAvailableUnits: false);
             Utils.DrawBorderString(Main.spriteBatch, duration,
                 new Vector2(point.X, point.Y + height), color, 0.8f);
         }

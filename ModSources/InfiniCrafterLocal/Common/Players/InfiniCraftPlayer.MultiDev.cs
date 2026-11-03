@@ -494,6 +494,7 @@ public sealed partial class InfiniCraftPlayer
             packet.Write(_stationEscrowClientId);
             packet.Write(job.RequestId);
             packet.Write(reason ?? "client_cancel");
+            WriteRemoteCraftCancelIdentity(packet, job.LaneIndex, job.Request);
             packet.Send();
         }
         catch { }

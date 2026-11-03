@@ -44,6 +44,44 @@ public sealed partial class GeneratorClient
         private Dictionary<int, HashSet<int>>? postdominators;
         private readonly Dictionary<int, HashSet<int>> controlRegions = new();
 
+        internal readonly HashSet<int> CompleteCallPrefixes = new();
+
+        internal static ParentSourceMethod ForCallPrefixes(MethodBase method, List<AmmoIl> code, IEnumerable<MethodBase> callees)
+        {
+            // Complete predecessor closure over the original method, not an
+            // identity-window slice. Unrelated terminating arms need not be
+            // decoded; every normal path into a selected call is retained.
+            // Constructor admission rejects any included exception region, so
+            // handler/finally side effects can never be silently certified absent.
+            var targets = callees.ToHashSet();
+            var calls = code.Where(i => i.Arg is MethodBase call && targets.Contains(call)).Select(i => i.Offset).ToArray();
+            if (calls.Length == 0) throw new NotSupportedException("call_prefix_missing");
+            var predecessors = code.ToDictionary(i => i.Offset, _ => new List<int>());
+            var next = code.Zip(code.Skip(1), (a, b) => (a.Offset, b.Offset)).ToDictionary(p => p.Item1, p => p.Item2);
+            void Edge(int from, int to)
+            {
+                if (!predecessors.TryGetValue(to, out var incoming)) throw new NotSupportedException("call_prefix_invalid_target");
+                incoming.Add(from);
+            }
+            foreach (var instruction in code)
+            {
+                if (instruction.Op == "switch" && instruction.Arg is int[] switches)
+                    foreach (int target in switches) Edge(instruction.Offset, target);
+                else if (IsBranch(instruction) && instruction.Arg is int target) Edge(instruction.Offset, target);
+                if (instruction.Op is not ("br" or "br.s" or "leave" or "leave.s" or "ret" or "throw" or "rethrow" or "jmp")
+                    && next.TryGetValue(instruction.Offset, out int following)) Edge(instruction.Offset, following);
+            }
+            var included = new HashSet<int>(); var pending = new Stack<int>(calls);
+            while (pending.Count > 0)
+            {
+                int offset = pending.Pop(); if (!included.Add(offset)) continue;
+                foreach (int predecessor in predecessors[offset]) pending.Push(predecessor);
+            }
+            var result = new ParentSourceMethod(method, code.Where(i => included.Contains(i.Offset)).ToList(), next);
+            result.CompleteCallPrefixes.UnionWith(calls);
+            return result;
+        }
+
         internal HashSet<int> Reach(int start)
         {
             if (reachable.TryGetValue(start, out var cached)) return cached;
@@ -92,7 +130,7 @@ public sealed partial class GeneratorClient
             return controlRegions[start] = region;
         }
 
-        internal ParentSourceMethod(MethodBase method, List<AmmoIl>? sourceSlice = null, Dictionary<int, int>? sourceNext = null)
+        internal ParentSourceMethod(MethodBase method, List<AmmoIl>? sourceSlice = null, Dictionary<int, int>? sourceNext = null, Dictionary<int, int>? selectedSuccessors = null)
         {
             Method = method;
             Code = sourceSlice ?? ReadAmmoIl(method, preserveStructure: true, sourceGraph: true);
@@ -142,6 +180,13 @@ public sealed partial class GeneratorClient
                     Blocks[target] = new Block { Start = target };
                 Unknown.Add("source_slice_entry_and_external_CFG_targets_unresolved");
             }
+            if (selectedSuccessors is not null)
+                foreach (var (start, successor) in selectedSuccessors)
+                {
+                    if (!Blocks.TryGetValue(start, out var block) || !block.Next.Contains(successor))
+                        throw new NotSupportedException("identity_selection_invalid_successor");
+                    block.Next = new List<int> { successor };
+                }
             DetermineHeights();
             foreach (Block block in Blocks.Values.Where(b => b.Height >= 0)) DecodeBlock(block);
             LinkLocals();

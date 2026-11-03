@@ -12,8 +12,15 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.mark.parametrize('api_mode', ['chat_completions', 'responses'])
-@pytest.mark.parametrize('mutation,expected', [('none', 'accepted'), ('temperature', 'blocked'), ('wire-temperature', 'blocked'), ('image', 'blocked')])
+@pytest.mark.parametrize('api_mode,mutation,expected', [
+    ('chat_completions', 'none', 'accepted'),
+    ('responses', 'none', 'accepted'),
+    ('chat_completions', 'wire-temperature', 'blocked'),
+    ('responses', 'wire-temperature', 'blocked'),
+    # These guards reject before API-specific wire projection.
+    ('chat_completions', 'temperature', 'blocked'),
+    ('chat_completions', 'image', 'blocked'),
+])
 def test_actual_request_and_parser_through_campaign_hooks(tmp_path, mutation, expected, api_mode):
     # Import-time provider configuration is intentionally exercised in a fresh process.
     script = textwrap.dedent('''
@@ -38,10 +45,11 @@ def test_actual_request_and_parser_through_campaign_hooks(tmp_path, mutation, ex
         sys.addaudithook(offline)
         from toolbox.live.options import build_parser
         from toolbox.live import support
-        from infini_local.pipelines import llm_transport
-        from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+        from infini_local.pipelines.transport import client as llm_transport
+        from infini_local.pipelines.transport import http as transport_http, rejections as transport_rejections
+        from infini_local.pipelines.author.request import build_initial_author_request
         from infini_local.core.llm_json_tools import parse_first_valid_llm_json
-        from infini_local.pipelines.llm_provider_wire import with_llm_stage
+        from infini_local.pipelines.transport.provider_wire import with_llm_stage
         args = build_parser().parse_args(['--expected-model', 'qa-model', '--expected-temperature', '0.5', '--expected-max-tokens', '512', '--expected-response-format', 'json_object'])
         from contextvars import ContextVar
         active_stage = ContextVar('test_stage', default='non_author')
@@ -69,7 +77,7 @@ def test_actual_request_and_parser_through_campaign_hooks(tmp_path, mutation, ex
                     'lease_snapshot', 'case_trace_fields', 'wall_time_fields', 'forbidden_backend'}
         nodes = [node for node in ast.parse(harness.read_text()).body if isinstance(node, ast.FunctionDef) and node.name in selected]
         exec(compile(ast.Module(body=nodes, type_ignores=[]), str(harness), 'exec'), ns)
-        llm_transport.http_json = ns['captured_http_json']
+        transport_http.http_json = ns['captured_http_json']
         items = [json.loads(line) for line in (root / 'toolbox/fixtures/items.jsonl').read_text(encoding='utf-8-sig').splitlines() if line.strip()]
         parents = {row['internalName']: row for row in items}
         request, _, _ = build_initial_author_request(parents['WoodenSword'], parents['WorkBench'], 'qa-request')
@@ -93,3 +101,19 @@ def test_actual_request_and_parser_through_campaign_hooks(tmp_path, mutation, ex
     assert report['outcome'] == expected
     assert report['sent'] == (1 if expected == 'accepted' else 0)
     assert report['counts']['activeLogical'] == report['counts']['activeHttp'] == 0
+
+
+def test_runner_help_does_not_import_generator_before_admitted_run():
+    script = """
+import runpy, sys
+class RejectProduction:
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == 'infini_local' or fullname.startswith('infini_local.'):
+            raise AssertionError('generator imported before admitted run')
+sys.meta_path.insert(0, RejectProduction())
+sys.argv = ['runner', '--help']
+runpy.run_module('toolbox.live.runner', run_name='__main__')
+"""
+    result = subprocess.run([sys.executable, '-c', script], cwd=ROOT, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    assert '--run' in result.stdout

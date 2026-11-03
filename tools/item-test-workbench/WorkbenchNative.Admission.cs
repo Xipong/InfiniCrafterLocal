@@ -7,6 +7,20 @@ using Terraria;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static void WValidateHistoryTrail(VfxSlotSpec slot,bool drawPlayer,GeneratedItemData? data=null)
+    {
+        if(drawPlayer&&data is not null&&slot.EntityId==data.RuntimeProgram.ItemEntityId&&slot.Event=="on_use") {
+            if(slot.Layer is not ("BeforePlayer" or "AfterPlayer")||slot.Trail is not {} held
+                ||held.Source is not ("center" or "tip")||!(held.Draw=="stroke"||held.Draw=="sprites"&&held.Texture?.Source=="item"))
+                throw new NotSupportedException("Held history proof covers stroke or exact item texture with final native body pose only");
+            return;
+        }
+        // Sprite history is evidenced only for the exact published entity texture
+        // and its recorded pose; alternate materials/anchors remain unadmitted.
+        if(!drawPlayer || slot.Trail is not {} trail || trail.Source!="center"
+            || !(trail.Draw=="stroke" || trail.Draw=="sprites" && trail.Texture?.Source=="entity" && trail.Pose=="sampled"))
+            throw new NotSupportedException("historyTrail requires full native draw and stroke/center or sampled entity sprites/center");
+    }
     private sealed class WWorldIdentity : IDisposable
     {
         private readonly int previous=Terraria.Main.worldID;
@@ -20,13 +34,15 @@ internal static partial class EngineRuntimeChecks
         if(binding is null) return "No binding for input "+input;
         if(!client && binding.UsePolicy.ContactDamage) return "Item-body contact requires native client geometry for input "+input+"; use client_hybrid for admitted no-VFX projectile combinations or client_vfx for supported VFX";
         string kind=binding.UsePolicy.Action.Kind;
-        if(client && kind!=RuntimeBindingAction.UseItemBody && !(hybrid && kind==RuntimeBindingAction.SpawnEntity) && !(render && kind==RuntimeBindingAction.ApplyItemEffects) && kind!=RuntimeBindingAction.PlaceItem && !(render && kind==RuntimeBindingAction.EquipPassive)) return "Client input requires use_item_body or hybrid spawn_entity: "+input;
+        if(kind==RuntimeBindingAction.NativeFishing && !full)return "Native fishing requires full player lifecycle";
+        if(client && kind!=RuntimeBindingAction.NativeFishing && kind!=RuntimeBindingAction.UseItemBody && !(hybrid && kind==RuntimeBindingAction.SpawnEntity) && !(render && kind==RuntimeBindingAction.ApplyItemEffects) && kind!=RuntimeBindingAction.PlaceItem && !(render && kind==RuntimeBindingAction.EquipPassive)) return "Client input requires use_item_body or hybrid spawn_entity: "+input;
         bool effects=full && kind==RuntimeBindingAction.ApplyItemEffects;
         bool placement=full && kind==RuntimeBindingAction.PlaceItem && binding.UsePolicy.StackCost==1;
         bool equipment=full && input==RuntimeInputKind.Equipped && (data.Accessory.Enabled || data.Armor.Enabled) && kind==RuntimeBindingAction.EquipPassive;
-        if(kind!=RuntimeBindingAction.SpawnEntity && !effects && !equipment && !placement && !(client && kind==RuntimeBindingAction.UseItemBody)) return "Input action is not admitted: "+input+" / "+kind;
-        if(render && effects && data.EffectsForBinding(binding).ExtraBuffs.Length>0) return "Client VFX item effects currently require no native ExtraBuffs; spawned vanilla buff actors/art are not admitted";
-        if(effects && data.EffectsForBinding(binding).MobilityMode is not ("" or "blink_to_cursor")) return "Only blink_to_cursor item mobility is admitted";
+        if(kind!=RuntimeBindingAction.NativeFishing && kind!=RuntimeBindingAction.SpawnEntity && !effects && !equipment && !placement && !(client && kind==RuntimeBindingAction.UseItemBody)) return "Input action is not admitted: "+input+" / "+kind;
+        if(render && effects && data.EffectsForBinding(binding).ExtraBuffs.Any(b=>b.BuffCode is not (Terraria.ID.BuffID.Gravitation or Terraria.ID.BuffID.Sonar)))
+            return "Client VFX ExtraBuffs admit only proven native Gravitation/Sonar flags; other buff actors/art are not admitted";
+        if(effects && data.EffectsForBinding(binding).MobilityMode is not ("" or "blink_to_cursor" or "recall_home")) return "Only blink_to_cursor and explicit-scene recall_home item mobility are admitted";
         return null;
     }
     private static void WRequireBinding(GeneratedItemData data,string input,bool full,bool client,bool hybrid,bool render=false)

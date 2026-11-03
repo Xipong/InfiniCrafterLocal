@@ -25,6 +25,42 @@ public sealed partial class GeneratorClient
         return graph.Finish();
     }
 
+    // Shared native identity-window recognizer. It selects source syntax only;
+    // entry, hooks and any opaque/non-identity predicates remain unresolved.
+    private static IEnumerable<(string Field, int Literal, int Guard, AmmoIl[] Code)> ProjectileIdentityWindows(List<AmmoIl> code, int type, int style, Action<string>? gap = null, bool meaningfulBudget = false)
+    {
+        for (int n = 0; n + 4 < code.Count; n++)
+        {
+            if (code[n].Op != "ldarg" || !Equals(code[n].Arg, 0)
+                || code[n + 1].Op != "ldfld" || code[n + 1].Arg is not FieldInfo field || field.DeclaringType != typeof(Projectile)
+                || code[n + 2].Op != "const" || code[n + 2].Arg is not int literal
+                || !(field.Name == "type" && literal == type || field.Name == "aiStyle" && literal == style)
+                || code[n + 3].Op is not ("bne.un" or "bne.un.s" or "beq" or "beq.s")
+                || code[n + 3].Arg is not int destination) continue;
+            if (destination <= code[n + 3].Offset)
+            { gap?.Invoke("identity_window_nonforward_branch_unsupported"); continue; }
+            int start = n + 4, end;
+            if (code[n + 3].Op is "bne.un" or "bne.un.s") end = destination;
+            else if (code[n + 3].Op is "beq" or "beq.s")
+            {
+                start = code.FindIndex(i => i.Offset == destination);
+                if (start < 1 || code[start - 1].Op is not ("bne.un" or "bne.un.s" or "br" or "br.s")
+                    || code[start - 1].Arg is not int boundary || boundary <= destination) continue;
+                end = boundary;
+            }
+            else continue;
+            // The broad source graph keeps its raw1024 budget. Narrow attack
+            // observation can admit nop-padded windows without removing offsets.
+            int rawLimit = meaningfulBudget ? 4096 : 1024;
+            var window = code.Skip(n).Take(4).Concat(code.Skip(start).TakeWhile(i => i.Offset < end)).Take(rawLimit + 1).ToArray();
+            if (window.Length > rawLimit)
+            { gap?.Invoke("identity_window_raw_instruction_bound"); continue; }
+            if (meaningfulBudget && window.Count(i => i.Op != "nop") > 1024)
+            { gap?.Invoke("identity_window_meaningful_instruction_bound"); continue; }
+            yield return (field.Name, literal, code[n + 3].Offset, window);
+        }
+    }
+
     private sealed class ParentSourceGraph
     {
         private const int NodeLimit = 48, EdgeLimit = 192, DepthLimit = 6, CharacterLimit = 16000;
@@ -225,7 +261,10 @@ public sealed partial class GeneratorClient
         {
             if (observation is JsonObject row)
             {
-                string target = row["receiver"]?.GetValue<string>() ?? receiver;
+                // Structured source expressions can also have a receiver; only
+                // a literal recipient token belongs to a buff observation.
+                string target = row["receiver"] is JsonValue recipient && recipient.TryGetValue<string>(out string? observed)
+                    ? observed ?? receiver : receiver;
                 if (row["buffId"] is JsonValue value && value.TryGetValue<int>(out int id)) Buff(id, target, null, null);
                 foreach (var pair in row) ObservedBuffs(pair.Value, pair.Key == "nativeBuffEffectReference" ? "player" : target);
             }
@@ -257,7 +296,6 @@ public sealed partial class GeneratorClient
 
         private void NativeProjectile(Projectile projectile, int? from, int? at)
         {
-            if (!NativeSourceModuleVerified.Value) { Gap("native_projectile_module_certificate_unavailable"); return; }
             foreach (string name in new[] { "VanillaAI", "Kill" })
             {
                 MethodInfo? method = typeof(Projectile).GetMethod(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -266,36 +304,18 @@ public sealed partial class GeneratorClient
                 {
                     if (!nativeCode.TryGetValue(method, out var code))
                     {
-                        nativeCode[method] = code = ReadAmmoIl(method, preserveStructure: true, sourceGraph: true);
+                        nativeCode[method] = code = AttackCode(method);
                         nativeNext[method] = code.Zip(code.Skip(1), (left, right) => (left.Offset, Next: right.Offset)).ToDictionary(p => p.Offset, p => p.Next);
                     }
                     var selected = new Dictionary<int, AmmoIl>();
                     // Exact type/AI-style equality fallthrough windows. Entry,
                     // missing predecessors and exits stay explicitly unresolved.
                     // No other branch arm is executed, selected or assumed true.
-                    for (int n = 0; n + 4 < code.Count; n++)
-                    {
-                        if (code[n].Op != "ldarg" || !Equals(code[n].Arg, 0)
-                            || code[n + 1].Op != "ldfld" || code[n + 1].Arg is not FieldInfo field || field.DeclaringType != typeof(Projectile)
-                            || code[n + 2].Op != "const" || code[n + 2].Arg is not int literal
-                            || !(field.Name == "type" && literal == projectile.type || field.Name == "aiStyle" && literal == projectile.aiStyle)
-                            || code[n + 3].Arg is not int destination || destination <= code[n + 3].Offset) continue;
-                        int start = n + 4, end;
-                        if (code[n + 3].Op is "bne.un" or "bne.un.s") end = destination;
-                        else if (code[n + 3].Op is "beq" or "beq.s")
-                        {
-                            start = code.FindIndex(i => i.Offset == destination);
-                            if (start < 1 || code[start - 1].Op is not ("bne.un" or "bne.un.s" or "br" or "br.s")
-                                || code[start - 1].Arg is not int boundary || boundary <= destination) continue;
-                            end = boundary;
-                        }
-                        else continue;
-                        var window = code.Skip(n).Take(4).Concat(code.Skip(start).TakeWhile(i => i.Offset < end)).Take(1025).ToArray();
-                        if (window.Length > 1024) { Gap("native_projectile_equality_window_bound"); continue; }
-                        foreach (var instruction in window) selected[instruction.Offset] = instruction;
-                    }
+                    bool windowRefused = false;
+                    foreach (var window in ProjectileIdentityWindows(code, projectile.type, projectile.aiStyle, reason => { windowRefused = true; Gap(reason); }))
+                        foreach (var instruction in window.Code) selected[instruction.Offset] = instruction;
                     if (selected.Count == 0)
-                    { Edge(from, null, "native_projectile_source", at, JsonValue.Create(projectile.type), "no_supported_type_or_aiStyle_equality_window_in_" + name); continue; }
+                    { Edge(from, null, "native_projectile_source", at, JsonValue.Create(projectile.type), windowRefused ? "native_identity_window_refused_in_" + name : "no_supported_type_or_aiStyle_equality_window_in_" + name); continue; }
                     if (nativeSlices.TryGetValue(method, out var prior)) foreach (var instruction in prior) selected[instruction.Offset] = instruction;
                     if (selected.Count > 4096) { Gap("native_projectile_source_window_limit"); continue; }
                     bool changed = prior is null || prior.Count != selected.Count;
@@ -327,7 +347,7 @@ public sealed partial class GeneratorClient
                     Edge(from, node, "requested_buff_implementation", at, new JsonObject { ["buffId"] = id, ["receiver"] = receiver }, node is null ? "graph_limit" : null);
                 }
             else NativeBuff(id, receiver, from);
-            if (NativeSourceModuleVerified.Value)
+            // Read the actual loaded admission method, not a cached source certificate.
             {
                 Type target = receiver == "npc" ? typeof(NPC) : typeof(Player);
                 MethodInfo? admission = target.GetMethods(BindingFlags.Instance | BindingFlags.Public).FirstOrDefault(m => m.Name == "AddBuff");

@@ -16,6 +16,20 @@ internal static partial class EngineRuntimeChecks
     private static void PlayedSilverFinalDeliveryAndNativeColorConsumers()
     {
         string wire = File.ReadAllText(Path.Combine("tools", "fixtures", "played-silver-delivered.json"));
+        // Frozen historical delivery stays untouched; this test exercises its RGB semantics in the current envelope.
+        Equal("ebab278b44ec2938c0341f8c32c9fecf06e9ccb02fafebd8c4c2de5c27a5fda7",
+            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(wire))).ToLowerInvariant(), "immutable played silver source");
+        Equal(true, GeneratedItemData.FromJson(wire) is null, "retired original delivery is not silently imported");
+        var envelope = JsonNode.Parse(wire)!;
+        Equal("immediate", envelope["runtimeProgram"]!["itemUse"]!["releaseTiming"]!.GetValue<string>(), "known saved runtime timing");
+        Equal("immediate", envelope["gameplay"]!["releaseTiming"]!.GetValue<string>(), "known saved gameplay timing");
+        envelope["runtimeProgram"]!["itemUse"]!.AsObject().Remove("releaseTiming");
+        envelope["gameplay"]!.AsObject().Remove("releaseTiming");
+        var restoredEnvelope = envelope.DeepClone();
+        restoredEnvelope["runtimeProgram"]!["itemUse"]!["releaseTiming"] = "immediate";
+        restoredEnvelope["gameplay"]!["releaseTiming"] = "immediate";
+        Equal(true, JsonNode.DeepEquals(JsonNode.Parse(wire), restoredEnvelope), "only the two retired envelope fields differ; RGB and mechanics are original");
+        wire = envelope.ToJsonString(); // Every later positive and negative RGB control uses this explicit current envelope.
         var data = GeneratedItemData.FromJson(wire)
             ?? throw new InvalidOperationException("RGB final delivery refused: " + ContractJsonDiagnostics.LastError);
         Color silver = new(192, 192, 192);

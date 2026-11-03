@@ -7,8 +7,8 @@ import json
 import pytest
 
 from infini_local.core import llm_config
-from infini_local.pipelines import llm_profiles
-from infini_local.pipelines import llm_provider_wire
+from infini_local.pipelines.transport import profiles as llm_profiles
+from infini_local.pipelines.transport import provider_wire as llm_provider_wire
 from infini_local.services import codex_auth as auth, codex_text_backend as text
 from infini_local.storage import trace_runtime as trace, trace_tools
 
@@ -57,7 +57,7 @@ def test_stalled_failed_trace_writer_cannot_delay_post_or_sse_parsing(recording,
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
     from infini_local.storage import trace_tools
-    from infini_local.pipelines import llm_transport as llm
+    from infini_local.pipelines.transport import client as llm
     entered, release = Event(), Event()
     original = trace_tools.append_ndjson
     def stalled(path, record, **kwargs):
@@ -122,7 +122,7 @@ def test_transport_ndjson_lock_does_not_block_generation_event_logging(recording
     from threading import Event
     from contextlib import contextmanager
     from infini_local.storage import trace_tools
-    from infini_local.pipelines import llm_transport as llm
+    from infini_local.pipelines.transport import client as llm
     entered, release = Event(), Event()
     original = trace_tools._ndjson_process_lock
     @contextmanager
@@ -153,7 +153,7 @@ def test_artifact_fsync_does_not_block_generation_event_logging(recording, monke
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
     from infini_local.storage import trace_tools
-    from infini_local.pipelines import llm_transport as llm
+    from infini_local.pipelines.transport import client as llm
     entered, release = Event(), Event()
     def stalled_fsync(fd):
         entered.set()
@@ -175,7 +175,7 @@ def test_artifact_fsync_does_not_block_generation_event_logging(recording, monke
 
 def test_expired_before_real_opener_reports_zero_physical_posts(recording, monkeypatch):
     from infini_local.core import http_io
-    from infini_local.pipelines import llm_transport as llm
+    from infini_local.pipelines.transport import client as llm
     clock = [100.0]
     opened = []
     monkeypatch.setattr(auth.time, "monotonic", lambda: clock[0])
@@ -200,7 +200,7 @@ def test_expired_before_real_opener_reports_zero_physical_posts(recording, monke
 def test_concurrent_codex_calls_keep_join_and_attempt_state_request_local(recording, monkeypatch):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
-    from infini_local.pipelines import llm_transport as llm
+    from infini_local.pipelines.transport import client as llm
     barrier = Barrier(2)
     monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
     monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "fixture-model")
@@ -227,7 +227,7 @@ def test_concurrent_codex_calls_keep_join_and_attempt_state_request_local(record
 
 def test_observed_codex_zero_send_removes_unknown_scope(recording, monkeypatch):
     from infini_local.core.http_io import HttpDeadlineExceeded
-    from infini_local.pipelines import llm_transport as llm
+    from infini_local.pipelines.transport import client as llm
     monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
     monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "fixture-model")
     remaining = auth.remaining_seconds
@@ -258,7 +258,7 @@ def test_malformed_provider_event_type_is_recorded_before_original_parser_reject
 
 @pytest.mark.parametrize("transport", ["text", "image"])
 def test_trace_off_still_counts_physical_posts_but_never_traces_auth(recording, monkeypatch, transport):
-    from infini_local.pipelines import llm_transport as llm
+    from infini_local.pipelines.transport import client as llm
     monkeypatch.setattr(trace, "TRACE_PROMPTS_ENABLED", False)
     monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
     monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "fixture-model")
@@ -609,7 +609,7 @@ def test_transport_artifacts_redact_all_json_members_and_nested_escaped_strings(
 def test_llm_logical_summary_counts_actual_codex_retry_posts(recording, monkeypatch):
     from email.message import Message
     from urllib.error import HTTPError
-    from infini_local.pipelines import llm_transport as llm
+    from infini_local.pipelines.transport import client as llm
     monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
     monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "fixture-model")
     calls = []
@@ -679,3 +679,94 @@ def test_effective_wire_and_actual_post_are_traced_without_headers(recording, mo
     persisted = b"".join(path.read_bytes() for path in recording.rglob("*") if path.is_file())
     for forbidden in (b"Authorization", b"ChatGPT-Account", b"fixture-access-secret", b"fixture-refresh-secret", b"fixture-account-secret"):
         assert forbidden not in persisted
+
+
+@pytest.mark.parametrize("diagnostics_enabled", [True, False])
+@pytest.mark.parametrize("observer_raises", [False, True])
+def test_text_transport_preserves_enclosing_observer(recording, monkeypatch, diagnostics_enabled, observer_raises):
+    from infini_local.pipelines.transport import client as llm
+    from infini_local.pipelines.transport import diagnostics
+    monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
+    monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "fixture-model")
+    install_opener(monkeypatch, lambda req, **_: MemoryResponse(sse(
+        {"type": "response.output_text.delta", "delta": "{}"},
+        {"type": "response.completed", "response": {"status": "completed"}})))
+    observed = []
+    def observe(row):
+        observed.append(dict(row))
+        if observer_raises:
+            raise OSError("fixture observer unavailable")
+    before = auth._GENERATION_OBSERVATIONS.get()
+    with auth.generation_observations({"case": "fixture-case", "attemptId": "fixture-item-attempt", "stage": "outer-stage"}, observe):
+        enclosing = auth._GENERATION_OBSERVATIONS.get()
+        payload = {"messages": [{"role": "user", "content": "fixture"}]}
+        if diagnostics_enabled:
+            result = llm.llm_chat_json(payload, timeout=3)
+            assert result["_debug"]["physicalAttemptCount"] == 1
+        else:
+            assert diagnostics._CURRENT_LLM_DIAGNOSTICS.get() is None
+            result = llm._llm_json_single_context(payload, 3, llm_profiles._primary_llm_context())
+        assert result["choices"][0]["message"]["content"] == "{}"
+        assert auth._GENERATION_OBSERVATIONS.get() == enclosing
+    assert auth._GENERATION_OBSERVATIONS.get() == before
+    assert len([r for r in observed if r["event"] == "post_start"]) == 1
+    assert len([r for r in observed if r["event"] == "call_end"]) == 1
+    assert len({r["transportCallId"] for r in observed}) == 1
+    assert all(r["case"] == "fixture-case" and r["attemptId"] == "fixture-item-attempt" for r in observed)
+    if diagnostics_enabled:
+        assert all(r["stage"] != "outer-stage" and "logicalCallId" in r for r in observed)
+    else:
+        assert all(r["stage"] == "outer-stage" for r in observed)
+    assert len([r for r in rows(recording) if r["event"] == "post_start"]) == 1
+
+
+def test_text_observer_context_restored_after_terminal_failure(recording, monkeypatch):
+    from email.message import Message
+    from urllib.error import HTTPError
+    from infini_local.pipelines.transport import client as llm
+    monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
+    monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "fixture-model")
+    def opened(req, **_):
+        raise HTTPError(req.full_url, 400, "fixture rejection", Message(), MemoryResponse(b'{"error":{"message":"fixture shape"}}'))
+    install_opener(monkeypatch, opened)
+    observed = []
+    before = auth._GENERATION_OBSERVATIONS.get()
+    with auth.generation_observations({"case": "failed-fixture"}, observed.append):
+        enclosing = auth._GENERATION_OBSERVATIONS.get()
+        with pytest.raises(auth.CodexError):
+            llm.llm_chat_json({"messages": [{"role": "user", "content": "fixture"}]}, timeout=3)
+        assert auth._GENERATION_OBSERVATIONS.get() == enclosing
+    assert auth._GENERATION_OBSERVATIONS.get() == before
+    assert len([r for r in observed if r["event"] == "post_start"]) == 1
+    ends = [r for r in observed if r["event"] == "call_end"]
+    assert len(ends) == 1 and ends[0]["outcome"] == "failure"
+    assert all(r["case"] == "failed-fixture" for r in observed)
+
+
+def test_parallel_text_observers_keep_case_identity_and_exact_counts(recording, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    from infini_local.pipelines.transport import client as llm
+    monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
+    monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "fixture-model")
+    barrier = Barrier(2)
+    def opened(req, **_):
+        barrier.wait(timeout=3)
+        return MemoryResponse(sse({"type": "response.output_text.delta", "delta": "{}"},
+            {"type": "response.completed", "response": {"status": "completed"}}))
+    install_opener(monkeypatch, opened)
+    def worker(case):
+        observed = []
+        before = auth._GENERATION_OBSERVATIONS.get()
+        with auth.generation_observations({"case": case}, observed.append):
+            result = llm._llm_json_single_context(
+                {"messages": [{"role": "user", "content": "fixture"}]}, 5, llm_profiles._primary_llm_context())
+        assert auth._GENERATION_OBSERVATIONS.get() == before
+        assert result["choices"][0]["message"]["content"] == "{}"
+        assert {r["case"] for r in observed} == {case}
+        assert len([r for r in observed if r["event"] == "post_start"]) == 1
+        assert len([r for r in observed if r["event"] == "call_end"]) == 1
+        return {r["transportCallId"] for r in observed}
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = list(pool.map(worker, ["first-fixture", "second-fixture"]))
+    assert len(first) == len(second) == 1 and first.isdisjoint(second)

@@ -1,12 +1,12 @@
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import dossier_text, request_dossier
+
 """Exact read-only Gameplay Repair facts must survive the real request builder."""
 import copy
 import json
 
 import pytest
-
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.pipelines import llm_authoring_pipeline as author
+from infini_local.pipelines.author import request as author
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
@@ -14,7 +14,8 @@ class _CapturedBeforeTransport(BaseException):
     pass
 
 
-from repair_test_helpers import offline_builder as _offline_builder, repair_with_response as _repair_with_response
+from repair_test_helpers import offline_builder as _offline_builder
+from repair_test_helpers import repair_with_response as _repair_with_response
 
 
 def _capture_request(monkeypatch, item, format_mode):
@@ -91,7 +92,7 @@ def test_binding_index_retains_current_flat_lanes_in_serialized_request(monkeypa
 
 @pytest.mark.parametrize("action_value", ["absent", None, {}, {"kind": None, "targetId": 0}])
 def test_binding_index_never_uses_legacy_wrapper_or_materializes_absences(action_value):
-    from infini_local.core.runtime_authoring.repair_scope import runtime_repair_fragments
+    from infini_local.core.runtime_authoring.repair.fragments import runtime_repair_fragments
     item = _broken_held_and_deployed()
     binding = item["runtimeProgram"]["bindings"][0]
     binding["usePolicy"] = {"action": {"kind": "legacy_must_not_win", "targetId": "legacy_must_not_win"}}
@@ -163,7 +164,7 @@ def _hostile_patch(item):
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_visible_independent_facts_grant_no_edits_through_real_repair(monkeypatch, format_mode):
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 
     item = _broken_held_and_deployed()
     _call(item, "item_stats")["params"].pop("manaCost")
@@ -190,6 +191,31 @@ def test_visible_independent_facts_grant_no_edits_through_real_repair(monkeypatc
     assert json.dumps(item, ensure_ascii=False) == before
 
 
+@pytest.mark.parametrize("valid_envelope", [True, False], ids=["exact-frozen-merge", "invalid-final-not-example"])
+def test_explicit_final_repair_output_preserves_shape_and_frozen_authority(monkeypatch, valid_envelope):
+    item = _broken_held_and_deployed()
+    before = copy.deepcopy(item)
+    incoming = _hostile_patch(item)
+    if not valid_envelope:
+        incoming["foreignRoot"] = True
+    content = 'An example is {"note":"not the final patch"}.\n```json\n' + json.dumps(incoming) + '\n```'
+    _offline_builder(monkeypatch, "json_object", lambda *_args, **_kwargs: {
+        "choices": [{"message": {"content": content}}]})
+    if not valid_envelope:
+        with pytest.raises(author.PlannerUnavailable, match="patch shape rejected"):
+            author.repair_author_item_after_failure(item, {}, {}, "explicit-output", failure_report=validate_runtime_program(item))
+    else:
+        repaired = author.repair_author_item_after_failure(item, {}, {}, "explicit-output", failure_report=validate_runtime_program(item))
+        audit = repaired.pop("debug")["gameplayRepairFilterAudit"]
+        expected = copy.deepcopy(item)
+        _call(expected, "held_lantern_pike_life")["params"]["lifetimeSeconds"] = 0.5
+        expected["realization"] = copy.deepcopy(incoming["realizationReplacement"])
+        assert repaired == expected
+        assert audit["ok"] and audit["ignoredChanges"]
+        assert validate_runtime_program(repaired)["ok"]
+    assert item == before
+
+
 @pytest.mark.parametrize("context_key", ["acceptedItemContext", "concept", "runtimeProgram", "immutableProgramIndex"])
 def test_readonly_context_is_not_an_output_schema_extension(context_key):
     from infini_local.core.runtime_authoring.program_schema import strict_repair_structure_report
@@ -199,3 +225,54 @@ def test_readonly_context_is_not_an_output_schema_extension(context_key):
     assert strict_repair_structure_report(patch)["ok"]
     patch[context_key] = {}
     assert not strict_repair_structure_report(patch)["ok"]
+
+
+@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("unknown_fn", [False, True], ids=["parameter-only", "unknown-function"])
+def test_repair_request_documents_grammar_without_expanding_frozen_permissions(monkeypatch, format_mode, unknown_fn):
+    from collections import Counter
+
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+    from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.schema import runtime_repair_schema_capabilities
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+
+    item = build_runtime_fixture("held_and_deployed")
+    call = {"id": "audit_light", "fn": "add_light" if unknown_fn else "held_light",
+            "target": "item", "params": {"strength": 0.5 if unknown_fn else 0, "color": "white"}}
+    item["runtimeProgram"]["calls"].append(call)
+    expected_scope = build_runtime_repair_scope(item, validate_runtime_program(item)["errors"])
+    _, dossier = _capture_request(monkeypatch, item, format_mode)
+    assert dossier["repairScope"] == expected_scope
+    names = runtime_repair_schema_capabilities(expected_scope)
+    if unknown_fn:
+        from test_registry_author_packet import _assert_catalog_delivery
+        catalog = dossier["replacementCapabilityCatalog"]
+        # Expand the actual serialized catalog's references and compare all
+        # delivered contracts, including multiplicity, with registry owners.
+        _assert_catalog_delivery(catalog)
+        assert Counter(card["fn"] for card in catalog["capabilities"]) == Counter(names)
+        assert set(names) == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible}
+    else:
+        assert names == ["held_light"]
+        assert "replacementCapabilityCatalog" not in dossier
+        cards = [card for section in ("blockerCapabilities", "supportingCapabilities",
+                                      "existingBrokenCapabilityCards") for card in dossier[section]]
+        assert cards == [CAPABILITY_REGISTRY["held_light"].prompt_card()]
+
+    fixed = {**copy.deepcopy(call), "fn": "held_light", "params": {"strength": 0.5, "color": "white"}}
+    filtered, audit = filter_repair_patch_scope(item, {"callsUpsert": [fixed], "note": "exact fix"}, expected_scope)
+    repaired = apply_repair_patch(item, filtered)
+    assert validate_runtime_program(repaired)["ok"]
+    assert _call(repaired, "audit_light") == fixed
+    assert audit["acceptedPaths"] == ["$.callsUpsert[0]." + ("fn" if unknown_fn else "params.strength")]
+
+    # Supplying full replacement contracts must not thaw target, color or
+    # unrelated calls. Unauthorized changes are ignored, not made authoritative.
+    hostile = copy.deepcopy(fixed)
+    hostile["target"] = "held_lantern_pike"
+    hostile["params"]["color"] = "red"
+    filtered, audit = filter_repair_patch_scope(item, {"callsUpsert": [hostile], "note": "overbroad edit"}, expected_scope)
+    assert _call(apply_repair_patch(item, filtered), "audit_light") == fixed
+    assert audit["ignoredChanges"]

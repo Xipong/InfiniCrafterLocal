@@ -1,9 +1,13 @@
 """Synthetic observer/matrix controls, not native gameplay or balance certification."""
 import copy
 import json
+import os
 from pathlib import Path
+import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 import performance_review as p
 
 
@@ -23,6 +27,71 @@ def sample():
 
 
 class PerformanceTests(unittest.TestCase):
+    def test_trial_children_receive_discovered_resources_and_explicit_overrides(self):
+        # Exercise the real process boundary. This Python child only inspects
+        # resources; it deliberately produces no native gameplay trace.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            native = root / 'tml/Libraries/Native/Linux'
+            particles = root / 'artifacts/dependencies/particle-assets'
+            explicit_particles = root / 'explicit-particles'
+            files = {
+                native / 'libFNA3D.so.0': b'library fixture',
+                root / 'artifacts/dependencies/ParticleLibrary/ParticleLibrary.dll': b'dependency fixture',
+                particles / 'Assets/Textures/Star.png': b'discovered particle fixture',
+                explicit_particles / 'Assets/Textures/Star.png': b'explicit particle fixture',
+            }
+            for path, data in files.items():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+            child = root / 'environment_probe.py'
+            child.write_text('''import json, os, sys
+from pathlib import Path
+native = Path(os.environ['INFINI_TML_NATIVE_DIR'])
+particles = Path(os.environ['INFINI_PARTICLE_ASSET_DIR'])
+receipt = {'native': str(native), 'particles': str(particles),
+           'libraryBytes': (native / 'libFNA3D.so.0').read_text(),
+           'particleBytes': (particles / 'Assets/Textures/Star.png').read_text(),
+           'callerValue': os.environ['IFC_ENV_PROBE']}
+output = Path(sys.argv[sys.argv.index('--output') + 1])
+output.with_name('environment-probe.json').write_text(json.dumps(receipt))
+''', encoding='utf-8')
+            item, parent, scene = root / 'item.json', root / 'parent.json', root / 'scene.json'
+            item.write_text(json.dumps({'id': 'child', 'recipeMeta': {'parentIdentities': ['generated:parent']}}))
+            parent.write_text(json.dumps({'id': 'parent'}))
+            scene.write_text(json.dumps({'ticks': 2, 'seed': 1, 'playerUpdate': 'client_vfx',
+                                         'dummy': {'x': 800, 'y': 700}, 'actions': [{'tick': 0, 'kind': 'primary'}]}))
+            env = {key: value for key, value in os.environ.items() if key not in (
+                'INFINI_TML_DEPS_SRC', 'INFINI_TML_NATIVE_DIR', 'INFINI_PARTICLE_ASSET_DIR')}
+            env.update(DOTNET=sys.executable, INFINI_TML_DIR=str(root / 'tml'), IFC_ENV_PROBE='retained')
+            for explicit in (False, True):
+                with self.subTest(explicit=explicit):
+                    args = SimpleNamespace(item=item, scenario=scene, parent_item=['generated:parent=' + str(parent)],
+                                           control=[], input_pattern='supplied', repeat_every=None, hold_ticks=None,
+                                           repeat_input='primary', plan=False, out=root / str(explicit), native_dll=child,
+                                           vanilla_assets=None, item_boundary='fresh', timeout=10)
+                    current = dict(env)
+                    if explicit:
+                        current['INFINI_PARTICLE_ASSET_DIR'] = str(explicit_particles)
+                    with patch.dict(os.environ, current, clear=True), patch.object(p.w, 'ROOT', root):
+                        self.assertEqual(p.run(args), 2)  # No native trace, so no gameplay measurement.
+                        self.assertNotIn('INFINI_TML_NATIVE_DIR', os.environ)
+                        self.assertEqual(os.environ.get('INFINI_PARTICLE_ASSET_DIR'),
+                                         str(explicit_particles) if explicit else None)
+                        self.assertEqual(os.environ['IFC_ENV_PROBE'], 'retained')
+                    report = json.loads((args.out / 'performance.json').read_text())
+                    self.assertFalse(report['allTrialsMeasured'])
+                    self.assertEqual([row['exitCode'] for row in report['trials']], [0] * 6)
+                    receipts = list(args.out.glob('*/environment-probe.json'))
+                    self.assertEqual(len(receipts), 6)
+                    for path in receipts:
+                        observed = json.loads(path.read_text())
+                        self.assertEqual(observed['native'], str(native))
+                        self.assertEqual(observed['particles'], str(explicit_particles if explicit else particles))
+                        self.assertEqual(observed['libraryBytes'], 'library fixture')
+                        self.assertEqual(observed['particleBytes'], ('explicit' if explicit else 'discovered') + ' particle fixture')
+                        self.assertEqual(observed['callerValue'], 'retained')
+
     def test_channels_uptime_debits_and_real_cadence_not_arithmetic(self):
         result=p.measure(sample())
         self.assertEqual(result['observedTargetLifeLost'],13)
@@ -73,12 +142,16 @@ class PerformanceTests(unittest.TestCase):
         for target in rows['grouped']['hostiles']:self.assertEqual(target['defense'],12)
         self.assertNotIn('nativeType',base['dummy'])
 
-    def test_pinned_native_geometry_manifest_matches_loader(self):
+    def test_default_geometry_assets_belong_to_complete_pinned_source(self):
         root=Path(__file__).parent
         manifest=json.loads((root/'performance-assets-manifest.json').read_text())
-        loader=(root/'WorkbenchNative.Graphics.cs').read_text()
+        index=json.loads((root/'vanilla-item-assets.json').read_text())
         self.assertEqual(len(manifest['files']),12)
-        for row in manifest['files']:self.assertIn(row['sha256'],loader)
+        self.assertEqual(index['communityCommit'],manifest['commit'])
+        for row in manifest['files']:
+            item_id=Path(row['path']).stem.removeprefix('Item_')
+            self.assertEqual(index['items'][item_id][1],row['bytes'])
+        self.assertIn('24',index['items'])
 
     def test_native_identity_requires_both_name_and_id(self):
         c={'vanillaItem':'BladeofGrass','recordedId':190}

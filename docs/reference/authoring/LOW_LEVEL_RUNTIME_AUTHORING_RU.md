@@ -2,7 +2,7 @@
 
 [Generated boundary](../generated/LOWERY_RU.md) · [Source owners](../../development/CODE_MAP_RU.md#python) · [Repair](../../development/pipeline/TARGETED_REPAIR_PROTOCOL_RU.md) · [Neutral omissions](DECLARED_NEUTRAL_OMISSIONS_RU.md)
 
-Это human projection, не owner schema/registry. Exact shape — [program_schema.py](../../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py); model-facing prose — [author_item_contract.py](../../../LocalGenerator/infini_local/pipelines/author_item_contract.py). Inventory/units/wire facts генерируются в [capability inventory](../generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) и [primitive parity](../generated/PRIMITIVE_PARITY_RU.md); технический manifest не надо копировать в LLM-каталог.
+Это human projection, не owner schema/registry. Exact shape — [program_schema.py](../../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py); model-facing prose — [author_item_contract.py](../../../LocalGenerator/infini_local/pipelines/author/item_contract.py). Inventory/units/wire facts генерируются в [capability inventory](../generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) и [primitive parity](../generated/PRIMITIVE_PARITY_RU.md); технический manifest не надо копировать в LLM-каталог.
 
 Новые канонические формы pull, nearby damage, зависимых свойств и скорости,
 а также точная граница совместимости со старыми предметами описаны в
@@ -128,7 +128,7 @@ Event producer alternatives берутся только из `EVENT_KIND_REGISTR
 
 Для projectile `pull_on_event(mode=target_to_entity)` направляет NPC к центру испускающего projectile, включая `on_hit`. При runtime `delayTicks > 0` этот центр фиксируется при постановке события в очередь; другие hit-actions сохраняют центр поражённого NPC. В MP receipt использует центр проверенного server-side projectile, не координаты клиента.
 
-Terminal meaning: `on_hit` требует collision; proximity detonation не hit. `on_expire` испускается при natural expiry и proximity detonation, не при любом early kill. `on_kill` покрывает terminal paths, включая collision/penetration/natural expiry/detonation; `on_tile_collision` — каждую collision. Bounce + только on_expire не обещает эффект на последнем ударе. [Runtime truth](../../../LocalGenerator/infini_local/pipelines/llm_authoring_prompt.py#L229) и consumer остаются источниками этих различий.
+Terminal meaning: `on_hit` требует collision; proximity detonation не hit. `on_expire` испускается при natural expiry и proximity detonation, не при любом early kill. `on_kill` покрывает terminal paths, включая collision/penetration/natural expiry/detonation; `on_tile_collision` — каждую collision. Bounce + только on_expire не обещает эффект на последнем ударе. [Runtime truth](../../../LocalGenerator/infini_local/pipelines/author/prompt.py#L229) и consumer остаются источниками этих различий.
 
 Числовые units/точные conversions и отсутствующие wire aliases — [standardization](../terraria/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md#units), не semantic repair. [Frozen-first Repair](../../development/pipeline/TARGETED_REPAIR_PROTOCOL_RU.md#frozen-first) не расширяет accepted design.
 

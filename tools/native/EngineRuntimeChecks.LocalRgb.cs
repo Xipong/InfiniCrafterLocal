@@ -319,5 +319,28 @@ internal static partial class EngineRuntimeChecks
         Equal(Color.Red,mesh[0].Color,"path native start vertices use immutable local RGB");
         Equal(Color.Lime,mesh[2].Color,"path native midpoint vertices use independent local RGB");
         Equal(Color.Blue,mesh[^1].Color,"path native endpoint vertices use independent local RGB");
+
+        // A decorative tapered strip follows the actual flexible collision path,
+        // not an inventory PNG placed on its tip or a reconstructed trajectory.
+        var generated = new InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile();
+        typeof(InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile)
+            .GetMethod("BuildLashPoints", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(generated, new object[] { new Vector2(30, 40), Vector2.UnitX, .35f, 96f, 16, -1.2f, 1.2f, .2f, 1f, 1, 1f });
+        var points = ((System.Collections.Generic.List<Vector2>)typeof(InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile)
+            .GetField("_whipPoints", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(generated)!).ToArray();
+        var frozen = (Vector2[])points.Clone();
+        path.Source = "whip"; path.WidthPx = 12;
+        path.WidthProfile = new VfxNumericProfileSpec { Start = .25f, Middle = 1, End = 0, Curve = "linear" };
+        design = LibraryInvoke("CopyPath", path, 1f, "alpha", "", "BeforeProjectiles", "self", 512, 0)!;
+        var skin = (VertexPositionColorTexture[])LibraryInvoke("BuildMaterialPathMesh", points, Array.Empty<float>(), design, 0UL, (Func<bool>)(()=>true))!;
+        Equal(true, skin.Length >= 16*6, "textured skin retains every actual lash segment");
+        AssertVfxNear(points[0], new Vector2((skin[0].Position.X+skin[1].Position.X)*.5f,
+            (skin[0].Position.Y+skin[1].Position.Y)*.5f), "skin starts at exact lash anchor");
+        AssertVfxNear(points[^1], new Vector2(skin[^1].Position.X, skin[^1].Position.Y), "zero-width taper ends at exact curve tip");
+        Equal(true, Math.Abs(Vector3.Distance(skin[0].Position,skin[1].Position)-3f)<.001f,
+            "explicit quarter-width profile is applied, not collision width");
+        for(int n=0;n<points.Length;n++) Equal(frozen[n],points[n],"material skin never changes collision points");
+
     }
 }

@@ -7,3 +7,5 @@ pyright>=1.1.411,<2
 tree-sitter>=0.25,<0.26
 tree-sitter-c-sharp==0.23.5
 markdown-it-py>=4.2,<5
+dnfile==0.18.0
+dncil==1.0.2

@@ -5,7 +5,7 @@ import pytest
 
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.pipelines.llm_authoring_pipeline import try_llm_plan
+from infini_local.pipelines.author.request import try_llm_plan
 from infini_local.qa.capability_witnesses import build_capability_witness
 from test_low_level_three_stage_pipeline import wire_transport  # noqa: F401
 
@@ -14,9 +14,9 @@ from test_low_level_three_stage_pipeline import wire_transport  # noqa: F401
 def test_native_arrow_parent_does_not_override_either_authored_motion_choice(wire_transport, falling):
     document = build_capability_witness("move_straight")
     if falling:
-        document["runtimeProgram"]["calls"].append({"id": "explicit_gravity", "fn": "accelerate_projectile_vertical",
+        document["runtimeProgram"]["calls"].append({"id": "explicit_gravity", "fn": "accelerate_y",
             "target": document["runtimeProgram"]["primaryEntityId"],
-            "params": {"accelerationYBlocksPerSecondSquared": 12}})
+            "params": {"accelY": 12}})
     before = copy.deepcopy(document)
     parent = {"id": 39, "name": "Wooden Bow", "shoot": 1,
               "directProjectileRaw": {"type": 1, "fullName": "Terraria/WoodenArrowFriendly", "aiStyle": 1, "arrow": True}}

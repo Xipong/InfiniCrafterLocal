@@ -1,24 +1,24 @@
 """Absolute-position tile policies must name an actual reachable native consumer."""
 from copy import deepcopy
-import pytest
 
-from test_composable_motion_primitives import base_document, add
-from infini_local.core.runtime_authoring.validator import validate_runtime_program
+import pytest
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+from test_composable_motion_primitives import add, base_document
 
 
 def absolute_body(lash=False, window=None):
     doc = base_document()
-    add(doc, "set_projectile_aim", {"source": "initial"})
+    add(doc, "set_aim", {"source": "initial"})
     if lash:
-        add(doc, "set_projectile_lash_geometry", {"clock": "active", "durationSeconds": 1,
-            "anchor": "owner_center", "reachBlocks": 8, "segments": 12,
+        add(doc, "lash_geometry", {"clock": "active", "duration": 1,
+            "anchor": "owner_center", "reach": 8, "segments": 12,
             "sweepStartRadians": -1, "sweepEndRadians": 1, "bendRatio": 0.2,
-            "useOwnerGravity": False, "useOwnerWhipRangeMultiplier": False})
+            "useOwnerGravity": False, "useWhipRange": False})
     else:
-        add(doc, "attach_projectile", {"anchor": "owner_center", **({"window": window} if window is not None else {})})
-    collision = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "set_projectile_collision")
+        add(doc, "attach", {"anchor": "owner_center", **({"window": window} if window is not None else {})})
+    collision = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "projectile_collision")
     collision["params"]["tileCollide"] = True
     return doc, collision
 
@@ -37,7 +37,7 @@ def test_always_absolute_position_refuses_unexecuted_tile_policy(lash, window):
 
 
 def test_finite_attachment_keeps_explicit_tile_policy_for_free_flight():
-    doc, _ = absolute_body(window={"phase": "always", "clock": "active", "startDelaySeconds": 0, "durationSeconds": 1})
+    doc, _ = absolute_body(window={"phase": "always", "clock": "active", "startDelay": 0, "duration": 1})
     assert validate_runtime_program(doc)["ok"]
 
 
@@ -54,8 +54,9 @@ def test_stripped_wire_checks_the_same_absolute_tile_consumer(lash):
 
 
 def test_collision_refusal_repair_does_not_open_other_valid_body_choices():
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     doc, collision = absolute_body()
     frozen = deepcopy(doc)
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])

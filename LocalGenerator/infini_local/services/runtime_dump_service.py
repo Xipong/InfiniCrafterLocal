@@ -7,7 +7,12 @@ They belong outside server.py because they are pure data-discovery/indexing logi
 HTTP/combine orchestration.
 """
 
-from pathlib import Path
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+import copy
+import hashlib
+from pathlib import Path, PurePosixPath
+import re
 from typing import Any
 
 from infini_local.core.config_bootstrap import DATA_DIR
@@ -50,7 +55,7 @@ def runtime_dump_candidates(data_dir: Path, filename: str, explicit_env: str, le
 def resolve_runtime_dump_path(data_dir: Path, filename: str, explicit_env: str, legacy_env: str) -> Path:
     candidates = runtime_dump_candidates(data_dir, filename, explicit_env, legacy_env)
     for c in candidates:
-        if c.exists():
+        if c.exists() or (c.parent / MANIFEST_NAME).exists() or (c.parent / MANIFEST_NAME).is_symlink():
             return c
     return candidates[0]
 
@@ -61,8 +66,12 @@ def load_jsonl_index(path: Path) -> tuple[list[dict[str, Any]], dict[Any, dict[s
     try:
         if not path.exists():
             return rows, by_type
+        if path.stat().st_size > MAX_DUMP_BYTES:
+            return rows, by_type
         with path.open("rb") as f:
-            for line in f:
+            for line_number, line in enumerate(f, 1):
+                if line_number > MAX_DUMP_ROWS:
+                    return [], {}
                 line = line.strip()
                 if not line:
                     continue
@@ -89,23 +98,222 @@ def load_jsonl_index(path: Path) -> tuple[list[dict[str, Any]], dict[Any, dict[s
     return rows, by_type
 
 
-def runtime_projectile_lookup(type_id: Any) -> dict[str, Any]:
+MANIFEST_NAME = "runtime_dump_manifest.json"
+MANIFEST_SCHEMA = "infini.runtime-dump.v1"
+MAX_MANIFEST_BYTES = 1024 * 1024
+MAX_DUMP_BYTES = 512 * 1024 * 1024
+MAX_DUMP_ROWS = 100_000
+
+
+@dataclass(frozen=True)
+class RuntimeDumpSnapshot:
+    items: list[dict[str, Any]]
+    projectiles: dict[Any, dict[str, Any]]
+    provenance: dict[str, Any]
+    modules: dict[str, str]
+
+
+def _bounded_bytes(path: Path, limit: int) -> bytes:
+    with path.open("rb") as stream:
+        data = stream.read(limit + 1)
+    if len(data) > limit:
+        raise ValueError("file_byte_bound")
+    return data
+
+
+def _manifest_for(path: Path) -> Path:
+    return path if path.name == MANIFEST_NAME else path.parent / MANIFEST_NAME
+
+
+def _snapshot_file(root: Path, relative: Any, snapshot_id: str, filename: str) -> Path:
+    # A manifest is untrusted data: no absolute paths, traversal, other snapshot
+    # IDs, platform-specific separators, or symlink escapes from its own root.
+    expected = f"runtime_dump_snapshots/{snapshot_id}/{filename}"
+    if not isinstance(relative, str) or relative != expected or "\\" in relative:
+        raise ValueError("snapshot_path_invalid")
+    parts = PurePosixPath(relative)
+    if parts.is_absolute() or ".." in parts.parts:
+        raise ValueError("snapshot_path_invalid")
+    target = (root / relative).resolve()
+    if not target.is_relative_to(root.resolve()):
+        raise ValueError("snapshot_path_escape")
+    return target
+
+
+def _verified_rows(path: Path, descriptor: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[int, dict[str, Any]]]:
+    size, count, errors = (descriptor.get(k) for k in ("bytes", "rows", "unavailableRows"))
+    if type(size) is not int or type(count) is not int or type(errors) is not int:
+        raise ValueError("snapshot_counts_invalid")
+    if not (0 <= size <= MAX_DUMP_BYTES and 0 <= errors <= count <= MAX_DUMP_ROWS):
+        raise ValueError("snapshot_counts_invalid")
+    digest = descriptor.get("sha256")
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise ValueError("snapshot_hash_invalid")
+    data = _bounded_bytes(path, size)
+    if len(data) != size or hashlib.sha256(data).hexdigest() != digest:
+        raise ValueError("snapshot_hash_mismatch")
+    rows: list[dict[str, Any]] = []
+    index: dict[int, dict[str, Any]] = {}
+    for line in data.splitlines():
+        if len(rows) >= MAX_DUMP_ROWS:
+            raise ValueError("snapshot_row_bound")
+        row = strict_json.loads(line.decode("utf-8"))
+        if not isinstance(row, dict) or type(row.get("type")) is not int or row["type"] < 0:
+            raise ValueError("snapshot_record_invalid")
+        if row["type"] in index:
+            raise ValueError("snapshot_duplicate_type")
+        rows.append(row)
+        index[row["type"]] = row
+    if len(rows) != count or sum(row.get("unavailable") is True for row in rows) != errors:
+        raise ValueError("snapshot_counts_mismatch")
+    return rows, index
+
+
+def load_runtime_dump_snapshot(items_path: Path, projectiles_path: Path) -> RuntimeDumpSnapshot:
+    manifests = [_manifest_for(path) for path in (items_path, projectiles_path)]
+    if not any(path.exists() or path.is_symlink() for path in manifests):
+        # Backward compatibility is explicit, not invented version provenance.
+        items, _ = load_jsonl_index(items_path)
+        _, projectiles = load_jsonl_index(projectiles_path)
+        status = "legacy_unverified" if items_path.exists() or projectiles_path.exists() else "absent"
+        return RuntimeDumpSnapshot(items, projectiles, {"status": status}, {})
     try:
-        found = RUNTIME_PROJECTILES_BY_TYPE.get(int(type_id))
-        if isinstance(found, dict):
-            return found
-    except Exception:
-        pass
-    return {}
+        if manifests[0].resolve() != manifests[1].resolve():
+            raise ValueError("configured_pair_manifest_mismatch")
+        path = manifests[0]
+        for configured, kind in ((items_path, "items"), (projectiles_path, "projectiles")):
+            if configured.name not in (MANIFEST_NAME, f"{kind}_runtime_dump.jsonl"):
+                raise ValueError("configured_payload_does_not_name_manifest_pair")
+        root = path.parent.resolve()
+        if not path.resolve().is_relative_to(root):
+            raise ValueError("manifest_path_escape")
+        manifest = strict_json.loads(_bounded_bytes(path, MAX_MANIFEST_BYTES).decode("utf-8"))
+        if not isinstance(manifest, dict) or manifest.get("schema") != MANIFEST_SCHEMA:
+            raise ValueError("manifest_schema_unsupported")
+        snapshot_id = manifest.get("snapshotId")
+        if not isinstance(snapshot_id, str) or not re.fullmatch(r"[0-9a-f]{32}", snapshot_id):
+            raise ValueError("snapshot_id_invalid")
+        captured = manifest.get("capturedAtUtc")
+        if not isinstance(captured, str) or len(captured) > 64 or datetime.fromisoformat(captured.replace("Z", "+00:00")).utcoffset() != timedelta(0):
+            raise ValueError("snapshot_timestamp_invalid")
+        files = manifest.get("files")
+        if not isinstance(files, dict) or set(files) != {"items", "projectiles"}:
+            raise ValueError("snapshot_pair_invalid")
+        loaded = {}
+        for kind in ("items", "projectiles"):
+            descriptor = files[kind]
+            if not isinstance(descriptor, dict):
+                raise ValueError("snapshot_descriptor_invalid")
+            target = _snapshot_file(root, descriptor.get("path"), snapshot_id, f"{kind}_runtime_dump.jsonl")
+            loaded[kind] = _verified_rows(target, descriptor)
+        environment = manifest.get("environment")
+        if not isinstance(environment, dict) or not isinstance(environment.get("mods"), list):
+            raise ValueError("snapshot_environment_invalid")
+        modules: dict[str, str] = {}
+        module_rows = [environment.get("tModLoader"), environment.get("exporter")]
+        module_rows += [mod.get("module") for mod in environment["mods"] if isinstance(mod, dict)]
+        for module in module_rows:
+            if isinstance(module, dict) and isinstance(module.get("assembly"), str) and isinstance(module.get("mvid"), str):
+                name, mvid = module["assembly"], module["mvid"]
+                if name in modules and modules[name] != mvid:
+                    raise ValueError("snapshot_module_identity_conflict")
+                modules[name] = mvid
+        return RuntimeDumpSnapshot(loaded["items"][0], loaded["projectiles"][1],
+            {"status": "verified_snapshot", "snapshotId": snapshot_id, "capturedAtUtc": captured}, modules)
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError):
+        # No legacy fallback after a present manifest fails: it could combine
+        # different snapshots. A bounded public reason, never manifest content.
+        return RuntimeDumpSnapshot([], {}, {"status": "invalid_snapshot", "reason": "manifest_or_pair_validation_failed"}, {})
 
 
-# One startup snapshot for the loaded Terraria/tModLoader mod set. These optional
-# /infinidump files are factual input, never bundled personal data or authoring policy.
+def _runtime_record_lookup(type_id: Any, index: dict[Any, dict[str, Any]], *, kind: str,
+                           expected_full_name: Any = None, expected_modules: Any = None,
+                           require_verified_identity: bool = False, expected_shoot: Any = None) -> dict[str, Any]:
+    try:
+        if type(type_id) not in (int, str):
+            return {}
+        identity = int(type_id)
+    except (ValueError, OverflowError):
+        return {}
+    if identity <= 0:
+        return {}
+    provenance = dict(RUNTIME_DUMP_SNAPSHOT.provenance)
+    provenance["compatibility"] = "unverified"
+    if provenance["status"] == "invalid_snapshot":
+        return {"type": identity, "unavailable": True, "runtimeDumpProvenance": provenance}
+    found = index.get(identity)
+    if not isinstance(found, dict):
+        return {}
+    if require_verified_identity and provenance["status"] != "verified_snapshot":
+        provenance.update(compatibility="unverified", reason="item_snapshot_not_integrity_verified")
+        return {"type": identity, "unavailable": True, "runtimeDumpProvenance": provenance}
+    actual_name = found.get("fullName")
+    if not actual_name and isinstance(found.get("sourceMod"), str) and isinstance(found.get("internalName"), str):
+        mod, name = found["sourceMod"], found["internalName"]
+        actual_name = name if name.startswith(mod + "/") else mod + "/" + name
+    matched = []
+    refusal = None
+    if require_verified_identity and (not isinstance(expected_full_name, str) or not expected_full_name or not actual_name):
+        provenance.update(compatibility="unverified", reason="stable_item_identity_unavailable")
+        return {"type": identity, "unavailable": True, "runtimeDumpProvenance": provenance}
+    if type(expected_shoot) is int and type(found.get("shoot")) is int and found["shoot"] != expected_shoot:
+        refusal = "item_shoot_identity_mismatch"
+    if isinstance(expected_full_name, str) and expected_full_name and actual_name:
+        if actual_name != expected_full_name:
+            refusal = kind + "_identity_mismatch"
+        else:
+            matched.append("identity")
+    if isinstance(expected_modules, list):
+        for module in expected_modules:
+            if not isinstance(module, dict):
+                continue
+            name, mvid = module.get("assembly"), module.get("mvid")
+            observed = RUNTIME_DUMP_SNAPSHOT.modules.get(name) if isinstance(name, str) else None
+            if observed and isinstance(mvid, str) and mvid:
+                if observed != mvid:
+                    refusal = "observed_module_mismatch"
+                elif "modules" not in matched:
+                    matched.append("modules")
+    if refusal:
+        provenance.update(compatibility="refused", reason=refusal)
+        return {"type": identity, "unavailable": True, "runtimeDumpProvenance": provenance}
+    if matched:
+        provenance["compatibility"] = "matched_available_" + "_and_".join(matched)
+    out = copy.deepcopy(found)
+    out["runtimeDumpProvenance"] = provenance
+    return out
+
+
+def runtime_projectile_lookup(type_id: Any, *, expected_full_name: Any = None,
+                              expected_modules: Any = None) -> dict[str, Any]:
+    return _runtime_record_lookup(type_id, RUNTIME_PROJECTILES_BY_TYPE, kind="projectile",
+        expected_full_name=expected_full_name, expected_modules=expected_modules)
+
+
+def runtime_item_lookup(type_id: Any, *, expected_full_name: Any = None,
+                        expected_modules: Any = None, expected_shoot: Any = None) -> dict[str, Any]:
+    # This new enrichment route does not broaden legacy numeric-ID authority.
+    result = _runtime_record_lookup(type_id, RUNTIME_ITEMS_BY_TYPE, kind="item",
+        expected_full_name=expected_full_name, expected_modules=expected_modules,
+        expected_shoot=expected_shoot, require_verified_identity=True)
+    if isinstance(result.get("runtimeDumpProvenance"), dict):
+        provenance = result["runtimeDumpProvenance"]
+        provenance["currentModSet"] = "mismatch" if provenance.get("reason") == "observed_module_mismatch" else "unverified"
+    return result
+
+
+# One startup snapshot; a newly exported pair requires a generator restart.
+# Integrity is not live-runtime compatibility or proof of complete AI behavior.
 ITEMS_RUNTIME_DUMP_PATH = resolve_runtime_dump_path(
     DATA_DIR, "items_runtime_dump.jsonl", "INFINI_ITEMS_RUNTIME_DUMP", "INFINI_ITEMS_DUMP",
 )
 PROJECTILES_RUNTIME_DUMP_PATH = resolve_runtime_dump_path(
     DATA_DIR, "projectiles_runtime_dump.jsonl", "INFINI_PROJECTILES_RUNTIME_DUMP", "INFINI_PROJECTILES_DUMP",
 )
-RUNTIME_ITEMS = load_jsonl_index(ITEMS_RUNTIME_DUMP_PATH)[0]
-RUNTIME_PROJECTILES_BY_TYPE = load_jsonl_index(PROJECTILES_RUNTIME_DUMP_PATH)[1]
+RUNTIME_DUMP_SNAPSHOT = load_runtime_dump_snapshot(ITEMS_RUNTIME_DUMP_PATH, PROJECTILES_RUNTIME_DUMP_PATH)
+RUNTIME_ITEMS = RUNTIME_DUMP_SNAPSHOT.items
+RUNTIME_ITEMS_BY_TYPE = {row["type"]: row for row in RUNTIME_ITEMS if type(row.get("type")) is int}
+RUNTIME_PROJECTILES_BY_TYPE = RUNTIME_DUMP_SNAPSHOT.projectiles
+if RUNTIME_DUMP_SNAPSHOT.provenance["status"] in ("invalid_snapshot", "legacy_unverified"):
+    print("[InfiniCrafterLocal] runtime dump: " + RUNTIME_DUMP_SNAPSHOT.provenance["status"]
+          + "; new exports require a generator restart")

@@ -64,7 +64,7 @@ Cache key/стабильный prefix не доказывают hit, latency spe
 
 ## Владельцы и регрессии
 
-[Prefix](../../../LocalGenerator/infini_local/core/llm_prompt_cache.py): `json_prefix_chars`/`with_prompt_cache_prefix`; [Author/Repair](../../../LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py), [VFX transport](../../../LocalGenerator/infini_local/pipelines/vfx_generation_pipeline.py), [Visual](../../../LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py), [VFX ordering](../../../LocalGenerator/infini_local/core/vfx_manifest.py); [transport](../../../LocalGenerator/infini_local/pipelines/llm_transport.py), [Codex whitelist](../../../LocalGenerator/infini_local/services/codex_text_backend.py).
+[Prefix](../../../LocalGenerator/infini_local/core/llm_prompt_cache.py): `json_prefix_chars`/`with_prompt_cache_prefix`; [Author/Repair](../../../LocalGenerator/infini_local/pipelines/author/request.py), [VFX transport](../../../LocalGenerator/infini_local/pipelines/vfx/request.py), [Visual](../../../LocalGenerator/infini_local/pipelines/visual/request.py), [VFX packet](../../../LocalGenerator/infini_local/pipelines/vfx/prompt.py); [transport](../../../LocalGenerator/infini_local/pipelines/transport/client.py), [Codex whitelist](../../../LocalGenerator/infini_local/services/codex_text_backend.py).
 
 [Request](../../../LocalGenerator/tests/test_provider_request_contract.py)/[transport](../../../LocalGenerator/tests/test_provider_transport_contract.py) regressions: identity/invalidation/processes/exact split/stripped marker/unknown endpoints/zero-vs-missing usage/self-contained requests. [Offline QA](../../user/START_RU.md); HTTP fixtures не GPU cache proof.
 

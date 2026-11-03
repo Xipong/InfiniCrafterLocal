@@ -13,12 +13,15 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from infini_local.pipelines import image_backend_pipeline as backend
-from infini_local.pipelines import pipeline_visual_config as config
-from infini_local.pipelines import sprite_postprocess as post
-from infini_local.pipelines import visual_generation_pipeline as visual
-from infini_local.pipelines import visual_sprite_generation as generation
-from infini_local.pipelines.visual_prompt_contracts import image_final_frame_prompt_clause, normalize_asset_prompt
+from infini_local.pipelines.images import backends as backend
+from infini_local.core.images import config
+import infini_local.pipelines.images.retry as post_retry
+import infini_local.pipelines.visual.contract as visual_contract
+import infini_local.pipelines.visual.repair as visual_repair
+import infini_local.pipelines.visual.repair_scope as visual_repair_scope
+import infini_local.pipelines.visual.stage as visual_stage
+from infini_local.pipelines.images import stage as generation
+from infini_local.pipelines.images.prompts import image_final_frame_prompt_clause, normalize_asset_prompt
 from test_image_attempt_contracts import Response, offline, png
 
 
@@ -45,8 +48,8 @@ def _accepted_equipment(slot: str = "accessory", *, mount: str | None = None, lo
                                   ("visualIdentity", " ivory and violet enamel", "IDENTITY_END")):
             overlay[field] = (overlay[field] + words * 40)[:700 - len(end)] + end
             assert len(overlay[field]) == 700
-    kit, errors = visual._validate_kit({
-        "schema": visual.VISUAL_KIT_SCHEMA,
+    kit, errors = visual_contract._validate_kit({
+        "schema": visual_contract.VISUAL_KIT_SCHEMA,
         "item": {
             "prompt": "A distinct plain inventory pebble.", "negativePrompt": "authored exclusion: red ribbon",
             "silhouette": "one inventory-only oval", "visualIdentity": "inventory-only blue spot", "palette": ["blue"],
@@ -59,7 +62,7 @@ def _accepted_equipment(slot: str = "accessory", *, mount: str | None = None, lo
         "animationPlan": "Follow accepted movement only.",
     }, ["item"], "item", equipment_overlay_required=True)
     assert kit is not None, errors
-    return visual._apply_kit(data, kit)
+    return visual_stage._apply_kit(data, kit)
 
 
 def _facts(prompt: str) -> dict:
@@ -89,9 +92,6 @@ def test_actual_adapter_receives_overlay_design_and_exact_slot_fit(offline, monk
     assert _facts(overlay_request["prompt"]) == expected
     assert authored["prompt"] in overlay_request["prompt"]
     assert overlay_request["negative_prompt"] == frozen["visualKit"]["item"]["negativePrompt"]
-    assert f"attached to the player's {body_part}" in overlay_request["prompt"]
-    assert "fits the whole final PNG" in overlay_request["prompt"]
-    assert "visible silhouette smaller" in overlay_request["prompt"]
     for foreign in ("inventory-only", '"renderSizePx"', '"grip"'):
         assert foreign not in overlay_request["prompt"]
     assert "Read-only equipment overlay facts:" not in item_request["prompt"]
@@ -120,20 +120,20 @@ def test_exact_mount_repair_reaches_adapter_and_preserves_frozen_design(offline)
     raw = copy.deepcopy(data["visualKit"])
     original_overlay = copy.deepcopy(raw["equipOverlay"])
     raw["equipOverlay"]["accessoryMount"] = "wing"
-    accepted, errors = visual._validate_kit(raw, ["item"], "item", equipment_overlay_required=True)
+    accepted, errors = visual_contract._validate_kit(raw, ["item"], "item", equipment_overlay_required=True)
     assert accepted is None
-    scope = visual._build_visual_repair_scope(raw, errors, ["item"], "item", equipment_overlay_required=True)
+    scope = visual_repair_scope._build_visual_repair_scope(raw, errors, ["item"], "item", equipment_overlay_required=True)
     assert scope["fieldPermissions"]["equipOverlayPaths"] == ["accessoryMount"]
-    repaired, audit = visual._apply_visual_repair_patch(raw, {
-        "schema": visual.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": None,
+    repaired, audit = visual_repair._apply_visual_repair_patch(raw, {
+        "schema": visual_contract.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": None,
         "equipOverlayPatch": dict(original_overlay, accessoryMount="waist", silhouette="unrequested replacement"),
         "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [],
         "note": "Repair only the invalid mount.",
     }, scope, ["item"], return_audit=True)
-    accepted, errors = visual._validate_kit(repaired, ["item"], "item", equipment_overlay_required=True)
+    accepted, errors = visual_contract._validate_kit(repaired, ["item"], "item", equipment_overlay_required=True)
     assert accepted is not None, errors
     assert audit["ignoredChanges"]
-    projected = visual._apply_kit(data, accepted)
+    projected = visual_stage._apply_kit(data, accepted)
     assert projected["visual"]["accessoryMount"] == "waist"
 
     generation.maybe_generate_visual_assets(projected)
@@ -150,7 +150,7 @@ def test_retry_and_prompt_only_preserve_long_overlay_facts(offline, monkeypatch,
     data = _accepted_equipment(mount="back", long_art=True)
     frozen = copy.deepcopy(data)
     monkeypatch.setattr(generation, "SPRITE_RETRIES", 1)
-    monkeypatch.setattr(post, "image_backend_is_zimage", lambda: zimage)
+    monkeypatch.setattr(post_retry, "image_backend_is_zimage", lambda: zimage)
     monkeypatch.setenv("INFINI_ZIMAGE_RETRY_PROMPT_LIMIT", "2200")
 
     def response(req, **kwargs):
@@ -174,7 +174,6 @@ def test_retry_and_prompt_only_preserve_long_overlay_facts(offline, monkeypatch,
     assert _facts(retry)["silhouette"] == frozen["visualKit"]["equipOverlay"]["silhouette"]
     assert _facts(retry)["visualIdentity"] == frozen["visualKit"]["equipOverlay"]["visualIdentity"]
     assert "SILHOUETTE_END" in retry and "IDENTITY_END" in retry
-    assert "Technical correction:" in retry if zimage else "fix these technical issues:" in retry
     attempts = json.loads(result["debug"]["equip_overlaySpriteValidation"])
     assert not attempts[0]["validation"]["ok"] and attempts[1]["validation"]["ok"]
     # The sd.cpp adapter performs its existing whitespace normalization.

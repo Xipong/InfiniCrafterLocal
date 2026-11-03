@@ -1,22 +1,21 @@
 """Structured Author parameters keep strict shape and exact wire provenance."""
+import json
+import sys
 from collections import Counter
 from copy import deepcopy
 from dataclasses import replace
-import json
 from pathlib import Path
-import sys
-
-import pytest
-from hypothesis import example, given, settings, strategies as st
-from jsonschema import Draft202012Validator
 
 import infini_local.core.runtime_authoring.capability_registry as registry
 import infini_local.core.runtime_authoring.compiler as compiler
 import infini_local.core.runtime_authoring.technical_lowering as technical_lowering
-from infini_local.core.runtime_authoring.capability_registry import ParamSpec
+import pytest
+from hypothesis import example, given, settings
+from hypothesis import strategies as st
+from infini_local.core.runtime_authoring.parameter_contract import ParamSpec
 from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
 from infini_local.qa.capability_witnesses import build_capability_witness
-
+from jsonschema import Draft202012Validator
 
 JSON_VALUES = st.recursive(
     st.none() | st.booleans() | st.integers() | st.floats(allow_nan=False, allow_infinity=False)
@@ -57,7 +56,7 @@ def test_boolean_and_numeric_const_union_selects_exactly_one_branch():
 @pytest.mark.parametrize("reverse_properties", [False, True], ids=["declared-order", "reversed-order"])
 def test_object_keeps_exact_leaf_units_and_rejects_empty_group(reverse_properties):
     properties = {
-        "radiusTiles": ParamSpec("number", "Radius on the exact pixel lattice", minimum=0.5,
+        "radius": ParamSpec("number", "Radius on the exact pixel lattice", minimum=0.5,
                                  maximum=48, multiple_of=1 / 16, wire_multiplier=16, wire_name="radiusPx"),
         "updatesPerTick": ParamSpec("integer", "Updates", minimum=1, maximum=6, wire_offset=-1,
                                     wire_name="extraUpdates", required=False),
@@ -65,20 +64,20 @@ def test_object_keeps_exact_leaf_units_and_rejects_empty_group(reverse_propertie
     if reverse_properties:
         properties = dict(reversed(list(properties.items())))
     spec = ParamSpec("object", "Explicit grouped stats", min_properties=1, properties=properties)
-    assert not strict_schema_errors({"radiusTiles": 8.0625, "updatesPerTick": 6}, spec.schema())
-    rows = spec.projected_fields({"radiusTiles": 8.0625, "updatesPerTick": 6}, "group")
+    assert not strict_schema_errors({"radius": 8.0625, "updatesPerTick": 6}, spec.schema())
+    rows = spec.projected_fields({"radius": 8.0625, "updatesPerTick": 6}, "group")
     # Independent DTO destinations have no execution order. Keep provenance,
     # values and multiplicity exact rather than pinning registry insertion order.
     assert Counter((r.authored_path, r.wire_path, r.value) for r in rows) == Counter([
-        ("group.radiusTiles", "radiusPx", 129), ("group.updatesPerTick", "extraUpdates", 5),
+        ("group.radius", "radiusPx", 129), ("group.updatesPerTick", "extraUpdates", 5),
     ])
     assert strict_schema_errors({}, spec.schema())
-    assert strict_schema_errors({"radiusTiles": 0.6}, spec.schema())
+    assert strict_schema_errors({"radius": 0.6}, spec.schema())
 
 
 @pytest.mark.parametrize("mutation", ["old-primary-path", "old-group-path", "six-inputs", "six-use-policy-inputs"])
 def test_retired_global_source_paths_are_refused(mutation):
-    document = build_capability_witness("present_placed_item_sprite" if mutation != "old-group-path" else "apply_generated_buff_on_use")
+    document = build_capability_witness("placed_sprite" if mutation != "old-group-path" else "generated_buff_on_use")
     if mutation == "old-group-path":
         next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "witness_call")["params"]["effectGroupId"] = "utility"
         document["runtimeProgram"]["bindings"][0]["action"]["effectGroupId"] = "utility"
@@ -92,7 +91,7 @@ def test_retired_global_source_paths_are_refused(mutation):
         row = next(r for r in receipts if r.get("lowererId") == "binding_effect_group_identity")
         row["authoredPaths"] = [p.replace(".action.", ".usePolicy.action.") for p in row["authoredPaths"]]
     else:
-        row = next(r for r in receipts if r.get("fn") == "present_placed_item_sprite" and r["status"] == "technical_projection")
+        row = next(r for r in receipts if r.get("fn") == "placed_sprite" and r["status"] == "technical_projection")
         paths = row["authoredPaths"]
         binding = paths[3].removesuffix(".id")
         row["authoredPaths"] = paths[:3] + [binding + ".action.kind", binding + ".action.targetId", binding + ".action.placementCallId"]
@@ -111,7 +110,7 @@ def test_ambiguous_union_fails_closed():
 
 
 def test_retired_provenance_refuses_old_wire_and_old_author():
-    old_author = build_capability_witness("set_projectile_collision")
+    old_author = build_capability_witness("projectile_collision")
     corpus = json.loads((Path(__file__).with_name("fixtures") / "projectile_retained_wire.json").read_text())
     old_wire = next(row["wire"] for row in corpus["cases"] if row["fn"] == "set_projectile_collision")
     old_call = next(c for c in old_author["runtimeProgram"]["calls"] if c["id"] == "witness_call")
@@ -135,8 +134,8 @@ def test_retired_provenance_refuses_old_wire_and_old_author():
 
 
 def _two_collision_calls():
-    document = build_capability_witness("spawn_entity_on_event")
-    calls = [c for c in document["runtimeProgram"]["calls"] if c["fn"] == "set_projectile_collision"]
+    document = build_capability_witness("spawn_on_event")
+    calls = [c for c in document["runtimeProgram"]["calls"] if c["fn"] == "projectile_collision"]
     assert len(calls) == 2
     for i, call in enumerate(calls):
         call["params"]["immunity"] = {"localCooldown": 10 + i}
@@ -159,7 +158,7 @@ def test_call_projection_authenticates_exact_entity_owner(attack):
         entities[indices[0]]["collision"], entities[indices[1]]["collision"] = (
             entities[indices[1]]["collision"], entities[indices[0]]["collision"])
         for row in receipts:
-            if row.get("fn") == "set_projectile_collision":
+            if row.get("fn") == "projectile_collision":
                 old = next(i for i in indices if row["finalPath"].startswith(f"runtimeProgram.entities[{i}]."))
                 new = indices[1] if old == indices[0] else indices[0]
                 row["finalPath"] = row["finalPath"].replace(f"entities[{old}]", f"entities[{new}]")
@@ -222,10 +221,10 @@ def test_projection_coverage_is_unique_and_complete(attack):
 @pytest.mark.parametrize("malformed", ["boolean", "above-maximum", "float", "null"])
 @pytest.mark.parametrize("source_available", [False, True])
 def test_structured_scalar_domain_is_not_authenticated_by_coherent_receipts(malformed, source_available):
-    immunity = registry.CAPABILITY_REGISTRY["set_projectile_collision"].params["immunity"]
+    immunity = registry.CAPABILITY_REGISTRY["projectile_collision"].params["immunity"]
     cooldown = next(branch.properties["localCooldown"] for branch in immunity.alternatives if branch.kind == "object")
     bad = {"boolean": True, "above-maximum": cooldown.maximum + 1, "float": 1.0, "null": None}[malformed]
-    document = build_capability_witness("set_projectile_collision")
+    document = build_capability_witness("projectile_collision")
     call = next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "witness_call")
     call["params"]["immunity"] = {"localCooldown": 19}
     wire = compiler.compile_runtime_program(document)
@@ -259,7 +258,7 @@ def test_wire_claim_cannot_split_one_call_across_entity_owners():
 
 @pytest.mark.parametrize("missing", ["npcImmunityMode", "localNpcHitCooldownTicks"])
 def test_typed_variant_outputs_require_complete_coverage(missing):
-    document = build_capability_witness("set_projectile_collision")
+    document = build_capability_witness("projectile_collision")
     wire = compiler.compile_runtime_program(document)
     receipts = wire["runtimeContract"]["finalWireReceipts"]
     receipts[:] = [r for r in receipts if not (r.get("callId") == "witness_call"
@@ -268,7 +267,7 @@ def test_typed_variant_outputs_require_complete_coverage(missing):
 
 
 def test_wire_output_cannot_be_claimed_by_two_distinct_calls():
-    document = build_capability_witness("set_projectile_collision")
+    document = build_capability_witness("projectile_collision")
     wire = compiler.compile_runtime_program(document)
     receipts = wire["runtimeContract"]["finalWireReceipts"]
     duplicates = [deepcopy(r) for r in receipts if r.get("callId") == "witness_call"]
@@ -280,15 +279,15 @@ def test_wire_output_cannot_be_claimed_by_two_distinct_calls():
 
 
 def test_fn_literal_provenance_requires_value_source_and_complete_coverage(monkeypatch):
-    document = build_capability_witness("configure_spawn")
+    document = build_capability_witness("spawn")
     changed = dict(registry.CAPABILITY_REGISTRY)
-    changed["configure_spawn"] = replace(changed["configure_spawn"], fixed_wire_literals={"enabled": True})
+    changed["spawn"] = replace(changed["spawn"], fixed_wire_literals={"enabled": True})
     for name, module in tuple(sys.modules.items()):
         if name.startswith("infini_local.") and hasattr(module, "CAPABILITY_REGISTRY"):
             monkeypatch.setattr(module, "CAPABILITY_REGISTRY", changed)
     wire = compiler.compile_runtime_program(document)
     receipts = wire["runtimeContract"]["finalWireReceipts"]
-    literal = next(r for r in receipts if r.get("fn") == "configure_spawn" and r["finalPath"].endswith(".enabled"))
+    literal = next(r for r in receipts if r.get("fn") == "spawn" and r["finalPath"].endswith(".enabled"))
     assert technical_lowering.audit_compiler_receipts(receipts, authored_document=document, final_document=wire)["ok"]
     for key, value in (("value", False), ("status", "delivered"), ("authoredPath", "runtimeProgram.calls[0].fn")):
         forged = deepcopy(receipts)

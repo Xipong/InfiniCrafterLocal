@@ -41,6 +41,14 @@ owns presentation interactions; `studio.js` owns routes, drafts, commands, and
 receipts. Manrope, Cormorant, and the SVG symbols are served locally. There is no
 frontend build step, CDN, animation dependency, or additional persisted UI state.
 
+`studio-i18n.js` owns the RU/EN message catalogs and parameter substitution.
+Presentation code translates explicit messages and annotated static labels;
+setting values, provider slugs, user profile names and raw diagnostic payloads
+keep their original bytes. The header language selector edits `INFINI_LANGUAGE`
+through the existing per-tab draft and Save flow. Interface changes are immediate;
+new item authoring uses the saved language after the normal safe server restart.
+Existing recipes are not translated or regenerated.
+
 `[data-flow-card]` links use a local fine-pointer highlight driven by normalized
 `--pointer-x` / `--pointer-y` and `data-pointer-active`. Interpolation stops when
 settled; leaving, keyboard input, offscreen cards, and hidden tabs clear it. There

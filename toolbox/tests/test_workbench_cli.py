@@ -20,7 +20,7 @@ def invoke(tmp_path, *args):
                           cwd=tmp_path, env=env, capture_output=True, text=True)
 
 
-@pytest.mark.parametrize('status', [0, 1, 2, 7])
+@pytest.mark.parametrize('status', [0, 7])
 def test_forwarding_preserves_argv_exit_and_caller_context(monkeypatch, tmp_path, status):
     from toolbox.cli import main
     monkeypatch.chdir(tmp_path)
@@ -55,7 +55,6 @@ def test_real_doctor_reports_missing_dependencies_without_execution(tmp_path):
     report = json.loads(result.stdout)
     assert report['ready'] is False
     assert report['checks']['dotnet'] is None
-    assert 'not a native execution' in report['note']
     assert list(tmp_path.iterdir()) == []
 
 

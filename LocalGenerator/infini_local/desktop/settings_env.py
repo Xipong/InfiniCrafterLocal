@@ -81,10 +81,12 @@ def load_user_presets(path: Path) -> dict[str, dict[str, str]]:
     return presets
 
 
-def save_user_preset(path: Path, name: str, data: dict[str, str]) -> dict[str, dict[str, str]]:
+def save_user_preset(path: Path, name: str, data: dict[str, str], *, overwrite: bool = False) -> dict[str, dict[str, str]]:
     """Save/update one profile and return the mapping for the GUI to refresh."""
     _validate_user_preset_name(name)
     presets = load_user_presets(path)
+    if name in presets and overwrite is not True:
+        raise ValueError("Preset already exists; explicit replacement confirmation is required.")
     presets[name] = user_preset_snapshot(data)
     document = {"schema": _USER_PRESET_SCHEMA, "presets": presets}
     temporary: Path | None = None

@@ -1,25 +1,22 @@
 """Offline transactions shared by frozen Repair observers, not alternative contracts."""
 
-from copy import deepcopy
 import json
 import socket
+from copy import deepcopy
 
 import pytest
-from jsonschema import Draft202012Validator
-
-from prompt_packet_helpers import request_dossier
 from infini_local.core import llm_config
+from infini_local.core.runtime_authoring.binding_use_policy import action_kind
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.binding_use_policy import action_kind
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-from infini_local.pipelines import author_item_contract as contract
-from infini_local.pipelines import llm_authoring_pipeline as author
+from infini_local.pipelines.author import item_contract as contract
+from infini_local.pipelines.author import request as author
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from jsonschema import Draft202012Validator
+from prompt_packet_helpers import request_dossier
 from test_codex_subscription_contract import _encode_nullable_fixture
-
 
 DELETE = object()
 
@@ -130,8 +127,12 @@ def provider_roundtrip(doc, response_format):
     before = json.dumps(doc, sort_keys=True)
     payload = deepcopy(doc)
     if response_format["type"] == "json_schema":
-        payload = _encode_nullable_fixture(payload, contract.author_item_response_schema())
-        Draft202012Validator(response_format["json_schema"]["schema"]).validate(payload)
+        provider = response_format["json_schema"]["schema"]
+        assert payload.keys() <= provider["properties"].keys()
+        local = contract.author_item_response_schema()
+        local["properties"] = {key: value for key, value in local["properties"].items() if key in provider["properties"]}
+        payload = _encode_nullable_fixture(payload, local)
+        Draft202012Validator(provider).validate(payload)
     restored = author._prepare_parsed_author_item(
         json.loads(json.dumps(payload)), response_format=response_format)
     assert json.dumps(restored, sort_keys=True) == before
@@ -142,7 +143,8 @@ def provider_roundtrip(doc, response_format):
 def frozen_call_repair(doc, incoming, permissions, expected, *, note):
     """Exercise exact local scope/filter/apply, without manufacturing candidate fields."""
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 
     before = json.dumps(doc, sort_keys=True)
     report = validate_runtime_program(doc)
@@ -172,11 +174,11 @@ def assert_repaired_source(repaired, expected):
 
 def binding_case(case):
     if case == "equipped":
-        doc = build_capability_witness("configure_accessory")
+        doc = build_capability_witness("accessory")
     elif case == "effects":
-        doc = build_capability_witness("move_player_on_use")
+        doc = build_capability_witness("blink_on_use")
     elif case == "body":
-        doc = build_capability_witness("configure_item_use")
+        doc = build_capability_witness("item_use")
     elif case == "hold":
         doc = build_runtime_fixture("held_and_deployed")
         row = doc["runtimeProgram"]["bindings"][0]
@@ -185,7 +187,7 @@ def binding_case(case):
         row.pop("stackCost")
         row.pop("contactDamage")
     elif case == "pure-placement":
-        doc = build_capability_witness("configure_tile_placement")
+        doc = build_capability_witness("place_tile")
     else:
         assert case == "placement"
         doc = build_runtime_fixture("fishing_platform_tool")
@@ -222,7 +224,7 @@ class BindingTransaction:
         if group is not None:
             self.row.setdefault("action", {})["effectGroupId"] = group
             next(c for c in self.doc["runtimeProgram"]["calls"]
-                 if c["fn"] == "move_player_on_use")["params"]["effectGroupId"] = group
+                 if c["fn"] == "blink_on_use")["params"]["effectGroupId"] = group
         edit_fields(self.row, values or {})
         self.expected = deepcopy(self.doc)
         self.candidate = deepcopy(self.row)

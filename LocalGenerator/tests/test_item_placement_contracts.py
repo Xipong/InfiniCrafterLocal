@@ -5,16 +5,15 @@ import copy
 import json
 
 import pytest
-
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+from infini_local.pipelines.author.prompt import build_llm_author_payload
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 from test_dual_use_placeable_contract import _dual_use_placeable
-
 
 PLACEMENT_FACT_CASES = [
     *[pytest.param(
@@ -83,8 +82,8 @@ def test_placement_facts_survive_serialized_author(item, expected_item, expected
 @pytest.mark.parametrize("tile_id", [18, 19], ids=["historical-workbench", "dual-use-platform"])
 def test_durable_hybrid_stack_contract(max_stack, invalid, tile_id):
     document = _dual_use_placeable()
-    next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == "configure_tile_placement")["params"]["tileId"] = tile_id
-    next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == "configure_item_stats")["params"]["maxStack"] = max_stack
+    next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == "place_tile")["params"]["tileId"] = tile_id
+    next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == "item_stats")["params"]["maxStack"] = max_stack
     report = validate_runtime_program(document)
     assert ("hybrid_placeable_max_stack" in {row["code"] for row in report["errors"]}) is invalid
     if not invalid:
@@ -94,7 +93,7 @@ def test_durable_hybrid_stack_contract(max_stack, invalid, tile_id):
 
 def test_hybrid_stack_repair_changes_only_authorized_leaf():
     document = _dual_use_placeable()
-    stats = next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == "configure_item_stats")
+    stats = next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == "item_stats")
     stats["params"]["maxStack"] = 9999
     errors = [r for r in validate_runtime_program(document)["errors"] if r["code"] == "hybrid_placeable_max_stack"]
     assert errors

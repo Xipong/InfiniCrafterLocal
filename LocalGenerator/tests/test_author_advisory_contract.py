@@ -8,14 +8,14 @@ import pytest
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch, strict_repair_structure_report
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.pipelines.gameplay_stage import compile_and_validate_authored_runtime
+from infini_local.pipelines.author.stage import compile_and_validate_authored_runtime
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
 @pytest.mark.parametrize("report", ["absent", None, {}, "author's informal interpretation", {"description": 42},
                                    {"selfEvaluation": {"programVsReport": {"behaviorChecks": []}}}])
 def test_advisory_report_shape_does_not_reject_or_repair_gameplay(monkeypatch, report):
-    from infini_local.pipelines import gameplay_stage
+    from infini_local.pipelines.author import stage as gameplay_stage
 
     baseline = build_runtime_fixture("workbench_blade")
     source = copy.deepcopy(baseline)
@@ -73,8 +73,8 @@ def test_fresh_pipeline_does_not_manufacture_inert_semantic_knowledge():
 
 
 def test_parent_summary_keeps_advisory_text_without_verdict_routing_or_duplicate_runtime_ids():
-    from infini_local.pipelines.generated_parent_summary import generated_parent_summary_from_data
-    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+    from infini_local.pipelines.context.generated_summary import generated_parent_summary_from_data
+    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 
     source = compile_runtime_program(build_runtime_fixture("workbench_blade"))
     source["id"] = "advisory_parent"

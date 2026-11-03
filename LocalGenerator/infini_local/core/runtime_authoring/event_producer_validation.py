@@ -7,12 +7,14 @@ from __future__ import annotations
 from typing import Any, Iterable, Mapping
 
 from infini_local.core.runtime_authoring.binding_use_policy import (
-    action_kind, contact_damage, target_id as binding_target_id,
+    action_kind,
+    contact_damage,
 )
-from infini_local.core.runtime_authoring.capability_registry import (
-    BINDING_ACTION_REGISTRY, EVENT_KIND_REGISTRY, INPUT_KIND_REGISTRY,
-    event_dependency_alternatives,
+from infini_local.core.runtime_authoring.binding_use_policy import (
+    target_id as binding_target_id,
 )
+from infini_local.core.runtime_authoring.capability_registry import BINDING_ACTION_REGISTRY, EVENT_KIND_REGISTRY, INPUT_KIND_REGISTRY
+from infini_local.core.runtime_authoring.event_dependencies import event_dependency_alternatives
 
 
 def item_body_producer_bindings(
@@ -73,11 +75,11 @@ def item_body_contact_suppressed(
     """The same frozen engine gates used by validation and wire projection."""
     calls = tuple(target_calls)  # Repair passes a one-shot generator; both gates must see it.
     return (contact_suppressed
-            or any(call.get("fn") == "configure_item_use"
+            or any(call.get("fn") == "item_use"
                    and isinstance(call.get("params"), Mapping)
                    and call["params"].get("disableMeleeHitbox") is True
                    for call in calls)
-            or any(call.get("fn") == "configure_vanilla_ammo_item"
+            or any(call.get("fn") == "ammo_item"
                    and isinstance(call.get("params"), Mapping)
                    and call["params"].get("ammoCategory")
                    for call in calls))

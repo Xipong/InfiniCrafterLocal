@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../../ModSources/InfiniCrafterLocal/Common/Services/Studio/StudioBundle.cs" Link="StudioBundle.cs" />
+    <Compile Include="../../../ModSources/InfiniCrafterLocal/Common/Services/Studio/BundledStudio.cs" Link="BundledStudio.cs" />
+    <Compile Include="Program.cs" />
+    <Compile Include="TmlBoundary.cs" />
+  </ItemGroup>
+</Project>

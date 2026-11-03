@@ -72,7 +72,7 @@ public sealed partial class GeneratedProjectile
         ProjectFrontHand(owner, axis, stretch, armRotation);
         Projectile.Center = hand + axis * _entity.Movement.Params.HitboxOffsetPx!.Value;
         Projectile.velocity = Vector2.Zero;
-        Projectile.rotation = axis.ToRotation() + MathHelper.PiOver2;
+        Projectile.rotation = SpritePresentation.ProjectileNativeRotation(_entity!, axis.ToRotation());
         Projectile.spriteDirection = owner.direction;
         ClaimHeldProjectile(owner); // no animation/lifetime extension
     }

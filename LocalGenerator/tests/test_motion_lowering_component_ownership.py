@@ -11,8 +11,8 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 
 
 @pytest.mark.parametrize("fn", [
-    "set_projectile_aim", "oscillate_projectile_velocity", "seek_projectile",
-    "set_projectile_turn_modifier",
+    "set_aim", "oscillate_velocity", "seek",
+    "turn_velocity",
 ])
 def test_component_receipts_admit_real_source_and_source_free_wire(fn):
     source = build_capability_witness(fn)
@@ -30,9 +30,9 @@ def test_component_receipts_admit_real_source_and_source_free_wire(fn):
 def test_contextual_neutral_receipts_use_the_same_entity_clock_and_inactive_branch(updates):
     source = build_capability_witness("move_straight")
     calls = source["runtimeProgram"]["calls"]
-    collision = next(c for c in calls if c["fn"] == "set_projectile_collision")
+    collision = next(c for c in calls if c["fn"] == "projectile_collision")
     collision["params"]["updatesPerTick"] = updates
-    call = {"id": "rotation", "fn": "set_projectile_rotation", "target": collision["target"],
+    call = {"id": "rotation", "fn": "rotate_sprite", "target": collision["target"],
             "params": {"mode": "velocity"}}
     calls.append(call)
     wire = compile_runtime_program(source)
@@ -64,14 +64,14 @@ def test_contextual_neutral_receipts_use_the_same_entity_clock_and_inactive_bran
 def two_seek_document():
     source = build_capability_witness("move_straight")
     source["runtimeProgram"]["calls"].append({
-        "id": "return_latch", "fn": "set_projectile_return_trigger",
+        "id": "return_latch", "fn": "return_when",
         "target": source["runtimeProgram"]["primaryEntityId"], "params": {"afterSeconds": 1},
     })
     for phase in ("outbound", "returning"):
         source["runtimeProgram"]["calls"].append({
-            "id": phase, "fn": "seek_projectile", "target": source["runtimeProgram"]["primaryEntityId"],
-            "params": {"target": "owner_center", "maxSpeedBlocksPerSecond": 30,
-                       "velocityLerpPerUpdate": 0.5, "limitSpeedToDistance": True,
+            "id": phase, "fn": "seek", "target": source["runtimeProgram"]["primaryEntityId"],
+            "params": {"target": "owner_center", "maxSpeed": 30,
+                       "lerpPerUpdate": 0.5, "limitSpeedToDistance": True,
                        "window": {"phase": phase}},
         })
     return source
@@ -82,7 +82,7 @@ def test_seek_instance_rejects_equal_value_forged_owner_proofs(mutation):
     source = two_seek_document()
     wire = compile_runtime_program(source)
     rows = wire["runtimeContract"]["finalWireReceipts"]
-    selected = [r for r in rows if r.get("fn") == "seek_projectile"]
+    selected = [r for r in rows if r.get("fn") == "seek"]
     first = next(r for r in selected if r["callId"] == "outbound" and r["authoredPath"].endswith(".limitSpeedToDistance"))
     second = next(r for r in selected if r["callId"] == "returning" and r["authoredPath"].endswith(".limitSpeedToDistance"))
     if mutation == "mixed_calls":
@@ -98,7 +98,7 @@ def test_seek_instance_rejects_equal_value_forged_owner_proofs(mutation):
     elif mutation == "mixed_coordinate":
         first["authoredPath"] = second["authoredPath"]
     elif mutation == "foreign_fn":
-        first["fn"] = "set_projectile_aim"
+        first["fn"] = "set_aim"
     elif mutation == "missing_leaf":
         rows.remove(first)
     else:
@@ -122,10 +122,10 @@ def test_seek_instance_ownership_is_independent_of_wire_or_source_order():
 
 
 def test_source_component_target_cannot_be_changed_by_consistent_wire_receipts():
-    source = build_capability_witness("seek_projectile")
+    source = build_capability_witness("seek")
     wire = compile_runtime_program(source)
     source = deepcopy(source)
-    call = next(c for c in source["runtimeProgram"]["calls"] if c["fn"] == "seek_projectile")
+    call = next(c for c in source["runtimeProgram"]["calls"] if c["fn"] == "seek")
     call["target"] = next(e["id"] for e in source["runtimeProgram"]["entities"] if e["kind"] == "item_body")
     report = audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=source, final_document=wire)
     assert not report["ok"]
@@ -133,10 +133,10 @@ def test_source_component_target_cannot_be_changed_by_consistent_wire_receipts()
 
 
 def test_fixed_only_component_cannot_lose_its_whole_receipt_group():
-    source = build_capability_witness("sustain_projectile_mana")
+    source = build_capability_witness("sustain_mana")
     wire = compile_runtime_program(source)
     rows = wire["runtimeContract"]["finalWireReceipts"]
-    rows[:] = [r for r in rows if r.get("fn") != "sustain_projectile_mana"]
+    rows[:] = [r for r in rows if r.get("fn") != "sustain_mana"]
     for authored in (source, None):
         report = audit_compiler_receipts(rows, authored_document=authored, final_document=wire)
         assert not report["ok"], "the stored component still asserts fn-selected cadence"
@@ -147,7 +147,7 @@ def test_fixed_only_component_cannot_lose_its_whole_receipt_group():
 def test_contextual_neutral_proof_rejects_missing_or_untyped_wire_clock(bad):
     source = build_capability_witness("move_straight")
     source["runtimeProgram"]["calls"].append({
-        "id": "rotation", "fn": "set_projectile_rotation",
+        "id": "rotation", "fn": "rotate_sprite",
         "target": source["runtimeProgram"]["primaryEntityId"], "params": {"mode": "velocity"},
     })
     wire = compile_runtime_program(source)
@@ -155,7 +155,7 @@ def test_contextual_neutral_proof_rejects_missing_or_untyped_wire_clock(bad):
     entity["collision"]["extraUpdates"] = bad
     rows = wire["runtimeContract"]["finalWireReceipts"]
     for row in rows:
-        if row.get("fn") == "set_projectile_collision" and row["finalPath"].endswith(".extraUpdates"):
+        if row.get("fn") == "projectile_collision" and row["finalPath"].endswith(".extraUpdates"):
             row["value"] = bad
     report = audit_compiler_receipts(rows, final_document=wire)
     assert not report["ok"]
@@ -165,7 +165,7 @@ def test_contextual_neutral_proof_rejects_missing_or_untyped_wire_clock(bad):
 def test_contextual_neutral_rejects_a_null_source_call_without_crashing():
     source = build_capability_witness("move_straight")
     source["runtimeProgram"]["calls"].append({
-        "id": "rotation", "fn": "set_projectile_rotation",
+        "id": "rotation", "fn": "rotate_sprite",
         "target": source["runtimeProgram"]["primaryEntityId"], "params": {"mode": "velocity"},
     })
     wire = compile_runtime_program(source)
@@ -177,12 +177,12 @@ def test_contextual_neutral_rejects_a_null_source_call_without_crashing():
 
 @pytest.mark.parametrize("bad", [None, True, 1.5, -1, 256])
 def test_component_scalar_cannot_admit_null_wrong_type_or_outside_domain_with_matching_receipt(bad):
-    source = build_capability_witness("set_projectile_opacity")
+    source = build_capability_witness("set_opacity")
     wire = compile_runtime_program(source)
     entity = next(e for e in wire["runtimeProgram"]["entities"] if "opacity" in e)
     entity["opacity"]["alpha"] = bad
     rows = wire["runtimeContract"]["finalWireReceipts"]
-    next(r for r in rows if r.get("fn") == "set_projectile_opacity")["value"] = bad
+    next(r for r in rows if r.get("fn") == "set_opacity")["value"] = bad
     report = audit_compiler_receipts(rows, final_document=wire)
     assert not report["ok"]
     assert not validate_runtime_wire(wire)["ok"]

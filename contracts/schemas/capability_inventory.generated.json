@@ -2,7 +2,7 @@
   "capabilities": [
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_owner_control",
+      "capability": "set_owner_control",
       "componentSlot": "ownerControl",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionOwnerControl",
@@ -90,7 +90,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Independent explicit owner cancellation, held-projectile claim, animation and lifetime policies; no position or damage.",
+      "purpose": "Set owner cancellation, held-projectile ownership, animation and lifetime policies.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -112,12 +112,12 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "accumulate_projectile_charge",
+      "capability": "charge",
       "componentSlot": "charge",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge|Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge/ReleaseCharge",
       "dependencies": [
-        "configure_item_use"
+        "item_use"
       ],
       "emittedEvents": [
         "on_release",
@@ -137,7 +137,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
       "parameters": {
-        "autoReleaseAfterActiveSeconds": {
+        "autoReleaseAge": {
           "enum": [],
           "kind": "number",
           "maximum": 360.0,
@@ -147,7 +147,7 @@
           "semanticType": "seconds",
           "units": "seconds"
         },
-        "durationSeconds": {
+        "duration": {
           "enum": [],
           "kind": "number",
           "maximum": 10.0,
@@ -169,11 +169,11 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Accumulate and latch release. Without releaseEffect, no velocity, combat or lifetime rewrite; aim and contact stay independent.",
+      "purpose": "Accumulate charge and latch release; releaseEffect optionally changes velocity, combat or lifetime at release.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
-          "capability": "configure_item_use",
+          "capability": "item_use",
           "equals": true,
           "kind": "item_capability_param",
           "message": "Active charge input requires explicit channel=true.",
@@ -203,7 +203,7 @@
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge/ReleaseCharge",
       "dependencies": [
-        "accumulate_projectile_charge"
+        "charge"
       ],
       "emittedEvents": [],
       "events": [],
@@ -238,7 +238,7 @@
           "semanticType": "unitless_scalar",
           "units": ""
         },
-        "launchSpeedBlocksPerSecond": {
+        "launchSpeed": {
           "enum": [],
           "kind": "number",
           "maximum": 1800.0,
@@ -274,7 +274,7 @@
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
-          "capability": "accumulate_projectile_charge",
+          "capability": "charge",
           "kind": "capability_present",
           "message": "ChargeRelease requires explicit Charge.",
           "target": "same_target"
@@ -293,7 +293,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "gate_projectile_contact",
+      "capability": "gate_contact",
       "componentSlot": "contactGate",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.DamageGate.cs::CanDamage",
@@ -333,7 +333,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Constrain actual damage eligibility during an explicit phase, including before the first AI; outside the gate retain base authored eligibility.",
+      "purpose": "Gate damage eligibility by phase, including before the first AI update; outside the gate retain base eligibility.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -351,18 +351,19 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_beam_geometry",
+      "capability": "beam_geometry",
       "componentSlot": "beamGeometry",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry|Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::BeamWarmupProgress|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
       "dependencies": [
-        "set_projectile_aim"
+        "set_aim"
       ],
       "emittedEvents": [],
       "events": [],
       "exclusiveGroup": "",
       "finalWirePaths": [
         "runtimeProgram.entities[].beamGeometry.lengthPx",
+        "runtimeProgram.entities[].beamGeometry.startOffsetPx",
         "runtimeProgram.entities[].beamGeometry.widthPx",
         "runtimeProgram.entities[].beamGeometry.raycastTiles",
         "runtimeProgram.entities[].beamRamp.warmupTicks",
@@ -373,7 +374,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
       "parameters": {
-        "lengthBlocks": {
+        "length": {
           "enum": [],
           "kind": "number",
           "maximum": 120.0,
@@ -403,6 +404,16 @@
           "semanticType": "tiles",
           "units": ""
         },
+        "startOffsetBlocks": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1920.0,
+          "minimum": -1920.0,
+          "reference": null,
+          "required": false,
+          "semanticType": "blocks",
+          "units": "blocks"
+        },
         "widthBlocks": {
           "enum": [],
           "kind": "number",
@@ -415,18 +426,18 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Define an independent shared line for collision, draw and VFX from body center and Aim, without channel/control/lifetime policy.",
+      "purpose": "Share a line between collision, draw and VFX along the existing Aim world unit axis (MotionAxis): start=body center+axis*startOffsetBlocks, end=start+axis*length, with blocks converted to world pixels. Omitted offset is zero; this is not a hand anchor or a PNG grip and follows actual attachment/reach displacement. Offset moves only the line origin, never body physics, length, width, reach or PNG scale.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
-          "capability": "set_projectile_aim",
+          "capability": "set_aim",
           "kind": "capability_present",
           "message": "Beam geometry requires explicit Aim.",
           "target": "same_target"
         },
         {
           "anyOf": [
-            "set_projectile_lash_geometry"
+            "lash_geometry"
           ],
           "kind": "capability_absent",
           "message": "Beam and lash are competing collision geometry owners.",
@@ -434,9 +445,9 @@
         },
         {
           "anyOf": [
-            "set_projectile_hitbox_curve",
-            "set_projectile_visual_scale_curve",
-            "add_projectile_visual_scale"
+            "hitbox_curve",
+            "sprite_scale_curve",
+            "add_sprite_scale"
           ],
           "kind": "capability_absent",
           "message": "Beam/lash line geometry excludes dynamic body hitbox and visual-scale owners; its shared line is the collision/draw authority.",
@@ -461,7 +472,7 @@
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::BeamWarmupProgress|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
       "dependencies": [
-        "set_projectile_beam_geometry"
+        "beam_geometry"
       ],
       "emittedEvents": [],
       "events": [],
@@ -521,7 +532,7 @@
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
-          "capability": "set_projectile_beam_geometry",
+          "capability": "beam_geometry",
           "kind": "capability_present",
           "message": "BeamRamp requires BeamGeometry.",
           "target": "same_target"
@@ -540,12 +551,12 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "sustain_projectile_mana",
+      "capability": "sustain_mana",
       "componentSlot": "manaSustain",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::PaySustainedMana",
       "dependencies": [
-        "set_projectile_owner_control"
+        "set_owner_control"
       ],
       "emittedEvents": [],
       "events": [],
@@ -557,11 +568,11 @@
       "networkAuthority": "owner_request_server_execute",
       "parameters": {},
       "positionOwnership": "none",
-      "purpose": "Pay recurring native held-item mana at the held item's use-time cadence, independently of geometry or damage class; initial payment belongs to item use.",
+      "purpose": "Pay recurring native held-item mana at the held item's use-time cadence; initial payment belongs to item use.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
-          "capability": "set_projectile_owner_control",
+          "capability": "set_owner_control",
           "kind": "capability_present",
           "message": "Recurring native held-item payment requires explicit owner control.",
           "target": "same_target"
@@ -582,12 +593,12 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_lash_geometry",
+      "capability": "lash_geometry",
       "componentSlot": "lashGeometry",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion|Content/Projectiles/GeneratedProjectile.ComposableMotion.Geometry.cs::BuildLashPoints",
       "dependencies": [
-        "set_projectile_aim"
+        "set_aim"
       ],
       "emittedEvents": [],
       "events": [],
@@ -644,7 +655,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "durationSeconds": {
+        "duration": {
           "enum": [],
           "kind": "number",
           "maximum": 360.0,
@@ -654,7 +665,7 @@
           "semanticType": "seconds",
           "units": "seconds"
         },
-        "reachBlocks": {
+        "reach": {
           "enum": [],
           "kind": "number",
           "maximum": 60.0,
@@ -704,7 +715,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "useOwnerWhipRangeMultiplier": {
+        "useWhipRange": {
           "enum": [],
           "kind": "boolean",
           "maximum": null,
@@ -716,20 +727,20 @@
         }
       },
       "positionOwnership": "owns_position_while_active",
-      "purpose": "Define one bounded curved polyline; terminal point owns body center, collision and draw share geometry; no implicit tags or animation lifetime. Requires explicit collision.tileCollide=false: the curve does not execute native body tile collision.",
+      "purpose": "A flexible extending/retracting collision curve, not a rigid sword swing: reach grows as sin(pi*progress), peaks halfway, then returns to zero while sweeping and bending. Its tip owns body center; a single PNG follows only that tip. Visual runtime_geometry draws a plain constant-width solid line, not a textured whip; texturedPath can skin the same curve. Width is max(4, hitbox.widthPx*hitboxScale/2) world pixels. tileCollide must be false because the curve bypasses native body tile collision.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
-          "capability": "set_projectile_aim",
+          "capability": "set_aim",
           "kind": "capability_present",
           "message": "Lash geometry requires explicit Aim.",
           "target": "same_target"
         },
         {
           "anyOf": [
-            "set_projectile_hitbox_curve",
-            "set_projectile_visual_scale_curve",
-            "add_projectile_visual_scale"
+            "hitbox_curve",
+            "sprite_scale_curve",
+            "add_sprite_scale"
           ],
           "kind": "capability_absent",
           "message": "Beam/lash line geometry excludes dynamic body hitbox and visual-scale owners; its shared line is the collision/draw authority.",
@@ -737,7 +748,7 @@
         },
         {
           "anyOf": [
-            "active:durationSeconds"
+            "active:duration"
           ],
           "equals": null,
           "kind": "conditional_param",
@@ -750,7 +761,7 @@
           "kind": "param_only_when",
           "message": "Only the active lash clock accepts duration.",
           "otherParam": "clock",
-          "param": "durationSeconds",
+          "param": "duration",
           "target": "same_target"
         }
       ],
@@ -767,7 +778,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_aim",
+      "capability": "set_aim",
       "componentSlot": "aim",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
@@ -809,7 +820,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Define a world unit axis, without translation.",
+      "purpose": "Define the world unit axis used by attachment, geometry and rotation.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -825,12 +836,12 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "attach_projectile",
+      "capability": "attach",
       "componentSlot": "attachment",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [
-        "set_projectile_aim"
+        "set_aim"
       ],
       "emittedEvents": [],
       "events": [],
@@ -912,11 +923,11 @@
         }
       },
       "positionOwnership": "owns_position_while_active",
-      "purpose": "Set absolute center from one native anchor and explicit axis/normal offsets; no control or lifetime policy. An always-active attachment requires explicit collision.tileCollide=false because it bypasses native integration; a phase/timing-limited attachment may keep tile collision for free flight.",
+      "purpose": "Set body center from a native anchor and axis/normal offsets. Always-active attachment bypasses native integration and requires tileCollide=false; a phase/timing-limited attachment allows tile collision during free flight.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
-          "capability": "set_projectile_aim",
+          "capability": "set_aim",
           "kind": "capability_present",
           "message": "Attachment requires an explicit Aim axis.",
           "target": "same_target"
@@ -935,13 +946,13 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_front_arm_pose",
+      "capability": "front_arm_pose",
       "componentSlot": "armPose",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [
-        "set_projectile_aim",
-        "configure_item_use"
+        "set_aim",
+        "item_use"
       ],
       "emittedEvents": [],
       "events": [],
@@ -960,7 +971,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
       "parameters": {
-        "durationSeconds": {
+        "duration": {
           "enum": [],
           "kind": "number",
           "maximum": 4.0,
@@ -1037,11 +1048,11 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Write the primary native front arm pose independently of body position; interpolate lengths piecewise, nearest stretch ties shorter.",
+      "purpose": "Write the primary front arm pose independently of attachment; no automatic body attachment or reach cancellation. Native hand stretch length is only 4 to 10px; interpolate stretch lengths piecewise, nearest stretch ties shorter.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
-          "capability": "set_projectile_aim",
+          "capability": "set_aim",
           "kind": "capability_present",
           "message": "Arm pose requires an explicit Aim axis.",
           "target": "same_target"
@@ -1062,7 +1073,7 @@
         },
         {
           "allowAbsent": true,
-          "capability": "configure_item_use",
+          "capability": "item_use",
           "equals": "",
           "kind": "item_capability_param",
           "message": "Item handPose cannot compete with the explicit arm writer.",
@@ -1088,7 +1099,7 @@
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [
-        "attach_projectile"
+        "attach"
       ],
       "emittedEvents": [],
       "events": [],
@@ -1107,7 +1118,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
       "parameters": {
-        "durationSeconds": {
+        "duration": {
           "enum": [],
           "kind": "number",
           "maximum": 360.0,
@@ -1169,11 +1180,11 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Add a piecewise linear axial reach displacement to an explicit attachment; no cycle kill or sprite inference.",
+      "purpose": "Translate actual body center, collision geometry and selected PNG grip axially relative to an explicit attachment, including front_hand; not an arm stretch or draw-only extension. No cycle kill or sprite inference.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
-          "capability": "attach_projectile",
+          "capability": "attach",
           "kind": "capability_present",
           "message": "Reach adds to an explicit Attachment.",
           "target": "same_target"
@@ -1192,7 +1203,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "orbit_projectile",
+      "capability": "orbit",
       "componentSlot": "orbit",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
@@ -1228,24 +1239,24 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "identityPhaseRadians": {
+        "anglePhase": {
           "enum": [],
           "kind": "number",
           "maximum": 100,
           "minimum": -100,
           "reference": null,
           "required": true,
-          "semanticType": "radians",
+          "semanticType": "unitless_scalar",
           "units": "radians"
         },
-        "phaseRadians": {
+        "identityAnglePhase": {
           "enum": [],
           "kind": "number",
           "maximum": 100,
           "minimum": -100,
           "reference": null,
           "required": true,
-          "semanticType": "radians",
+          "semanticType": "unitless_scalar",
           "units": "radians"
         },
         "radiansPerSecond": {
@@ -1258,14 +1269,14 @@
           "semanticType": "radians/second",
           "units": "radians/second"
         },
-        "radiusBlocks": {
+        "radius": {
           "enum": [],
           "kind": "number",
           "maximum": 120.0,
           "minimum": 6.25e-05,
           "reference": null,
           "required": true,
-          "semanticType": "blocks",
+          "semanticType": "tiles",
           "units": "blocks"
         },
         "window": {
@@ -1280,7 +1291,7 @@
         }
       },
       "positionOwnership": "owns_position_while_active",
-      "purpose": "Own an absolute anchored orbit with explicit phase and identity phase; tile collision remains independently authored.",
+      "purpose": "Circular path in world XY around the selected anchor, with per-instance phase. The path has no terrain avoidance; tile collision is configured separately.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -1296,7 +1307,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "seek_projectile",
+      "capability": "seek",
       "componentSlot": "seek",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
@@ -1331,6 +1342,16 @@
           "semanticType": "blocks",
           "units": "blocks"
         },
+        "lerpPerUpdate": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "unitless"
+        },
         "limitSpeedToDistance": {
           "enum": [],
           "kind": "boolean",
@@ -1341,7 +1362,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "maxSpeedBlocksPerSecond": {
+        "maxSpeed": {
           "enum": [],
           "kind": "number",
           "maximum": 1800.0,
@@ -1351,7 +1372,7 @@
           "semanticType": "blocks/second",
           "units": "blocks/second"
         },
-        "minimumSpeedBlocksPerSecond": {
+        "minSpeed": {
           "enum": [],
           "kind": "number",
           "maximum": 1800.0,
@@ -1371,14 +1392,14 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "searchRangeTiles": {
+        "searchRange": {
           "enum": [],
           "kind": "number",
           "maximum": 120,
           "minimum": 0.001,
           "reference": null,
           "required": false,
-          "semanticType": "tiles",
+          "semanticType": "unitless_scalar",
           "units": "blocks"
         },
         "target": {
@@ -1396,16 +1417,6 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "velocityLerpPerUpdate": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1,
-          "minimum": 0,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "unitless"
-        },
         "window": {
           "enum": [],
           "kind": "union",
@@ -1418,12 +1429,12 @@
         }
       },
       "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Lerp velocity toward an explicit target independently of spin, return, lifetime or collision. At most two disjoint outbound/returning instances.",
+      "purpose": "Lerp velocity toward a target. Supports up to two disjoint outbound/returning instances.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
           "anyOf": [
-            "nearest_npc:searchRangeTiles",
+            "nearest_npc:searchRange",
             "nearest_npc:requireLineOfSight"
           ],
           "equals": null,
@@ -1445,7 +1456,7 @@
           "kind": "param_only_when",
           "message": "Only nearest NPC seek accepts a search range.",
           "otherParam": "target",
-          "param": "searchRangeTiles",
+          "param": "searchRange",
           "target": "same_target"
         },
         {
@@ -1460,8 +1471,8 @@
           "equals": null,
           "kind": "ordered_params",
           "message": "Minimum desired speed may not exceed maximum.",
-          "otherParam": "maxSpeedBlocksPerSecond",
-          "param": "minimumSpeedBlocksPerSecond",
+          "otherParam": "maxSpeed",
+          "param": "minSpeed",
           "target": "same_target"
         }
       ],
@@ -1478,7 +1489,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_return_trigger",
+      "capability": "return_when",
       "componentSlot": "returnTrigger",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::ApplyMotionReturnTrigger|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::OnTileCollide",
@@ -1506,16 +1517,6 @@
           "semanticType": "seconds",
           "units": "seconds"
         },
-        "disableTileCollisionOnReturn": {
-          "enum": [],
-          "kind": "boolean",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": false,
-          "semanticType": "bounded_text",
-          "units": ""
-        },
         "onOwnerRelease": {
           "enum": [],
           "kind": "boolean",
@@ -1536,7 +1537,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "ownerDistanceBlocks": {
+        "ownerDistance": {
           "enum": [],
           "kind": "number",
           "maximum": 2000.0,
@@ -1545,16 +1546,26 @@
           "required": false,
           "semanticType": "blocks",
           "units": "blocks"
+        },
+        "passTilesOnReturn": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         }
       },
       "positionOwnership": "none",
-      "purpose": "OR-latch returning exactly once, without seek, arrival, spin or implicit tile policy.",
+      "purpose": "Latch the returning state once when any selected trigger fires.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
           "anyOf": [
             "afterSeconds",
-            "ownerDistanceBlocks",
+            "ownerDistance",
             "onOwnerRelease",
             "onTileCollision"
           ],
@@ -1576,7 +1587,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_arrival",
+      "capability": "kill_on_arrival",
       "componentSlot": "arrival",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
@@ -1596,14 +1607,14 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
       "parameters": {
-        "radiusBlocks": {
+        "radius": {
           "enum": [],
           "kind": "number",
           "maximum": 32.0,
           "minimum": 6.25e-05,
           "reference": null,
           "required": true,
-          "semanticType": "blocks",
+          "semanticType": "tiles",
           "units": "blocks"
         },
         "target": {
@@ -1631,7 +1642,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Kill on reaching the selected owner anchor; fn selects action=kill. No return latch is implied.",
+      "purpose": "Kill when reaching the selected owner anchor.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -1649,7 +1660,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_proximity_action",
+      "capability": "proximity_action",
       "componentSlot": "proximity",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
@@ -1693,14 +1704,14 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "searchRangeTiles": {
+        "searchRange": {
           "enum": [],
           "kind": "number",
           "maximum": 120,
           "minimum": 0.001,
           "reference": null,
           "required": true,
-          "semanticType": "tiles",
+          "semanticType": "unitless_scalar",
           "units": "blocks"
         },
         "triggerRadiusBlocks": {
@@ -1725,7 +1736,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Select nearest valid NPC deterministically and kill, independently of steering; expiry emits on_expire then on_kill, not on_hit.",
+      "purpose": "Find the nearest valid NPC and terminate on proximity; expire_then_kill emits on_expire then on_kill.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -1741,7 +1752,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "accelerate_projectile_vertical",
+      "capability": "accelerate_y",
       "componentSlot": "verticalAcceleration",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
@@ -1759,7 +1770,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
       "parameters": {
-        "accelerationYBlocksPerSecondSquared": {
+        "accelY": {
           "enum": [],
           "kind": "number",
           "maximum": 16200.0,
@@ -1781,7 +1792,7 @@
         }
       },
       "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Add signed world vertical acceleration independently of steering.",
+      "purpose": "Add signed world vertical acceleration.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -1815,7 +1826,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
       "parameters": {
-        "multiplierPerUpdate": {
+        "scalePerUpdate": {
           "enum": [],
           "kind": "number",
           "maximum": 1.2,
@@ -1853,7 +1864,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "scale_projectile_velocity",
+      "capability": "scale_velocity",
       "componentSlot": "velocityScale",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
@@ -1872,7 +1883,7 @@
       "multiplicity": "many_per_target",
       "networkAuthority": "owner_request_server_execute",
       "parameters": {
-        "maxSpeedBlocksPerSecond": {
+        "maxSpeed": {
           "enum": [],
           "kind": "number",
           "maximum": 1800.0,
@@ -1882,7 +1893,7 @@
           "semanticType": "blocks/second",
           "units": "blocks/second"
         },
-        "multiplierPerUpdate": {
+        "scalePerUpdate": {
           "enum": [],
           "kind": "number",
           "maximum": 1.2,
@@ -1904,7 +1915,7 @@
         }
       },
       "positionOwnership": "velocity_or_position_controller",
-      "purpose": "After turn and before homing, multiply velocity per update, optionally cap its magnitude. Zero stops; below one brakes. At most two independently timed, provably disjoint instances; no early-stage scaling.",
+      "purpose": "After turn and before homing, multiply velocity per update and optionally cap its magnitude. Supports two provably disjoint timing windows.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -1930,12 +1941,12 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_rotation",
+      "capability": "rotate_sprite",
       "componentSlot": "rotation",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::ApplyMotionRotation",
       "dependencies": [
-        "set_projectile_aim"
+        "set_aim"
       ],
       "emittedEvents": [],
       "events": [],
@@ -1998,7 +2009,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Choose sprite rotation without changing velocity.",
+      "purpose": "Set the visible body orientation; the renderer separately aligns the PNG forward axis. Zero offset aligns its forward direction with the chosen axis/velocity. This does not steer movement or rotate collision geometry.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -2012,7 +2023,7 @@
           "target": "same_target"
         },
         {
-          "capability": "set_projectile_aim",
+          "capability": "set_aim",
           "equals": "axis",
           "kind": "capability_present",
           "message": "Axis rotation requires an explicit Aim axis.",
@@ -2040,7 +2051,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "oscillate_projectile_velocity",
+      "capability": "oscillate_velocity",
       "componentSlot": "oscillation",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
@@ -2061,7 +2072,17 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
       "parameters": {
-        "frequencyRadiansPerSecond": {
+        "anglePhase": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 100,
+          "minimum": -100,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "radians"
+        },
+        "angularFrequency": {
           "enum": [],
           "kind": "number",
           "maximum": 2160.0,
@@ -2081,16 +2102,6 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "phaseRadians": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 100,
-          "minimum": -100,
-          "reference": null,
-          "required": true,
-          "semanticType": "radians",
-          "units": "radians"
-        },
         "window": {
           "enum": [],
           "kind": "union",
@@ -2103,7 +2114,7 @@
         }
       },
       "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Independent sine steering; no NPC targeting or opacity. Fixed order: Seek, vertical acceleration, retention, oscillation, existing turn/speed/homing modifiers.",
+      "purpose": "Add sine steering after seek, vertical acceleration and retention, before the turn/speed/homing modifiers.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -2119,7 +2130,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "add_projectile_visual_scale",
+      "capability": "add_sprite_scale",
       "componentSlot": "visualScaleRate",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
@@ -2186,7 +2197,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_opacity",
+      "capability": "set_opacity",
       "componentSlot": "opacity",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
@@ -2204,7 +2215,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
       "parameters": {
-        "alpha": {
+        "transparencyByte": {
           "enum": [],
           "kind": "integer",
           "maximum": 255,
@@ -2212,7 +2223,7 @@
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
-          "units": ""
+          "units": "byte (0 opaque; 255 transparent)"
         },
         "window": {
           "enum": [],
@@ -2226,7 +2237,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Set body opacity independently of steering or collision.",
+      "purpose": "Set body opacity.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -2242,7 +2253,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "configure_item_stats",
+      "capability": "item_stats",
       "componentSlot": "item_stats",
       "conflicts": [],
       "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
@@ -2415,7 +2426,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Set exact item stats; no weapon class or behaviour is inferred.",
+      "purpose": "Set item stats.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -2426,7 +2437,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "configure_item_use",
+      "capability": "item_use",
       "componentSlot": "item_use",
       "conflicts": [],
       "csharpOwner": "Content/Items/GeneratedItem.Use.cs::CanUseItem|Content/Items/GeneratedItem.UseStyle.cs::UseStyle",
@@ -2441,14 +2452,12 @@
         "gameplay.holdoutOffsetX",
         "gameplay.holdoutOffsetY",
         "gameplay.handPose",
-        "gameplay.releaseTiming",
         "runtimeProgram.itemUse.configured",
         "runtimeProgram.itemUse.useStyle",
         "runtimeProgram.itemUse.hideUseGraphic",
         "runtimeProgram.itemUse.disableMeleeHitbox",
         "runtimeProgram.itemUse.channel",
         "runtimeProgram.itemUse.handPose",
-        "runtimeProgram.itemUse.releaseTiming",
         "runtimeProgram.itemUse.holdoutOffsetX",
         "runtimeProgram.itemUse.holdoutOffsetY"
       ],
@@ -2472,20 +2481,6 @@
           "minimum": null,
           "reference": null,
           "required": true,
-          "semanticType": "bounded_text",
-          "units": ""
-        },
-        "customHeldSprite": {
-          "enum": [
-            "hidden",
-            "visible",
-            "inherit"
-          ],
-          "kind": "string",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": false,
           "semanticType": "bounded_text",
           "units": ""
         },
@@ -2581,7 +2576,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Set exact item use/draw/input affordances.",
+      "purpose": "Configure use behavior and held-item presentation.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -2592,7 +2587,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "collect_seeds_from_grass",
+      "capability": "collect_seeds",
       "componentSlot": "inventory_seed_collection",
       "conflicts": [],
       "csharpOwner": "Common/Systems/Utility/GeneratedInventorySeedSystem.cs::HasItem",
@@ -2607,7 +2602,7 @@
       "networkAuthority": "native_worldgen",
       "parameters": {},
       "positionOwnership": "none",
-      "purpose": "Inventory passive: explicitly let this generated definition satisfy Terraria's native grass seed-collection inventory check. No use/equip/hold binding is needed. Only carried inventory slots 0..57 count (not mouse slot, equipment, banks or Void Bag); native tile admission, 50% seed RNG and nearest-player selection remain unchanged. Does not consume the item. No parameters.",
+      "purpose": "Enable Terraria's grass seed-collection inventory check. Only carried slots 0..57 count; native tile admission, 50% seed RNG and nearest-player selection apply. The item is retained.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "one bounded native inventory witness; no added spawns or RNG",
@@ -2618,7 +2613,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "configure_item_contact_hitbox",
+      "capability": "item_hitbox",
       "componentSlot": "item_contact",
       "conflicts": [],
       "csharpOwner": "Content/Items/GeneratedItem.Use.cs::UseItemHitbox/OnHitNPC",
@@ -2658,7 +2653,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Modify the current Terraria contact rectangle when a binding enables item-body contact; not a fixed PNG box. Keep its center; round each dimension times hitboxScale, add contactForgivenessPx on each side, minimum 1px. Omission leaves native geometry unchanged.",
+      "purpose": "Resize the Terraria item-contact rectangle around its current center: round each dimension times hitboxScale, then add contactForgivenessPx on each side, minimum 1px.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -2669,7 +2664,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "configure_weapon_ammo",
+      "capability": "weapon_ammo",
       "componentSlot": "weapon_ammo",
       "conflicts": [
         "exclusive_group:ammo_role"
@@ -2728,7 +2723,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. native_shot requires constant velocity on each active binding target; authored_spawn preserves explicitly sampled velocity. Other actions and passive hold spawns do not consume ammo. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
+      "purpose": "Use native Terraria ammunition selection and conservation for active spawn_entity shots. Weapon-plus-ammo damage and knockback feed the authored projectile; its behavior comes from the runtime entity. native_shot requires constant velocity on each active target; authored_spawn preserves its sampled velocity. Other actions and hold spawns do not consume ammunition.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -2751,7 +2746,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "configure_vanilla_ammo_item",
+      "capability": "ammo_item",
       "componentSlot": "ammo_item",
       "conflicts": [
         "exclusive_group:ammo_role"
@@ -2816,7 +2811,7 @@
           "semanticType": "terraria_projectile_id",
           "units": ""
         },
-        "shootSpeedContributionBlocksPerSecond": {
+        "speedBonus": {
           "enum": [],
           "kind": "number",
           "maximum": 300.0,
@@ -2828,7 +2823,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Mark this generated item as one exact vanilla ammo category and projectile. It does not configure a weapon to consume ammo.",
+      "purpose": "Make the generated item usable as the selected vanilla ammunition.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -2915,9 +2910,9 @@
         {
           "anyOf": [
             "restore_resources_on_use",
-            "apply_vanilla_buff_on_use",
-            "apply_generated_buff_on_use",
-            "move_player_on_use",
+            "native_buff_on_use",
+            "generated_buff_on_use",
+            "blink_on_use",
             "recall_home_on_use"
           ],
           "kind": "capability_group_present",
@@ -2937,7 +2932,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "apply_vanilla_buff_on_use",
+      "capability": "native_buff_on_use",
       "componentSlot": "use_buff",
       "conflicts": [],
       "csharpOwner": "Content/Items/GeneratedItem.Use.cs::ApplyItemEffects",
@@ -2965,7 +2960,7 @@
           "semanticType": "terraria_buff_id",
           "units": ""
         },
-        "durationSeconds": {
+        "duration": {
           "enum": [],
           "kind": "number",
           "maximum": 360.0,
@@ -3007,7 +3002,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "apply_generated_buff_on_use",
+      "capability": "generated_buff_on_use",
       "componentSlot": "generated_use_buff",
       "conflicts": [],
       "csharpOwner": "Content/Items/GeneratedItem.Use.cs::ApplyItemEffects",
@@ -3016,6 +3011,24 @@
       "events": [],
       "exclusiveGroup": "",
       "finalWirePaths": [
+        "gameplay.generatedBuff.playerEffect.condition",
+        "gameplay.generatedBuff.playerEffect.fishingPowerPoints",
+        "gameplay.generatedBuff.playerEffect.preventLineBreak",
+        "gameplay.generatedBuff.playerEffect.allowLavaFishing",
+        "gameplay.generatedBuff.playerEffect.revealHookedCatch",
+        "gameplay.generatedBuff.playerEffect.extraCrateChancePercent",
+        "gameplay.generatedBuff.playerEffect.itemPickupRangePx",
+        "gameplay.generatedBuff.playerEffect.heartPickupRangePx",
+        "gameplay.generatedBuff.playerEffect.manaPickupRangePx",
+        "gameplay.generatedBuff.playerEffect.coinPickupRangePx",
+        "gameplay.generatedBuff.playerEffect.highlightDanger",
+        "gameplay.generatedBuff.playerEffect.highlightCreatures",
+        "gameplay.generatedBuff.playerEffect.nightVision",
+        "gameplay.generatedBuff.playerEffect.healingPotionCooldownReductionPercent",
+        "gameplay.generatedBuff.playerEffect.healingPotionCooldownReductionTicks",
+        "gameplay.generatedBuff.playerEffect.autoManaPotionBelowPercent",
+        "gameplay.generatedBuff.playerEffect.healingPotionCooldownOnHitReductionTicks",
+        "gameplay.generatedBuff.playerEffect.hurtInvulnerabilityBonusTicks",
         "gameplay.generatedBuff.durationTicks",
         "gameplay.generatedBuff.exhaustionTicks",
         "gameplay.generatedBuff.miningSpeedMultiplier",
@@ -3026,12 +3039,32 @@
         "gameplay.generatedBuff.jumpBoost",
         "gameplay.generatedBuff.manaRegen",
         "gameplay.generatedBuff.lifeRegen",
+        "gameplay.generatedBuff.lifeRegenCondition",
+        "gameplay.generatedBuff.treasureSenseCondition",
         "gameplay.generatedBuff.combat.defensePoints",
         "gameplay.generatedBuff.combat.attackSpeedPercent",
         "gameplay.generatedBuff.combat.critChancePoints",
         "gameplay.generatedBuff.combat.damagePercent",
         "gameplay.generatedBuff.combat.damageClass",
         "runtimeProgram.effectGroups[].id",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.condition",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.fishingPowerPoints",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.preventLineBreak",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.allowLavaFishing",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.revealHookedCatch",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.extraCrateChancePercent",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.itemPickupRangePx",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.heartPickupRangePx",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.manaPickupRangePx",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.coinPickupRangePx",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.highlightDanger",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.highlightCreatures",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.nightVision",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.healingPotionCooldownReductionPercent",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.healingPotionCooldownReductionTicks",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.autoManaPotionBelowPercent",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.healingPotionCooldownOnHitReductionTicks",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.hurtInvulnerabilityBonusTicks",
         "runtimeProgram.effectGroups[].generatedBuff.durationTicks",
         "runtimeProgram.effectGroups[].generatedBuff.exhaustionTicks",
         "runtimeProgram.effectGroups[].generatedBuff.miningSpeedMultiplier",
@@ -3042,6 +3075,8 @@
         "runtimeProgram.effectGroups[].generatedBuff.jumpBoost",
         "runtimeProgram.effectGroups[].generatedBuff.manaRegen",
         "runtimeProgram.effectGroups[].generatedBuff.lifeRegen",
+        "runtimeProgram.effectGroups[].generatedBuff.lifeRegenCondition",
+        "runtimeProgram.effectGroups[].generatedBuff.treasureSenseCondition",
         "runtimeProgram.effectGroups[].generatedBuff.combat.defensePoints",
         "runtimeProgram.effectGroups[].generatedBuff.combat.attackSpeedPercent",
         "runtimeProgram.effectGroups[].generatedBuff.combat.critChancePoints",
@@ -3061,11 +3096,11 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "durationSeconds": {
+        "duration": {
           "enum": [],
           "kind": "number",
-          "maximum": 360.0,
-          "minimum": 0.008333333333333333,
+          "maximum": 35791394.1,
+          "minimum": 0,
           "reference": null,
           "required": true,
           "semanticType": "seconds",
@@ -3091,7 +3126,7 @@
           "semanticType": "seconds",
           "units": "seconds"
         },
-        "jumpSpeedBonusBlocksPerSecond": {
+        "jumpSpeedBonus": {
           "enum": [],
           "kind": "number",
           "maximum": 30.0,
@@ -3101,14 +3136,14 @@
           "semanticType": "blocks/s",
           "units": "blocks/s"
         },
-        "lifeRegenHpPerSecond": {
+        "lifeRegen": {
           "enum": [],
           "kind": "number",
           "maximum": 60,
           "minimum": -50,
           "reference": null,
           "required": false,
-          "semanticType": "unitless_scalar",
+          "semanticType": "terraria_life_regen",
           "units": "HP/s"
         },
         "lightColor": {
@@ -3143,14 +3178,14 @@
           "semanticType": "unitless_scalar",
           "units": "engine units: RGB coefficient"
         },
-        "manaRegenBonusPoints": {
+        "manaRegen": {
           "enum": [],
           "kind": "integer",
           "maximum": 120,
           "minimum": -100,
           "reference": null,
           "required": false,
-          "semanticType": "unitless_scalar",
+          "semanticType": "terraria_mana_regen",
           "units": "engine units: manaRegenBonus points"
         },
         "miningSpeedMultiplier": {
@@ -3163,7 +3198,7 @@
           "semanticType": "unitless_scalar",
           "units": "engine units: pickSpeed divisor"
         },
-        "moveSpeedBonusPercent": {
+        "moveSpeedBonus": {
           "enum": [],
           "kind": "number",
           "maximum": 200,
@@ -3173,7 +3208,30 @@
           "semanticType": "additive_percent",
           "units": "additive_percent"
         },
-        "oreSenseEnabled": {
+        "playerEffect": {
+          "enum": [],
+          "kind": "object",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "regenWhen": {
+          "enum": [
+            "always",
+            "stationary"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "treasureSense": {
           "enum": [],
           "kind": "boolean",
           "maximum": null,
@@ -3182,10 +3240,23 @@
           "required": false,
           "semanticType": "boolean_capability",
           "units": ""
+        },
+        "treasureWhen": {
+          "enum": [
+            "always",
+            "stationary"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         }
       },
       "positionOwnership": "none",
-      "purpose": "Apply a bounded generated utility effect. Refreshing an identical effect retains maximum remaining duration, not extra strength; distinct effects coexist under player stat caps. exhaustionSeconds starts at successful application or refresh, independently of buff duration. Normal attacks and other item effects are unchanged; attack cadence is separately authored. Free repeatable refresh can sustain indefinite uptime despite a short duration.",
+      "purpose": "Apply a generated utility effect. Identical effects refresh to the greater remaining duration; distinct effects coexist under player stat caps. exhaustionSeconds starts on successful application or refresh. Repeated refresh can sustain the effect indefinitely.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -3193,12 +3264,23 @@
             "apply_item_effects"
           ],
           "kind": "binding_action_present",
-          "message": "This generated buff requires a matching effectGroupId in an apply_item_effects binding, refresh_generated_effect_group_while_held, or apply_generated_buff_on_event; an ungrouped buff requires an ungrouped apply_item_effects binding. A spawn_entity or use_item_body binding alone does not apply it.",
+          "message": "This generated buff requires a matching effectGroupId in an apply_item_effects binding, refresh_held_effect, or generated_buff_on_event; an ungrouped buff requires an ungrouped apply_item_effects binding. A spawn_entity or use_item_body binding alone does not apply it.",
           "target": "item_body"
         },
         {
           "kind": "non_neutral_param",
           "message": "at least one generated-buff effect must be non-neutral",
+          "nonzeroParams": [
+            "playerEffect",
+            "combat",
+            "miningSpeedMultiplier",
+            "lightStrength",
+            "treasureSense",
+            "moveSpeedBonus",
+            "jumpSpeedBonus",
+            "manaRegen",
+            "lifeRegen"
+          ],
           "target": "same_target"
         }
       ],
@@ -3210,7 +3292,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "refresh_generated_effect_group_while_held",
+      "capability": "refresh_held_effect",
       "componentSlot": "held_generated_buff",
       "conflicts": [],
       "csharpOwner": "Content/Items/GeneratedItem.Use.cs::HoldItem",
@@ -3236,7 +3318,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Attempt to refresh one named generated utility buff group each world tick while this exact item is held; its exhaustionSeconds policy still applies. durationSeconds controls lingering after release, independently of exhaustion. Only apply_generated_buff_on_use may populate the group; no healing, teleport, native buff or invisible projectile is inferred.",
+      "purpose": "Refresh the selected generated_buff_on_use group each world tick while held, subject to its exhaustionSeconds lockout. duration determines lingering after release.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -3247,12 +3329,12 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "configure_tool",
+      "capability": "tool_stats",
       "componentSlot": "tool",
       "conflicts": [],
       "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "dependencies": [
-        "configure_item_use"
+        "item_use"
       ],
       "emittedEvents": [],
       "events": [],
@@ -3266,14 +3348,14 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
       "parameters": {
-        "axePowerTooltipPercent": {
+        "axePower": {
           "enum": [],
           "kind": "integer",
           "maximum": 500,
           "minimum": 0,
           "reference": null,
           "required": true,
-          "semanticType": "unitless_scalar",
+          "semanticType": "terraria_axe_power",
           "units": "tooltip percent"
         },
         "hammerPower": {
@@ -3312,7 +3394,7 @@
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
-          "capability": "configure_item_use",
+          "capability": "item_use",
           "kind": "capability_present",
           "message": "A configured tool requires explicit item-use configuration; no use behavior is inferred.",
           "target": "item_body"
@@ -3335,7 +3417,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "configure_tile_placement",
+      "capability": "place_tile",
       "componentSlot": "placeable",
       "conflicts": [
         "exclusive_group:placeable"
@@ -3395,7 +3477,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "configure_wall_placement",
+      "capability": "place_wall",
       "componentSlot": "placeable",
       "conflicts": [
         "exclusive_group:placeable"
@@ -3455,12 +3537,12 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "present_placed_item_sprite",
+      "capability": "placed_sprite",
       "componentSlot": "placed_body",
       "conflicts": [],
       "csharpOwner": "Common/Models/Contracts/RuntimeProgramSpec.cs::Validate",
       "dependencies": [
-        "configure_tile_placement"
+        "place_tile"
       ],
       "emittedEvents": [],
       "events": [],
@@ -3614,14 +3696,14 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Explicit persistent static presentation of the same item_body's existing full-frame root PNG over one exact native tile placement. Replaces all native body/flame pictures: native animation and on/off visual states do not survive in this single PNG; baked flames stay static and visible when the native tile is switched off. To retain native animation/state pictures omit this call. Independently opt-in enable_placed_vfx can later support separate live effects selected by placementBindingId; it does not animate this root PNG or restore native flame pictures. Native tile support, solidity, mining, wiring, interactions and light remain unchanged; a two-headed sprite does not create two mechanical lights. Absent call retains native presentation. Requires an exact bounded native footprint (16x16/256 cells max) from configure_tile_placement. Container behavior belongs to that native placement, not this presentation call.",
+      "purpose": "Draw the full root item PNG over the native placed tile, replacing its body/flame pictures. This single static image replaces native animation and on/off visuals; baked flames remain visible when switched off. Omit to retain native pictures. placed_vfx can add separate live effects. Native support, solidity, mining, wiring, interactions and light remain unchanged. Requires the place_tile footprint, up to 16x16/256 cells.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
           "anyOf": [
             "place_item"
           ],
-          "capability": "configure_tile_placement",
+          "capability": "place_tile",
           "equals": null,
           "kind": "executed_tile_placement_reference",
           "message": "Reference an exact same-item tile-only placement used by an executable place_item binding, or explicitly delete this placed component call. No walls, inferred source, or unused reference.",
@@ -3649,12 +3731,12 @@
         "light": "client_visual_only",
         "placement": "owner_request_server_execute"
       },
-      "capability": "add_placed_light",
+      "capability": "placed_light",
       "componentSlot": "placed_light",
       "conflicts": [],
       "csharpOwner": "Common/Systems/Placement/GeneratedPlacementLedgerSystem.PlacedLight.cs::TryGetPlacedLight",
       "dependencies": [
-        "configure_tile_placement"
+        "place_tile"
       ],
       "emittedEvents": [],
       "events": [],
@@ -3718,14 +3800,14 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Add independent persistent light at the center tile of one exact committed native tile footprint. Explicit strength and color; no held/projectile light, PNG dependency or inferred emitter count. Absent call adds no light. Native tile light and interactions remain unchanged. Requires an exact bounded native footprint (16x16/256 cells max) from configure_tile_placement. Container behavior belongs to that native placement, not this light call.",
+      "purpose": "Add persistent light at the center tile of the committed native footprint (up to 16x16/256 cells). Native tile light remains.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
           "anyOf": [
             "place_item"
           ],
-          "capability": "configure_tile_placement",
+          "capability": "place_tile",
           "equals": null,
           "kind": "executed_tile_placement_reference",
           "message": "Reference an exact same-item tile-only placement used by an executable place_item binding, or explicitly delete this placed component call. No walls, inferred source, or unused reference.",
@@ -3753,12 +3835,12 @@
         "placement": "owner_request_server_execute",
         "vfx": "client_visual_only"
       },
-      "capability": "enable_placed_vfx",
+      "capability": "placed_vfx",
       "componentSlot": "placed_vfx",
       "conflicts": [],
       "csharpOwner": "Common/Systems/Placement/GeneratedPlacementLedgerSystem.PlacedVfx.cs::TryGetPlacedVfxFrame",
       "dependencies": [
-        "configure_tile_placement"
+        "place_tile"
       ],
       "emittedEvents": [],
       "events": [],
@@ -3810,7 +3892,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Opt in to independent live placed VFX slots on one exact committed native tile footprint, not held-item effects. Bounds consume actual top-left native TileFrameY inclusively, not animation time/count: 0..32767 selects all nonnegative frames. Native state facts are read-only; never infer a gate from names. VFX Director later selects this placement binding for periodic self spriteElement/libraryParticle/lightCue. Same item root PNG remains stable physical art; existing independent VFX assets can animate separate flames without rotating/pulsing the whole root. No effects/defaults are inserted. Requires an exact bounded native footprint (16x16/256 cells max) from configure_tile_placement. Does not change its native container behavior, material ownership or returns.",
+      "purpose": "Expose live placed-effect slots for this committed native footprint (up to 16x16/256 cells). Inclusive bounds select the top-left native TileFrameY; 0..32767 covers all nonnegative frames. VFX Director may add periodic self spriteElement/libraryParticle/lightCue effects to this placement binding, separately from the static root PNG.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -3825,7 +3907,7 @@
           "anyOf": [
             "place_item"
           ],
-          "capability": "configure_tile_placement",
+          "capability": "place_tile",
           "equals": null,
           "kind": "executed_tile_placement_reference",
           "message": "Reference an exact same-item tile-only placement used by an executable place_item binding, or explicitly delete this placed component call. No walls, inferred source, or unused reference.",
@@ -3850,7 +3932,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "require_use_condition",
+      "capability": "use_condition",
       "componentSlot": "use_condition",
       "conflicts": [],
       "csharpOwner": "Content/Items/GeneratedItem.Use.cs::UseBlockedReason",
@@ -3892,7 +3974,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Gate one active input; one condition per input. Omit for unrestricted use.",
+      "purpose": "Require one condition for the selected active input.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -3903,7 +3985,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "add_hold_light",
+      "capability": "held_light",
       "componentSlot": "held_light",
       "conflicts": [],
       "csharpOwner": "Content/Items/GeneratedItem.Use.cs::HoldItem",
@@ -3963,7 +4045,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "move_player_on_use",
+      "capability": "blink_on_use",
       "componentSlot": "item_mobility",
       "conflicts": [
         "exclusive_group:item_mobility"
@@ -3987,7 +4069,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "cooldownSeconds": {
+        "cooldown": {
           "enum": [],
           "kind": "number",
           "maximum": 60.0,
@@ -4019,7 +4101,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "rangeTiles": {
+        "range": {
           "enum": [],
           "kind": "integer",
           "maximum": 120,
@@ -4041,7 +4123,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Run a bounded blink-to-cursor action on successful use; home recall has its own operation.",
+      "purpose": "Blink on successful use with gravity-relative feet at the range-limited cursor, like the native teleport rod. No nearby-space search; home recall has its own operation.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -4085,7 +4167,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "cooldownSeconds": {
+        "cooldown": {
           "enum": [],
           "kind": "number",
           "maximum": 60.0,
@@ -4127,7 +4209,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "configure_accessory",
+      "capability": "accessory",
       "componentSlot": "accessory",
       "conflicts": [],
       "csharpOwner": "Content/Items/GeneratedItem.Equipment.cs::UpdateAccessory",
@@ -4137,6 +4219,27 @@
       "exclusiveGroup": "",
       "finalWirePaths": [
         "accessory.enabled",
+        "accessory.playerEffect.condition",
+        "accessory.playerEffect.fishingPowerPoints",
+        "accessory.playerEffect.preventLineBreak",
+        "accessory.playerEffect.allowLavaFishing",
+        "accessory.playerEffect.revealHookedCatch",
+        "accessory.playerEffect.extraCrateChancePercent",
+        "accessory.playerEffect.itemPickupRangePx",
+        "accessory.playerEffect.heartPickupRangePx",
+        "accessory.playerEffect.manaPickupRangePx",
+        "accessory.playerEffect.coinPickupRangePx",
+        "accessory.playerEffect.highlightDanger",
+        "accessory.playerEffect.highlightCreatures",
+        "accessory.playerEffect.nightVision",
+        "accessory.playerEffect.healingPotionCooldownReductionPercent",
+        "accessory.playerEffect.healingPotionCooldownReductionTicks",
+        "accessory.playerEffect.autoManaPotionBelowPercent",
+        "accessory.playerEffect.healingPotionCooldownOnHitReductionTicks",
+        "accessory.playerEffect.hurtInvulnerabilityBonusTicks",
+        "accessory.lifeRegenCondition",
+        "accessory.treasureSense",
+        "accessory.treasureSenseCondition",
         "accessory.defense",
         "accessory.maxLife",
         "accessory.maxMana",
@@ -4172,16 +4275,6 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "accRunSpeedBlocksPerSecond": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 75.0,
-          "minimum": 0.0,
-          "reference": null,
-          "required": false,
-          "semanticType": "blocks/s",
-          "units": "blocks/s"
-        },
         "aggroPoints": {
           "enum": [],
           "kind": "integer",
@@ -4202,7 +4295,37 @@
           "semanticType": "probability_percent",
           "units": "probability_percent"
         },
-        "damageReductionPercentagePoints": {
+        "armorPenetration": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 100,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "armor_points",
+          "units": "armor_points"
+        },
+        "attackSpeedBonus": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 300,
+          "minimum": -90,
+          "reference": null,
+          "required": false,
+          "semanticType": "additive_percent",
+          "units": "additive_percent"
+        },
+        "critChance": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 100,
+          "minimum": -100,
+          "reference": null,
+          "required": false,
+          "semanticType": "percentage_points",
+          "units": "percentage_points"
+        },
+        "damageReduction": {
           "enum": [],
           "kind": "number",
           "maximum": 75,
@@ -4242,46 +4365,6 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "genericArmorPenetrationPoints": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 100,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "armor_points",
-          "units": "armor_points"
-        },
-        "genericAttackSpeedBonusPercent": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 300,
-          "minimum": -90,
-          "reference": null,
-          "required": false,
-          "semanticType": "additive_percent",
-          "units": "additive_percent"
-        },
-        "genericCritChancePercentagePoints": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 100,
-          "minimum": -100,
-          "reference": null,
-          "required": false,
-          "semanticType": "percentage_points",
-          "units": "percentage_points"
-        },
-        "genericKnockbackBonusPercent": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 300,
-          "minimum": -90,
-          "reference": null,
-          "required": false,
-          "semanticType": "additive_percent",
-          "units": "additive_percent"
-        },
         "iceSkate": {
           "enum": [],
           "kind": "boolean",
@@ -4292,7 +4375,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "jumpSpeedBonusBlocksPerSecond": {
+        "jumpSpeedBonus": {
           "enum": [],
           "kind": "number",
           "maximum": 75.0,
@@ -4301,6 +4384,16 @@
           "required": false,
           "semanticType": "blocks/s",
           "units": "blocks/s"
+        },
+        "knockbackBonus": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 300,
+          "minimum": -90,
+          "reference": null,
+          "required": false,
+          "semanticType": "additive_percent",
+          "units": "additive_percent"
         },
         "lavaImmune": {
           "enum": [],
@@ -4312,7 +4405,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "lifeRegenHpPerSecond": {
+        "lifeRegen": {
           "enum": [],
           "kind": "number",
           "maximum": 100,
@@ -4354,7 +4447,7 @@
           "semanticType": "engine units: RGB coefficient",
           "units": "engine units: RGB coefficient"
         },
-        "manaCostReductionPercentagePoints": {
+        "manaCostReduction": {
           "enum": [],
           "kind": "number",
           "maximum": 90,
@@ -4364,7 +4457,7 @@
           "semanticType": "percentage_points",
           "units": "percentage_points"
         },
-        "manaRegenBonusPoints": {
+        "manaRegen": {
           "enum": [],
           "kind": "integer",
           "maximum": 200,
@@ -4394,16 +4487,6 @@
           "semanticType": "mana_points",
           "units": "mana_points"
         },
-        "maxRunSpeedBonusBlocksPerSecond": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 75.0,
-          "minimum": -18.75,
-          "reference": null,
-          "required": false,
-          "semanticType": "blocks/s",
-          "units": "blocks/s"
-        },
         "minionSlotsBonus": {
           "enum": [],
           "kind": "integer",
@@ -4414,7 +4497,7 @@
           "semanticType": "slots",
           "units": "slots"
         },
-        "moveSpeedBonusPercent": {
+        "moveSpeedBonus": {
           "enum": [],
           "kind": "number",
           "maximum": 300,
@@ -4434,6 +4517,29 @@
           "semanticType": "bounded_text",
           "units": ""
         },
+        "playerEffect": {
+          "enum": [],
+          "kind": "object",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "regenWhen": {
+          "enum": [
+            "always",
+            "stationary"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "rocketBoots": {
           "enum": [],
           "kind": "integer",
@@ -4443,6 +4549,16 @@
           "required": false,
           "semanticType": "unitless_scalar",
           "units": "native rocket flight mode"
+        },
+        "runSpeedBonus": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 75.0,
+          "minimum": -18.75,
+          "reference": null,
+          "required": false,
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
         },
         "sentrySlotsBonus": {
           "enum": [],
@@ -4454,7 +4570,17 @@
           "semanticType": "slots",
           "units": "slots"
         },
-        "taggedSummonSourceDamageBonusPercent": {
+        "sprintSpeedFloor": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 75.0,
+          "minimum": 0.0,
+          "reference": null,
+          "required": false,
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
+        },
+        "taggedSummonDamageBonus": {
           "enum": [],
           "kind": "number",
           "maximum": 300,
@@ -4463,6 +4589,29 @@
           "required": false,
           "semanticType": "source_damage_percent",
           "units": "source_damage_percent"
+        },
+        "treasureSense": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "treasureWhen": {
+          "enum": [
+            "always",
+            "stationary"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "waterWalk": {
           "enum": [],
@@ -4496,36 +4645,40 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Apply independently chosen passive equipment effects; numeric bonuses use explicit units.",
+      "purpose": "Apply passive equipment effects.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
           "anyOf": [
-            "add_equipment_damage_bonus"
+            "equipment_damage_bonus"
           ],
           "kind": "at_least_one_param_nonzero",
           "message": "An accessory call must author at least one non-zero executable effect or be removed.",
           "nonzeroParams": [
+            "playerEffect",
+            "regenWhen",
+            "treasureSense",
+            "treasureWhen",
             "defensePoints",
             "maxLifePoints",
             "maxManaPoints",
-            "lifeRegenHpPerSecond",
-            "manaRegenBonusPoints",
-            "moveSpeedBonusPercent",
-            "maxRunSpeedBonusBlocksPerSecond",
-            "jumpSpeedBonusBlocksPerSecond",
-            "genericCritChancePercentagePoints",
-            "genericAttackSpeedBonusPercent",
-            "genericKnockbackBonusPercent",
+            "lifeRegen",
+            "manaRegen",
+            "moveSpeedBonus",
+            "runSpeedBonus",
+            "jumpSpeedBonus",
+            "critChance",
+            "attackSpeedBonus",
+            "knockbackBonus",
             "minionSlotsBonus",
             "sentrySlotsBonus",
-            "manaCostReductionPercentagePoints",
+            "manaCostReduction",
             "ammoSaveChancePercent",
             "aggroPoints",
-            "damageReductionPercentagePoints",
-            "genericArmorPenetrationPoints",
+            "damageReduction",
+            "armorPenetration",
             "whipRangeBonusPercent",
-            "taggedSummonSourceDamageBonusPercent",
+            "taggedSummonDamageBonus",
             "lightStrength",
             "fallDamageImmune",
             "lavaImmune",
@@ -4533,7 +4686,7 @@
             "iceSkate",
             "noKnockback",
             "fireWalk",
-            "accRunSpeedBlocksPerSecond",
+            "sprintSpeedFloor",
             "rocketBoots",
             "wireVision"
           ],
@@ -4560,7 +4713,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "configure_armor",
+      "capability": "armor",
       "componentSlot": "armor",
       "conflicts": [],
       "csharpOwner": "Content/Items/GeneratedItem.Equipment.cs::UpdateEquip",
@@ -4572,6 +4725,27 @@
         "armor.enabled",
         "armor.slot",
         "armor.setKey",
+        "armor.playerEffect.condition",
+        "armor.playerEffect.fishingPowerPoints",
+        "armor.playerEffect.preventLineBreak",
+        "armor.playerEffect.allowLavaFishing",
+        "armor.playerEffect.revealHookedCatch",
+        "armor.playerEffect.extraCrateChancePercent",
+        "armor.playerEffect.itemPickupRangePx",
+        "armor.playerEffect.heartPickupRangePx",
+        "armor.playerEffect.manaPickupRangePx",
+        "armor.playerEffect.coinPickupRangePx",
+        "armor.playerEffect.highlightDanger",
+        "armor.playerEffect.highlightCreatures",
+        "armor.playerEffect.nightVision",
+        "armor.playerEffect.healingPotionCooldownReductionPercent",
+        "armor.playerEffect.healingPotionCooldownReductionTicks",
+        "armor.playerEffect.autoManaPotionBelowPercent",
+        "armor.playerEffect.healingPotionCooldownOnHitReductionTicks",
+        "armor.playerEffect.hurtInvulnerabilityBonusTicks",
+        "armor.lifeRegenCondition",
+        "armor.treasureSense",
+        "armor.treasureSenseCondition",
         "armor.defense",
         "armor.maxLife",
         "armor.maxMana",
@@ -4632,7 +4806,37 @@
           "semanticType": "probability_percent",
           "units": "probability_percent"
         },
-        "damageReductionPercentagePoints": {
+        "armorPenetration": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 100,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "armor_points",
+          "units": "armor_points"
+        },
+        "attackSpeedBonus": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 300,
+          "minimum": -90,
+          "reference": null,
+          "required": false,
+          "semanticType": "additive_percent",
+          "units": "additive_percent"
+        },
+        "critChance": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 100,
+          "minimum": -100,
+          "reference": null,
+          "required": false,
+          "semanticType": "percentage_points",
+          "units": "percentage_points"
+        },
+        "damageReduction": {
           "enum": [],
           "kind": "number",
           "maximum": 75,
@@ -4662,47 +4866,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "genericArmorPenetrationPoints": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 100,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "armor_points",
-          "units": "armor_points"
-        },
-        "genericAttackSpeedBonusPercent": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 300,
-          "minimum": -90,
-          "reference": null,
-          "required": false,
-          "semanticType": "additive_percent",
-          "units": "additive_percent"
-        },
-        "genericCritChancePercentagePoints": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 100,
-          "minimum": -100,
-          "reference": null,
-          "required": false,
-          "semanticType": "percentage_points",
-          "units": "percentage_points"
-        },
-        "genericKnockbackBonusPercent": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 300,
-          "minimum": -90,
-          "reference": null,
-          "required": false,
-          "semanticType": "additive_percent",
-          "units": "additive_percent"
-        },
-        "jumpSpeedBonusBlocksPerSecond": {
+        "jumpSpeedBonus": {
           "enum": [],
           "kind": "number",
           "maximum": 75.0,
@@ -4711,6 +4875,16 @@
           "required": false,
           "semanticType": "blocks/s",
           "units": "blocks/s"
+        },
+        "knockbackBonus": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 300,
+          "minimum": -90,
+          "reference": null,
+          "required": false,
+          "semanticType": "additive_percent",
+          "units": "additive_percent"
         },
         "lavaImmune": {
           "enum": [],
@@ -4722,7 +4896,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "lifeRegenHpPerSecond": {
+        "lifeRegen": {
           "enum": [],
           "kind": "number",
           "maximum": 100,
@@ -4764,7 +4938,7 @@
           "semanticType": "engine units: RGB coefficient",
           "units": "engine units: RGB coefficient"
         },
-        "manaCostReductionPercentagePoints": {
+        "manaCostReduction": {
           "enum": [],
           "kind": "number",
           "maximum": 90,
@@ -4774,7 +4948,7 @@
           "semanticType": "percentage_points",
           "units": "percentage_points"
         },
-        "manaRegenBonusPoints": {
+        "manaRegen": {
           "enum": [],
           "kind": "integer",
           "maximum": 200,
@@ -4804,16 +4978,6 @@
           "semanticType": "mana_points",
           "units": "mana_points"
         },
-        "maxRunSpeedBonusBlocksPerSecond": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 75.0,
-          "minimum": -18.75,
-          "reference": null,
-          "required": false,
-          "semanticType": "blocks/s",
-          "units": "blocks/s"
-        },
         "minionSlotsBonus": {
           "enum": [],
           "kind": "integer",
@@ -4824,7 +4988,7 @@
           "semanticType": "slots",
           "units": "slots"
         },
-        "moveSpeedBonusPercent": {
+        "moveSpeedBonus": {
           "enum": [],
           "kind": "number",
           "maximum": 300,
@@ -4833,6 +4997,39 @@
           "required": false,
           "semanticType": "additive_percent",
           "units": "additive_percent"
+        },
+        "playerEffect": {
+          "enum": [],
+          "kind": "object",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "regenWhen": {
+          "enum": [
+            "always",
+            "stationary"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "runSpeedBonus": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 75.0,
+          "minimum": -18.75,
+          "reference": null,
+          "required": false,
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
         },
         "sentrySlotsBonus": {
           "enum": [],
@@ -4878,7 +5075,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "taggedSummonSourceDamageBonusPercent": {
+        "taggedSummonDamageBonus": {
           "enum": [],
           "kind": "number",
           "maximum": 300,
@@ -4887,6 +5084,29 @@
           "required": false,
           "semanticType": "source_damage_percent",
           "units": "source_damage_percent"
+        },
+        "treasureSense": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "treasureWhen": {
+          "enum": [
+            "always",
+            "stationary"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "waterWalk": {
           "enum": [],
@@ -4910,7 +5130,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Apply independently chosen armor effects and matching three-piece set bonuses.",
+      "purpose": "Apply armor effects and matching three-piece set bonuses.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -4954,7 +5174,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "add_equipment_damage_bonus",
+      "capability": "equipment_damage_bonus",
       "componentSlot": "equipment_class_damage",
       "conflicts": [],
       "csharpOwner": "Content/Items/GeneratedItem.Equipment.cs::UpdateAccessory/UpdateEquip/UpdateArmorSet",
@@ -5023,13 +5243,13 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Add one selected DamageClass modifier while equipped or with a matching armor set; each class and phase is a separate explicit choice.",
+      "purpose": "Add a DamageClass modifier while equipped or with a matching armor set.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
           "anyOf": [
-            "configure_accessory",
-            "configure_armor"
+            "accessory",
+            "armor"
           ],
           "kind": "capability_group_present",
           "message": "Equipment class damage requires exactly one explicit accessory or armor configuration on the same item.",
@@ -5044,12 +5264,12 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "configure_spawn",
+      "capability": "spawn",
       "componentSlot": "spawn",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity/Configure",
       "dependencies": [
-        "configure_weapon_ammo"
+        "weapon_ammo"
       ],
       "emittedEvents": [],
       "events": [],
@@ -5139,7 +5359,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Set this entity spawn cardinality per activation, initial direction and position; cardinality is separate from the optional set_projectile_concurrency live cap, not a singleton guarantee. Does not choose movement or damage.",
+      "purpose": "Set the spawn batch size, initial direction and position.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -5194,24 +5414,24 @@
           "equals": null,
           "kind": "ordered_params",
           "message": "Minimum sampled speed must not exceed the explicitly authored maximum.",
-          "otherParam": "velocity.fanSpeed.maxSpeedBlocksPerSecond",
-          "param": "velocity.fanSpeed.minSpeedBlocksPerSecond",
+          "otherParam": "velocity.fanSpeed.maxSpeed",
+          "param": "velocity.fanSpeed.minSpeed",
           "target": "same_target"
         },
         {
           "equals": null,
           "kind": "ordered_params",
           "message": "Minimum sampled speed must not exceed the explicitly authored maximum.",
-          "otherParam": "velocity.radial.maxSpeedBlocksPerSecond",
-          "param": "velocity.radial.minSpeedBlocksPerSecond",
+          "otherParam": "velocity.radial.maxSpeed",
+          "param": "velocity.radial.minSpeed",
           "target": "same_target"
         },
         {
           "equals": null,
           "kind": "ordered_params",
           "message": "Minimum sampled speed must not exceed the explicitly authored maximum.",
-          "otherParam": "velocity.cone.maxSpeedBlocksPerSecond",
-          "param": "velocity.cone.minSpeedBlocksPerSecond",
+          "otherParam": "velocity.cone.maxSpeed",
+          "param": "velocity.cone.minSpeed",
           "target": "same_target"
         },
         {
@@ -5327,7 +5547,7 @@
             "velocity.disk",
             "velocity.cone"
           ],
-          "capability": "configure_weapon_ammo",
+          "capability": "weapon_ammo",
           "equals": "native_shot",
           "kind": "present_params_forbid_item_capability_when_active_spawn",
           "message": "An active native_shot ammo root requires the constant-speed variant; sampled authored min/max and native shot magnitude cannot both own initial speed.",
@@ -5365,7 +5585,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_concurrency",
+      "capability": "projectile_limit",
       "componentSlot": "spawn",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity",
@@ -5391,7 +5611,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Explicit opt-in concurrency cap: count live projectiles for the same owner + generated item ID + exact entity ID, across all producers regardless of root/child, binding or input; pending scheduler entries are not live. The requested effective batch is admitted all-or-nothing when enough slots remain, otherwise refused; no clipping by this cap of the effective batch after existing global/depth/event-budget limits. count is per activation; concurrency is separate. Select maxActive=1 for one returned physical copy, or deliberately choose a larger positive cap. Same-ID different inventory copies and an alternate binding to the same entity share the cap. This does not override existing producer semantics: the owner-attached active-use singleton remains, and hold maintains one existing batch; maxActive>1 does not bypass repeat-use singleton or make hold refill to this cap. First-batch count retains its existing meaning. Capability absence adds no admission cap.",
+      "purpose": "Cap live projectiles sharing owner, generated item ID and entity ID across all producers; pending scheduler entries are excluded. Admit each effective batch all-or-nothing after other global/depth/event limits. Inventory copies and alternate bindings sharing the same IDs share this cap. Existing owner-attached active-use singleton and hold-batch suppression still apply.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5407,7 +5627,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_sentry",
+      "capability": "sentry",
       "componentSlot": "native_sentry",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure|Content/Items/GeneratedItem.Use.cs::ApplyActiveUseProjection",
@@ -5433,7 +5653,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Explicitly choose native sentry registration for this entity. enabled=true participates in the owner's native sentry cap; each successful native sentry spawn immediately checks that cap and may retire the oldest sentry. Each active input uses the sentry status of its own target. Lifetime, position, damage, collision, targeting and child budget remain separate authored choices; native sentry does not imply stationary movement. Omission leaves the entity without native sentry registration.",
+      "purpose": "Register as a native sentry. Each successful sentry spawn checks the owner's sentry cap and may retire the oldest sentry. Each active input uses its own target's sentry status.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5449,7 +5669,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_descendant_concurrency",
+      "capability": "descendant_limit",
       "componentSlot": "spawn",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure|Common/Runtime/RuntimeSpawnBudget.cs::Reserve",
@@ -5475,7 +5695,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Explicitly bound pending spawn reservations plus live descendants of each physical source projectile. A free root binding gets its own replenishable descendant pool instead of the monotonic activation event ledger; the root itself is excluded. A nested source adds this cap while retaining every ancestor pool and any ancestor lifetime ledger. All descendant event/controller producers share that ancestry; death or retirement releases only concurrent occupancy, never restores a lifetime allowance. Failed or cancelled spawns refund their reservation. Independent roots have independent pools; global owner/depth/entity caps remain. Absence retains the existing lifetime budget.",
+      "purpose": "Cap pending reservations plus live descendants of each physical source projectile, excluding the root. A root pool replaces its lifetime event ledger; nested pools retain every ancestor pool and lifetime ledger. Death releases concurrent occupancy, while failed/cancelled spawns refund reservations. Independent roots have independent pools; owner/depth/entity limits still apply.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5491,7 +5711,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_damage",
+      "capability": "projectile_damage",
       "componentSlot": "damage",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",
@@ -5554,7 +5774,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Enable contact damage with explicit class, damage and knockback.",
+      "purpose": "Set contact damage, damage class and knockback.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5572,7 +5792,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_lifetime",
+      "capability": "projectile_lifetime",
       "componentSlot": "lifetime",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",
@@ -5598,7 +5818,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Set exact bounded entity lifetime.",
+      "purpose": "Set lifetime.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5614,7 +5834,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_hitbox",
+      "capability": "projectile_hitbox",
       "componentSlot": "hitbox",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",
@@ -5689,12 +5909,12 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_hitbox_curve",
+      "capability": "hitbox_curve",
       "componentSlot": "hitbox_curve",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::ModifyDamageHitbox|Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyHitboxCurveVisual",
       "dependencies": [
-        "set_projectile_hitbox"
+        "projectile_hitbox"
       ],
       "emittedEvents": [],
       "events": [],
@@ -5723,7 +5943,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "durationSeconds": {
+        "duration": {
           "enum": [],
           "kind": "number",
           "maximum": 360.0,
@@ -5753,7 +5973,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "startDelaySeconds": {
+        "startDelay": {
           "enum": [],
           "kind": "number",
           "maximum": 360.0,
@@ -5775,11 +5995,11 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Scale the native rectangular damage hitbox along an explicit active-age curve, independently of sprite/VFX size. Start/end are multipliers on set_projectile_hitbox.hitboxScale. Active world ticks begin after spawn activation delay; extraUpdates changes sample frequency, not duration. Optional visual coupling is an explicit mirrorToSprite choice. Beam and whip line geometry are excluded.",
+      "purpose": "Scale the native rectangular damage hitbox along an explicit active-age curve, independently of sprite/VFX size. Start/end are multipliers on projectile_hitbox.hitboxScale. Active world ticks begin after spawn activation delay; extraUpdates changes sample frequency, not duration. Optional visual coupling is an explicit mirrorToSprite choice. Beam and whip line geometry are excluded.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
-          "capability": "set_projectile_hitbox",
+          "capability": "projectile_hitbox",
           "kind": "capability_present",
           "message": "A hitbox curve multiplies the same entity's explicit static hitbox.",
           "target": "same_target"
@@ -5796,7 +6016,7 @@
         {
           "anyOf": [
             "move_expanding_wave",
-            "set_projectile_visual_scale_curve"
+            "sprite_scale_curve"
           ],
           "equals": true,
           "kind": "capability_absent",
@@ -5818,7 +6038,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_turn_modifier",
+      "capability": "turn_velocity",
       "componentSlot": "turnModifier",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
@@ -5838,7 +6058,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "durationSeconds": {
+        "duration": {
           "enum": [],
           "kind": "number",
           "maximum": 360.0,
@@ -5848,7 +6068,7 @@
           "semanticType": "seconds",
           "units": "seconds"
         },
-        "startDelaySeconds": {
+        "startDelay": {
           "enum": [],
           "kind": "number",
           "maximum": 360.0,
@@ -5880,18 +6100,19 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Rotate velocity after motion; modifier order: turn, speed, homing. Requires, never selects, a trajectory.",
+      "purpose": "Rotate velocity after motion, before speed and homing modifiers.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
+          "allowAbsent": true,
           "anyOf": [
             "window"
           ],
           "equals": null,
           "kind": "timing_pair_or_window",
-          "message": "Window or scalar pair; both intersect.",
-          "otherParam": "durationSeconds",
-          "param": "startDelaySeconds",
+          "message": "Omit all timing for the whole active lifetime; otherwise use window or both scalar times. Both forms intersect.",
+          "otherParam": "duration",
+          "param": "startDelay",
           "target": "same_target"
         },
         {
@@ -5905,14 +6126,14 @@
         },
         {
           "anyOf": [
-            "accelerate_projectile_vertical",
-            "attach_projectile",
+            "accelerate_y",
+            "attach",
+            "lash_geometry",
             "move_straight",
-            "orbit_projectile",
-            "oscillate_projectile_velocity",
-            "scale_projectile_velocity",
-            "seek_projectile",
-            "set_projectile_lash_geometry"
+            "orbit",
+            "oscillate_velocity",
+            "scale_velocity",
+            "seek"
           ],
           "kind": "capability_group_present",
           "message": "Trajectory required, even with target_and_fire.",
@@ -5953,7 +6174,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "durationSeconds": {
+        "duration": {
           "enum": [],
           "kind": "number",
           "maximum": 360.0,
@@ -5963,7 +6184,7 @@
           "semanticType": "seconds",
           "units": "seconds"
         },
-        "maxSpeedBlocksPerSecond": {
+        "maxSpeed": {
           "enum": [],
           "kind": "number",
           "maximum": 1800.0,
@@ -5983,7 +6204,7 @@
           "semanticType": "unitless_scalar",
           "units": "dimensionless multiplier/update"
         },
-        "startDelaySeconds": {
+        "startDelay": {
           "enum": [],
           "kind": "number",
           "maximum": 360.0,
@@ -6009,14 +6230,15 @@
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
+          "allowAbsent": true,
           "anyOf": [
             "window"
           ],
           "equals": null,
           "kind": "timing_pair_or_window",
-          "message": "Window or scalar pair; both intersect.",
-          "otherParam": "durationSeconds",
-          "param": "startDelaySeconds",
+          "message": "Omit all timing for the whole active lifetime; otherwise use window or both scalar times. Both forms intersect.",
+          "otherParam": "duration",
+          "param": "startDelay",
           "target": "same_target"
         },
         {
@@ -6030,14 +6252,14 @@
         },
         {
           "anyOf": [
-            "accelerate_projectile_vertical",
-            "attach_projectile",
+            "accelerate_y",
+            "attach",
+            "lash_geometry",
             "move_straight",
-            "orbit_projectile",
-            "oscillate_projectile_velocity",
-            "scale_projectile_velocity",
-            "seek_projectile",
-            "set_projectile_lash_geometry"
+            "orbit",
+            "oscillate_velocity",
+            "scale_velocity",
+            "seek"
           ],
           "kind": "capability_group_present",
           "message": "Trajectory required, even with target_and_fire.",
@@ -6057,7 +6279,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_homing_modifier",
+      "capability": "homing",
       "componentSlot": "homingModifier",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyHomingModifier",
@@ -6079,7 +6301,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "durationSeconds": {
+        "duration": {
           "enum": [],
           "kind": "number",
           "maximum": 360.0,
@@ -6099,7 +6321,7 @@
           "semanticType": "radians/s",
           "units": "radians/s"
         },
-        "rangeTiles": {
+        "range": {
           "enum": [],
           "kind": "number",
           "maximum": 120,
@@ -6119,7 +6341,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "startDelaySeconds": {
+        "startDelay": {
           "enum": [],
           "kind": "number",
           "maximum": 360.0,
@@ -6145,14 +6367,15 @@
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
+          "allowAbsent": true,
           "anyOf": [
             "window"
           ],
           "equals": null,
           "kind": "timing_pair_or_window",
-          "message": "Window or scalar pair; both intersect.",
-          "otherParam": "durationSeconds",
-          "param": "startDelaySeconds",
+          "message": "Omit all timing for the whole active lifetime; otherwise use window or both scalar times. Both forms intersect.",
+          "otherParam": "duration",
+          "param": "startDelay",
           "target": "same_target"
         },
         {
@@ -6166,14 +6389,14 @@
         },
         {
           "anyOf": [
-            "accelerate_projectile_vertical",
-            "attach_projectile",
+            "accelerate_y",
+            "attach",
+            "lash_geometry",
             "move_straight",
-            "orbit_projectile",
-            "oscillate_projectile_velocity",
-            "scale_projectile_velocity",
-            "seek_projectile",
-            "set_projectile_lash_geometry"
+            "orbit",
+            "oscillate_velocity",
+            "scale_velocity",
+            "seek"
           ],
           "kind": "capability_group_present",
           "message": "Trajectory required, even with target_and_fire.",
@@ -6193,7 +6416,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "attract_npcs_while_active",
+      "capability": "attract_npcs",
       "componentSlot": "npcAttraction",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyNpcAttraction",
@@ -6216,7 +6439,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "server_execute",
       "parameters": {
-        "accelerationBlocksPerSecondSquared": {
+        "accel": {
           "enum": [],
           "kind": "number",
           "maximum": 5400.0,
@@ -6226,7 +6449,7 @@
           "semanticType": "blocks/s² (NPC world-tick velocity)",
           "units": "blocks/s² (NPC world-tick velocity)"
         },
-        "durationSeconds": {
+        "duration": {
           "enum": [],
           "kind": "number",
           "maximum": 360.0,
@@ -6259,7 +6482,7 @@
           "semanticType": "unitless_scalar",
           "units": ""
         },
-        "rangeTiles": {
+        "range": {
           "enum": [],
           "kind": "number",
           "maximum": 80,
@@ -6269,7 +6492,7 @@
           "semanticType": "tiles",
           "units": "blocks (tiles)"
         },
-        "startDelaySeconds": {
+        "startDelay": {
           "enum": [],
           "kind": "number",
           "maximum": 360.0,
@@ -6291,18 +6514,19 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Attraction after movement/modifiers each active projectile update, not periodic/on-hit. Projectile velocity/trajectory unchanged. Scan NPC index order: chaseable, positive-resistance, inside hard range; at most maxTargets. Native resistance clamps to 0.1..1.",
+      "purpose": "Attract NPCs after movement/modifiers each active update. Scan NPC index order for chaseable, positive-resistance targets inside range, up to maxTargets. Native resistance clamps to 0.1..1.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
+          "allowAbsent": true,
           "anyOf": [
             "window"
           ],
           "equals": null,
           "kind": "timing_pair_or_window",
-          "message": "Window or scalar pair; both intersect.",
-          "otherParam": "durationSeconds",
-          "param": "startDelaySeconds",
+          "message": "Omit all timing for the whole active lifetime; otherwise use window or both scalar times. Both forms intersect.",
+          "otherParam": "duration",
+          "param": "startDelay",
           "target": "same_target"
         }
       ],
@@ -6319,7 +6543,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_visual_scale_curve",
+      "capability": "sprite_scale_curve",
       "componentSlot": "visualScaleCurve",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyVisualScaleCurve",
@@ -6354,7 +6578,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "durationSeconds": {
+        "duration": {
           "enum": [],
           "kind": "number",
           "maximum": 360.0,
@@ -6374,7 +6598,7 @@
           "semanticType": "unitless_scalar",
           "units": "dimensionless multiplier"
         },
-        "startDelaySeconds": {
+        "startDelay": {
           "enum": [],
           "kind": "number",
           "maximum": 360.0,
@@ -6406,7 +6630,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Set sprite/generic body scale to authored drawScale times visual.scale times an independent time curve. Linear or exponential interpolation uses active world ticks. This does not change damage or tile collision. Beam/whip line drivers are excluded because their exact body geometry uses collision dimensions. A separate gameplay hitbox curve can coexist only with its mirrorToSprite=false; no_asset still deliberately hides the body.",
+      "purpose": "Scale the body by drawScale × visual.scale × a linear or exponential active-world-time curve. Collision remains unchanged. Beam/whip line drivers are excluded; a separate hitbox curve may coexist with mirrorToSprite=false. no_asset hides the body.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -6478,7 +6702,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "set_projectile_collision",
+      "capability": "projectile_collision",
       "componentSlot": "collision",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::OnTileCollide",
@@ -6613,7 +6837,7 @@
       "networkAuthority": "owner_execute_sync",
       "parameters": {},
       "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Keep initial velocity: no gravity, no drag, no falling arc. The generated proxy never invokes native projectile AI merely because a source is an arrow or has aiStyle=1.",
+      "purpose": "Keep initial velocity.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -6661,7 +6885,7 @@
           "semanticType": "unitless_scalar",
           "units": "engine units: velocity lerp fraction"
         },
-        "rangeTiles": {
+        "range": {
           "enum": [],
           "kind": "number",
           "maximum": 120,
@@ -6710,7 +6934,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "accelerationYBlocksPerSecondSquared": {
+        "accelY": {
           "enum": [],
           "kind": "number",
           "maximum": 16200.0,
@@ -6809,7 +7033,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "radiusTiles": {
+        "radius": {
           "enum": [],
           "kind": "number",
           "maximum": 80,
@@ -6940,7 +7164,7 @@
           "semanticType": "unitless_scalar",
           "units": "engine units: velocity lerp fraction"
         },
-        "rangeTiles": {
+        "range": {
           "enum": [],
           "kind": "number",
           "maximum": 120,
@@ -7049,7 +7273,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "maxSpeedBlocksPerSecond": {
+        "maxSpeed": {
           "enum": [],
           "kind": "number",
           "maximum": 1800.0,
@@ -7158,7 +7382,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "accelerationBlocksPerSecondSquared": {
+        "accel": {
           "enum": [],
           "kind": "number",
           "maximum": 5400.0,
@@ -7168,7 +7392,7 @@
           "semanticType": "blocks/s² (NPC world-tick velocity)",
           "units": "blocks/s² (NPC world-tick velocity)"
         },
-        "rangeTiles": {
+        "range": {
           "enum": [],
           "kind": "number",
           "maximum": 80,
@@ -7218,7 +7442,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "accelerationBlocksPerSecondSquared": {
+        "accel": {
           "enum": [],
           "kind": "number",
           "maximum": 5400.0,
@@ -7228,7 +7452,7 @@
           "semanticType": "blocks/s² (NPC world-tick velocity)",
           "units": "blocks/s² (NPC world-tick velocity)"
         },
-        "rangeTiles": {
+        "range": {
           "enum": [],
           "kind": "number",
           "maximum": 80,
@@ -7289,7 +7513,7 @@
           "semanticType": "unitless_scalar",
           "units": "engine units: velocity lerp fraction"
         },
-        "rangeTiles": {
+        "range": {
           "enum": [],
           "kind": "number",
           "maximum": 120,
@@ -7457,7 +7681,7 @@
       ],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [
-        "configure_item_use"
+        "item_use"
       ],
       "emittedEvents": [],
       "events": [],
@@ -7471,7 +7695,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "rangeTiles": {
+        "range": {
           "enum": [],
           "kind": "number",
           "maximum": 60,
@@ -7493,11 +7717,11 @@
         }
       },
       "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Tether to owner; outbound flight ends at the leash or when owner.channel becomes false, then return is latched. An active spawn root requires configure_item_use.channel=true: native StartChanneling(Item) otherwise leaves an idle owner unchannelled and return begins on the first AI. Passive/event-driven copies only observe the owner channel established by another active source; this controller does not start channeling.",
+      "purpose": "Tether to owner; outbound flight ends at the leash or when owner.channel becomes false, then return is latched. An active spawn root requires item_use.channel=true: native StartChanneling(Item) otherwise leaves an idle owner unchannelled and return begins on the first AI. Passive/event-driven copies only observe the owner channel established by another active source; this controller does not start channeling.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
-          "capability": "configure_item_use",
+          "capability": "item_use",
           "equals": true,
           "kind": "item_capability_param",
           "message": "An active flail spawn requires explicit item channel=true so native StartChanneling(Item) supplies owner.channel; release or reaching the leash latches return. Passive/event producers only observe existing owner channel.",
@@ -7527,7 +7751,7 @@
       ],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [
-        "configure_item_use"
+        "item_use"
       ],
       "emittedEvents": [],
       "events": [],
@@ -7541,7 +7765,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "rangeTiles": {
+        "range": {
           "enum": [],
           "kind": "number",
           "maximum": 60,
@@ -7563,11 +7787,11 @@
         }
       },
       "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Follow the owner's cursor inside a leash and return on release. The same authored speed controls both cursor tracking and return, with velocity smoothing. This movement rotates the body by 0.35 radians per projectile update and does not turn the player toward the cursor; a child aiming by facing still uses the player's direction, not the rotating body. An active spawn root requires configure_item_use.channel=true: native StartChanneling(Item) otherwise leaves an idle owner unchannelled and return is latched on the first AI. Passive/event-driven copies observe existing owner channel; this movement does not start channeling.",
+      "purpose": "Follow the owner's cursor inside a leash and return on release. The same authored speed controls both cursor tracking and return, with velocity smoothing. This movement rotates the body by 0.35 radians per projectile update and does not turn the player toward the cursor; a child aiming by facing still uses the player's direction, not the rotating body. An active spawn root requires item_use.channel=true: native StartChanneling(Item) otherwise leaves an idle owner unchannelled and return is latched on the first AI. Passive/event-driven copies observe existing owner channel; this movement does not start channeling.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
-          "capability": "configure_item_use",
+          "capability": "item_use",
           "equals": true,
           "kind": "item_capability_param",
           "message": "An active yoyo spawn requires explicit item channel=true so native StartChanneling(Item) supplies owner.channel; release latches return. Passive/event producers only observe existing owner channel.",
@@ -7609,7 +7833,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "rangeTiles": {
+        "range": {
           "enum": [],
           "kind": "number",
           "maximum": 60,
@@ -7664,7 +7888,7 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "durationSeconds": {
+        "duration": {
           "enum": [],
           "kind": "number",
           "maximum": 4.0,
@@ -7674,7 +7898,7 @@
           "semanticType": "seconds",
           "units": "seconds"
         },
-        "rangeTiles": {
+        "range": {
           "enum": [],
           "kind": "number",
           "maximum": 20,
@@ -7686,7 +7910,7 @@
         }
       },
       "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Move the body center from owner center + aimed axis * (18px + triangular range displacement), extending then retracting during the cycle. The axis follows the live owner cursor (bounded synced aim for remote owners) every AI update, rotating both body and hitbox; not a fixed initial launch axis. configure_spawn.aim controls launch only, not this ongoing aim. This is not hand-attached: no native arm control, grip consumption or PNG stretching. It remains an independent legal movement choice.",
+      "purpose": "Move the body center from owner center + aimed axis * (18px + triangular range displacement), extending then retracting during the cycle. The axis follows the live owner cursor (bounded synced aim for remote owners) every AI update, rotating both body and hitbox; not a fixed initial launch axis. spawn.aim controls launch only, not this ongoing aim. This is not hand-attached: no native arm control, grip consumption or PNG stretching. It remains an independent legal movement choice.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -7707,10 +7931,10 @@
       ],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [
-        "set_projectile_concurrency",
-        "configure_spawn",
-        "set_projectile_collision",
-        "configure_item_use"
+        "projectile_limit",
+        "spawn",
+        "projectile_collision",
+        "item_use"
       ],
       "emittedEvents": [],
       "events": [],
@@ -7740,7 +7964,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "durationSeconds": {
+        "duration": {
           "enum": [],
           "kind": "number",
           "maximum": 4.0,
@@ -7824,7 +8048,7 @@
           "target": "same_target"
         },
         {
-          "capability": "set_projectile_concurrency",
+          "capability": "projectile_limit",
           "equals": 1,
           "kind": "item_capability_param",
           "message": "The hand owner requires explicit same-item/entity maxActive=1; count=1 is not a concurrency cap.",
@@ -7837,14 +8061,14 @@
             "facing",
             "velocity"
           ],
-          "capability": "configure_spawn",
+          "capability": "spawn",
           "kind": "item_capability_param",
-          "message": "The hand owner requires an explicit launch axis: configure_spawn aim must be cursor, facing or velocity, never none, even when aimMode=cursor.",
+          "message": "The hand owner requires an explicit launch axis: spawn aim must be cursor, facing or velocity, never none, even when aimMode=cursor.",
           "param": "aim",
           "target": "same_target"
         },
         {
-          "capability": "configure_spawn",
+          "capability": "spawn",
           "equals": 1,
           "kind": "item_capability_param",
           "message": "The hand owner requires explicit spawn count=1.",
@@ -7852,7 +8076,7 @@
           "target": "same_target"
         },
         {
-          "capability": "configure_spawn",
+          "capability": "spawn",
           "equals": 0,
           "kind": "item_capability_param",
           "message": "The hand owner requires explicit zero spawn fan spread.",
@@ -7860,9 +8084,9 @@
           "target": "same_target"
         },
         {
-          "capability": "configure_spawn",
+          "capability": "spawn",
           "equals": {
-            "constantSpeedBlocksPerSecond": 0
+            "speed": 0
           },
           "kind": "item_capability_param",
           "message": "The hand owner requires constant zero translational launch speed, not a sampled distribution.",
@@ -7870,7 +8094,7 @@
           "target": "same_target"
         },
         {
-          "capability": "set_projectile_collision",
+          "capability": "projectile_collision",
           "equals": false,
           "kind": "item_capability_param",
           "message": "The hand-driven body requires explicit tileCollide=false.",
@@ -7879,7 +8103,7 @@
         },
         {
           "allowAbsent": true,
-          "capability": "configure_item_use",
+          "capability": "item_use",
           "equals": "",
           "kind": "item_capability_param",
           "message": "Another item handPose cannot own the same arm; leave handPose empty or absent.",
@@ -7897,7 +8121,7 @@
           "target": "same_target"
         },
         {
-          "capability": "configure_spawn",
+          "capability": "spawn",
           "equals": null,
           "kind": "capability_param_absent",
           "message": "The hand-driven body cannot use an over-target spawn displacement.",
@@ -7927,7 +8151,7 @@
       ],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyChannelBeam/TryPayChannelBeamMana|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
       "dependencies": [
-        "configure_item_use"
+        "item_use"
       ],
       "emittedEvents": [],
       "events": [],
@@ -7990,7 +8214,7 @@
           "semanticType": "bounded_text",
           "units": "native mana payment cadence"
         },
-        "rangeTiles": {
+        "range": {
           "enum": [],
           "kind": "number",
           "maximum": 120,
@@ -8036,7 +8260,7 @@
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
-          "capability": "configure_item_use",
+          "capability": "item_use",
           "equals": true,
           "kind": "item_capability_param",
           "message": "channel controller requires channel=true on item_body",
@@ -8062,7 +8286,7 @@
       ],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyChargeThenRelease",
       "dependencies": [
-        "configure_item_use"
+        "item_use"
       ],
       "emittedEvents": [
         "on_release",
@@ -8127,7 +8351,7 @@
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
-          "capability": "configure_item_use",
+          "capability": "item_use",
           "equals": true,
           "kind": "item_capability_param",
           "message": "channel controller requires channel=true on item_body",
@@ -8269,7 +8493,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "rangeTiles": {
+        "range": {
           "enum": [],
           "kind": "number",
           "maximum": 120,
@@ -8346,7 +8570,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Acquire NPC targets and periodically spawn an authored shot entity from this entity's current position. Explicit same-entity movement executes before firing. Stationary/helper entities without movement remain stationary; free/child entities require explicit movement. Independent shot entities keep their own movement. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; the selected damage is multiplied once, without repeating player/class modifiers. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and position={at:activation_origin} consumes the firing entity origin; other explicit child aim/position choices remain literal.",
+      "purpose": "Acquire NPC targets and periodically spawn an authored shot entity from this entity's current position. Explicit same-entity movement executes before firing. Stationary/helper entities without movement remain stationary; free/child entities require explicit movement. Independent shot entities keep their own movement. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; the selected damage is multiplied once, without repeating player/class modifiers. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child spawn aim=velocity consumes the acquired target direction, and position={at:activation_origin} consumes the firing entity origin; other explicit child aim/position choices remain literal.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -8363,7 +8587,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "spawn_entity_on_event",
+      "capability": "spawn_on_event",
       "componentSlot": "event_action",
       "conflicts": [],
       "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
@@ -8435,7 +8659,7 @@
           "semanticType": "unitless_scalar",
           "units": ""
         },
-        "delaySeconds": {
+        "delay": {
           "enum": [],
           "kind": "number",
           "maximum": 10.0,
@@ -8517,7 +8741,7 @@
             "velocity.radial",
             "velocity.disk"
           ],
-          "capability": "configure_spawn",
+          "capability": "spawn",
           "equals": 0,
           "kind": "referenced_param_presence_requires_value",
           "message": "A radial/disk child owns its complete direction distribution; this event must explicitly select spreadRadians=0.",
@@ -8577,7 +8801,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "spawn_entity_from_hit_target",
+      "capability": "spawn_at_hit",
       "componentSlot": "event_action",
       "conflicts": [],
       "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
@@ -8643,7 +8867,7 @@
           "semanticType": "unitless_scalar",
           "units": ""
         },
-        "delaySeconds": {
+        "delay": {
           "enum": [],
           "kind": "number",
           "maximum": 10.0,
@@ -8709,7 +8933,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Emit authored moving children from explicit before/after geometry around the actually hit NPC. Capture its centre, size, event direction and owner seed at event admission, including delay. Each child uses its own authored velocity rule; geometry does not promise a re-hit or inherit a hidden parent-speed formula.",
+      "purpose": "Spawn moving children around the hit NPC using before/after geometry. Capture its center, size, event direction and owner seed at event admission, including delayed actions.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -8720,7 +8944,7 @@
           "target": "same_target"
         },
         {
-          "capability": "configure_spawn",
+          "capability": "spawn",
           "equals": {
             "aim": "velocity",
             "offsetBlocks": 0,
@@ -8747,7 +8971,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "select_targets_and_emit_on_event",
+      "capability": "emit_to_targets_on_event",
       "componentSlot": "event_action",
       "conflicts": [],
       "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction/PlanTargetEmissions/SelectTargetsAndEmit",
@@ -8774,7 +8998,7 @@
       "multiplicity": "many_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "delaySeconds": {
+        "delay": {
           "enum": [],
           "kind": "number",
           "maximum": 10.0,
@@ -8802,7 +9026,7 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "initialIgnoreCountdownUpdates": {
+        "ignoreTargetUpdates": {
           "enum": [],
           "kind": "integer",
           "maximum": 600,
@@ -8883,7 +9107,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Plan bounded NPC links at the hit callback and emit a separate authored projectile for each link. Each search and initial emission starts at the selected anchor; all links are planned at dispatch, not after child hits. The child owns its speed, movement, damage and native collision; a selected target is an initial direction, not a guaranteed hit. No direct damage, status or VFX is implied.",
+      "purpose": "Plan NPC links at the hit callback and emit one projectile per link. Each search and initial emission starts at the selected anchor; all links are planned at dispatch. The selected target supplies the initial direction; the child supplies flight and collision.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -8894,7 +9118,7 @@
           "target": "same_target"
         },
         {
-          "capability": "configure_spawn",
+          "capability": "spawn",
           "equals": {
             "aim": "velocity",
             "offsetBlocks": 0,
@@ -8903,7 +9127,7 @@
             }
           },
           "kind": "referenced_entity_capability_params",
-          "message": "The emission reference requires configure_spawn position={at:activation_origin}, aim=velocity, offsetBlocks=0; Repair permissions distinguish an exclusive dependency from an independently used child.",
+          "message": "The emission reference requires spawn position={at:activation_origin}, aim=velocity, offsetBlocks=0; Repair permissions distinguish an exclusive dependency from an independently used child.",
           "param": "entity",
           "target": "same_target"
         }
@@ -8922,7 +9146,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "apply_generated_buff_on_event",
+      "capability": "generated_buff_on_event",
       "componentSlot": "event_action",
       "conflicts": [],
       "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
@@ -8944,7 +9168,7 @@
       "multiplicity": "many_per_target",
       "networkAuthority": "server_execute",
       "parameters": {
-        "delaySeconds": {
+        "delay": {
           "enum": [],
           "kind": "number",
           "maximum": 10.0,
@@ -8976,7 +9200,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Apply one exact named generated-utility-buff group to the owner after a functional equipment reaction. Populate it with apply_generated_buff_on_use using the same effectGroupId; no active-use binding is needed for that group. The group must contain only this generated buff, never healing, native buffs or teleport. Identical effects refresh remaining duration without stacking strength; existing item exhaustion and shared per-action reaction cooldowns still apply.",
+      "purpose": "Apply the selected generated_buff_on_use group to the owner after an equipment reaction, without an active-use binding. The group contains only this generated buff. Identical effects refresh duration; item exhaustion and shared reaction cooldowns apply.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -8995,7 +9219,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "apply_npc_effect_on_event",
+      "capability": "npc_effect_on_event",
       "componentSlot": "event_action",
       "conflicts": [],
       "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
@@ -9061,7 +9285,7 @@
           "semanticType": "unitless_scalar",
           "units": "defense points"
         },
-        "delaySeconds": {
+        "delay": {
           "enum": [],
           "kind": "number",
           "maximum": 10.0,
@@ -9071,7 +9295,7 @@
           "semanticType": "seconds",
           "units": "seconds"
         },
-        "durationSeconds": {
+        "duration": {
           "enum": [],
           "kind": "number",
           "maximum": 60.0,
@@ -9081,7 +9305,7 @@
           "semanticType": "seconds",
           "units": "seconds"
         },
-        "velocityRetentionPerTick": {
+        "retentionPerTick": {
           "enum": [],
           "kind": "number",
           "maximum": 1,
@@ -9106,7 +9330,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Apply independently composed timed modifiers to the actually hit NPC, without a BuffID or name-to-effect mapping. The same item/entity/action/owner refreshes remaining duration, not strength per hit; independent records may combine under bounded native caps. Chance rolls once per hit/crit admission before delay; the server receiver never rerolls, and independent calls draw independently. This is a bounded set of modifiers, not the full native buff repertoire.",
+      "purpose": "Apply timed modifiers to the hit NPC. The same item/entity/action/owner refreshes remaining duration; independent records combine under native caps. Chance rolls once per hit/crit admission before delay, independently for each call.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -9116,7 +9340,7 @@
             "damagePerSecond",
             "defenseDelta",
             "contactDamageMultiplier",
-            "velocityRetentionPerTick"
+            "retentionPerTick"
           ],
           "target": "same_target"
         },
@@ -9174,7 +9398,7 @@
           "semanticType": "terraria_buff_id",
           "units": ""
         },
-        "delaySeconds": {
+        "delay": {
           "enum": [],
           "kind": "number",
           "maximum": 10.0,
@@ -9184,7 +9408,7 @@
           "semanticType": "seconds",
           "units": "seconds"
         },
-        "durationSeconds": {
+        "duration": {
           "enum": [],
           "kind": "number",
           "maximum": 360.0,
@@ -9278,7 +9502,7 @@
           "semanticType": "unitless_scalar",
           "units": ""
         },
-        "delaySeconds": {
+        "delay": {
           "enum": [],
           "kind": "number",
           "maximum": 10.0,
@@ -9298,7 +9522,7 @@
           "semanticType": "spawn_or_target_count",
           "units": ""
         },
-        "radiusTiles": {
+        "radius": {
           "enum": [],
           "kind": "number",
           "maximum": 60,
@@ -9320,7 +9544,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Damage up to maxTargets nearest eligible NPCs around the event position, ranked by distance then NPC slot; omission selects the technical maximum of 16, not unlimited targets. Exclude the event's direct target only for on_hit/on_crit. For other events, including on_expire/on_kill, ignore direct-target exclusion; a previously hit NPC is not excluded by hit history. An additional hit is not guaranteed: native NPC eligibility/damage rules still apply.",
+      "purpose": "Damage the nearest eligible NPCs around the event position, ordered by distance then NPC slot. Direct-target exclusion applies only to on_hit/on_crit; other events have no hit-history exclusion.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -9388,7 +9612,7 @@
           "semanticType": "unitless_scalar",
           "units": ""
         },
-        "delaySeconds": {
+        "delay": {
           "enum": [],
           "kind": "number",
           "maximum": 10.0,
@@ -9398,7 +9622,7 @@
           "semanticType": "seconds",
           "units": "seconds"
         },
-        "radiusTiles": {
+        "radius": {
           "enum": [],
           "kind": "number",
           "maximum": 48,
@@ -9478,7 +9702,7 @@
           "semanticType": "unitless_scalar",
           "units": ""
         },
-        "delaySeconds": {
+        "delay": {
           "enum": [],
           "kind": "number",
           "maximum": 10.0,
@@ -9498,7 +9722,7 @@
           "semanticType": "spawn_or_target_count",
           "units": ""
         },
-        "rangeTiles": {
+        "range": {
           "enum": [],
           "kind": "number",
           "maximum": 60,
@@ -9585,7 +9809,7 @@
       "multiplicity": "many_per_target",
       "networkAuthority": "server_execute",
       "parameters": {
-        "delaySeconds": {
+        "delay": {
           "enum": [],
           "kind": "number",
           "maximum": 10.0,
@@ -9630,7 +9854,7 @@
           "semanticType": "blocks/s",
           "units": "blocks/s"
         },
-        "radiusTiles": {
+        "radius": {
           "enum": [],
           "kind": "number",
           "maximum": 60,
@@ -9668,7 +9892,7 @@
         {
           "anyOf": [
             "impulseBlocksPerSecond",
-            "radiusTiles"
+            "radius"
           ],
           "equals": "target_to_owner",
           "kind": "param_branch_fields",
@@ -9679,7 +9903,7 @@
         {
           "anyOf": [
             "impulseBlocksPerSecond",
-            "radiusTiles"
+            "radius"
           ],
           "equals": "target_to_entity",
           "kind": "param_branch_fields",
@@ -9778,7 +10002,7 @@
       "multiplicity": "many_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "delaySeconds": {
+        "delay": {
           "enum": [],
           "kind": "number",
           "maximum": 10.0,
@@ -9834,6 +10058,87 @@
     },
     {
       "authorityByEffect": {},
+      "capability": "reduce_heal_cooldown_on_event",
+      "componentSlot": "event_action",
+      "conflicts": [],
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [
+        "on_hit",
+        "on_crit"
+      ],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].cooldownReductionTicks",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "delay": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 10.0,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "seconds": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 60.0,
+          "minimum": 0.008333333333333333,
+          "reference": null,
+          "required": true,
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "when": {
+          "enum": [
+            "on_hit",
+            "on_crit"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_trigger",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "purpose": "Subtract authored seconds from the owner's already running healing-potion cooldown. Both native potionDelay and Potion Sickness remaining time decrease, floored at zero.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "event_available",
+          "message": "target entity must actually emit the selected event",
+          "param": "when",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "targetKinds": [
+        "item_body",
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
       "capability": "heal_owner_on_event",
       "componentSlot": "event_action",
       "conflicts": [],
@@ -9866,7 +10171,7 @@
           "semanticType": "unitless_scalar",
           "units": ""
         },
-        "delaySeconds": {
+        "delay": {
           "enum": [],
           "kind": "number",
           "maximum": 10.0,
@@ -9951,7 +10256,7 @@
       "multiplicity": "many_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "cooldownSeconds": {
+        "cooldown": {
           "enum": [],
           "kind": "number",
           "maximum": 60.0,
@@ -9961,7 +10266,7 @@
           "semanticType": "seconds",
           "units": "seconds"
         },
-        "delaySeconds": {
+        "delay": {
           "enum": [],
           "kind": "number",
           "maximum": 10.0,
@@ -9971,7 +10276,7 @@
           "semanticType": "seconds",
           "units": "seconds"
         },
-        "rangeTiles": {
+        "range": {
           "enum": [],
           "kind": "integer",
           "maximum": 120,
@@ -10031,7 +10336,7 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "emit_light_while_active",
+      "capability": "projectile_light",
       "componentSlot": "light",
       "conflicts": [],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::AI",

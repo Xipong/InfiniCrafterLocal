@@ -63,6 +63,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
     public override void Load()
     {
         LoadLibrary();
+        if(!Main.dedServ)InfiniItemVfxRuntime.LoadItemHistory();
         if (!Main.dedServ)
             On_Main.DrawProjectiles += DrawProjectiles;
     }
@@ -71,6 +72,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
     {
         if (!Main.dedServ)
             On_Main.DrawProjectiles -= DrawProjectiles;
+        if(!Main.dedServ)InfiniItemVfxRuntime.UnloadItemHistory();
         ClearLibrary(unload:true);
         Clear();
     }
@@ -83,6 +85,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
     {
         InfiniItemVfxRuntime.UpdatePendingItemEvents();
         if (!Main.dedServ) {
+            InfiniItemVfxRuntime.PruneHeldHistory();
             UpdateMaterials();
             PruneExpired();
         }
@@ -124,7 +127,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
             Color = color,
             StartUpdate = Main.GameUpdateCount,
             Duration = Math.Clamp(duration, 3, 120),
-            MaxDrawCalls = Math.Clamp(maxDrawCalls, 0, 512),
+            MaxDrawCalls = Math.Clamp(maxDrawCalls, 0, 2048),
         });
     }
 
@@ -139,13 +142,16 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
             SourceKey = sourceKey, PrimitiveKind = kind, Layer = layer, Center = center, Forward = forward,
             Scale = scale, Density = density, PhaseOffset = phaseOffset, RepeatEvery = repeatEvery,
             Color = color, StartUpdate = Main.GameUpdateCount, Duration = Math.Clamp(duration, 3, 120),
-            MaxDrawCalls = Math.Clamp(maxDrawCalls, 0, 512),
+            MaxDrawCalls = Math.Clamp(maxDrawCalls, 0, 2048),
         });
     }
 
     internal static bool TrySpendDetachedParticle(string sourceKey, int maxPerTick, int maxTotal)
+        => TrySpendDetachedParticles(sourceKey, maxPerTick, maxTotal, 1);
+
+    internal static bool TrySpendDetachedParticles(string sourceKey, int maxPerTick, int maxTotal, int count)
     {
-        if (string.IsNullOrWhiteSpace(sourceKey) || maxPerTick <= 0 || maxTotal <= 0)
+        if (string.IsNullOrWhiteSpace(sourceKey) || maxPerTick <= 0 || maxTotal <= 0 || count <= 0)
             return false;
         ulong now = Main.GameUpdateCount;
         PruneParticleBudgets(now);
@@ -160,10 +166,10 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
             budget.ThisTick = 0;
         }
         budget.LastSeenTick = now;
-        if (budget.ThisTick >= maxPerTick || budget.Total >= maxTotal)
+        if (count > maxPerTick - budget.ThisTick || count > maxTotal - budget.Total)
             return false;
-        budget.ThisTick++;
-        budget.Total++;
+        budget.ThisTick += count;
+        budget.Total += count;
         return true;
     }
 
@@ -195,6 +201,8 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
         {
             DrawLibraryParticles(layer,batch.GraphicsDevice);
             if(MaterialPaths.Any(p=>p.Design.Layer==layer))DrawMaterialPaths(layer,batch.GraphicsDevice);
+            DrawMeshShapes(layer,TextureAssets.MagicPixel.Value,batch.GraphicsDevice);
+            DrawContours(layer,batch.GraphicsDevice);
             // Authored PNG elements preserve texels, independent of vanilla's
             // configurable sampler. This batch is owned and ends before simple-renderer draws.
             DrawMaterialSprites(layer,batch,()=>{
@@ -203,6 +211,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
                 began=true;
             });
             if(began){began=false;batch.End();}
+            DrawShapes(layer,TextureAssets.MagicPixel.Value,EnsureBegin);
             foreach (DetachedEmission emission in Emissions)
             {
                 if (!string.Equals(emission.Layer, layer, StringComparison.Ordinal))
@@ -296,6 +305,11 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
         PeriodicElements.Clear();
         LastMaterialsTick=ulong.MaxValue;
         MaterialEmissions.Clear();
+        ShapeEmissions.Clear();
+        ContourEmissions.Clear();
+        NativeCueEmissions.Clear();
+        NativeEffectAdmissionTick = 0;
+        NativeEffectParticlesThisTick = 0;
         Emissions.Clear();
         DrawCallsBySource.Clear();
         ParticleBudgetsBySource.Clear();

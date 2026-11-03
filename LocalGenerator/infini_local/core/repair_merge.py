@@ -94,6 +94,7 @@ def merge_frozen_subtree(
     audit_path: str,
     allow_additions: bool = True,
     delete_paths: Iterable[Any] = (),
+    array_leaves: bool = False,
 ) -> tuple[Any, list[dict[str, Any]], list[str]]:
     """Merge ``candidate`` into ``original`` without rewriting valid values.
 
@@ -108,6 +109,9 @@ def merge_frozen_subtree(
     when ``candidate`` omits such a key, the merged result drops it instead of
     preserving the broken value. Keys still present in ``candidate`` keep the
     normal frozen-merge behaviour so an unauthorized rewrite stays ignored.
+    ``array_leaves`` opts a caller into indexed descendant edits. Without a
+    permission on the array itself, its length and all other indices remain
+    frozen; omitted elements are retained and appended elements are ignored.
     """
 
     permissions = _normalize_paths(mutable_paths)
@@ -144,7 +148,7 @@ def merge_frozen_subtree(
                     if merged is not MISSING:
                         out[key] = merged
                     continue
-                if isinstance(previous, Mapping) and isinstance(value, Mapping):
+                if (isinstance(previous, Mapping) and isinstance(value, Mapping)) or (array_leaves and isinstance(previous, list) and isinstance(value, list)):
                     # Recurse even when the parent itself is frozen: missing
                     # nested parameters may still be accepted.
                     out[key] = visit(previous, value, child_rel, child_abs)
@@ -159,6 +163,21 @@ def merge_frozen_subtree(
                 if key not in new and _leaf_allowed(child_rel, deletions):
                     del out[key]
                     accepted.append(json_path_child(absolute, str(key)))
+            return out
+
+        if array_leaves and isinstance(old, list) and isinstance(new, list) and not _leaf_allowed(relative, permissions):
+            # A diagnosed descendant never authorizes resizing/reordering its
+            # containing array. Merge fixed positions and retain omitted values.
+            out = copy.deepcopy(old)
+            for index, value in enumerate(new):
+                child_rel = json_path_child(relative, index)
+                child_abs = json_path_child(absolute, index)
+                if index >= len(old):
+                    ignored.append(_ignored_row(child_abs, value, None, "array_growth_not_permitted"))
+                else:
+                    out[index] = visit(old[index], value, child_rel, child_abs)
+            if len(new) < len(old):
+                ignored.append(_ignored_row(absolute, new, old, "array_shrink_not_permitted"))
             return out
 
         if _leaf_allowed(relative, permissions):

@@ -191,7 +191,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void ComposableNpcEffectTooltipUsesGeneratedSemantics()
     {
-        var row = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine("tools", "fixtures", "played-secondaries-delivered.json")))!.AsArray()[0]!;
+        var row = PlayedSecondaryCurrentTestEnvelopes()[0]!;
         WithForgePresentationLanguages(locale =>
         {
             var data = GeneratedItemData.FromJson(row.ToJsonString())!;

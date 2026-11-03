@@ -19,7 +19,7 @@ public readonly record struct InfiniVfxSlotEmissionKey(
     string SlotId);
 
 /// <summary>Per-projectile presentation state. It never contains gameplay state.</summary>
-public sealed class InfiniVfxState
+public sealed partial class InfiniVfxState
 {
     public int Tick;
     public int ParticlesThisTick;
@@ -131,7 +131,7 @@ public enum InfiniVfxDrawPass { All, UnderProjectile, OverProjectile }
 /// Bounded renderer for exact ``entityId + event`` slots.  It is presentation
 /// only and cannot mutate damage, velocity, collision, ownership, or lifecycle.
 /// </summary>
-public static class InfiniVfxRuntime
+public static partial class InfiniVfxRuntime
 {
     public static void OnTick(Projectile projectile, GeneratedItemData data, string entityId, VfxManifestSpec manifest, ref InfiniVfxState state)
     {
@@ -141,7 +141,7 @@ public static class InfiniVfxRuntime
         InfiniDetachedVfxSystem.RegisterMaterialPaths(data,entityId,state.SourceKey,VfxSourceBinding.Capture(projectile));
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
-            if (InfiniDetachedVfxSystem.HasOwnedVfx(slot)) continue;
+            if (InfiniDetachedVfxSystem.HasOwnedVfx(slot) || slot.Trail is not null) continue;
             if (!Matches(slot, entityId, RuntimeEventKind.Periodic) || !Cadence(slot, state.Tick)) continue;
             if (!TryAnchor(projectile, data, entityId, slot.Anchor, projectile.Center, out Vector2 anchor)) continue;
             if (!TryMarkSlotEmission(projectile, entityId, RuntimeEventKind.Periodic, slot, ref state)) continue;
@@ -160,7 +160,7 @@ public static class InfiniVfxRuntime
         bool emitted = false;
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
-            if (!Matches(slot, entityId, eventName)) continue;
+            if (!Matches(slot, entityId, eventName) || slot.Trail is not null) continue;
             if (!snapshot.TryAnchor(slot.Anchor, center, out Vector2 anchor)) continue;
             if(slot.Path is not null) {
                 InfiniDetachedVfxSystem.RegisterMaterialPaths(data,entityId,state.SourceKey,VfxSourceBinding.Capture(projectile));
@@ -198,6 +198,7 @@ public static class InfiniVfxRuntime
         BeginWorldTick(projectile, ref state);
         // Capture the actual world tip now, not center history with today's aim.
         state.PushTip(ForwardTip(projectile, data, entityId));
+        CaptureExplicitTrails(projectile,data,entityId,state);
     }
 
     private static void BeginWorldTick(Projectile projectile, ref InfiniVfxState state)
@@ -246,12 +247,10 @@ public static class InfiniVfxRuntime
     {
         if (projectile.ModProjectile is Content.Projectiles.GeneratedProjectile motion
             && motion.TryGetMotionPresentationAxis(out var motionAxis)) return motionAxis;
-        foreach (RuntimeEntitySpec entity in data.RuntimeProgram.Entities)
-            if (entity.Id == entityId && entity.Movement.Code is 14 or 16 or 17)
-                return projectile.rotation.ToRotationVector2();
-        if (data.RuntimeProgram.TryGetEntity(entityId)?.Movement.Code == 20)
-            return (projectile.rotation - MathHelper.PiOver2).ToRotationVector2();
-        return projectile.velocity.SafeNormalize(projectile.rotation.ToRotationVector2());
+        RuntimeEntitySpec? entity = data.RuntimeProgram.TryGetEntity(entityId);
+        Vector2 bodyForward = SpritePresentation.ProjectileBodyAngle(entity, projectile.rotation).ToRotationVector2();
+        if (entity?.Movement.Code is 14 or 16 or 17 or 20) return bodyForward;
+        return projectile.velocity.SafeNormalize(bodyForward);
     }
 
     private static bool TryMarkSlotEmission(
@@ -277,6 +276,11 @@ public static class InfiniVfxRuntime
         {
             if (!string.Equals(slot.EntityId, entityId, StringComparison.Ordinal)) continue;
             if (InfiniDetachedVfxSystem.HasOwnedVfx(slot) || slot.RendererKind is "soundCue" or "lightCue") continue;
+            if(slot.Trail is not null) {
+                bool trailOver=slot.Layer=="AfterProjectiles";
+                if(pass==InfiniVfxDrawPass.UnderProjectile&&trailOver||pass==InfiniVfxDrawPass.OverProjectile&&!trailOver)continue;
+                DrawExplicitTrail(pixel,projectile,data,entityId,slot,manifest,ref state);continue;
+            }
             // Nonperiodic procedural/sprite effects have detached event lifetimes.
             // History renderers need live samples; retain their on_spawn trail path.
             InfiniVfxRendererKind kind = VfxRendererRegistry.Resolve(slot);
@@ -288,7 +292,7 @@ public static class InfiniVfxRuntime
             if (pass == InfiniVfxDrawPass.OverProjectile && !over) continue;
             if (!TryAnchor(projectile, data, entityId, slot.Anchor, projectile.Center, out Vector2 anchor)) continue;
             Vector2 forward = slot.Anchor == "velocity"
-                ? projectile.velocity.SafeNormalize(projectile.rotation.ToRotationVector2()) : ForwardAxis(projectile, data, entityId);
+                ? projectile.velocity.SafeNormalize(SpritePresentation.ProjectileBodyAngle(data.RuntimeProgram.TryGetEntity(entityId), projectile.rotation).ToRotationVector2()) : ForwardAxis(projectile, data, entityId);
             Color color = ApplyBlend(slot.Color!.ToColor() * slot.Alpha!.Value, slot.Blend!);
             switch (VfxRendererRegistry.Resolve(slot))
             {
@@ -342,7 +346,7 @@ public static class InfiniVfxRuntime
         bool emitted = false;
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
-            if (!Matches(slot, entityId, eventName)) continue;
+            if (!Matches(slot, entityId, eventName) || slot.Trail is not null) continue;
             Vector2 anchor = center;
             if (!snapshot.TryAnchor(slot.Anchor, center, out anchor)) continue;
             if (slot.Path is not null) continue; // live geometry requires its registered source binding
@@ -439,9 +443,7 @@ public static class InfiniVfxRuntime
             // Explicit authored scale components preserve the same scale as the body.
             // Capture the selected texture's corrected pose and base size only here.
             var entity = data.RuntimeProgram.TryGetEntity(entityId);
-            var selectedPose = captured with { Rotation = entity is not null
-                ? Content.Projectiles.GeneratedProjectile.MotionSpriteRotation(entity, selected, captured.Rotation, captured.Effects)
-                : selected.ProjectileRotation(entity, captured.Rotation, captured.Effects) };
+            var selectedPose = captured with { Rotation = selected.ProjectileRotation(entity, captured.Rotation, captured.Effects) };
             InfiniDetachedVfxSystem.Enqueue(sourceKey, selected.Path, slot.Layer!, center + new Vector2(0, captured.GfxOffY),
                 selectedPose.Rotation, captured.Scale * slot.Scale!.Value, slot.Alpha!.Value, color,
                 slot.Duration!.Value, manifest.Budget.MaxDrawCalls, selectedPose, selected.RenderSizePx,
@@ -513,8 +515,7 @@ public static class InfiniVfxRuntime
     {
         if (!selected.ImpactTexture && (!selected.RenderSizePx.HasValue || !selected.ForwardAngleDegrees.HasValue)) return;
         SpriteEffects effects = projectile.spriteDirection < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-        float rotation = entity is not null ? Content.Projectiles.GeneratedProjectile.MotionSpriteRotation(entity, selected, projectile.rotation, effects)
-            : selected.ProjectileRotation(entity, projectile.rotation, effects);
+        float rotation = selected.ProjectileRotation(entity, projectile.rotation, effects);
         float drawScale = selected.ImpactTexture ? Math.Max(0.05f, projectile.scale * scale)
             : Math.Clamp(projectile.scale, 0.1f, 8f) * scale * selected.FrameScale(texture.Width, texture.Height);
         if (!selected.ImpactTexture && Content.Projectiles.GeneratedProjectile.PreservesExplicitBodyScale(entity))

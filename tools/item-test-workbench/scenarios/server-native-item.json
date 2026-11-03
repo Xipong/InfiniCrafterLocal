@@ -1,0 +1,9 @@
+{
+  "playerUpdate": "full",
+  "ticks": 2,
+  "seed": 1,
+  "player": {"x": 640, "y": 640, "life": 100, "mana": 200},
+  "dummy": {"x": 850, "y": 640},
+  "actions": [],
+  "assertions": [{"kind": "no_nonfinite"}]
+}

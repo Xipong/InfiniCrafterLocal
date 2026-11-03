@@ -75,6 +75,14 @@ def main():
     for check in wrong_blink['assertions']:
         if check['kind']=='teleport_count':check['value']=3
     short_held=w.read_json(w.HERE/'scenarios/full-held-deselect.json');short_held['ticks']=100
+    one_tick_held=w.read_json(w.HERE/'scenarios/full-held-deselect.json');one_tick_held['ticks']=6
+    one_tick_held['actions']=[{'tick':3,'kind':'select_slot','slot':1}]
+    one_tick_held['assertions']=[finite,{'kind':'spawn_count','value':0}]
+    for tick,speed,buff in [(0,1,1),(1,1.5,1),(2,1.5,1),(3,1.5,0),(4,1,0)]:
+        one_tick_held['assertions'].extend([
+            {'kind':'player_stat_at','tick':tick,'stat':'moveSpeed','value':speed},
+            {'kind':'player_stat_at','tick':tick,'stat':'generatedBuffTicks','value':buff}])
+    cases.append(('full-one-tick-held-release','synthetic-one-tick-held.json',one_tick_held,0))
     vanilla_repeat=modified(ticks=180,actions=[{'tick':0,'kind':'primary'},{'tick':1,'kind':'release'},{'tick':20,'kind':'primary'},{'tick':21,'kind':'release'}],assertions=[spawned,{'kind':'dummy_damaged'},inactive,finite])
     full_vanilla_repeat=w.read_json(w.HERE/'scenarios/full-vanilla.json');full_vanilla_repeat['actions']=vanilla_repeat['actions']
     cases.extend([('full-alt-insufficient',frog,insufficient,0),('full-negative-blink-count',frog,wrong_blink,1),('full-negative-premature-expiry','unsupported-held-buff.json',short_held,1),('vanilla-repeat',284,vanilla_repeat,0),('full-vanilla-repeat',284,full_vanilla_repeat,0)])
@@ -117,6 +125,8 @@ def main():
     held['runtimeProgram']['effectGroups']=[{'id':'held_utility','generatedBuff':{'durationTicks':60,'jumpBoost':0.5}}]
     held['runtimeProgram']['heldEffectGroupId']='held_utility'
     (fixtures/'unsupported-held-buff.json').write_text(json.dumps(held,indent=2))
+    held['runtimeProgram']['effectGroups'][0]['generatedBuff']={'durationTicks':1,'movementSpeed':0.5}
+    (fixtures/'synthetic-one-tick-held.json').write_text(json.dumps(held,indent=2))
     rows=[]
     for name,item,scenario,expected in cases:
         scenario_path=out/(name+'-scenario.json');scenario_path.write_text(json.dumps(scenario,indent=2))
@@ -149,9 +159,9 @@ def main():
     full=recorded('full-alt-repeat');full_repeat=recorded('full-alt-repeat-again')
     rows.append({'name':'full-player-same-seed-determinism','passed':bool(full and full_repeat) and full.get('snapshots')==full_repeat.get('snapshots') and full.get('assertions')==full_repeat.get('assertions')})
     post={s['tick']:s for s in full.get('snapshots',[]) if s.get('phase')!='after_input_before_update'}
-    checkpoints={0:(299,119),60:(299,59),121:(299,119),420:(0,0)}
+    checkpoints={0:(300,119),60:(300,59),121:(300,119),420:(1,0),421:(0,0)}
     correct=all(post.get(t,{}).get('player',{}).get('generatedBuffTicks')==buff and post.get(t,{}).get('player',{}).get('mobilityCooldownTicks')==cooldown for t,(buff,cooldown) in checkpoints.items())
-    correct=correct and post.get(421,{}).get('player',{}).get('jumpSpeedBoost')==0 and max(s['player']['jumpSpeedBoost'] for s in full.get('snapshots',[]))==1.5
+    correct=correct and post.get(421,{}).get('player',{}).get('jumpSpeedBoost')==1.5 and post.get(422,{}).get('player',{}).get('jumpSpeedBoost')==0 and max(s['player']['jumpSpeedBoost'] for s in full.get('snapshots',[]))==1.5
     rows.append({'name':'native-buff-cooldown-exact-checkpoints-and-no-stacking','passed':correct,'checkpoints':{str(t):list(v) for t,v in checkpoints.items()}})
     for category,native_speed,damage,knockback in [('arrow',11,35,4),('bullet',12.5,39,5)]:
         observed={};passed=True

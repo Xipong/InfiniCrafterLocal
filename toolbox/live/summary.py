@@ -25,10 +25,12 @@ def _rows(path: Path) -> list[dict[str, Any]]:
 
 
 def _terminals(rows: list[dict[str, Any]]) -> tuple[int, list[Any], bool]:
-    requests = Counter(row.get('sequence') for row in rows if row.get('phase') == 'request')
-    ends = Counter(row.get('sequence') for row in rows if row.get('phase') in ('response', 'error'))
-    pending = sorted((requests - ends).elements(), key=str)
-    return sum(requests.values()), pending, bool(requests) and requests == ends and all(n == 1 for n in requests.values())
+    requests = Counter((row.get('case'), row.get('sequence')) for row in rows if row.get('phase') == 'request')
+    ends = Counter((row.get('case'), row.get('sequence')) for row in rows if row.get('phase') in ('response', 'error'))
+    pending = sorted((sequence for _, sequence in (requests - ends).elements()), key=str)
+    unique_sequences = len({sequence for _, sequence in requests}) == len(requests)
+    covered = bool(requests) and requests == ends and unique_sequences and all(n == 1 for n in requests.values())
+    return sum(requests.values()), pending, covered
 
 
 def summarize(directory: Path) -> dict[str, Any]:
@@ -48,6 +50,13 @@ def summarize(directory: Path) -> dict[str, Any]:
     image_counts = Counter(row.get('case') for row in lanes['image_boundary'])
     logical_count, logical_pending, logical_ok = _terminals(lanes['logical_llm'])
     http_count, http_pending, http_ok = _terminals(lanes['http_llm'])
+    evidence_cases = {
+        'logical_llm': {row.get('case') for row in lanes['logical_llm'] if row.get('phase') == 'request'},
+        'http_llm': {row.get('case') for row in lanes['http_llm'] if row.get('phase') == 'request'},
+        'harness_events': {row.get('case') for row in lanes['harness_events'] if row.get('event') == 'CASE_ATTEMPT_START'},
+    }
+    missing_case_evidence = {name: [case for case in planned if case not in cases]
+                             for name, cases in evidence_cases.items()}
     report: dict[str, Any] = {
         'schema': 'infini.toolbox-offline-summary.v1',
         'planned': len(planned), 'completed': len(completed),
@@ -60,6 +69,7 @@ def summarize(directory: Path) -> dict[str, Any]:
         'unstartedCases': [c for c in planned if c not in observed] if not missing else None,
         'unfinishedCases': [c for c in planned if c not in completed and c in observed],
         'missingFiles': missing,
+        'missingCaseEvidence': missing_case_evidence,
         'logicalRequests': None if 'logical_llm.ndjson' in missing else logical_count,
         'httpRequests': None if 'http_llm.ndjson' in missing else http_count,
         'logicalPending': logical_pending, 'httpPending': http_pending,
@@ -80,6 +90,7 @@ def summarize(directory: Path) -> dict[str, Any]:
         not any(report[key] for key in ('failedCases', 'missingCases', 'duplicateCases', 'unexpectedCases',
                                         'missingFiles', 'unexpectedTraceCases', 'imageBoundaryMissing', 'imageBoundaryDuplicates',
                                         'imageBoundaryUnexpected', 'authorBudgetViolations', 'unaccountedTransportErrors'))
+        and not any(missing_case_evidence.values())
         and report['terminalCoverage'] and report['caseAttemptCoverage'] and report['retryWaitCoverage']
         and report['caseTransportRetryAccountingConsistent'] and report['transportRetryAccountingConsistent']
         and report['transportRetryCount'] == 0 and not logical_domain_errors

@@ -54,28 +54,13 @@ internal sealed class WorkbenchGraphicsContext : IDisposable
     }
     public Asset<Texture2D> LoadVanillaItemTexture(int id,string root)
     {
-        string expected=id switch {
-            96 => "a79952bd1872b03989644b5b0f327ef46a3432b2fd1e326ee61e317ba74ba253",
-            98 => "5074f5d67a76b71008159acb680caee6737cf0670378dfd57958642f29863573",
-            190 => "709da5dd2aad04d007194bc89d45883426debaaaca2bc779829c874eb691ed44",
-            46 => "ce5cadf297077a5a05e44fd1c838fa7af40f12700b904cefdb77a3f77767d60e",
-            964 => "cf4a7c175939aa78f5ef9e486c6bc03babe8ae9b1aa8b7fd3dc9a0a640192d3e",
-            930 => "efe6fbfc116f8791a6cb5a5f8983987b11f403804bb7157ff8eece6b98809a8c",
-            162 => "acda075ed8b513f707a156122aaf60333cd281314206dcb5d950e65c7ec71212",
-            168 => "c7362c0174942b4b5ca1e0fa1c48455e0420999bf3f1fcba8861021411420830",
-            3485 => "13a8766a6ec5f100e4f3ca3e5f603e136a03767bfa8c8452c77cf2e5744b612f",
-            3029 => "dee434ceefe9095959ebac3a9f5e89f0f2cb999cb41a9c81f777a5153a0b1c0f",
-            2223 => "63ca70e9da8b5d8fe702b4862a741d946b99a47da3a484ae5231d823cfc38263",
-            3019 => "1c4245fb09078cdca936024e071b7f9eda5d23b5909306c004993be9aac9f05e",
-            _ => throw new NotSupportedException("No pinned native item geometry asset for vanilla parent "+id)
-        };
-        string path=Path.GetFullPath(Path.Combine(root,"Images","Item_"+id+".png"));
-        for(FileSystemInfo? part=new FileInfo(path);part is not null;part=part is FileInfo file?file.Directory:((DirectoryInfo)part).Parent)
-            if(part.LinkTarget is not null)throw new InvalidDataException("Vanilla asset must not traverse symlinks");
-        byte[] bytes=File.ReadAllBytes(path);string hash=Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-        if(hash!=expected)throw new InvalidDataException("Vanilla item source differs from pinned community Item_"+id+".png");
-        using var input=new MemoryStream(bytes,writable:false);var texture=assets.CreateUntracked<Texture2D>(input,"Item_"+id+".png",AssetRequestMode.ImmediateLoad);
-        Provenance["vanillaItem"] = new JsonObject { ["path"]=path,["sha256"]=hash,["state"]=texture.State.ToString(),["width"]=texture.Value.Width,["height"]=texture.Value.Height,["source"]="Pinned community Terraria 1.4.4.9 source PNG, not official-byte-certified",["scope"]="Native Item.GetDrawHitbox/use-style geometry and optional actual vanilla PlayerRenderer artwork; no generated proxy substitution" };
+        byte[] bytes=WVanillaItemAssets.Read(root,id,out var receipt);
+        using var input=new MemoryStream(bytes,writable:false);
+        var texture=assets.CreateUntracked<Texture2D>(input,"Item_"+id+".png",AssetRequestMode.ImmediateLoad);
+        if(texture.State!=AssetState.Loaded || texture.Value.Width!=receipt["width"]!.GetValue<uint>() || texture.Value.Height!=receipt["height"]!.GetValue<uint>())
+            throw new InvalidDataException("Native vanilla item upload differs from verified PNG geometry");
+        receipt["state"]=texture.State.ToString();
+        Provenance["vanillaItem"]=receipt;
         return texture;
     }
     public Asset<Texture2D> LoadEmptyItemTexture(string root)

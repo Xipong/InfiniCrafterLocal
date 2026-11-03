@@ -308,6 +308,33 @@ internal static partial class EngineRuntimeChecks
         });
         WithLighting((_, __) => {
             using var peers = new ReviewPeers();
+            var data = ReviewContactItemData(); data.Id = "late_sync_item_tokens";
+            data.VfxManifest.Slots = LightManifest(data.RuntimeProgram.ItemEntityId, RuntimeEventKind.OnHit).Slots;
+            data.VfxManifest.Assets = Array.Empty<VfxAssetSpec>(); data.Normalize(); peers.Register(data);
+            var player = Terraria.Main.player[0]; player.selectedItem = 0;
+            var first = ReviewItem(data); player.inventory[0] = first.Item;
+            peers.Mode(NetmodeID.MultiplayerClient, 0);
+            first.OnHitNPC(player, new NPC { active = true, Center = new Vector2(320,240) }, new NPC.HitInfo(), 1);
+            var later = ReviewItem(data); player.inventory[0] = later.Item;
+            for (int i = 0; i < 2; i++)
+                later.OnHitNPC(player, new NPC { active = true, Center = new Vector2(640 + 16*i,240) }, new NPC.HitInfo(), 1);
+            var claims = peers.Sent.ToArray(); peers.Sent.Clear();
+            using var laterWire = new MemoryStream(); later.NetSend(new BinaryWriter(laterWire));
+            using var firstWire = new MemoryStream(); first.NetSend(new BinaryWriter(firstWire));
+            var server = ReviewItem(data); player.inventory[0] = server.Item;
+            peers.Mode(NetmodeID.Server, 255);
+            foreach (var claim in claims) peers.Receive(claim, 0);
+            Equal(0, peers.Sent.Count, "all claims wait on the unrelated authoritative token");
+            laterWire.Position = 0; server.NetReceive(new BinaryReader(laterWire));
+            peers.System.PostUpdateEverything();
+            Equal(2, peers.Sent.Count, "late authoritative sync supersedes stale head and releases both matching occurrences");
+            firstWire.Position = 0; server.NetReceive(new BinaryReader(firstWire));
+            peers.System.PostUpdateEverything();
+            Equal(2, peers.Sent.Count, "late sync supersession cannot revive the earlier source");
+            InfiniItemVfxRuntime.ClearUseEventCaches();
+        });
+        WithLighting((_, __) => {
+            using var peers = new ReviewPeers();
             var data = ReviewContactItemData(); data.Id = "replay_item_tokens";
             data.VfxManifest.Slots = LightManifest(data.RuntimeProgram.ItemEntityId, RuntimeEventKind.OnHit).Slots;
             data.VfxManifest.Assets = Array.Empty<VfxAssetSpec>(); data.Normalize(); peers.Register(data);

@@ -115,7 +115,22 @@ public static partial class InfiniItemVfxRuntime
                 string channel=ItemEventChannel(p);
                 if (blocked.Contains(channel)) { i++; continue; }
                 if (EventSourceItem(player,p.ItemId,p.Event) is not GeneratedItem gi || gi.PresentationToken!=p.Token)
-                { blocked.Add(channel); i++; continue; }
+                {
+                    // ItemIO may catch up after every claim has already arrived.
+                    // A later matching occurrence is the same supersession proof
+                    // used by the receive path. Ignore expired/foreign sessions,
+                    // and never discard matching occurrences or other channels.
+                    bool superseded = false;
+                    for (int j=i+1; j<queue.Count; j++) {
+                        var later=queue[j];
+                        if (ReferenceEquals(later.Player,player) && ReferenceEquals(later.Socket,socket)
+                            && now>=later.Tick && now-later.Tick<=PendingItemEventLifetimeTicks
+                            && ItemEventChannel(later.Event)==channel && HasCurrentItemToken(player,later.Event))
+                        { superseded=true; break; }
+                    }
+                    if (superseded) { queue.RemoveAt(i); continue; }
+                    blocked.Add(channel); i++; continue;
+                }
                 queue.RemoveAt(i);
                 if (!HasExactSlot(gi.Data,p.EntityId,p.Event)) continue;
                 var entity=gi.Data.RuntimeProgram.TryGetEntity(p.EntityId);
@@ -156,6 +171,7 @@ public static partial class InfiniItemVfxRuntime
         if(data is null&&InfiniCrafterLocalMod.GeneratedItems?.TryGet(p.ItemId,out var registered)==true)data=registered;
         if(data is null||!GeneratedItemRegistryService.IsCurrentWorldData(data)||!HasExactSlot(data,p.EntityId,p.Event)||!AcceptMaterialItemEvent(p)||!AdmitRemoteEvent(p.Owner))return;
         VfxSourceBinding? binding=player is not null&&EventSourceItem(player,p.ItemId,p.Event) is GeneratedItem live&&live.PresentationToken==p.Token?VfxSourceBinding.Capture(player,live.Item,data):null;
+        if(p.Event=="on_use"&&binding is not null&&player is not null)BeginHeldHistory(player,data,p.EntityId);
         var allowance=new MaterialEventAllowance(data.VfxManifest.Budget.MaxParticlesTotal);
         EmitMaterialItemSnapshot(data,p,binding,allowance);
         // Simple renderers retain their live-player anchors; the admitted

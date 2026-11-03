@@ -3,7 +3,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_owner_control",
+      "capability": "set_owner_control",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionOwnerControl",
       "outputs": [
@@ -18,7 +18,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "accumulate_projectile_charge",
+      "capability": "charge",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge|Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge/ReleaseCharge",
       "outputs": [
@@ -48,7 +48,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "gate_projectile_contact",
+      "capability": "gate_contact",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.DamageGate.cs::CanDamage",
       "outputs": [
@@ -62,11 +62,12 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_beam_geometry",
+      "capability": "beam_geometry",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry|Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::BeamWarmupProgress|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
       "outputs": [
         "runtimeProgram.entities[].beamGeometry.lengthPx",
+        "runtimeProgram.entities[].beamGeometry.startOffsetPx",
         "runtimeProgram.entities[].beamGeometry.widthPx",
         "runtimeProgram.entities[].beamGeometry.raycastTiles",
         "runtimeProgram.entities[].beamRamp.warmupTicks",
@@ -91,7 +92,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "sustain_projectile_mana",
+      "capability": "sustain_mana",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::PaySustainedMana",
       "outputs": [
@@ -104,7 +105,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_lash_geometry",
+      "capability": "lash_geometry",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion|Content/Projectiles/GeneratedProjectile.ComposableMotion.Geometry.cs::BuildLashPoints",
       "outputs": [
@@ -123,7 +124,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_aim",
+      "capability": "set_aim",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
@@ -134,7 +135,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "attach_projectile",
+      "capability": "attach",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
@@ -159,7 +160,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_front_arm_pose",
+      "capability": "front_arm_pose",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
@@ -195,7 +196,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "orbit_projectile",
+      "capability": "orbit",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
@@ -213,7 +214,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "seek_projectile",
+      "capability": "seek",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
@@ -234,7 +235,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_return_trigger",
+      "capability": "return_when",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::ApplyMotionReturnTrigger|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::OnTileCollide",
       "outputs": [
@@ -248,7 +249,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_arrival",
+      "capability": "kill_on_arrival",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
@@ -267,7 +268,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_proximity_action",
+      "capability": "proximity_action",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
@@ -284,7 +285,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "accelerate_projectile_vertical",
+      "capability": "accelerate_y",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
@@ -312,7 +313,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "scale_projectile_velocity",
+      "capability": "scale_velocity",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
       "outputs": [
@@ -327,7 +328,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_rotation",
+      "capability": "rotate_sprite",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::ApplyMotionRotation",
       "outputs": [
@@ -343,7 +344,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "oscillate_projectile_velocity",
+      "capability": "oscillate_velocity",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
@@ -360,7 +361,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "add_projectile_visual_scale",
+      "capability": "add_sprite_scale",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
@@ -375,7 +376,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_opacity",
+      "capability": "set_opacity",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
@@ -389,7 +390,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "configure_item_stats",
+      "capability": "item_stats",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "outputs": [
@@ -412,7 +413,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "configure_item_use",
+      "capability": "item_use",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.Use.cs::CanUseItem|Content/Items/GeneratedItem.UseStyle.cs::UseStyle",
       "outputs": [
@@ -422,14 +423,12 @@
         "gameplay.holdoutOffsetX",
         "gameplay.holdoutOffsetY",
         "gameplay.handPose",
-        "gameplay.releaseTiming",
         "runtimeProgram.itemUse.configured",
         "runtimeProgram.itemUse.useStyle",
         "runtimeProgram.itemUse.hideUseGraphic",
         "runtimeProgram.itemUse.disableMeleeHitbox",
         "runtimeProgram.itemUse.channel",
         "runtimeProgram.itemUse.handPose",
-        "runtimeProgram.itemUse.releaseTiming",
         "runtimeProgram.itemUse.holdoutOffsetX",
         "runtimeProgram.itemUse.holdoutOffsetY"
       ]
@@ -437,7 +436,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "collect_seeds_from_grass",
+      "capability": "collect_seeds",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Systems/Utility/GeneratedInventorySeedSystem.cs::HasItem",
       "outputs": [
@@ -448,7 +447,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "configure_item_contact_hitbox",
+      "capability": "item_hitbox",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.Use.cs::UseItemHitbox/OnHitNPC",
       "outputs": [
@@ -459,7 +458,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "configure_weapon_ammo",
+      "capability": "weapon_ammo",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem|Content/Items/GeneratedItem.Use.cs::ApplyActiveUseProjection/Shoot",
       "outputs": [
@@ -474,7 +473,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "configure_vanilla_ammo_item",
+      "capability": "ammo_item",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Models/Contracts/TerrariaRuntimeVocabulary.cs::ResolveAmmoCategory|Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "outputs": [
@@ -503,7 +502,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "apply_vanilla_buff_on_use",
+      "capability": "native_buff_on_use",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.Use.cs::ApplyItemEffects",
       "outputs": [
@@ -517,10 +516,28 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "apply_generated_buff_on_use",
+      "capability": "generated_buff_on_use",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.Use.cs::ApplyItemEffects",
       "outputs": [
+        "gameplay.generatedBuff.playerEffect.condition",
+        "gameplay.generatedBuff.playerEffect.fishingPowerPoints",
+        "gameplay.generatedBuff.playerEffect.preventLineBreak",
+        "gameplay.generatedBuff.playerEffect.allowLavaFishing",
+        "gameplay.generatedBuff.playerEffect.revealHookedCatch",
+        "gameplay.generatedBuff.playerEffect.extraCrateChancePercent",
+        "gameplay.generatedBuff.playerEffect.itemPickupRangePx",
+        "gameplay.generatedBuff.playerEffect.heartPickupRangePx",
+        "gameplay.generatedBuff.playerEffect.manaPickupRangePx",
+        "gameplay.generatedBuff.playerEffect.coinPickupRangePx",
+        "gameplay.generatedBuff.playerEffect.highlightDanger",
+        "gameplay.generatedBuff.playerEffect.highlightCreatures",
+        "gameplay.generatedBuff.playerEffect.nightVision",
+        "gameplay.generatedBuff.playerEffect.healingPotionCooldownReductionPercent",
+        "gameplay.generatedBuff.playerEffect.healingPotionCooldownReductionTicks",
+        "gameplay.generatedBuff.playerEffect.autoManaPotionBelowPercent",
+        "gameplay.generatedBuff.playerEffect.healingPotionCooldownOnHitReductionTicks",
+        "gameplay.generatedBuff.playerEffect.hurtInvulnerabilityBonusTicks",
         "gameplay.generatedBuff.durationTicks",
         "gameplay.generatedBuff.exhaustionTicks",
         "gameplay.generatedBuff.miningSpeedMultiplier",
@@ -531,12 +548,32 @@
         "gameplay.generatedBuff.jumpBoost",
         "gameplay.generatedBuff.manaRegen",
         "gameplay.generatedBuff.lifeRegen",
+        "gameplay.generatedBuff.lifeRegenCondition",
+        "gameplay.generatedBuff.treasureSenseCondition",
         "gameplay.generatedBuff.combat.defensePoints",
         "gameplay.generatedBuff.combat.attackSpeedPercent",
         "gameplay.generatedBuff.combat.critChancePoints",
         "gameplay.generatedBuff.combat.damagePercent",
         "gameplay.generatedBuff.combat.damageClass",
         "runtimeProgram.effectGroups[].id",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.condition",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.fishingPowerPoints",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.preventLineBreak",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.allowLavaFishing",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.revealHookedCatch",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.extraCrateChancePercent",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.itemPickupRangePx",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.heartPickupRangePx",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.manaPickupRangePx",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.coinPickupRangePx",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.highlightDanger",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.highlightCreatures",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.nightVision",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.healingPotionCooldownReductionPercent",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.healingPotionCooldownReductionTicks",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.autoManaPotionBelowPercent",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.healingPotionCooldownOnHitReductionTicks",
+        "runtimeProgram.effectGroups[].generatedBuff.playerEffect.hurtInvulnerabilityBonusTicks",
         "runtimeProgram.effectGroups[].generatedBuff.durationTicks",
         "runtimeProgram.effectGroups[].generatedBuff.exhaustionTicks",
         "runtimeProgram.effectGroups[].generatedBuff.miningSpeedMultiplier",
@@ -547,6 +584,8 @@
         "runtimeProgram.effectGroups[].generatedBuff.jumpBoost",
         "runtimeProgram.effectGroups[].generatedBuff.manaRegen",
         "runtimeProgram.effectGroups[].generatedBuff.lifeRegen",
+        "runtimeProgram.effectGroups[].generatedBuff.lifeRegenCondition",
+        "runtimeProgram.effectGroups[].generatedBuff.treasureSenseCondition",
         "runtimeProgram.effectGroups[].generatedBuff.combat.defensePoints",
         "runtimeProgram.effectGroups[].generatedBuff.combat.attackSpeedPercent",
         "runtimeProgram.effectGroups[].generatedBuff.combat.critChancePoints",
@@ -557,7 +596,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "refresh_generated_effect_group_while_held",
+      "capability": "refresh_held_effect",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.Use.cs::HoldItem",
       "outputs": [
@@ -567,7 +606,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "configure_tool",
+      "capability": "tool_stats",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "outputs": [
@@ -580,7 +619,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "configure_tile_placement",
+      "capability": "place_tile",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "outputs": [
@@ -592,7 +631,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "configure_wall_placement",
+      "capability": "place_wall",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
       "outputs": [
@@ -604,7 +643,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "present_placed_item_sprite",
+      "capability": "placed_sprite",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Models/Contracts/RuntimeProgramSpec.cs::Validate",
       "outputs": [
@@ -633,7 +672,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "add_placed_light",
+      "capability": "placed_light",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Systems/Placement/GeneratedPlacementLedgerSystem.PlacedLight.cs::TryGetPlacedLight",
       "outputs": [
@@ -653,7 +692,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "enable_placed_vfx",
+      "capability": "placed_vfx",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Systems/Placement/GeneratedPlacementLedgerSystem.PlacedVfx.cs::TryGetPlacedVfxFrame",
       "outputs": [
@@ -673,7 +712,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "require_use_condition",
+      "capability": "use_condition",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.Use.cs::UseBlockedReason",
       "outputs": [
@@ -686,7 +725,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "add_hold_light",
+      "capability": "held_light",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.Use.cs::HoldItem",
       "outputs": [
@@ -697,7 +736,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "move_player_on_use",
+      "capability": "blink_on_use",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.Use.cs::ApplyItemEffects",
       "outputs": [
@@ -733,11 +772,32 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "configure_accessory",
+      "capability": "accessory",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.Equipment.cs::UpdateAccessory",
       "outputs": [
         "accessory.enabled",
+        "accessory.playerEffect.condition",
+        "accessory.playerEffect.fishingPowerPoints",
+        "accessory.playerEffect.preventLineBreak",
+        "accessory.playerEffect.allowLavaFishing",
+        "accessory.playerEffect.revealHookedCatch",
+        "accessory.playerEffect.extraCrateChancePercent",
+        "accessory.playerEffect.itemPickupRangePx",
+        "accessory.playerEffect.heartPickupRangePx",
+        "accessory.playerEffect.manaPickupRangePx",
+        "accessory.playerEffect.coinPickupRangePx",
+        "accessory.playerEffect.highlightDanger",
+        "accessory.playerEffect.highlightCreatures",
+        "accessory.playerEffect.nightVision",
+        "accessory.playerEffect.healingPotionCooldownReductionPercent",
+        "accessory.playerEffect.healingPotionCooldownReductionTicks",
+        "accessory.playerEffect.autoManaPotionBelowPercent",
+        "accessory.playerEffect.healingPotionCooldownOnHitReductionTicks",
+        "accessory.playerEffect.hurtInvulnerabilityBonusTicks",
+        "accessory.lifeRegenCondition",
+        "accessory.treasureSense",
+        "accessory.treasureSenseCondition",
         "accessory.defense",
         "accessory.maxLife",
         "accessory.maxMana",
@@ -774,13 +834,34 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "configure_armor",
+      "capability": "armor",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.Equipment.cs::UpdateEquip",
       "outputs": [
         "armor.enabled",
         "armor.slot",
         "armor.setKey",
+        "armor.playerEffect.condition",
+        "armor.playerEffect.fishingPowerPoints",
+        "armor.playerEffect.preventLineBreak",
+        "armor.playerEffect.allowLavaFishing",
+        "armor.playerEffect.revealHookedCatch",
+        "armor.playerEffect.extraCrateChancePercent",
+        "armor.playerEffect.itemPickupRangePx",
+        "armor.playerEffect.heartPickupRangePx",
+        "armor.playerEffect.manaPickupRangePx",
+        "armor.playerEffect.coinPickupRangePx",
+        "armor.playerEffect.highlightDanger",
+        "armor.playerEffect.highlightCreatures",
+        "armor.playerEffect.nightVision",
+        "armor.playerEffect.healingPotionCooldownReductionPercent",
+        "armor.playerEffect.healingPotionCooldownReductionTicks",
+        "armor.playerEffect.autoManaPotionBelowPercent",
+        "armor.playerEffect.healingPotionCooldownOnHitReductionTicks",
+        "armor.playerEffect.hurtInvulnerabilityBonusTicks",
+        "armor.lifeRegenCondition",
+        "armor.treasureSense",
+        "armor.treasureSenseCondition",
         "armor.defense",
         "armor.maxLife",
         "armor.maxMana",
@@ -822,7 +903,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "add_equipment_damage_bonus",
+      "capability": "equipment_damage_bonus",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.Equipment.cs::UpdateAccessory/UpdateEquip/UpdateArmorSet",
       "outputs": [
@@ -846,7 +927,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "configure_spawn",
+      "capability": "spawn",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity/Configure",
       "outputs": [
@@ -868,7 +949,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_concurrency",
+      "capability": "projectile_limit",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::SpawnRuntimeEntity",
       "outputs": [
@@ -878,7 +959,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_sentry",
+      "capability": "sentry",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure|Content/Items/GeneratedItem.Use.cs::ApplyActiveUseProjection",
       "outputs": [
@@ -888,7 +969,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_descendant_concurrency",
+      "capability": "descendant_limit",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure|Common/Runtime/RuntimeSpawnBudget.cs::Reserve",
       "outputs": [
@@ -898,7 +979,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_damage",
+      "capability": "projectile_damage",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",
       "outputs": [
@@ -912,7 +993,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_lifetime",
+      "capability": "projectile_lifetime",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",
       "outputs": [
@@ -922,7 +1003,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_hitbox",
+      "capability": "projectile_hitbox",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",
       "outputs": [
@@ -935,7 +1016,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_hitbox_curve",
+      "capability": "hitbox_curve",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::ModifyDamageHitbox|Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyHitboxCurveVisual",
       "outputs": [
@@ -951,7 +1032,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_turn_modifier",
+      "capability": "turn_velocity",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
       "outputs": [
@@ -986,7 +1067,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_homing_modifier",
+      "capability": "homing",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyHomingModifier",
       "outputs": [
@@ -1005,7 +1086,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "attract_npcs_while_active",
+      "capability": "attract_npcs",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyNpcAttraction",
       "outputs": [
@@ -1025,7 +1106,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_visual_scale_curve",
+      "capability": "sprite_scale_curve",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyVisualScaleCurve",
       "outputs": [
@@ -1058,7 +1139,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "set_projectile_collision",
+      "capability": "projectile_collision",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::OnTileCollide",
       "outputs": [
@@ -1391,7 +1472,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "spawn_entity_on_event",
+      "capability": "spawn_on_event",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
       "outputs": [
@@ -1413,7 +1494,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "spawn_entity_from_hit_target",
+      "capability": "spawn_at_hit",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
       "outputs": [
@@ -1439,7 +1520,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "select_targets_and_emit_on_event",
+      "capability": "emit_to_targets_on_event",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction/PlanTargetEmissions/SelectTargetsAndEmit",
       "outputs": [
@@ -1459,7 +1540,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "apply_generated_buff_on_event",
+      "capability": "generated_buff_on_event",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
       "outputs": [
@@ -1474,7 +1555,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "apply_npc_effect_on_event",
+      "capability": "npc_effect_on_event",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
       "outputs": [
@@ -1593,6 +1674,20 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "reduce_heal_cooldown_on_event",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "outputs": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].cooldownReductionTicks",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "heal_owner_on_event",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
@@ -1625,7 +1720,7 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
-      "capability": "emit_light_while_active",
+      "capability": "projectile_light",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::AI",
       "outputs": [
@@ -1653,6 +1748,8 @@
         "runtimeProgram.bindings[].stackCost",
         "runtimeProgram.bindings[].contactDamage",
         "runtimeProgram.bindings[].action.effectGroupId",
+        "runtimeProgram.bindings[].action.fishing.power",
+        "runtimeProgram.bindings[].action.fishing.castSpeed",
         "runtimeProgram.entities[].id",
         "runtimeProgram.entities[].kind",
         "runtimeProgram.primaryEntityId"
@@ -1663,6 +1760,8 @@
         "runtimeProgram.bindings[].usePolicy.action.kind",
         "runtimeProgram.bindings[].usePolicy.action.targetId",
         "runtimeProgram.bindings[].usePolicy.action.effectGroupId",
+        "runtimeProgram.bindings[].usePolicy.action.fishing.power",
+        "runtimeProgram.bindings[].usePolicy.action.fishing.castSpeedPxPerTick",
         "runtimeProgram.bindings[].usePolicy.stackCost",
         "runtimeProgram.bindings[].usePolicy.contactDamage",
         "runtimeProgram.entities[].id",
@@ -1823,14 +1922,12 @@
         "gameplay.holdoutOffsetX",
         "gameplay.holdoutOffsetY",
         "gameplay.handPose",
-        "gameplay.releaseTiming",
         "runtimeProgram.itemUse.configured",
         "runtimeProgram.itemUse.useStyle",
         "runtimeProgram.itemUse.hideUseGraphic",
         "runtimeProgram.itemUse.disableMeleeHitbox",
         "runtimeProgram.itemUse.channel",
         "runtimeProgram.itemUse.handPose",
-        "runtimeProgram.itemUse.releaseTiming",
         "runtimeProgram.itemUse.holdoutOffsetX",
         "runtimeProgram.itemUse.holdoutOffsetY",
         "gameplay.collectSeedsFromGrass",
@@ -1845,6 +1942,24 @@
         "gameplay.potion",
         "gameplay.extraBuffs[].buffCode",
         "gameplay.extraBuffs[].buffTime",
+        "gameplay.generatedBuff.playerEffect.condition",
+        "gameplay.generatedBuff.playerEffect.fishingPowerPoints",
+        "gameplay.generatedBuff.playerEffect.preventLineBreak",
+        "gameplay.generatedBuff.playerEffect.allowLavaFishing",
+        "gameplay.generatedBuff.playerEffect.revealHookedCatch",
+        "gameplay.generatedBuff.playerEffect.extraCrateChancePercent",
+        "gameplay.generatedBuff.playerEffect.itemPickupRangePx",
+        "gameplay.generatedBuff.playerEffect.heartPickupRangePx",
+        "gameplay.generatedBuff.playerEffect.manaPickupRangePx",
+        "gameplay.generatedBuff.playerEffect.coinPickupRangePx",
+        "gameplay.generatedBuff.playerEffect.highlightDanger",
+        "gameplay.generatedBuff.playerEffect.highlightCreatures",
+        "gameplay.generatedBuff.playerEffect.nightVision",
+        "gameplay.generatedBuff.playerEffect.healingPotionCooldownReductionPercent",
+        "gameplay.generatedBuff.playerEffect.healingPotionCooldownReductionTicks",
+        "gameplay.generatedBuff.playerEffect.autoManaPotionBelowPercent",
+        "gameplay.generatedBuff.playerEffect.healingPotionCooldownOnHitReductionTicks",
+        "gameplay.generatedBuff.playerEffect.hurtInvulnerabilityBonusTicks",
         "gameplay.generatedBuff.durationTicks",
         "gameplay.generatedBuff.exhaustionTicks",
         "gameplay.generatedBuff.miningSpeedMultiplier",
@@ -1855,6 +1970,8 @@
         "gameplay.generatedBuff.jumpBoost",
         "gameplay.generatedBuff.manaRegen",
         "gameplay.generatedBuff.lifeRegen",
+        "gameplay.generatedBuff.lifeRegenCondition",
+        "gameplay.generatedBuff.treasureSenseCondition",
         "gameplay.generatedBuff.combat.defensePoints",
         "gameplay.generatedBuff.combat.attackSpeedPercent",
         "gameplay.generatedBuff.combat.critChancePoints",
@@ -1875,6 +1992,27 @@
         "gameplay.mobilityCooldownTicks",
         "gameplay.mobilitySafeTileOnly",
         "accessory.enabled",
+        "accessory.playerEffect.condition",
+        "accessory.playerEffect.fishingPowerPoints",
+        "accessory.playerEffect.preventLineBreak",
+        "accessory.playerEffect.allowLavaFishing",
+        "accessory.playerEffect.revealHookedCatch",
+        "accessory.playerEffect.extraCrateChancePercent",
+        "accessory.playerEffect.itemPickupRangePx",
+        "accessory.playerEffect.heartPickupRangePx",
+        "accessory.playerEffect.manaPickupRangePx",
+        "accessory.playerEffect.coinPickupRangePx",
+        "accessory.playerEffect.highlightDanger",
+        "accessory.playerEffect.highlightCreatures",
+        "accessory.playerEffect.nightVision",
+        "accessory.playerEffect.healingPotionCooldownReductionPercent",
+        "accessory.playerEffect.healingPotionCooldownReductionTicks",
+        "accessory.playerEffect.autoManaPotionBelowPercent",
+        "accessory.playerEffect.healingPotionCooldownOnHitReductionTicks",
+        "accessory.playerEffect.hurtInvulnerabilityBonusTicks",
+        "accessory.lifeRegenCondition",
+        "accessory.treasureSense",
+        "accessory.treasureSenseCondition",
         "accessory.defense",
         "accessory.maxLife",
         "accessory.maxMana",
@@ -1909,6 +2047,27 @@
         "armor.enabled",
         "armor.slot",
         "armor.setKey",
+        "armor.playerEffect.condition",
+        "armor.playerEffect.fishingPowerPoints",
+        "armor.playerEffect.preventLineBreak",
+        "armor.playerEffect.allowLavaFishing",
+        "armor.playerEffect.revealHookedCatch",
+        "armor.playerEffect.extraCrateChancePercent",
+        "armor.playerEffect.itemPickupRangePx",
+        "armor.playerEffect.heartPickupRangePx",
+        "armor.playerEffect.manaPickupRangePx",
+        "armor.playerEffect.coinPickupRangePx",
+        "armor.playerEffect.highlightDanger",
+        "armor.playerEffect.highlightCreatures",
+        "armor.playerEffect.nightVision",
+        "armor.playerEffect.healingPotionCooldownReductionPercent",
+        "armor.playerEffect.healingPotionCooldownReductionTicks",
+        "armor.playerEffect.autoManaPotionBelowPercent",
+        "armor.playerEffect.healingPotionCooldownOnHitReductionTicks",
+        "armor.playerEffect.hurtInvulnerabilityBonusTicks",
+        "armor.lifeRegenCondition",
+        "armor.treasureSense",
+        "armor.treasureSenseCondition",
         "armor.defense",
         "armor.maxLife",
         "armor.maxMana",

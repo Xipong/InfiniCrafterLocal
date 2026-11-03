@@ -5,7 +5,7 @@
 
 Visual Director выбирает внешний вид принятого gameplay, не mechanics/classifier outputs. Одна физическая вещь имеет один visual project; отдельный объект — отдельный. `item_body` всегда требует отдельный inventory PNG: единственный missing-mode Fix допускается только при уже непустых `prompt`, `silhouette`, `visualIdentity` и добавляет `baked_sprite` с audit. Без описания — Visual Repair/RED, не artwork из кода.
 
-Источник ordinary/Repair schema и dispatch — [visual_generation_pipeline.py](../../../LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py); projects/processing role — [visual_asset_plan.py](../../../LocalGenerator/infini_local/pipelines/visual_asset_plan.py). Director root: `schema`, `item`, одна `entities` запись на runtime entity, optional advisory текст `animationPlan` (не основание для Repair); `equipOverlay` обязателен только для объявленной equipment потребности. Root `item` — единственный автор внешности тела предмета: его `prompt`, `silhouette`, `visualIdentity` не дублируются в `entities`. Существующий projector выбирает этот root по `visualProjectRef=item`, не восстанавливает копии в `visualKit`. Поэтому Repair root-текста не открывает permissions на entity rows. Отдельный baked entity по-прежнему обязан полностью описать собственный проект; missing/invalid root-дизайн остаётся RED. Сохранённые delivered DTO и их presentation не мигрируются.
+Источник ordinary/Repair schema и dispatch — [Visual contract](../../../LocalGenerator/infini_local/pipelines/visual/contract.py); projects/processing role — [visual_asset_plan.py](../../../LocalGenerator/infini_local/pipelines/visual/assets.py). Director root: `schema`, `item`, одна `entities` запись на runtime entity, optional advisory текст `animationPlan` (не основание для Repair); `equipOverlay` обязателен только для объявленной equipment потребности. Root `item` — единственный автор внешности тела предмета: его `prompt`, `silhouette`, `visualIdentity` не дублируются в `entities`. Существующий projector выбирает этот root по `visualProjectRef=item`, не восстанавливает копии в `visualKit`. Поэтому Repair root-текста не открывает permissions на entity rows. Отдельный baked entity по-прежнему обязан полностью описать собственный проект; missing/invalid root-дизайн остаётся RED. Сохранённые delivered DTO и их presentation не мигрируются.
 
 | Entity branch | Обязательная Visual запись |
 |---|---|
@@ -23,7 +23,7 @@ Fresh Visual v2 item требует `prompt`, `negativePrompt`, `silhouette`, `v
 
 Processing role отделена от произвольного entity ID: identity вроде `entity_<id>` не является geometry role. Directional convention обязана соответствовать renderer: +X canonicalization нельзя применять поверх native +Y rotation; PCA/taper не semantic detector носа/рукояти. Authored design/palette/silhouette не переписываются name/category/regex heuristics.
 
-Item/equipment сохраняют hard pixel alpha, impact/effect — soft alpha. Straight RGBA PNG premultiplies только при runtime upload, не вместо bake policy. Final PNG transparent; raw backend input может требовать solid chroma key по [sprite_contracts.py](../../../LocalGenerator/infini_local/pipelines/sprite_contracts.py). Prompt/keyer/retry используют один mapping (white/black/cyan и retained aliases); magenta-only spill не применяется к другому key, unknown key диагностируется. Нельзя путать raw solid-key background с непрозрачным final PNG или восстанавливать arbitrary alpha, уже сплющенную provider на opaque фон.
+Item/equipment сохраняют hard pixel alpha, impact/effect — soft alpha. Straight RGBA PNG premultiplies только при runtime upload, не вместо bake policy. Final PNG transparent; raw backend input может требовать solid chroma key по [sprite_contracts.py](../../../LocalGenerator/infini_local/core/images/contracts.py). Prompt/keyer/retry используют один mapping (white/black/cyan и retained aliases); magenta-only spill не применяется к другому key, unknown key диагностируется. Нельзя путать raw solid-key background с непрозрачным final PNG или восстанавливать arbitrary alpha, уже сплющенную provider на opaque фон.
 
 <a id="size-axis"></a>
 ## Base world size, final-PNG axis и независимый canvas
@@ -53,11 +53,42 @@ Snapshot/network `Pose.Scale`, Item.scale, Projectile.scale, collision, hitbox/t
 
 Reuse гарантирует одинаковые pixels и **base** frame extent, не принудительное равенство final held/world/body: с нейтральными caller hooks equality held/body требует `G == clamp(D*E,.1,8)` либо `G == D*E*curveScale(active age)` при явном mirror. W не переносится на held, G не дописывается в projectile. Accepted G/D/gameplay не менять ради арта. Mirror относится к базовому body; VFX body copies сохраняют собственные опубликованные scale rules.
 
+### Projectile body-forward и native angle boundary
+
+`SpritePresentation.ProjectileNativeRotation/ProjectileBodyAngle` — единственный
+владелец преобразования угла между native storage и смысловым body-forward.
+Обычные generated movement drivers сохраняют native `body + π/2`; explicit
+`rotation` и legacy spin 14/16/17 хранят body-forward непосредственно. Для любого
+main PNG, включая spin/whip, renderer вычитает declared PNG forward axis с учётом
+flip. Эта ось описывает пиксели, не меняет полёт, aim или collider.
+
+Новый initial contract: body-forward каждого нового physical source равен world
+angle 0 (вправо), до первого AI/callback. Дальше его меняет принятый driver или
+явный rotation component; неподвижность не означает автоматическое слежение за
+aim. Native entity state инициализируется один раз, в том числе при первой remote
+hydration. Повторная metadata hydration того же source не сбрасывает угол или
+потраченный pierce; новый source token снова получает initial pose.
+
+Это намеренное изменение presentation, не обещание pixel-совместимости старых
+предметов. В частности, stationary main PNG больше не получает скрытые −90°.
+Dedicated impact/asset stamps и `body_segment.axis=rotation` сохраняют свой
+**literal raw native angle** contract: у обычного source начальный raw angle теперь
+π/2, поэтому их начальная поза тоже меняется. У движущегося ordinary body после AI
+raw convention прежняя; explicit spin также не переопределён. `body_segment` —
+только draw geometry: gameplay collision по-прежнему читает AABB либо реальные
+beam/lash points, а направления event-spawn — gameplay aim/velocity/initial axis.
+
+Native SyncProjectile и текущий ExtraAI не передают rotation. First stationary
+remote pose теперь инициализируется правильно; это **не** доставка произвольного
+исторического угла late-joining peer: например, последний угол уже остановившегося
+body из payload восстановить нельзя. Сетевой формат не менялся; полноценная
+multiplayer-сессия и произвольные сторонние GlobalProjectile hooks здесь не доказаны.
+
 ### Read-only Director/Repair context и visibility
 
 Оба actual packets передают exact accepted `gameplay.itemScale/width/height`, `itemUse`, `itemContact` when present, bindings, item/primary IDs/owner и полные movement/controller params, hitbox D/hitboxScale. Formulas и bake-fill/padding берутся в том же packet; fill facts проецируются из `sprite_contract_for` для eligible canvas/processing roles, не выбирают world size и не меняют image pipeline.
 
-Held-root visibility привязана к existing accepted `itemUse` и presence root R: `hideUseGraphic=true` с empty/omitted `releaseTiming` скрывает custom root только в declared-size presentation; без R сохраняется legacy keep. `immediate` hides; explicit `on_release/after_charge` keep while use is active, **не новая scheduling/release mechanics**. Packet reuse-ит exact canonical registry descriptions; Visual не переписывает эти hint/flag.
+Held-root visibility имеет одного владельца: accepted `itemUse.hideUseGraphic` проецируется в native `Item.noUseGraphic`. Никакого отдельного custom-root visibility override или второго held renderer нет. Hidden projectile/floating bodies сохраняют собственные accepted visual/motion owners.
 
 <a id="metadata"></a>
 ## Optional metadata
@@ -110,24 +141,38 @@ Visual Repair root использует partial `itemPatch|null`, условно
 
 `test_visual_presentation_metadata.py`: strict values, refusal of foreign color metadata, schema transport/downgrade behavior, Director dispatch/conditional Repair, frozen absences/siblings, delivery. Existing held/equipment fixture extensions in `EngineRuntimeChecks`: real DTO full/cache/network/save/registry routes, facing/gravity grip DrawData and FNA CPU submission, all fixed mounts/orbit through real player transforms. Texture shells and intercepted GPU flushes are headless seams, not in-game rendering.
 
-Условные проекты/actual packets/pixels защищают `test_vfx_packet_contracts.py`, `test_vfx_frozen_boundary_contracts.py`, `test_sprite_render_contracts.py`, `test_visual_vfx_prompt_prefix.py`. C# consumers — [VisualSpec](../../../ModSources/InfiniCrafterLocal/Common/Models/Contracts/GeneratedItemData.Model.cs), [held layer](../../../ModSources/InfiniCrafterLocal/Common/Players/GeneratedHeldItemDrawLayer.cs), [equip layer](../../../ModSources/InfiniCrafterLocal/Common/Players/GeneratedEquipOverlayDrawLayer.cs). Результаты старых проходов — [history](../../archive/VISUAL_AUDIT_HISTORY_RU.md#presentation); актуальные команды/границы — [test owners](../../development/TESTING_RU.md).
+Условные проекты/actual packets/pixels защищают `test_vfx_packet_contracts.py`, `test_vfx_frozen_boundary_contracts.py`, `test_sprite_render_contracts.py`, `test_visual_vfx_prompt_prefix.py`. C# consumers — [VisualSpec](../../../ModSources/InfiniCrafterLocal/Common/Models/Contracts/GeneratedItemData.Model.cs), [held layer](../../../ModSources/InfiniCrafterLocal/Common/Players/GeneratedHeldItemPresentation.cs), [equip layer](../../../ModSources/InfiniCrafterLocal/Common/Players/GeneratedEquipOverlayDrawLayer.cs). Результаты старых проходов — [history](../../archive/VISUAL_AUDIT_HISTORY_RU.md#presentation); актуальные команды/границы — [test owners](../../development/TESTING_RU.md).
 
-### Native held contact and dropped support
+### Single native held owner
 
-The held root renderer projects the native use-style pose into the authored grip's
-contact space. An enabled composite front arm uses the engine's front-hand getter;
-ordinary shoot uses the native proxy frame's center translation; swing/thrust retain
-their native item anchor. Draw-set translation, native layer/full-player transforms,
-explicit holdout offsets, facing and gravity remain independent. This is a technical
-pose correction, not a new arm pose or a reinterpretation of projectile `reach`.
-The held-presentation packet is version **6**: its location pair carries resolved
-contact relative to `player.position`. The remote renderer reconstructs it from the
-owner's current position, so movement/interpolation between packets does not leave
-the PNG at an old world coordinate. Producer and local draw use the same native
-contact projection; subsequent draw-set/player transforms remain unchanged.
-Versions 4 (raw item anchor) and 5 (absolute resolved contact) are rejected rather
-than reinterpreted; server and clients must run the same mod version. This
-presentation packet never controls gameplay.
+Ordinary visible `item_body` is rendered by Terraria `HeldItem` through the existing
+`GeneratedItem.ModifyItemDraw` hook. The hook replaces only per-instance artwork
+and its centered canvas calibration. Native position, rotation, facing/gravity,
+arm pose, draw ordering and `noUseGraphic` gate remain authoritative. There is no
+separate grip-contact renderer, `heldAlignment` choice or visibility alias.
+
+For native frame F and actual artwork A, let k=max(A)/max(F). The artwork origin is
+`(nativeOrigin - F/2)*k + A/2`; its scale is the native scale times
+`renderSizePx/max(A)`. Source rectangles identify frame-local coordinates; their
+atlas offset is not an additional origin. This uniform mapping does not stretch
+non-square artwork or infer its handle. Draw the art for the accepted native pose:
+PNG `grip` and `forwardAngleDegrees` remain truthful metadata for composable
+projectile/reuse adapters, not an instruction to reposition this ordinary body.
+No hidden axis rotation, per-weapon table or anatomical contact guarantee exists.
+
+`hideUseGraphic` is the only authored item-body visibility flag. Hidden spear,
+rapier and independently posed projectile bodies are not resurrected by a second
+layer. Explicit arm gestures remain native gameplay intent. The discarded
+`customHeldSprite`/`releaseTiming` and `heldAlignment` choices are not accepted by
+the new strict contract; old item migration is not provided by this API reset.
+
+Held history observes an unambiguous actual native body entry before coordinate
+transforms and samples that entry after native transforms. A missing or duplicate
+witness is skipped, never replaced with a guessed hand point. Image readiness and
+canonical definition identity still fail closed. Native player use-state, not a
+custom pose cache, owns local and remote animation.
+
+### Dropped support
 
 Dropped sprites retain their complete PNG, declared frame size, caller rotation and
 scale, native collider and authored draw offsets. The selected texture cache measures

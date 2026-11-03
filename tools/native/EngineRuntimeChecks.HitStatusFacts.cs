@@ -21,7 +21,9 @@ internal static partial class EngineRuntimeChecks
         byte[] il = typeof(Projectile).GetMethod(nameof(Projectile.StatusNPC))!.GetMethodBody()!.GetILAsByteArray()!;
         string certificate = Convert.ToHexString(SHA256.HashData(il)).ToLowerInvariant();
         string moduleVersionId = typeof(Projectile).Module.ModuleVersionId.ToString();
-        string catalogKey = certificate + ":" + moduleVersionId;
+        string catalogKey = (string?)typeof(GeneratorClient).GetMethod("AuditedNativeCertificate", BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, new object[] { certificate + ":" + moduleVersionId, "hit_status" })
+            ?? throw new InvalidOperationException("Loaded semantic status contract is not certified");
         Equal(true, NativeHitStatusCatalog.Sources.ContainsKey(catalogKey),
             "native test dependency must exercise a certified source, not silently skip coverage");
         foreach (var (projectileType, buffType, minimum, maximum) in new[] {
@@ -35,10 +37,7 @@ internal static partial class EngineRuntimeChecks
             Equal(null, capture.Invoke(null, new object?[] { projectile, "unverified-method", moduleVersionId }), "unknown native code must not claim status facts");
             Equal(null, capture.Invoke(null, new object?[] { projectile, certificate, Guid.Empty.ToString() }), "identical method bytes in an unknown module cannot claim facts");
             object? observation = capture.Invoke(null, new object?[] { projectile, certificate, moduleVersionId });
-            if (NativeHitStatusCatalog.Sources.ContainsKey(catalogKey))
-                Equal(true, observation is not null, "verified release must expose its certified facts");
-            // Other native versions deliberately decline, not an extrapolated fact.
-            if (observation is null) continue;
+            Equal(true, observation is not null, "verified semantic contract must expose its certified facts");
             var fact = JsonSerializer.SerializeToElement(observation);
             var effect = fact.GetProperty("effects")[0];
             Equal(buffType, effect.GetProperty("buffId").GetInt32(), "exact loaded buff identifier");
@@ -53,10 +52,7 @@ internal static partial class EngineRuntimeChecks
             Equal(CanonicalParentFactJson(fact), CanonicalParentFactJson(delivered), "native certificate and limits delivered intact to generator");
             Equal(0, item.buffType, "NPC-hit fact does not rewrite native self-use buff");
             Equal(-1, Array.IndexOf(Terraria.Main.npc[0].buffType, buffType), "craft capture does not execute hit effects");
-            var dumpCapture = typeof(InfiniDumpCommand).GetMethod("ProjectileRawSnapshot", BindingFlags.NonPublic | BindingFlags.Static)!;
-            object dump = dumpCapture.Invoke(null, new object[] { projectileType, item.shootSpeed, "item.shoot",
-                itemType, item.Name, "literal-source-name", item.ammo, item.useAmmo, item.damage, "magic",
-                item.shoot, item.shootSpeed, item.knockBack })!;
+            var dump = InfiniDumpCommand.CaptureProjectileSnapshot(projectileType);
             var dumpFact = JsonSerializer.SerializeToElement(dump).GetProperty("onHitStatusReference");
             Equal(CanonicalParentFactJson(fact), CanonicalParentFactJson(dumpFact), "offline dump and live request share exact source certificate and limits");
             for (int trial = 0; trial < 16; trial++)

@@ -1,18 +1,17 @@
 """Registry-owned unit explanations at real Author/Repair request boundaries."""
 from __future__ import annotations
 
-from prompt_packet_helpers import request_dossier, dossier_text
-
 import copy
 import json
 import socket
 
+import infini_local.pipelines.transport.http as transport_http
 import pytest
-
-from infini_local.pipelines import llm_admission
 from infini_local.core import llm_config
-from infini_local.pipelines import llm_authoring_pipeline as author
-from infini_local.pipelines import llm_transport as transport
+from infini_local.pipelines.author import request as author
+from infini_local.pipelines.transport import admission as llm_admission
+from infini_local.pipelines.transport import client as transport
+from prompt_packet_helpers import dossier_text, request_dossier
 
 
 @pytest.fixture(autouse=True)
@@ -76,10 +75,10 @@ def test_source_wire_glossary_reads_nested_velocity_with_exact_entity_update_con
     before = json.dumps(source, ensure_ascii=False)
     request, packet = _author_request(monkeypatch, mode, source)
     glossary = packet["sourceWireUnits"]
-    spawn = next(row for row in glossary["scopes"] if row["fn"] == "configure_spawn"
+    spawn = next(row for row in glossary["scopes"] if row["fn"] == "spawn"
                  and row["source"] == "raw.generatedParent.runtimeProgram.entities[].spawn")
     minimum = spawn["fields"]["velocityDistribution.minSpeedPxPerUpdate"]
-    assert "velocity.radial.minSpeedBlocksPerSecond" in minimum[0]
+    assert "velocity.radial.minSpeed" in minimum[0]
     assert minimum[1] == "source * 60 * updatesPerTick / 16"
     assert minimum[2] == "blocks/s"
     assert json.dumps(source, ensure_ascii=False) == before
@@ -98,17 +97,17 @@ def test_author_explains_scoped_wire_units_without_converting_source(monkeypatch
     glossary = packet["sourceWireUnits"]
     assert glossary["fieldColumns"] == ["authorParam", "sourceToAuthor", "authorUnits"]
     for path in ("raw.item.axePower", "raw.generatedParent.gameplay.axePower"):
-        assert _mapping(glossary, path, "configure_tool") == [
-            "axePowerTooltipPercent", "source * 5", "tooltip percent"]
+        assert _mapping(glossary, path, "tool_stats") == [
+            "axePower", "source * 5", "tooltip percent"]
     for owner in ("accessory", "armor"):
-        assert _mapping(glossary, f"raw.generatedParent.{owner}.movementSpeed", f"configure_{owner}") == [
-            "moveSpeedBonusPercent", "source * 100", "additive_percent"]
-        assert _mapping(glossary, f"raw.generatedParent.{owner}.lifeRegen", f"configure_{owner}") == [
-            "lifeRegenHpPerSecond", "source / 2", "HP/s"]
-    assert _mapping(glossary, "raw.generatedParent.gameplay.generatedBuff.movementSpeed", "apply_generated_buff_on_use") == [
-        "moveSpeedBonusPercent", "source * 100", "additive_percent"]
-    assert _mapping(glossary, "raw.generatedParent.gameplay.generatedBuff.lifeRegen", "apply_generated_buff_on_use") == [
-        "lifeRegenHpPerSecond", "source / 2", "HP/s"]
+        assert _mapping(glossary, f"raw.generatedParent.{owner}.movementSpeed", owner) == [
+            "moveSpeedBonus", "source * 100", "additive_percent"]
+        assert _mapping(glossary, f"raw.generatedParent.{owner}.lifeRegen", owner) == [
+            "lifeRegen", "source / 2", "HP/s"]
+    assert _mapping(glossary, "raw.generatedParent.gameplay.generatedBuff.movementSpeed", "generated_buff_on_use") == [
+        "moveSpeedBonus", "source * 100", "additive_percent"]
+    assert _mapping(glossary, "raw.generatedParent.gameplay.generatedBuff.lifeRegen", "generated_buff_on_use") == [
+        "lifeRegen", "source / 2", "HP/s"]
     raw = packet["parents"]["A"]["packet"]["raw"]
     assert raw["item"]["axePower"] == 9
     assert raw["item"]["tooltipLines"] == source["tooltipLines"]
@@ -119,18 +118,18 @@ def test_author_explains_scoped_wire_units_without_converting_source(monkeypatch
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-def test_serialized_author_and_repair_share_player_description_guidance(monkeypatch, mode):
+def test_serialized_author_requests_notes_and_repair_retains_advisory_replacement(monkeypatch, mode):
     source, item = _source(), _broken_item()
     author_request, author_packet = _author_request(monkeypatch, mode, source)
     repair_request, repair_packet = _repair_request(monkeypatch, mode, source, item)
-    advisory = author_packet["requiredJsonShape"]["realization"]
-    assert repair_packet["requiredJsonShape"]["realizationReplacement"] == advisory
-    from infini_local.pipelines.author_item_contract import author_item_prompt_shape_card
-    assert advisory == author_item_prompt_shape_card()["realization"]
-    assert author_packet["requiredJsonShape"]["optionalAdvisory"] == ["concept", "realization"]
+    assert isinstance(author_packet["requiredJsonShape"]["concept"], str)
+    assert set(author_packet["requiredJsonShape"]["realization"]) == {"description", "selfEvaluation"}
+    advisory = repair_packet["requiredJsonShape"]["realizationReplacement"]
+    from infini_local.pipelines.author.item_contract import author_item_repair_prompt_shape_card
+    assert advisory == author_item_repair_prompt_shape_card()["realizationReplacement"]
     # Inspect the literal serialized message rows, not just local schema annotations
     # or the helper's merged view. Strict provider projection removes annotations.
-    for request, shape_key in ((author_request, "realization"), (repair_request, "realizationReplacement")):
+    for request, shape_key in ((repair_request, "realizationReplacement"),):
         sent = _serialized_chat_request(monkeypatch, request)
         message_shapes = [json.loads(row["content"])["requiredJsonShape"]
                           for row in sent["messages"][1:]
@@ -146,14 +145,15 @@ def test_serialized_author_and_repair_share_player_description_guidance(monkeypa
 def test_lowery_renderer_projects_shared_player_description_and_unit_guidance():
     import runpy
     from pathlib import Path
-    from infini_local.pipelines.author_item_contract import author_item_prompt_shape_card
-    from infini_local.pipelines.llm_authoring_prompt import concise_terraria_tick_guide_for_llm
+
+    from infini_local.pipelines.author.item_contract import author_item_repair_prompt_shape_card
+    from infini_local.pipelines.author.prompt import concise_terraria_tick_guide_for_llm
 
     root = Path(__file__).resolve().parents[2]
     generator = runpy.run_path(str(root / "tools" / "generate" / "generate_lowery.py"))
     rendered = generator["render"]()  # Pure renderer: do not refresh parent-owned docs here.
     assert '<a id="player-text"></a>' in rendered
-    advisory = author_item_prompt_shape_card()["realization"]
+    advisory = author_item_repair_prompt_shape_card()["realizationReplacement"]
     for name in ("description", "playerExperience"):
         assert advisory[name] in rendered
     for rule in concise_terraria_tick_guide_for_llm().values():
@@ -173,7 +173,7 @@ def _serialized_chat_request(monkeypatch, request):
         raise _Captured()
 
     with monkeypatch.context() as patch:
-        patch.setattr(transport, "urlopen_no_redirect", stop)
+        patch.setattr(transport_http, "urlopen_no_redirect", stop)
         patch.setattr(llm_admission, "_reserve_remote_rate_slot", lambda *args, **kwargs: None)
         with pytest.raises(_Captured):
             transport._llm_chat_json_exact_context(request, 10, {
@@ -182,7 +182,9 @@ def _serialized_chat_request(monkeypatch, request):
                 "api_key": "", "profile_id": "offline-unit-guidance",
             })
     assert len(sent) == 1
-    assert sent[0]["messages"] == request["messages"]
+    assert [row["role"] for row in sent[0]["messages"]] == ["system", "user"]
+    from prompt_packet_helpers import dossier_text
+    dossier_text(sent[0], declaration=request)  # Verify the complete local projection.
     assert sent[0].get("response_format") == request["response_format"]
     return sent[0]
 
@@ -225,10 +227,10 @@ def _repair_request(monkeypatch, mode, source, item):
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_scoped_repair_carries_canonical_clock_units_without_expanding_permissions(monkeypatch, mode):
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
+    from infini_local.core.runtime_authoring.registry_views import runtime_authoring_prompt_field_guide
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
-    from infini_local.core.runtime_authoring.capability_registry import runtime_authoring_prompt_field_guide
-    from infini_local.pipelines.llm_authoring_prompt import concise_terraria_tick_guide_for_llm
+    from infini_local.pipelines.author.prompt import concise_terraria_tick_guide_for_llm
 
     source, item = _source(), _broken_item()
     author_request, author_packet = _author_request(monkeypatch, mode, source)
@@ -308,6 +310,9 @@ def test_static_guidance_never_launders_dynamic_sources_into_instruction_prefix(
         for section in ("accessory", "armor", "gameplay"):
             assert json.dumps(raw["generatedParent"][section]) == json.dumps(variant["generatedData"][section])
         changed["parents"][root] = copy.deepcopy(packet["parents"][root])
+        assert changed["parentBriefs"][root]["identity"]["tooltipLines"] == variant["tooltipLines"]
+        assert changed["parentBriefs"][root]["properties"]["axePower"] == 13
+        changed["parentBriefs"][root] = copy.deepcopy(packet["parentBriefs"][root])
         assert changed["sourceWireUnits"] != packet["sourceWireUnits"]
         changed["sourceWireUnits"] = copy.deepcopy(packet["sourceWireUnits"])
         assert changed == packet
@@ -315,7 +320,7 @@ def test_static_guidance_never_launders_dynamic_sources_into_instruction_prefix(
             assert second["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
             static_text, dynamic_text = [row["content"] for row in second["messages"][1:]]
             assert "UNTRUSTED" not in static_text
-            assert set(json.loads(dynamic_text)) == {"recipeKey", "parents", "balanceCorridor", "sourceWireUnits"}
+            assert set(json.loads(dynamic_text)) == {"recipeKey", "parentBriefRule", "parentBriefs", "parents", "balanceCorridor", "sourceWireUnits"}
             assert json.loads(dynamic_text)["parents"]["A"]["packet"]["raw"] == raw
         else:
             assert static_instruction_prefix_parts(second) is None
@@ -325,10 +330,11 @@ def test_static_guidance_never_launders_dynamic_sources_into_instruction_prefix(
 def test_packet_glossary_is_derived_from_registry_metadata_not_capability_name(monkeypatch, mode):
     from dataclasses import replace
     from types import MappingProxyType
+
     import infini_local.core.runtime_authoring.capability_registry as registry
 
-    spec = registry.CAPABILITY_REGISTRY["configure_accessory"].params["moveSpeedBonusPercent"]
-    template = registry.CAPABILITY_REGISTRY["configure_accessory"]
+    spec = registry.CAPABILITY_REGISTRY["accessory"].params["moveSpeedBonus"]
+    template = registry.CAPABILITY_REGISTRY["accessory"]
     arbitrary = replace(template, name="numeric_metadata_probe", params=MappingProxyType({
         "arbitraryPercent": replace(spec, wire_name="unfamiliar", wire_divisor=37, units="probe percent"),
         "arbitraryRate": replace(spec, wire_name="another", wire_divisor=1, wire_multiplier=7, units="probe rate"),
@@ -338,7 +344,7 @@ def test_packet_glossary_is_derived_from_registry_metadata_not_capability_name(m
     }), final_wire_paths=("armor.unfamiliar", "gameplay.generatedBuff.another", "accessory.same", "gameplay.ratio", "gameplay.shifted", "gameplay.not_a_param"))
     mutated = {**registry.CAPABILITY_REGISTRY, arbitrary.name: arbitrary}
     monkeypatch.setattr(registry, "CAPABILITY_REGISTRY", mutated)
-    from infini_local.pipelines import llm_authoring_prompt
+    from infini_local.pipelines.author import prompt as llm_authoring_prompt
     monkeypatch.setattr(llm_authoring_prompt, "CAPABILITY_REGISTRY", mutated)
     source = _source()
     source["generatedData"]["armor"]["unfamiliar"] = 0.2
@@ -363,10 +369,10 @@ def test_packet_glossary_is_derived_from_registry_metadata_not_capability_name(m
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("fn,values,path", [
-    ("configure_tool", {"axePowerTooltipPercent": 45}, "gameplay"),
-    ("configure_accessory", {"moveSpeedBonusPercent": 15, "lifeRegenHpPerSecond": 1}, "accessory"),
-    ("configure_armor", {"moveSpeedBonusPercent": 15, "lifeRegenHpPerSecond": 1}, "armor"),
-    ("apply_generated_buff_on_use", {"moveSpeedBonusPercent": 15, "lifeRegenHpPerSecond": 1}, "gameplay.generatedBuff"),
+    ("tool_stats", {"axePower": 45}, "gameplay"),
+    ("accessory", {"moveSpeedBonus": 15, "lifeRegen": 1}, "accessory"),
+    ("armor", {"moveSpeedBonus": 15, "lifeRegen": 1}, "armor"),
+    ("generated_buff_on_use", {"moveSpeedBonus": 15, "lifeRegen": 1}, "gameplay.generatedBuff"),
 ])
 def test_compiler_produced_parent_is_explained_not_reauthored(monkeypatch, mode, fn, values, path):
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
@@ -397,7 +403,7 @@ def test_compiler_produced_parent_is_explained_not_reauthored(monkeypatch, mode,
     owner = raw
     for part in path.split("."):
         owner = owner[part]
-    if fn == "configure_tool":
+    if fn == "tool_stats":
         assert owner["axePower"] == 9
     else:
         assert owner["movementSpeed"] == 0.15
@@ -406,8 +412,8 @@ def test_compiler_produced_parent_is_explained_not_reauthored(monkeypatch, mode,
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_source_unit_guidance_never_grants_hostile_repair_edits(monkeypatch, mode):
-    from test_gameplay_repair_readonly_context import _hostile_patch, _repair_with_response
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
+    from test_gameplay_repair_readonly_context import _hostile_patch, _repair_with_response
 
     item = _broken_item()
     before = json.dumps(item)
@@ -427,7 +433,7 @@ def test_source_unit_guidance_never_grants_hostile_repair_edits(monkeypatch, mod
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_repair_source_units_cover_every_registry_path_without_changing_scope(monkeypatch, mode):
-    from infini_local.pipelines.llm_authoring_prompt import source_wire_units_for_llm
+    from infini_local.pipelines.author.prompt import source_wire_units_for_llm
 
     full = source_wire_units_for_llm()
     packet = {}
@@ -461,6 +467,7 @@ def test_repair_source_units_cover_every_registry_path_without_changing_scope(mo
     # allowed calls, schema, errors, accepted context or repair permissions.
     for dossier in (with_sources, without_sources):
         dossier.pop("parents")
+        dossier.pop("parentBriefs")
         dossier.pop("sourceWireUnits")
     assert with_sources == without_sources
 
@@ -482,7 +489,7 @@ def test_repair_source_units_require_actual_discriminator_without_reauthoring_so
     item = _broken_item()
     _, packet = _repair_request(monkeypatch, mode, source, item)
     readings = [row for row in packet["sourceWireUnits"]["scopes"]
-                if row["fn"] == "oscillate_projectile_velocity"]
+                if row["fn"] == "oscillate_velocity"]
     if author_param is None:
         assert readings == [], "missing/unknown law cannot select a numeric conversion"
     else:
@@ -511,12 +518,39 @@ def test_repair_unit_filter_keeps_zero_null_and_exact_array_namespaces(monkeypat
     actual = {(row["source"], row["fn"], field)
               for row in dossier["sourceWireUnits"]["scopes"] for field in row["fields"]}
     assert actual == {
-        ("raw.item", "configure_tool", "axePower"),
-        ("raw.generatedParent.accessory", "configure_accessory", "movementSpeed"),
-        ("raw.generatedParent.armor", "configure_armor", "lifeRegen"),
-        ("raw.generatedParent.gameplay.generatedBuff", "apply_generated_buff_on_use", "lifeRegen"),
-        ("raw.generatedParent.runtimeProgram.entities[].collision", "set_projectile_collision", "extraUpdates"),
-        ("raw.generatedParent.runtimeProgram.entities[].spawn", "configure_spawn", "velocityDistribution.minSpeedPxPerUpdate"),
+        ("raw.item", "tool_stats", "axePower"),
+        ("raw.generatedParent.accessory", "accessory", "movementSpeed"),
+        ("raw.generatedParent.armor", "armor", "lifeRegen"),
+        ("raw.generatedParent.gameplay.generatedBuff", "generated_buff_on_use", "lifeRegen"),
+        ("raw.generatedParent.runtimeProgram.entities[].collision", "projectile_collision", "extraUpdates"),
+        ("raw.generatedParent.runtimeProgram.entities[].spawn", "spawn", "velocityDistribution.minSpeedPxPerUpdate"),
     }
-    spawn = next(row for row in dossier["sourceWireUnits"]["scopes"] if row["fn"] == "configure_spawn")
+    spawn = next(row for row in dossier["sourceWireUnits"]["scopes"] if row["fn"] == "spawn")
     assert spawn["fields"]["velocityDistribution.minSpeedPxPerUpdate"][1] == "source * 60 * updatesPerTick / 16"
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("generated", [False, True], ids=["native-stat-view", "accepted-generated-wire"])
+def test_source_unit_guides_match_stage_visible_stat_types(monkeypatch, mode, generated):
+    source = {"name": "stat context", "lifeRegen": 4}
+    if generated:
+        source["generatedData"] = {"accessory": {"lifeRegen": 4}}
+    for builder, root in ((_author_request, "A"), (_repair_request, "a")):
+        args = () if builder is _author_request else (_broken_item(),)
+        _, packet = builder(monkeypatch, mode, source, *args)
+        raw = packet["parents"][root]["packet"]["raw"]
+        if generated:
+            assert raw["item"]["lifeRegen"] == 4
+            assert raw["generatedParent"]["accessory"]["lifeRegen"] == 4
+            assert _mapping(packet["sourceWireUnits"], "raw.generatedParent.accessory.lifeRegen", "accessory") == [
+                "lifeRegen", "source / 2", "HP/s"]
+        else:
+            assert raw["item"]["lifeRegen"] == {"value": 2, "units": "HP/s"}
+            assert all("lifeRegen" not in row["fields"] for row in packet["sourceWireUnits"]["scopes"]
+                       if row["source"] == "raw.item")
+        # Every advertised raw-item reading acts on an actual scalar rather
+        # than an already-normalized value/unit object or boolean.
+        for row in packet["sourceWireUnits"]["scopes"]:
+            if row["source"] == "raw.item":
+                for field in row["fields"]:
+                    assert type(raw["item"][field]) in {int, float}

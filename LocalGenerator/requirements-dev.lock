@@ -6,6 +6,10 @@ attrs==26.1.0
     # via
     #   jsonschema
     #   referencing
+dncil==1.0.2
+    # via -r LocalGenerator/requirements-dev.txt
+dnfile==0.18.0
+    # via -r LocalGenerator/requirements-dev.txt
 hypothesis==6.156.6
     # via -r LocalGenerator/requirements-dev.txt
 iniconfig==2.3.0
@@ -22,6 +26,8 @@ nodeenv==1.10.0
     # via pyright
 packaging==26.2
     # via pytest
+pefile==2024.8.26
+    # via dnfile
 pillow==12.3.0
     # via -r LocalGenerator/requirements.txt
 pluggy==1.6.0

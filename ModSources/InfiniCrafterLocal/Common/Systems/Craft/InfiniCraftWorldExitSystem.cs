@@ -35,7 +35,7 @@ public sealed class InfiniCraftWorldExitSystem : ModSystem
             try { Main.LocalPlayer?.GetModPlayer<InfiniCraftPlayer>().AbortTransientCraftForWorldExit(); }
             catch { } // Best-effort inventory protection while Terraria is unloading.
         }
-        try { GeneratedHeldItemDrawLayer.ClearNetCaches(); }
+        try { GeneratedHeldItemPresentation.ClearAssetRequests(); }
         catch { }
         try { GeneratedEquipOverlayDrawLayerBase.ClearNetCaches(); }
         catch { }

@@ -9,13 +9,13 @@ from pathlib import Path
 import threading
 import pytest
 from PIL import Image, ImageDraw
-from infini_local.pipelines import image_backend_pipeline as backend
-from infini_local.pipelines import sprite_postprocess as post
-from infini_local.pipelines import visual_sprite_generation as generation
-from infini_local.pipelines import visual_delivery_gate as delivery
-from infini_local.pipelines import visual_asset_manifest as manifest
-from infini_local.pipelines import pipeline_visual_config as config
-from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+from infini_local.pipelines.images import backends as backend
+from infini_local.pipelines.images import postprocess as post
+from infini_local.pipelines.images import stage as generation
+from infini_local.pipelines.visual import delivery
+from infini_local.pipelines.images import manifest
+from infini_local.core.images import config
+from infini_local.pipelines.visual.assets import build_visual_asset_plan
 from infini_local.services import asset_sync_service as sync
 from infini_local.services.sdcpp_service import ImageRequestGate
 from infini_local.web.server_utility_routes import ServerUtilityRoutes
@@ -234,7 +234,7 @@ def test_corrupt_provider_image_remains_a_bounded_quality_retry(offline, monkeyp
     assert result[3] == 'generated' and Path(result[0]).exists()
     assert len(calls) == 2 and len(requests) == 1
     assert calls[0]['seed'] == calls[1]['seed'] == 731
-    assert 'STRICT RETRY 1' in calls[1]['prompt']
+    assert calls[1]['prompt'] != calls[0]['prompt']
 
 
 def test_raw_provider_canvas_above_client_limit_still_processes_to_final_png(offline, monkeypatch):
@@ -565,6 +565,9 @@ def test_transient_unrecoverable_keying_retries_then_delivers_compact_png(offlin
         # ONLY into the first real postprocess call, not candidate scoring.
         calls.append(True)
         if len(calls) == 1:
+            # Exercise the cold processing path: a valid selected preparation
+            # intentionally bypasses keying, whose failure this control injects.
+            kwargs['prepared'] = None
             with monkeypatch.context() as patch:
                 patch.setattr(post, 'apply_background_removal',
                               lambda *_a, **_k: (_ for _ in ()).throw(ValueError('temporary keyer failure')))

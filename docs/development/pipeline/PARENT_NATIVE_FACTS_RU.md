@@ -9,15 +9,21 @@
 
 - **Snapshot:** `GeneratorClient.ParentFacts.cs` читает выбранные поля native Item
   и нового Projectile после `SetDefaults`. `lifeRegen` — сырой вклад Item;
-  `armorPenetration` — исходное значение Projectile. Это не итоговый player regen,
+  `armorPenetration` отдельно сохраняется у Item и Projectile;
+  `itemScale` — базовое `Item.scale` без reforge prefix, не размер PNG.
+  `useLimitPerAnimation` — буквальный native лимит применений внутри одной
+  анимации: `null` означает отсутствие явного лимита, отсутствие поля в старом
+  пакете остаётся неизвестным. Число выстрелов не выводится из одного отношения
+  `useAnimation / useTime`: например, у BookStaff и FairyQueenMagicItem native
+  лимит равен 4, у FairyQueenRangedItem — 5. Это не итоговый player regen,
   не результат выстрела и не полное описание AI. Ноль сохраняется, неизвестное
   поведение не становится отрицательным утверждением.
 - **Certified source reference:** существующий offline IL extractor читает
   assembly без исполнения игровых hooks. Runtime допускает наблюдения только при
   точном совпадении SHA256 тела метода **и** ModuleVersionId, только для vanilla
   объектов. Новый/неподдержанный binary или modded объект не заимствует сертификат.
-  Эти ссылки, исходные offsets и scope проходят до Author целиком: точные
-  повторы могут иметь `sourceSameAs: N` — точный индекс полного значения в
+  Исходные offsets и сертификаты сохраняются в native dump; Author получает
+  connected behavior projection с условиями и scope. Точные повторы могут иметь `sourceSameAs: N` — точный индекс полного значения в
   `nativeSourceFacts[N]` того же dossier. Это lossless sharing, не удаление фактов или выбор «лучшего»
   наблюдения. Порядок/кратность массивов и типы сохраняются после раскрытия;
   literal tooltip и accepted generated-parent packets остаются inline.
@@ -82,6 +88,47 @@ input на 357; Hellwing меняет только current projectile 1 на 485
 оружия остаётся отдельным ориентиром даже без её ammo в текущем inventory.
 Нет нового progression solver, recommended damage corridor или скрытого
 перебаланса сохранённого ребёнка при смене патронов.
+
+## Причины неполного identity window
+
+Общий `parentSourceGraph` сохраняет предел 1024 сырых IL инструкций и character
+budget 16000. Узкое наблюдение `VanillaAI` допускает до 1024 значимых инструкций
+при отдельном hard bound 4096 сырых: `nop` и исходные offsets не удаляются.
+Отказы по raw/meaningful budget отличаются от неподдержанного dispatch и
+non-forward перехода. Превышение границы остаётся unknown, не пустой механикой.
+
+Существующий certified identity selector применяется также к inline dispatch:
+выбираются только доказанные ветви captured type/aiStyle; живые условия, alias
+hazards и неподдержанные пути не угадываются. Effect/clock slice сохраняет
+создание снаряда, Damage/Kill, связанные изменения состояния и hitbox,
+AI/localAI writes, predicates, loop dependencies и выходы из invocation.
+`UpdatePosition` наблюдается и при inline движении без отдельного AI helper.
+Opaque helper/global effects остаются unknown; даже value-only аргумент не
+доказывает чистоту вызова. Счётчики означают AI invocations, а не автоматически
+тики мира, секунды, точную частоту попаданий или DPS. Полный AI не обещается.
+
+## Условные дочерние source profiles: один переход
+
+`referencedProjectiles` собирает тот же `ProjectileRawSnapshot`, который
+используется обычным `Prepare` и `/infinidump`; внешний dump для live-запроса
+не нужен. Producer связывает literal candidates из уже выбранных source
+observations с исходными callsites, conditions и сертификатами. Runtime/dynamic
+ID остаётся явно unresolved; соседняя исключённая identity-ветка не возвращается
+через каталог. Один профиль может обслуживать несколько условных вызовов.
+
+Вложенный snapshot содержит native defaults/source, не состояние реально
+созданного снаряда. Его sourceItem отсутствует; фактические damage, velocity,
+owner и AI arguments читаются из родительского вызова, а не из нулевых defaults.
+Python передаёт read-only profile через существующие compaction и exact-sharing,
+не выбирая механику и не меняя input/fingerprint.
+
+Раскрывается ровно один переход: вложенные вызовы имеют
+`includeChildReferences:false`, поэтому self/cyclic references не вызывают
+рекурсию. Технический предел — восемь **целых** profiles на snapshot; все callsites
+и overflow identities сохраняются с причиной unknown. Это бюджет наблюдения,
+не ограничение игрового числа дочерних снарядов и не рекомендация Author.
+Отдельный catalog snapshot может содержать больше собственного source-контекста,
+чем неполная ссылка на него; отсутствие профиля не доказывает отсутствие эффекта.
 
 ## Неопределённость не запрещает новый дизайн
 
@@ -226,6 +273,37 @@ item snapshots и полные accepted generated graphs продолжают р
 Новые references проходят Python compact packet с полными conditions, нулями,
 false, пустыми альтернативами и независимой копией данных.
 
+## Сохранённый dump как источник read-only context
+
+`/infinidump` использует тот же `ToWireItem` / `ProjectileRawSnapshot`, что live
+`Prepare`: это не второй extractor. Полная строка item содержит исходные numeric
+use/cooldown/lifetime поля, literal tooltips, доступные native references и
+bounded source graph. `timeLeft` или `useTime` не являются записью всей AI
+последовательности и не доказывают частоту дочерних выстрелов.
+
+`runtime_dump_service.py` загружает проверенную manifest-пару один раз при старте.
+`native_item_context_from_dump` дополняет только read-only parent card: требует
+целую verified пару и точное stable item identity (numeric ID плюс fullName либо
+sourceMod/internalName). Известное противоречие module MVID, item identity или
+shoot identity запрещает заимствование. Отсутствие сравнимых modules остаётся
+`currentModSet=unverified`, а не доказательством текущей совместимости.
+
+Копируются только целиком отсутствующие producer-owned native source references,
+`parentSourceGraph`, `directProjectileRaw`, `spriteReferenceRaw` и связка literal
+tooltip/source. Presence проверяется в root, runtimeFacts и fingerprint: null,
+пустой объект и unavailable не заполняются старым dump. Частичный source graph
+не сливается рекурсивно с другим capture. Scalars, player ammo/effective state,
+recipe identity, fingerprint и исходный input не изменяются; generated parents
+не используют этот путь. Provenance с перечнем добавленных полей проходит в
+Author/Visual/VFX cards, включая честный dump-origin для projectile.
+
+Legacy JSONL без manifest сохраняет прежний **projectile-only** lookup с меткой
+`legacy_unverified`; новый item enrichment на него не распространяется. Если
+полную item-строку подают как исходный parent, её уже присутствующие поля идут
+обычным projection, без нового восстановления. Непокрытые/отказанные native
+AI/source окна остаются unknown и в live, и в dump, и в card: отсутствие cadence
+не заменяется вручную поддерживаемыми таблицами Terraria.
+
 ## Воспроизведение и ограничения
 
 ```bash
@@ -248,3 +326,14 @@ DPS, multiplayer, arbitrary C# semantics или доказательство в�
 AI, tile/buff/banner и всех остальных contact-status hooks. Новые equipment/set
 checks сравнивают source-факты с реальными GrantArmorBenefits/UpdateArmorSets,
 включая mixed/incomplete slots и отсутствие изменения владельца при Prepare. Непокрытое остаётся неизвестным.
+
+
+### Совместимость нативных исходников между сборками
+
+SHA всего tModLoader — диагностическая идентичность, а не запрет механики при любом обновлении. Placed-body adapter предупреждает о незнакомой сборке один раз и по-прежнему проверяет все 19 типизированных IL-контрактов и текущую цепочку hooks до включения.
+
+Кэшированные native facts допускаются по семантическим сертификатам конкретных методов и явно используемых зависимостей: разрешённые типы/члены, инструкции, операнды, переходы, локальные типы и EH. Перенумерация metadata tokens/MVID не меняет сертификат; изменение значимой зависимости оставляет неизвестными только факты соответствующего каталога. Метаданные читаются один раз; MVID и IL-байты сверяются с реально загруженным методом. Это не доказательство поведения произвольных mod hooks. Live source graph читает текущий IL независимо от доступности frozen catalogs и сохраняет свои partial/unknown границы.
+
+В provenance различаются исходная проверенная экстракция (audited certificate и сохранённые данные экстракции) и текущая наблюдаемая сборка (`observed*`); старые signature tokens не объявляются токенами новой сборки. Existing registry values остаются текущими наблюдениями, а не константами из прошлого DLL.
+
+Карта сертификатов генерируется metadata-only инструментом `tools/generate/native_source_certificates/NativeSourceCertificates.csproj` из официального DLL и существующих `contracts/reports/native_*_sources.generated.json`; общий `NativeSourceFingerprint` используется и генератором, и runtime. Аргументы: `<assembly> <reports directory> <output NativeSourceCertificates.g.cs> [--check]`, MSBuild property `InfiniTmlReferenceDir` указывает существующие tML reference assemblies. Неразрешённый или неоднозначный обязательный source key прерывает генерацию, а не создаёт частичный сертификат.

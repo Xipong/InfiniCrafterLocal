@@ -65,7 +65,8 @@ internal static partial class EngineRuntimeChecks
         using var mobility = new MobilityConsumptionNativeScope();
         WithGeneratedPrefixScope(() => WithPersistenceTilemap((_, __) => WithPlayer((player, ___) => {
             PrepareMobilityConsumptionPlayer(player);
-            player.SpawnX = player.SpawnY = 42; // inside the retained 100x100 CPU tilemap
+            player.SpawnX = player.SpawnY = -1; // no bed exists in this CPU tilemap
+            Terraria.Main.spawnTileX = Terraria.Main.spawnTileY = 42; // inside retained 100x100 bounds
             Terraria.Main.netMode = NetmodeID.SinglePlayer;
             player.controlUseItem = true;
             player.position = new Vector2(640, 640);

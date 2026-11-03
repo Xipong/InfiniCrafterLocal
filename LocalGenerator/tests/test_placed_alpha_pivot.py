@@ -1,17 +1,18 @@
 """Opt-in alpha-bounds pivot: real Author/compiler/final-wire boundaries, offline."""
-
 import copy
 import json
+
 import pytest
-
-from prompt_packet_helpers import request_dossier
-from test_low_level_three_stage_pipeline import wire_transport
-
 from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+from infini_local.pipelines.visual import contract as visual_contract
+from infini_local.pipelines.visual import request as visual_request
+from infini_local.pipelines.visual import stage as visual_stage
+from prompt_packet_helpers import request_dossier
+from test_low_level_three_stage_pipeline import wire_transport
 from test_placed_body_capability import FN, placed, placement
 
 
@@ -61,19 +62,19 @@ def test_neutral_omission_receipt_and_historical_wire_absence_preserve_frame():
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_real_provider_and_visual_repair_describe_selected_basis_readonly(wire_transport, monkeypatch, mode):
-    from infini_local.pipelines import author_item_contract as contract
-    from infini_local.pipelines import llm_authoring_pipeline as author
-    from infini_local.pipelines import visual_generation_pipeline as visual
-    from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+    from infini_local.pipelines.author import item_contract as contract
+    from infini_local.pipelines.author import request as author
+    from infini_local.pipelines.visual.assets import build_visual_asset_plan
+    from jsonschema import Draft202012Validator
     from test_codex_subscription_contract import _encode_nullable_fixture
     from test_low_level_three_stage_pipeline import _visual_kit
-    from jsonschema import Draft202012Validator
 
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
-    document = placed()
+    document = {key: value for key, value in placed().items() if key in {"name", "category", "runtimeProgram"}}
     document["runtimeProgram"]["calls"][-1]["params"]["pivotSpace"] = "alpha_bounds"
     responses, requests = wire_transport
-    payload = _encode_nullable_fixture(document, contract.author_item_response_schema()) if mode == "json_schema" else document
+    local_schema = contract.author_item_response_schema()
+    payload = _encode_nullable_fixture(document, local_schema) if mode == "json_schema" else document
     responses.append(payload)
     accepted = author.try_llm_plan({"name":"A"}, {"name":"B"}, "offline-alpha-pivot")
     assert accepted is not None
@@ -88,8 +89,8 @@ def test_real_provider_and_visual_repair_describe_selected_basis_readonly(wire_t
     before = copy.deepcopy(wire)
     kit = _visual_kit(wire)
     for repair in (False, True):
-        responses.append(kit if not repair else {"schema":visual.VISUAL_REPAIR_PATCH_SCHEMA,"note":"offline no-op"})
-        visual._request_visual_kit(wire, {}, {}, **({"repair_errors":[],"previous":kit,"repair_scope":{}} if repair else {}))
+        responses.append(kit if not repair else {"schema":visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,"note":"offline no-op"})
+        visual_request._request_visual_kit(wire, {}, {}, **({"repair_errors":[],"previous":kit,"repair_scope":{}} if repair else {}))
         packet = request_dossier(requests[-1])
         guidance = packet["spritePresentationReadOnly"]["placedBody"]
         assert "pivotSpace" in guidance["ownership"]
@@ -100,7 +101,7 @@ def test_real_provider_and_visual_repair_describe_selected_basis_readonly(wire_t
         assert bindings == wire["runtimeProgram"]["bindings"]
         assert placement({"runtimeProgram":{"bindings":bindings}})["placedBody"]["pivotSpace"] == "alpha_bounds"
     assert wire == before
-    projected = visual._apply_kit(wire, kit)
+    projected = visual_stage._apply_kit(wire, kit)
     frame = copy.deepcopy(projected)
     placement(frame)["placedBody"]["pivotSpace"] = "frame"
     assert build_visual_asset_plan(projected) == build_visual_asset_plan(frame)
@@ -115,9 +116,9 @@ def test_current_nested_dto_audit_classifies_optional_selector_not_hidden_storag
 
 
 def test_outgoing_placement_cards_keep_native_containers_at_existing_placement(wire_transport):
-    from infini_local.pipelines import llm_authoring_pipeline as author
-    from test_placed_light_capability import lit
+    from infini_local.pipelines.author import request as author
     from test_dual_use_placeable_contract import _dual_use_placeable
+    from test_placed_light_capability import lit
     responses, requests = wire_transport
     document = placed()
     document["runtimeProgram"]["calls"].append(lit()["runtimeProgram"]["calls"][-1])
@@ -125,16 +126,17 @@ def test_outgoing_placement_cards_keep_native_containers_at_existing_placement(w
     accepted = author.try_llm_plan({"name":"A"}, {"name":"B"}, "offline-native-precondition")
     assert accepted is not None
     cards = request_dossier(requests[-1])["runtimeCapabilityContract"]["catalog"]["capabilities"]
-    native = next(c for c in cards if c["fn"] == "configure_tile_placement")
+    native = next(c for c in cards if c["fn"] == "place_tile")
     assert set(native["params"]) == {"tileId", "placeStyle"}  # No chest flag or new authored decision.
     summary = native["does"].lower()
     assert "native containers" in summary and "terraria" in summary
     assert "inventory" in summary and "return" in summary
     assert "unsupported" in summary and "callback" in summary
-    for fn in (FN, "add_placed_light", "enable_placed_vfx"):
-        summary = next(c for c in cards if c["fn"] == fn)["does"].lower()
-        assert "footprint" in summary and "bounded" in summary
-        assert "configure_tile_placement" in summary
+    for fn in (FN, "placed_light", "placed_vfx"):
+        card = next(c for c in cards if c["fn"] == fn)
+        summary = card["does"].lower()
+        assert "footprint" in summary and "16x16/256 cells" in summary
+        assert "place_tile" in card["params"]["placementCallId"]["meaning"]
         assert "waterchest" not in summary and "tile 21/style 17" not in summary
     wire = compile_runtime_program(accepted)
     assert {"placedBody", "placedLight"} <= placement(wire).keys()
@@ -186,8 +188,9 @@ def test_alpha_receipt_cannot_be_forged_or_dropped(attack):
 
 @pytest.mark.parametrize("old", ["absent", "alpha_bounds", "frame", "invalid"])
 def test_frozen_leaf_repair_preserves_basis_and_absence(old):
-    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+    from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     document = placed()
     call = document["runtimeProgram"]["calls"][-1]
     if old != "absent": call["params"]["pivotSpace"] = old
@@ -208,39 +211,49 @@ def test_frozen_leaf_repair_preserves_basis_and_absence(old):
     assert validate_runtime_wire(compile_runtime_program(result))["ok"]
 
 
-def test_immutable_old_delivery_keeps_absence_through_current_sanitizer(tmp_path, monkeypatch):
+def test_frozen_body_absence_survives_current_visibility_control_sanitizer(tmp_path, monkeypatch):
     import hashlib
     from pathlib import Path
-    from PIL import Image
-    from infini_local.pipelines import visual_delivery_gate as gate
+
+    from infini_local.pipelines.visual import delivery as gate
     from infini_local.storage.world_storage import sanitize_recipe_for_delivery
+    from PIL import Image
     path = Path(__file__).resolve().parents[2] / "tools/fixtures/placed-body-pre-alpha-delivered.json"
     raw = path.read_bytes()
     assert hashlib.sha256(raw).hexdigest() == "90d1d3c16b4d6b0b5cf5ce69eaa25731bb3a9518b80bd8c8c896f09a585e7fa7"
     old = json.loads(raw)
     assert "pivotSpace" not in placement(old)["placedBody"]
-    assert validate_runtime_wire(old)["ok"]
+    report = validate_runtime_wire(old)
+    assert not report["ok"] and any(e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
+    control = copy.deepcopy(old)
+    assert control["gameplay"].pop("releaseTiming") == "immediate"
+    assert control["runtimeProgram"]["itemUse"].pop("releaseTiming") == "immediate"
+    control["runtimeProgram"]["itemUse"]["hideUseGraphic"] = True
+    assert validate_runtime_wire(control)["ok"]
+    assert placement(control) == placement(old)
     png = tmp_path / "placed.png"
     Image.new("RGBA", (32,32), (240,90,20,255)).save(png)
     monkeypatch.setattr(gate, "_resolved_asset_path", lambda p: png if p and Path(str(p)).name == "placed.png" else None)
-    before = copy.deepcopy(old)
-    final = sanitize_recipe_for_delivery(old)
-    assert final == old == before
+    before = copy.deepcopy(control)
+    final = sanitize_recipe_for_delivery(control)
+    assert final == control == before
+    assert json.loads(raw) == old and path.read_bytes() == raw
     assert "pivotSpace" not in placement(json.loads(json.dumps(final)))["placedBody"]
 
 
 def test_real_final_delivery_sanitizer_keeps_alpha_choice_and_refuses_foreign_leaf(tmp_path, monkeypatch):
     from pathlib import Path
+
+    import infini_local.pipelines.visual.stage as visual_stage
+    from infini_local.pipelines.vfx.stage import attach_vfx_manifest
+    from infini_local.pipelines.visual import delivery as gate
+    from infini_local.storage.world_storage import is_deliverable_recipe_payload, sanitize_recipe_for_delivery
     from PIL import Image
-    from infini_local.pipelines import visual_generation_pipeline as visual
-    from infini_local.pipelines import visual_delivery_gate as gate
-    from infini_local.storage.world_storage import sanitize_recipe_for_delivery, is_deliverable_recipe_payload
-    from infini_local.core.vfx_manifest import attach_vfx_manifest
-    from test_low_level_three_stage_pipeline import _visual_kit, _vfx_output
+    from test_low_level_three_stage_pipeline import _vfx_output, _visual_kit
     document = placed()
     document["runtimeProgram"]["calls"][-1]["params"]["pivotSpace"] = "alpha_bounds"
     wire = compile_runtime_program(document)
-    wire = visual._apply_kit(wire, _visual_kit(wire))
+    wire = visual_stage._apply_kit(wire, _visual_kit(wire))
     wire = attach_vfx_manifest(wire, "offline-alpha-delivery", llm_director=lambda *_a, **_kw: _vfx_output(wire))
     wire.update(id="alpha_delivery_fixture", sourceMode="llm", schemaVersion=5, runtimeApiVersion="infini.runtime-program.v5")
     png = tmp_path / "alpha.png"
@@ -255,7 +268,9 @@ def test_real_final_delivery_sanitizer_keeps_alpha_choice_and_refuses_foreign_le
     expected = json.loads((Path(__file__).resolve().parents[2] / "tools/fixtures/placed-alpha-pivot-delivered.json").read_text())
     # The retained native observer consumes placement/rendering, not unrelated
     # future item-stat defaults. Keep its bytes and validate both deliveries.
-    assert validate_runtime_wire(expected)["ok"]
+    report = validate_runtime_wire(expected)
+    assert not report["ok"] and any(e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
+    assert validate_runtime_wire(final_wire)["ok"]
     assert placement(final_wire) == placement(expected)
     # Fresh motion composition is independent of the retained native placement
     # witness. Keep complete sanitizer identity against the current input and
@@ -263,7 +278,7 @@ def test_real_final_delivery_sanitizer_keeps_alpha_choice_and_refuses_foreign_le
     from collections import Counter
     assert final_wire["runtimeProgram"] == before["runtimeProgram"]
     assert final_wire["visual"] == expected["visual"]
-    assert final_wire["vfxManifest"] == expected["vfxManifest"]
+    assert final_wire["vfxManifest"] == before["vfxManifest"]
     def presentations(payload):
         return Counter((row["id"], row["kind"], json.dumps(row["visual"], sort_keys=True))
                        for row in payload["runtimeProgram"]["entities"])

@@ -15,10 +15,10 @@ def _fixture(sentry=None, pool=None, placement="item_use_origin"):
     doc = build_capability_witness("target_and_fire")
     root = next(c["target"] for c in doc["runtimeProgram"]["calls"] if c["fn"] == "target_and_fire")
     for call in doc["runtimeProgram"]["calls"]:
-        if call["fn"] == "configure_spawn" and call["target"] == root:
+        if call["fn"] == "spawn" and call["target"] == root:
             call["params"]["position"] = {"at": "activation_origin" if placement == "item_use_origin" else placement}
-    for ident, fn, params in (("native", "set_projectile_sentry", {"enabled": sentry}),
-                              ("pool", "set_descendant_concurrency", {"maxActive": pool})):
+    for ident, fn, params in (("native", "sentry", {"enabled": sentry}),
+                              ("pool", "descendant_limit", {"maxActive": pool})):
         if next(iter(params.values())) is not None:
             doc["runtimeProgram"]["calls"].append({"id": ident, "fn": fn, "target": root, "params": params})
     return doc
@@ -63,8 +63,8 @@ def test_every_independent_combination_preserves_exact_authored_delta(native, po
     assert wire["runtimeProgram"] == expected
     assert doc == before
     receipts = wire["runtimeContract"]["finalWireReceipts"]
-    for fn, value, suffix in (("set_projectile_sentry", native, ".nativeSentry"),
-                               ("set_descendant_concurrency", pool, ".spawn.descendantMaxActive")):
+    for fn, value, suffix in (("sentry", native, ".nativeSentry"),
+                               ("descendant_limit", pool, ".spawn.descendantMaxActive")):
         rows = [r for r in receipts if r.get("fn") == fn]
         assert len(rows) == (value is not None)
         if rows:
@@ -74,8 +74,8 @@ def test_every_independent_combination_preserves_exact_authored_delta(native, po
 
 
 @pytest.mark.parametrize("fn,key,bad", [
-    *(('set_projectile_sentry', 'enabled', v) for v in (None, 0, 1, "true", {}, [])),
-    *(('set_descendant_concurrency', 'maxActive', v) for v in (None, True, False, 0, 97, 1.0, "3", {}, [])),
+    *(('sentry', 'enabled', v) for v in (None, 0, 1, "true", {}, [])),
+    *(('descendant_limit', 'maxActive', v) for v in (None, True, False, 0, 97, 1.0, "3", {}, [])),
 ])
 def test_present_invalid_values_are_red_without_coercion_or_provenance(fn, key, bad):
     doc = _fixture(True, 3)
@@ -83,8 +83,8 @@ def test_present_invalid_values_are_red_without_coercion_or_provenance(fn, key, 
     call = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == fn)
     call["params"][key] = bad
     root = _entity(wire)
-    path = ".nativeSentry" if fn == "set_projectile_sentry" else ".spawn.descendantMaxActive"
-    target = root if fn == "set_projectile_sentry" else root["spawn"]
+    path = ".nativeSentry" if fn == "sentry" else ".spawn.descendantMaxActive"
+    target = root if fn == "sentry" else root["spawn"]
     target[path.rsplit('.', 1)[-1]] = bad
     for value, validator, suffix in ((doc, validate_runtime_program, ".params." + key), (wire, validate_runtime_wire, path)):
         before = deepcopy(value); report = validator(value)
@@ -93,7 +93,7 @@ def test_present_invalid_values_are_red_without_coercion_or_provenance(fn, key, 
         assert value == before
 
 
-@pytest.mark.parametrize("fn", ("set_projectile_sentry", "set_descendant_concurrency"))
+@pytest.mark.parametrize("fn", ("sentry", "descendant_limit"))
 def test_missing_required_choice_and_item_body_target_remain_red(fn):
     doc = build_capability_witness(fn)
     call = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == fn)
@@ -105,7 +105,7 @@ def test_missing_required_choice_and_item_body_target_remain_red(fn):
     wire = compile_runtime_program(_fixture())
     wire.pop("runtimeContract")
     item = wire["runtimeProgram"]["entities"][0]
-    if fn == "set_projectile_sentry":
+    if fn == "sentry":
         item["nativeSentry"] = False
     else:
         item.setdefault("spawn", {})["descendantMaxActive"] = 1
@@ -133,6 +133,6 @@ def test_accepted_absence_of_lifecycle_and_pool_is_not_materialized():
 
 
 def test_descendant_capacity_range_is_strictly_audited():
-    rows = [r for r in _runtime_param_bound_rows() if r["capability"] == "set_descendant_concurrency"]
+    rows = [r for r in _runtime_param_bound_rows() if r["capability"] == "descendant_limit"]
     assert len(rows) == 1 and rows[0]["preserved"]
     assert rows[0]["csharpBounds"] == [1, 96] and rows[0]["admission"] == "reject_without_clamp"

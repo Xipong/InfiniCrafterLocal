@@ -1,5 +1,5 @@
 from __future__ import annotations
-from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
+from infini_local.pipelines.vfx import request as vfx_transport
 
 import importlib
 import json
@@ -15,7 +15,8 @@ from infini_local.storage import trace_runtime, trace_tools
 @pytest.mark.parametrize("enabled", [True, False])
 def test_real_director_seams_store_complete_response_and_request_without_semantic_changes(monkeypatch, tmp_path, stage, enabled):
     import copy
-    from infini_local.pipelines import llm_authoring_pipeline as author, visual_generation_pipeline as visual
+    from infini_local.pipelines.author import request as author
+    import infini_local.pipelines.visual.request as visual_request
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     _runtime_cache(monkeypatch, tmp_path)
@@ -27,7 +28,7 @@ def test_real_director_seams_store_complete_response_and_request_without_semanti
     def respond(request, **kwargs):
         captured.append(copy.deepcopy(request))
         return {"choices": [{"message": {"content": raw}}]}
-    for owner in (author, visual, vfx_transport):
+    for owner in (author, visual_request, vfx_transport):
         monkeypatch.setattr(owner, "llm_chat_json", respond)
         monkeypatch.setattr(owner, "resolve_llm_model", lambda: "offline-model")
     if stage.startswith("visual"):
@@ -37,15 +38,16 @@ def test_real_director_seams_store_complete_response_and_request_without_semanti
         kwargs = {"repair_errors": [{"path": "$.item.silhouette", "message": "required"}],
                   "previous": {"item": {"prompt": "frozen"}},
                   "repair_scope": {"itemMutable": True, "fieldPermissions": {"itemPaths": ["silhouette"]}}} if stage.endswith("repair") else {}
-        result = visual._request_visual_kit(data, {}, {}, **kwargs)
+        result = visual_request._request_visual_kit(data, {}, {}, **kwargs)
         assert data == before
     else:
-        from infini_local.core import vfx_manifest as vfx
+        import infini_local.pipelines.vfx.prompt as vfx_prompt
+        import infini_local.pipelines.vfx.stage as vfx_stage
         from prompt_packet_helpers import request_dossier
         data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
         data.update(id="g_exact", recipeKey="r_exact")
-        packet = vfx._prompt_packet(data, {}, {})
-        arguments = vfx._request(lambda *args, **kwargs: (args, kwargs), packet,
+        packet = vfx_prompt._prompt_packet(data, {}, {})
+        arguments = vfx_stage._request(lambda *args, **kwargs: (args, kwargs), packet,
                                  **({"repair_errors": [{"path": "$.slots", "message": "required"}],
                                      "previous": {}, "repair_scope": {}} if stage.endswith("repair") else {}))
         user = arguments[0][1]
@@ -55,7 +57,10 @@ def test_real_director_seams_store_complete_response_and_request_without_semanti
                     {"role": "user", "name": "vfx_repair_context", "content": json.dumps(user, ensure_ascii=False)}] if stage.endswith("repair") else None
         result = vfx_transport.call_llm_vfx_director("exact contract", user, 123, 0.2, 5, messages=messages)
         assert user == before
-        assert request_dossier(captured[0]) == before
+        from infini_local.core.vfx.materials import vfx_model_context
+        projected = request_dossier(captured[0])
+        assert projected == vfx_model_context(before)
+        assert projected["source"] == before["source"], "literal input bytes survive model spelling and logging"
         assert captured[0]["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
     expected_result = json.loads(raw)
     if stage == "visual_repair":
@@ -133,13 +138,13 @@ def test_http_access_diagnostics_are_silent_off_and_redacted_on(monkeypatch, cap
 @pytest.mark.parametrize("enabled", [True, False])
 def test_sdcpp_lifecycle_recording_obeys_logging_toggle_without_launching_backend(monkeypatch, tmp_path, enabled):
     from infini_local.services import sdcpp_service
-    from infini_local.pipelines import image_backend_pipeline as backend
+    from infini_local.pipelines.images import backends as backend
     _runtime_cache(monkeypatch, tmp_path)
     monkeypatch.setattr(trace_runtime, "TRACE_PROMPTS_ENABLED", enabled)
     state = sdcpp_service.SdcppServerState()
     monkeypatch.setattr(backend, "SDCPP_SERVER_STATE", state)
     monkeypatch.setattr(backend, "CACHE_DIR", tmp_path)
-    monkeypatch.setattr(backend, "ROOT", tmp_path)
+    monkeypatch.setattr(backend, "STATE_ROOT", tmp_path)
     monkeypatch.setattr(backend, "SDCPP_SERVER_AUTOSTART", True)
     monkeypatch.setattr(backend, "SDCPP_SERVER_SHOW_CONSOLE", False)
     monkeypatch.setattr(backend, "SDCPP_SERVER_LOG_FILE", "")
@@ -455,3 +460,183 @@ def test_disabled_failure_preserves_in_memory_error_without_debug_artifact(monke
     assert result["ok"] is False and "craft failed" in result["error"]
     assert generation_debug.last_combine_failure_summary()["stage"] == "author"
     assert list(tmp_path.iterdir()) == []
+
+
+def test_health_response_survives_unusable_stdout(monkeypatch):
+    import sys
+    import threading
+    from http.server import ThreadingHTTPServer
+    from urllib.request import urlopen
+    from test_provider_http_contract import boundary_handler
+
+    class BrokenOutput:
+        def write(self, _text):
+            raise OSError(22, "Invalid argument")
+        def flush(self):
+            pass
+
+    handler, _ = boundary_handler(path="/health")
+    server = ThreadingHTTPServer(("127.0.0.1", 0), type(handler))
+    worker = threading.Thread(target=server.serve_forever)
+    worker.start()
+    try:
+        monkeypatch.setattr(trace_runtime, "TRACE_PROMPTS_ENABLED", True)
+        with monkeypatch.context() as patch:
+            patch.setattr(sys, "stdout", BrokenOutput())
+            with urlopen(f"http://127.0.0.1:{server.server_port}/health", timeout=5) as response:
+                assert response.status == 200
+                assert json.load(response) == {"ok": True, "route": "health"}
+    finally:
+        server.shutdown()
+        worker.join(timeout=5)
+        server.server_close()
+
+
+def test_visible_sdcpp_console_also_persists_startup_failure(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    from pathlib import Path
+    from infini_local.services import sdcpp_service as service
+
+    state = service.SdcppServerState()
+    monkeypatch.setattr(service, "os", SimpleNamespace(name="nt", environ={}))
+    monkeypatch.setattr(service, "install_cleanup_handlers", lambda *args: None)
+    calls = []
+    class Process:
+        returncode = 1
+        def poll(self):
+            return 1
+    def spawn(command, **kwargs):
+        calls.append((command, kwargs))
+        if len(calls) == 1:
+            kwargs["stdout"].write("sd.cpp failed to load model\n")
+            kwargs["stdout"].flush()
+        return Process()
+    monkeypatch.setattr(service.subprocess, "Popen", spawn)
+    cleanup = lambda reason: service.cleanup_server_process(state, lambda *_: None, reason)
+    result = service.ensure_server(
+        state=state, root=tmp_path, cache_dir=tmp_path, server_url="http://127.0.0.1:1",
+        server_autostart=True, startup_timeout=5, show_console=True, server_log_file="",
+        server_is_alive=lambda: False, build_command=lambda: (["sd-server"], False),
+        stringify_cmd=lambda cmd: " ".join(cmd), cleanup_process=cleanup,
+        log_event=lambda *_: None, tail_text_file=lambda path, size: Path(path).read_text()[-size:],
+    )
+    assert result is False
+    assert state.last_exit["returncode"] == 1
+    assert "sd.cpp failed to load model" in state.last_exit["logTail"]
+    assert "sd.cpp failed to load model" in (tmp_path / "sdcpp_server.log").read_text()
+    assert len(calls) == 2  # sd-server and the live log viewer
+
+
+@pytest.mark.parametrize("failure", [None, "terminate", "wait", "kill"])
+def test_sdcpp_viewer_cleanup_keeps_ownership_until_exit(monkeypatch, failure):
+    from infini_local.services import sdcpp_service as service
+
+    class Viewer:
+        returncode = None
+        def __init__(self):
+            self.calls = []
+        def poll(self):
+            return self.returncode
+        def terminate(self):
+            self.calls.append("terminate")
+            if failure in ("terminate", "kill"):
+                raise OSError("viewer handle failure")
+            if failure != "wait":
+                self.returncode = 0
+        def wait(self, timeout):
+            self.calls.append("wait")
+            if self.returncode is None:
+                raise service.subprocess.TimeoutExpired("viewer", timeout)
+        def kill(self):
+            self.calls.append("kill")
+            if failure == "kill":
+                raise OSError("viewer kill denied")
+            self.returncode = 0
+
+    viewer = Viewer()
+    backend = Viewer()
+    state = service.SdcppServerState(process=backend, log_viewer=viewer)
+    events = []
+    def stop_backend(process, *, hard):
+        assert process is backend
+        process.returncode = 0
+    monkeypatch.setattr(service, "_terminate_process_tree", stop_backend)
+    service.cleanup_server_process(state, lambda *event: events.append(event), "test")
+    assert backend.poll() == 0 and state.process is None
+    if failure == "kill":
+        assert state.log_viewer is viewer and viewer.poll() is None
+        assert any(event[0] == "warn" for event in events)
+        failure = None
+        service.cleanup_server_process(state, lambda *event: events.append(event), "retry")
+        assert viewer.calls.count("terminate") == 2
+    elif failure in ("terminate", "wait"):
+        assert viewer.calls.count("kill") == 1
+    else:
+        assert "kill" not in viewer.calls
+    assert state.log_viewer is None and viewer.poll() == 0
+
+
+@pytest.mark.parametrize("mode", ["missing_viewer", "startup_exit", "timeout", "restart", "retained_viewer"])
+def test_sdcpp_viewer_does_not_replace_or_break_owned_server(monkeypatch, tmp_path, mode):
+    from pathlib import Path
+    from types import SimpleNamespace
+    from infini_local.services import sdcpp_service as service
+
+    class Process:
+        def __init__(self, returncode=None, stubborn=False):
+            self.returncode, self.stubborn, self.stops = returncode, stubborn, 0
+        def poll(self):
+            return self.returncode
+        def terminate(self):
+            self.stops += 1
+            if self.stubborn:
+                raise OSError("viewer handle failure")
+            self.returncode = 0
+        kill = terminate
+        def wait(self, timeout):
+            return self.returncode
+
+    server = Process(1 if mode == "startup_exit" else None)
+    viewer, previous = Process(), Process(stubborn=mode == "retained_viewer")
+    state = service.SdcppServerState()
+    if mode in ("restart", "retained_viewer"):
+        state.process, state.log_viewer = Process(1), previous
+    calls, events, clock = [], [], [0]
+    monkeypatch.setattr(service, "os", SimpleNamespace(name="nt", environ={}))
+    monkeypatch.setattr(service, "install_cleanup_handlers", lambda *_: None)
+    monkeypatch.setattr(service, "_terminate_process_tree", lambda process, hard: process.terminate())
+    monkeypatch.setattr(service.time, "time", lambda: clock[0])
+    monkeypatch.setattr(service.time, "sleep", lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+    def spawn(command, **kwargs):
+        calls.append((command, kwargs))
+        if len(calls) == 1:
+            kwargs["stdout"].write("captured model startup output\n")
+            kwargs["stdout"].flush()
+            return server
+        if mode == "missing_viewer":
+            raise FileNotFoundError("powershell.exe")
+        return viewer
+    monkeypatch.setattr(service.subprocess, "Popen", spawn)
+    result = service.ensure_server(
+        state=state, root=tmp_path, cache_dir=tmp_path, server_url="http://127.0.0.1:1",
+        server_autostart=True, startup_timeout=5, show_console=True, server_log_file="",
+        server_is_alive=lambda: bool(calls) and mode not in ("startup_exit", "timeout"),
+        build_command=lambda: (["sd-server"], False), stringify_cmd=lambda command: " ".join(command),
+        cleanup_process=lambda reason: service.cleanup_server_process(state, lambda *event: events.append(event), reason),
+        log_event=lambda *event: events.append(event), tail_text_file=lambda path, size: Path(path).read_text()[-size:],
+    )
+    assert "captured model startup output" in (tmp_path / "sdcpp_server.log").read_text()
+    if mode in ("startup_exit", "timeout"):
+        assert not result and state.process is None and state.log_viewer is None
+        assert viewer.poll() == 0 and viewer.stops == 1
+        if mode == "startup_exit":
+            assert state.last_exit["returncode"] == 1
+    else:
+        assert result and state.process is server and server.poll() is None
+        if mode == "retained_viewer":
+            assert state.log_viewer is previous and previous.poll() is None
+            assert len(calls) == 1  # Never overwrite unresolved process ownership.
+        elif mode == "missing_viewer":
+            assert state.log_viewer is None and any(event[0] == "warn" for event in events)
+        else:
+            assert state.log_viewer is viewer and previous.poll() == 0

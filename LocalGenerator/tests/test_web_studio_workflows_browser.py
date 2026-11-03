@@ -45,6 +45,44 @@ def browser_studio():
             server.close()
 
 
+@pytest.mark.parametrize('viewport', [{'width': 1440, 'height': 1000}, {'width': 390, 'height': 844}])
+@pytest.mark.parametrize('route', ['operate', 'configure'])
+def test_config_folder_is_visible_and_preserves_draft_after_action(browser_studio, viewport, route):
+    page, server, snapshot = browser_studio
+    expect = pytest.importorskip('playwright.sync_api').expect
+    config_path = 'C:/Folder with spaces/Override/config.env'
+    snapshot['configPath'] = config_path
+    server.publish(snapshot)
+    page.set_viewport_size(viewport)
+    page.goto(server.url + '#' + route)
+    folder = page.get_by_role('button', name='Открыть папку конфигурации', exact=True)
+    expect(folder).to_be_visible()
+    assert folder.evaluate('(element) => !element.closest("details")')
+    if route == 'configure':
+        path = page.get_by_label('Путь к файлу настроек', exact=True)
+        expect(path).to_have_value(config_path)
+        assert path.get_attribute('readonly') is not None
+        path.select_text()
+        assert path.evaluate('(element) => element.value.slice(element.selectionStart, element.selectionEnd)') == config_path
+    page.locator('#language-select').select_option('en')
+    expect(page.get_by_role('button', name='Open config folder', exact=True)).to_be_visible()
+    expect(page.locator('#save-tray')).to_be_visible()
+    page.get_by_role('button', name='Open config folder', exact=True).click()
+    command = server.commands.get(timeout=5)
+    assert command['action'] == 'openConfigFolder' and 'path' not in command['extra']
+    snapshot['actionResults'] = [{'id': command['id'], 'action': command['action'],
+                                  'ok': True, 'status': 'succeeded', 'message': 'Opened fixture folder'}]
+    server.publish(snapshot)
+    expect(page.get_by_role('button', name='Open config folder', exact=True)).to_be_enabled()
+    expect(page.locator('#language-select')).to_have_value('en')
+    expect(page.locator('#save-tray')).to_be_visible()
+    assert page.url.endswith('#' + route), 'Opening the folder must not navigate to another settings page'
+    if route == 'configure':
+        expect(page.get_by_label('Config file path', exact=True)).to_have_value(config_path)
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    assert server.commands.empty()
+
+
 def finish_catalog(server, snapshot, command, *, ok=True):
     snapshot['fields'][1]['options'] = ['fixture-model', 'fixture-second']
     snapshot['account']['catalog'] = 'Fixture catalog ready' if ok else 'Fixture catalog unavailable'
@@ -52,6 +90,64 @@ def finish_catalog(server, snapshot, command, *, ok=True):
                                   'status': 'succeeded' if ok else 'failed',
                                   'message': snapshot['account']['catalog']}]
     server.publish(snapshot)
+
+
+@pytest.mark.parametrize('viewport', [{'width': 1440, 'height': 1000}, {'width': 390, 'height': 844}])
+def test_language_switch_preserves_draft_values_and_saved_selection(browser_studio, viewport):
+    page, server, snapshot = browser_studio
+    expect = pytest.importorskip('playwright.sync_api').expect
+    values = snapshot['savedValues']
+    raw_value = 'Сохранить {0} <b>untouched</b>'
+    values.update(INFINI_LANGUAGE='ru', INFINI_PRIVATE_UNKNOWN=raw_value)
+    snapshot['values'] = dict(values)
+    server.publish(snapshot)
+    page.set_viewport_size(viewport)
+    page.goto(server.url + '#configure')
+    page.locator('details[data-details="all-settings"]').evaluate('(element) => element.open = true')
+    field = page.locator('#field-INFINI_PRIVATE_UNKNOWN')
+    expect(field).to_have_value(raw_value)
+    changed = raw_value + ' — черновик'
+    field.fill(changed)
+    heading_ru = page.locator('#workspace h1').inner_text()
+    language = page.locator('#language-select')
+    language.select_option('en')
+    expect(page.locator('html')).to_have_attribute('lang', 'en')
+    expect(page.locator('#workspace h1')).not_to_have_text(heading_ru)
+    expect(language).to_be_focused()
+    expect(field).to_have_value(changed)
+    expect(page.locator('#save-tray')).to_be_visible()
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+    page.locator('#save-tray [data-action="save"]').click()
+    command = server.commands.get(timeout=5)
+    assert command['action'] == 'save'
+    assert command['values']['INFINI_LANGUAGE'] == 'en'
+    assert command['values']['INFINI_PRIVATE_UNKNOWN'] == changed
+    assert command['values']['INFINI_CODEX_LLM_MODEL'] == values['INFINI_CODEX_LLM_MODEL']
+    # A later language choice belongs to the draft, not the pending Save.
+    language.select_option('ru')
+    expect(page.locator('html')).to_have_attribute('lang', 'ru')
+    saved = dict(values, **command['values'])
+    snapshot.update(values=saved, savedValues=saved, savedRevision='language-saved',
+                    actionResults=[{'id': command['id'], 'action': 'save', 'status': 'succeeded',
+                                    'ok': True, 'savedValues': saved, 'savedRevision': 'language-saved'}])
+    server.publish(snapshot)
+    expect(page.locator('#save-tray [data-action="save"]')).to_be_enabled()
+    expect(page.locator('html')).to_have_attribute('lang', 'ru')
+    expect(page.locator('#save-tray')).to_be_visible()
+    expect(field).to_have_value(changed)
+    language.select_option('en')
+    expect(page.locator('#save-tray')).to_be_hidden()
+    page.reload()
+    expect(page.locator('html')).to_have_attribute('lang', 'en')
+    expect(language).to_have_value('en')
+    page.locator('details[data-details="all-settings"]').evaluate('(element) => element.open = true')
+    expect(field).to_have_value(changed)
+    language.select_option('ru')
+    expect(page.locator('html')).to_have_attribute('lang', 'ru')
+    expect(page.locator('#workspace h1')).to_have_text(heading_ru)
+    expect(field).to_have_value(changed)
+    assert server.commands.empty(), 'Switching interface language alone must not write settings'
 
 
 @pytest.mark.parametrize('viewport', [{'width': 1440, 'height': 1000}, {'width': 390, 'height': 844}])
@@ -387,10 +483,14 @@ def test_light_theme_and_accent_follow_current_navigation(browser_studio, viewpo
     def expect_route_highlight():
         # The active link is intentionally transparent: the separate accent
         # marker supplies its background, including after keyboard navigation.
+        # Marker geometry can settle before the link's background/color
+        # transitions finish; inspect the settled colors below, not a frame.
         page.wait_for_function('''() => {
             const marker = document.querySelector('.nav-active-marker').getBoundingClientRect();
-            const active = document.querySelector('.nav-link.active').getBoundingClientRect();
-            return ['top', 'left', 'width', 'height'].every(key => Math.abs(marker[key] - active[key]) <= 1);
+            const activeLink = document.querySelector('.nav-link.active');
+            const active = activeLink.getBoundingClientRect();
+            return ['top', 'left', 'width', 'height'].every(key => Math.abs(marker[key] - active[key]) <= 1)
+                && activeLink.getAnimations().every(animation => animation.playState === 'finished');
         }''')
 
     expect_route_highlight()
@@ -479,3 +579,35 @@ def test_defaults_refresh_does_not_reopen_or_replace_dismissed_dialog(browser_st
         if dismissal == 'reopen':
             expect(page.locator('#defaults-refresh')).to_be_focused()
     assert server.commands.empty(), 'Refreshing or dismissing must never apply recommendations'
+
+
+@pytest.mark.parametrize('viewport', [{'width': 1440, 'height': 1000}, {'width': 390, 'height': 844}])
+def test_lifecycle_toasts_stack_deduplicate_and_close(browser_studio, viewport):
+    page, server, snapshot = browser_studio
+    expect = pytest.importorskip('playwright.sync_api').expect
+    page.set_viewport_size(viewport)
+    snapshot['notifications'] = [{'id': 'historical', 'level': 'info', 'title': 'Old', 'message': 'Historical'}]
+    server.publish(snapshot)
+    page.goto(server.url + '#operate')
+    page.wait_for_selector('.station')
+    expect(page.locator('#toasts .toast')).to_have_count(0)
+    snapshot['notifications'] += [
+        {'id': 'generator-ready', 'level': 'info', 'title': 'Генератор готов', 'message': 'Соединение с генератором подтверждено.'},
+        {'id': 'sdcpp-ready', 'level': 'info', 'title': 'sd.cpp готов', 'message': 'Управляемый сервер изображений подтвердил готовность.'},
+    ]
+    server.publish(snapshot)
+    expect(page.locator('#toasts .toast')).to_have_count(2)
+    for toast in page.locator('#toasts .toast').all():
+        expect(toast).to_be_visible()
+        assert toast.get_attribute('role') == 'status'
+        box = toast.bounding_box()
+        assert box and box['x'] >= 0 and box['x'] + box['width'] <= viewport['width']
+    output = os.environ.get('INFINI_TEST_TOAST_SCREENSHOTS')
+    if output:
+        page.screenshot(path=str(Path(output) / f"toast-{viewport['width']}.png"))
+    page.locator('#toasts .toast button').first.click()
+    expect(page.locator('#toasts .toast')).to_have_count(1)
+    server.publish(snapshot)
+    # Wait for the next real poll: the dismissed notice must not reappear.
+    page.wait_for_timeout(1800)
+    expect(page.locator('#toasts .toast')).to_have_count(1)

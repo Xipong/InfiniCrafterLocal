@@ -1,28 +1,30 @@
 """Canonical registry inventories and real schema/validator/Repair/compiler consumers."""
 
 from __future__ import annotations
+
+import json
+from copy import deepcopy
 from dataclasses import replace
 from types import MappingProxyType
-from copy import deepcopy
-import json
+
+import infini_local.core.runtime_authoring.capability_registry as capability_registry
+import infini_local.core.runtime_authoring.capability_registry as registry_module
+import infini_local.core.runtime_authoring.repair.scope as repair_scope
+import infini_local.core.runtime_authoring.validator as validator
+import infini_local.core.runtime_authoring.validator as validator_module
 import pytest
 from infini_local.core.runtime_authoring.capability_registry import (
-    CAPABILITY_REGISTRY,
     BINDING_ACTION_REGISTRY,
+    CAPABILITY_REGISTRY,
     ENTITY_KIND_REGISTRY,
     EVENT_KIND_REGISTRY,
     INPUT_KIND_REGISTRY,
-    runtime_authoring_registry_manifest,
 )
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import runtime_program_author_schema
+from infini_local.core.runtime_authoring.registry_views import runtime_authoring_registry_manifest
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-import infini_local.core.runtime_authoring.validator as validator
-import infini_local.core.runtime_authoring.repair_scope as repair_scope
-import infini_local.core.runtime_authoring.capability_registry as capability_registry
-import infini_local.core.runtime_authoring.capability_registry as registry_module
-import infini_local.core.runtime_authoring.validator as validator_module
-from infini_local.core.runtime_authoring.program_schema import runtime_program_author_schema
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
@@ -53,8 +55,8 @@ def test_machine_manifest_has_exact_registry_identity(key, identity, registry):
 
 @pytest.mark.parametrize("fn", [cap.name for cap in CAPABILITY_REGISTRY.values() if cap.author_visible])
 def test_registered_capability_reaches_provider_and_wire_without_mutation(fn):
+    from infini_local.pipelines.author.item_contract import author_item_response_schema
     from jsonschema import Draft202012Validator
-    from infini_local.pipelines.author_item_contract import author_item_response_schema
 
     item = build_capability_witness(fn)
     before = deepcopy(item)
@@ -72,7 +74,7 @@ def test_registered_capability_reaches_provider_and_wire_without_mutation(fn):
 
 
 def test_registry_mutation_updates_schema_but_missing_executor_stays_red(monkeypatch: pytest.MonkeyPatch) -> None:
-    source = CAPABILITY_REGISTRY["emit_light_while_active"]
+    source = CAPABILITY_REGISTRY["projectile_light"]
     synthetic = replace(
         source,
         name="emit_test_light",
@@ -111,7 +113,7 @@ def test_event_registry_mutation_reaches_validator_and_repair_projection(monkeyp
     ]
     original_errors = validator.validate_runtime_program(without_damage)["errors"]
     assert [(row["code"], row["allowed"]) for row in original_errors] == [
-        ("event_not_emitted", ["set_projectile_damage"]),
+        ("event_not_emitted", ["projectile_damage"]),
     ]
 
     # Conversely, removing collision leaves an unrelated required-component
@@ -127,7 +129,7 @@ def test_event_registry_mutation_reaches_validator_and_repair_projection(monkeyp
     registry = dict(EVENT_KIND_REGISTRY)
     registry["on_hit"] = replace(
         registry["on_hit"],
-        producer_capabilities=("set_projectile_collision",),
+        producer_capabilities=("projectile_collision",),
     )
     monkeypatch.setattr(capability_registry, "EVENT_KIND_REGISTRY", registry)
     assert validator.validate_runtime_program(without_damage)["ok"] is True
@@ -135,9 +137,35 @@ def test_event_registry_mutation_reaches_validator_and_repair_projection(monkeyp
     changed_errors = validator.validate_runtime_program(without_collision)["errors"]
     event_errors = [row for row in changed_errors if row["code"] == "event_not_emitted"]
     assert len(event_errors) == 1
-    assert event_errors[0]["allowed"] == ["set_projectile_collision"]
+    assert event_errors[0]["allowed"] == ["projectile_collision"]
     assert event_errors[0]["relatedIds"] == ["workbench_blade"]
     scope = repair_scope.build_runtime_repair_scope(without_collision, event_errors)
-    assert scope["create"]["calls"]["allowedFns"] == ["set_projectile_collision"]
+    assert scope["create"]["calls"]["allowedFns"] == ["projectile_collision"]
     assert scope["create"]["calls"]["allowedTargetIds"] == ["workbench_blade"]
-    assert scope["repairRequirements"][0]["requiredOneOfCapabilities"] == ["set_projectile_collision"]
+    assert scope["repairRequirements"][0]["requiredOneOfCapabilities"] == ["projectile_collision"]
+
+
+@pytest.mark.parametrize("name", list(EVENT_KIND_REGISTRY))
+def test_author_event_cards_preserve_all_nonempty_producer_conditions(name):
+    from infini_local.pipelines.author.prompt import sharp_engine_fn_catalog_for_llm
+
+    source = EVENT_KIND_REGISTRY[name].prompt_card()
+    rows = [row for row in sharp_engine_fn_catalog_for_llm()["events"] if row["event"] == name]
+    assert len(rows) == 1
+    delivered = rows[0]
+    for key, value in source.items():
+        if value is None or value == [] or value == {}:
+            assert key not in delivered
+        else:
+            assert delivered[key] == value
+
+
+def test_author_event_metadata_omission_does_not_drop_false_or_exact_zero():
+    event = replace(EVENT_KIND_REGISTRY["on_hit"], producer_binding_contact_damage=False,
+                    producer_exact_params={"producer": {"count": 0, "enabled": False}})
+    card = event.author_prompt_card()
+    assert card["producerBindingContactDamage"] is False
+    assert card["producerExactParams"] == {"producer": {"count": 0, "enabled": False}}
+    # The complete registry view is still available for non-prompt consumers.
+    assert "producedByBindingInputs" in replace(event, producer_binding_inputs=()).prompt_card()
+    assert "producedByBindingInputs" not in replace(event, producer_binding_inputs=()).author_prompt_card()

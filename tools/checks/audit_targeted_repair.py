@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit blocker-scoped conditional Repair against representative v5 failures."""
+"""Audit blocker-scoped conditional Repair against representative current Author failures."""
 from __future__ import annotations
 
 import argparse
@@ -13,16 +13,13 @@ from typing import Any, Callable
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "LocalGenerator"))
 
-from infini_local.core.runtime_authoring.repair_scope import (
-    REPAIR_ERROR_POLICY,
-    REPAIR_VALIDATION_ERROR_CODES,
-    build_runtime_repair_scope,
-    filter_repair_patch_scope,
-)
-from infini_local.core.runtime_authoring.validator import VALIDATION_ERROR_CODES, validate_runtime_program
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-from infini_local.pipelines.llm_authoring_pipeline import (
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.schema import REPAIR_ERROR_POLICY, REPAIR_VALIDATION_ERROR_CODES
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.validator import VALIDATION_ERROR_CODES, validate_runtime_program
+from infini_local.pipelines.author.request import (
     build_gameplay_repair_dossier,
     build_initial_author_request,
 )
@@ -97,8 +94,8 @@ def _channel_dependency(data: dict[str, Any]) -> None:
     # Keep the valid independent position owners frozen. Charge has an exact
     # declared channel dependency; a retired bundle is not a fresh repair case.
     data["runtimeProgram"]["calls"].append({
-        "id": "charge_input", "fn": "accumulate_projectile_charge",
-        "target": "workbench_blade", "params": {"durationSeconds": 0.2},
+        "id": "charge_input", "fn": "charge",
+        "target": "workbench_blade", "params": {"duration": 0.2},
     })
 
 
@@ -120,13 +117,13 @@ def _frozen_merge_probe() -> dict[str, Any]:
     old_damage = item_stats["params"]["damage"]
     old_hand_pose = item_use["params"]["handPose"]
     item_use["params"].pop("useStyle", None)
-    item_use["params"].pop("customHeldSprite", None)  # optional, deliberately not reported as required
+    item_use["params"].pop("holdoutOffsetX", None)  # optional, deliberately not reported as required
     validation = validate_runtime_program(current)
     scope = build_runtime_repair_scope(current, validation["errors"])
 
     fixed = copy.deepcopy(item_use)
     fixed["params"]["useStyle"] = "shoot"
-    fixed["params"]["customHeldSprite"] = "visible"
+    fixed["params"]["holdoutOffsetX"] = 7
     fixed["params"]["handPose"] = "two_handed"
     rewrite = copy.deepcopy(item_stats)
     rewrite["params"]["damage"] = 999
@@ -141,7 +138,7 @@ def _frozen_merge_probe() -> dict[str, Any]:
         "exactRequiredFixApplied": repaired_use["params"].get("useStyle") == "shoot",
         "frozenExistingValuePreserved": repaired_use["params"].get("handPose") == old_hand_pose,
         "independentDamagePreserved": repaired_stats["params"].get("damage") == old_damage,
-        "optionalUnreportedAdditionIgnored": "customHeldSprite" not in repaired_use["params"],
+        "optionalUnreportedAdditionIgnored": "holdoutOffsetX" not in repaired_use["params"],
         "ignoredChangeCount": len(audit.get("ignoredChanges") or []),
         "acceptedPaths": list(audit.get("acceptedPaths") or []),
         "ok": bool(
@@ -149,7 +146,7 @@ def _frozen_merge_probe() -> dict[str, Any]:
             and repaired_use["params"].get("useStyle") == "shoot"
             and repaired_use["params"].get("handPose") == old_hand_pose
             and repaired_stats["params"].get("damage") == old_damage
-            and "customHeldSprite" not in repaired_use["params"]
+            and "holdoutOffsetX" not in repaired_use["params"]
         ),
     }
 
@@ -190,9 +187,9 @@ def _emitted_validator_codes() -> set[str]:
 
 def _frozen_callsite_audit() -> dict[str, Any]:
     paths = [
-        ROOT / "LocalGenerator/infini_local/core/runtime_authoring/repair_scope.py",
-        ROOT / "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
-        ROOT / "LocalGenerator/infini_local/core/vfx_manifest.py",
+        ROOT / "LocalGenerator/infini_local/core/runtime_authoring/repair/filter.py",
+        ROOT / "LocalGenerator/infini_local/pipelines/visual/repair.py",
+        ROOT / "LocalGenerator/infini_local/core/vfx/repair.py",
     ]
     total = 0
     explicit_false = 0
@@ -240,7 +237,7 @@ def render() -> dict[str, Any]:
     if "channel_beam" in movement["directCapabilities"] or "charge_then_release" in movement["directCapabilities"]:
         errors.append("missing_position_driver: multi-step/frozen-context alternatives leaked into blocker cards")
     channel = next(row for row in cases if row["name"] == "existing_dependency_parameter_mismatch")
-    if channel["directCapabilities"] != ["configure_item_use"]:
+    if channel["directCapabilities"] != ["item_use"]:
         errors.append("existing_dependency_parameter_mismatch: exact existing dependency was not isolated")
 
     emitted_codes = _emitted_validator_codes()

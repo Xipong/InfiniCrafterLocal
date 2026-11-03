@@ -16,7 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     values = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(
         description='Утилиты QA: безопасный offline-вход; live только с --run.',
-        epilog='live10/live20: исторические входы, preflight или явная text-кампания; panels: каталог запросов; summary: saved ledgers; doctor: read-only prerequisites; replay: saved wire; verify: canonical affected checks; workbench: native item tests and recorded frames.',
+        epilog='live10/live20: versioned inputs, preflight или явная text/image-кампания; panels: каталог запросов; summary: saved ledgers; doctor: read-only prerequisites; replay: saved wire; verify: canonical affected checks; workbench: native item tests and recorded frames.',
     )
     parser.add_argument('command', choices=('live10', 'live20', 'panels', 'summary', 'doctor', 'verify', 'replay', 'workbench'))
     if not values or values[0] in ('-h', '--help'):
@@ -41,7 +41,14 @@ def main(argv: list[str] | None = None) -> int:
     if values[0] == 'verify':
         return subprocess.run([sys.executable, str(BASE_ROOT / 'tools/agentctl.py'), 'verify', *values[1:]], cwd=BASE_ROOT).returncode
     if values[0] == 'replay':
-        child = subprocess.run([sys.executable, '-m', 'toolbox.testing.replay', *values[1:]], cwd=BASE_ROOT, text=True, capture_output=True)
+        from toolbox.testing.replay import build_parser as replay_parser
+        args = replay_parser().parse_args(values[1:])
+        forwarded = [str(args.case.expanduser().resolve())]
+        if args.compare:
+            forwarded.append('--compare')
+        if args.project is not None:
+            forwarded.extend(['--project', str(args.project.expanduser().resolve())])
+        child = subprocess.run([sys.executable, '-m', 'toolbox.testing.replay', *forwarded], cwd=BASE_ROOT, text=True, capture_output=True)
         print(child.stdout, end='')
         print(child.stderr, end='', file=sys.stderr)
         return child.returncode
@@ -79,7 +86,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.run:
             # The child runs at BASE_ROOT; preserve the caller's selected files.
             forwarded = list(values[1:])
-            for name in ('project', 'output', 'config', 'cases_file', 'runtime_dump'):
+            for name in ('project', 'output', 'config', 'cases_file', 'runtime_dump', 'attempt_budget',
+                         'reuse_images_from', 'vfx_only_from'):
                 path = getattr(args, name)
                 if path is not None:
                     forwarded += ['--' + name.replace('_', '-'), str(path.expanduser().resolve())]
@@ -89,6 +97,6 @@ def main(argv: list[str] | None = None) -> int:
             ).returncode
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0
-    except (ValueError, OSError) as exc:
+    except (ValueError, OSError, EOFError) as exc:
         options.error(str(exc))
     return 2

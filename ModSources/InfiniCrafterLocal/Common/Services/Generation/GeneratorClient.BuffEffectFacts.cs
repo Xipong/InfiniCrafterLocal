@@ -18,21 +18,9 @@ public sealed partial class GeneratorClient
     {
         try
         {
-            var assembly = typeof(Player).Assembly;
-            using var stream = File.OpenRead(assembly.Location);
-            string assemblyHash = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
-            string key = assemblyHash + ":" + typeof(Player).Module.ModuleVersionId;
-            if (!NativeBuffEffectCatalog.Sources.TryGetValue(key, out var source)) return null;
-            foreach (var expected in source.Methods)
-            {
-                Type owner = expected.Owner == "Player" ? typeof(Player) : typeof(NPC);
-                MethodInfo? method = owner.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                    .SingleOrDefault(candidate => candidate.Name == expected.Name);
-                byte[]? il = method?.GetMethodBody()?.GetILAsByteArray();
-                if (il is null || Convert.ToHexString(SHA256.HashData(il)).ToLowerInvariant() != expected.Sha256)
-                    return null;
-            }
-            return key;
+            if (!NativeCatalogVerified("buff_effect")) return null;
+            string auditedModule = NativeSourceCertificates.Methods.First(e => e.Group == "buff_effect").AuditedCertificate.Split(':')[1];
+            return NativeBuffEffectCatalog.Sources.Keys.SingleOrDefault(key => key.EndsWith(":" + auditedModule, StringComparison.Ordinal));
         }
         catch { return null; }
     });
@@ -71,6 +59,8 @@ public sealed partial class GeneratorClient
         {
             observation["source"] = "certified_native_buff_operation_fragments";
             observation["sourceCertificate"] = JsonNode.Parse(source.CertificateJson);
+            observation["observedModuleVersionId"] = typeof(Player).Module.ModuleVersionId.ToString();
+            observation["verification"] = "audited_source_semantic_dependency_match; not_arbitrary_mod_hooks";
             return observation;
         }
         return new JsonObject

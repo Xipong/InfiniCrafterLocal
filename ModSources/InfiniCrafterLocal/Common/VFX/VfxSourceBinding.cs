@@ -5,6 +5,8 @@ using InfiniCrafterLocal.Content.Items;
 using InfiniCrafterLocal.Content.Projectiles;
 using Microsoft.Xna.Framework;
 using Terraria;
+using Terraria.ModLoader;
+using Terraria.ModLoader.Default;
 namespace InfiniCrafterLocal.Common.VFX;
 
 // Only references needed to fence exact local generations are retained. World
@@ -23,8 +25,14 @@ internal abstract class VfxSourceBinding
         item ??= player.HeldItem?.ModItem is GeneratedItem held&&held.Data.Id==data.Id?player.HeldItem:null;
         if(item?.ModItem is not GeneratedItem generated||generated.Data.Id!=data.Id)return null;
         int index=ReferenceEquals(player.HeldItem,item)?-1:Array.FindIndex(player.armor??Array.Empty<Item>(),i=>ReferenceEquals(i,item));
-        if(index<0&&!ReferenceEquals(player.HeldItem,item))return null;
-        return new ItemBinding(player,item,generated,index);
+        if(index>=0||ReferenceEquals(player.HeldItem,item))return new ItemBinding(player,item,generated,index);
+        using (new Main.CurrentPlayerOverride(player))
+        foreach (ModAccessorySlot slot in ModContent.GetContent<ModAccessorySlot>()) {
+            if(slot.Type<0||slot.Type>=player.GetModPlayer<ModAccessorySlotPlayer>().LoadedSlotCount)continue;
+            if(ReferenceEquals(slot.FunctionalItem,item))return new ItemBinding(player,item,generated,slot.Type,slot,false);
+            if(ReferenceEquals(slot.VanityItem,item))return new ItemBinding(player,item,generated,slot.Type,slot,true);
+        }
+        return null;
     }
     internal static VfxSourceFrame ItemFrame(Player player,string anchor,Vector2? eventPosition=null)
     {
@@ -55,11 +63,20 @@ internal abstract class VfxSourceBinding
         private readonly GeneratedItem generation;
         private readonly int ownerSlot,itemSlot,type;
         private readonly object fence;
-        internal ItemBinding(Player p,Item i,GeneratedItem g,int index){owner=p;item=i;generation=g;fence=g.PresentationGeneration;ownerSlot=p.whoAmI;itemSlot=index;type=i.type;}
+        private readonly ModAccessorySlot? modSlot;
+        private readonly bool vanity;
+        internal ItemBinding(Player p,Item i,GeneratedItem g,int index,ModAccessorySlot? extraSlot=null,bool social=false){owner=p;item=i;generation=g;fence=g.PresentationGeneration;ownerSlot=p.whoAmI;itemSlot=index;type=i.type;modSlot=extraSlot;vanity=social;}
         internal override object Generation=>fence;
         internal override bool IsLive=>owner.active&&!owner.dead&&ownerSlot>=0&&ownerSlot<Main.player.Length&&ReferenceEquals(Main.player[ownerSlot],owner)
             &&!item.IsAir&&item.type==type&&ReferenceEquals(item.ModItem,generation)&&ReferenceEquals(generation.PresentationGeneration,fence)
-            &&(itemSlot<0?ReferenceEquals(owner.HeldItem,item):itemSlot<owner.armor.Length&&ReferenceEquals(owner.armor[itemSlot],item));
+            &&IsCurrentSlot();
+        private bool IsCurrentSlot() {
+            if(modSlot is null)return itemSlot<0?ReferenceEquals(owner.HeldItem,item):itemSlot<owner.armor.Length&&ReferenceEquals(owner.armor[itemSlot],item);
+            using var currentPlayer=new Main.CurrentPlayerOverride(owner);
+            return itemSlot<owner.GetModPlayer<ModAccessorySlotPlayer>().LoadedSlotCount
+                &&LoaderManager.Get<AccessorySlotLoader>().ModdedIsSpecificItemSlotUnlockedAndUsable(itemSlot,owner,vanity)
+                &&ReferenceEquals(vanity?modSlot.VanityItem:modSlot.FunctionalItem,item);
+        }
         internal override bool TryFrame(string anchor,out VfxSourceFrame frame) {
             frame=default;if(!IsLive||anchor=="hitPoint"||itemSlot>=0&&anchor is "tip" or "tipHistory")return false;
             frame=ItemFrame(owner,anchor);return frame.Valid;

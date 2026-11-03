@@ -84,6 +84,8 @@ def test_historical_parent_rows_preserve_original_source_bytes(filename, count, 
     rows = [json.loads(line) for line in raw.splitlines() if line.strip()]
     assert hashlib.sha256(raw).hexdigest() == original_sha
     assert len(rows) == len({row['internalName'] for row in rows}) == count
+    if filename == 'items.jsonl':
+        assert {row['sourceMod'] for row in rows} == {'Terraria'}
 
 
 def test_panel_specific_parent_context_is_not_merged_by_internal_name():

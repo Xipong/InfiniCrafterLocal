@@ -21,7 +21,6 @@ internal static partial class EngineRuntimeChecks
             lifecycle.PostSetupContent();
             Equal(true, (bool)available.GetValue(null)!, "native profile installs: "
                 + adapter.GetProperty("UnsupportedBoundary", PersistenceStatic)!.GetValue(null));
-            Equal(19, (int)PlacedNativeCall("GetOwnedHookCount")!, "complete native hook roster retained");
             Equal(true, GeneratedPlacedBodyNativeAdapter.TryAdmitNative(
                 Terraria.ID.TileID.Stone, null, false, out _), "supported ordinary native tile admitted");
             Equal(false, GeneratedPlacedBodyNativeAdapter.TryAdmitNative(
@@ -62,10 +61,11 @@ internal static partial class EngineRuntimeChecks
                     Equal(1, unrelated.ReadByte(), "unrelated file opens keep their original bytes");
                 Equal(0, opened, "observer redirects only the exact native assembly path");
                 object?[] install = { (Func<int,int,bool>)((_,_) => false), null, null };
-                Equal(false, (bool)PlacedNativeCall("TryInstall", install)!, "unknown native bytes cannot install");
-                Equal(true, ((string)install[2]!).Contains("unsupported native assembly SHA256"), "hash refusal precedes hooks");
+                Equal(true, (bool)PlacedNativeCall("TryInstall", install)!, "unknown module identity with unchanged method contracts installs");
+                Equal(string.Empty, (string)install[2]!, "module identity is advisory, not a contract refusal");
                 Equal(1, opened, "unknown-byte probe reached actual hash owner");
-                Equal(0, (int)PlacedNativeCall("GetOwnedHookCount")!, "hash refusal retains no hooks");
+                Equal(19, (int)PlacedNativeCall("GetOwnedHookCount")!, "all semantic contracts admitted before enabling hooks");
+                PlacedNativeCall("Unload");
             }
             var methods = (MethodInfo[])PlacedNativeCall("GetFixtureMethods")!;
             var lateMethod = methods.Single(method => method.Name == "DrawMultiTileVinesInWind");

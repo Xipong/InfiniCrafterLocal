@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Fetch pinned official ParticleLibrary assets; never install/replace its DLL.
+"""Install the pinned ParticleLibrary DLL and resources, or verify an existing DLL.
 
+  python fetch_vfx_assets.py --setup
   python fetch_vfx_assets.py --out /path/to/ParticleLibrary-assets --particle-dll /path/to/ParticleLibrary.dll
   export INFINI_PARTICLE_ASSET_DIR=/path/to/ParticleLibrary-assets
 
@@ -26,7 +27,12 @@ def digest(data: bytes) -> str:
 
 
 def verify(data: bytes, entry: dict, label: str) -> None:
-    if len(data) != entry["bytes"] or digest(data) != entry["sha256"]:
+    blob_id = entry.get("gitBlobSha1")
+    actual_blob = hashlib.sha1(b"blob " + str(len(data)).encode("ascii") + b"\0" + data).hexdigest() if blob_id else None
+    if (len(data) != entry["bytes"] or
+        (entry.get("sha256") is not None and digest(data) != entry["sha256"]) or
+        (blob_id is not None and actual_blob != blob_id) or
+        (entry.get("sha256") is None and blob_id is None)):
         raise ValueError(f"Integrity mismatch: {label}; refusing to install/overwrite")
 
 
@@ -49,6 +55,54 @@ def destination(root: Path, relative: str) -> Path:
             raise ValueError(f"Symlink destination is not admitted: {part}")
     if not result.resolve().is_relative_to(root.resolve()):
         raise ValueError(f"Destination escapes output directory: {relative}")
+    return result
+
+
+def install_file(root: Path, entry: dict, fetch=download) -> bool:
+    """Verify an existing file or install downloaded bytes without replacing it."""
+    path = destination(root, entry["path"])
+    if path.exists():
+        verify(path.read_bytes(), entry, str(path))
+        return False
+    data = fetch(entry)
+    verify(data, entry, entry["sourceURL"])
+    destination(root, entry["path"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(prefix=".asset-", dir=path.parent, delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        try:
+            os.link(temporary, path)
+            return True
+        except FileExistsError:
+            verify(path.read_bytes(), entry, str(path))
+            return False
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def setup_particle(deps_root: Path, manifest: dict, fetch=download) -> dict:
+    """Prepare the real pinned DLL and assets in the standard dependency layout."""
+    root = deps_root.expanduser().absolute()
+    if root.is_symlink() or (root.exists() and not root.is_dir()):
+        raise ValueError("Dependency root must be a directory, not a symlink")
+    installed = manifest["installedDll"]
+    if installed["relativePath"] != "ParticleLibrary/ParticleLibrary.dll":
+        raise ValueError("Unexpected ParticleLibrary DLL destination")
+    expected_url = OFFICIAL_PREFIX + manifest["commit"] + "/ParticleLibrary.dll"
+    if installed["sourceURL"] != expected_url:
+        raise ValueError("DLL URL is not the exact pinned official source")
+    dll_entry = {**installed, "path": installed["relativePath"]}
+    downloaded = install_file(root, dll_entry, fetch)
+    dll = destination(root, installed["relativePath"])
+    result = provision(root / "particle-assets", dll, manifest, fetch)
+    result["dll"] = {"path": str(dll), "downloaded": downloaded, "sha256": installed["sha256"]}
+    result["environment"]["INFINI_TML_DEPS_SRC"] = str(root)
     return result
 
 
@@ -77,33 +131,11 @@ def provision(out: Path, particle_dll: Path, manifest: dict, fetch=download) -> 
             verify(path.read_bytes(), entry, str(path))
         paths.append((entry, path))
     downloaded = reused = 0
-    for entry, path in paths:
-        if path.exists():
-            verify(path.read_bytes(), entry, str(path))
+    for entry, _ in paths:
+        if install_file(out, entry, fetch):
+            downloaded += 1
+        else:
             reused += 1
-            continue
-        data = fetch(entry)
-        verify(data, entry, entry["sourceURL"])
-        # Revalidate after the fetch, before creating anything.
-        destination(out, entry["path"])
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = None
-        try:
-            with tempfile.NamedTemporaryFile(prefix=".asset-", dir=path.parent, delete=False) as stream:
-                temporary = Path(stream.name)
-                stream.write(data)
-                stream.flush()
-                os.fsync(stream.fileno())
-            # Exclusive atomic creation: never replace a concurrently created file.
-            try:
-                os.link(temporary, path)
-                downloaded += 1
-            except FileExistsError:
-                verify(path.read_bytes(), entry, str(path))
-                reused += 1
-        finally:
-            if temporary is not None:
-                temporary.unlink(missing_ok=True)
     return {"status": "verified", "package": manifest["package"], "version": manifest["version"],
             "commit": manifest["commit"], "output": str(out), "downloaded": downloaded,
             "reused": reused, "verifiedFiles": len(entries), "verifiedDllSha256": digest(dll),
@@ -113,14 +145,29 @@ def provision(out: Path, particle_dll: Path, manifest: dict, fetch=download) -> 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--out", type=Path, help="Asset directory when verifying an existing DLL")
     parser.add_argument("--particle-dll", type=Path, help="Existing pinned ParticleLibrary.dll (otherwise INFINI_TML_DEPS_SRC/ParticleLibrary/ParticleLibrary.dll)")
+    parser.add_argument("--setup", action="store_true", help="Install pinned official DLL and assets in the standard dependency layout")
+    parser.add_argument("--deps-root", type=Path, help="Dependency root for --setup (default: artifacts/dependencies)")
     args = parser.parse_args()
+    if args.setup:
+        if args.out or args.particle_dll:
+            parser.error("--setup uses its own layout; do not combine with --out or --particle-dll")
+        try:
+            root = args.deps_root or Path(__file__).resolve().parents[2] / "artifacts/dependencies"
+            result = setup_particle(root, json.loads(MANIFEST.read_text(encoding="utf-8")))
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            print(json.dumps({"status": "error", "error": str(error)}))
+            return 2
+        print(json.dumps(result, indent=2))
+        return 0
+    if args.out is None or args.deps_root is not None:
+        parser.error("Use --out with an existing DLL, or --setup with optional --deps-root")
     dll = args.particle_dll
     if dll is None:
         deps = os.environ.get("INFINI_TML_DEPS_SRC")
         if not deps:
-            parser.error("Provide --particle-dll or INFINI_TML_DEPS_SRC; DLL downloads are deliberately unsupported")
+            parser.error("Provide --particle-dll or INFINI_TML_DEPS_SRC, or use --setup to install the pinned DLL")
         dll = Path(deps) / "ParticleLibrary" / "ParticleLibrary.dll"
     try:
         result = provision(args.out, dll, json.loads(MANIFEST.read_text(encoding="utf-8")))

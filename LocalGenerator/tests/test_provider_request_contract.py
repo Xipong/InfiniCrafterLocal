@@ -4,15 +4,15 @@ from __future__ import annotations
 import copy
 import urllib.error
 
+import infini_local.pipelines.transport.http as transport_http
 import pytest
-
 from infini_local.core import llm_config
-from infini_local.pipelines import llm_profiles
-from infini_local.pipelines import llm_provider_wire
 from infini_local.core.llm_json_tools import json_object_candidates, parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_prompt_cache import with_prompt_cache_prefix
-from infini_local.pipelines import llm_transport as llm
-from test_provider_transport_contract import schema_error, packet, wire, loopback_transport  # noqa: F401 - imported pytest fixtures
+from infini_local.pipelines.transport import client as llm
+from infini_local.pipelines.transport import profiles as llm_profiles
+from infini_local.pipelines.transport import provider_wire as llm_provider_wire
+from test_provider_transport_contract import loopback_transport, packet, schema_error, wire  # noqa: F401 - imported pytest fixtures
 
 SCHEMA_REJECTION = {"error": {"code": "unsupported_response_format", "param": "response_format",
                               "message": "json_schema response_format is not supported"}}
@@ -169,8 +169,8 @@ def test_real_http_schema_cache_requires_relevant_rejection_valid_recovery_and_e
 
 
 def test_shape_rejection_reaches_actual_author_failure_with_operator_diagnosis(wire, monkeypatch):
-    from infini_local.pipelines import llm_authoring_pipeline as author
     from infini_local.core.errors import PlannerUnavailable
+    from infini_local.pipelines.author import request as author
     wire.configure(OPENROUTER_PROVIDER="", LLM_PROVIDER="openai_compat", OPENAI_COMPAT_BASE_URL=GOOGLE,
                    OPENAI_COMPAT_MODEL="gemini-3.5-flash-lite", LLM_API_MODE="chat_completions")
     wire.replies.extend([schema_error(GOOGLE + "/chat/completions"), 400])
@@ -350,7 +350,7 @@ def test_successful_provider_reply_keeps_raw_usage_and_publishes_actual_counters
 
 
 @pytest.mark.parametrize("operation,text,expected", [
-    pytest.param("parse", '```json\n{"name":"First"}\n``` trailing {"name":"Second"}', {"name": "First"}, id="fenced-first-object"),
+    pytest.param("parse", '```json\n{"name":"First"}\n```\ntrailing {"name":"Second"}', {"name": "First"}, id="fenced-first-object"),
     pytest.param("candidates", '{"a":1}{"b":2}', ['{"a":1}', '{"b":2}'], id="duplicate-objects"),
     pytest.param("parse", 'prefix {"text":"brace } inside string", "ok": true} suffix', {"text": "brace } inside string", "ok": True}, id="string-braces"),
     pytest.param("parse", '<thought>{"name":"Decoy"}</thought>{"name":"Authored"}', {"name": "Authored"}, id="private-thought"),
@@ -358,10 +358,62 @@ def test_successful_provider_reply_keeps_raw_usage_and_publishes_actual_counters
     pytest.param("parse", '{"text":"<analysis>literal</analysis>"}', {"text": "<analysis>literal</analysis>"}, id="literal-private-tags"),
     pytest.param("parse", '<analysis>{"decoy":1}</analysis>{"text":"<thought>literal"}', {"text": "<thought>literal"}, id="unfinished-literal-tag"),
     pytest.param("parse", '{"text":"quote \\" <analysis>x</analysis>"}', {"text": 'quote " <analysis>x</analysis>'}, id="escaped-quote-before-tag"),
+    pytest.param("parse", 'Example {"above":{"kind":"age"}}.\n```json\n{"note":"final", "callsUpsert":[]}\n```', {"note": "final", "callsUpsert": []}, id="explicit-output-not-prose-example"),
+    pytest.param("parse", 'Example {"above":0}. Final output:```json\n{"note":"final"}\n```', {"note": "final"}, id="inline-output-fence"),
+    pytest.param("parse", 'An unmatched prose "quote\nFinal output:```json\n{"note":"final"}\n```', {"note": "final"}, id="prose-quote-not-json-string"),
+    pytest.param("parse", 'Example {"ok":true}.\n```\n{"authoredInvalidField":0}\n```', {"authoredInvalidField": 0}, id="invalid-authored-shape-preserved"),
+    pytest.param("parse", '{"text":"```json\\n{\\"decoy\\":true}\\n```", "ok":true}', {"text": '```json\n{"decoy":true}\n```', "ok": True}, id="literal-fence-in-authored-string"),
 ])
 def test_json_extraction_preserves_authored_text_not_private_thought(operation, text, expected):
     result = parse_first_valid_llm_json(text) if operation == "parse" else json_object_candidates(text)
     assert result == expected
+
+
+@pytest.mark.parametrize("text", [
+    'Example {"ok":true}.\n```json\n{"bad":}\n```',
+    'Example {"ok":true}.\n```json\n{"child":{"ok":true}',
+    '```json\n{"first":true}\n```\n```json\n{"second":true}\n```',
+    '```json\n{"first":true}{"second":true}\n```',
+    '```json\n[{"nested":true}]\n```',
+    '```json\n{"first":true}\n```json\n{"second":true}',
+    '```json\n{"first":true}\n``` trailing {"second":true}',
+    '```json\n{"note":"first", "note":"second"}\n```',
+    '{"text":"invalid raw newline\n```json\n{\\"nested\\":true}\n```\n"}',
+])
+def test_explicit_json_output_never_rescues_prose_or_nested_objects(text):
+    with pytest.raises(ValueError):
+        parse_first_valid_llm_json(text)
+
+
+@pytest.mark.parametrize("envelope,expected", [
+    ({"output": [
+        {"type": "reasoning", "content": [{"type": "text", "text": '{"decoy":true}'}]},
+        {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": '{"note":"final"}'}]},
+    ]}, '{"note":"final"}'),
+    ({"output_text": '{"decoy":true}', "output": [
+        {"type": "message", "role": "assistant", "content": [
+            {"type": "reasoning_text", "text": '{"nestedDecoy":true}'},
+            {"type": "output_text", "text": '{"note":'}, {"type": "output_text", "text": '"final"}'},
+        ]},
+    ]}, '{"note":"final"}'),
+    ({"output_text": '{"direct":true}'}, '{"direct":true}'),
+])
+def test_responses_transport_preserves_only_final_output_text(monkeypatch, envelope, expected):
+    monkeypatch.setattr(transport_http, "http_json", lambda *_args, **_kwargs: copy.deepcopy(envelope))
+    context = {"provider": "local", "base_url": "http://127.0.0.1:1234/v1", "model": "local-model", "api_mode": "responses"}
+    result = llm._llm_responses_json_single_context({"messages": [], "model": "local-model"}, 1, context)
+    assert result["choices"][0]["message"]["content"] == expected
+
+
+@pytest.mark.parametrize("output", [
+    [{"type": "reasoning", "content": [{"type": "text", "text": '{"decoy":true}'}]}],
+    [{"type": "message", "role": "assistant", "content": [{"type": "refusal", "refusal": "declined"}]}],
+])
+def test_responses_transport_never_uses_reasoning_as_final_output(monkeypatch, output):
+    monkeypatch.setattr(transport_http, "http_json", lambda *_args, **_kwargs: {"output": output})
+    context = {"provider": "local", "base_url": "http://127.0.0.1:1234/v1", "model": "local-model", "api_mode": "responses"}
+    with pytest.raises(RuntimeError):
+        llm._llm_responses_json_single_context({"messages": [], "model": "local-model"}, 1, context)
 
 
 @pytest.mark.parametrize("text", [
@@ -389,7 +441,7 @@ def test_json_syntax_recovery_never_invents_or_rewrites_values(text, expected):
 
 
 def test_platform_responses_explicit_breakpoint_preserves_exact_content_and_is_stateless(monkeypatch):
-    monkeypatch.setattr(llm, "http_json", lambda url, body, **kw: sent.append(body) or {
+    monkeypatch.setattr(transport_http, "http_json", lambda url, body, **kw: sent.append(body) or {
         "id": "resp-id", "output_text": "{}", "usage": {"input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 12}}})
     sent = []
     ctx = {"provider": "openai_compat", "base_url": "https://api.openai.com/v1", "model": "gpt-5.6", "api_mode": "responses", "api_key": "test"}

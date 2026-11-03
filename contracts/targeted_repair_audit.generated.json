@@ -1,5 +1,5 @@
 {
-  "authorVisibleCapabilityCount": 69,
+  "authorVisibleCapabilityCount": 70,
   "cases": [
     {
       "brokenCounts": {
@@ -10,7 +10,7 @@
       "capabilityCardsMatchSubset": true,
       "capabilitySubsetCount": 1,
       "directCapabilities": [],
-      "dossierChars": 36228,
+      "dossierChars": 29538,
       "errorCodes": [
         "shape_one_of",
         "shape_required"
@@ -20,7 +20,7 @@
         "$.runtimeProgram.calls[1].params.useStyle"
       ],
       "existingBrokenCapabilities": [
-        "configure_item_use"
+        "item_use"
       ],
       "name": "missing_required_parameter",
       "nonRepairableCount": 0,
@@ -40,9 +40,9 @@
       "capabilityCardsMatchSubset": true,
       "capabilitySubsetCount": 1,
       "directCapabilities": [
-        "configure_item_use"
+        "item_use"
       ],
-      "dossierChars": 35660,
+      "dossierChars": 28998,
       "errorCodes": [
         "binding_dependency"
       ],
@@ -68,16 +68,16 @@
       "capabilityCardsMatchSubset": true,
       "capabilitySubsetCount": 9,
       "directCapabilities": [
-        "accelerate_projectile_vertical",
-        "attach_projectile",
+        "accelerate_y",
+        "attach",
+        "lash_geometry",
         "move_straight",
-        "orbit_projectile",
-        "oscillate_projectile_velocity",
-        "scale_projectile_velocity",
-        "seek_projectile",
-        "set_projectile_lash_geometry"
+        "orbit",
+        "oscillate_velocity",
+        "scale_velocity",
+        "seek"
       ],
-      "dossierChars": 74533,
+      "dossierChars": 67329,
       "errorCodes": [
         "missing_movement_component"
       ],
@@ -93,7 +93,7 @@
         "entities": 1
       },
       "supportingCapabilities": [
-        "set_projectile_aim"
+        "set_aim"
       ]
     },
     {
@@ -105,9 +105,9 @@
       "capabilityCardsMatchSubset": true,
       "capabilitySubsetCount": 2,
       "directCapabilities": [
-        "configure_item_use"
+        "item_use"
       ],
-      "dossierChars": 42024,
+      "dossierChars": 34376,
       "errorCodes": [
         "missing_item_capability_param"
       ],
@@ -115,8 +115,8 @@
         "$.runtimeProgram.calls[18]"
       ],
       "existingBrokenCapabilities": [
-        "accumulate_projectile_charge",
-        "configure_item_use"
+        "charge",
+        "item_use"
       ],
       "name": "existing_dependency_parameter_mismatch",
       "nonRepairableCount": 0,
@@ -147,16 +147,16 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-  "fullAuthorPayloadChars": 191867,
-  "fullCapabilityCatalogCount": 99,
+  "fullAuthorPayloadChars": 165726,
+  "fullCapabilityCatalogCount": 100,
   "ok": true,
   "policyCoverage": {
-    "declaredCodes": 56,
+    "declaredCodes": 57,
     "declaredEqualsPolicy": true,
-    "emittedCodes": 55,
+    "emittedCodes": 56,
     "nonRepairableRegistryDefect": true,
-    "policyCodes": 56,
-    "runtimeDeclaredCodes": 55,
+    "policyCodes": 57,
+    "runtimeDeclaredCodes": 56,
     "runtimeDeclaredEqualsEmitted": true
   },
   "schema": "infini.targeted-repair-audit.v1"

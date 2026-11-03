@@ -21,7 +21,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     PROJECTILE_MODIFIER_COMPONENTS,
     PROJECTILE_ENTITY_KINDS,
     ENTITY_KINDS,
-    EVENT_ACTION_OPCODE,
+    EVENT_ACTION_OPCODE, WIRE_EVENT_ACTION_OPCODE,
     INPUT_KIND_REGISTRY,
     MOVEMENT_OPCODE,
     RUNTIME_PROGRAM_API_VERSION,
@@ -39,7 +39,7 @@ from infini_local.core.runtime_authoring.validator import (
 _MAX_MOVEMENT_CODE = max(MOVEMENT_OPCODE.values())
 _MAX_CONTROLLER_CODE = 3
 _MAX_EVENT_ACTION_CODE = max(EVENT_ACTION_OPCODE.values())
-_TARGET_EMISSION = "select_targets_and_emit_on_event"
+_TARGET_EMISSION = "emit_to_targets_on_event"
 _TARGET_EMISSION_FIELDS = frozenset(
     spec.wire_name or name for name, spec in CAPABILITY_REGISTRY[_TARGET_EMISSION].params.items()
 )
@@ -79,16 +79,16 @@ _VISUAL_KEYS = frozenset({
     "role", "assetMode", "prompt", "silhouette", "visualIdentity", "impactPrompt", "impactNegativePrompt",
     "scale", "spritePath", "spriteUrl", "spriteStatus", "spriteTechnicalScore", "impactSpritePath",
     "impactSpriteUrl", "impactSpriteStatus", "impactSpriteTechnicalScore", "impactCanvasSize",
-    "renderSizePx", "preferredCanvasSize", "forwardAngleDegrees", "grip",
+    "renderSizePx", "preferredCanvasSize", "forwardAngleDegrees", "grip", "geometry",
 })
 _SPAWN_KEYS = frozenset({"enabled", "speedPxPerTick", "count", "spreadRadians", "offsetPx", "aim", "placement", "overTarget", "velocityDistribution"}) | frozenset(
-    spec.wire_name or name for fn in ("set_projectile_concurrency", "set_descendant_concurrency")
+    spec.wire_name or name for fn in ("projectile_limit", "descendant_limit")
     for name, spec in CAPABILITY_REGISTRY[fn].params.items()
 )
 _OVER_TARGET_KEYS = frozenset({"heightTiles", "delayTicks"})
 _DAMAGE_KEYS = frozenset({"enabled", "damageClass", "damage", "knockback", "ownerHitCheck"})
 _HITBOX_KEYS = frozenset({"widthPx", "heightPx", "drawScale", "hitboxScale"})
-_COLLISION_KEYS = frozenset(field for name, spec in CAPABILITY_REGISTRY["set_projectile_collision"].params.items() for field in spec.wire_field_names(name))
+_COLLISION_KEYS = frozenset(field for name, spec in CAPABILITY_REGISTRY["projectile_collision"].params.items() for field in spec.wire_field_names(name))
 _DRIVER_KEYS = frozenset({"name", "code", "params"})
 _PARAMS_KEYS = frozenset({
     "rangeTiles", "homingStrength", "gravityPerTick", "velocityRetention", "returnAfterTicks", "returnSpeed",
@@ -105,15 +105,15 @@ _EVENT_KEYS = frozenset({
     "id", "event", "action", "actionCode", "entityId", "count", "spreadRadians", "damageMultiplier",
     "delayTicks", "periodTicks", "buffId", "durationTicks", "radiusPx", "rangeTiles", "mode", "strength",
     "radiusTiles", "damageFraction", "maxHeal", "cooldownTicks", "safeTileOnly", "reactionCooldownTicks",
-    "damageBasis", "knockbackBasis", "hitTargetSpawn", "effectGroupId", "useInput", "ownerStrength", "targetStrength", "maxTargets",
+    "cooldownReductionTicks", "damageBasis", "knockbackBasis", "hitTargetSpawn", "effectGroupId", "useInput", "ownerStrength", "targetStrength", "maxTargets",
 }) | _TARGET_EMISSION_FIELDS | frozenset(member for cap in CAPABILITY_REGISTRY.values()
                                         if cap.category == "event" for member in cap.wire_components)
 _BINDING_KEYS = frozenset({"id", "input", "role", "usePolicy"})
 _USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage", "stackConsumeChancePercent"})
-_BINDING_ACTION_KEYS = frozenset({"kind", "targetId", "placement", "effectGroupId"})
+_BINDING_ACTION_KEYS = frozenset({"kind", "targetId", "placement", "effectGroupId", "fishing"})
 _PLACEMENT_KEYS = frozenset({"tileId", "wallId", "placeStyle", "placedBody", "placedLight", "placedVfx"})
-_PLACED_BODY_KEYS = frozenset(name for name in CAPABILITY_REGISTRY["present_placed_item_sprite"].params if name != "placementCallId")
-_ITEM_USE_KEYS = frozenset({"configured", "useStyle", "hideUseGraphic", "disableMeleeHitbox", "channel", "handPose", "releaseTiming", "holdoutOffsetX", "holdoutOffsetY"})
+_PLACED_BODY_KEYS = frozenset(name for name in CAPABILITY_REGISTRY["placed_sprite"].params if name != "placementCallId")
+_ITEM_USE_KEYS = frozenset({"configured", "useStyle", "hideUseGraphic", "disableMeleeHitbox", "channel", "handPose", "holdoutOffsetX", "holdoutOffsetY"})
 _ITEM_CONTACT_KEYS = frozenset({"hitboxScale", "contactForgivenessPx"})
 
 
@@ -172,7 +172,7 @@ def _validate_child_combat(
 def _validate_spawn_velocity(spawn: Mapping[str, Any], entity: Mapping[str, Any], path: str, errors: list[dict[str, Any]]) -> None:
     if "velocityDistribution" not in spawn:
         return  # Historical constant-speed wire is unchanged.
-    cap = CAPABILITY_REGISTRY["configure_spawn"]
+    cap = CAPABILITY_REGISTRY["spawn"]
     spec = cap.params["velocity"]
     distribution = spawn["velocityDistribution"]
     fields = frozenset(name.split(".", 1)[1] for name in spec.wire_field_names("velocity")
@@ -207,7 +207,7 @@ def _validate_spawn_velocity(spawn: Mapping[str, Any], entity: Mapping[str, Any]
 def _validate_hit_target_spawn(event: Mapping[str, Any], source_kind: str, entities: list[Mapping[str, Any]], path: str, errors: list[dict[str, Any]]) -> None:
     if "hitTargetSpawn" not in event:
         return
-    cap = CAPABILITY_REGISTRY["spawn_entity_from_hit_target"]
+    cap = CAPABILITY_REGISTRY["spawn_at_hit"]
     spec = cap.params["geometry"]
     allowed = frozenset(name.split(".", 1)[1] for name in spec.wire_field_names("geometry")
                         if name.startswith("hitTargetSpawn."))
@@ -217,7 +217,7 @@ def _validate_hit_target_spawn(event: Mapping[str, Any], source_kind: str, entit
         errors.append({"path": path + ".hitTargetSpawn", "code": "invalid_hit_target_spawn_geometry",
                        "message": "Hit-target geometry requires every declared leaf and its exact inactive-spread literal."})
     if (event.get("action") != cap.wire_action or type(event.get("actionCode")) is not int
-            or event["actionCode"] != EVENT_ACTION_OPCODE[cap.wire_action] or source_kind not in cap.target_kinds):
+            or event["actionCode"] != WIRE_EVENT_ACTION_OPCODE[cap.wire_action] or source_kind not in cap.target_kinds):
         errors.append({"path": path + ".hitTargetSpawn", "code": "inactive_hit_target_spawn_geometry",
                        "message": "Target-relative geometry belongs only to a projectile's exact spawn action."})
     for name, parameter in cap.params.items():
@@ -245,16 +245,16 @@ def _validate_hit_target_spawn(event: Mapping[str, Any], source_kind: str, entit
 
 def _validate_npc_effect(event: Mapping[str, Any], entity: Mapping[str, Any], runtime: Mapping[str, Any],
                          path: str, errors: list[dict[str, Any]]) -> None:
-    cap = CAPABILITY_REGISTRY["apply_npc_effect_on_event"]
+    cap = CAPABILITY_REGISTRY["npc_effect_on_event"]
     active = event.get("actionCode") == EVENT_ACTION_OPCODE[cap.name]
     if not active:
         if "npcEffect" in event:
             errors.append({"path": path + ".npcEffect", "code": "wrong_event_parameter_owner",
-                           "message": "npcEffect belongs only to apply_npc_effect_on_event."})
+                           "message": "npcEffect belongs only to npc_effect_on_event."})
         return
-    if event.get("action") != cap.name or event.get("event") not in cap.allowed_events or entity.get("kind") not in cap.target_kinds:
+    if event.get("action") != cap.persisted_name or event.get("event") not in cap.allowed_events or entity.get("kind") not in cap.target_kinds:
         errors.append({"path": path, "code": "invalid_event_action", "message": "NPC effects require the exact action and hit/crit event on a supported source."})
-    for name in ("durationSeconds", "delaySeconds"):
+    for name in ("duration", "delay"):
         spec = cap.params[name]
         key = spec.wire_name or name
         if key in event:
@@ -293,8 +293,8 @@ def _validate_npc_effect(event: Mapping[str, Any], entity: Mapping[str, Any], ru
 
 
 def _validate_generated_buff(wire: Mapping[str, Any], errors: list[dict[str, Any]], path: str = "$.gameplay.generatedBuff") -> None:
-    """Check every present leaf; absent legacy leaves retain C# DTO defaults."""
-    specs = {name: spec for name, spec in CAPABILITY_REGISTRY["apply_generated_buff_on_use"].params.items() if name != "effectGroupId"}
+    """Validate present leaves; a nonneutral buff must explicitly own its lifetime."""
+    specs = {name: spec for name, spec in CAPABILITY_REGISTRY["generated_buff_on_use"].params.items() if name != "effectGroupId"}
     _reject_unknown(wire, frozenset(spec.wire_name or name for name, spec in specs.items()),
                     path, errors)
     light = wire.get("emitLightStrength", 0)
@@ -311,19 +311,16 @@ def _validate_generated_buff(wire: Mapping[str, Any], errors: list[dict[str, Any
         elif spec.wire_boolean_true_value is not None:
             valid = type(value) is int and value in (0, spec.wire_boolean_true_value)
         elif spec.kind == "string":
-            valid = isinstance(value, str) and (value in spec.enum or (value == "" and no_light))
+            valid = isinstance(value, str) and (value in spec.enum or (key == "lightColorName" and value == "" and no_light))
         elif spec.wire_kind:
-            valid = ((key == "durationTicks" and type(value) is int and value == 0)
-                     or spec.matches_scalar_projection(value))
+            valid = spec.matches_scalar_projection(value)
         else:
             integer_wire = spec.projected_kind == "integer"
             typed = type(value) is int if integer_wire else type(value) in (int, float)
             if typed:
                 try:
                     authored = value * spec.wire_divisor / spec.wire_multiplier
-                    # Zero duration is the inactive DTO state, not an active
-                    # authored buff. Other bounds/conversions are registry-owned.
-                    minimum = 0 if key == "durationTicks" else spec.minimum
+                    minimum = spec.minimum
                     valid = (isfinite(authored)
                              and (minimum is None or authored >= minimum)
                              and (spec.maximum is None or authored <= spec.maximum)
@@ -335,17 +332,33 @@ def _validate_generated_buff(wire: Mapping[str, Any], errors: list[dict[str, Any
             errors.append({"path": f"{path}.{key}",
                            "code": "invalid_generated_buff_field",
                            "message": "Value must match the declared generated-buff wire type and domain without coercion."})
+            if key == "durationTicks" and (type(value) is not int or value < 0):
+                errors.append({"path": f"{path}.{key}", "code": "invalid_integer",
+                               "message": "Generated buff duration must be a nonnegative integer; zero means permanent."})
+    if "durationTicks" not in wire and _generated_buff_has_effect(wire):
+        errors.append({"path": f"{path}.durationTicks", "code": "missing_generated_buff_duration",
+                       "message": "A nonneutral generated buff requires explicit durationTicks; zero selects permanent duration."})
 
 
 def _generated_buff_has_effect(wire: Mapping[str, Any]) -> bool:
     """Project typed wire stats back to the canonical Author-side effect predicate."""
     params: dict[str, Any] = {}
-    for name, spec in CAPABILITY_REGISTRY["apply_generated_buff_on_use"].params.items():
+    for name, spec in CAPABILITY_REGISTRY["generated_buff_on_use"].params.items():
         # Duration and color describe an effect; neither executes one. The
         # registry marks exactly the executable stats with neutral values.
         if spec.kind == "object" and name in wire:
-            # Composite combat leaves retain their authored units on the wire.
-            params[name] = wire[name]
+            # Test executable leaves in their declared wire units. Nested
+            # modifiers may rename/scale fields; raw wire is not Author input.
+            for projection in _wire_projection_witness(spec, name, "buff", {"buff": wire}):
+                leaf = spec
+                for part in projection.authored_path.split(".")[1:]:
+                    leaf = leaf.properties.get(part)
+                    if leaf is None:
+                        break
+                if (leaf is not None and leaf.neutral is not None
+                    and type(projection.value) in (int, float, bool)
+                    and projection.value != leaf.to_wire(leaf.neutral)):
+                    return True
         if spec.neutral is None:
             continue
         value = wire.get(spec.wire_name or name)
@@ -374,9 +387,9 @@ def _generated_buff_has_effect(wire: Mapping[str, Any]) -> bool:
 def _item_effect_group_wire_schema() -> dict[str, Any]:
     """The accepted container surface is a projection of existing registry fields."""
     properties = {"id": CAPABILITY_REGISTRY["restore_resources_on_use"].params["effectGroupId"].schema()}
-    for fn in ("restore_resources_on_use", "move_player_on_use"):
+    for fn in ("restore_resources_on_use", "blink_on_use"):
         properties.update({spec.wire_name or name: spec.wire_schema() for name, spec in CAPABILITY_REGISTRY[fn].params.items() if name != "effectGroupId"})
-    buff_properties = {spec.wire_name or name: spec.wire_schema() for name, spec in CAPABILITY_REGISTRY["apply_vanilla_buff_on_use"].params.items() if name != "effectGroupId"}
+    buff_properties = {spec.wire_name or name: spec.wire_schema() for name, spec in CAPABILITY_REGISTRY["native_buff_on_use"].params.items() if name != "effectGroupId"}
     properties["mobilityMode"]["enum"] = ["", *properties["mobilityMode"]["enum"]]
     # A fn-selected exact literal shares the same DTO domain as parameter
     # projections; exposing it on wire does not accept a retired Author token.
@@ -415,8 +428,8 @@ def _validate_effect_groups(runtime: Mapping[str, Any], errors: list[dict[str, A
         generated = row.get("generatedBuff")
         if isinstance(generated, Mapping):
             _validate_generated_buff(generated, errors, f"{path}.generatedBuff")
-            if type(generated.get("durationTicks")) is not int or not 1 <= generated["durationTicks"] <= 21600:
-                errors.append({"path": f"{path}.generatedBuff.durationTicks", "code": "invalid_effect_group", "message": "Named generated buff requires explicit 1..21600 duration."})
+            if "durationTicks" not in generated:
+                errors.append({"path": f"{path}.generatedBuff.durationTicks", "code": "invalid_effect_group", "message": "Named generated buff requires an explicit duration; zero selects permanent duration."})
         if not _item_effects_present(row):
             errors.append({"path": path, "code": "empty_effect_group", "message": "Effect group must contain an executable explicit item effect."})
     return groups
@@ -427,7 +440,7 @@ def _item_effects_present(effects: Mapping[str, Any]) -> bool:
     duration = generated.get("durationTicks") if isinstance(generated, Mapping) else None
     return (any(type(effects.get(key)) is int and effects[key] > 0 for key in ("healLife", "healMana"))
             or isinstance(effects.get("extraBuffs"), list) and bool(effects["extraBuffs"])
-            or isinstance(generated, Mapping) and type(duration) is int and duration > 0 and _generated_buff_has_effect(generated)
+            or isinstance(generated, Mapping) and type(duration) is int and duration >= 0 and _generated_buff_has_effect(generated)
             or effects.get("mobilityMode") in ("recall_home", "blink_to_cursor"))
 
 
@@ -453,7 +466,7 @@ def _walk_forbidden(value: Any, path: str = "$") -> list[dict[str, str]]:
 def _validate_sprite_presentation(visual: Mapping[str, Any], path: str, errors: list[dict[str, Any]], *, entity_kind: str | None = None) -> None:
     """Validate presentation choices at their explicit image owner."""
     from infini_local.core.visual_contract_schema import grip_schema, sprite_presentation_properties
-    from infini_local.pipelines.visual_generation_pipeline import _visual_item_schema
+    from infini_local.pipelines.visual.contract import _visual_item_schema
     fields = ("renderSizePx", "forwardAngleDegrees", "grip") if entity_kind is None else ("renderSizePx", "forwardAngleDegrees", "preferredCanvasSize", "grip")
     properties = {**sprite_presentation_properties(), "grip": grip_schema(),
                   "preferredCanvasSize": _visual_item_schema()["properties"]["preferredCanvasSize"]}
@@ -481,7 +494,7 @@ def _validate_target_emission(event: Mapping[str, Any], entities: list[Mapping[s
             errors.append({"path": f"{path}.actionCode", "code": "event_name_opcode_mismatch",
                            "message": "Target-selection emission requires its exact registered opcode."})
         return
-    if event.get("action") != cap.name:
+    if event.get("action") != cap.persisted_name:
         errors.append({"path": f"{path}.action", "code": "event_name_opcode_mismatch",
                        "message": "The target emission name and opcode must agree exactly."})
     schema = {"type": "object", "additionalProperties": False,
@@ -562,13 +575,13 @@ def _validate_target_emission_graph(runtime: Mapping[str, Any], entities: list[M
     input_totals = {"primary_use": 0, "alternate_use": 0}
     for entity, event in actions:
         opcode = event.get("actionCode")
-        if opcode not in (EVENT_ACTION_OPCODE["spawn_entity_on_event"], EVENT_ACTION_OPCODE[_TARGET_EMISSION]):
+        if opcode not in (EVENT_ACTION_OPCODE["spawn_on_event"], EVENT_ACTION_OPCODE[_TARGET_EMISSION]):
             continue
         child = event.get("entityId")
         if isinstance(child, str) and child in graph:
             graph[str(entity.get("id") or "")].add(child)
         count = event.get("stepCount") if opcode == EVENT_ACTION_OPCODE[_TARGET_EMISSION] else event.get("count", 1)
-        if type(count) is not int or count < 1 or count > CAPABILITY_REGISTRY["spawn_entity_on_event"].params["count"].maximum:
+        if type(count) is not int or count < 1 or count > CAPABILITY_REGISTRY["spawn_on_event"].params["count"].maximum:
             errors.append({"path": "$.runtimeProgram.entities", "code": "invalid_graph_spawn_count",
                            "message": "Every counted spawn edge needs its declared integer count."})
             return
@@ -610,7 +623,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(runtime_raw, Mapping):
         errors.append({"path": "$.runtimeProgram", "code": "required_object", "message": "Compiled runtimeProgram object is required."})
     if "weaponAmmo" in runtime:
-        ammo_cap = CAPABILITY_REGISTRY["configure_weapon_ammo"]
+        ammo_cap = CAPABILITY_REGISTRY["weapon_ammo"]
         ammo_schema = {"type": "object", "additionalProperties": False,
                        "properties": {name: spec.schema() for name, spec in ammo_cap.params.items()},
                        "required": list(ammo_cap.params)}
@@ -659,7 +672,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         errors.append({"path": "$.gameplay.useConditions", "code": "invalid_use_conditions", "message": "At most two explicit input conditions are allowed."})
     else:
         seen_conditions: set[str] = set()
-        cap = CAPABILITY_REGISTRY["require_use_condition"]
+        cap = CAPABILITY_REGISTRY["use_condition"]
         for ci, condition in enumerate(conditions):
             path = f"$.gameplay.useConditions[{ci}]"
             if not isinstance(condition, Mapping) or not _wire_projection_witness(cap.params["condition"], "condition", "gate", {"gate": condition}):
@@ -688,7 +701,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             if not isinstance(event, Mapping): continue
             reactive = event.get("event") in ("on_hurt", "on_enemy_kill")
             timer = event.get("reactionCooldownTicks", 0)
-            if (reactive and (type(timer) is not int or not 6 <= timer <= 3600 or event.get("actionCode") not in (1, 3, EVENT_ACTION_OPCODE["apply_generated_buff_on_event"], EVENT_ACTION_OPCODE["damage_nearby_on_event"]))
+            if (reactive and (type(timer) is not int or not 6 <= timer <= 3600 or event.get("actionCode") not in (1, 3, EVENT_ACTION_OPCODE["generated_buff_on_event"], EVENT_ACTION_OPCODE["damage_nearby_on_event"]))
                     or not reactive and "reactionCooldownTicks" in event):
                 errors.append({"path": f"{entity_path}.events[{event_index}].reactionCooldownTicks", "code": "invalid_reaction_cooldown", "message": "Equipment reactions require an explicit supported action and bounded cooldown."})
         movement = entity.get("movement") if isinstance(entity.get("movement"), Mapping) else {}
@@ -737,9 +750,9 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                     suffix = f"[{n}]" if isinstance(value, list) else ""
                     motion_rows.append({"fn": fn, "params": record, "_path": f"{entity_path}.{member}{suffix}"})
         if isinstance(entity.get("hitboxCurve"), Mapping):
-            motion_rows.append({"fn": "set_projectile_hitbox_curve", "params": entity["hitboxCurve"], "_path": entity_path + ".hitboxCurve"})
+            motion_rows.append({"fn": "hitbox_curve", "params": entity["hitboxCurve"], "_path": entity_path + ".hitboxCurve"})
         if isinstance(entity.get("collision"), Mapping):
-            motion_rows.append({"fn": "set_projectile_collision", "params": entity["collision"], "_path": entity_path + ".collision"})
+            motion_rows.append({"fn": "projectile_collision", "params": entity["collision"], "_path": entity_path + ".collision"})
         active = any(isinstance(binding.get("input"), str) and binding.get("input") in ACTIVE_USE_INPUTS
                      and action_kind(binding) == "spawn_entity"
                      and binding_target_id(binding) == entity.get("id")
@@ -754,7 +767,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             if entity["whipUsesOwnerGravity"] is not True or kind != "owner_attached_projectile" or movement.get("code") != 18 or controller.get("code") == 1:
                 errors.append({"path": path, "code": "invalid_whip_gravity", "message": "The true marker requires actual owner-attached whip geometry without beam precedence."})
         if "hitboxCurve" in entity:
-            curve_cap = CAPABILITY_REGISTRY["set_projectile_hitbox_curve"]
+            curve_cap = CAPABILITY_REGISTRY["hitbox_curve"]
             curve_schema = curve_cap.flat_wire_params_schema()
             curve = entity["hitboxCurve"]
             curve_path = entity_path + ".hitboxCurve"
@@ -778,8 +791,21 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             component = _validate_component_shape(entity.get(component_name), allowed_keys, f"{entity_path}.{component_name}", errors)
             if component_name == "visual" and component is not None:
                 _validate_sprite_presentation(component, f"{entity_path}.visual", errors, entity_kind=kind)
+                if "geometry" in component:
+                    from infini_local.core.visual_contract_schema import body_geometry_schema, collision_path_source
+                    geometry_path = f"{entity_path}.visual.geometry"
+                    geometry = component["geometry"]
+                    if component.get("assetMode") != "runtime_geometry" or kind == "item_body":
+                        errors.append({"path": geometry_path, "code": "nonowning_body_geometry", "message": "Explicit geometry belongs only to a non-item runtime_geometry body."})
+                    for diagnostic in strict_schema_errors(geometry, body_geometry_schema(), path=geometry_path):
+                        errors.append({"path": diagnostic["path"], "code": "invalid_body_geometry", "message": "Explicit body geometry must satisfy its finite versioned schema."})
+                    if isinstance(geometry, Mapping):
+                        if geometry.get("source") == "collision_path" and collision_path_source(entity) is None:
+                            errors.append({"path": geometry_path + ".source", "code": "missing_body_geometry_source", "message": "collision_path requires accepted beam/lash geometry."})
+                        if geometry.get("source") == "body_segment" and geometry.get("axis") == "aim" and not isinstance(entity.get("aim"), Mapping):
+                            errors.append({"path": geometry_path + ".axis", "code": "missing_body_geometry_aim", "message": "aim axis requires an accepted aim component."})
             if component_name == "spawn" and component is not None:
-                for fn in ("set_projectile_concurrency", "set_descendant_concurrency"):
+                for fn in ("projectile_limit", "descendant_limit"):
                     concurrency = CAPABILITY_REGISTRY[fn]
                     for name, spec in concurrency.params.items():
                         key = spec.wire_name or name
@@ -790,7 +816,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                             errors.append({"path": path, "code": "invalid_projectile_concurrency",
                                            "message": "Present concurrency must match the registry projectile target, integer type and positive bounds without coercion."})
                 if "placement" in component:
-                    anchor = CAPABILITY_REGISTRY["configure_spawn"].params["position"].alternatives[0].properties["at"]
+                    anchor = CAPABILITY_REGISTRY["spawn"].params["position"].alternatives[0].properties["at"]
                     if not anchor.matches_scalar_projection(component["placement"]):
                         errors.append({"path": f"{entity_path}.spawn.placement", "code": "invalid_spawn_anchor",
                                        "message": "Spawn anchor must be an exact current position projection."})
@@ -798,7 +824,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                     _validate_component_shape(component.get("overTarget"), _OVER_TARGET_KEYS, f"{entity_path}.spawn.overTarget", errors)
                 _validate_spawn_velocity(component, entity, f"{entity_path}.spawn", errors)
             if component_name == "collision" and component is not None and "bounceSpeedRetention" in component:
-                spec = CAPABILITY_REGISTRY["set_projectile_collision"].params["bounceSpeedRetention"]
+                spec = CAPABILITY_REGISTRY["projectile_collision"].params["bounceSpeedRetention"]
                 if kind not in PROJECTILE_ENTITY_KINDS or not spec.matches_scalar_projection(component["bounceSpeedRetention"]):
                     errors.append({"path": f"{entity_path}.collision.bounceSpeedRetention", "code": "invalid_bounce_retention", "message": "Present bounce retention requires a projectile and finite 0..1 multiplier."})
             if component_name in {"movement", "controller"} and component is not None:
@@ -878,7 +904,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                         errors.append({"path": path, "code": "invalid_channel_beam_param",
                                        "message": "Present beam extension must match its exact controller, target, type, bounds and consumer precision without coercion."})
         if "nativeSentry" in entity:
-            spec = CAPABILITY_REGISTRY["set_projectile_sentry"]
+            spec = CAPABILITY_REGISTRY["sentry"]
             path = f"{entity_path}.nativeSentry"
             if kind not in spec.target_kinds or strict_schema_errors(entity["nativeSentry"], spec.params["enabled"].schema(), path=path):
                 errors.append({"path": path, "code": "invalid_native_sentry", "message": "Present nativeSentry must be an explicit projectile boolean."})
@@ -1044,7 +1070,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                         continue
                     if not _retained_event_neutral_matches(key, event[key], neutral):
                         errors.append({"path": event_path + "." + key, "code": "wrong_event_parameter_owner", "message": "Nearby damage cannot consume another action's fields."})
-                for name in ("radiusTiles", "damageMultiplier", "maxTargets"):
+                for name in ("radius", "damageMultiplier", "maxTargets"):
                     spec = cap.params[name]
                     key = spec.wire_name or name
                     if key not in event:
@@ -1052,8 +1078,8 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                     else:
                         errors.extend(strict_schema_errors(event[key], spec.wire_schema(), path=event_path + "." + key))
                 if "delayTicks" in event:
-                    errors.extend(strict_schema_errors(event["delayTicks"], cap.params["delaySeconds"].wire_schema(), path=event_path + ".delayTicks"))
-                if event.get("action") != cap.name or event.get("event") not in cap.allowed_events:
+                    errors.extend(strict_schema_errors(event["delayTicks"], cap.params["delay"].wire_schema(), path=event_path + ".delayTicks"))
+                if event.get("action") != cap.persisted_name or event.get("event") not in cap.allowed_events:
                     errors.append({"path": event_path, "code": "invalid_event_action", "message": "Nearby damage requires its exact name and supported event."})
             if action_code != EVENT_ACTION_OPCODE["damage_nearby_on_event"] and "maxTargets" in event:
                 errors.append({"path": event_path + ".maxTargets", "code": "wrong_event_parameter_owner", "message": "maxTargets requires nearby damage."})
@@ -1074,15 +1100,15 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                         errors.append({"path": event_path + "." + key, "code": "wrong_event_parameter_owner",
                                        "message": "Both pull cannot consume another action's fields; retained DTO neutrals remain readable."})
                 if "delayTicks" in event:
-                    errors.extend(strict_schema_errors(event["delayTicks"], CAPABILITY_REGISTRY["pull_on_event"].params["delaySeconds"].wire_schema(), path=event_path + ".delayTicks"))
+                    errors.extend(strict_schema_errors(event["delayTicks"], CAPABILITY_REGISTRY["pull_on_event"].params["delay"].wire_schema(), path=event_path + ".delayTicks"))
             if both and (event.get("action") != "pull_on_event" or event.get("event") not in ("on_hit", "on_crit")
                          or event.get("strength", 0) != 0 or event.get("radiusTiles", 0) != 0):
                 errors.append({"path": event_path, "code": "invalid_pull_branch", "message": "Both never consumes a shared impulse or NPC-search radius."})
 
             _validate_hit_target_spawn(event, kind, entities, f"$.runtimeProgram.entities[{index}].events[{event_index}]", errors)
-            _validate_child_combat(event, "spawn_entity_on_event", kind,
-                                   type(action_code) is int and action_code == EVENT_ACTION_OPCODE["spawn_entity_on_event"]
-                                   and event.get("action") == "spawn_entity_on_event",
+            _validate_child_combat(event, "spawn_on_event", kind,
+                                   type(action_code) is int and action_code == EVENT_ACTION_OPCODE["spawn_on_event"]
+                                   and event.get("action") == CAPABILITY_REGISTRY["spawn_on_event"].persisted_name,
                                    f"$.runtimeProgram.entities[{index}].events[{event_index}]", errors)
             if not isinstance(action_code, int) or isinstance(action_code, bool) or not 1 <= action_code <= _MAX_EVENT_ACTION_CODE:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}].actionCode", "code": "unsupported_opcode", "message": f"Event action opcode must be 1..{_MAX_EVENT_ACTION_CODE}."})
@@ -1090,7 +1116,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             child_row = next((row for row in entities if row.get("id") == child), {})
             child_spawn = child_row.get("spawn", {})
             distribution = child_spawn.get("velocityDistribution", {}) if isinstance(child_spawn, Mapping) else {}
-            if (action_code == EVENT_ACTION_OPCODE["spawn_entity_on_event"] and isinstance(distribution, Mapping)
+            if (action_code == EVENT_ACTION_OPCODE["spawn_on_event"] and isinstance(distribution, Mapping)
                     and distribution.get("kind") in {"radial", "disk"}
                     and (type(event.get("spreadRadians")) not in (int, float) or event["spreadRadians"] != 0)):
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}].spreadRadians",
@@ -1188,6 +1214,26 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         contact_value = policy.get("contactDamage")
         if not isinstance(contact_value, bool):
             errors.append({"path": f"{binding_path}.usePolicy.contactDamage", "code": "required_boolean", "message": "contactDamage must be a boolean."})
+        fishing = action_row.get("fishing")
+        if action_name == "native_fishing":
+            from infini_local.core.runtime_authoring.capability_registry import NATIVE_FISHING_PARAMETERS
+            fishing_schema = {"type": "object", "additionalProperties": False,
+                "properties": {spec.wire_name or name: spec.wire_schema() for name, spec in NATIVE_FISHING_PARAMETERS.items()},
+                "required": [spec.wire_name or name for name, spec in NATIVE_FISHING_PARAMETERS.items()]}
+            for issue in strict_schema_errors(fishing, fishing_schema, path=f"{binding_path}.usePolicy.action.fishing"):
+                errors.append({**issue, "code": "invalid_native_fishing"})
+            if isinstance(fishing, Mapping):
+                for name, spec in NATIVE_FISHING_PARAMETERS.items():
+                    key = spec.wire_name or name
+                    if key in fishing and type(fishing[key]) in (int, float):
+                        if reason := spec.consumer_value_error(fishing[key], wire_value=True):
+                            errors.append({"path": f"{binding_path}.usePolicy.action.fishing.{key}", "code": "invalid_native_fishing", "message": reason})
+            if cost != 0 or contact_value is not False:
+                errors.append({"path": f"{binding_path}.usePolicy", "code": "binding_action_mismatch", "message": "Native fishing retains the item and has no contact damage."})
+            if gameplay.get("ammoCategory"):
+                errors.append({"path": f"{binding_path}.usePolicy.action", "code": "ammo_role_conflict", "message": "A native ammo stack cannot also own a native fishing bobber."})
+        elif fishing is not None:
+            errors.append({"path": f"{binding_path}.usePolicy.action.fishing", "code": "binding_action_mismatch", "message": "Only native_fishing may carry fishing payload."})
         placement = action_row.get("placement")
         if action_name == "place_item":
             if cost != 1:
@@ -1233,7 +1279,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
     active_use = any(isinstance(row, Mapping) and str(row.get("input") or "") in {"primary_use", "alternate_use"} for row in bindings)
     item_use = item_use_raw if isinstance(item_use_raw, Mapping) else {}
     if active_use and item_use.get("configured") is not True:
-        errors.append({"path": "$.runtimeProgram.itemUse.configured", "code": "missing_item_use_capability", "message": "Active primary/alternate binding requires explicit configure_item_use."})
+        errors.append({"path": "$.runtimeProgram.itemUse.configured", "code": "missing_item_use_capability", "message": "Active primary/alternate binding requires explicit item_use."})
 
     gameplay_raw = data.get("gameplay")
     gameplay: Mapping[str, Any] = gameplay_raw if isinstance(gameplay_raw, Mapping) else {}
@@ -1246,7 +1292,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                     and field in gameplay and type(gameplay[field]) is not bool):
                 errors.append({"path": f"$.gameplay.{field}", "code": "invalid_boolean",
                                "message": "Inventory opt-in must be a boolean without coercion."})
-    for requirement in CAPABILITY_REGISTRY["configure_spawn"].requirements:
+    for requirement in CAPABILITY_REGISTRY["spawn"].requirements:
         if requirement.kind != "present_params_forbid_item_capability_when_active_spawn":
             continue
         ammo = runtime.get("weaponAmmo")
@@ -1258,7 +1304,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             spawn = entity.get("spawn") if isinstance(entity, Mapping) else None
             if not isinstance(spawn, Mapping) or entity.get("id") not in selected:
                 continue
-            rows = _wire_projection_witness(CAPABILITY_REGISTRY["configure_spawn"].params[requirement.param],
+            rows = _wire_projection_witness(CAPABILITY_REGISTRY["spawn"].params[requirement.param],
                                             requirement.param, "spawn", {"spawn": spawn})
             if any(row.authored_path == name or row.authored_path.startswith(name + ".")
                    for row in rows for name in requirement.any_of):
@@ -1294,12 +1340,27 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
     # Equipment leaves marked wire_presence_requires_receipt retain their
     # registry-owned domains after delivery strips provenance. This check
     # does not change the current declared omission semantics.
-    for fn in ("configure_accessory", "configure_armor"):
+    for fn in ("accessory", "armor"):
         component = fn.removeprefix("configure_")
         node = data.get(component)
         if not isinstance(node, Mapping):
+            if component in data:
+                errors.append({"path": "$." + component, "code": "required_object", "message": "Equipment must be an object."})
             continue
+        prefix = component + "."
+        allowed = frozenset(path[len(prefix):].split(".", 1)[0]
+                            for cap in CAPABILITY_REGISTRY.values() for path in cap.final_wire_paths
+                            if path.startswith(prefix))
+        _reject_unknown(node, allowed, "$." + component, errors)
         for name, spec in CAPABILITY_REGISTRY[fn].params.items():
+            fields = spec.wire_field_names(name)
+            # Closed nested components keep their typed shape even after saved
+            # wire strips receipts; unknown siblings must not disappear.
+            if spec.structured and fields and all(field.startswith(name + ".") for field in fields):
+                if name in node and not _wire_projection_witness(spec, name, component, {component: node}):
+                    errors.append({"path": f"$.{component}.{name}", "code": "invalid_equipment_parameter",
+                                   "message": "Present equipment component must match its complete registered wire shape."})
+                continue
             if not spec.wire_presence_requires_receipt or spec.structured:
                 continue
             field = spec.wire_name or name
@@ -1316,7 +1377,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
     # hide malformed values behind an otherwise valid healing effect.
     heals_life = _positive_integer_effect(gameplay.get("healLife", 0), "$.gameplay.healLife", errors)
     heals_mana = _positive_integer_effect(gameplay.get("healMana", 0), "$.gameplay.healMana", errors)
-    buff_has_duration = _positive_integer_effect(generated_buff.get("durationTicks", 0), "$.gameplay.generatedBuff.durationTicks", errors)
+    buff_has_duration = type(generated_buff.get("durationTicks")) is int and generated_buff["durationTicks"] >= 0
     has_generated_buff = buff_has_duration and _generated_buff_has_effect(generated_buff)
     has_use_effect = (
         heals_life
@@ -1342,9 +1403,9 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         for ai, event in enumerate(entity.get("events", []) if isinstance(entity.get("events"), list) else []):
             if not isinstance(event, Mapping): continue
             path = f"$.runtimeProgram.entities[{ei}].events[{ai}]"
-            is_buff = event.get("actionCode") == EVENT_ACTION_OPCODE["apply_generated_buff_on_event"]
+            is_buff = event.get("actionCode") == EVENT_ACTION_OPCODE["generated_buff_on_event"]
             if not is_buff:
-                if "effectGroupId" in event or event.get("action") == "apply_generated_buff_on_event":
+                if "effectGroupId" in event or event.get("action") == CAPABILITY_REGISTRY["generated_buff_on_event"].persisted_name:
                     errors.append({"path": path + ".effectGroupId", "code": "invalid_effect_group_reference", "message": "Event effect-group references belong only to generated-buff reactions."})
                 continue
             for key, neutral in {**_EMISSION_UNUSED_EVENT_DEFAULTS, "entityId": ""}.items():
@@ -1357,11 +1418,11 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 errors.append({"path": path + ".delayTicks", "code": "invalid_reaction_delay", "message": "Reaction delay must be an integer in 0..600."})
             group_id = event.get("effectGroupId")
             group = effect_groups.get(group_id) if isinstance(group_id, str) else None
-            cap = CAPABILITY_REGISTRY["apply_generated_buff_on_event"]
+            cap = CAPABILITY_REGISTRY["generated_buff_on_event"]
             if (not has_equipment or not any(isinstance(binding, Mapping)
                     and binding.get("input") == "equipped" and action_kind(binding) == "equip_passive"
                     and binding_target_id(binding) == entity.get("id") for binding in bindings)
-                    or entity.get("kind") != "item_body" or event.get("action") != cap.name
+                    or entity.get("kind") != "item_body" or event.get("action") != cap.persisted_name
                     or event.get("event") not in cap.allowed_events or group is None
                     or not isinstance(group.get("generatedBuff"), Mapping)
                     or not _generated_buff_has_effect(group["generatedBuff"])

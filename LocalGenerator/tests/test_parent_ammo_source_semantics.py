@@ -16,7 +16,7 @@ sys.path.insert(0, str(ROOT / "tools/generate"))
 def test_ammo_source_rules_survive_real_author_serialization(monkeypatch, mode):
     from infini_local.core import llm_config
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from infini_local.pipelines.author.request import build_initial_author_request
     from prompt_packet_helpers import request_dossier
     reference = {
         "status": "source_inspected", "ammoProjectileRelation": "conditionally_replaced",
@@ -48,7 +48,7 @@ def test_ammo_source_rules_survive_real_author_serialization(monkeypatch, mode):
 
 def assert_native_prepare_ammo_packet(packet):
     """CPU harness replay assertion, called with its actual Prepare JSON export."""
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from infini_local.pipelines.author.request import build_initial_author_request
     from prompt_packet_helpers import request_dossier
     before = copy.deepcopy(packet)
     request, _, _ = build_initial_author_request(packet["itemA"], packet["itemB"], "native-ammo-source-replay", model_name="offline-test-model")
@@ -77,7 +77,7 @@ def assert_native_prepare_ammo_packet(packet):
 
 
 def assert_native_hellwing_ammo_packet(packet):
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    from infini_local.pipelines.author.request import build_initial_author_request
     from prompt_packet_helpers import request_dossier
     before = copy.deepcopy(packet)
     request, _, _ = build_initial_author_request(packet["itemA"], packet["itemB"], "native-hellwing-replay", model_name="offline-test-model")

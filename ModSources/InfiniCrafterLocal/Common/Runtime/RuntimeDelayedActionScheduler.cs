@@ -64,6 +64,8 @@ internal static class RuntimeDelayedActionScheduler
     {
         if (data is null || action is null || owner is null || !owner.active || source is null || action.DelayTicks <= 0)
             return false;
+        if (owner.dead && action.ActionCode == RuntimeEventActionCode.ApplyGeneratedBuff)
+            return false;
         if (!RuntimeProgramExecutor.HasActionAuthority(action, owner))
             return false;
         if (action.ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit
@@ -229,6 +231,13 @@ internal static class RuntimeDelayedActionScheduler
             // their captured target must not depend on a recycled projectile slot.
             if (owner is null || !owner.active || !ReferenceEquals(owner, pending.Owner)
                 || !capturedNpcEffect && !SourceIsCurrent(pending, owner))
+            {
+                pending.Budget.Return(pending.ReservedSpawnBudget);
+                continue;
+            }
+            if (pending.Action.ActionCode == RuntimeEventActionCode.ApplyGeneratedBuff
+                && (owner.dead || !owner.GetModPlayer<InfiniCrafterLocal.Common.Players.InfiniCraftPlayer>()
+                    .IsGeneratedUtilityActivationCurrent(pending.EnqueuedTick)))
             {
                 pending.Budget.Return(pending.ReservedSpawnBudget);
                 continue;

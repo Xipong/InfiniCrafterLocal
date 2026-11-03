@@ -87,6 +87,7 @@ internal static partial class EngineRuntimeChecks
             bool nativeParent = label is not ("generated" or "generated_placement");
             Equal(nativeParent ? 2 : 0, sourceGraphCaptures, label + " source graph captured once per native A/B parent, never for a generated proxy");
             string ExpectedKeys(string keys) => string.Join(",", keys.Split(',')
+                .Concat(new[] { "armorPenetration", "itemScale", "useLimitPerAnimation" })
                 .Concat(nativeParent ? new[] { "parentSourceGraph" } : Array.Empty<string>()).OrderBy(key => key, StringComparer.Ordinal));
             JsonElement root = request.RootElement.GetProperty("itemA");
             JsonElement facts = root.GetProperty("runtimeFacts");

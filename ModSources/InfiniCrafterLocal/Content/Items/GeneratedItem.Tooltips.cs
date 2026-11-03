@@ -69,7 +69,7 @@ public partial class GeneratedItem
                     && program.TryGetEntity(binding.UsePolicy.Action.TargetId)?.Kind == RuntimeEntityKind.ItemBody
                     && (data.EffectsForBinding(binding).MobilityMode is "recall_home" or "blink_to_cursor"))
                 {
-                    Add("MobilityCooldownRemaining", "MobilityCooldownRemaining", RuntimeTooltipTime(mobilityTicks));
+                    Add("MobilityCooldownRemaining", "MobilityCooldownRemaining", RuntimeTooltipText("Time", GeneratedStatusTooltipView.CountdownTenths(mobilityTicks, RuntimeTooltipCulture)));
                     break;
                 }
             }
@@ -81,7 +81,7 @@ public partial class GeneratedItem
                 {
                     if (entry.RemainingTicks <= 0 || !string.Equals(entry.ItemId, data.Id, StringComparison.Ordinal)
                         || !string.Equals(entry.DefinitionIdentity, definition, StringComparison.Ordinal)) continue;
-                    Add("ExhaustionRemaining", "ExhaustionRemaining", RuntimeTooltipTime(entry.RemainingTicks));
+                    Add("ExhaustionRemaining", "ExhaustionRemaining", RuntimeTooltipText("Time", GeneratedStatusTooltipView.CountdownTenths(entry.RemainingTicks, RuntimeTooltipCulture)));
                     break;
                 }
             }
@@ -264,7 +264,7 @@ public partial class GeneratedItem
     private static void AddRuntimeExhaustion(GeneratedBuffSpec? buff, string suffix, string input,
         Action<string, string, object[]> add)
     {
-        if (buff?.HasAnyEffect == true && buff.DurationTicks is > 0 and <= 21600
+        if (buff?.HasAnyEffect == true
             && buff.ExhaustionTicks is > 0 and <= 21600)
             add("Exhaustion" + suffix, "ExhaustionDeclared",
                 new object[] { input, RuntimeTooltipTime(buff.ExhaustionTicks.Value) });
@@ -296,10 +296,13 @@ public partial class GeneratedItem
         for (int i = 0; i < Math.Min(16, buffs.Length); i++)
             if (buffs[i] is { } buff) Buff("Buff" + suffix + i.ToString(CultureInfo.InvariantCulture), buff.BuffCode, buff.BuffTime);
         GeneratedBuffSpec? generated = gp.GeneratedBuff;
-        if (generated?.HasAnyEffect == true && generated.DurationTicks is > 0 and <= 21600)
+        if (generated?.HasAnyEffect == true)
         {
-            string duration = RuntimeTooltipTime(generated.DurationTicks);
-            void Effect(string name, string key, object value) => add(name + suffix, key, new object[] { input, value, duration });
+            string duration = generated.DurationTicks == GeneratedBuffSpec.PermanentDurationTicks
+                ? "∞" : RuntimeTooltipTime(generated.DurationTicks);
+            void Effect(string name, string key, object value, string? condition = "always")
+                => add(name + suffix, key, new object[] {
+                    PlayerEffectDescription.WithCondition(input, condition, RuntimeTooltipCulture), value, duration });
             if (RuntimeTooltipFinite(generated.MiningSpeedMultiplier, 0.25f, 4f) && generated.MiningSpeedMultiplier != 1f)
                 Effect("Mining", "Mining", RuntimeTooltipNumber(generated.MiningSpeedMultiplier));
             if (RuntimeTooltipFinite(generated.MovementSpeed, -0.8f, 2f) && generated.MovementSpeed != 0f)
@@ -307,11 +310,16 @@ public partial class GeneratedItem
             if (RuntimeTooltipFinite(generated.JumpBoost, -8f, 8f) && generated.JumpBoost != 0f)
                 Effect("Jump", "Jump", RuntimeTooltipNumber(PlayerDisplayUnits.BlocksPerSecond(generated.JumpBoost)));
             if (generated.ManaRegen is >= -100 and <= 120 && generated.ManaRegen != 0) Effect("ManaRegen", "ManaRegen", (generated.ManaRegen >= 0 ? "+" : "") + RuntimeTooltipNumber(generated.ManaRegen));
-            if (generated.LifeRegen is >= -100 and <= 120 && generated.LifeRegen != 0) Effect("LifeRegen", "LifeRegen", (generated.LifeRegen >= 0 ? "+" : "") + RuntimeTooltipNumber(generated.LifeRegen / 2f));
+            if (generated.LifeRegen is >= -100 and <= 120 && generated.LifeRegen != 0)
+                Effect("LifeRegen", "LifeRegen", (generated.LifeRegen >= 0 ? "+" : "") + RuntimeTooltipNumber(generated.LifeRegen / 2f), generated.LifeRegenCondition);
             if (RuntimeTooltipFinite(generated.EmitLightStrength, 0f, 1.5f) && generated.EmitLightStrength > 0f)
                 Effect("Light", "Light", RuntimeTooltipNumber(generated.EmitLightStrength));
             // The executable effect sets findTreasure, not a radius-limited scan.
-            if (generated.OreSenseEnabled) add("OreSense" + suffix, "OreSense", new object[] { input, duration });
+            if (generated.OreSenseEnabled) add("OreSense" + suffix, "OreSense", new object[] {
+                PlayerEffectDescription.WithCondition(input, generated.TreasureSenseCondition, RuntimeTooltipCulture), duration });
+            if (generated.PlayerEffect is { HasEffect: true } effect)
+                add("PlayerEffectBuff" + suffix, "PlayerEffectBuff", new object[] { input,
+                    PlayerEffectDescription.Build(effect, RuntimeTooltipCulture), duration });
             if (generated.Combat is { HasEffect: true } combat)
             {
                 if (combat.DefensePoints != 0) Effect("CombatDefense", "CombatDefense", (combat.DefensePoints >= 0 ? "+" : "") + combat.DefensePoints.ToString(CultureInfo.InvariantCulture));

@@ -26,6 +26,9 @@ internal static partial class EngineRuntimeChecks
     // packet decode, escrow, identity validation and actual Prepare remain native.
     private static void ClientTooltipServerCraftEscrowEndToEnd()
     {
+        var defaults = new InfiniParentTooltipServerConfig();
+        Equal(false, defaults.TrustClientParentTooltips, "actual server trust config defaults off");
+        Equal(Terraria.ModLoader.Config.ConfigScope.ServerSide, defaults.Mode, "client cannot own tooltip trust policy");
         var genProperty = typeof(InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("Generator")!;
         object? previousGenerator = genProperty.GetValue(null);
         var oldLanguage = LanguageManager.Instance;
@@ -146,6 +149,24 @@ internal static partial class EngineRuntimeChecks
                     Receive(Packet(request, ItemID.CopperShortsword, "changed replay"));
                     Equal(1, started, "pending replay does not start another generator");
                     Equal(frozen, prepared.PayloadJson, "pending replay cannot mutate frozen parent context");
+                    byte[] malformedRetry = Packet(request, ItemID.CopperShortsword, "damaged retry")[..^1];
+                    peers.Sent.Clear();
+                    Receive(malformedRetry);
+                    Equal(0, peers.Sent.Count, "malformed pending replay cannot send a conflicting failure");
+                    Equal(1, started, "malformed pending replay cannot launch another generation");
+                    Equal(frozen, prepared.PayloadJson, "malformed pending replay preserves frozen context");
+                    Equal(true, GeneratedStationEscrowStateSystem.CompleteCraft(token, request, true, "committed output", "ok"), "fixture records actual journal success");
+                    Receive(malformedRetry);
+                    Equal(1, peers.Sent.Count, "malformed completed replay returns canonical result");
+                    using (var result = new BinaryReader(new MemoryStream(peers.Sent.Single()))) {
+                        Equal(InfiniCrafterLocal.Common.InfiniNetPacketIds.CraftCommitResult, result.ReadByte(), "replay result opcode");
+                        Equal(3, result.ReadInt32(), "replay protocol version");
+                        Equal(scope, result.ReadString(), "replay authority scope");
+                        Equal(request, result.ReadString(), "replay request identity");
+                        Equal(true, result.ReadBoolean(), "malformed optional bytes cannot replace committed success");
+                        Equal("committed output", result.ReadString(), "canonical output name survives malformed replay");
+                    }
+
                 });
             }
         }

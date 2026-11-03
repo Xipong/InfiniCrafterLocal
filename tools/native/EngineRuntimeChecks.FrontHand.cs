@@ -15,15 +15,33 @@ using Terraria.ID;
 
 internal static partial class EngineRuntimeChecks
 {
-    // Baseline-compilable: no reference to new members/types, no saved-item rewrite.
-    // Parent supplies a FRESH compiler/delivery fixture, not fixture.saved.json.
-    private static string FrontHandWire() => File.ReadAllText(
-        Environment.GetEnvironmentVariable("ICL_FRONT_HAND_FIXTURE")
-        ?? Path.Combine("tools", "fixtures", "front-hand-compiled.json"));
+    // Saved opcode20 movement fixture, projected explicitly into the current test envelope.
+    // Never write the source, change its motion, or claim a fresh Author generation.
+    private static string FrontHandFixturePath() => Environment.GetEnvironmentVariable("ICL_FRONT_HAND_FIXTURE")
+        ?? Path.Combine("tools", "fixtures", "front-hand-compiled.json");
+    private static string FrontHandWire()
+    {
+        var root=JsonNode.Parse(File.ReadAllText(FrontHandFixturePath()))!.AsObject();
+        var use=root["runtimeProgram"]!["itemUse"]!.AsObject();
+        if(use.ContainsKey("releaseTiming")) {
+            if(use["releaseTiming"]!.GetValue<string>()!="immediate"||use["hideUseGraphic"]!.GetValue<bool>()!=true)
+                throw new InvalidDataException("Saved movement fixture has no proven equivalent current visibility envelope");
+            use.Remove("releaseTiming");
+        }
+        var gameplay=root["gameplay"]!.AsObject();
+        if(gameplay.ContainsKey("releaseTiming")) {
+            if(gameplay["releaseTiming"]!.GetValue<string>()!="immediate")throw new InvalidDataException("Unexpected saved gameplay visibility");
+            gameplay.Remove("releaseTiming");
+        }
+        if(root["runtimeContract"]?["finalWireReceipts"] is JsonArray receipts)
+            for(int i=receipts.Count-1;i>=0;i--)
+                if(receipts[i]?["finalPath"]?.GetValue<string>() is "runtimeProgram.itemUse.releaseTiming" or "gameplay.releaseTiming")receipts.RemoveAt(i);
+        return root.ToJsonString();
+    }
     private static GeneratedItemData FrontHandDefinition(string? json = null)
     {
         var data = GeneratedItemData.FromJson(json ?? FrontHandWire());
-        if (data is null) throw new InvalidOperationException("RED: fresh explicit move_front_hand definition rejected by native DTO: " + ContractJsonDiagnostics.LastError);
+        if (data is null) throw new InvalidOperationException("RED: saved movement/current test envelope rejected by native DTO: " + ContractJsonDiagnostics.LastError);
         return data;
     }
     private static JsonObject FrontHandEntity(JsonObject root)
@@ -32,10 +50,22 @@ internal static partial class EngineRuntimeChecks
 
     private static void FrontHandFreshWireAdmission()
     {
+        byte[] saved=File.ReadAllBytes(FrontHandFixturePath());
+        string sourceHash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(saved)).ToLowerInvariant();
+        if(Environment.GetEnvironmentVariable("ICL_FRONT_HAND_FIXTURE") is null)
+            Equal("dfcc7ce0cb1cbdf827b79c2d21b20de4e62edf2b26890ba74d509a56276ddc96",sourceHash,"original saved fixture immutable SHA");
+        var original=JsonNode.Parse(saved)!;
+        if(original["runtimeProgram"]?["itemUse"]?["releaseTiming"] is not null || original["gameplay"]?["releaseTiming"] is not null)
+            Equal(true,GeneratedItemData.FromJson(System.Text.Encoding.UTF8.GetString(saved)) is null,"old DTO remains strict RED; projection exists only in tests");
         string wire = FrontHandWire();
+        var projected=JsonNode.Parse(wire)!;
+        Equal(true,JsonNode.DeepEquals(original["runtimeProgram"]!["entities"],projected["runtimeProgram"]!["entities"]),"all saved entities/movement/parameters unchanged");
+        var expectedProgram=original["runtimeProgram"]!.DeepClone();expectedProgram["itemUse"]!.AsObject().Remove("releaseTiming");
+        Equal(true,JsonNode.DeepEquals(expectedProgram,projected["runtimeProgram"]),"runtime envelope changes only exact retired field");
+        Equal(sourceHash,Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(FrontHandFixturePath()))).ToLowerInvariant(),"test projection never writes archived source");
         var data = FrontHandDefinition(wire);
         var e = data.RuntimeProgram.TryGetEntity(data.RuntimeProgram.PrimaryEntityId)!;
-        Equal(20, e.Movement.Code, "new opcode, never code19 remapping");
+        Equal(20, e.Movement.Code, "saved opcode20, never code19 remapping");
         Equal("move_front_hand", e.Movement.Name, "explicit low-level selection");
         Equal(12, e.Movement.Params.DurationTicks, "fixture cycle is 12 world ticks");
         foreach (string field in new[] { "aimMode", "startStretch", "peakStretch", "hitboxOffsetPx", "durationTicks" })
@@ -115,7 +145,7 @@ internal static partial class EngineRuntimeChecks
     }
     private static void FrontHandNativePoseAndContact()
     {
-        string wire = FrontHandWire(); // authentic receipt-bearing source remains untouched
+        string wire = FrontHandWire(); // saved source remains untouched; current test envelope is explicit
         // A small pairwise roster, not a Cartesian coverage framework.
         var cases = new[] {
             (Facing: 1, Gravity: 1f, Angle: .35f, Full: 0f, Updates: 1, Cursor: false, After: false, Server: false, Distinct: false),

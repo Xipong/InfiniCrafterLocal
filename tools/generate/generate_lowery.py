@@ -14,8 +14,8 @@ from infini_local.core.runtime_authoring.capability_registry import (  # noqa: E
     CAPABILITY_REGISTRY,
     CONTROLLER_OPCODE,
     ENTITY_KIND_REGISTRY,
-    EVENT_KIND_REGISTRY,
     EVENT_ACTION_OPCODE,
+    EVENT_KIND_REGISTRY,
     MOVEMENT_OPCODE,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
@@ -37,9 +37,8 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (  # noqa: E
     DAMAGE_CLASS_TMODLOADER_NAMES,
     ITEM_USE_STYLE_TMODLOADER_NAMES,
 )
-
-from infini_local.pipelines.author_item_contract import author_item_prompt_shape_card  # noqa: E402
-from infini_local.pipelines.llm_authoring_prompt import concise_terraria_tick_guide_for_llm  # noqa: E402
+from infini_local.pipelines.author.item_contract import author_item_repair_prompt_shape_card  # noqa: E402
+from infini_local.pipelines.author.prompt import concise_terraria_tick_guide_for_llm  # noqa: E402
 
 OUTPUT = ROOT / "docs/reference/generated/LOWERY_RU.md"
 
@@ -63,8 +62,8 @@ def render() -> str:
         "[Author shape](../../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py), "
         "[lowering](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py), "
         "[tModLoader vocabulary](../../../LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py), "
-        "[Author/Repair prose](../../../LocalGenerator/infini_local/pipelines/author_item_contract.py), "
-        "[unit guide](../../../LocalGenerator/infini_local/pipelines/llm_authoring_prompt.py).",
+        "[Author/Repair prose](../../../LocalGenerator/infini_local/pipelines/author/item_contract.py), "
+        "[unit guide](../../../LocalGenerator/infini_local/pipelines/author/prompt.py).",
         "",
         f"Schemas: `{RUNTIME_PROGRAM_API_VERSION}` / `{RUNTIME_PROGRAM_SCHEMA}` / `{RUNTIME_WIRE_SCHEMA}`.",
         "",
@@ -76,7 +75,7 @@ def render() -> str:
         "",
         "## READ THIS FIRST — замороженная граница",
         "",
-        "1. Gameplay Author сам выбирает механику, entities, bindings, calls, params, events, references, metadata и optional advisory realization/selfEvaluation. "
+        "1. Gameplay Author сам выбирает механику, entities, bindings, calls, params, events, references и metadata. "
         "Ни имя, tooltip, category, family, parent tag или capability prose не разрешают коду дописать дизайн.",
         "2. Deterministic Python имеет право только проверить exact authored graph, ограничить его, отфильтровать exact Repair scope и выполнить lossless technical lowering.",
         "3. Lowery не является вторым Author. Он не выбирает movement, attachment, delivery, lifecycle, input, target, entity kind, event, damage, visual topology, hitbox topology, root executor или fallback mechanic. Он может скрывать неудобство API, но не сжимать пространство дизайна.",
@@ -96,9 +95,9 @@ def render() -> str:
         ("Author JSON shape, primaryEntity fields, repair patch shape", "runtime_authoring/program_schema.py", "prompt schema, validator, Repair filter"),
         ("capabilities, entity/input/action/event facts and event producers", "runtime_authoring/capability_registry.py", "Author catalog, validator, Repair alternatives, docs"),
         ("lossless projections, exact outputs, receipts, repetition policy", "runtime_authoring/technical_lowering.py", "compiler, audits, this document"),
-        ("Author/Repair model-facing prose and unit explanation", "pipelines/author_item_contract.py + pipelines/llm_authoring_prompt.py", "serialized Author/Repair messages, this document"),
+        ("Author/Repair model-facing prose and unit explanation", "pipelines/author/item_contract.py + pipelines/author/prompt.py", "serialized Author/Repair messages, this document"),
         ("validation truth", "runtime_authoring/validator.py", "Repair requirements and final acceptance"),
-        ("Repair permissions/filter", "runtime_authoring/repair_scope.py", "conditional Repair dossier and merge report"),
+        ("Repair scope/permissions/filter", "runtime_authoring/repair/{schema,scope,filter,validation,fragments}.py", "conditional Repair dossier and merge report"),
         ("wire materialization", "runtime_authoring/compiler.py", "RuntimeProgram wire + finalWireReceipts"),
         ("runtime execution", "ModSources/.../RuntimeProgramSpec.cs + executors", "tModLoader behavior"),
     ])
@@ -119,7 +118,7 @@ def render() -> str:
         "",
         "### Event producer contract",
         "",
-        "`EventKindSpec` владеет producer calls, producer binding inputs и exact producer params; `EntityKindSpec.base_events` владеет producer-free availability для конкретного kind. "
+        "`EventKindSpec` владеет producer calls, producer binding inputs, exact producer params и playerEffect predicate; `EntityKindSpec.base_events` владеет producer-free availability для конкретного kind. "
         "Validator и Repair вызывают одну generic registry projection. Event-name `if/elif` вне registry запрещён.",
         "",
     ]
@@ -130,14 +129,16 @@ def render() -> str:
             f"{capability}({','.join(f'{name}={value!r}' for name, value in params.items())})"
             for capability, params in event.producer_exact_params.items()
         ) or "—"
+        player_effect_member = getattr(event, "producer_player_effect_member", "")
         event_rows.append((
             event.name,
             ", ".join(event.producer_capabilities) or "—",
             ", ".join(event.producer_binding_inputs) or "—",
             ", ".join(base_kinds) or "—",
             exact,
+            f"playerEffect.{player_effect_member} present" if player_effect_member else "—",
         ))
-    lines += table(("event", "producer calls", "producer binding inputs", "producer-free kinds", "exact params"), event_rows)
+    lines += table(("event", "producer calls", "producer binding inputs", "producer-free kinds", "exact params", "playerEffect predicate"), event_rows)
     lines += [
         "",
         '<a id="lowering"></a>',
@@ -165,18 +166,20 @@ def render() -> str:
         "Каждый fn-selected выход требует ровно один technical_projection receipt с exact source .fn, callId, finalPath и типизированным значением. "
         "Source-aware audit связывает его с реально выбранным executor и authored target; согласованно изменить wire и receipt недостаточно. "
         "Без Author `authoredSourceChecked=false`: это только проверка согласованности сохранённых утверждений, не восстановление неизвестного намерения. "
-        "Старые wire/opcodes/отсутствия не переписываются на чтении.",
+        "Старые wire/opcodes/отсутствия не переписываются на чтении. "
+        "`fresh Author` означает доступный модели самостоятельный fn; `retained runtime` сохраняется для принятого runtime wire, но не предлагается как самостоятельный fn в новом Author.",
         "",
     ]
-    lines += table(("capability", "fn-selected wire output", "exact value"), [
-        (fn, path, repr(value)) for fn in CAPABILITY_REGISTRY
+    lines += table(("capability", "availability", "fn-selected wire output", "exact value"), [
+        (fn, "fresh Author" if cap.author_visible else "retained runtime", path, repr(value))
+        for fn, cap in CAPABILITY_REGISTRY.items()
         for path, value in capability_fixed_outputs(fn).items()
     ])
     lines += ["", "### Явные event-проекции", "",
               "Разное authored имя может выбирать точную зарегистрированную проекцию существующего event executor. "
               "Это полезный отдельный выбор, не разрешение угадывать действие из prose и не whole-weapon macro.", ""]
-    lines += table(("authored capability", "wire action", "fixed outputs"), [
-        (fn, cap.wire_action, repr(dict(cap.fixed_wire_literals)))
+    lines += table(("capability", "availability", "wire action", "fixed outputs"), [
+        (fn, "fresh Author" if cap.author_visible else "retained runtime", cap.wire_action, repr(dict(cap.fixed_wire_literals)))
         for fn, cap in CAPABILITY_REGISTRY.items() if cap.wire_action
     ])
     lines += ["", "### Structured и enum projections", "",
@@ -191,14 +194,17 @@ def render() -> str:
               "Это только объявленные default=neutral, не универсальное правило для нуля. "
               "При условии вне указанной ветви leaf остаётся обязательным; contradictory-present не исправляется. "
               "Compiler выдаёт declared_neutral_omission receipt, а Repair отсутствие сохраняет.", ""]
-    lines += table(("capability.param", "exact neutral", "inactive branch (OR)"), [
+    lines += table(("capability.param", "exact neutral", "omission condition"), [
         (f"{fn}.{name}", repr(value),
          repr({"targetKinds": spec.omission_condition.target_kinds,
                "paramEquals": spec.omission_condition.param_equals,
-               "targetCapabilities": spec.omission_condition.target_capabilities}) if spec.omission_condition else "unconditional declared neutral")
+               "targetCapabilities": spec.omission_condition.target_capabilities}) if spec.omission_condition else
+         next(("all timing absent: " + ", ".join((rule.param, rule.other_param, *rule.any_of))
+               for rule in cap.requirements if rule.kind == "timing_pair_or_window" and rule.allow_absent
+               and name.split(".", 1)[0] in rule.any_of), "unconditional declared neutral"))
         for fn, cap in CAPABILITY_REGISTRY.items()
         for name, value in declared_neutral_omissions(fn, {}).items()
-        for spec in (cap.params[name],)
+        for spec in (cap.params[name.split(".", 1)[0]],)
     ])
     lines += [
         "",
@@ -223,7 +229,7 @@ def render() -> str:
     lines += table(("runtime token", "tModLoader field"), [(k, v) for k, v in AMMO_CATEGORY_TMODLOADER_NAMES.items()])
     lines += [
         "",
-        "`configure_vanilla_ammo_item` отдельно принимает `projectileId` и `shootSpeedContributionBlocksPerSecond`, переводя базовый ammo-вклад в native `Item.shootSpeed`; `projectileId` задаёт `Item.shoot`. Категория не выбирает projectile автоматически. `Item.ammo` означает «этот предмет является боеприпасом». Отдельная capability `configure_weapon_ammo` задаёт `Item.useAmmo` для active spawn_entity shots: native selection/conservation и damage/knockback сохраняются, поведение projectile принадлежит authored entity. Author явно выбирает `speedBasis=authored_spawn|native_shot`. Другие use lanes и passive hold не расходуют ammo. Одновременная роль ammo stack и ammo consumer у одного generated item отклоняется.",
+        "`ammo_item` отдельно принимает `projectileId` и `shootSpeedContributionBlocksPerSecond`, переводя базовый ammo-вклад в native `Item.shootSpeed`; `projectileId` задаёт `Item.shoot`. Категория не выбирает projectile автоматически. `Item.ammo` означает «этот предмет является боеприпасом». Отдельная capability `weapon_ammo` задаёт `Item.useAmmo` для active spawn_entity shots: native selection/conservation и damage/knockback сохраняются, поведение projectile принадлежит authored entity. Author явно выбирает `speedBasis=authored_spawn|native_shot`. Другие use lanes и passive hold не расходуют ammo. Одновременная роль ammo stack и ammo consumer у одного generated item отклоняется.",
         "",
         "### Loaded content IDs",
         "",
@@ -232,8 +238,9 @@ def render() -> str:
         "### Поля с неочевидными Terraria units",
         "",
         "- `valueCopper` напрямую пишет `Item.value`; это base/shop value в copper, а не обещание конкретной суммы resale игроком.",
-        "- Author `configure_tool.axePowerTooltipPercent` задаёт целое 0..500 с шагом 5 в видимых процентах tooltip; compiler точно пишет старое целое `gameplay.axePower = value / 5` в `Item.axe` 0..100. Старое имя `axePower` не принимается как Author alias.",
-        "- Author `apply_generated_buff_on_use.lifeRegenHpPerSecond` задаёт вклад в HP/с (0..60, шаг 0.5); compiler точно пишет старое целое `gameplay.generatedBuff.lifeRegen = value × 2`. Это вклад в engine stat до остальных эффектов, не обещание итогового лечения.",
+        "- Author `tool_stats.axePower` задаёт целое 0..500 с шагом 5 в видимых процентах tooltip; compiler точно пишет старое целое `gameplay.axePower = value / 5` в `Item.axe` 0..100. Старое имя `axePower` не принимается как Author alias.",
+        "- Author `generated_buff_on_use.lifeRegen` задаёт вклад в HP/с (-50..60, шаг 0.5); compiler точно пишет старое целое `gameplay.generatedBuff.lifeRegen = value × 2`. Это вклад в engine stat до остальных эффектов, не обещание итогового лечения.",
+        "- `lifeRegen`/`regenWhen` и `treasureSense`/`treasureWhen` — единственные Author-входы для этих эффектов. Условия переводятся в typed native condition fields, не создают вторую stat-величину и сами по себе не являются эффектом. Nested `playerEffect.lifeRegen…`/`highlightTreasure` отвергаются.",
         "",
         '<a id="player-text"></a>',
         "",
@@ -250,13 +257,14 @@ def render() -> str:
         "Механическая истина — явно emitted runtimeProgram, а не красивое обещание в тексте.",
         "",
         "Ниже — тот же model-facing текст из существующих prompt owners, а не отдельный prose-контракт. "
-        "Author получает его в `requiredJsonShape.realization` и `runtimeCapabilityContract.technicalNotes`; "
+        "Initial Author получает единицы в `runtimeCapabilityContract.technicalNotes` и generation-only provider schema с кратким concept и разделёнными realization.description (применение) / selfEvaluation (отладка). "
+        "Legacy acceptance и Repair сохраняют эти optional advisory поля; "
         "Repair — в `requiredJsonShape.realizationReplacement` и `runtimeExecutionTruth.units.playerFacingUnits`. "
         "Он передаётся в JSON messages при json_schema и json_object; schema annotations для этого не требуются. "
         "Если Repair добровольно возвращает описание, оно относится к post-merge программе; read-only context не даёт права менять frozen механику.",
         "",
     ]
-    realization = author_item_prompt_shape_card()["realization"]
+    realization = author_item_repair_prompt_shape_card()["realizationReplacement"]
     lines += table(("optional prose", "shared guidance"), [
         (f"realization.{name}", realization[name]) for name in ("description", "playerExperience")
     ])

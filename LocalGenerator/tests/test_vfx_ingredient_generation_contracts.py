@@ -6,11 +6,14 @@ import json
 from pathlib import Path
 import pytest
 from PIL import Image, ImageDraw
-from infini_local.pipelines import sprite_postprocess, visual_sprite_generation
-from infini_local.pipelines import visual_delivery_gate
+from infini_local.pipelines.images import postprocess as sprite_postprocess
+import infini_local.pipelines.images.pixels as sprite_postprocess_pixels
+import infini_local.pipelines.images.validation as sprite_postprocess_validation
+from infini_local.pipelines.images import stage as visual_sprite_generation
+from infini_local.pipelines.visual import delivery as visual_delivery_gate
 from infini_local.services import asset_sync_service
-from infini_local.core.vfx_manifest import VFX_DIRECTOR_SCHEMA
-from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+from infini_local.core.vfx.contract import VFX_DIRECTOR_SCHEMA
+from infini_local.pipelines.visual.assets import build_visual_asset_plan
 from tests.vfx_image_fixtures import _data, _request, _slot, _raw_fixture, offline_backend
 
 
@@ -56,9 +59,9 @@ def test_delivery_checks_exact_requested_vfx_png_contract(offline_backend, layou
 def test_strip_alpha_coverage_can_fill_full_frame_without_silhouette_heuristics(tmp_path):
     path = tmp_path / "offline_full_frame_soft_strip.png"
     Image.new("RGBA", (32, 32), (210, 100, 20, 144)).save(path)
-    validation = sprite_postprocess.validate_processed_sprite(str(path), "vfx_strip", expected_canvas=32)
+    validation = sprite_postprocess_validation.validate_processed_sprite(str(path), "vfx_strip", expected_canvas=32)
     assert validation["ok"], validation
-    assert not sprite_postprocess.sprite_validation_fatal(validation)
+    assert not sprite_postprocess_validation.sprite_validation_fatal(validation)
 
 
 def test_runtime_png_roster_matches_shared_csharp_dto_path_parity_vector():
@@ -95,7 +98,7 @@ def test_invalid_requests_fail_planning_before_backend_jobs(offline_backend, dam
     assert calls == []
 
 def test_unused_new_request_is_rejected_in_canonical_fresh_caption_domain(offline_backend):
-    from infini_local.core.vfx_manifest import validate_vfx_director_output
+    from infini_local.core.vfx.validation import validate_vfx_director_output
     calls, _ = offline_backend
     data = _data([])
     raw = {
@@ -173,7 +176,7 @@ def test_delivery_rejects_cross_role_or_cross_request_filename_aliasing(offline_
 def test_strip_retry_keeps_asymmetric_uv_landmarks_and_publishes_only_final_png(offline_backend, monkeypatch, failure):
     calls, _ = offline_backend
     original_backend = visual_sprite_generation.generate_sdcpp
-    original_bake = sprite_postprocess.bake_sprite_from_master
+    original_bake = sprite_postprocess_pixels.bake_sprite_from_master
     attempts = 0
     bakes = 0
     original_refit = visual_sprite_generation.refit_processed_sprite_to_contract
@@ -280,14 +283,14 @@ def test_delivery_counts_whole_canonical_roster_even_for_unneeded_overlay(offlin
     ("negativePrompt", "exact different negative"), ("canvasSize", 48), ("layout", "strip"),
 ])
 def test_processing_digest_uses_each_exact_request_field(field, value):
-    from infini_local.pipelines.visual_asset_plan import vfx_asset_job_id
+    from infini_local.pipelines.visual.assets import vfx_asset_job_id
     data = _data()
     first = data["vfxManifest"]["assets"][0]
     second = {**first, field: value}
     assert vfx_asset_job_id(data, first).casefold() != vfx_asset_job_id(data, second).casefold()
 
 def test_both_processing_and_final_png_identity_are_exact_recipe_scoped(offline_backend):
-    from infini_local.pipelines.visual_asset_plan import vfx_asset_job_id
+    from infini_local.pipelines.visual.assets import vfx_asset_job_id
     first = _data()
     second = copy.deepcopy(first)
     second["vfxManifest"]["recipeId"] = "Offline_recipe"

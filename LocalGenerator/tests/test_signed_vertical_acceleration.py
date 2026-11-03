@@ -2,23 +2,19 @@
 from copy import deepcopy
 
 import pytest
-
-from infini_local.core.runtime_authoring.capability_registry import (
-    CAPABILITY_REGISTRY,
-    capability_provider_union,
-    compact_capability_catalog,
-)
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.registry_views import capability_provider_union, compact_capability_catalog
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
 
-
-FN = "accelerate_projectile_vertical"
-PARAM = "accelerationYBlocksPerSecondSquared"
+FN = "accelerate_y"
+PARAM = "accelY"
 
 
 def selected(document, fn=FN):
@@ -31,7 +27,7 @@ def test_signed_values_reach_the_same_wire_and_exact_receipts(value, updates):
     document = build_capability_witness(FN)
     call = selected(document)
     call["params"][PARAM] = CAPABILITY_REGISTRY[FN].params[PARAM].from_wire(value, updates_per_tick=updates)
-    selected(document, "set_projectile_collision")["params"]["updatesPerTick"] = updates
+    selected(document, "projectile_collision")["params"]["updatesPerTick"] = updates
     assert validate_runtime_program(document)["ok"]
     wire = compile_runtime_program(document)
     entity = next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == call["target"])
@@ -99,7 +95,7 @@ def test_repair_changes_only_bad_acceleration_and_keeps_valid_negative_frozen():
     assert selected(fixed)["target"] == call["target"]
     assert validate_runtime_program(fixed)["ok"]
     # A later unrelated invalid collision leaf cannot rewrite accepted acceleration.
-    collision = selected(fixed, "set_projectile_collision")
+    collision = selected(fixed, "projectile_collision")
     collision["params"]["pierce"] = 101
     scope = build_runtime_repair_scope(fixed, validate_runtime_program(fixed)["errors"])
     hostile = deepcopy(selected(fixed))
@@ -110,7 +106,7 @@ def test_repair_changes_only_bad_acceleration_and_keeps_valid_negative_frozen():
     assert audit["ok"], audit
     repaired = apply_repair_patch(fixed, filtered)
     assert selected(repaired)["params"][PARAM] == -42.1875
-    assert selected(repaired, "set_projectile_collision")["params"]["pierce"] == 3
+    assert selected(repaired, "projectile_collision")["params"]["pierce"] == 3
     assert validate_runtime_program(repaired)["ok"]
 
 

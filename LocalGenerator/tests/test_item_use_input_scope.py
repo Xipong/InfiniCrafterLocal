@@ -11,12 +11,12 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 
 
 def _document(scope="both"):
-    doc = build_capability_witness("spawn_entity_on_event")
+    doc = build_capability_witness("spawn_on_event")
     runtime = doc["runtimeProgram"]
     call = next(c for c in runtime["calls"] if c["id"] == "witness_call")
     call["target"] = "item"
     call["params"]["when"] = "on_use" if scope is None else {"on": "on_use", "useInput": scope}
-    call["params"]["delaySeconds"] = 0.5
+    call["params"]["delay"] = 0.5
     alternate = deepcopy(runtime["bindings"][0])
     alternate.update(id="alternate", input="alternate_use")
     runtime["bindings"].append(alternate)
@@ -52,7 +52,7 @@ def test_use_event_scope_projects_once_with_exact_provenance(scope):
 @pytest.mark.parametrize("scope", ["primary_use", "alternate_use", "both", None])
 def test_mana_scope_and_legacy_default_keep_declared_receipts(scope):
     doc = _document()
-    stats = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_item_stats")
+    stats = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "item_stats")
     stats["params"]["manaCost"] = 17
     if scope is not None:
         stats["params"]["manaCostInput"] = scope

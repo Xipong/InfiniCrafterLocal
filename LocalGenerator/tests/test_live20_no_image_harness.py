@@ -1,4 +1,5 @@
 from __future__ import annotations
+from pipeline_test_support import isolated_serving_roots
 
 import ast
 import copy
@@ -6,27 +7,27 @@ import json
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image
 import pytest
-
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.core.vfx_manifest import _compile_manifest, validate_vfx_director_output
-from infini_local.pipelines import visual_delivery_gate
-from infini_local.pipelines.visual_delivery_gate import visual_delivery_report
+from infini_local.core.vfx.projection import _compile_manifest
+from infini_local.core.vfx.validation import validate_vfx_director_output
+from infini_local.pipelines.visual import delivery as visual_delivery_gate
+from infini_local.pipelines.visual.delivery import visual_delivery_report
 from infini_local.qa.live_no_image_fixture import (
     hydrate_no_image_fixture_assets,
     write_no_image_fixture_png,
 )
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-from test_low_level_three_stage_pipeline import _vfx_output
-from pipeline_test_support import isolated_serving_roots, install_campaign_fault
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
+from PIL import Image
+from pipeline_test_support import install_campaign_fault
+from tests.vfx_material_fixtures import _history, _legacy, _shape, _sprite
 
 
 def test_campaign_placed_body_uses_authenticated_qa_root_png(tmp_path):
     authored = build_runtime_fixture("fishing_platform_tool")
     authored["runtimeProgram"]["calls"].append({
-        "id": "placed_body", "fn": "present_placed_item_sprite", "target": "item",
+        "id": "placed_body", "fn": "placed_sprite", "target": "item",
         "params": {"placementCallId": "platform_result", "renderSizePx": 32,
                    "footprintAnchorX": 0.5, "footprintAnchorY": 1,
                    "pivotSpace": "alpha_bounds", "imagePivotX": 0.5, "imagePivotY": 1,
@@ -56,8 +57,9 @@ def test_campaign_placed_body_uses_authenticated_qa_root_png(tmp_path):
 @pytest.mark.parametrize("mode", ["runtime_geometry", "no_asset", "baked_sprite"])
 def test_campaign_normalizes_prompts_only_for_image_jobs(tmp_path, mode):
     from typing import Any, cast
-    from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
-    from infini_local.pipelines.visual_prompt_contracts import asset_negative_prompt, normalize_asset_prompt
+
+    from infini_local.pipelines.images.prompts import asset_negative_prompt, normalize_asset_prompt
+    from infini_local.pipelines.visual.assets import build_visual_asset_plan
 
     data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
     data.update(id="qa-prompt-boundary", visual={
@@ -90,9 +92,10 @@ def test_campaign_normalizes_prompts_only_for_image_jobs(tmp_path, mode):
         assert entity["visual"]["assetMode"] == mode
 
 
-def _campaign_observers(fixture):
+def _campaign_observers(fixture, *, real_images=False):
     """Execute only the campaign's real observer installation, without inference."""
     from types import SimpleNamespace
+
     from infini_local.pipelines import combine_pipeline
     from infini_local.qa import live_no_image_fixture
 
@@ -114,14 +117,48 @@ def _campaign_observers(fixture):
                    }) for target in node.targets
         ):
             nodes.append(node)
+        elif (isinstance(node, ast.If)
+              and isinstance(node.test, ast.UnaryOp) and isinstance(node.test.op, ast.Not)
+              and isinstance(node.test.operand, ast.Name) and node.test.operand.id == "REAL_IMAGES"
+              and any(isinstance(child, ast.Assign) and any(
+                  isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name)
+                  and target.value.id == "combine" and target.attr == "assert_visual_delivery_ready"
+                  for target in child.targets) for child in node.body)):
+            # Execute the actual conditional installation rather than bypassing
+            # the new real/no-image split or replacing its delivery owners.
+            nodes.append(node)
     observer = SimpleNamespace(
         _cached_payload_report=combine_pipeline._cached_payload_report,
         assert_visual_delivery_ready=combine_pipeline.assert_visual_delivery_ready,
     )
-    namespace = {"combine": observer, "NO_IMAGE_FIXTURE": fixture, "Any": object, "copy": copy}
+    namespace = {"combine": observer, "NO_IMAGE_FIXTURE": fixture, "Any": object, "copy": copy, "REAL_IMAGES": real_images}
     namespace.update(vars(live_no_image_fixture))
     exec(compile(ast.Module(body=nodes, type_ignores=[]), str(harness), "exec"), namespace)
     return observer
+
+
+def test_real_image_campaign_does_not_install_synthetic_readiness_observers(tmp_path, monkeypatch):
+    import runpy
+    import sys
+    from infini_local.pipelines import combine_pipeline
+    from infini_local.services import asset_sync_service
+    from toolbox.live import preflight, real_run
+
+    owners = (combine_pipeline._cached_payload_report, combine_pipeline.assert_visual_delivery_ready,
+              asset_sync_service.attach_asset_sync_meta)
+    called = []
+    monkeypatch.setattr(preflight, "prepare", lambda args: ({"realImageGeneration": True}, {}))
+    def admitted_run(args, report, environment):
+        called.append(args.real_images)
+        assert (combine_pipeline._cached_payload_report, combine_pipeline.assert_visual_delivery_ready,
+                asset_sync_service.attach_asset_sync_meta) == owners
+        return 0
+    monkeypatch.setattr(real_run, "run", admitted_run)
+    monkeypatch.setattr(sys, "argv", ["runner", "--real-images", "--run", "--output", str(tmp_path / "output")])
+    with pytest.raises(SystemExit) as stopped:
+        runpy.run_module("toolbox.live.runner", run_name="__main__")
+    assert stopped.value.code == 0 and called == [True]
+    assert not (tmp_path / "output").exists()
 
 
 @pytest.mark.parametrize("output_depth", ["short", "long"])
@@ -150,7 +187,7 @@ def test_campaign_fixture_uses_canonical_serving_root(tmp_path, monkeypatch, out
         ))
     ]
     assert sum(isinstance(node, ast.Assign) for node in nodes) == 1
-    namespace = {"OUT": output, "write_no_image_fixture_png": write_no_image_fixture_png}
+    namespace = {"OUT": output, "write_no_image_fixture_png": write_no_image_fixture_png, "REAL_IMAGES": False}
     exec(compile(ast.Module(body=nodes, type_ignores=[]), str(harness), "exec"), namespace)
     fixture = namespace["NO_IMAGE_FIXTURE"]
     if output_depth == "long":
@@ -166,7 +203,7 @@ def test_campaign_fixture_uses_canonical_serving_root(tmp_path, monkeypatch, out
             entity["visual"]["preferredCanvasSize"] = 32
     # Selected baked history consumes real PNG execution metadata, not just a
     # hydrated filename. Exercise the actual harness-installed final observer.
-    authored = _vfx_output(data)
+    authored = _history(data, "entity")
     selected = next(entity for entity in data["runtimeProgram"]["entities"] if entity["kind"] != "item_body")
     authored["slots"][0].update(entityId=selected["id"], event="periodic")
     admitted = validate_vfx_director_output(authored, data)
@@ -226,11 +263,12 @@ def test_campaign_fixture_uses_canonical_serving_root(tmp_path, monkeypatch, out
 
 @pytest.mark.parametrize("selection", ["baked_history", "projectile_body", "reuse_item_icon", "item_body"])
 def test_campaign_execution_control_preserves_selected_owner_and_qa_evidence(campaign_case, tmp_path, monkeypatch, selection):
-    from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
-    from infini_local.core.vfx_manifest import vfx_png_dependencies
-    from infini_local.pipelines import combine_pipeline, visual_sprite_generation as sprites
-    from infini_local.qa.live_no_image_fixture import synthetic_no_image_execution_control
     import hashlib
+
+    from infini_local.core.vfx.validation import vfx_png_dependencies
+    from infini_local.pipelines import combine_pipeline
+    from infini_local.pipelines.images import stage as sprites
+    from infini_local.qa.live_no_image_fixture import synthetic_no_image_execution_control
 
     fixture, hydrated, entity = campaign_case(selection=selection)
     before = copy.deepcopy(hydrated)
@@ -336,8 +374,11 @@ def campaign_case(tmp_path):
             entity["visual"]["assetMode"] = "reuse_item_icon" if selection == "reuse_item_icon" else "baked_sprite"
             if selection == "reuse_item_icon":
                 entity["visual"].pop("preferredCanvasSize")
-            authored = _vfx_output(data)
-            authored["slots"][0].update(entityId=entity["id"], event="periodic", textureRole="entity")
+            authored = _history(data, "entity") if selection == "baked_history" else _sprite(data)
+            authored["slots"][0].update(entityId=entity["id"], event="periodic")
+            if selection != "baked_history":
+                authored["slots"][0]["repeatEvery"] = 4
+                authored["slots"][0]["element"]["texture"] = {"source": "entity", "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
             admitted = validate_vfx_director_output(authored, data)
             assert admitted["ok"], admitted["errors"]
             data["vfxManifest"] = _compile_manifest(data, admitted["normalized"], identity)
@@ -380,6 +421,7 @@ def test_campaign_consumption_authenticates_bytes_and_serving_selection(
     campaign_case, monkeypatch, owner, boundary, consumer, policy,
 ):
     import hashlib
+
     from tests.vfx_image_fixtures import _request
 
     fixture, data, _ = campaign_case(ingredient=_request() if owner == "ingredient" else None, identity="qa-fixture-byte-identity")
@@ -439,8 +481,9 @@ def test_campaign_consumption_authenticates_bytes_and_serving_selection(
 def test_campaign_declared_vfx_canvas_alpha_and_private_projection(campaign_case, layout, canvas):
     import hashlib
     import json
-    from tests.vfx_image_fixtures import _request
+
     from infini_local.qa.live_no_image_fixture import synthetic_no_image_execution_control
+    from tests.vfx_image_fixtures import _request
 
     fixture, data, _ = campaign_case(ingredient=_request("ingredient", layout=layout, canvas=canvas), fixture_name="qa.png")
     before = copy.deepcopy(data)
@@ -522,6 +565,7 @@ def test_campaign_vfx_ingredient_controls_refuse(campaign_case, mutation):
 @pytest.mark.parametrize("entry", [{}, {"assetId": "grain", "path": None}, {"assetId": "grain", "path": "qa.png", "sha256": []}])
 def test_campaign_malformed_ingredient_provenance_refuses(campaign_case, entry):
     import json
+
     from tests.vfx_image_fixtures import _request
 
     fixture, data, _ = campaign_case(ingredient=_request(), fixture_name="qa.png")
@@ -622,7 +666,7 @@ def test_no_image_fixture_hydrates_canonical_required_asset_plan_roles(tmp_path:
     assert "vfx_manifest_invalid" in problem_codes
 
 
-def test_primitive_impact_ring_does_not_require_a_texture_but_impact_sprite_does(tmp_path: Path) -> None:
+def test_explicit_shape_needs_no_texture_but_saved_impact_sprite_still_does(tmp_path: Path) -> None:
     fixture = write_no_image_fixture_png(tmp_path / "no-image.png")
     data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
     data["visual"] = {"preferredCanvasSize": 32}
@@ -630,10 +674,8 @@ def test_primitive_impact_ring_does_not_require_a_texture_but_impact_sprite_does
     for row in data["runtimeProgram"]["entities"]:
         if row["kind"] != "item_body":
             row.setdefault("visual", {}).update(assetMode="baked_sprite", preferredCanvasSize=32)
-    authored = _vfx_output(data)
-    authored["slots"][0].update(entityId=entity["id"], event="periodic",
-                                rendererKind="impactRing")
-    authored["slots"][0].pop("textureRole")
+    authored = _shape(data)
+    authored["slots"][0].update(entityId=entity["id"], event="periodic", repeatEvery=4)
     report = validate_vfx_director_output(authored, data)
     assert report["ok"], report["errors"]
     data["vfxManifest"] = _compile_manifest(data, report["normalized"], "no_image_impact_probe")
@@ -646,10 +688,15 @@ def test_primitive_impact_ring_does_not_require_a_texture_but_impact_sprite_does
     assert ring_report["ok"], ring_report["problems"]
     assert not any(slot["role"] == "impact:" + entity["id"] for slot in ring_report["slots"])
 
-    slot = data["vfxManifest"]["slots"][0]
-    slot.update(rendererKind="impactSprite", textureRole="impact")
-    for field in ("spread", "particleSystemId"):
-        slot.pop(field)  # no Dust accompaniment; repeatEvery=0 still consumes density
+    # Historical impact consumers remain valid persisted wire. This does not
+    # feed a retired renderer to the fresh Director.
+    saved = _legacy(data)
+    slot = saved["slots"][0]
+    slot.update(entityId=entity["id"], event="periodic", repeatEvery=4,
+                rendererKind="impactSprite", textureRole="impact")
+    for field in ("spread", "particleSystemId", "density"):
+        slot.pop(field)
+    data["vfxManifest"] = _compile_manifest(data, saved, "saved-impact-consumer")
     entity["visual"]["impactCanvasSize"] = 32
     sprite_report = visual_delivery_report(data, check_backend_config=False)
     assert "required_impact_sprite_missing" in {problem["code"] for problem in sprite_report["problems"]}

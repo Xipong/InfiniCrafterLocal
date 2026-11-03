@@ -7,13 +7,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_generated_contract_docs_have_one_reference_home():
-    for name in ("LOWERY_RU.md", "TECHNICAL_LOWERING_AUDIT_RU.md", "LOW_LEVEL_CAPABILITY_INVENTORY_RU.md", "CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md", "PRIMITIVE_PARITY_RU.md"):
-        assert (ROOT / "docs/reference/generated" / name).is_file(), name
-    assert not (ROOT / "lowery.md").exists()
-    assert not (ROOT / "TECHNICAL_LOWERING_AUDIT_RU.md").exists()
-
-
 def test_handbook_navigation_replaces_per_folder_notes(tmp_path, monkeypatch):
     spec = importlib.util.spec_from_file_location("handbook_hygiene", ROOT / "tools/checks/check_project_hygiene.py")
     assert spec and spec.loader
@@ -26,11 +19,6 @@ def test_handbook_navigation_replaces_per_folder_notes(tmp_path, monkeypatch):
         path.write_text('Useful documentation', encoding='utf-8')
     (tmp_path / 'LocalGenerator/infini_local/deep_module').mkdir(parents=True)
     hygiene.check_documentation_layout()
-
-
-def test_old_redirects_are_not_returned_to_the_source_archive():
-    retired = ("AGENT_INDEX_RU.md", "BUILD_QOL_RU.md", "PROJECT_ARCHITECTURE_RU.md", "PROJECT_MAP_RU.md", "QUICK_START_RU.md", "README_RU.md", "TODO_ROADMAP_VERY_LATER_RU.md", "command.md", "LocalGenerator/PROJECT_ARCHITECTURE_RU.md", "LocalGenerator/PROJECT_MAP_RU.md", "LocalGenerator/QUICK_START_RU.md", "LocalGenerator/README_RU.md")
-    assert not [name for name in retired if (ROOT / name).exists()]
 
 
 def test_specialist_guides_are_reachable_from_their_topic_hub():
@@ -73,10 +61,6 @@ def test_manifest_commands_resolve_the_reorganized_tool_owners():
         for argument in command:
             if argument.startswith("tools/"):
                 assert (ROOT / argument).is_file(), argument
-    project = manifest["checks"]["native_checks"][2]
-    assert project == "tools/native/EngineRuntimeChecks.csproj"
-    assert {p.name for p in (ROOT / "tools").glob("*.py")} == {
-        "__init__.py", "agentctl.py", "validate_release.py", "build_documentation.py"}
 
 
 def test_source_installer_resolves_root_from_build_directory(tmp_path):

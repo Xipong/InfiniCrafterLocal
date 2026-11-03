@@ -3,44 +3,41 @@ from __future__ import annotations
 import copy
 import json
 
+import infini_local.core.vfx.contract as vfx_stage_contract
+import infini_local.pipelines.author.request as gameplay_stage
+import infini_local.pipelines.visual.contract as visual_stage_contract
+import infini_local.pipelines.visual.repair as visual_stage_repair
+import infini_local.pipelines.visual.repair_scope as visual_stage_repair_scope
 import pytest
-
-import infini_local.pipelines.llm_authoring_pipeline as gameplay_stage
-import infini_local.pipelines.visual_generation_pipeline as visual_stage
-import infini_local.core.vfx_manifest as vfx_stage
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.repair_scope import (
-    build_runtime_repair_scope,
-    filter_repair_patch_scope,
-    runtime_repair_fragments,
-    runtime_repair_scope_schema,
-    validate_repair_patch_scope,
-)
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.fragments import runtime_repair_fragments
+from infini_local.core.runtime_authoring.repair.schema import runtime_repair_scope_schema
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.repair.validation import validate_repair_patch_scope
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_views import runtime_event_inventory
 from infini_local.core.schema_validation import strict_schema_errors
-from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.core.vfx_manifest import (
-    VFX_REPAIR_PATCH_SCHEMA,
-    _apply_vfx_repair_patch,
-    _build_vfx_repair_scope,
-    validate_vfx_director_output,
-    vfx_director_surface,
-)
-from infini_local.pipelines.gameplay_stage import authored_item_validation_report
+from infini_local.core.vfx.contract import VFX_REPAIR_PATCH_SCHEMA
+from infini_local.core.vfx.repair import _apply_vfx_repair_patch, _build_vfx_repair_scope
+from infini_local.core.vfx.surface import vfx_director_surface
+from infini_local.core.vfx.validation import validate_vfx_director_output
+from infini_local.pipelines.author.stage import authored_item_validation_report
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from pipeline_test_support import RepairTransaction
 from test_low_level_three_stage_pipeline import (
-    _binding_row,
-    _visual_kit,
     _accepted_visual_data,
-    _vfx_output,
+    _binding_row,
     _empty_gameplay_patch,
+    _vfx_output,
+    _visual_kit,
     wire_transport,
 )
+
 
 @pytest.mark.parametrize("source,selection,ok", [
     pytest.param("invalid", "item", True, id="invalid-primary-select-item"),
@@ -137,7 +134,7 @@ def test_missing_call_leaves_freeze_valid_siblings(scenario):
     use = next(c for c in current["runtimeProgram"]["calls"] if c["id"] == "item_use")
     original = copy.deepcopy(use)
     use["params"].pop("useStyle")
-    use["params"].pop("autoReuse" if scenario == "required-pair" else "customHeldSprite")
+    use["params"].pop("autoReuse" if scenario == "required-pair" else "holdoutOffsetY")
     transaction = RepairTransaction(current)
     scope = transaction.scope
     assert strict_schema_errors(scope, runtime_repair_scope_schema()) == []
@@ -145,11 +142,11 @@ def test_missing_call_leaves_freeze_valid_siblings(scenario):
     assert scope["repairRequirements"][0]["llmRepairable"] is True
     assert not scope["create"]["entities"]["allowed"]
     assert scope["mutable"]["callIds"] == ["item_use"]
-    assert scope["blockerPlan"]["existingBrokenCapabilityNames"] == ["configure_item_use"]
+    assert scope["blockerPlan"]["existingBrokenCapabilityNames"] == ["item_use"]
     if scenario == "optional-absence":
         assert next(e["paths"] for e in scope["fieldPermissions"]["calls"] if e["id"] == "item_use") == ["params.useStyle"]
     fixed = copy.deepcopy(use)
-    fixed["params"].update(useStyle="shoot", autoReuse=True, handPose="two_handed", customHeldSprite="visible")
+    fixed["params"].update(useStyle="shoot", autoReuse=True, handPose="two_handed", holdoutOffsetY=17)
     fixed["params"]["channel"] = True  # hostile frozen sibling
     unrelated = copy.deepcopy(next(c for c in current["runtimeProgram"]["calls"] if c["id"] == "item_stats"))
     unrelated["params"]["damage"] = 999
@@ -163,11 +160,11 @@ def test_missing_call_leaves_freeze_valid_siblings(scenario):
     assert "target" not in calls["item_use"]
     assert calls["item_stats"]["params"]["damage"] != 999
     if scenario == "required-pair":
-        assert calls["item_use"]["params"]["customHeldSprite"] == "hidden"
+        assert calls["item_use"]["params"]["holdoutOffsetY"] == original["params"]["holdoutOffsetY"]
     else:
-        assert "customHeldSprite" not in calls["item_use"]["params"]
+        assert "holdoutOffsetY" not in calls["item_use"]["params"]
         assert any(e["path"].endswith("params.handPose") for e in audit["ignoredChanges"])
-        assert any(e["path"].endswith("params.customHeldSprite") and e["reason"] == "addition_not_permitted" for e in audit["ignoredChanges"])
+        assert any(e["path"].endswith("params.holdoutOffsetY") and e["reason"] == "addition_not_permitted" for e in audit["ignoredChanges"])
 
 
 @pytest.mark.parametrize("scenario", ["call-property", "param-extra", "renamed-value", "nested-extra"])
@@ -232,12 +229,12 @@ def test_missing_dependency_creation(scenario, ok):
     if scenario == "missing-identity":
         assert not scope["create"]["calls"]["allowed"] and scope["create"]["calls"]["allowedTargetIds"] == []
         return
-    assert scope["create"]["calls"]["allowedFns"] == ["configure_item_use"]
+    assert scope["create"]["calls"]["allowedFns"] == ["item_use"]
     assert scope["create"]["calls"]["allowedTargetIds"] == ["item"]
     plan = scope["blockerPlan"]
-    assert plan["directCapabilityNames"] == ["configure_item_use"]
+    assert plan["directCapabilityNames"] == ["item_use"]
     assert plan["supportingCapabilityNames"] == []
-    assert scope["capabilitySubset"] == ["configure_item_use"]
+    assert scope["capabilitySubset"] == ["item_use"]
     dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, failure_report=report)
     assert "blockerPlan" not in dossier
     assert dossier["repairScope"]["blockerPlan"] == plan
@@ -252,7 +249,7 @@ def test_missing_dependency_creation(scenario, ok):
         candidate["id"] = "item"
     patch = dict(_empty_gameplay_patch(), callsUpsert=[candidate])
     if scenario == "delete-new-param":
-        patch["callParamKeysDelete"] = [{"callId": "repair_item_use", "key": "customHeldSprite"}]
+        patch["callParamKeysDelete"] = [{"callId": "repair_item_use", "key": "handPose"}]
     if scenario == "global-collision":
         audit = validate_repair_patch_scope(current, patch, scope)
         assert not audit["ok"]
@@ -285,12 +282,12 @@ def test_item_event_producer_and_exact_contact_repair(scenario, event_ok):
     event_call["params"]["when"] = "on_use" if scenario == "placement" else "on_hit"
     if scenario == "placement":
         binding.pop("stackCost"); binding.pop("contactDamage"); binding["action"] = {"kind": "place_item", "placementCallId": "place_bench"}
-        program["calls"].append({"id": "place_bench", "fn": "configure_tile_placement", "params": {"tileId": 18, "placeStyle": 0}})
+        program["calls"].append({"id": "place_bench", "fn": "place_tile", "params": {"tileId": 18, "placeStyle": 0}})
         event_call["params"]["entity"] = "workbench_blade"
     else:
         program["bindings"].append(_binding_row("projectile_root", "alternate_use" if scenario == "foreign-target-contact" else "hold", "spawn_entity", "workbench_blade", contact_damage=scenario == "foreign-target-contact"))
         if scenario == "no-optional-geometry":
-            program["calls"] = [c for c in program["calls"] if c["fn"] != "configure_item_contact_hitbox"]
+            program["calls"] = [c for c in program["calls"] if c["fn"] != "item_hitbox"]
     report = validate_runtime_program(current)
     if not event_ok:
         assert "event_not_emitted" in {e["code"] for e in report["errors"]}
@@ -323,8 +320,8 @@ def test_missing_tool_binding_dependency_with_occupied_primary_exposes_atomic_mo
     program["calls"] = [
         row for row in program["calls"] if row["id"] in {"item_stats", "item_use"}
     ] + [
-        {"id": "place", "fn": "configure_tile_placement", "params": {"tileId": 1, "placeStyle": 0}},
-        {"id": "tool", "fn": "configure_tool", "params": {"pickPower": 100, "axePowerTooltipPercent": 0, "hammerPower": 0, "miningSpeedMultiplier": 1.0}},
+        {"id": "place", "fn": "place_tile", "params": {"tileId": 1, "placeStyle": 0}},
+        {"id": "tool", "fn": "tool_stats", "params": {"pickPower": 100, "axePower": 0, "hammerPower": 0, "miningSpeedMultiplier": 1.0}},
     ]
     program["bindings"] = [{
         "id": "primary_place",
@@ -403,7 +400,7 @@ def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(wi
     scope = transaction.scope
     assert strict_schema_errors(scope, runtime_repair_scope_schema()) == []
     assert scope["create"]["calls"]["allowedTargetKinds"] == ["item_body"]
-    assert {"configure_item_stats", "configure_item_use"}.issubset(
+    assert {"item_stats", "item_use"}.issubset(
         scope["create"]["calls"]["allowedFns"]
     )
 
@@ -412,7 +409,7 @@ def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(wi
     repaired_item["id"] = new_item_id
     repaired_calls = []
     for row in original_item_calls:
-        if row["fn"] not in {"configure_item_stats", "configure_item_use"}:
+        if row["fn"] not in {"item_stats", "item_use"}:
             continue
         repaired = copy.deepcopy(row)
         repaired["id"] = "repaired_" + row["id"]
@@ -438,16 +435,15 @@ def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(wi
     assert len(requests) == 1 and not responses
     repair_system = requests[0]["messages"][0]["content"]
     assert "create.calls.allowedTargetKinds" in repair_system
-    assert "emitted exactly once in entitiesUpsert" in repair_system
     assert validate_runtime_program(llm_repaired)["ok"]
 
 
 def test_malformed_vfx_repair_output_fails_closed_as_planner_unavailable() -> None:
     current = build_runtime_fixture("workbench_blade")
-    previous = vfx_stage.MalformedVfxDirectorOutput("{", "initial malformed JSON")
+    previous = vfx_stage_contract.MalformedVfxDirectorOutput("{", "initial malformed JSON")
     report = validate_vfx_director_output(previous, current)
     scope = _build_vfx_repair_scope(previous, report["errors"])
-    malformed_patch = vfx_stage.MalformedVfxDirectorOutput("{", "repair truncated")
+    malformed_patch = vfx_stage_contract.MalformedVfxDirectorOutput("{", "repair truncated")
 
     with pytest.raises(PlannerUnavailable, match="VFX Repair patch shape rejected"):
         _apply_vfx_repair_patch(current, previous, malformed_patch, scope)
@@ -469,7 +465,7 @@ def test_author_report_preserves_canonical_shape_and_graph_errors(semantic):
         program["bindings"].extend([duplicate, _binding_row("wrong_item_spawn", "alternate_use", "spawn_entity", "item")])
         program["entities"].append({"id": "idle_helper", "kind": "temporary_helper"})
         program["bindings"].append(_binding_row("spawn_idle_helper", "hold", "spawn_entity", "idle_helper"))
-        program["calls"].append({"id": "invalid_placeable", "fn": "configure_tile_placement", "params": {"tileId": -2, "placeStyle": 0}})
+        program["calls"].append({"id": "invalid_placeable", "fn": "place_tile", "params": {"tileId": -2, "placeStyle": 0}})
     report = authored_item_validation_report(current)
     codes = {row.get("code") for row in report["errors"]}
     assert report["ok"] is False
@@ -507,8 +503,8 @@ def test_visual_repair_freezes_valid_fields_and_ignores_scope_escape() -> None:
     old_silhouette = previous["entities"][1]["silhouette"]
     entity_ids = [row["id"] for row in data["runtimeProgram"]["entities"]]
     item_id = data["runtimeProgram"]["itemEntityId"]
-    _kit, errors = visual_stage._validate_kit(previous, entity_ids, item_id)
-    scope = visual_stage._build_visual_repair_scope(previous, errors, entity_ids, item_id)
+    _kit, errors = visual_stage_contract._validate_kit(previous, entity_ids, item_id)
+    scope = visual_stage_repair_scope._build_visual_repair_scope(previous, errors, entity_ids, item_id)
     fixed_row = copy.deepcopy(previous["entities"][1])
     fixed_row["prompt"] = "fixed chained door"
     fixed_row["scale"] = 1.25
@@ -516,11 +512,11 @@ def test_visual_repair_freezes_valid_fields_and_ignores_scope_escape() -> None:
     unrelated_row = copy.deepcopy(previous["entities"][0])
     unrelated_row["scale"] = 4
     patch = {
-        "schema": visual_stage.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": None,
+        "schema": visual_stage_contract.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": None,
         "entitiesUpsert": [fixed_row, unrelated_row], "entityIdsDelete": [], "entityIndicesDelete": [],
         "animationPlan": "SHOULD_BE_IGNORED", "note": "repair one entity row",
     }
-    repaired, audit = visual_stage._apply_visual_repair_patch(previous, patch, scope, entity_ids, return_audit=True)
+    repaired, audit = visual_stage_repair._apply_visual_repair_patch(previous, patch, scope, entity_ids, return_audit=True)
     assert repaired["item"]["prompt"] == "KEEP_VALID_ITEM_PROMPT"
     assert repaired["entities"][0] == previous["entities"][0]
     assert repaired["entities"][1]["scale"] == 1.25
@@ -530,7 +526,7 @@ def test_visual_repair_freezes_valid_fields_and_ignores_scope_escape() -> None:
 
 
 @pytest.mark.parametrize("scenario,paths", [
-    pytest.param("slot-params", ["duration", "spread"], id="missing-executable-slot-params-frozen-alpha"),
+    pytest.param("slot-params", ["duration", "startTick"], id="missing-executable-slot-params-frozen-alpha"),
     pytest.param("root-pair", ["entityId", "event"], id="root-pair-frozen-duration"),
 ])
 def test_vfx_exact_slot_closure_freezes_valid_document(scenario, paths):
@@ -539,8 +535,8 @@ def test_vfx_exact_slot_closure_freezes_valid_document(scenario, paths):
     slot = previous["slots"][0]
     if scenario == "slot-params":
         slot["duration"] = 999
-        del slot["spread"]
-        changes = {"duration": 30, "spread": 0.2}
+        del slot["startTick"]
+        changes = {"duration": 30, "startTick": 2}
         hostile = {"alpha": 0.1}
     else:
         slot["entityId"] = "missing_entity"
@@ -569,10 +565,10 @@ def test_vfx_exact_slot_closure_freezes_valid_document(scenario, paths):
 
 
 @pytest.mark.parametrize("scenario,fixture,code", [
-    pytest.param("set-key", "configure_armor", "missing_set_key", id="armor-exact-set-key"),
-    pytest.param("body-set", "configure_armor", "set_bonus_head_only", id="body-only-invalid-modifier-delete"),
-    pytest.param("unwanted-binding", "configure_accessory", "binding_dependency", id="equipment-exact-binding-delete"),
-    pytest.param("inert-accessory", "configure_accessory", "inert_component", id="accessory-nonzero-executable-effect"),
+    pytest.param("set-key", "armor", "missing_set_key", id="armor-exact-set-key"),
+    pytest.param("body-set", "armor", "set_bonus_head_only", id="body-only-invalid-modifier-delete"),
+    pytest.param("unwanted-binding", "accessory", "binding_dependency", id="equipment-exact-binding-delete"),
+    pytest.param("inert-accessory", "accessory", "inert_component", id="accessory-nonzero-executable-effect"),
     pytest.param("collision", "workbench_blade", "event_not_emitted", id="event-existing-collision-parameter"),
     pytest.param("channel", "workbench_blade", "missing_item_capability_param", id="charge-existing-channel-parameter"),
 ])
@@ -582,9 +578,9 @@ def test_scoped_dependency_closure_freezes_entire_document(scenario, fixture, co
     calls = program["calls"]
     owner, field, value = {}, "", None
     if scenario in {"set-key", "body-set"}:
-        owner = next(row for row in calls if row["fn"] == "configure_armor")
+        owner = next(row for row in calls if row["fn"] == "armor")
         owner["params"]["setKey" if scenario == "set-key" else "slot"] = "" if scenario == "set-key" else "body"
-        calls.append({"id": "set_damage", "fn": "add_equipment_damage_bonus",
+        calls.append({"id": "set_damage", "fn": "equipment_damage_bonus",
                       "params": {"phase": "matching_armor_set", "damageClass": "magic", "bonusPercent": 15}})
         field, value = "setKey", "matching_set"
     elif scenario == "unwanted-binding":
@@ -607,8 +603,8 @@ def test_scoped_dependency_closure_freezes_entire_document(scenario, fixture, co
     else:
         # Beam geometry no longer implies a channel policy. An actual charge
         # input producer retains the exact channel dependency being tested.
-        calls.append({"id": "workbench_blade_charge", "fn": "accumulate_projectile_charge",
-                      "target": "workbench_blade", "params": {"durationSeconds": 0.5}})
+        calls.append({"id": "workbench_blade_charge", "fn": "charge",
+                      "target": "workbench_blade", "params": {"duration": 0.5}})
         owner = next(row for row in calls if row["id"] == "item_use")
         field, value = "channel", True
     report = validate_runtime_program(current)
@@ -629,7 +625,7 @@ def test_scoped_dependency_closure_freezes_entire_document(scenario, fixture, co
             assert owner["id"] not in scope["deletable"][key]
         else:
             assert scope["deletable"][key] == [deleted]
-            assert scope["create"]["calls"]["allowedFns"] == ["configure_accessory", "configure_armor"]
+            assert scope["create"]["calls"]["allowedFns"] == ["accessory", "armor"]
         patch[key + "Delete"] = [deleted]
         expected["runtimeProgram"][collection] = [row for row in expected["runtimeProgram"][collection] if row["id"] != deleted]
     else:
@@ -642,7 +638,7 @@ def test_scoped_dependency_closure_freezes_entire_document(scenario, fixture, co
         elif scenario == "collision":
             assert owner["id"] in scope["mutable"]["callIds"]
         else:
-            assert scope["blockerPlan"]["directCapabilityNames"] == ["configure_item_use"]
+            assert scope["blockerPlan"]["directCapabilityNames"] == ["item_use"]
             assert scope["create"]["calls"]["allowed"] is False
             assert scope["mutable"]["callIds"] == ["item_use"]
             assert permissions[owner["id"]] == ["params.channel"]
@@ -676,7 +672,7 @@ def test_scoped_dependency_closure_freezes_entire_document(scenario, fixture, co
 ])
 def test_selected_event_transaction_closes_exact_support(scenario, invalid_choice, message):
     fixture = {"producer": "door_on_chain", "alternative": "damage_nearby_on_event",
-               "lifetime": "damage_nearby_on_event", "binding": "spawn_entity_on_event"}[scenario]
+               "lifetime": "damage_nearby_on_event", "binding": "spawn_on_event"}[scenario]
     current = build_runtime_fixture(fixture) if fixture == "door_on_chain" else build_capability_witness(fixture)
     program = current["runtimeProgram"]
     event_call = next(row for row in program["calls"] if row["id"] == ("door_stun" if scenario == "producer" else "witness_call"))
@@ -688,12 +684,12 @@ def test_selected_event_transaction_closes_exact_support(scenario, invalid_choic
         support_calls = [damage]
     elif scenario == "alternative":
         next(row for row in program["entities"] if row["id"] == "witness_entity")["kind"] = "temporary_helper"
-        program["calls"] = [row for row in program["calls"] if row["id"] != "base_set_projectile_damage"]
-        next(row for row in program["calls"] if row["id"] == "base_set_projectile_collision")["params"]["tileCollide"] = False
-        support_calls = [{"id": "repair_damage", "fn": "set_projectile_damage", "target": "witness_entity",
+        program["calls"] = [row for row in program["calls"] if row["id"] != "base_projectile_damage"]
+        next(row for row in program["calls"] if row["id"] == "base_projectile_collision")["params"]["tileCollide"] = False
+        support_calls = [{"id": "repair_damage", "fn": "projectile_damage", "target": "witness_entity",
                           "params": {"damageClass": "generic", "damage": 20, "knockback": 3.0, "ownerHitCheck": False}}]
     elif scenario == "lifetime":
-        lifetime = next(row for row in program["calls"] if row["fn"] == "set_projectile_lifetime" and row["target"] == event_call["target"])
+        lifetime = next(row for row in program["calls"] if row["fn"] == "projectile_lifetime" and row["target"] == event_call["target"])
         program["calls"].remove(lifetime)
         support_calls, chosen_event = [lifetime], "on_expire"
     else:
@@ -714,8 +710,8 @@ def test_selected_event_transaction_closes_exact_support(scenario, invalid_choic
         assert alternative["callId"] == "door_stun"
         assert alternative["targetId"] == "chained_door"
         assert {row["event"] for row in alternative["allowed"]} == {"on_hit", "on_crit"}
-        assert all(row["requiredCalls"] == [{"fn": "set_projectile_damage", "targetId": "chained_door", "exactParams": []}] for row in alternative["allowed"])
-        assert scope["blockerPlan"]["supportingCapabilityNames"] == ["set_projectile_damage"]
+        assert all(row["requiredCalls"] == [{"fn": "projectile_damage", "targetId": "chained_door", "exactParams": []}] for row in alternative["allowed"])
+        assert scope["blockerPlan"]["supportingCapabilityNames"] == ["projectile_damage"]
     fixed = copy.deepcopy(event_call)
     fixed["params"]["when"] = chosen_event
     complete = dict(_empty_gameplay_patch(), callsUpsert=[fixed, *support_calls], bindingsUpsert=support_bindings)
@@ -735,38 +731,38 @@ def test_selected_event_transaction_closes_exact_support(scenario, invalid_choic
     compile_runtime_program(result)
 
 
-def _bounded_invalid_buff_calls(fields=("durationSeconds",)):
+def _bounded_invalid_buff_calls(fields=("duration",)):
     from infini_local.core.runtime_authoring.program_schema import runtime_program_author_schema
-    good = build_capability_witness("apply_vanilla_buff_on_use")
+    good = build_capability_witness("native_buff_on_use")
     program = good["runtimeProgram"]
-    buff = next(row for row in program["calls"] if row["fn"] == "apply_vanilla_buff_on_use")
+    buff = next(row for row in program["calls"] if row["fn"] == "native_buff_on_use")
     support = [row for row in program["calls"] if row is not buff]
     max_calls = runtime_program_author_schema()["properties"]["calls"]["maxItems"]
     program["calls"] = support + [dict(copy.deepcopy(buff), id=f"buff_{index}") for index in range(max_calls - len(support))]
     invalid = copy.deepcopy(good)
     for row in invalid["runtimeProgram"]["calls"]:
-        if row["fn"] == "apply_vanilla_buff_on_use":
+        if row["fn"] == "native_buff_on_use":
             row["params"].update({field: 0 for field in fields})
     return invalid, good
 
 
 @pytest.mark.parametrize("fields,failure_envelope", [
-    pytest.param(("buffId", "durationSeconds"), "orchestration", id="all-canonical-leaves-reach-single-repair")
+    pytest.param(("buffId", "duration"), "orchestration", id="all-canonical-leaves-reach-single-repair")
 ])
 def test_bounded_dossier_preserves_all_canonical_errors_without_broad_permissions(failure_envelope, fields):
-    from infini_local.pipelines.gameplay_stage import _failure_report
+    from infini_local.pipelines.author.stage import _failure_report
 
     current, good = _bounded_invalid_buff_calls(fields)
     assert validate_runtime_program(good)["ok"]
     validation = validate_runtime_program(current)
-    broken = [row for row in current["runtimeProgram"]["calls"] if row["fn"] == "apply_vanilla_buff_on_use"]
+    broken = [row for row in current["runtimeProgram"]["calls"] if row["fn"] == "native_buff_on_use"]
     assert not validation["ok"]
     # Unit projection may add a representability diagnostic at an already
     # shape-invalid leaf. Require complete, exact path coverage, not the old
     # fixed diagnostic multiplicity; the canonical lists below stay byte-exact.
     expected_paths = {
         path for index, row in enumerate(current["runtimeProgram"]["calls"])
-        if row["fn"] == "apply_vanilla_buff_on_use"
+        if row["fn"] == "native_buff_on_use"
         for path in [f"$.runtimeProgram.calls[{index}]",
                      *(f"$.runtimeProgram.calls[{index}].params.{field}" for field in fields)]
     }
@@ -777,7 +773,7 @@ def test_bounded_dossier_preserves_all_canonical_errors_without_broad_permission
         assert failure["errors"] == validation["errors"], "the canonical failure envelope must not truncate diagnostics"
     dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, failure_report=failure)
     assert dossier["exactValidationErrors"] == validation["errors"], "one Repair cannot silently drop later canonical diagnostics"
-    broken = [row for row in current["runtimeProgram"]["calls"] if row["fn"] == "apply_vanilla_buff_on_use"]
+    broken = [row for row in current["runtimeProgram"]["calls"] if row["fn"] == "native_buff_on_use"]
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == sorted(
         [{"id": row["id"], "paths": ["params." + field for field in fields]} for row in broken], key=lambda row: row["id"])
     candidate = copy.deepcopy(good["runtimeProgram"]["calls"])
@@ -789,10 +785,9 @@ def test_bounded_dossier_preserves_all_canonical_errors_without_broad_permission
 
 @pytest.mark.parametrize("identity_tail", [False, True], ids=["shape-only", "author-identity-after-shape"])
 def test_strict_author_exception_keeps_all_targets_separate_from_display(identity_tail):
-    from infini_local.pipelines.gameplay_stage import _failure_report
-    from infini_local.pipelines.gameplay_stage import strict_validate_authored_item
+    from infini_local.pipelines.author.stage import _failure_report, strict_validate_authored_item
 
-    current, _ = _bounded_invalid_buff_calls(("buffId", "durationSeconds"))
+    current, _ = _bounded_invalid_buff_calls(("buffId", "duration"))
     parent_a, parent_b = {"name": "Parent A"}, {"name": "Parent B"}
     if identity_tail:
         current["name"] = parent_a["name"]

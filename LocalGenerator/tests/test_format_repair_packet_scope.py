@@ -9,8 +9,8 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from infini_local.core.errors import PlannerUnavailable
-from infini_local.pipelines import author_item_contract as contract
-from infini_local.pipelines import llm_authoring_pipeline as author
+from infini_local.pipelines.author import item_contract as contract
+from infini_local.pipelines.author import request as author
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from prompt_packet_helpers import request_dossier
 from test_codex_subscription_contract import _encode_nullable_fixture
@@ -24,7 +24,7 @@ def test_format_repair_sends_only_recovered_function_grammar_without_design_cont
     raw = json.dumps(source, ensure_ascii=False)[:-1] + ",}"
     response = copy.deepcopy(source)
     if changed:
-        next(row for row in response["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")["params"]["damage"] += 1
+        next(row for row in response["runtimeProgram"]["calls"] if row["fn"] == "item_stats")["params"]["damage"] += 1
     calls = {row["fn"] for row in source["runtimeProgram"]["calls"]}
     requests = []
 

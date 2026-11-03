@@ -24,7 +24,8 @@ namespace InfiniCrafterLocal.Common.Players;
 // Never add a client-authored GeneratedItemData commit path here.
 public sealed partial class InfiniCraftPlayer
 {
-    // Version 3 adds bounded client tooltip observations to craft requests.
+    // Version 3 adds bounded client tooltip observations and optional exact
+    // lane/ingredient identity on cancellation before initial craft admission.
     private const int RemoteStationProtocolVersion = 3;
 
     private void WriteRemoteStationScope(System.IO.BinaryWriter writer)
@@ -510,7 +511,7 @@ public sealed partial class InfiniCraftPlayer
     private void WriteGeneratedBuffState(System.IO.BinaryWriter writer)
     {
         writer.Write((byte)Player.whoAmI);
-        writer.Write((byte)6); // includes exact combat bonuses in each active entry
+        writer.Write((byte)9); // one regen/treasure value plus explicit per-stat conditions
         writer.Write(_generatedBuffTicks);
         writer.Write(_generatedMiningSpeedMultiplier);
         writer.Write(_generatedLightStrength);
@@ -534,7 +535,7 @@ public sealed partial class InfiniCraftPlayer
     private void ReadGeneratedBuffState(System.IO.BinaryReader reader)
     {
         byte version = reader.ReadByte();
-        if (version != 6)
+        if (version != 9)
             throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
         // Decode before replacing owner prediction; malformed packets do not
         // erase a valid timer table or leave half-read buff state behind.
@@ -558,13 +559,14 @@ public sealed partial class InfiniCraftPlayer
         _activeGeneratedUtilityBuffs.Clear(); _activeGeneratedUtilityBuffs.AddRange(buffs);
         RebuildGeneratedUtilityBuffAggregate();
         _generatedItemExhaustion.Clear(); _generatedItemExhaustion.AddRange(exhaustion);
+        if (Player.dead) RetireGeneratedUtilityOnDeath();
         _generatedBuffSnapshotRevision = unchecked(_generatedBuffSnapshotRevision + 1);
     }
 
     private static void DiscardGeneratedBuffState(System.IO.BinaryReader reader)
     {
         byte version = reader.ReadByte();
-        if (version != 6)
+        if (version != 9)
             throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
         _ = reader.ReadInt32();
         _ = reader.ReadSingle();
@@ -585,6 +587,7 @@ public sealed partial class InfiniCraftPlayer
     private static void WriteGeneratedUtilityBuffEntry(System.IO.BinaryWriter writer, ActiveGeneratedUtilityBuff buff)
     {
         writer.Write(buff.Ticks);
+        writer.Write(buff.InitialDurationTicks);
         writer.Write(buff.MiningSpeedMultiplier);
         writer.Write(buff.EmitLightStrength);
         writer.Write(buff.LightColorName ?? "");
@@ -593,19 +596,29 @@ public sealed partial class InfiniCraftPlayer
         writer.Write(buff.JumpBoost);
         writer.Write(buff.ManaRegen);
         writer.Write(buff.LifeRegen);
+        writer.Write(buff.LifeRegenCondition);
+        writer.Write(buff.TreasureSenseCondition);
         writer.Write(buff.Combat is not null);
         buff.Combat?.Write(writer);
+        writer.Write(buff.PlayerEffect is not null);
+        buff.PlayerEffect?.Write(writer);
     }
 
     private static ActiveGeneratedUtilityBuff ReadGeneratedUtilityBuffEntry(System.IO.BinaryReader reader)
     {
         int ticks = reader.ReadInt32();
+        int initialDuration = reader.ReadInt32();
+        if (initialDuration is < 0 or > GeneratedBuffSpec.MaxFiniteDurationTicks
+            || (initialDuration == GeneratedBuffSpec.PermanentDurationTicks
+                ? ticks != int.MaxValue : ticks <= 0 || ticks > initialDuration))
+            throw new System.IO.InvalidDataException("invalid generated buff duration state");
         float miningSpeedMultiplier = reader.ReadSingle();
         float lightStrength = reader.ReadSingle();
         string lightColor = ReadGeneratedBuffText(reader, 128).Trim();
         return new ActiveGeneratedUtilityBuff
         {
-            Ticks = Math.Clamp(ticks, 1, 21600),
+            Ticks = ticks,
+            InitialDurationTicks = initialDuration,
             MiningSpeedMultiplier = Math.Clamp(miningSpeedMultiplier, 0.25f, 4f),
             EmitLightStrength = Math.Clamp(lightStrength, 0f, 1.5f),
             LightColorName = lightColor[..Math.Min(lightColor.Length, 32)],
@@ -614,7 +627,10 @@ public sealed partial class InfiniCraftPlayer
             JumpBoost = Math.Clamp(reader.ReadSingle(), -8f, 8f),
             ManaRegen = Math.Clamp(reader.ReadInt32(), -100, 120),
             LifeRegen = Math.Clamp(reader.ReadInt32(), -100, 120),
+            LifeRegenCondition = PlayerEffectSpec.ValidateCondition(ReadGeneratedBuffText(reader, 16)),
+            TreasureSenseCondition = PlayerEffectSpec.ValidateCondition(ReadGeneratedBuffText(reader, 16)),
             Combat = reader.ReadBoolean() ? GeneratedCombatBuffSpec.Read(reader) : null,
+            PlayerEffect = reader.ReadBoolean() ? PlayerEffectSpec.Read(reader) : null,
         };
     }
 
@@ -623,7 +639,7 @@ public sealed partial class InfiniCraftPlayer
 
     private void ClampGeneratedBuffState()
     {
-        _generatedBuffTicks = Math.Clamp(_generatedBuffTicks, 0, 21600);
+        _generatedBuffTicks = Math.Max(_generatedBuffTicks, 0);
         _generatedMiningSpeedMultiplier = Math.Clamp(_generatedMiningSpeedMultiplier <= 0f ? 1f : _generatedMiningSpeedMultiplier, 0.25f, 4f);
         _generatedLightStrength = Math.Clamp(_generatedLightStrength, 0f, 1.5f);
         _generatedLightColorName = string.IsNullOrWhiteSpace(_generatedLightColorName) ? "" : _generatedLightColorName.Trim()[..Math.Min(_generatedLightColorName.Trim().Length, 32)];
@@ -863,18 +879,6 @@ public sealed partial class InfiniCraftPlayer
         int laneIndex = Math.Clamp((int)reader.ReadByte(), 0, 2);
         CraftItemRef aRef = ReadCraftItemRef(reader);
         CraftItemRef bRef = ReadCraftItemRef(reader);
-        ClientTooltipObservation? clientTooltipA;
-        ClientTooltipObservation? clientTooltipB;
-        try
-        {
-            clientTooltipA = ClientTooltipWire.Read(reader);
-            clientTooltipB = ClientTooltipWire.Read(reader);
-        }
-        catch (Exception ex) when (ex is System.IO.InvalidDataException or System.IO.EndOfStreamException or System.Text.DecoderFallbackException)
-        {
-            SendCraftCommitResult(whoAmI, requestId, false, "", "invalid client tooltip observation");
-            return;
-        }
         LogServerCraftTransaction(whoAmI, requestId, "received", $"lane={laneIndex} aType={aRef.Type} bType={bRef.Type}");
         if (string.IsNullOrWhiteSpace(requestId))
         {
@@ -911,6 +915,20 @@ public sealed partial class InfiniCraftPlayer
             const string interrupted = "server craft interrupted; inputs remain in station";
             GeneratedStationEscrowStateSystem.CompleteCraft(clientId, requestId, false, "", interrupted);
             SendCraftCommitResult(whoAmI, requestId, false, "", interrupted);
+            return;
+        }
+        // Existing journal state is authoritative even if a retry's optional
+        // observation is damaged. Never send a conflicting terminal failure.
+        ClientTooltipObservation? clientTooltipA;
+        ClientTooltipObservation? clientTooltipB;
+        try
+        {
+            clientTooltipA = ClientTooltipWire.Read(reader);
+            clientTooltipB = ClientTooltipWire.Read(reader);
+        }
+        catch (Exception ex) when (ex is System.IO.InvalidDataException or System.IO.EndOfStreamException or System.Text.DecoderFallbackException)
+        {
+            SendCraftCommitResult(whoAmI, requestId, false, "", "invalid client tooltip observation");
             return;
         }
         if (!modPlayer.IsCraftLaneVisible(laneIndex))
@@ -1011,15 +1029,35 @@ public sealed partial class InfiniCraftPlayer
         if (player is null || !player.active)
             return;
         var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
-        // A cancel carries the same bearer claim as a craft request, but cannot
-        // create a new transaction (or start generation) for an unknown request.
         bool completed = GeneratedStationEscrowStateSystem.TryReplayCraft(clientId, requestId, out var replay);
-        if (!completed && !GeneratedStationEscrowStateSystem.IsCraftPending(clientId, requestId)) return;
+        bool pending = GeneratedStationEscrowStateSystem.IsCraftPending(clientId, requestId);
+        int cancelLane = -1;
+        CraftItemRef cancelA = default, cancelB = default;
+        if (!completed && !pending)
+        {
+            // A bare cancellation cannot claim an unknown request. Version 3
+            // senders can also identify the exact station inputs when their first
+            // craft packet was lost (including a damaged saved observation).
+            if (reader.BaseStream.Position == reader.BaseStream.Length) return;
+            cancelLane = reader.ReadByte();
+            cancelA = ReadCraftItemRef(reader);
+            cancelB = ReadCraftItemRef(reader);
+            if (cancelLane is < 0 or > 2 || reader.BaseStream.Position != reader.BaseStream.Length) return;
+        }
         if (!modPlayer.RestoreServerCraftOwner(clientId, scope)) return;
         if (completed)
         {
             SendCraftCommitResult(whoAmI, requestId, replay.Success, replay.ItemName, replay.Message);
             return;
+        }
+        if (!pending)
+        {
+            if (!modPlayer.TrySnapshotServerEscrowInput(cancelLane * 2, cancelA, out _, out _)
+                || !modPlayer.TrySnapshotServerEscrowInput(cancelLane * 2 + 1, cancelB, out _, out _)
+                || !GeneratedStationEscrowStateSystem.TryBeginCraftCancellationRecovery(clientId, requestId, cancelLane, modPlayer)) return;
+            // Main-thread journal-only transition: no generation or material
+            // mutation. The bounded durable terminal entry also blocks a late
+            // initial craft packet from starting this cancelled request.
         }
         if (!modPlayer.HasActiveServerCraftRequest(requestId))
         {
@@ -1034,6 +1072,15 @@ public sealed partial class InfiniCraftPlayer
             modPlayer.TryCancelExtraServerCraft(requestId, "client cancelled/timeout");
     }
 
+    private static void WriteRemoteCraftCancelIdentity(System.IO.BinaryWriter writer, int laneIndex,
+        GeneratorClient.PreparedGenerationRequest? request)
+    {
+        if (request?.RefundA is null || request.RefundB is null) return;
+        writer.Write((byte)laneIndex);
+        WriteCraftItemRef(writer, request.RefundA);
+        WriteCraftItemRef(writer, request.RefundB);
+    }
+
     private void SendRemoteServerCraftCancel(string reason)
     {
         if (Main.netMode != NetmodeID.MultiplayerClient || !EnsureRemoteStationAuthority() || !_awaitingServerCommit || !HasCraftRequestId(_serverRequestId))
@@ -1046,6 +1093,7 @@ public sealed partial class InfiniCraftPlayer
             packet.Write(_stationEscrowClientId);
             packet.Write(_serverRequestId);
             packet.Write(reason ?? "client_cancel");
+            WriteRemoteCraftCancelIdentity(packet, 0, _request);
             packet.Send();
         }
         catch { }

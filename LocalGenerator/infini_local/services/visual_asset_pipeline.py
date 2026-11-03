@@ -23,7 +23,14 @@ def write_image_bytes(path: Path, raw: bytes) -> None:
 def save_image_output(image: Any, path: Path) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        image.save(path)
+        metadata = image.info.get("infini.chroma-key")
+        if metadata is not None:
+            from PIL.PngImagePlugin import PngInfo
+            info = PngInfo()
+            info.add_text("infini.chroma-key", metadata)
+            image.save(path, pnginfo=info)
+        else:
+            image.save(path)
     except OSError as exc:
         raise ImageOutputIOError("processed image write failed") from exc
 
@@ -221,7 +228,7 @@ def generate_procedural_asset(
     image_draw_cls: Any,
 ) -> str:
     role = str(role or "projectile").lower()
-    from infini_local.pipelines.sprite_contracts import final_sprite_canvas
+    from infini_local.core.images.contracts import final_sprite_canvas
     canvas = final_sprite_canvas(canvas_size)
     seed = f"{data.get('id') or data.get('name') or 'item'}:{role}:{variant}"
     color = _stable_rgb(seed)

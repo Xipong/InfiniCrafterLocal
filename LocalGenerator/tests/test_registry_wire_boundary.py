@@ -11,13 +11,13 @@ from infini_local.core.runtime_authoring.technical_lowering import audit_compile
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.web.vfx_debug_routes import _sample_data
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
-from infini_local.core.vfx_manifest import _compile_manifest
+from infini_local.core.vfx.projection import _compile_manifest
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery, is_deliverable_recipe_payload
 
 
 def test_unknown_author_root_cannot_survive_validation_and_compilation():
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-    from infini_local.pipelines.llm_authoring_pipeline import _prepare_parsed_author_item
+    from infini_local.pipelines.author.request import _prepare_parsed_author_item
 
     source = build_runtime_fixture("workbench_blade")
     assert validate_runtime_program(source)["ok"]
@@ -135,7 +135,7 @@ def test_wire_cross_row_identity_constraints(wire, mutation, path, code):
 
 
 def _wire():
-    data = compile_runtime_program(build_capability_witness("apply_generated_buff_on_use"))
+    data = compile_runtime_program(build_capability_witness("generated_buff_on_use"))
     data.pop("runtimeContract")
     data["gameplay"]["generatedBuff"]["emitLightStrength"] = 0.25
     return data
@@ -146,7 +146,7 @@ MALFORMED_BUFF_FIELDS = [
     ("lifeRegen", True),
     ("miningSpeedMultiplier", 0),
     ("oreSenseRadiusTiles", 2),
-    ("durationTicks", 21601),
+    ("durationTicks", 2147483647),
     ("durationTicks", 1.0),
     ("manaRegen", 1.0),
     ("lifeRegen", 1.0),
@@ -219,25 +219,25 @@ def test_generated_buff_fields_cannot_hide_or_forge_executable_effect(field, val
         for r in (
             ("miningSpeedMultiplier", 1.5, "miningSpeedMultiplier", 1.5),
             ("lightStrength", 0.25, "emitLightStrength", 0.25),
-            ("oreSenseEnabled", True, "oreSenseRadiusTiles", 1),
-            ("moveSpeedBonusPercent", 20, "movementSpeed", 0.2),
-            ("jumpSpeedBonusBlocksPerSecond", 60 / 16, "jumpBoost", 1),
-            ("manaRegenBonusPoints", 1, "manaRegen", 1),
-            ("lifeRegenHpPerSecond", 0.5, "lifeRegen", 1),
-            ("moveSpeedBonusPercent", -25, "movementSpeed", -0.25),
+            ("treasureSense", True, "oreSenseRadiusTiles", 1),
+            ("moveSpeedBonus", 20, "movementSpeed", 0.2),
+            ("jumpSpeedBonus", 60 / 16, "jumpBoost", 1),
+            ("manaRegen", 1, "manaRegen", 1),
+            ("lifeRegen", 0.5, "lifeRegen", 1),
+            ("moveSpeedBonus", -25, "movementSpeed", -0.25),
         )
     ],
 )
 def test_single_buff_effect_is_not_inert_and_sparse_wire_is_exact(effect, value, wire_key, wire_value):
-    source = build_capability_witness("apply_generated_buff_on_use")
-    params = next(c["params"] for c in source["runtimeProgram"]["calls"] if c["fn"] == "apply_generated_buff_on_use")
+    source = build_capability_witness("generated_buff_on_use")
+    params = next(c["params"] for c in source["runtimeProgram"]["calls"] if c["fn"] == "generated_buff_on_use")
     neutrals = {
         "miningSpeedMultiplier": 1,
-        "oreSenseEnabled": False,
-        "moveSpeedBonusPercent": 0,
-        "jumpSpeedBonusBlocksPerSecond": 0,
-        "manaRegenBonusPoints": 0,
-        "lifeRegenHpPerSecond": 0,
+        "treasureSense": False,
+        "moveSpeedBonus": 0,
+        "jumpSpeedBonus": 0,
+        "manaRegen": 0,
+        "lifeRegen": 0,
     }
     params.update(neutrals, lightStrength=0, lightColor="white")
     assert any(e["code"] == "inert_component" for e in validate_runtime_program(source)["errors"])
@@ -261,7 +261,8 @@ def test_generated_buff_dependency_and_legacy_absence(change):
     if change.endswith("color-only"):
         buff.update(emitLightStrength=0, lightColorName=change.split("-")[0])
     elif change == "no-duration":
-        buff.update(durationTicks=0, oreSenseRadiusTiles=1)
+        buff.pop("durationTicks")
+        buff["oreSenseRadiusTiles"] = 1
     elif change == "empty-color":
         buff["lightColorName"] = ""
     elif change == "missing-color":
@@ -285,7 +286,7 @@ def test_generated_buff_dependency_and_legacy_absence(change):
     pytest.param("buff_duration", "$.gameplay.generatedBuff.durationTicks", "invalid_integer", id="buff_duration"),
 ])
 def test_rejected_wire_is_quarantined_by_real_cache_lookup(tmp_path, monkeypatch, wire, mutation, error_path, code):
-    from infini_local.pipelines import visual_delivery_gate
+    from infini_local.pipelines.visual import delivery as visual_delivery_gate
     from infini_local.pipelines.combine_pipeline import _cached_payload_report, combine_cache_lookup
     from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png, synthetic_no_image_execution_control
     from infini_local.storage import world_recipe_runtime, world_storage
@@ -396,7 +397,7 @@ def test_present_malformed_buff_object_is_not_hidden_by_healing(bad):
     ],
 )
 def test_malformed_rows_have_original_index_in_direct_and_wire_audits(bad):
-    source = build_capability_witness("configure_item_stats")
+    source = build_capability_witness("item_stats")
     wire = compile_runtime_program(source)
     rows = wire["runtimeContract"]["finalWireReceipts"]
     index = len(rows)
@@ -424,11 +425,11 @@ def test_malformed_rows_have_original_index_in_direct_and_wire_audits(bad):
     pytest.param("authoredPaths", "not_an_index", True, id="sources-text"),
 ])
 def test_malformed_path_indices_are_indexed_violations(field, bad_index, with_source):
-    source = build_capability_witness("configure_item_stats")
+    source = build_capability_witness("item_stats")
     wire = compile_runtime_program(source)
     rows = wire["runtimeContract"]["finalWireReceipts"]
     if field == "authoredPath":
-        bad = deepcopy(next(row for row in rows if row.get("fn") == "configure_item_stats"))
+        bad = deepcopy(next(row for row in rows if row.get("fn") == "item_stats"))
         bad[field] = re.sub(r"\[\d+\]", f"[{bad_index}]", bad[field], count=1)
     else:
         bad = deepcopy(rows[0])

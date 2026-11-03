@@ -13,7 +13,7 @@ from infini_local.core.item_identity_tools import item_num
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 
 
-def _source_progression_fact(item: dict[str, Any], parent: str) -> dict[str, Any] | None:
+def _source_craft_depth_fact(item: dict[str, Any], parent: str) -> dict[str, Any] | None:
     generated = item.get("generatedData")
     if not isinstance(generated, dict):
         return None
@@ -35,25 +35,25 @@ def _source_progression_fact(item: dict[str, Any], parent: str) -> dict[str, Any
 
 def stat_profile_for(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     damages = [max(0, int(item_num(parent, "damage", 0))) for parent in (a, b)]
-    progression_facts = [
+    craft_depth_facts = [
         fact for fact in (
-            _source_progression_fact(a, "A"),
-            _source_progression_fact(b, "B"),
+            _source_craft_depth_fact(a, "A"),
+            _source_craft_depth_fact(b, "B"),
         ) if fact is not None
     ]
     return {
         "authority": "source_numeric_facts_only",
         "gameplayRouter": False,
         "sourceDamage": damages,
-        "sourceNumericProgressionFacts": progression_facts,
+        "sourceCraftDepthFacts": craft_depth_facts,
         "balanceEnvelope": {
             "useTimeSeconds": {
-                "minimum": CAPABILITY_REGISTRY["configure_item_stats"].params["useTimeSeconds"].from_wire(4),
-                "maximum": CAPABILITY_REGISTRY["configure_item_stats"].params["useTimeSeconds"].from_wire(600),
+                "minimum": CAPABILITY_REGISTRY["item_stats"].params["useTimeSeconds"].from_wire(4),
+                "maximum": CAPABILITY_REGISTRY["item_stats"].params["useTimeSeconds"].from_wire(600),
             },
             "lifetimeSeconds": {
-                "minimum": CAPABILITY_REGISTRY["set_projectile_lifetime"].params["lifetimeSeconds"].minimum,
-                "maximum": CAPABILITY_REGISTRY["set_projectile_lifetime"].params["lifetimeSeconds"].maximum,
+                "minimum": CAPABILITY_REGISTRY["projectile_lifetime"].params["lifetimeSeconds"].minimum,
+                "maximum": CAPABILITY_REGISTRY["projectile_lifetime"].params["lifetimeSeconds"].maximum,
             },
             "entityCount": {"minimum": 1, "maximum": 12},
             "eventSpawnsPerActivation": {"minimum": 0, "maximum": 32},

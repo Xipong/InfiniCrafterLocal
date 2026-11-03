@@ -8,9 +8,10 @@
   "scope": "Original third-party VFX resources downloaded locally; no Terraria game assets bundled",
   "installedDll": {
     "relativePath": "ParticleLibrary/ParticleLibrary.dll",
+    "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/ParticleLibrary.dll",
     "sha256": "22c5774e90ddde7c2730c7c71c07deea3cb4a43c45f6f9f29091622056773e7f",
     "bytes": 164352,
-    "policy": "Verify existing DLL only; this utility never downloads or replaces it"
+    "policy": "Optional pinned official install; verify existing DLL and never overwrite"
   },
   "files": [
     {

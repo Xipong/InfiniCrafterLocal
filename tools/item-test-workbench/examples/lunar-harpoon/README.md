@@ -1,7 +1,9 @@
 # Returning lunar trident: reproducible assistant-authored demo
 
 This is a newly authored example, not a captured user item. The three source JSON
-files are Author API, Visual Director and VFX Director inputs. `build.py` invokes
+files are current Author v7, Visual Director and VFX Director inputs. The Author
+vocabulary update preserves the executable gameplay wire; rebuilding regenerates
+receipts against the current source paths. `build.py` invokes
 the repository's actual validators, compiler, receipt auditor and delivery
 sanitizer. It does not call an LLM/image API or edit compiled gameplay wire.
 

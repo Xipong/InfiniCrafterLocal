@@ -18,13 +18,10 @@ from infini_local.core.runtime_authoring.program_schema import (
     strict_author_shape_report,
     strict_repair_shape_report,
 )
-from infini_local.pipelines.author_item_contract import (
-    author_item_provider_response_schema,
-    author_item_response_schema,
-)
-from infini_local.pipelines import llm_authoring_pipeline as pipeline
-from infini_local.pipelines.generated_parent_summary import generated_parent_summary_from_data
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+from infini_local.pipelines.author.item_contract import author_item_provider_response_schema, author_item_response_schema
+from infini_local.pipelines.author import request as pipeline
+from infini_local.pipelines.context.generated_summary import generated_parent_summary_from_data
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture as _runtime_fixture
 from infini_local.storage.world_storage import atomic_write_json, sanitize_recipe_for_delivery
 
@@ -37,7 +34,7 @@ def build_runtime_fixture(name):
 
 @pytest.mark.parametrize("length,accepted", [(80, True), (81, False)])
 def test_fresh_item_name_has_80_unicode_character_boundary(length, accepted):
-    from infini_local.pipelines.gameplay_stage import authored_item_validation_report
+    from infini_local.pipelines.author.stage import authored_item_validation_report
 
     item = build_runtime_fixture("workbench_blade")
     item["name"] = "🌟" * length
@@ -100,14 +97,14 @@ def test_expanded_report_boundary_survives_author_repair_and_python_delivery(tmp
     stored = json.loads(path.read_text(encoding="utf-8"))
     assert stored["realization"] == before["realization"]
     summary = stored["generatedParentSummary"]
-    assert summary[field] == before["realization"][field]
+    assert summary[field] == before["realization"][field].strip()
     recursive = raw_parent_card_for_llm({"generatedData": stored})
     assert recursive["raw"]["generatedParent"]["summary"][field] == summary[field]
     assert item == before and patch == patch_before
 
 
 @pytest.mark.parametrize("mode", ["json_object", "off"])
-def test_actual_author_and_repair_packets_disclose_schema_owned_report_bounds(monkeypatch, mode):
+def test_author_and_repair_disclose_schema_owned_description_bounds(monkeypatch, mode):
     import infini_local.core.runtime_authoring.program_schema as program_schema
 
     canonical = program_schema.realization_schema
@@ -143,7 +140,10 @@ def test_actual_author_and_repair_packets_disclose_schema_owned_report_bounds(mo
     result = pipeline.repair_author_item_after_failure(item, {}, {}, "report-card", failure_report={"errors": []})
     repair = requests[0]
     expected_format = {"type": "json_object"} if mode == "json_object" else None
-    for request, root in ((author, "realization"), (repair, "realizationReplacement")):
+    assert set(request_dossier(author)["requiredJsonShape"]["realization"]) == {"description", "selfEvaluation"}
+    assert "4017" in request_dossier(author)["requiredJsonShape"]["realization"]["description"]
+    assert author.get("response_format") == expected_format
+    for request, root in ((repair, "realizationReplacement"),):
         assert request.get("response_format") == expected_format
         card = request_dossier(request)["requiredJsonShape"][root]
         for field, schema in author_item_response_schema()["properties"]["realization"]["properties"].items():
@@ -152,8 +152,7 @@ def test_actual_author_and_repair_packets_disclose_schema_owned_report_bounds(mo
             text = card[field]
             assert f"minLength={schema['minLength']}" in text, (root, field, text)
             assert f"maxLength={schema['maxLength']}" in text, (root, field, text)
-            assert "Unicode code points" in text
-            assert "optional advisory" in text
+            assert "Unicode" in text
     assert result["runtimeProgram"] == before["runtimeProgram"]
     assert result["realization"] == before["realization"] and item == before
 

@@ -22,6 +22,7 @@ public sealed partial class InfiniCraftPlayer
     private sealed class ActiveGeneratedUtilityBuff
     {
         public int Ticks;
+        public int InitialDurationTicks;
         public float MiningSpeedMultiplier = 1f;
         public float EmitLightStrength;
         public string LightColorName = "";
@@ -30,11 +31,15 @@ public sealed partial class InfiniCraftPlayer
         public float JumpBoost;
         public int ManaRegen;
         public int LifeRegen;
+        public string LifeRegenCondition = "always";
+        public string TreasureSenseCondition = "always";
         public GeneratedCombatBuffSpec? Combat;
+        public PlayerEffectSpec? PlayerEffect;
 
         public static ActiveGeneratedUtilityBuff From(GeneratedBuffSpec buff) => new()
         {
-            Ticks = Math.Clamp(buff.DurationTicks, 1, 21600),
+            Ticks = buff.DurationTicks == GeneratedBuffSpec.PermanentDurationTicks ? int.MaxValue : buff.DurationTicks,
+            InitialDurationTicks = buff.DurationTicks,
             MiningSpeedMultiplier = Math.Clamp(buff.MiningSpeedMultiplier, 0.25f, 4f),
             EmitLightStrength = Math.Clamp(buff.EmitLightStrength, 0f, 1.5f),
             LightColorName = buff.LightColorName ?? "",
@@ -43,7 +48,10 @@ public sealed partial class InfiniCraftPlayer
             JumpBoost = Math.Clamp(buff.JumpBoost, -8f, 8f),
             ManaRegen = Math.Clamp(buff.ManaRegen, -100, 120),
             LifeRegen = Math.Clamp(buff.LifeRegen, -100, 120),
+            LifeRegenCondition = buff.LifeRegenCondition ?? "always",
+            TreasureSenseCondition = buff.TreasureSenseCondition ?? "always",
             Combat = buff.Combat,
+            PlayerEffect = buff.PlayerEffect,
         };
 
         public bool SameEffect(ActiveGeneratedUtilityBuff other)
@@ -55,7 +63,10 @@ public sealed partial class InfiniCraftPlayer
             && JumpBoost == other.JumpBoost
             && ManaRegen == other.ManaRegen
             && LifeRegen == other.LifeRegen
-            && GeneratedCombatBuffSpec.SameEffect(Combat, other.Combat);
+            && (LifeRegen == 0 || LifeRegenCondition == other.LifeRegenCondition)
+            && (OreSenseRadiusTiles == 0 || TreasureSenseCondition == other.TreasureSenseCondition)
+            && GeneratedCombatBuffSpec.SameEffect(Combat, other.Combat)
+            && PlayerEffectSpec.SameEffect(PlayerEffect, other.PlayerEffect);
     }
 
     public bool TryReserveGeneratedMobilityCooldown(int cooldownTicks)
@@ -79,6 +90,11 @@ public sealed partial class InfiniCraftPlayer
         GeneratedItemData? source = null, uint? activationTick = null)
     {
         if (buff is null) return false;
+        if (Player.dead || !IsGeneratedUtilityActivationCurrent(activationTick))
+        {
+            if (syncNetwork) CorrectGeneratedBuffPrediction();
+            return false;
+        }
         buff.Normalize();
         if (!buff.HasAnyEffect) return false;
         uint elapsed = activationTick.HasValue
@@ -96,14 +112,21 @@ public sealed partial class InfiniCraftPlayer
         // A confirmed delayed occurrence can have no buff time left while its
         // independent exhaustion is still live. Do not replay even one buff tick
         // or remove another active contribution merely to retain that lockout.
-        int remaining = buff.DurationTicks - (int)elapsed;
+        int remaining = buff.DurationTicks == GeneratedBuffSpec.PermanentDurationTicks
+            ? int.MaxValue : buff.DurationTicks - (int)elapsed;
         if (remaining > 0)
         {
             var incoming = ActiveGeneratedUtilityBuff.From(buff);
             incoming.Ticks = remaining;
             var existing = _activeGeneratedUtilityBuffs.FirstOrDefault(active => active.SameEffect(incoming));
             if (existing is not null)
-                existing.Ticks = Math.Max(existing.Ticks, incoming.Ticks);
+            {
+                if (incoming.Ticks > existing.Ticks)
+                {
+                    existing.Ticks = incoming.Ticks;
+                    existing.InitialDurationTicks = incoming.InitialDurationTicks;
+                }
+            }
             else
             {
                 // Bound pathological repeated authoring while preserving independent
@@ -251,15 +274,25 @@ public sealed partial class InfiniCraftPlayer
             _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityAuthority");
             return false;
         }
-        int sx = Player.SpawnX >= 0 ? Player.SpawnX : Main.spawnTileX;
-        int sy = Player.SpawnY >= 0 ? Player.SpawnY : Main.spawnTileY;
-        if (sx <= 0 || sy <= 0)
+        bool validBed = Player.SpawnX > 0 && Player.SpawnY > 0
+            && Player.SpawnX < Main.maxTilesX - 1 && Player.SpawnY < Main.maxTilesY - 1
+            && Terraria.Player.CheckSpawn(Player.SpawnX, Player.SpawnY);
+        int sx = validBed ? Player.SpawnX : Main.spawnTileX;
+        int sy = validBed ? Player.SpawnY : Main.spawnTileY;
+        if (sx <= 0 || sy <= 0 || sx >= Main.maxTilesX - 1 || sy >= Main.maxTilesY - 1)
         {
             _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilitySpawnMissing");
             return false;
         }
         Vector2 destination = new(sx * 16f + 8f - Player.width / 2f, sy * 16f - Player.height);
+        if (!IsBlinkWithinWorld(destination))
+        {
+            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilitySpawnMissing");
+            return false;
+        }
         Player.Teleport(destination, 0);
+        Player.velocity = Vector2.Zero;
+        Player.fallStart2 = Player.fallStart;
         InfiniCrafterLocal.Common.Services.InfiniRuntimeAuthority.SyncTeleport(Player, destination);
         return true;
     }
@@ -291,13 +324,20 @@ public sealed partial class InfiniCraftPlayer
             _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityRangeMissing");
             return false;
         }
+        if (!float.IsFinite(target.X) || !float.IsFinite(target.Y))
+        {
+            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityUnsafe");
+            return false;
+        }
         int rangeTiles = Math.Clamp(gameplay.MobilityRangeTiles, 1, 120);
         Vector2 delta = target - Player.Center;
         float max = rangeTiles * 16f;
         if (delta.Length() > max)
             target = Player.Center + delta.SafeNormalize(Vector2.UnitX * Player.direction) * max;
-        Vector2 destination = new(target.X - Player.width / 2f, target.Y - Player.height / 2f);
-        if (gameplay.MobilitySafeTileOnly && !IsSafeBlinkDestination(destination))
+        // Main.MouseWorld already mirrors the cursor under inverted gravity.
+        // Match the native teleport rod's gravity-relative feet, not body centre.
+        Vector2 destination = new(target.X - Player.width / 2, target.Y - (Player.gravDir == 1f ? Player.height : 0));
+        if (!IsBlinkWithinWorld(destination) || gameplay.MobilitySafeTileOnly && !IsSafeBlinkDestination(destination))
         {
             _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityUnsafe");
             return false;
@@ -306,6 +346,12 @@ public sealed partial class InfiniCraftPlayer
         InfiniCrafterLocal.Common.Services.InfiniRuntimeAuthority.SyncTeleport(Player, destination);
         return true;
     }
+
+    internal bool IsBlinkWithinWorld(Vector2 destination)
+        => float.IsFinite(destination.X) && float.IsFinite(destination.Y)
+            && destination.X >= 16f && destination.Y >= 16f
+            && destination.X + Player.width < (Main.maxTilesX - 1) * 16f
+            && destination.Y + Player.height < (Main.maxTilesY - 1) * 16f;
 
     private bool IsSafeBlinkDestination(Vector2 destination)
     {
@@ -334,34 +380,43 @@ public sealed partial class InfiniCraftPlayer
 
     private void TickGeneratedUtilityBuff()
     {
-        if (PruneGeneratedItemExhaustion()) CorrectGeneratedBuffPrediction();
-        if (_generatedMobilityCooldownTicks > 0)
-            _generatedMobilityCooldownTicks--;
-
         if (_activeGeneratedUtilityBuffs.Count > 0)
         {
             for (int index = _activeGeneratedUtilityBuffs.Count - 1; index >= 0; index--)
             {
                 var active = _activeGeneratedUtilityBuffs[index];
+                if (active.InitialDurationTicks == GeneratedBuffSpec.PermanentDurationTicks)
+                    continue;
                 active.Ticks--;
                 if (active.Ticks <= 0)
                     _activeGeneratedUtilityBuffs.RemoveAt(index);
             }
             RebuildGeneratedUtilityBuffAggregate();
         }
-        else if (!InfiniRuntimeAuthority.ShouldRunPlayerGameplay(Player) && _generatedBuffTicks > 0)
+        else if (!InfiniRuntimeAuthority.ShouldRunPlayerGameplay(Player)
+            && _generatedBuffTicks is > 0 and < int.MaxValue)
         {
-            // Version-mismatch fallback only; v2 snapshots carry exact entries.
+            // Client comparison mirrors can carry only an aggregate duration;
+            // active network snapshots carry independently expiring entries.
             _generatedBuffTicks--;
         }
 
-        if (_generatedBuffTicks <= 0)
-        {
-            if (_activeGeneratedUtilityBuffs.Count == 0)
-                ResetGeneratedUtilityBuffAggregate();
-            return;
-        }
-        if (_generatedLightStrength > 0f && Main.netMode != NetmodeID.Server)
+        if (_generatedBuffTicks <= 0 && _activeGeneratedUtilityBuffs.Count == 0)
+            ResetGeneratedUtilityBuffAggregate();
+    }
+
+    private void TickGeneratedUtilityCooldowns()
+    {
+        // These clocks keep their existing end-of-update phase. Buff durations
+        // advance after PostUpdateEquips has sampled their stats and light.
+        if (PruneGeneratedItemExhaustion()) CorrectGeneratedBuffPrediction();
+        if (_generatedMobilityCooldownTicks > 0)
+            _generatedMobilityCooldownTicks--;
+    }
+
+    private void EmitGeneratedUtilityBuffLight()
+    {
+        if (_generatedBuffTicks > 0 && _generatedLightStrength > 0f && Main.netMode != NetmodeID.Server)
         {
             Color c = RuntimeColorPolicy.Resolve(_generatedLightColorName, Color.White);
             float strength = Math.Clamp(_generatedLightStrength, 0f, 1.5f);
@@ -369,9 +424,29 @@ public sealed partial class InfiniCraftPlayer
         }
     }
 
+    internal int CurrentGeneratedLifeRegen
+    {
+        get
+        {
+            int units = 0;
+            foreach (var active in _activeGeneratedUtilityBuffs)
+                if (active.Ticks > 0 && PlayerEffectSpec.IsConditionActive(active.LifeRegenCondition, Player))
+                    units += active.LifeRegen;
+            // Select active contributions first, then preserve the existing cap.
+            return Math.Clamp(units, -100, 120);
+        }
+    }
+
+    internal bool HasActiveGeneratedTreasureSense
+        => _activeGeneratedUtilityBuffs.Any(active =>
+            active.Ticks > 0 && active.OreSenseRadiusTiles > 0
+                && PlayerEffectSpec.IsConditionActive(active.TreasureSenseCondition, Player));
+
     private void ApplyGeneratedUtilityBuffEffects()
     {
-        if (_generatedBuffTicks <= 0 || !InfiniRuntimeAuthority.ShouldRunPlayerGameplay(Player))
+        foreach (var active in _activeGeneratedUtilityBuffs)
+            if (active.Ticks > 0 && active.PlayerEffect is { } effect) ApplyPlayerEffect(effect);
+        if (Player.dead || _generatedBuffTicks <= 0 || !InfiniRuntimeAuthority.ShouldRunPlayerGameplay(Player))
             return;
         if (_generatedMiningSpeedMultiplier != 1f)
             Player.pickSpeed /= Math.Clamp(_generatedMiningSpeedMultiplier, 0.25f, 4f);
@@ -381,10 +456,8 @@ public sealed partial class InfiniCraftPlayer
             Player.jumpSpeedBoost += _generatedJumpBoost;
         if (_generatedManaRegen != 0)
             Player.manaRegenBonus += _generatedManaRegen;
-        if (_generatedLifeRegen != 0)
-            Player.lifeRegen += _generatedLifeRegen;
-        if (_generatedOreSenseRadiusTiles > 0)
-            Player.findTreasure = true;
+        ApplyLifeRegen(CurrentGeneratedLifeRegen);
+        ApplyTreasureSense(HasActiveGeneratedTreasureSense);
         Player.statDefense += _generatedDefense;
         Player.GetAttackSpeed(DamageClass.Generic) += _generatedAttackSpeed / 100f;
         Player.GetCritChance(DamageClass.Generic) += _generatedCrit;

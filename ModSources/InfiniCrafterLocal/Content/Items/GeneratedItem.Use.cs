@@ -20,9 +20,14 @@ namespace InfiniCrafterLocal.Content.Items;
 public partial class GeneratedItem
 {
     private RuntimeBindingSpec? ActiveUseBinding(Player player)
-        => Data.RuntimeProgram.BindingForInput(GeneratedQuickUseSystem.IsNativeQuickUse(player)
+    {
+        if (UsesNativeInputProjection && Main.netMode != NetmodeID.SinglePlayer && player.whoAmI != Main.myPlayer)
+            return player.GetModPlayer<InfiniCraftPlayer>().ResolveNativeUseProjection(this);
+        return Data.RuntimeProgram.BindingForInput(GeneratedQuickUseSystem.IsNativeQuickUse(player)
             ? RuntimeInputKind.PrimaryUse
             : player.altFunctionUse == 2 ? RuntimeInputKind.AlternateUse : RuntimeInputKind.PrimaryUse);
+    }
+
 
     private bool BindingUsesItemBodyContact(RuntimeBindingSpec? binding)
         => binding?.UsePolicy.ContactDamage == true;
@@ -67,6 +72,8 @@ public partial class GeneratedItem
         bool applyingItemEffects = action.Kind == RuntimeBindingAction.ApplyItemEffects;
         Data.ApplyUseEffectFields(Item, applyingItemEffects, binding);
         bool spawning = action.Kind == RuntimeBindingAction.SpawnEntity;
+        bool fishing = action.Kind == RuntimeBindingAction.NativeFishing;
+        Item.fishingPole = fishing ? action.Fishing!.Power : 0;
         Data.ApplyWeaponAmmoField(Item, spawning);
         Item.sentry = spawning && Data.RuntimeProgram.TryGetEntity(action.TargetId)?.NativeSentry == true;
         Item.shoot = spawning ? ModContent.ProjectileType<GeneratedProjectile>() : ProjectileID.None;
@@ -75,10 +82,15 @@ public partial class GeneratedItem
             : 0f;
         // The same Item is used as direct-use input and as a vanilla ammo stack.
         // Direct-use projection must not erase the independent authored ammo fields.
-        if (Item.ammo != AmmoID.None)
+        if (Item.ammo != AmmoID.None && !fishing)
         {
             Item.shoot = Data.Gameplay.AmmoProjectileId;
             Item.shootSpeed = Data.Gameplay.AmmoShootSpeedPxPerTick;
+        }
+        if (fishing)
+        {
+            Item.shoot = ProjectileID.BobberWooden;
+            Item.shootSpeed = action.Fishing!.CastSpeedPxPerTick;
         }
         FinishNativePrefixProjection(nativePrefix, placing);
         // Native CheckMana owns reductions, admission and the sole payment.
@@ -155,10 +167,38 @@ public partial class GeneratedItem
         RuntimeBindingSpec? binding = ActiveUseBinding(player);
         if (binding is null || !GeneratedQuickUseSystem.AcceptsBinding(player, binding, Data.EffectsForBinding(binding))) return false;
         ApplyActiveUseProjection(binding);
+        if (UsesNativeInputProjection && !GeneratedQuickUseSystem.IsNativeQuickUse(player)
+            && Main.netMode == NetmodeID.MultiplayerClient && player.whoAmI == Main.myPlayer)
+            player.GetModPlayer<InfiniCraftPlayer>().PublishNativeUseProjection(this, binding.Input);
+        // Native CheckCanUse pays mana before checking/reeling existing bobbers.
+        // Match that owner's active/owner/bobber predicate exactly (not rod identity).
+        // Reel/cancel never starts another paid cast; native bait processing stays untouched.
+        if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.NativeFishing)
+        {
+            for (int i = 0; i < Main.maxProjectiles; i++)
+            {
+                Projectile projectile = Main.projectile[i];
+                if (projectile.active && projectile.owner == player.whoAmI && projectile.bobber)
+                {
+                    Item.mana = 0;
+                    break;
+                }
+            }
+        }
         string blocked = UseBlockedReason(player, Data.Gameplay, binding.Input);
         if (!string.IsNullOrWhiteSpace(blocked))
         {
             player.GetModPlayer<InfiniCraftPlayer>().NotifyGeneratedUseRefusal(blocked);
+            return false;
+        }
+        // A known cooldown leaves a pure mobility binding with no executable effect.
+        // Refuse paid admission before native PayMana; retain free-attempt timing,
+        // mixed companion effects and the existing post-admission outcome policy.
+        if (Item.mana > 0 && IsPureMobilityUse(binding)
+            && player.GetModPlayer<InfiniCraftPlayer>() is { GeneratedMobilityCooldownTicks: > 0 } mobilityOwner)
+        {
+            mobilityOwner.NotifyGeneratedUseRefusal(InfiniCraftPlayer.GeneratedUseFeedbackText(
+                "MobilityCooldown", mobilityOwner.GeneratedMobilityCooldownSeconds));
             return false;
         }
         if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity)
@@ -179,6 +219,12 @@ public partial class GeneratedItem
             if (placement is null || !GeneratedPlacementLedgerSystem.PreparePlacement(player, Data, placement))
                 return false;
         }
+        // Native ItemCheck_CheckCanUse pays mana before its final HasAmmo check.
+        // Preflight mixed-cost uses through the same native predicate: no PickAmmo,
+        // conservation roll or debit here; NeedsAmmo exceptions remain native.
+        // Leave ordinary ammo-only hook timing unchanged.
+        if (Item.mana > 0 && Item.useAmmo != AmmoID.None && !player.HasAmmo(Item))
+            return false;
         _itemEventBudget = new RuntimeSpawnBudget(Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
         return true;
     }
@@ -440,6 +486,8 @@ public partial class GeneratedItem
     {
         RestoreRootCombatSource(player);
         RuntimeBindingSpec? binding = ActiveUseBinding(player);
+        if (binding?.UsePolicy.Action.Kind == RuntimeBindingAction.NativeFishing)
+            return InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player);
         if (binding?.UsePolicy.Action.Kind != RuntimeBindingAction.SpawnEntity) return false;
         if (!InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player)) return false;
         RuntimeEntitySpec? entity = Data.RuntimeProgram.TryGetEntity(binding.UsePolicy.Action.TargetId);

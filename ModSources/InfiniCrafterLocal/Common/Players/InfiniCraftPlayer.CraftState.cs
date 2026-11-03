@@ -192,7 +192,9 @@ public sealed partial class InfiniCraftPlayer
 
     public override void Initialize()
     {
-        ClearGeneratedItemExhaustion();
+        ClearNativeUseSync();
+        _generatedUtilityDeathTick = null;
+        ClearGeneratedUtilityState();
         Array.Clear(_craftLaneOutcomes);
         Array.Clear(_craftLaneOutcomeTicks);
         Array.Clear(_remoteCraftCancelRequested);
@@ -210,7 +212,8 @@ public sealed partial class InfiniCraftPlayer
 
     public override void OnEnterWorld()
     {
-        ClearGeneratedItemExhaustion();
+        _generatedUtilityDeathTick = null;
+        ClearGeneratedUtilityState();
         if (InputA is null) InputA = NewAirItem();
         if (InputB is null) InputB = NewAirItem();
         // A half-open remote escrow operation is durable and must resend the same
@@ -590,27 +593,33 @@ public sealed partial class InfiniCraftPlayer
         if (_generatedAccRunSpeedFloor > 0f)
             Player.accRunSpeed = Math.Max(Player.accRunSpeed, _generatedAccRunSpeedFloor);
         ApplyGeneratedUtilityBuffEffects();
+        EmitGeneratedUtilityBuffLight();
+        // ItemCheck/HoldItem follows this hook. Consume an effect tick only
+        // after its stat/light samples, so a new one-tick application survives until
+        // the next equipment phase instead of expiring unused in PostUpdate.
+        TickGeneratedUtilityBuff();
     }
 
     public override bool PreItemCheck()
     {
+        RefreshNativeUseProjectionBeforeItemCheck();
         Common.Systems.GeneratedPlacementLedgerSystem.RefreshPlacementInput(Player);
         return true;
     }
 
     public override void PostUpdate()
     {
+        AutoUseManaPotion();
         Common.VFX.InfiniItemVfxRuntime.RefreshItemPresentationWitnesses(Player);
         RefreshRemoteStationAuthority();
         TickCraftLanePresentation();
         TickCraftAudioGuard();
-        TickGeneratedUtilityBuff();
+        TickGeneratedUtilityCooldowns();
         TickGeneratedRegistryCatchup();
         TickGeneratedInventoryAssetPrefetch();
         TickPendingStationEscrow();
         if (Main.netMode != NetmodeID.Server) RestoreDeferredExitRefunds();
         TickMultiDevCrafts();
-        GeneratedHeldItemDrawLayer.MaybeBroadcastLocalHeldItem(Player, ref _heldItemPresentationSyncTick, ref _heldItemPresentationSyncKey);
 
         if (Main.netMode != NetmodeID.Server && !Main.playerInventory && HasAnyInput)
             ReturnIdleStationInputs();

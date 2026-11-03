@@ -19,13 +19,13 @@ public sealed partial class InfiniDetachedVfxSystem
             double height=element.HeightPx*Math.Max(element.HeightProfile.Start,Math.Max(element.HeightProfile.Middle,element.HeightProfile.End));
             return PlacedParticleReach(duration,element.SpeedMaxPxPerTick,
                 element.AccelerationXPxPerTickSquared,element.AccelerationYPxPerTickSquared,
-                element.OffsetForwardPx,element.OffsetSidePx,width,height);
+                element.OffsetForwardPx,element.OffsetSidePx,width,height)+VfxSpawnGeometry.MaxDistance(element.Spawn);
         }
         var particle=slot.Particle!;
         double scale=Math.Max(1,particle.EndScaleMultiplier);
         return PlacedParticleReach(duration,particle.SpeedMaxPxPerTick,
             particle.AccelerationXPxPerTickSquared,particle.AccelerationYPxPerTickSquared,
-            0,0,particle.WidthPx*scale,particle.HeightPx*scale);
+            0,0,particle.WidthPx*scale,particle.HeightPx*scale)+VfxSpawnGeometry.MaxDistance(particle.Spawn);
     }
 
     private static double PlacedParticleReach(double duration,double speed,double ax,double ay,
@@ -46,7 +46,7 @@ public sealed partial class InfiniDetachedVfxSystem
         {
             if (slot.PlacementBindingId != view.BindingId || slot.EntityId != view.EntityId
                 || slot.Event != RuntimeEventKind.Periodic) continue;
-            if (slot.RendererKind == "lightCue") return true;
+            if (slot.RendererKind is "lightCue" or "nativeLight") return true;
             if ((slot.Element is not null || slot.Particle is not null)
                 && PlacedVfxInView(center,PlacedVfxReachRadius(slot))) return true;
         }

@@ -86,7 +86,9 @@ internal static partial class EngineRuntimeChecks
     private sealed class AccessorySlotIdentityProbe : ModAccessorySlot
     {
         internal bool Accept = true;
+        internal bool Enabled = true;
         public override bool CanAcceptItem(Item item, AccessorySlotType context) => Accept;
+        public override bool IsEnabled() => Enabled;
     }
 
     private sealed class AccessoryIdentityProbe : GeneratedItem

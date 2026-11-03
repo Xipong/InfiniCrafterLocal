@@ -5,8 +5,14 @@ import copy
 
 import pytest
 
-from infini_local.core import vfx_manifest as vfx
-from tests.vfx_material_fixtures import _data, _legacy
+import infini_local.core.vfx.contract as vfx_contract
+import infini_local.core.vfx.projection as vfx_projection
+import infini_local.core.vfx.repair as vfx_repair
+import infini_local.core.vfx.schema as vfx_schema
+import infini_local.core.vfx.surface as vfx_surface
+import infini_local.core.vfx.validation as vfx_validation
+import infini_local.pipelines.vfx.stage as vfx_stage
+from tests.vfx_material_fixtures import _data, _legacy, _native
 
 
 RETIRED_SLOT_FIELDS = (
@@ -16,34 +22,35 @@ RETIRED_SLOT_FIELDS = (
 
 
 def current_input(data):
-    return _legacy(data)
+    return _native(data)
 
 
-@pytest.mark.parametrize("renderer,admitted", [("spriteStampTrail", True),
+@pytest.mark.parametrize("renderer,admitted", [("historyTrail", True),
                                                ("projectileAfterimage", False), ("actorAfterimage", False)])
 def test_texture_history_has_one_current_renderer_without_alias_translation(renderer, admitted):
     from infini_local.core.schema_validation import strict_schema_errors
     from tests.test_vfx_dependency_delivery_contracts import visual_data, authored_vfx
 
     data = visual_data("reuse_item_icon")
-    raw = authored_vfx(renderer)
+    raw = authored_vfx("historyTrail")
+    raw["slots"][0]["rendererKind"] = renderer
     before = copy.deepcopy(raw)
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"] is admitted
     if not admitted:
         assert {row["path"] for row in report["errors"]} == {"$.slots[0].rendererKind"}
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": raw["slots"], "note": "exact renderer"}
-    assert (not strict_schema_errors(patch, vfx.vfx_repair_schema(data))) is admitted
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "texture-history")
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": raw["slots"], "note": "exact renderer"}
+    assert (not strict_schema_errors(patch, vfx_repair.vfx_repair_schema(data))) is admitted
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "texture-history")
     assert data["vfxManifest"]["slots"][0]["rendererKind"] == renderer
-    report = vfx.validate_vfx_manifest_wire(data)
+    report = vfx_validation.validate_vfx_manifest_wire(data)
     assert report["ok"] is admitted
     if not admitted:
         assert {row["path"] for row in report["errors"]} == {"$.vfxManifest.slots[0].rendererKind"}
     assert raw == before
 
 
-@pytest.mark.parametrize("renderer", [r for r in vfx._RENDERERS if r not in vfx.SPRITE_TEXTURE_RENDERERS])
+@pytest.mark.parametrize("renderer", [r for r in vfx_contract._FRESH_RENDERERS if r not in vfx_contract.SPRITE_TEXTURE_RENDERERS])
 def test_non_sprite_renderers_forbid_common_texture_selector_across_boundaries(renderer):
     from infini_local.core.schema_validation import strict_schema_errors
     from tests.test_vfx_material_admission_contracts import _renderer_material
@@ -53,52 +60,51 @@ def test_non_sprite_renderers_forbid_common_texture_selector_across_boundaries(r
     raw = _renderer_material(data, renderer)
     raw["slots"][0].pop("textureRole", None)
     before = copy.deepcopy(raw)
-    assert vfx.validate_vfx_director_output(raw, data)["ok"]
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": raw["slots"], "note": "exact selector owner"}
-    assert not strict_schema_errors(patch, vfx.vfx_repair_schema(data))
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "no-common-texture-selector")
-    assert vfx.validate_vfx_manifest_wire(data)["ok"]
+    assert vfx_validation.validate_vfx_director_output(raw, data)["ok"]
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": raw["slots"], "note": "exact selector owner"}
+    assert not strict_schema_errors(patch, vfx_repair.vfx_repair_schema(data))
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "no-common-texture-selector")
+    assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
     assert "textureRole" not in data["vfxManifest"]["slots"][0]
     assert raw == before
     for value in ("none", "item", "entity", "impact", None):
         invalid = copy.deepcopy(raw)
         invalid["slots"][0]["textureRole"] = value
-        assert not vfx.validate_vfx_director_output(invalid, data)["ok"]
+        assert not vfx_validation.validate_vfx_director_output(invalid, data)["ok"]
         patch["slotsUpsert"] = invalid["slots"]
-        assert strict_schema_errors(patch, vfx.vfx_repair_schema(data))
-        data["vfxManifest"] = vfx._compile_manifest(data, invalid, "foreign-selector")
-        assert not vfx.validate_vfx_manifest_wire(data)["ok"]
+        assert strict_schema_errors(patch, vfx_repair.vfx_repair_schema(data))
+        data["vfxManifest"] = vfx_projection._compile_manifest(data, invalid, "foreign-selector")
+        assert not vfx_validation.validate_vfx_manifest_wire(data)["ok"]
 
 
 @pytest.mark.parametrize("renderer,unused", [
-    ("lightCue", {"alpha", "blend", "layer", "duration", "spread", "particleSystemId", "textureRole"}),
-    ("impactSprite", {"spread", "particleSystemId"}),
-    ("childMotes", {"alpha", "blend", "layer", "duration"}),
+    ("nativeLight", {"alpha", "blend", "layer", "duration", "spread", "particleSystemId", "textureRole"}),
+    ("nativeDust", {"alpha", "blend", "layer", "duration"}),
 ])
-def test_light_and_impact_forbid_always_unconsumed_fields(renderer, unused):
+def test_native_light_and_dust_forbid_always_unconsumed_fields(renderer, unused):
     from tests.test_vfx_dependency_delivery_contracts import visual_data, authored_vfx
     from infini_local.core.schema_validation import strict_schema_errors
 
     data = visual_data("reuse_item_icon")
-    raw = authored_vfx(renderer, "impact" if renderer == "impactSprite" else "none")
+    raw = _native(data, renderer) if renderer.startswith("native") else authored_vfx(renderer, "impact")
     foreign = {field: raw["slots"][0].pop(field, {"alpha": 1, "blend": "alpha", "layer": "BeforeProjectiles", "duration": 10, "spread": 0, "particleSystemId": "none", "textureRole": "none"}[field]) for field in unused}
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"], report["errors"]
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "only-executed-controls")
-    assert vfx.validate_vfx_manifest_wire(data)["ok"]
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "only-executed-controls")
+    assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
     for field, value in foreign.items():
         candidate = copy.deepcopy(raw)
         candidate["slots"][0][field] = value
-        assert not vfx.validate_vfx_director_output(candidate, data)["ok"], field
-        patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": candidate["slots"], "note": "foreign control"}
-        assert strict_schema_errors(patch, vfx.vfx_repair_schema(data)), field
+        assert not vfx_validation.validate_vfx_director_output(candidate, data)["ok"], field
+        patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": candidate["slots"], "note": "foreign control"}
+        assert strict_schema_errors(patch, vfx_repair.vfx_repair_schema(data)), field
 
 
 @pytest.mark.parametrize("renderer", ["lightCue", "impactSprite"])
 @pytest.mark.parametrize("item,periodic,repeat", [(True, False, 0), (False, False, 0),
                                                 (True, True, 0), (True, True, 3),
                                                 (False, True, 0), (False, True, 3)])
-def test_light_and_impact_cadence_fields_exist_only_at_native_read_sites(renderer, item, periodic, repeat):
+def test_saved_light_and_impact_cadence_fields_exist_only_at_native_read_sites(renderer, item, periodic, repeat):
     from infini_local.core.schema_validation import strict_schema_errors
     from tests.test_vfx_dependency_delivery_contracts import visual_data, authored_vfx
 
@@ -115,11 +121,9 @@ def test_light_and_impact_cadence_fields_exist_only_at_native_read_sites(rendere
             if repeat == 0:
                 slot["density"] = 0.37
     before = copy.deepcopy(raw)
-    assert vfx.validate_vfx_director_output(raw, data)["ok"]
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": raw["slots"], "note": "consumed cadence only"}
-    assert not strict_schema_errors(patch, vfx.vfx_repair_schema(data))
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "cadence-presence")
-    assert vfx.validate_vfx_manifest_wire(data)["ok"]
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "saved-cadence")
+    assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
+    assert not strict_schema_errors(raw, vfx_schema._director_schema(data, include_legacy=True))
     assert raw == before
     for field in ("startTick", "repeatEvery", "density"):
         mutation = copy.deepcopy(raw)
@@ -127,28 +131,26 @@ def test_light_and_impact_cadence_fields_exist_only_at_native_read_sites(rendere
             mutation["slots"][0].pop(field)
         else:
             mutation["slots"][0][field] = 0
-        report = vfx.validate_vfx_director_output(mutation, data)
+        data["vfxManifest"] = vfx_projection._compile_manifest(data, mutation, "saved-invalid-cadence")
+        report = vfx_validation.validate_vfx_manifest_wire(data)
         assert not report["ok"], field
-        assert {row["path"] for row in report["errors"]} == {f"$.slots[0].{field}"}
-        patch["slotsUpsert"] = mutation["slots"]
-        assert strict_schema_errors(patch, vfx.vfx_repair_schema(data)), field
-        data["vfxManifest"] = vfx._compile_manifest(data, mutation, "invalid-cadence-presence")
-        assert not vfx.validate_vfx_manifest_wire(data)["ok"], field
+        assert {row["path"] for row in report["errors"]} == {f"$.vfxManifest.slots[0].{field}"}
+        assert strict_schema_errors(mutation, vfx_schema._director_schema(data, include_legacy=True)), field
 
 
 def test_current_rgb_survives_director_compile_and_persisted_gate():
     data = _data()
     raw = current_input(data)
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"], report["errors"]
-    final = vfx.attach_vfx_manifest(data, "rgb-contract", llm_director=lambda *_a, **_kw: raw)
+    final = vfx_stage.attach_vfx_manifest(data, "rgb-contract", llm_director=lambda *_a, **_kw: raw)
     manifest = final["vfxManifest"]
     assert manifest["schema"] == "infini.vfx.runtime-events.v16"
-    assert raw["schema"] == "infini.vfx-director.runtime-events.v3"
+    assert raw["schema"] == "infini.vfx-director.runtime-events.v4"
     assert manifest["slots"][0]["color"] == raw["slots"][0]["color"]
     assert set(manifest) == {"schema", "recipeId", "budget", "slots"}
     assert set(manifest["budget"]) == {"maxParticlesPerTick", "maxParticlesTotal", "maxDrawCalls"}
-    assert vfx.validate_vfx_manifest_wire(final)["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(final)["ok"]
     for field in RETIRED_SLOT_FIELDS:
         assert field not in manifest["slots"][0]
 
@@ -160,22 +162,22 @@ def test_color_rejects_tokens_noninteger_and_alpha(value):
     data = _data()
     raw = current_input(data)
     raw["slots"][0]["color"] = value
-    assert not vfx.validate_vfx_director_output(raw, data)["ok"]
+    assert not vfx_validation.validate_vfx_director_output(raw, data)["ok"]
 
 
 def test_persisted_gate_rejects_retired_fields_for_simple_renderers():
     data = _data()
     raw = current_input(data)
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "strict-current")
-    assert vfx.validate_vfx_manifest_wire(data)["ok"]
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "strict-current")
+    assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
     for field in (*RETIRED_SLOT_FIELDS, "bakedCommands", "effectName", "eventGroup", "stage", "source"):
         mutation = copy.deepcopy(data)
         mutation["vfxManifest"]["slots"][0][field] = [] if field == "bakedCommands" else "retired"
-        assert not vfx.validate_vfx_manifest_wire(mutation)["ok"], field
+        assert not vfx_validation.validate_vfx_manifest_wire(mutation)["ok"], field
     for field in ("motif", "effectMagnitude", "visualBudgetClass", "debug", "playbackMode"):
         mutation = copy.deepcopy(data)
         mutation["vfxManifest"][field] = "retired"
-        assert not vfx.validate_vfx_manifest_wire(mutation)["ok"], field
+        assert not vfx_validation.validate_vfx_manifest_wire(mutation)["ok"], field
 
 
 @pytest.mark.parametrize("renderer", ["spriteElement", "texturedPath", "libraryParticle", "screenShakeCue", "soundCue"])
@@ -187,13 +189,13 @@ def test_nested_color_owners_and_nonvisual_cues_forbid_common_color(renderer):
     data = _data()
     raw = {"spriteElement": _sprite, "texturedPath": _path, "libraryParticle": _library_particle,
            "screenShakeCue": _screen_shake, "soundCue": _sound}[renderer](data)
-    assert vfx.validate_vfx_director_output(raw, data)["ok"]
+    assert vfx_validation.validate_vfx_director_output(raw, data)["ok"]
     assert "color" not in raw["slots"][0]
     raw["slots"][0]["color"] = {"r": 1, "g": 2, "b": 3}
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert {row["path"] for row in report["errors"]} == {"$.slots[0].color"}
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "foreign-color")
-    assert not vfx.validate_vfx_manifest_wire(data)["ok"]
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "foreign-color")
+    assert not vfx_validation.validate_vfx_manifest_wire(data)["ok"]
 
 
 def test_rgb_component_repair_is_exact_and_preserves_other_channels_profiles_and_resources():
@@ -203,61 +205,66 @@ def test_rgb_component_repair_is_exact_and_preserves_other_channels_profiles_and
     accepted = _with_asset(data)
     raw = copy.deepcopy(accepted)
     raw["slots"][0]["element"]["colorProfile"]["middle"]["g"] = 256
-    report = vfx.validate_vfx_director_output(raw, data)
-    scope = vfx._build_vfx_repair_scope(raw, report["errors"])
+    report = vfx_validation.validate_vfx_director_output(raw, data)
+    scope = vfx_repair._build_vfx_repair_scope(raw, report["errors"])
     assert scope["fieldPermissions"] == {"globals": {}, "slots": [
         {"slotId": "ingredient_element", "paths": ["element.colorProfile.middle.g"]}], "assets": []}
     candidate = copy.deepcopy(accepted["slots"][0])
     candidate["element"]["colorProfile"]["middle"].update(r=0, b=0)
     candidate["element"]["colorProfile"]["curve"] = "easeIn"
     candidate["element"]["opacityProfile"]["middle"] = 0
-    candidate["element"]["texture"] = {"source": "item", "assetId": ""}
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [candidate],
+    candidate["element"]["texture"] = {"source": "item", "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [candidate],
              "assetsUpsert": [{**accepted["assets"][0], "prompt": "unrequested new artwork"}],
              "note": "only green channel is invalid"}
     replies = iter([raw, patch])
-    final = vfx.attach_vfx_manifest(data, "rgb-leaf-repair", llm_director=lambda *_a, **_kw: next(replies))
+    final = vfx_stage.attach_vfx_manifest(data, "rgb-leaf-repair", llm_director=lambda *_a, **_kw: next(replies))
     assert final["debug"]["vfxDirectorRaw"] == accepted
     assert final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"] == ["$.slotsUpsert[0].element.colorProfile.middle.g"]
-    assert vfx.validate_vfx_manifest_wire(final)["ok"]
+    assert vfx_validation.validate_vfx_manifest_wire(final)["ok"]
 
 
-@pytest.mark.parametrize("renderer", [renderer for renderer in vfx.vfx_director_surface(_data())["rendererKind"]
-                                      if renderer not in {"spriteElement", "texturedPath", "libraryParticle", "screenShakeCue", "soundCue"}])
+@pytest.mark.parametrize("renderer", [renderer for renderer in vfx_surface.vfx_director_surface(_data())["rendererKind"]
+                                      if renderer not in {"spriteElement", "texturedPath", "libraryParticle", "screenShakeCue", "soundCue", "shape", "contour", "historyTrail", "nativeEffect"}])
 def test_every_simple_visible_renderer_requires_explicit_rgb(renderer):
     from tests.test_vfx_material_admission_contracts import _renderer_material
     from tests.test_low_level_three_stage_pipeline import _accepted_visual_data
 
     data = _accepted_visual_data("workbench_blade")
     raw = _renderer_material(data, renderer)
-    assert vfx.validate_vfx_director_output(raw, data)["ok"]
+    assert vfx_validation.validate_vfx_director_output(raw, data)["ok"]
     raw["slots"][0].pop("color")
-    report = vfx.validate_vfx_director_output(raw, data)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
     assert {error["path"] for error in report["errors"]} == {"$.slots[0].color"}
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "missing-local-rgb")
-    assert not vfx.validate_vfx_manifest_wire(data)["ok"]
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "missing-local-rgb")
+    assert not vfx_validation.validate_vfx_manifest_wire(data)["ok"]
 
 
 def test_persisted_impact_producers_remain_unique_per_entity():
     data = _data()
-    raw = current_input(data)
+    raw = _legacy(data)
     slot = raw["slots"][0]
     slot.update(rendererKind="impactSprite", textureRole="impact", spriteCanvasSize=32, spritePrompt="one exact impact", spriteNegativePrompt="")
+    for field in ("spread", "particleSystemId", "startTick", "repeatEvery", "density"):
+        slot.pop(field, None)
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "single-saved-impact")
+    assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
     raw["slots"].append({**copy.deepcopy(slot), "id": "duplicate_producer"})
-    data["vfxManifest"] = vfx._compile_manifest(data, raw, "duplicate-impact")
-    assert not vfx.validate_vfx_manifest_wire(data)["ok"]
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "duplicate-impact")
+    report = vfx_validation.validate_vfx_manifest_wire(data)
+    assert {row["path"] for row in report["errors"]} == {"$.vfxManifest.slots[1].entityId"}
 
 
 @pytest.mark.parametrize("retired,current,repair", [
-    ("infini.vfx-director.runtime-events.v2", vfx.VFX_DIRECTOR_SCHEMA, False),
-    ("infini.vfx-repair-patch.runtime-events.v1", vfx.VFX_REPAIR_PATCH_SCHEMA, True),
+    ("infini.vfx-director.runtime-events.v2", vfx_contract.VFX_DIRECTOR_SCHEMA, False),
+    ("infini.vfx-repair-patch.runtime-events.v1", vfx_contract.VFX_REPAIR_PATCH_SCHEMA, True),
 ])
 def test_only_current_director_and_repair_schema_ids_are_admitted(retired, current, repair):
     from infini_local.core.schema_validation import strict_schema_errors
 
     data = _data()
     raw = {"schema": current, "note": "no edits"} if repair else current_input(data)
-    schema = vfx.vfx_repair_schema(data) if repair else vfx.vfx_director_schema(data)
+    schema = vfx_repair.vfx_repair_schema(data) if repair else vfx_schema.vfx_director_schema(data)
     assert not strict_schema_errors(raw, schema)
     raw["schema"] = retired
     assert strict_schema_errors(raw, schema)

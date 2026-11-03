@@ -67,6 +67,10 @@ python tools/agentctl.py diff --base origin/main
 
 Для native CPU: `dotnet` в PATH, `INFINI_TML_REFERENCE_DIR` указывает на `tModLoader/lib/net8.0`, `INFINI_TML_DEPS_SRC` — на корень ParticleLibrary/Luminance. Runner собирает harness один раз и запускает DLL только после успешной сборки. Это не GPU/world/MP проверка. `--require-build` и `--require-runtime-selftest` делают соответствующие environment gates обязательными для release command.
 
+Число partitions задаёт единственный pytest command в `.agent/manifest.json`; CI matrix и локальный default читают его через существующий runner. В GitHub CI шесть детерминированных pytest-partition выполняются параллельно на отдельных runners через существующий `run_pytest_shards.py --shard-index`. Итоговый check **Python tests** принимает только все полные отчёта того же `GITHUB_SHA`: проверяет уникальность partition, точный список файлов обоих test roots, исполненные команды/изоляцию, exit codes и суммы passed. Пропущенный, смешанный или failed отчёт даёт RED; failed/cancelled matrix job также не становится PASS. Затем тот же `validate_release.py --group python --pytest-reports ...` исполняет остальные Python gates. Обычный локальный запуск без этого явного флага по-прежнему запускает тесты, а не читает прошлые результаты. Артефакты `pytest-shard-*` и `python-validation` сохраняют coverage, вывод pytest и длительности; При rerun каждый job заменяет только собственный одноимённый artifact; журналы предыдущей попытки остаются в GitHub. Ускорение оценивается по фактической полной CI wall-clock, а не сумме времени параллельных jobs.
+
+Source-spelling тесты (regex-имитация C# compilation/registration, запрет литерала вместо именованной константы, точная фраза workflow и дублирующий полный source scan) не заменяют исполнение. C# компилируется и выполняется штатным native gate; уникальность его фактического roster проверяет сам runner. Schema/provenance freshness, parser/path behavior, packet identity и opt-in безопасность self-test остаются отдельными существенными контрактами. Prose-only snapshots, XML-имитация MSBuild и source-order UI pins удалены; native dependency refusals проверяются после валидного roundtrip той же fixture, без привязки к тексту исключения. Portable sandbox сохраняет реальные repository syntax/JSON, process-safety и bootstrap scans; его orchestration проверяется на маленьких исполняемых checker fixtures, не повторяет пять полных static gates. Отсутствие отдельного native UI/throttle контроля не объявляется покрытым после удаления source snapshot.
+
 Обновление производных файлов: `python tools/validate_release.py --refresh runtime` либо `--refresh config`; оба вызывают существующих producers и в конце обновляют offline handbook. Для одной документации — `--refresh docs`. Refresh не запускает тестовую кампанию и не меняет runtime contracts сам.
 
 ## Запуск
@@ -84,7 +88,7 @@ Studio controller проверяется без Tcl/Tk и дисплея. Для
 PYTHONPATH=LocalGenerator python -m pytest -q LocalGenerator/tests/test_web_studio.py LocalGenerator/tests/test_web_studio_browser.py
 ```
 
-Полная Python приёмка: `PYTHONPATH=LocalGenerator python tools/testing/run_pytest_shards.py --shards 4` (оба test roots). Native:
+Полная Python приёмка: `PYTHONPATH=LocalGenerator python tools/testing/run_pytest_shards.py` (оба test roots). Native:
 
 ```bash
 dotnet build tools/native/EngineRuntimeChecks.csproj -c Release \
@@ -93,7 +97,7 @@ dotnet build tools/native/EngineRuntimeChecks.csproj -c Release \
 dotnet tools/native/bin/Release/net8.0/EngineRuntimeChecks.dll --check-filter "<named behavior>"
 ```
 
-Новый `tools/native/EngineRuntimeChecks*.cs` входит в Compile автоматически; добавь явный вызов check в `RunChecks`. C# source gate проверяет развёрнутый compile roster и фактическую регистрацию.
+Новый `tools/native/EngineRuntimeChecks*.cs` входит в Compile автоматически; добавь явный вызов check в `RunChecks`. Реальная сборка проверяет compile roster, а исполняемый runner проверяет уникальность зарегистрированных labels.
 
 Filter должен выбрать хотя бы одну проверку; compile и registration smoke не равны execution. Без .NET/tML/FNA/native DLL — `notRun`, не PASS. CPU/headless не доказывает GPU/game-loop или сетевой матч. Не меняй production, operator config, captured fixtures или generated artifacts ради tests-only GREEN.
 
@@ -102,7 +106,7 @@ Filter должен выбрать хотя бы одну проверку; comp
 
 ```bash
 python tools/checks/check_code_health.py --base origin/main
-python tools/checks/check_code_health.py --base origin/main --path LocalGenerator/infini_local/core/runtime_authoring/repair_scope.py
+python tools/checks/check_code_health.py --base origin/main --path LocalGenerator/infini_local/core/runtime_authoring/repair/scope.py
 ```
 
 Команда сравнивает текущие Python implementation files с Git merge-base; без `--path` учитывает committed, staged, unstaged и untracked изменения. Без `--base` baseline — `HEAD`. Tests и декларации вне функций не входят в измерение; функции внутри большого registry проверяются как обычно. Старый показатель выше ориентира становится своим текущим пределом: сохранение или уменьшение не даёт предупреждения, рост показывает before/after/cap.

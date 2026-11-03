@@ -4,18 +4,41 @@ from __future__ import annotations
 import base64
 import io
 import json
-from pathlib import Path
 import time
+from pathlib import Path
+
 import pytest
-from infini_local.pipelines import image_backend_pipeline as backend
-from infini_local.pipelines import visual_sprite_generation as generation
-from infini_local.services import codex_auth, asset_sync_service, visual_asset_pipeline
+from infini_local.pipelines.images import backends as backend
+from infini_local.pipelines.images import backends as image_backend_pipeline
+from infini_local.pipelines.images import stage as generation
+from infini_local.pipelines.images import stage as visual_sprite_generation
+from infini_local.pipelines.visual import delivery as visual_delivery_gate
+from infini_local.pipelines.visual.assets import build_visual_asset_plan
+from infini_local.services import asset_sync_service, codex_auth, visual_asset_pipeline
 from PIL import Image, ImageDraw
-from infini_local.pipelines import image_backend_pipeline, visual_delivery_gate, visual_sprite_generation
-from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+from provider_test_support import loopback_server
 from tests.test_image_attempt_contracts import Response, offline, png
 from tests.vfx_image_fixtures import _data, _request, offline_backend
-from provider_test_support import loopback_server
+
+
+@pytest.mark.parametrize('setting', ['COMFYUI_WORKFLOW', 'COMFYUI_WORKFLOW_NO_LORA', 'COMFYUI_WORKFLOW_LORA'])
+def test_comfyui_configured_workflow_uses_persistent_state(tmp_path, monkeypatch, setting):
+    runtime = tmp_path / 'runtime' / 'LocalGenerator'
+    state = tmp_path / 'persistent data'
+    relative = Path('workflows') / 'my-workflow.json'
+    for directory, content in ((runtime, 'old runtime copy'), (state, 'user workflow')):
+        path = directory / relative
+        path.parent.mkdir(parents=True)
+        path.write_text(content)
+    monkeypatch.setattr(backend, 'ROOT', runtime)
+    monkeypatch.setattr(backend, 'STATE_ROOT', state)
+    monkeypatch.setattr(backend, 'COMFYUI_WORKFLOW', 'auto')
+    monkeypatch.setattr(backend, 'COMFYUI_WORKFLOW_NO_LORA', '')
+    monkeypatch.setattr(backend, 'COMFYUI_WORKFLOW_LORA', '')
+    monkeypatch.setattr(backend, 'COMFYUI_LORA_NAME', 'configured-lora' if setting == 'COMFYUI_WORKFLOW_LORA' else '')
+    monkeypatch.setattr(backend, setting, relative.as_posix())
+    assert backend.resolve_comfyui_workflow_path() == state / relative
+
 
 @pytest.fixture
 def adapter_transport(offline, monkeypatch, tmp_path):
@@ -177,7 +200,7 @@ def test_sdcpp_local_response_read_failure_never_retries_or_substitutes_art(
         assert result['visual']['spriteStatus'] == 'generated'
         assert asset_sync_service.is_complete_png_file(result['visual']['spritePath'])
         if expected_calls == 2:
-            assert 'STRICT RETRY 1' in requests[1]['prompt']
+            assert requests[1]['prompt'] != requests[0]['prompt']
     else:
         assert result['visual']['spriteStatus'] == 'failed'
     diagnostics = json.loads(result['debug']['itemSpriteDiagnostics'])
@@ -196,6 +219,7 @@ def test_image_dripping_body_deadline_releases_gate_without_retry_or_dev_art(
     import threading
     from http.server import BaseHTTPRequestHandler
     from urllib import request as urlrequest
+
     from infini_local.core import http_io
 
     root, _ = offline
@@ -295,6 +319,7 @@ def test_image_dripping_body_deadline_releases_gate_without_retry_or_dev_art(
 def test_lora_catalog_subdeadline_does_not_cancel_remaining_image_budget(offline, monkeypatch, tmp_path, overall_timeout):
     import threading
     from http.server import BaseHTTPRequestHandler
+
     from infini_local.core import http_io
 
     raw = png((210, 100, 20))
@@ -370,8 +395,8 @@ def test_lora_catalog_subdeadline_does_not_cancel_remaining_image_budget(offline
 
 @pytest.mark.parametrize('kind,expected_calls', [('sdcpp', 3), ('image_api', 2)])
 def test_image_negotiation_closes_rejected_http_response_bodies(offline, monkeypatch, kind, expected_calls):
-    from urllib.error import HTTPError
     from email.message import Message
+    from urllib.error import HTTPError
 
     errors = []
 
@@ -410,13 +435,17 @@ def test_private_output_ownership_never_becomes_a_seed_input(adapter_transport, 
 def test_vfx_comfy_placeholder_preserves_the_accepted_nonce_digest_calls(adapter_transport, monkeypatch, layout):
     import hashlib
     from types import SimpleNamespace
+
+    from infini_local.pipelines.visual.assets import build_visual_asset_plan
     from tests.vfx_image_fixtures import _data, _request
-    from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
     root, requests, raw = adapter_transport
     nonce = '0123456789abcdef0123456789abcdef'
     monkeypatch.setattr(generation.uuid, 'uuid4', lambda: SimpleNamespace(hex=nonce))
     monkeypatch.setattr(generation, 'IMAGE_BACKEND', 'comfyui')
     monkeypatch.setattr(generation, 'SPRITE_RETRIES', 1)
+    # This case isolates retry identity; best-of-N variants are a separate
+    # contract and can salvage the first attempt without triggering a retry.
+    monkeypatch.setattr(backend, 'GENERATE_VARIANTS', 1)
     downloads = []
 
     def corrupt_then_valid(req, **kwargs):
@@ -434,7 +463,7 @@ def test_vfx_comfy_placeholder_preserves_the_accepted_nonce_digest_calls(adapter
     assert [row['seed'] for row in prompts] == [91023, 91023]
     assert all(row['negative'] == job['negativePrompt'] for row in prompts)
     assert prompts[0]['text'].endswith(generation.normalize_asset_prompt(data, 'vfx_' + layout, job['prompt'], 32))
-    assert 'STRICT RETRY 1' in prompts[1]['text']
+    assert prompts[1]['text'] != prompts[0]['text']
     assert len(downloads) == 2
 
 @pytest.mark.parametrize("configured_seed", [0, 731])

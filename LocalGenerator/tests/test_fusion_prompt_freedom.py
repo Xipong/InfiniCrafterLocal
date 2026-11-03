@@ -9,11 +9,11 @@ from test_author_prompt_consistency import _stationary_periodic_shooter
 def test_repair_cannot_add_a_replenishable_pool_to_a_valid_finite_producer(monkeypatch):
     good, root, _ = _stationary_periodic_shooter()
     broken = deepcopy(good)
-    stats = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
+    stats = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "item_stats")
     correction = deepcopy(stats)
     stats["params"]["damage"] = True
     before = deepcopy(broken)
-    unwanted_pool = {"id": "invented_pool", "fn": "set_descendant_concurrency",
+    unwanted_pool = {"id": "invented_pool", "fn": "descendant_limit",
                      "target": root, "params": {"maxActive": 3}}
     repaired, request = repair_with_response(monkeypatch, broken, {
         "note": "Fix damage; try to redesign an already valid producer",

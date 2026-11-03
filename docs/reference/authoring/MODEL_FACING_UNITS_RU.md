@@ -3,11 +3,11 @@
 <a id="authority"></a>
 ## Один источник диапазонов и преобразований
 
-Gameplay параметры, descriptions, domains, units и exact wire mapping — [capability_registry.py](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) (`ParamSpec`/`CapabilitySpec`). Структура — [program_schema.py](../../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py), executable projection/receipts — [compiler.py](../../../LocalGenerator/infini_local/core/runtime_authoring/compiler.py) и [technical_lowering.py](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py). Полный roster — generated [capability inventory](../generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) / [primitive parity](../generated/PRIMITIVE_PARITY_RU.md), не ручная копия всех registry rows.
+Gameplay параметры, descriptions, domains, units и exact wire mapping — [capability_registry.py](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) (`CapabilitySpec` и конкретные объявления параметров). Общий контракт параметра и его точная проекция — [parameter_contract.py](../../../LocalGenerator/infini_local/core/runtime_authoring/parameter_contract.py) (`ParamSpec`); model/audit представления registry — [registry_views.py](../../../LocalGenerator/infini_local/core/runtime_authoring/registry_views.py). Структура — [program_schema.py](../../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py), executable projection/receipts — [compiler.py](../../../LocalGenerator/infini_local/core/runtime_authoring/compiler.py) и [technical_lowering.py](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py). Полный roster — generated [capability inventory](../generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) / [primitive parity](../generated/PRIMITIVE_PARITY_RU.md), не ручная копия всех registry rows.
 
 Путь изменения: registry → actual provider schema/prompt → validator/Repair → compiler receipt → strict wire → C# DTO/executor → regression. Исторический rename не становится Author alias; C# wire сохраняет объявленные старые leaves. Category/name/prose не выбирают единицу, sentinel, механическую композицию или default.
 
-Свежий Gameplay Author использует `infini.runtime-program.authoring.v6`; runtime API остаётся `infini.runtime-program.v5`, persisted wire — `infini.runtime-program.wire.v3`. Author/Repair выбирают игровые расстояния в **блоках**, длительности в **секундах**, скорости в **блоках/с**. Смысл и диапазон каждого конкретного поля по-прежнему задаёт registry, а не suffix-эвристика.
+Свежий Gameplay Author использует `infini.runtime-program.authoring.v7`; runtime API остаётся `infini.runtime-program.v5`, persisted wire — `infini.runtime-program.wire.v3`. Author/Repair выбирают игровые расстояния в **блоках**, длительности в **секундах**, скорости в **блоках/с**. Смысл и диапазон каждого конкретного поля по-прежнему задаёт registry, а не suffix-эвристика.
 
 | Семейство | Author | Canonical lowering в прежний wire |
 |---|---|---|
@@ -24,7 +24,7 @@ N = explicit `set_projectile_collision.updatesPerTick` **того же target**;
 
 Секундная проекция — объявленная quantization, не обещание точного восстановления исходного decimal: половина тика округляется вверх. Ненулевой эффект не может исчезнуть при lowering/storage. Для integer world-pixel wire, например `offsetBlocks`, сохраняется точная пиксельная решётка; произвольная дробь блока не округляется скрыто.
 
-Current Author/Repair принимают только v6 keys, не старые `*Ticks`/`*PxPerUpdate` как fresh aliases. Saved wire не переписывается. Source-free audit принимает только конечные predecessor paths, **явно объявленные для этой миграции** в `ParamSpec`; это не возврат всех ранее retired aliases и не importer. Source-backed audit требует exact current Author source. Архивные JSON/hashes остаются неизменными. Проверки: `test_author_world_unit_projection.py` плюс существующие numeric/Repair/receipt controls; historical diagnostic hash не становится current admission contract.
+Current Author/Repair принимают только v7 keys, не старые `*Ticks`/`*PxPerUpdate` как fresh aliases. Saved wire не переписывается. Source-free audit принимает только конечные predecessor paths, **явно объявленные для этой миграции** в `ParamSpec`; это не возврат всех ранее retired aliases и не importer. Source-backed audit требует exact current Author source. Архивные JSON/hashes остаются неизменными. Проверки: `test_author_world_unit_projection.py` плюс существующие numeric/Repair/receipt controls; historical diagnostic hash не становится current admission contract.
 
 <a id="clocks"></a>
 ## World ticks, updates, pixels
@@ -93,7 +93,7 @@ Optional-null inverse допустим только для объявленны�
 <a id="vfx"></a>
 ## VFX: common controls не универсальная физика
 
-Source: [vfx_manifest.py](../../../LocalGenerator/infini_local/core/vfx_manifest.py) (`_VFX_NUMERIC_DESCRIPTIONS`, `_RENDERER_SEMANTICS`, Director/Repair schemas) и [presentation guide](../presentation/PRESENTATION_CONSISTENCY_RU.md#legacy-vfx). Material payload ranges/units/zeros/profiles имеют отдельный [контракт](../presentation/VFX_MATERIAL_ELEMENTS_RU.md), а не старые knobs.
+Source: [VFX semantics](../../../LocalGenerator/infini_local/core/vfx/contract.py) (`_VFX_NUMERIC_DESCRIPTIONS`, `_RENDERER_SEMANTICS`) и [Director/Repair schemas](../../../LocalGenerator/infini_local/core/vfx/schema.py) и [presentation guide](../presentation/PRESENTATION_CONSISTENCY_RU.md#legacy-vfx). Material payload ranges/units/zeros/profiles имеют отдельный [контракт](../presentation/VFX_MATERIAL_ELEMENTS_RU.md), а не старые knobs.
 
 VFX Director/Repair получают точный `acceptedGameplayReadOnly`: в частности base `useTime/useAnimation` и `itemScale` не восстанавливаются из realization. Для body sprite copies с declared `renderSizePx` коэффициент `q=R/max(actual final PNG frame)` берётся у выбранного texture owner. Projectile copies используют current P (уже D×E с последующим growth), slot scale и q; не повторно E/G. Dedicated impact, material world-pixel shapes и legacy absent-R ветки имеют отдельные правила в actual schema descriptions.
 

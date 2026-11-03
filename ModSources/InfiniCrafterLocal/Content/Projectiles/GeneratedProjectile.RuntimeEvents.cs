@@ -129,7 +129,7 @@ public sealed partial class GeneratedProjectile
         RuntimeParamsSpec p = _entity!.Controller.Params;
         var beam = _entity.BeamGeometry;
         Vector2 direction = beam is not null ? MotionAxis(Owner(), publish: false) : Projectile.velocity.SafeNormalize(_initialDirection);
-        start = beam is not null ? Projectile.Center : Owner().MountedCenter + direction * 18f;
+        start = beam is not null ? Projectile.Center + direction * (beam.StartOffsetPx ?? 0f) : Owner().MountedCenter + direction * 18f;
         double initialWidth = _entity.BeamRamp?.InitialWidthMultiplier ?? (beam is not null ? 1d : p.InitialWidthMultiplier ?? 1d);
         width = (float)((beam?.WidthPx ?? Math.Max(2f, p.WidthPx)) * (initialWidth + (1d - initialWidth) * BeamWarmupProgress()));
         float length = beam?.LengthPx ?? Math.Max(16f, p.RangeTiles * 16f);

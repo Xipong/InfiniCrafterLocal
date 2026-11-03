@@ -145,17 +145,20 @@ def test_real_controller_metadata_and_save_preserve_full_setting_surface(tmp_pat
         controller = module.StudioController(app, server)
         before = controller.snapshot()
         assert before['configPath'] == str(config)
-        assert len(before['fields']) == 129
+        language_field = next(field for field in before['fields'] if field['key'] == 'INFINI_LANGUAGE')
+        assert language_field['options'] == ['ru', 'en']
+        assert before['values']['INFINI_LANGUAGE'] == 'ru'
         assert 'INFINI_IMAGE_PARALLEL' in {field['key'] for field in before['fields']}
         assert 'INFINI_BALANCE_MODE' not in {field['key'] for field in before['fields']}
         assert {field['page'] for field in before['fields']} == {'configure','providers','images','sprites','models','multiplayer','diagnostics'}
         assert next(field for field in before['fields'] if field['key'] == 'INFINI_OPENAI_COMPAT_API_KEY')['secret'] is True
-        controller.apply({'id':'save-proof','action':'save','values':{'INFINI_PROMPT_STYLE':'Terraria Like'},'extra':{}})
+        controller.apply({'id':'save-proof','action':'save','values':{'INFINI_PROMPT_STYLE':'Terraria Like', 'INFINI_LANGUAGE': ' EN '},'extra':{}})
         saved = parse_env(config)
         assert saved['INFINI_PRIVATE_UNKNOWN'] == 'preserved'
         assert saved['INFINI_OPENAI_COMPAT_API_KEY'] == 'keep-me'
         assert saved['INFINI_LLM_MAX_TOKENS'] == '12345'
         assert saved['INFINI_PROMPT_STYLE'] == 'Terraria Like'
+        assert SettingsController(config).values['INFINI_LANGUAGE'] == 'en'
         assert saved['INFINI_IMAGE_PARALLEL'] == '1'
         assert controller.last_action['ok'] is True
         controller.apply({'id':'unknown-edit','action':'save','values':{'INFINI_PRIVATE_UNKNOWN':'edited-explicitly'},'extra':{}})
@@ -180,6 +183,12 @@ def test_real_controller_metadata_and_save_preserve_full_setting_surface(tmp_pat
             assert parse_env(config)[key] == tags
             assert receipt['savedValues'][key] == tags
             assert controller.snapshot()['savedValues'][key] == tags
+        persisted = config.read_bytes()
+        with pytest.raises(ValueError, match='INFINI_LANGUAGE'):
+            controller.apply({'id': 'invalid-language', 'action': 'save', 'values': {'INFINI_LANGUAGE': 'unsupported'}, 'extra': {}})
+        assert config.read_bytes() == persisted
+        controller.apply({'id': 'restore-language', 'action': 'save', 'values': {'INFINI_LANGUAGE': 'ru'}, 'extra': {}})
+        assert parse_env(config)['INFINI_LANGUAGE'] == 'ru'
     finally:
         server.close()
         app.on_close()

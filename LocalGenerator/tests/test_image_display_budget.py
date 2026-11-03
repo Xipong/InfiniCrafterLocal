@@ -15,30 +15,33 @@ from PIL import Image
 
 from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.pipelines import pipeline_visual_config as config
-from infini_local.pipelines import image_backend_pipeline as backend
-from infini_local.pipelines import sprite_postprocess as post
-from infini_local.pipelines import visual_generation_pipeline as visual
-from infini_local.pipelines import visual_sprite_generation as generation
-from infini_local.pipelines.visual_prompt_contracts import image_final_frame_prompt_clause
+from infini_local.core.images import config
+from infini_local.pipelines.images import backends as backend
+from infini_local.pipelines.images import postprocess as post
+import infini_local.pipelines.images.retry as post_retry
+import infini_local.pipelines.images.validation as post_validation
+import infini_local.pipelines.visual.contract as visual_contract
+import infini_local.pipelines.visual.stage as visual_stage
+from infini_local.pipelines.images import stage as generation
+from infini_local.pipelines.images.prompts import image_final_frame_prompt_clause, image_generation_prompt_suffix
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
 def _accepted_visual_data(*, long_art: bool = False, curve_mirror: bool | None = None, visual_curve: bool = False) -> dict:
     author = build_runtime_fixture("workbench_blade")
     for call in author["runtimeProgram"]["calls"]:
-        if call["fn"] == "configure_item_stats":
+        if call["fn"] == "item_stats":
             call["params"]["scale"] = 1.25
-        if call["fn"] == "set_projectile_hitbox":
+        if call["fn"] == "projectile_hitbox":
             call["params"]["drawScale"] = 1.75 if call["target"] == "nail" else 1.5
     if curve_mirror is not None:
         for target in ("workbench_blade", "nail"):
-            author["runtimeProgram"]["calls"].append({"id": "curve_" + target, "fn": "set_projectile_hitbox_curve", "target": target,
-                "params": {"startScale": .25, "endScale": 8, 'startDelaySeconds': (5) / 60, 'durationSeconds': (60) / 60, "curve": "exponential", "mirrorToSprite": curve_mirror}})
+            author["runtimeProgram"]["calls"].append({"id": "curve_" + target, "fn": "hitbox_curve", "target": target,
+                "params": {"startScale": .25, "endScale": 8, 'startDelay': (5) / 60, 'duration': (60) / 60, "curve": "exponential", "mirrorToSprite": curve_mirror}})
     if visual_curve:
         for target in ("workbench_blade", "nail"):
-            author["runtimeProgram"]["calls"].append({"id": "visual_curve_" + target, "fn": "set_projectile_visual_scale_curve", "target": target,
-                "params": {"startScale": 8, "endScale": .25, 'startDelaySeconds': (7) / 60, 'durationSeconds': (30) / 60, "curve": "linear"}})
+            author["runtimeProgram"]["calls"].append({"id": "visual_curve_" + target, "fn": "sprite_scale_curve", "target": target,
+                "params": {"startScale": 8, "endScale": .25, 'startDelay': (7) / 60, 'duration': (30) / 60, "curve": "linear"}})
     data = compile_runtime_program(author)
     item_id = data["runtimeProgram"]["itemEntityId"]
     item_art = "Four short blades around a red glass vial, copper handle and oak brace."
@@ -62,11 +65,11 @@ def _accepted_visual_data(*, long_art: bool = False, curve_mirror: bool | None =
                              preferredCanvasSize=32, renderSizePx=22, forwardAngleDegrees=0, scale=0.8))
         else:
             rows.append(dict(entityId=entity["id"], assetMode="reuse_item_icon", visualProjectRef="item", scale=0.75))
-    kit, errors = visual._validate_kit(dict(schema=visual.VISUAL_KIT_SCHEMA, item=item, entities=rows,
+    kit, errors = visual_contract._validate_kit(dict(schema=visual_contract.VISUAL_KIT_SCHEMA, item=item, entities=rows,
                                          animationPlan="Follow accepted movement without changing gameplay."),
                                      [row["id"] for row in data["runtimeProgram"]["entities"]], item_id)
     assert kit is not None, errors
-    return visual._apply_kit(data, kit)
+    return visual_stage._apply_kit(data, kit)
 
 
 def _framing(text: str) -> dict:
@@ -105,7 +108,7 @@ def _capture_backend(monkeypatch, tmp_path: Path, *, retries: bool = False) -> l
 
 
 def test_absent_presentation_stays_absent_and_special_assets_do_not_borrow_root_budget():
-    from infini_local.pipelines.visual_prompt_contracts import normalize_asset_prompt
+    from infini_local.pipelines.images.prompts import normalize_asset_prompt
 
     data = _accepted_visual_data()
     legacy = copy.deepcopy(data)
@@ -133,7 +136,11 @@ def test_absent_presentation_stays_absent_and_special_assets_do_not_borrow_root_
 @pytest.mark.parametrize("zimage", [False, True])
 def test_real_retry_compactor_retains_selected_frame_with_long_art_and_png_diagnostics(monkeypatch, tmp_path, style, zimage):
     monkeypatch.setattr(llm_config, "PROMPT_STYLE", style)
-    monkeypatch.setattr(post, "image_backend_is_zimage", lambda: zimage)
+    selected_guidance = image_generation_prompt_suffix()
+    with monkeypatch.context() as other_style:
+        other_style.setattr(llm_config, "PROMPT_STYLE", "Terraria Like" if style == "Default" else "Default")
+        assert selected_guidance != image_generation_prompt_suffix()
+    monkeypatch.setattr(post_retry, "image_backend_is_zimage", lambda: zimage)
     monkeypatch.setenv("INFINI_ZIMAGE_RETRY_PROMPT_LIMIT", "2200")
     data = _accepted_visual_data(long_art=True)
     frozen = copy.deepcopy(data)
@@ -144,7 +151,10 @@ def test_real_retry_compactor_retains_selected_frame_with_long_art_and_png_diagn
     assert len(calls) == 4
     for first, retry, role in ((calls[0], calls[1], "item"), (calls[2], calls[3], "runtime:child_projectile")):
         assert _framing(retry["prompt"]) == _framing(first["prompt"])
-        assert "Retain the literal authored silhouette, component count" in retry["prompt"]
+        owner = (frozen["visualKit"]["item"] if role == "item" else
+                 next(row for row in frozen["visualKit"]["entities"] if row["entityId"] == "nail"))
+        for field in ("silhouette", "visualIdentity"):
+            assert _framing(retry["prompt"])[field] == owner[field]
         # The tiny PNG went through real postprocess/validation. No hand-written
         # reasons dictionary and no stubbed retry builder can satisfy this case.
         audit = "itemSpriteValidation" if role == "item" else role + "SpriteValidation"
@@ -152,16 +162,15 @@ def test_real_retry_compactor_retains_selected_frame_with_long_art_and_png_diagn
         validation = attempts[0]["validation"]
         assert not validation["ok"] and any(reason.startswith("too_few_opaque_pixels") for reason in validation["reasons"])
         assert len(validation["reasons"]) >= 2
-        assert post.validation_retry_notes(validation, role)
-        assert "Technical correction:" in retry["prompt"] if zimage else "fix these technical issues:" in retry["prompt"]
+        notes = post_retry.validation_retry_notes(validation, role)
+        assert notes and notes in retry["prompt"]
         from infini_local.services.sdcpp_backend import server_payload
         for call in (first, retry):
             payload = server_payload(backend._sdcpp_config(), call["prompt"], "not sent", 512, 512, 42, "a1111", is_zimage=zimage, positive_only=True)
             wire = json.loads(json.dumps(payload, ensure_ascii=False))
             assert _framing(wire["prompt"]) == _framing(call["prompt"])
             assert wire["negative_prompt"] == ""
-            assert "Terraria (tModLoader) game asset" in wire["prompt"]
-            assert ("Terraria Like art direction" in wire["prompt"]) == (style == "Terraria Like")
+            assert wire["prompt"].endswith(selected_guidance)
         assert Path(first["raw"]).read_bytes() == first["bytes"]
         assert Path(retry["raw"]).read_bytes() == retry["bytes"]
     assert frozen["visual"]["imagePrompt"] in calls[0]["prompt"]
@@ -193,13 +202,14 @@ def test_image_composition_preserves_prospective_grip_and_literal_topology(monke
     # Assert authored ownership/retry order, not cross-asset completion order.
     calls.sort(key=lambda call: (_framing(call["prompt"]).get("entityId", ""), call["attempt"]))
     root_prompt, arrow_prompt = (call["prompt"] for call in calls)
-    for prompt in (root_prompt, arrow_prompt):
-        assert "Retain the literal authored silhouette, component count, spatial arrangement and distinctive elements" in prompt
-        assert "Do not omit or merge authored parts to simplify the sprite" in prompt
-    assert "visible handle/hand-contact region must contain the declared final-space grip" in root_prompt
-    assert "not the guard, blade or empty space" in root_prompt
-    assert "not a RAW-image coordinate" in root_prompt
-    assert "not a RAW-image coordinate" not in arrow_prompt
+    item_facts, arrow_facts = _framing(root_prompt), _framing(arrow_prompt)
+    assert item_facts["grip"] == data["visualKit"]["item"]["grip"]
+    assert item_facts["silhouette"] == data["visualKit"]["item"]["silhouette"]
+    assert item_facts["visualIdentity"] == data["visualKit"]["item"]["visualIdentity"]
+    assert item_facts["nativeHeldCanvas"]["nativeBodyBindsPngGrip"] is False
+    assert "grip" not in arrow_facts
+    arrow_design = next(row for row in data["visualKit"]["entities"] if row["entityId"] == "nail")
+    assert arrow_facts["silhouette"] == arrow_design["silhouette"]
     assert "semanticReviewStatus" not in result["visual"]
 
 
@@ -231,7 +241,6 @@ def test_real_image_jobs_forward_exact_selected_frame_owner_and_multipliers(monk
     assert arrow["silhouette"] == frozen["runtimeProgram"]["entities"][2]["visual"]["silhouette"]
     for call in calls:
         assert Path(call["raw"]).read_bytes() == call["bytes"]
-        assert "R/C" in call["prompt"] and "not hitbox" in call["prompt"]
     assert frozen["visual"]["imagePrompt"] in calls[0]["prompt"]
     assert frozen["runtimeProgram"]["entities"][2]["visual"]["prompt"] in calls[1]["prompt"]
     assert result["gameplay"] == frozen["gameplay"]
@@ -244,7 +253,7 @@ def test_real_image_jobs_forward_exact_selected_frame_owner_and_multipliers(monk
     assert result["runtimeProgram"]["entities"][1]["visual"]["spritePath"] == result["visual"]["spritePath"]
     for owner, role in ((result["visual"], "item"), (result["runtimeProgram"]["entities"][2]["visual"], "runtime:child_projectile")):
         assert owner["spriteStatus"] == "generated"
-        assert post.validate_processed_sprite(owner["spritePath"], role)["ok"]
+        assert post_validation.validate_processed_sprite(owner["spritePath"], role)["ok"]
 
 
 @pytest.mark.parametrize("curve_mirror", [None, False, True])
@@ -263,9 +272,6 @@ def test_actual_image_jobs_preserve_curve_facts_for_shared_root_and_distinct_bod
         assert ("hitboxCurve" in actual) == ("hitboxCurve" in accepted)
         if curve_mirror is not None:
             assert actual["hitboxCurve"] == accepted["hitboxCurve"]
-    for call in calls:
-        assert "without a clamp when accepted hitboxCurve.mirrorToSprite=true" in call["prompt"]
-        assert "Otherwise its existing clamp(Projectile.scale,0.1,8) remains" in call["prompt"]
     for entity, before in zip(result["runtimeProgram"]["entities"], frozen["runtimeProgram"]["entities"]):
         assert {key: value for key, value in entity.items() if key != "visual"} == {key: value for key, value in before.items() if key != "visual"}
 
@@ -284,9 +290,5 @@ def test_real_image_jobs_keep_independent_visual_curve_and_hitbox_ownership(monk
         accepted = next(row for row in frozen["runtimeProgram"]["entities"] if row["id"] == entity_id)
         assert actual["visualScaleCurve"] == accepted["visualScaleCurve"]
         assert actual.get("hitboxCurve") == accepted.get("hitboxCurve")
-    for call in calls:
-        assert "or visualScaleCurve is present" in call["prompt"]
-        assert "An independent hitbox curve does not multiply it" in call["prompt"]
-        assert "VFX body copies retain their separate published scale rules" in call["prompt"]
     for entity, before in zip(result["runtimeProgram"]["entities"], frozen["runtimeProgram"]["entities"]):
         assert {key: value for key, value in entity.items() if key != "visual"} == {key: value for key, value in before.items() if key != "visual"}

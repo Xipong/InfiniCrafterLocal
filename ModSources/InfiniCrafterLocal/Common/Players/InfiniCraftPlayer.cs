@@ -90,8 +90,6 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     private int _generatedRocketBootsMode;
     private float _generatedAccRunSpeedFloor;
     private string _lastGeneratedMobilityFailureMessage = "";
-    private int _heldItemPresentationSyncTick;
-    private string _heldItemPresentationSyncKey = "";
     private int _inventoryAssetPrefetchTicks;
 
     public Item InputA = new();
@@ -118,6 +116,7 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
 
     public override void ResetEffects()
     {
+        ResetPlayerEffects();
         _reactiveEquipment.Clear();
         // Rebuild generated grants from currently equipped items every tick.
         // Keep the exact ammo chance instead of Terraria's coarse 20%/25% flags.

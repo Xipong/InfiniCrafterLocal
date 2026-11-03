@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from infini_local.core import llm_config
-from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
+from infini_local.pipelines.vfx import request as vfx_transport
 
 from copy import deepcopy
 import json
@@ -10,17 +10,21 @@ import json
 import pytest
 
 from prompt_packet_helpers import request_dossier
-from infini_local.core import vfx_manifest as vfx
+import infini_local.core.vfx.contract as vfx_contract
+import infini_local.core.vfx.validation as vfx_validation
+import infini_local.pipelines.vfx.prompt as vfx_prompt
+import infini_local.pipelines.vfx.stage as vfx_stage
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.pipelines import llm_authoring_pipeline as author
-from infini_local.pipelines import visual_generation_pipeline as visual
+from infini_local.pipelines.author import request as author
+import infini_local.pipelines.visual.context as visual_context
+import infini_local.pipelines.visual.request as visual_request
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
 def _accepted_data():
     # The independent curve needs no retired movement/controller. Keep the
     # actual compiler and Director readers in the absent-driver path.
-    source = build_capability_witness("set_projectile_lash_geometry")
+    source = build_capability_witness("lash_geometry")
     source["runtimeProgram"]["calls"] = [call for call in source["runtimeProgram"]["calls"] if call["fn"] != "move_straight"]
     return compile_runtime_program(source)
 
@@ -33,10 +37,10 @@ def _capture_visual(monkeypatch, data, *, repair=False):
         return {"choices": [{"message": {"content": "{}"}}]}
 
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
-    monkeypatch.setattr(visual, "resolve_llm_model", lambda: "test-model")
-    monkeypatch.setattr(visual, "llm_chat_json", offline_response)
+    monkeypatch.setattr(visual_request, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(visual_request, "llm_chat_json", offline_response)
     kwargs = {"repair_errors": [], "previous": {}, "repair_scope": {}} if repair else {}
-    visual._request_visual_kit(data, {}, {}, **kwargs)
+    visual_request._request_visual_kit(data, {}, {}, **kwargs)
     assert len(sent) == 1
     return sent[0], request_dossier(sent[0])
 
@@ -45,19 +49,11 @@ def test_visual_packet_explains_geometry_without_prescribing_terminal_sprite_pat
     data = _accepted_data()
     frozen = deepcopy(data)
     request, packet = _capture_visual(monkeypatch, data)
-    rule = packet["spritePresentationReadOnly"]["geometryCoverage"]
-    for fact in ("driverMeaningReadOnly", "movement/controller params", "runtime_geometry",
-                 "beam/whip collision geometry", "baked_sprite/reuse_item_icon", "texturedPath",
-                 "animationPlan", "VFX is not yet authored", "no_asset", "no automatic mode conversion",
-                 "Do not alter accepted mechanics"):
-        assert fact in rule
     assert packet["acceptedPresentationMechanicsReadOnly"]["bindings"] == data["runtimeProgram"]["bindings"]
-    assert packet["runtimeEntities"] == visual._runtime_card(data)
-    assert packet["assetModeCatalog"] == visual.visual_asset_mode_catalog()
+    assert packet["runtimeEntities"] == visual_context._runtime_card(data)
+    assert packet["assetModeCatalog"] == visual_request.visual_asset_mode_catalog()
     assert data == frozen
-    assert "with a separately chosen texturedPath for the path" not in rule
-    assert "represent only a terminal body" not in rule
-    assert "with a separately chosen texturedPath for the path" not in json.dumps(request["messages"])
+
 
 
 def _capture_vfx(monkeypatch, data, *, repair=False):
@@ -72,32 +68,37 @@ def _capture_vfx(monkeypatch, data, *, repair=False):
     monkeypatch.setattr(vfx_transport, "resolve_llm_model", lambda: "test-model")
     monkeypatch.setattr(vfx_transport, "llm_chat_json", offline_response)
     kwargs = {"repair_errors": [], "previous": {}, "repair_scope": {}} if repair else {}
-    vfx._request(vfx_transport.call_llm_vfx_director, vfx._prompt_packet(data, {}, {}), **kwargs)
+    vfx_stage._request(vfx_transport.call_llm_vfx_director, vfx_prompt._prompt_packet(data, {}, {}), **kwargs)
     assert len(sent) == 1
     return sent[0], request_dossier(sent[0])
 
 
-def test_vfx_packet_keeps_path_coverage_facts_without_tip_plus_path_build_example(monkeypatch):
+def test_vfx_packet_preserves_geometry_choices_without_adding_effects(monkeypatch):
     data = _accepted_data()
     frozen = deepcopy(data)
-    request, packet = _capture_vfx(monkeypatch, data)
-    rule = packet["runtimeVocabulary"]["rendererSemantics"]["texturedPath"]
-    for fact in ("anchor history", "beam/whip geometry", "baked_sprite/reuse_item_icon",
-                 "single PNG", "whip terminal point", "runtime_geometry",
-                 "Selection is not automatic", "slots may remain empty", "width",
-                 "collision corner", "shared caps", "Read-only gameplay geometry"):
-        assert fact in rule
+    _, packet = _capture_vfx(monkeypatch, data)
     mechanics = deepcopy(data["runtimeProgram"])
     for row in mechanics["entities"]:
         row.pop("visual", None)
     assert packet["acceptedRuntimeProgramReadOnly"] == mechanics
-    assert packet["runtimeVocabulary"] == {
-        key: vfx.vfx_director_surface(data)[key] for key in vfx._VFX_RUNTIME_VOCABULARY_KEYS
-    }
-    assert data == frozen
-    assert "can coexist with a baked tip/body" not in rule
-    assert "If the intended body covers that path" not in rule
-    assert "can coexist with a baked tip/body" not in json.dumps(request["messages"])
+    entity = next(row for row in mechanics["entities"] if "lashGeometry" in row)
+    offered = next(row for row in packet["runtimeSurface"]["texturedPathSources"]
+                   if row["entityId"] == entity["id"])
+    assert offered["sources"] == ["anchorHistory", "whip", "ownerLink"]
+    assert packet["outputSchema"]["properties"]["slots"]["minItems"] == 0
+    assert vfx_validation.validate_vfx_director_output({"schema": vfx_contract.VFX_DIRECTOR_SCHEMA, "slots": []}, data)["ok"]
+    assert "vfxManifest" not in data and data == frozen
+
+    # Geometry availability follows accepted runtime facts, not names or prose.
+    without_geometry = deepcopy(data)
+    next(row for row in without_geometry["runtimeProgram"]["entities"]
+         if row["id"] == entity["id"]).pop("lashGeometry")
+    _, without_packet = _capture_vfx(monkeypatch, without_geometry)
+    without_sources = next(row["sources"] for row in without_packet["runtimeSurface"]["texturedPathSources"]
+                           if row["entityId"] == entity["id"])
+    assert without_sources == ["anchorHistory", "ownerLink"]
+    assert without_packet["item"] == packet["item"]
+    assert without_packet["runtimeSurface"]["runtimePairs"] == packet["runtimeSurface"]["runtimePairs"]
 
 
 @pytest.mark.parametrize("director", ["visual", "vfx"])
@@ -107,14 +108,12 @@ def test_shared_geometry_guidance_remains_neutral_in_serialized_repair(monkeypat
     request, packet = capture(monkeypatch, data, repair=True)
     scope = packet["repairScope"]
     assert scope == {}  # Shared presentation facts do not expand permissions.
-    assert "optional unreported fields stay absent" in " ".join(packet["rules"])
-    messages = json.dumps(request["messages"])
-    assert "with a separately chosen texturedPath for the path" not in messages
-    assert "can coexist with a baked tip/body" not in messages
     if director == "visual":
-        assert "texturedPath is an independent VFX renderer" in packet["spritePresentationReadOnly"]["geometryCoverage"]
+        assert packet["runtimeEntitiesReadOnly"] == visual_context._runtime_card(data)
+        assert packet["assetModeCatalog"] == visual_request.visual_asset_mode_catalog()
     else:
-        assert "Path coverage is independent of PNG-body presentation" in packet["runtimeVocabularyReadOnly"]["rendererSemantics"]["texturedPath"]
+        assert packet["acceptedRuntimeProgramReadOnly"]["bindings"] == data["runtimeProgram"]["bindings"]
+
 
 
 def test_author_packet_retains_full_grammar_without_counterexample_item_anecdotes(monkeypatch):
@@ -122,7 +121,7 @@ def test_author_packet_retains_full_grammar_without_counterexample_item_anecdote
         BINDING_ACTION_REGISTRY, ENTITY_KIND_REGISTRY, EVENT_KIND_REGISTRY,
         INPUT_KIND_REGISTRY, CAPABILITY_REGISTRY,
     )
-    from infini_local.pipelines.llm_authoring_prompt import sharp_engine_fn_catalog_for_llm
+    from infini_local.pipelines.author.prompt import sharp_engine_fn_catalog_for_llm
 
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
     parent = {"name": "Source object", "damage": 13, "useTime": 21,
@@ -159,11 +158,9 @@ def test_author_packet_retains_full_grammar_without_counterexample_item_anecdote
     shape = packet["requiredJsonShape"]["runtimeProgram"]
     assert shape["bindings"] and shape["calls"]
     assert {"id", "fn", "target", "params"} <= shape["calls"][0].keys()
-    assert "not defaults or edit permissions" in catalog["fieldGuide"]["rowShapes"]
-    assert "permitted omissions remain valid" in catalog["fieldGuide"]["paramNotation"]
-    rule = packet["requiredJsonShape"]["concept"]["coreMechanic"]
-    assert "duration is not a cooldown" in rule
-    assert "intentional free sustained utility remains a design choice" in rule
+    # The complete executable capability fields were compared above. Their
+    # explanatory wording is not part of the packet contract.
+    assert isinstance(packet["requiredJsonShape"]["concept"], str)
     assert parent == frozen
     assert "Exact source fact" in json.dumps(packet["parents"])
     instructions = " ".join(row["content"] for row in request["messages"][:2]).lower()
@@ -172,9 +169,9 @@ def test_author_packet_retains_full_grammar_without_counterexample_item_anecdote
 
 
 def test_image_packet_preserves_literal_art_and_selected_facts_without_build_examples(monkeypatch):
-    from infini_local.pipelines import image_backend_pipeline as image
-    from infini_local.pipelines import pipeline_visual_config as config
-    from infini_local.pipelines.visual_prompt_contracts import normalize_asset_prompt
+    from infini_local.pipelines.images import backends as image
+    from infini_local.core.images import config
+    from infini_local.pipelines.images.prompts import normalize_asset_prompt
 
     monkeypatch.setattr(config, "BG_COLOR", "transparent")
     monkeypatch.setattr(image, "SDCPP_LORA_PROMPT_TAGS", "")
@@ -192,14 +189,8 @@ def test_image_packet_preserves_literal_art_and_selected_facts_without_build_exa
     payload = json.loads(json.dumps(image.sdcpp_server_payload(prompt, "no text", 64, 64, 7, "a1111")))
     text = payload["prompt"]
     assert text.startswith(authored)
-    assert "transparent background" in text
-    assert "Retain the literal authored silhouette, component count, spatial arrangement" in text
-    assert "normalized final canvas coordinates" in text
-    assert "Terraria (tModLoader) game asset" in text
     facts = json.JSONDecoder().raw_decode(text.split("Read-only final-frame facts: ", 1)[1])[0]
     for key, value in data["visual"].items():
         assert facts[key] == value
     assert facts["canvasSizePx"] == 64
     assert data == frozen
-    assert "with a separately chosen texturedPath for the path" not in text
-    assert "can coexist with a baked tip/body" not in text

@@ -43,14 +43,19 @@ class SdcppServerState:
     """
 
     process: subprocess.Popen | None = None
+    log_viewer: subprocess.Popen | None = None
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     cleanup_registered: bool = False
     signal_handlers_registered: bool = False
     previous_signal_handlers: dict[int, Any] = field(default_factory=dict, repr=False)
+    lifecycle: str = "unknown"
     last_command: str = ""
     last_log_file: str = ""
     last_start_error: str = ""
     last_exit: dict[str, Any] = field(default_factory=dict)
+    probe_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    last_probe_started: float = 0.0
+    last_probe: dict[str, Any] = field(default_factory=lambda: {"outcome": "not_probed", "attempts": 0, "routes": []})
 
 
 LogEvent = Callable[[str, str, Any], None]
@@ -115,10 +120,25 @@ def _terminate_process_tree(proc: subprocess.Popen | Any, *, hard: bool) -> None
 
 def cleanup_server_process(state: SdcppServerState, log_event: LogEvent, reason: str = "cleanup") -> None:
     with state.lock:
+        viewer = state.log_viewer
+        if viewer is not None:
+            try:
+                if viewer.poll() is None:
+                    try:
+                        viewer.terminate()
+                        viewer.wait(timeout=3)
+                    except (OSError, subprocess.TimeoutExpired):
+                        viewer.kill()
+                        viewer.wait(timeout=3)
+                if viewer.poll() is not None:
+                    state.log_viewer = None
+            except (OSError, subprocess.SubprocessError) as error:
+                # Retain a still-owned viewer for a later cleanup retry.
+                log_event("warn", "sd.cpp log viewer cleanup failed", {"reason": reason, "error": repr(error)})
         proc = state.process
         if proc is None:
             return
-        state.process = None
+        state.lifecycle = "stopping"
         try:
             if proc.poll() is None:
                 log_event("info", "terminating stable-diffusion.cpp server", {"reason": reason, "pid": getattr(proc, "pid", None)})
@@ -135,7 +155,15 @@ def cleanup_server_process(state: SdcppServerState, log_event: LogEvent, reason:
         except (OSError, subprocess.SubprocessError) as e:
             log_event("warn", "stable-diffusion.cpp cleanup failed", {"reason": reason, "error": repr(e)})
         finally:
-            _close_process_log_handle(proc)
+            # Do not forget a child whose termination is unconfirmed.
+            try:
+                exited = proc.poll() is not None
+            except (OSError, subprocess.SubprocessError):
+                exited = False
+            state.lifecycle = ("failed" if reason in {"startup_exited", "startup_timeout"} else "stopped") if exited else "unknown"
+            if exited:
+                state.process = None
+                _close_process_log_handle(proc)
 
 
 def install_cleanup_handlers(state: SdcppServerState, cleanup_process: CleanupProcess) -> None:
@@ -217,10 +245,12 @@ def debug_snapshot(
         "version": app_version,
         "serverUrl": server_url,
         "serverAlive": server_is_alive,
+        "lastProbe": dict(state.last_probe),
         "serverConfigured": server_is_configured,
         "autostart": server_autostart,
         "showConsole": show_console,
         "processAlive": proc_alive,
+        "processLifecycle": ("exited" if proc_returncode is not None else state.lifecycle),
         "processReturncode": proc_returncode,
         "serverExe": server_exe,
         "model": model,
@@ -266,6 +296,7 @@ def ensure_server(
     with state.lock:
         state.last_start_error = ""
         if server_is_alive():
+            state.lifecycle = "ready" if state.process is not None else "external"
             return True
         if not server_autostart:
             return False
@@ -277,10 +308,14 @@ def ensure_server(
                     # Process exists but health failed; give it a brief moment before restarting.
                     time.sleep(0.5)
                     if server_is_alive():
+                        state.lifecycle = "ready"
                         return True
             except Exception:
                 pass
             cleanup_process("restart_unhealthy")
+            if state.process is not None:
+                return False  # No replacement before confirmed exit.
+        state.lifecycle = "starting"
         cmd, shell = build_command()
         state.last_command = stringify_cmd(cmd)
         log_path = Path(server_log_file) if server_log_file else (cache_dir / "sdcpp_server.log")
@@ -294,11 +329,8 @@ def ensure_server(
             stderr_target = None
             if not diagnostics_enabled:
                 stdout_target = stderr_target = subprocess.DEVNULL
-            elif os.name == "nt" and show_console:
-                # Let sd-server own a visible console. This prevents stdout PIPE deadlocks and gives the user live logs.
-                creationflags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
             else:
-                # Headless mode: redirect logs to a file, never to PIPE. PIPE can block verbose model startup.
+                # Always persist both streams, including when a console is requested.
                 log_path.parent.mkdir(parents=True, exist_ok=True)
                 log_handle = open(log_path, "a", encoding="utf-8", errors="replace")
                 log_handle.write("\n\n===== sd.cpp start " + time.strftime("%Y-%m-%d %H:%M:%S") + " =====\n")
@@ -307,8 +339,9 @@ def ensure_server(
                 stdout_target = log_handle
                 stderr_target = subprocess.STDOUT
             start_new_session = os.name != "nt"
-            if os.name == "nt" and not show_console:
+            if os.name == "nt":
                 creationflags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                creationflags |= getattr(subprocess, "CREATE_NO_WINDOW", 0)
             spawned_process = subprocess.Popen(
                 cmd,
                 shell=shell,
@@ -326,6 +359,20 @@ def ensure_server(
             # Store it as a private attribute so logs keep flowing while the process lives.
             if log_handle is not None:
                 setattr(spawned_process, "_infini_log_handle", log_handle)
+            if os.name == "nt" and show_console and diagnostics_enabled and state.log_viewer is None:
+                # A separate viewer tails the same file; sd-server remains the owned
+                # process, so its actual return code and process tree are preserved.
+                viewer_env = dict(os.environ)
+                viewer_env["INFINI_SDCPP_LOG_VIEW"] = str(log_path.resolve())
+                try:
+                    state.log_viewer = subprocess.Popen(
+                        ["powershell.exe", "-NoProfile", "-Command",
+                         "Get-Content -LiteralPath $env:INFINI_SDCPP_LOG_VIEW -Wait"],
+                        env=viewer_env,
+                        creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
+                    )
+                except OSError as e:
+                    log_event("warn", "could not open sd.cpp log viewer", {"error": repr(e), "logFile": state.last_log_file})
         except Exception as e:
             state.process = None
             if spawned_process is not None:
@@ -341,12 +388,14 @@ def ensure_server(
                     log_handle.close()
                 except (OSError, ValueError):
                     pass
+            state.lifecycle = "failed"
             state.last_start_error = repr(e)
             log_event("warn", "failed to start stable-diffusion.cpp server", {"error": state.last_start_error, "cmd": state.last_command, "logFile": state.last_log_file})
             return False
         deadline = time.time() + max(5, startup_timeout)
         while time.time() < deadline:
             if server_is_alive():
+                state.lifecycle = "ready"
                 log_event("info", "stable-diffusion.cpp server is ready", {"url": server_url, "logFile": state.last_log_file})
                 return True
             if state.process is not None and state.process.poll() is not None:
