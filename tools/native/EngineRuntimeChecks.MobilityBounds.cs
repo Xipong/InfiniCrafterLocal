@@ -82,7 +82,7 @@ internal static partial class EngineRuntimeChecks
                         MobilityMode = "blink_to_cursor", MobilityRangeTiles = 120,
                         MobilityCooldownTicks = 60, MobilitySafeTileOnly = false }), "unsafe item solid teleport accepted");
                 }
-                Equal(target, player.Center, "unsafe solid destination retains authored meaning");
+                Equal(target, eventAction ? player.Center : player.Bottom, "unsafe destination keeps event centre or item feet");
                 Equal(60, generated.GeneratedMobilityCooldownTicks, "successful unsafe move consumes cooldown");
             });
         }
