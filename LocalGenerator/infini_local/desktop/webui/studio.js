@@ -287,6 +287,7 @@
     for (const notice of remote.notifications || []) {
       if (state.seenNotifications.has(notice.id)) continue;
       state.seenNotifications.add(notice.id);
+      if (first) continue; // Do not replay old lifecycle notifications on opening.
       toast([notice.title,notice.message].filter(Boolean).map(text => t(text)).join(' · '), notice.level !== 'info');
     }
     state.fields=makeFields(remote);
@@ -411,7 +412,8 @@
     }
     const div = document.createElement('div'); div.setAttribute('role',error ? 'alert':'status'); div.className = `toast${error ? ' error':''}`;
     div.innerHTML = `${icon(error ? 'alert':'check')}<span class="toast-copy">${esc(message)}</span><button aria-label="${t("Закрыть уведомление")}">×</button>`;
-    div.querySelector('button').onclick = () => div.remove(); $('#toasts').replaceChildren(div);
+    div.querySelector('button').onclick = () => div.remove(); const stack=$('#toasts');stack.append(div);
+    while(stack.children.length > 4) stack.firstElementChild.remove();
     if (!error) setTimeout(() => div.remove(),9000);
   }
   function heading(page) {
