@@ -36,7 +36,6 @@ public sealed partial class InfiniDumpCommand : ModCommand
         string dir = Path.Combine(Main.SavePath, "InfiniCrafterLocal");
         // Capture identity metadata now, but hash files only on the writer thread.
         JsonObject environment = CaptureDumpEnvironmentCore(includeFileHash: false);
-        sourceGraphCache = new GeneratorClient.ParentSourceGraphCache();
         activeExport = new RuntimeDumpExport(dir, ItemLoader.ItemCount, ProjectileLoader.ProjectileCount,
             type =>
             {

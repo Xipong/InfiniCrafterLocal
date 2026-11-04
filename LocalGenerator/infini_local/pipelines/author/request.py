@@ -6,7 +6,7 @@ import math
 from typing import Any, Mapping
 
 from infini_local.core import llm_config
-from infini_local.core.env_utils import env_first_allow_empty, env_float, env_int
+from infini_local.core.env_utils import env_float, env_int, env_str
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 from infini_local.core.item_identity_tools import name_of, stable_hash
@@ -101,12 +101,9 @@ def _prepare_parsed_author_item(
 
 
 def _gameplay_repair_temperature() -> float:
-    """Canonical key wins by presence; the GUI spelling is a legacy alias.
-
-    Blank/invalid values use the scoped Repair default, never planner temperature.
-    """
+    """Blank/invalid values use the scoped Repair default, never planner temperature."""
     default = 0.12
-    raw = env_first_allow_empty(("INFINI_LLM_REPAIR_TEMPERATURE", "INFINI_LLM_REAUTHOR_TEMPERATURE"))
+    raw = env_str("INFINI_LLM_REPAIR_TEMPERATURE")
     try:
         value = float(raw)
     except (TypeError, ValueError):

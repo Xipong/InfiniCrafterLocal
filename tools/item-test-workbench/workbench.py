@@ -503,8 +503,6 @@ def execute_loader_run(args):
     """Run the real DLL autoload path without packaging or launching Terraria."""
     if not 1 <= args.timeout <= 3600:
         raise ValueError("Timeout must be 1..3600 seconds")
-    if bool(args.probe_dll) != bool(args.probe_mod_root):
-        raise ValueError("--probe-dll and --probe-mod-root must be supplied together")
     item = args.item.resolve() if args.item is not None else None
     native_item = getattr(args,"native_item",None)
     if (item is None) == (native_item is None):
@@ -546,17 +544,12 @@ def execute_loader_run(args):
     production_root = (Path(configured_root) if configured_root.strip() else dll.parent / "native-mod").resolve()
     env["INFINI_MOD_SOURCE_ROOT"] = str(production_root)
     production_content = {"root": str(production_root), "files": mod_content_state(production_root)}
-    pairs = []
-    if args.probe_dll:
-        pairs.append((args.probe_dll, args.probe_mod_root, True))
-    pairs.extend((Path(dll), Path(root), False) for dll, root in getattr(args, "mods", []))
-    for mod_dll, mod_root, legacy in pairs:
+    for mod_dll, mod_root in getattr(args, "mods", []):
         probe = mod_dll.expanduser().resolve(strict=True)
         probe_root = mod_root.expanduser().resolve(strict=True)
         if not probe.is_file() or not probe_root.is_dir():
             raise ValueError("Each extra mod requires an existing DLL and source directory")
-        command.extend((["--probe-dll", str(probe), "--probe-mod-root", str(probe_root)] if legacy else
-                        ["--mod-dll", str(probe), "--mod-root", str(probe_root)]))
+        command.extend(["--mod-dll", str(probe), "--mod-root", str(probe_root)])
         external[str(probe)] = digest(probe)
         external_content[str(probe_root)] = mod_content_state(probe_root, external=True)
     archives = {}
@@ -719,7 +712,7 @@ def main():
     sources=r.add_mutually_exclusive_group(required=True);sources.add_argument("--item",type=Path);sources.add_argument("--native-item",help="Native ItemID/name or registered Mod/Item")
     r.add_argument("--scenario",type=Path,required=True);r.add_argument("--out",type=Path,required=True)
     r.add_argument("--no-build",action="store_true");r.add_argument("--item-boundary",choices=("fresh","local_cache"),default="fresh")
-    r.add_argument("--timeout",type=int,default=180);r.add_argument("--probe-dll",type=Path);r.add_argument("--probe-mod-root",type=Path)
+    r.add_argument("--timeout",type=int,default=180)
     r.add_argument("--mod", dest="mods", type=Path, nargs=2, action="append", default=[], metavar=("DLL", "SOURCE_ROOT"), help="Additional original mod and source root; repeat for each dependency")
     r.add_argument("--server-mode", action="store_true", help="Use native server network mode for loading and the controlled CPU scene")
     r.add_argument("--tmod", dest="tmods", type=Path, action="append", default=[], metavar="PATH", help="Additional original .tmod archive; repeat for dependencies")

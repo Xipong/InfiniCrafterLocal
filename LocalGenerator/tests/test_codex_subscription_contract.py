@@ -439,7 +439,8 @@ def test_subscription_dispatch_strips_foreign_pin_and_never_pays_for_fallback(wi
     response, credentials = subscription
     wire.configure(LLM_PROVIDER="openai_codex", CODEX_LLM_MODEL="test-model", CODEX_VISUAL_REASONING="low",
         OPENAI_COMPAT_BASE_URL="https://api.openai.com/v1", OPENAI_COMPAT_API_KEY="synthetic-paid-key",
-        LLM_FALLBACK_PROVIDER="openrouter", LLM_FALLBACK_MODEL="paid-route-not-authorized", LLM_FALLBACK_OPENROUTER_PROVIDER=PIN)
+        LLM_POOL_PROFILES=({"id": "llm_2", "enabled": True, "provider": "openrouter",
+                           "model": "paid-route-not-authorized", "openrouter_provider": PIN},))
     calls, prepared_calls = [], []
     generate = backend.generate_chat
     monkeypatch.setattr(backend, "generate_chat", lambda payload, timeout: prepared_calls.append(copy.deepcopy(payload)) or generate(payload, timeout=timeout))
@@ -730,7 +731,7 @@ def test_native_session_roundtrip_is_private_and_status_has_no_secrets(tmp_path)
     ("transparent", True, "sprite_keyer", "transparent"),
     ("transparent", False, "sprite_keyer", "transparent"),
     ("cyan", False, "sprite_keyer", "transparent"),
-    ("magenta", True, "off", "transparent"),
+    ("magenta", False, "sprite_keyer", "transparent"),
 ])
 def test_codex_dispatch_writes_verified_png_and_preserves_authored_prompt(tmp_path, monkeypatch, color, remove_bg, mode, background):
     from infini_local.core.images import config as visual_config
@@ -738,7 +739,6 @@ def test_codex_dispatch_writes_verified_png_and_preserves_authored_prompt(tmp_pa
     monkeypatch.setattr(visual_config, "REMOVE_BG", remove_bg)
     monkeypatch.setattr(visual_config, "BG_REMOVE_MODE", mode)
     assert "openai_codex" in config.SUPPORTED_IMAGE_BACKENDS
-    assert config.IMAGE_BACKEND_ALIASES.get("openai_codex", "openai_codex") != "image_api"
     import base64
     import contextlib
     import io

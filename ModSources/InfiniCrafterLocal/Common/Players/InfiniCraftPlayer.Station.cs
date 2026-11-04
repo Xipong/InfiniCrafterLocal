@@ -146,7 +146,7 @@ public sealed partial class InfiniCraftPlayer
         GeneratorClient.PreparedGenerationRequest request;
         try
         {
-            request = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Generator.Prepare(
+            request = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Generator.PrepareDeferred(
                 a,
                 b,
                 Player,

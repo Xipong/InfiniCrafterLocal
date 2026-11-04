@@ -15,7 +15,6 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from infini_local.core import llm_config as config
-from infini_local.core.env_utils import env_str
 from infini_local.services.combine_endpoint import update_generation_activity
 from infini_local.storage.trace_runtime import log_event
 
@@ -41,7 +40,6 @@ class LlmItemLease:
     pool_size: int
     initial_profile_id: str = ""
     profiles: tuple[dict[str, Any], ...] = ()
-    legacy_fallback_allowed: bool = False
     previous_response_id: str = ""
     responses_disabled: bool = False
     call_count: int = 0
@@ -74,16 +72,10 @@ _CURRENT_LLM_ITEM_LEASE: ContextVar[LlmItemLease | None] = ContextVar("infini_ll
 
 
 def _normalized_llm_provider(configured: str) -> str:
-    configured = (configured or "").strip().lower().replace("-", "_")
-    if configured in {"openrouter", "or"}:
-        return "openrouter"
-    if configured in {"openai", "openai_compat", "api", "remote"}:
-        return "openai_compat"
-    if configured in {"local", "lmstudio", "lm_studio", "ollama", ""}:
-        if not configured and config.OPENROUTER_API_KEY and config.OPENROUTER_MODEL and str(config.OPENROUTER_MODEL).lower() not in {"auto", "default"}:
-            return "openrouter"
-        return "local"
-    return configured
+    provider = (configured or "local").strip().lower()
+    if provider not in {"local", "openrouter", "openai_compat", "openai_codex"}:
+        raise ValueError("INFINI_LLM_PROVIDER and pool PROVIDER must be local, openrouter, openai_compat or openai_codex")
+    return provider
 
 
 def active_llm_provider(context: dict[str, Any] | None = None) -> str:
@@ -96,12 +88,10 @@ def active_llm_provider(context: dict[str, Any] | None = None) -> str:
 
 
 def _normalized_api_mode(value: Any) -> str:
-    mode = str(value or "auto").strip().lower().replace("-", "_")
-    if mode in {"responses", "response"}:
-        return "responses"
-    if mode in {"chat", "chat_completion", "chat_completions", "completions"}:
-        return "chat_completions"
-    return "auto"
+    mode = str(value or "auto").strip().lower()
+    if mode not in {"auto", "responses", "chat_completions"}:
+        raise ValueError("LLM API mode must be auto, responses or chat_completions")
+    return mode
 
 
 def _openrouter_provider(context: dict[str, Any]) -> str:
@@ -129,7 +119,7 @@ def _llm_context_key(context: dict[str, Any] | None) -> str:
     return key
 
 
-def _legacy_primary_llm_context() -> dict[str, Any]:
+def _configured_primary_llm_context() -> dict[str, Any]:
     provider = _normalized_llm_provider(config.LLM_PROVIDER or "")
     if provider == "openai_codex":
         return {
@@ -157,7 +147,7 @@ def _legacy_primary_llm_context() -> dict[str, Any]:
     if provider == "openai_compat":
         return {
             "provider": provider,
-            "base_url": config.OPENAI_COMPAT_BASE_URL or env_str("OPENAI_BASE_URL", "").rstrip("/"),
+            "base_url": config.OPENAI_COMPAT_BASE_URL,
             "model": config.OPENAI_COMPAT_MODEL or "auto",
             "api_key": config.OPENAI_COMPAT_API_KEY,
             "label": "llm_1",
@@ -177,7 +167,7 @@ def _legacy_primary_llm_context() -> dict[str, Any]:
 
 def _primary_llm_context() -> dict[str, Any]:
     lease = _CURRENT_LLM_ITEM_LEASE.get()
-    return lease.context if lease is not None else _legacy_primary_llm_context()
+    return lease.context if lease is not None else _configured_primary_llm_context()
 
 
 def _pool_profile_context(raw: dict[str, Any]) -> dict[str, Any] | None:
@@ -200,7 +190,7 @@ def _pool_profile_context(raw: dict[str, Any]) -> dict[str, Any] | None:
         api_key = ""
     else:
         provider = "openai_compat"
-        base_url = base_url or config.OPENAI_COMPAT_BASE_URL or env_str("OPENAI_BASE_URL", "").rstrip("/")
+        base_url = base_url or config.OPENAI_COMPAT_BASE_URL
         api_key = api_key or config.OPENAI_COMPAT_API_KEY
     profile_id = str(raw.get("id") or "llm_pool").strip()
     return {
@@ -218,7 +208,7 @@ def _pool_profile_context(raw: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def configured_llm_pool() -> list[dict[str, Any]]:
-    profiles = [_legacy_primary_llm_context()]
+    profiles = [_configured_primary_llm_context()]
     seen_ids = {"llm_1"}
     for raw in config.LLM_POOL_PROFILES:
         context = _pool_profile_context(raw)
@@ -279,7 +269,6 @@ def begin_llm_item_lease(recipe_key: str, *, preferred_profile_id: str = "") -> 
         context=selected,
         pool_size=len(pinned_profiles),
         profiles=pinned_profiles,
-        legacy_fallback_allowed=not preferred and len(profiles) == 1,
     )
     token = _CURRENT_LLM_ITEM_LEASE.set(lease)
     try:
@@ -309,41 +298,6 @@ def llm_item_lease(recipe_key: str):
 
 def current_llm_item_lease() -> LlmItemLease | None:
     return _CURRENT_LLM_ITEM_LEASE.get()
-
-
-def _fallback_llm_context() -> dict[str, Any] | None:
-    model = str(config.LLM_FALLBACK_MODEL or "").strip()
-    if not model:
-        return None
-    primary = _legacy_primary_llm_context()
-    provider = _normalized_llm_provider(config.LLM_FALLBACK_PROVIDER or str(primary.get("provider") or "local"))
-    ctx: dict[str, Any] = {
-        "provider": provider,
-        "model": model,
-        "label": "fallback",
-        "profile_id": "legacy_fallback",
-        "api_mode": "chat_completions",
-    }
-    if provider == "openrouter":
-        ctx["base_url"] = config.LLM_FALLBACK_BASE_URL or config.OPENROUTER_BASE_URL or "https://openrouter.ai/api/v1"
-        ctx["api_key"] = config.LLM_FALLBACK_API_KEY or config.OPENROUTER_API_KEY
-        ctx["http_referer"] = config.OPENROUTER_HTTP_REFERER
-        ctx["app_title"] = config.OPENROUTER_APP_TITLE
-        ctx["openrouter_provider"] = config.LLM_FALLBACK_OPENROUTER_PROVIDER
-    elif provider == "openai_compat":
-        ctx["base_url"] = config.LLM_FALLBACK_BASE_URL or config.OPENAI_COMPAT_BASE_URL or env_str("OPENAI_BASE_URL", "").rstrip("/")
-        ctx["api_key"] = config.LLM_FALLBACK_API_KEY or config.OPENAI_COMPAT_API_KEY
-    elif provider == "openai_codex":
-        ctx["base_url"] = "https://chatgpt.com/backend-api/codex"
-        ctx["api_key"] = ""
-        ctx["api_mode"] = "responses"
-    else:
-        ctx["provider"] = "local"
-        ctx["base_url"] = config.LLM_FALLBACK_BASE_URL or config.LMSTUDIO_URL
-        ctx["api_key"] = ""
-    if _llm_context_key(ctx) == _llm_context_key(primary):
-        return None
-    return ctx
 
 
 def _join_openai_compat_url(base: str, endpoint: str) -> str:
@@ -462,12 +416,3 @@ def _switch_lease_profile(lease: LlmItemLease, context: dict[str, Any], error: E
         "model": context.get("model"),
         "reason": repr(error),
     })
-
-
-def _switch_lease_to_legacy_fallback(lease: LlmItemLease | None, fallback: dict[str, Any]) -> None:
-    if lease is None:
-        return
-    lease.context = fallback
-    lease.profile_id = str(fallback.get("profile_id") or "legacy_fallback")
-    lease.previous_response_id = ""
-    lease.responses_disabled = False

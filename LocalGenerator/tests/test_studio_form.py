@@ -55,10 +55,10 @@ def test_home_health_feedback_is_honest_when_check_failed_or_stale(tmp_path):
 
 def test_form_branches_preserve_secrets_unknown_keys_and_explicit_choices(tmp_path):
     config = tmp_path / 'config.env'
-    config.write_text('INFINI_MANUAL_FUTURE_OPTION=retained\nINFINI_LLM_PROVIDER=local\n'
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_MANUAL_FUTURE_OPTION=retained\nINFINI_LLM_PROVIDER=local\n'
         'INFINI_IMAGE_BACKEND=off\nINFINI_OPENROUTER_API_KEY=FAKE-HIDDEN-TOKEN\n'
         'INFINI_LLM_MAX_TOKENS=4321\nINFINI_TRACE_PROMPTS=0\n'
-        'INFINI_SDCPP_MODEL=retained.gguf\n', encoding='utf-8')
+        'INFINI_SDCPP_MODEL=retained.gguf\n'), encoding='utf-8')
     app = SettingsController(config)
     try:
         assert all(field['key'] in app.values for field in FIELDS)

@@ -9,7 +9,7 @@ from infini_local.services import sdcpp_backend
 
 def _cfg(*, root: str) -> sdcpp_backend.SdcppBackendConfig:
     return sdcpp_backend.SdcppBackendConfig(
-        default_command_template=settings_schema.SDCPP_DEFAULT_COMMAND_TEMPLATE,
+        default_command_template=sdcpp_backend.DEFAULT_COMMAND_TEMPLATE,
         command_mode="safe_args",
         server_exe=r"C:\Games\sdcpp-hybrid-gfx1030\sd-server.exe",
         model=r"C:\Games\sdcpp\models\Flux 2 4B\flux-2-klein-4b-Q8_0.gguf",

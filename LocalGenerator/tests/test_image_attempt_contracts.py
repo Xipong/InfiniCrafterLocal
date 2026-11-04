@@ -18,7 +18,7 @@ from infini_local.core.images import config
 from infini_local.pipelines.visual.assets import build_visual_asset_plan
 from infini_local.services import asset_sync_service as sync
 from infini_local.services.sdcpp_service import ImageRequestGate
-from infini_local.web.server_utility_routes import ServerUtilityRoutes
+from infini_local.web import server_utility_routes as routes
 from tests.vfx_image_fixtures import HttpCapture, _data, _request, _existing_texture_data
 
 def sha(raw):
@@ -42,16 +42,15 @@ class Response(io.BytesIO):
 
 
 def serve(root, path, route='asset'):
-    # Use the real route methods and real stat/open/read, without starting HTTP.
-    routes = object.__new__(ServerUtilityRoutes)
-    routes.sprite_dir = root
-    routes.world_recipes_dir = root / 'world-recipes'
-    routes.asset_sync_service = sync
+    # Real route and filesystem with scoped serving roots, no HTTP listener.
     handler = HttpCapture()
-    if route == 'asset':
-        routes.get_asset(handler, '/get_asset?file=' + Path(path).name)
-    else:
-        routes.sprite_file(handler, '/sprite/' + Path(path).name)
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(routes, "SPRITE_DIR", root)
+        patch.setattr(routes, "WORLD_RECIPES_DIR", root / "world-recipes")
+        if route == 'asset':
+            routes.get_asset(handler, '/get_asset?file=' + Path(path).name)
+        else:
+            routes.sprite_file(handler, '/sprite/' + Path(path).name)
     return {'code': handler.code, 'headers': handler.headers, 'raw': handler.wfile.getvalue()}
 
 @pytest.fixture

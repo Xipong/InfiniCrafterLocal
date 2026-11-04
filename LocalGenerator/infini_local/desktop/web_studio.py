@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import copy
-from collections import OrderedDict
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -41,7 +40,7 @@ class StudioServer:
     def __init__(self, assets: Path, *, port: int = 0):
         self.assets = assets
         self.token = secrets.token_urlsafe(32)
-        from infini_local.desktop.settings_paths import ROOT, STATE_ROOT
+        from infini_local.core.app_paths import ROOT, STATE_ROOT
         self.file_root = STATE_ROOT
         self.guide_path = ROOT.parent / 'START_HERE.html'
         self.commands: queue.Queue[dict] = queue.Queue(maxsize=32)
@@ -291,12 +290,6 @@ class StudioController:
     def __init__(self, app, server: StudioServer):
         self.app, self.server = app, server
         self.fields = self._fields()
-        self.last_action: dict = {}
-        self.action_results: OrderedDict[str, dict] = OrderedDict()
-        self.notifications: list[dict] = []
-        app._ui_notification_sink = self._notify
-        app._ui_action_sink = self._finish_action
-        self.revision = 0
         self._saved_values: dict | None = None
 
     def _fields(self):
@@ -361,12 +354,12 @@ class StudioController:
             'home': {'state': self.app.home_state, 'detail': self.app.home_detail,
                      'config': self.app.home_config},
             'traceStatus': self.app.trace_status,
-            'notifications': self.notifications, 'actionResults': list(self.action_results.values()),
+            'notifications': self.app.actions.notifications, 'actionResults': list(self.app.actions.results.values()),
             'trace': dict(self.app.trace),
-            'configPath': str(CONFIG_PATH.absolute()), 'version': APP_VERSION, 'lastAction': self.last_action,
+            'configPath': str(CONFIG_PATH.absolute()), 'version': APP_VERSION, 'lastAction': self.app.actions.last_action,
             'managed': bool(self.app.__dict__.get('_managed_by_tmodloader', False)),
             'nativeFolderPicker': is_available(),
-            'revision': self.revision, 'busy': list(self.app._gui_tasks), 'lanEnabled': bool(self.app.lan_enabled),
+            'revision': self.app.actions.revision, 'busy': list(self.app.actions.tasks), 'lanEnabled': bool(self.app.lan_enabled),
             'account': {'status': self.app.__dict__.get('_codex_account_status', ''), 'catalog': self.app.codex_catalog,
                         'images': self.app.codex_image_account, 'authenticated': auth_status()['authenticated'],
                         'textModels': text_models},
@@ -375,45 +368,8 @@ class StudioController:
     def _values(self, values, extra):
         self.app.update_values(values, lan_enabled=extra.get('lanEnabled'))
 
-    def _notify(self, level, title, message):
-        self.notifications.append({'id': secrets.token_hex(8), 'level': level, 'title': title, 'message': message,
-                                   'actionId': self.app.__dict__.get('_studio_notification_action_id') or self.app.__dict__.get('_studio_command_id')})
-        del self.notifications[:-64]
-
-    def _finish_action(self, identifier, ok, message, *, cancelled=False, result=None, saved=False):
-        receipt = self.action_results.get(identifier)
-        if receipt is None:
-            return
-        self.revision += 1
-        receipt.update(ok=bool(ok), status='cancelled' if cancelled else 'succeeded' if ok else 'failed',
-                       message=message, revision=self.revision)
-        if result is not None:
-            receipt['result'] = result
-        if not self.app._gui_closed and receipt['action'] in {'applyPreset', 'clearLora', 'useLora', 'resetSprite', 'savePreset', 'save', 'start', 'forceRestart'}:
-            receipt['values'] = self.app._current_profile_settings()
-            receipt['values']['INFINI_GUI_PIPELINE_PRESET'] = self.app.preset
-            receipt['lanEnabled'] = bool(self.app.lan_enabled)
-        if (ok or saved) and receipt['action'] in {'save', 'start', 'forceRestart', 'acceptDefaults'}:
-            from infini_local.desktop.settings_env import parse_env
-            CONFIG_PATH = self.app.config_path
-            receipt['savedValues'] = parse_env(CONFIG_PATH)
-            receipt['savedValues']['INFINI_GUI_PIPELINE_PRESET'] = self.app._pipeline_preset_from_config(receipt['savedValues'], self.app.user_presets)
-            receipt['savedRevision'] = saved_config_revision(CONFIG_PATH, example_path=self.app.example_path)
-            receipt['saved'] = True
-        self.last_action = receipt
-        while len(self.action_results) > 128:
-            retired = next((key for key, item in self.action_results.items() if item['status'] != 'running'), None)
-            if retired is None:
-                break
-            del self.action_results[retired]
-
     def apply(self, command):
-        identifier = command['id']
-        self.action_results[identifier] = {'id': identifier, 'action': command['action'], 'ok': True,
-                                           'status': 'running', 'message': 'Действие выполняется.'}
-        self.last_action = self.action_results[identifier]
-        self.app._studio_command_id = identifier
-        self.app._studio_expected_config_revision = command.get('extra', {}).get('savedRevision')
+        identifier = self.app.actions.start(command)
         transient = command['action'] in {'health', 'trace', 'validate', 'clearTrace', 'openCache', 'stop', 'applyPreset', 'clearLora', 'useLora', 'resetSprite', 'savePreset'}
         draft = None
         if transient:
@@ -421,18 +377,17 @@ class StudioController:
                      copy.deepcopy(self.app._profile_baseline), self.app._profile_baseline_label)
         try:
             outcome = self._apply(command)
-            pending = any(task.get('command_id') == identifier or task.get('pending') and task['pending'][2] == identifier for task in self.app._gui_tasks.values())
-            pending = pending or identifier in self.app.__dict__.get('_studio_async_ids', set())
+            pending = identifier in self.app.actions.pending_ids
             if not pending:
                 outcome = outcome if isinstance(outcome, dict) else {}
-                self._finish_action(identifier, outcome.get('ok', True), outcome.get('message', self.app.status if not self.app._gui_closed else 'Студия закрыта.'),
+                self.app.actions.finish(identifier, outcome.get('ok', True), outcome.get('message', self.app.status if not self.app._gui_closed else 'Студия закрыта.'),
                                     result=outcome.get('result'), saved=outcome.get('saved', False))
         except (OSError, ValueError, AttributeError, RuntimeError) as exc:
-            self._finish_action(identifier, False, str(exc))
+            self.app.actions.finish(identifier, False, str(exc))
             raise
         finally:
-            self.app._studio_command_id = None
-            self.app._studio_expected_config_revision = None
+            self.app.actions.command_id = None
+            self.app.actions.expected_config_revision = None
             if draft is not None:
                 # Diagnostics and draft transforms return their captured result,
                 # but do not replace another browser tab's shared launch state.
@@ -447,7 +402,7 @@ class StudioController:
         action, extra = command['action'], command.get('extra', {})
         if action == 'forceRestart' and extra.get('confirm') is not True:
             raise ValueError('Explicit confirmation is required to interrupt active generation')
-        if action in {'start', 'forceRestart'} and 'server-action' in app._gui_tasks:
+        if action in {'start', 'forceRestart'} and 'server-action' in app.actions.tasks:
             # Refuse before adopting another tab's draft: the in-flight guard
             # still compares and launches from the shared control-loop state.
             return (app.start_server() if action == 'start' else
@@ -527,7 +482,7 @@ class StudioController:
                 raise ValueError('Native folder selection requires a registered folder setting')
             if not is_available():
                 raise ValueError('Системный выбор папки доступен только на Windows-компьютере генератора. Используй список Studio.')
-            if 'native-folder-picker' in app._gui_tasks:
+            if 'native-folder-picker' in app.actions.tasks:
                 raise ValueError('Окно выбора папки уже открыто на компьютере генератора.')
             # Existing local-path admission rejects UNC, mapped drives and links
             # before seeding the OS dialog, and validates the returned selection.
@@ -549,9 +504,9 @@ class StudioController:
                     return {'ok': True, 'cancelled': True, 'message': 'Выбор папки отменён. Черновик не изменён.'}
                 return {'ok': True, 'message': 'Папка выбрана. Изменён только черновик в этой вкладке.',
                         'result': {'kind': 'folderSelection', 'key': key, 'path': selected}}
-            app._run_gui_task('native-folder-picker', work, completed)
+            app.actions.run('native-folder-picker', work, completed)
         elif action == 'help':
-            from infini_local.desktop.settings_paths import ROOT
+            from infini_local.core.app_paths import ROOT
             if not (ROOT.parent / 'START_HERE.html').is_file():
                 raise ValueError('Локальная инструкция не найдена.')
             return {'ok': True, 'message': 'Локальная инструкция готова.', 'result': {
@@ -602,7 +557,7 @@ class StudioController:
             # Publish final receipts without querying closed lifecycle state.
             with self.server._lock:
                 final_state = copy.deepcopy(self.server._state)
-            final_state.update(lastAction=self.last_action, actionResults=list(self.action_results.values()), closed=True)
+            final_state.update(lastAction=self.app.actions.last_action, actionResults=list(self.app.actions.results.values()), closed=True)
             self.server.publish(final_state)
 
 

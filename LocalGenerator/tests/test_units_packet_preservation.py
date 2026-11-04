@@ -242,7 +242,7 @@ def test_current_live_and_dump_ammo_packets_remain_available(monkeypatch):
     def lookup(projectile_id):
         looked_up.append(projectile_id)
         return {"type": 1, "tileCollide": True}
-    monkeypatch.setattr(parents, "runtime_projectile_lookup", lookup)
+    monkeypatch.setattr(parents.runtime_dump_service.RuntimeDumpSnapshot, "lookup", lambda self, kind, identity, **kwargs: lookup(identity))
     dump = {"useAmmo": 97}
     assert parents.compact_ammo_profile(dump) == {}
     assert parents.effective_projectile_profile_of(dump) == {} and looked_up == []

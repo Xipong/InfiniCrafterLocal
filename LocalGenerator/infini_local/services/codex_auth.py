@@ -549,7 +549,7 @@ def post_sse(url: str, payload: dict, *, headers: dict | None = None, timeout: f
     merged = {"Content-Type": "application/json", "Accept": "text/event-stream", "User-Agent": "infinicrafter/1.0", **(headers or {})}
     req = urlrequest.Request(url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), headers=merged, method="POST")
     deadline = time.monotonic() + timeout
-    attempts = env_int("INFINI_LLM_FALLBACK_NETWORK_FAILS", 2, lo=1, hi=10)
+    attempts = env_int("INFINI_LLM_NETWORK_ATTEMPTS", 2, lo=1, hi=10)
     return _generation_request(req, deadline=deadline, attempts=attempts, payload=payload, headers=merged,
                                read_response=lambda response: _read_sse_response(response, deadline=deadline, limit=limit))
 

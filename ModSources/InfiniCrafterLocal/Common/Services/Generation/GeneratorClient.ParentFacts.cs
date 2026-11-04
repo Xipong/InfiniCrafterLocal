@@ -860,6 +860,16 @@ public sealed partial class GeneratorClient
                 onHitStatusReference = CaptureNativeHitStatusReference(p)
             };
             var sprite = TryCaptureProjectileSpriteReference(p);
+            if (currentParentAnalysis is { } analysis && includeChildReferences && p.ModProjectile is null
+                && p.type > ProjectileID.None && p.type < ProjectileID.Count)
+            {
+                int type = p.type, style = p.aiStyle;
+                var captured = JsonSerializer.SerializeToNode(snapshot, WireJsonOptions)!.AsObject();
+                if (sprite is not null) captured["spriteReferenceRaw"] = JsonSerializer.SerializeToNode(sprite, WireJsonOptions);
+                captured["referencedProjectiles"] = analysis.Defer(() => ReferencedProjectileSnapshots(
+                    JsonNode.Parse(ProjectileAttackSource(type, style).Spawns)!.AsArray()), omitIfNull: true);
+                return captured;
+            }
             var children = includeChildReferences ? ReferencedProjectileSnapshots(ProjectileSpawnReferences(p)) : null;
             if (sprite is null && children is null) return snapshot;
             var observed = JsonSerializer.SerializeToNode(snapshot, WireJsonOptions)!.AsObject();
@@ -899,15 +909,15 @@ public sealed partial class GeneratorClient
         foreach (var (id, sites) in identities)
         {
             var reference = new JsonObject { ["type"] = id, ["sourceCallIndices"] = sites };
-            if (id <= ProjectileID.None || id >= ProjectileLoader.ProjectileCount)
+            if (id <= ProjectileID.None || id >= SourceSnapshotOnMain(() => ProjectileLoader.ProjectileCount))
                 reference["unresolved"] = "spawn_projectile_identity_not_registered";
             else if (captured >= ProfileLimit) reference["unresolved"] = "single_hop_profile_count_bound";
             else
             {
                 captured++;
                 // Defaults/source only; actual spawn arguments stay in parent.
-                reference["profile"] = JsonSerializer.SerializeToNode(ProjectileRawSnapshot(id, 0f,
-                    "conditional_native_spawn_candidate", null, -1, includeChildReferences: false), WireJsonOptions);
+                reference["profile"] = SourceSnapshotOnMain(() => JsonSerializer.SerializeToNode(ProjectileRawSnapshot(id, 0f,
+                    "conditional_native_spawn_candidate", null, -1, includeChildReferences: false), WireJsonOptions));
             }
             references.Add(reference);
         }

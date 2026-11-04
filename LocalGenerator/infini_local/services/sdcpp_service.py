@@ -38,8 +38,8 @@ class ImageRequestGate:
 class SdcppServerState:
     """Mutable lifecycle state for the optional persistent stable-diffusion.cpp server.
 
-    Keep this state outside server.py so the HTTP entrypoint can stay focused on routing
-    and pipeline orchestration while the image-backend adapter owns lifecycle calls.
+    Lifecycle calls and their process state share this owner; configuration and
+    HTTP routes only supply settings or request startup/shutdown.
     """
 
     process: subprocess.Popen | None = None
@@ -58,13 +58,14 @@ class SdcppServerState:
     last_probe: dict[str, Any] = field(default_factory=lambda: {"outcome": "not_probed", "attempts": 0, "routes": []})
 
 
+SDCPP_SERVER_STATE = SdcppServerState()
+
+
 LogEvent = Callable[[str, str, Any], None]
 TailTextFile = Callable[[str | Path, int], str]
 ServerIsAlive = Callable[[], bool]
 BuildCommand = Callable[[], tuple[list[str] | str, bool]]
 StringifyCommand = Callable[[list[str] | str], str]
-ServerIsConfigured = Callable[[], bool]
-CleanupProcess = Callable[[str], None]
 
 
 def _close_process_log_handle(proc: subprocess.Popen | Any) -> None:
@@ -166,11 +167,11 @@ def cleanup_server_process(state: SdcppServerState, log_event: LogEvent, reason:
                 _close_process_log_handle(proc)
 
 
-def install_cleanup_handlers(state: SdcppServerState, cleanup_process: CleanupProcess) -> None:
+def install_cleanup_handlers(state: SdcppServerState, log_event: LogEvent) -> None:
     with state.lock:
         if not state.cleanup_registered:
             state.cleanup_registered = True
-            atexit.register(lambda: cleanup_process("atexit"))
+            atexit.register(lambda: cleanup_server_process(state, log_event, "atexit"))
 
         # Python only permits signal registration on the main thread. A worker
         # may install atexit first; a later main-thread autostart must still get
@@ -187,7 +188,7 @@ def install_cleanup_handlers(state: SdcppServerState, cleanup_process: CleanupPr
                 state.previous_signal_handlers[int(sig)] = previous
 
                 def _handler(signum, frame, previous=previous):
-                    cleanup_process(f"signal:{signum}")
+                    cleanup_server_process(state, log_event, f"signal:{signum}")
                     if callable(previous):
                         previous(signum, frame)
                         return
@@ -286,7 +287,6 @@ def ensure_server(
     server_is_alive: ServerIsAlive,
     build_command: BuildCommand,
     stringify_cmd: StringifyCommand,
-    cleanup_process: CleanupProcess,
     log_event: LogEvent,
     tail_text_file: TailTextFile,
     process_env: dict[str, str] | None = None,
@@ -300,7 +300,7 @@ def ensure_server(
             return True
         if not server_autostart:
             return False
-        install_cleanup_handlers(state, cleanup_process)
+        install_cleanup_handlers(state, log_event)
         # If old child died or became unhealthy, forget/cleanup it before restarting.
         if state.process is not None:
             try:
@@ -312,7 +312,7 @@ def ensure_server(
                         return True
             except Exception:
                 pass
-            cleanup_process("restart_unhealthy")
+            cleanup_server_process(state, log_event, "restart_unhealthy")
             if state.process is not None:
                 return False  # No replacement before confirmed exit.
         state.lifecycle = "starting"
@@ -404,11 +404,11 @@ def ensure_server(
                     "logTail": tail_text_file(state.last_log_file, 16000),
                 }
                 log_event("warn", "stable-diffusion.cpp server exited during startup", {"returncode": state.process.returncode, "logFile": state.last_log_file, "logTail": state.last_exit.get("logTail", "")[-2000:]})
-                cleanup_process("startup_exited")
+                cleanup_server_process(state, log_event, "startup_exited")
                 return False
             time.sleep(1.0)
         state.last_start_error = f"startup timeout after {startup_timeout}s"
         timeout_tail = tail_text_file(state.last_log_file, 16000)[-2000:]
         log_event("warn", "stable-diffusion.cpp server startup timeout", {"url": server_url, "timeout": startup_timeout, "cmd": state.last_command, "logFile": state.last_log_file, "logTail": timeout_tail})
-        cleanup_process("startup_timeout")
+        cleanup_server_process(state, log_event, "startup_timeout")
         return False

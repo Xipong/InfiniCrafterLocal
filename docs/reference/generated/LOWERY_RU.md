@@ -5,7 +5,7 @@
 
 Schemas: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v7` / `infini.runtime-program.wire.v3`.
 
-**Навигация:** [граница](#boundary) · [owners](#owners) · [Author → wire](#wire) · [manifest](#lowering) · [технические отображения](#mappings) · [текст и единицы игрока](#player-text) · [config/UI aliases](#config-aliases) · [proxy runtime](#runtime) · [обновление и проверка](#refresh).
+**Навигация:** [граница](#boundary) · [owners](#owners) · [Author → wire](#wire) · [manifest](#lowering) · [технические отображения](#mappings) · [текст и единицы игрока](#player-text) · [config choices](#config-choices) · [proxy runtime](#runtime) · [обновление и проверка](#refresh).
 
 <a id="boundary"></a>
 
@@ -482,33 +482,38 @@ Visual role — renderer handoff, а не gameplay-классификатор.
 
 Whole-pattern aliases и archetype routers не входят в текущий контракт. Name/category/prose не выбирают композицию; compatibility importer и старые spelling не являются вторым API.
 
-<a id="config-aliases"></a>
+<a id="config-choices"></a>
 
-## Сохранившиеся aliases вне gameplay
+## Единственные config spellings
 
-Эти aliases не попадают в runtimeProgram и не могут выбирать механику предмета.
+Настройки используют canonical values без старых aliases. Они не попадают в runtimeProgram и не выбирают механику предмета.
 
 ### LLM provider config
 
-| accepted config spelling | canonical provider |
+| provider | назначение |
 |---|---|
-| openrouter, or | openrouter |
-| openai, openai_compat, api, remote | openai_compat |
-| local, lmstudio, lm_studio, ollama, empty | local |
+| local | локальный OpenAI-compatible endpoint |
+| openrouter | OpenRouter |
+| openai_compat | явно настроенный совместимый API |
+| openai_codex | ChatGPT/Codex subscription |
 
 ### Image backend config
 
-| accepted config spelling | canonical image backend |
+| image backend | назначение |
 |---|---|
-| stablediffusioncpp, stable-diffusion.cpp, stable_diffusion_cpp | sdcpp |
-| api_image, openai_image, openai_images, openai_compat_image | image_api |
-| none, disabled | off |
+| off | изображения отключены |
+| sdcpp | stable-diffusion.cpp server |
+| a1111 | AUTOMATIC1111 |
+| comfyui | ComfyUI |
+| image_api | явно настроенный image API |
+| openai_codex | ChatGPT/Codex images |
+| procedural | явный offline development path |
 
 Это только выбор существующего image backend в конфигурации; visual topology и gameplay от spelling не зависят.
 
 ### Явные presentation choices
 
-Категория результата проходит strict Author enum без UI/category alias routing. VFX цвет задаётся local RGB objects в slots/profile knots/library endpoints; Visual palette остаётся art context. Технические config aliases выше не выбирают механику, renderer или цвет.
+Категория результата проходит strict Author enum без UI/category alias routing. VFX цвет задаётся local RGB objects в slots/profile knots/library endpoints; Visual palette остаётся art context. Config choices выше не выбирают механику, renderer или цвет.
 
 <a id="runtime"></a>
 

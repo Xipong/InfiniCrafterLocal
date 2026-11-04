@@ -8,9 +8,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from infini_local.web import server
+from infini_local.web import server_status as server
 from infini_local.pipelines.images import backends as IMAGE_BACKEND_PIPELINE
-from infini_local.core.images import config as visual_config
+from infini_local.services.sdcpp_service import SDCPP_SERVER_STATE
 from infini_local.services import sdcpp_backend
 
 
@@ -94,7 +94,7 @@ def _check_sdcpp_lora_file_tag_helper_and_prompt_suffix() -> None:
     assert sdcpp_backend.lora_tag_from_file(r"C:\Games\sdcpp\loras\terraria_items.safetensors", "") == "<lora:terraria_items:0.25>"
 
     cfg = sdcpp_backend.SdcppBackendConfig(
-        default_command_template=visual_config.SDCPP_DEFAULT_COMMAND_TEMPLATE,
+        default_command_template=sdcpp_backend.DEFAULT_COMMAND_TEMPLATE,
         command_mode="safe_args",
         server_exe=r"C:\Games\sdcpp\sd-server.exe",
         model=r"C:\Games\sdcpp\models\z-image.gguf",
@@ -177,7 +177,7 @@ def _check_shutdown_releases_the_owned_sdcpp_process(monkeypatch) -> None:
     from infini_local.services import combine_endpoint, sdcpp_service
     from infini_local.web import server_utility_routes
 
-    state = visual_config.SDCPP_SERVER_STATE
+    state = SDCPP_SERVER_STATE
     process = OwnedProcess()
     def completed_wait(**_kwargs):
         # Popen.wait() returning an exit code also makes subsequent poll terminal.
@@ -206,7 +206,7 @@ def _check_shutdown_releases_the_owned_sdcpp_process(monkeypatch) -> None:
     # Exercise the real route -> cleanup callback -> process owner. Wrappers and
     # module aliases may change, but shutdown must terminate the owned child.
     try:
-        assert server._utility_routes().handle_post(handler, "/shutdown?force=1", {})
+        assert server_utility_routes.handle_post(handler, "/shutdown?force=1", {})
         assert stopped.wait(5), "shutdown never completed"
     finally:
         for worker in workers:
@@ -223,18 +223,16 @@ def _check_shutdown_releases_the_owned_sdcpp_process(monkeypatch) -> None:
 def test_helper_health_does_not_probe_image_servers(monkeypatch, backend):
     monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "sdcpp_server_is_alive", lambda: pytest.fail("health performed a blocking image-server probe"))
     monkeypatch.setattr(server.visual_config, "IMAGE_BACKEND", backend)
-    monkeypatch.setattr(server, "_multiplayer_connect_info", lambda: {})
+    monkeypatch.setattr(server, "multiplayer_connect_info", lambda: {})
     monkeypatch.setattr(server, "llm_auth_snapshot", lambda: {"provider": "openai_codex", "model": "test-model"})
-    health = server._health_payload()
+    health = server.health_payload()
     assert health["ok"] is True
     assert health["sdcpp"]["serverAlive"] is None
     assert health["sdcpp"]["serverAliveProbed"] is False
 
 
 def _check_sdcpp_health_reads_canonical_state_fields() -> None:
-    import infini_local.core.images.config as pipeline_visual_config
-
-    state = pipeline_visual_config.SDCPP_SERVER_STATE
+    state = SDCPP_SERVER_STATE
     old_last_command = state.last_command
     old_last_start_error = state.last_start_error
     old_last_exit = state.last_exit
@@ -246,7 +244,7 @@ def _check_sdcpp_health_reads_canonical_state_fields() -> None:
         state.last_exit = {"returncode": 23, "signal": None}
         state.last_log_file = "/tmp/canonical-sdcpp.log"
 
-        health = server._health_payload()
+        health = server.health_payload()
 
         assert health["sdcpp"]["lastCommand"] == "test canonical command"
         assert health["sdcpp"]["lastStartError"] == "test canonical start error"

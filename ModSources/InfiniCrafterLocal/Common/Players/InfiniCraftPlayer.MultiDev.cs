@@ -1,4 +1,5 @@
 #nullable enable
+using InfiniCrafterLocal.Common;
 using InfiniCrafterLocal.Common.Config;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Services;
@@ -242,7 +243,7 @@ public sealed partial class InfiniCraftPlayer
 
         try
         {
-            GeneratorClient.PreparedGenerationRequest request = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Generator.Prepare(
+            GeneratorClient.PreparedGenerationRequest request = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Generator.PrepareDeferred(
                 a,
                 b,
                 Player,
@@ -489,7 +490,7 @@ public sealed partial class InfiniCraftPlayer
         try
         {
             var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
-            packet.Write(PacketCancelServerCraft);
+            packet.Write(InfiniNetPacketIds.CancelServerCraft);
             WriteRemoteStationScope(packet);
             packet.Write(_stationEscrowClientId);
             packet.Write(job.RequestId);
@@ -516,7 +517,7 @@ public sealed partial class InfiniCraftPlayer
         try
         {
             var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
-            packet.Write(PacketRequestServerCraft);
+            packet.Write(InfiniNetPacketIds.RequestServerCraft);
             WriteRemoteStationScope(packet);
             packet.Write(_stationEscrowClientId);
             packet.Write(requestId ?? "");

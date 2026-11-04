@@ -11,7 +11,6 @@ namespace InfiniCrafterLocal.Common.Commands;
 public sealed partial class InfiniDumpCommand
 {
     private static RuntimeDumpExport? activeExport;
-    private static GeneratorClient.ParentSourceGraphCache? sourceGraphCache;
     private static DateTime nextProgressAt;
     private static bool notifyCompletion = true;
 
@@ -20,11 +19,7 @@ public sealed partial class InfiniDumpCommand
         if (activeExport is not { } export) return;
         if (!export.Completion.IsCompleted)
         {
-            if (sourceGraphCache is { } cache)
-            {
-                using (cache.Enter()) export.Pump();
-                if (export.CaptureFinished) { cache.Dispose(); sourceGraphCache = null; }
-            }
+            export.Pump();
             if (notifyCompletion && DateTime.UtcNow >= nextProgressAt)
             {
                 Main.NewText("InfiniCraft dump: " + export.Progress, 120, 220, 255);
@@ -33,7 +28,6 @@ public sealed partial class InfiniDumpCommand
             return;
         }
         activeExport = null;
-        sourceGraphCache?.Dispose(); sourceGraphCache = null;
         try
         {
             JsonObject manifest = export.Completion.GetAwaiter().GetResult();
@@ -64,9 +58,8 @@ public sealed partial class InfiniDumpCommand
         { if (notify) Main.NewText("InfiniCraft: no dump is running.", 120, 220, 255); return; }
         notifyCompletion = notify;
         if (notify)
-        { export.Cancel(); sourceGraphCache?.Dispose(); }
+        { export.Cancel(); }
         else export.RequestCancellation(); // Unload can run on the loader thread.
-        sourceGraphCache = null;
         if (notify) Main.NewText("InfiniCraft dump: cancelling. Previous snapshots are retained.", 255, 200, 120);
     }
 
@@ -85,7 +78,19 @@ public sealed partial class InfiniDumpCommand
 
 public sealed class InfiniDumpSystem : ModSystem
 {
-    public override void PostUpdateEverything() => InfiniDumpCommand.UpdateExport();
-    public override void OnWorldUnload() => InfiniDumpCommand.CancelExport(notify: false);
-    public override void Unload() => InfiniDumpCommand.UnloadExport();
+    public override void PostUpdateEverything()
+    {
+        GeneratorClient.ParentAnalysis.Pump();
+        InfiniDumpCommand.UpdateExport();
+    }
+    public override void OnWorldUnload()
+    {
+        InfiniDumpCommand.CancelExport(notify: false);
+        GeneratorClient.ParentAnalysis.Invalidate();
+    }
+    public override void Unload()
+    {
+        InfiniDumpCommand.UnloadExport();
+        GeneratorClient.ParentAnalysis.Invalidate();
+    }
 }

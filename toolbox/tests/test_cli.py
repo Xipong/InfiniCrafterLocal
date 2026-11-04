@@ -59,9 +59,20 @@ def test_cli_refuses_invalid_boundaries_before_bootstrap(monkeypatch, capsys, fl
     assert fragment in captured.err
 
 
+@pytest.mark.parametrize('key', ['INFINI_LLM_FALLBACK_MODEL', 'INFINI_LLM_REAUTHOR_TEMPERATURE'])
+def test_retired_config_is_refused_without_secret_values(monkeypatch, capsys, tmp_path, key):
+    config = tmp_path / 'private.env'
+    config.write_text(f'# infini-config-format: json-string-v1\n{key}=SECRET-OLD-VALUE\n')
+    code, captured = cli(monkeypatch, capsys, 'live10', '--config', config)
+    assert code == 2
+    assert key in captured.err
+    assert 'SECRET-OLD-VALUE' not in captured.out + captured.err
+    assert not (tmp_path / 'cache').exists()
+
+
 def test_private_config_is_checked_not_printed(monkeypatch, capsys, tmp_path):
     config = tmp_path / 'private.env'
-    config.write_text('INFINI_LLM_PROVIDER=openai_compat\nINFINI_OPENAI_COMPAT_MODEL=qa-model\nINFINI_OPENAI_COMPAT_API_KEY=TOP-SECRET\nINFINI_OPENAI_COMPAT_BASE_URL=https://example.invalid/v1/\n')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_LLM_PROVIDER=openai_compat\nINFINI_OPENAI_COMPAT_MODEL=qa-model\nINFINI_OPENAI_COMPAT_API_KEY=TOP-SECRET\nINFINI_OPENAI_COMPAT_BASE_URL=https://example.invalid/v1/\n'))
     code, captured = cli(monkeypatch, capsys, 'live10', '--config', config, '--expected-model', 'wrong')
     assert code == 2
     assert 'model' in captured.err.lower()
@@ -96,7 +107,7 @@ def test_deliberate_run_dispatches_canonical_harness_and_propagates_status(monke
     subprocess.run(['git', '-C', str(project), '-c', 'user.name=QA', '-c', 'user.email=qa@example.invalid', 'commit', '--allow-empty', '-qm', 'fixture'], check=True)
     head = subprocess.check_output(['git', '-C', str(project), 'rev-parse', 'HEAD'], text=True).strip()
     config = tmp_path / 'private.env'
-    config.write_text('INFINI_LLM_PROVIDER=openai_compat\nINFINI_OPENAI_COMPAT_MODEL=qa-model\nINFINI_OPENAI_COMPAT_BASE_URL=https://example.invalid/v1\nINFINI_LLM_API_MODE=chat_completions\nINFINI_LLM_RESPONSE_FORMAT=json_object\n')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_LLM_PROVIDER=openai_compat\nINFINI_OPENAI_COMPAT_MODEL=qa-model\nINFINI_OPENAI_COMPAT_BASE_URL=https://example.invalid/v1\nINFINI_LLM_API_MODE=chat_completions\nINFINI_LLM_RESPONSE_FORMAT=json_object\n'))
     config.write_text(config.read_text() + '\nINFINI_USE_LLM=1\n')
     calls = []
     original_run = subprocess.run
@@ -170,7 +181,7 @@ def test_custom_cases_validate_real_fixture(monkeypatch, capsys, tmp_path, kind,
 @pytest.mark.parametrize('endpoint', ['https://secret:password@example.invalid', 'https://example.invalid/?token=secret'])
 def test_credentials_in_endpoint_are_refused_without_echo(monkeypatch, capsys, tmp_path, endpoint):
     config = tmp_path / 'private.env'
-    config.write_text('INFINI_OPENAI_COMPAT_BASE_URL=' + endpoint)
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_OPENAI_COMPAT_BASE_URL=' + endpoint))
     code, captured = cli(monkeypatch, capsys, 'live10', '--config', config)
     assert code == 2
     assert 'secret' not in captured.out + captured.err
@@ -195,7 +206,7 @@ def test_skip_config_does_not_read_operator_profile_unless_explicit(monkeypatch,
     project = tmp_path / 'source'
     (project / 'LocalGenerator/infini_local').mkdir(parents=True)
     config = project / 'LocalGenerator/config.env'
-    config.write_text('INFINI_OPENAI_COMPAT_MODEL=private-model\n')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_OPENAI_COMPAT_MODEL=private-model\n'))
     monkeypatch.setenv('INFINI_SKIP_CONFIG_FILE', '1')
     code, output = cli(monkeypatch, capsys, 'live10', '--project', project)
     assert code == 0

@@ -670,16 +670,12 @@ internal static partial class EngineRuntimeChecks
 
     private static bool ScheduleTestItemAction(GeneratedItemData data, RuntimeEntitySpec entity,
         RuntimeEventActionSpec action, Player owner, Vector2 position, Vector2 direction,
-        NPC? target, int damageDone, int childDepth, ref int remainingBudget)
+        NPC? target, int damageDone, int childDepth, RuntimeSpawnBudget budget)
     {
-        // The test's legacy ref-budget convenience must still provide a real
-        // item-use source; production scheduling never fabricates Misc lineage.
-        var budget = new RuntimeSpawnBudget(remainingBudget);
-        bool queued = RuntimeDelayedActionScheduler.TrySchedule(data, entity, action, owner,
+        // Production scheduling requires an item-use source and a shared budget.
+        return RuntimeDelayedActionScheduler.TrySchedule(data, entity, action, owner,
             owner.GetSource_ItemUse(new Item { type = ItemID.CopperShortsword, stack = 1 }),
             position, direction, target, damageDone, childDepth, budget);
-        remainingBudget = budget.Remaining;
-        return queued;
     }
 
     private static void DelayedActionsKeepOriginalOwner()
@@ -713,10 +709,10 @@ internal static partial class EngineRuntimeChecks
                         Mode = "target_to_owner", Strength = 2f, RadiusTiles = 10f,
                     };
                     action.NormalizeAndValidate();
-                    int budget = 8;
+                    var budget = new RuntimeSpawnBudget(8);
                     Equal(true, ScheduleTestItemAction(GeneratedItemData.Placeholder(), new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, action,
-                        owner, Vector2.Zero, Vector2.UnitX, target, 0, 0, ref budget), label + " queued");
-                    Equal(8, budget, label + " non-spawn action preserves budget");
+                        owner, Vector2.Zero, Vector2.UnitX, target, 0, 0, budget), label + " queued");
+                    Equal(8, budget.Remaining, label + " non-spawn action preserves budget");
                     AdvanceRuntimeWorldTick();
                     Equal(Vector2.Zero, target.velocity, label + " not before authored tick");
                     if (state == "inactive") owner.active = false;
@@ -795,10 +791,10 @@ internal static partial class EngineRuntimeChecks
                     Mode = mode, Strength = 2f, RadiusTiles = 10f,
                 };
                 action.NormalizeAndValidate();
-                int budget = 8;
+                var budget = new RuntimeSpawnBudget(8);
                 RuntimeProgramExecutor.ExecuteAction(GeneratedItemData.Placeholder(), new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, action, owner,
                     owner.GetSource_Misc("engine_pull_check"), new Vector2(64f, 0f), Vector2.UnitX,
-                    direct, 0, 0, ref budget);
+                    direct, 0, 0, budget);
                 bool ownerAuthority = ownerActive && (netMode == NetmodeID.SinglePlayer || netMode == NetmodeID.MultiplayerClient && local);
                 bool npcAuthority = netMode != NetmodeID.MultiplayerClient;
                 if (mode == "owner_to_target")
@@ -817,7 +813,7 @@ internal static partial class EngineRuntimeChecks
                     Equal(npcAuthority && targetState != "active" ? new Vector2(-2f, 0f) : Vector2.Zero,
                         nearby.velocity, label + " NPC mode area control");
                 }
-                Equal(8, budget, label + " does not consume spawn budget");
+                Equal(8, budget.Remaining, label + " does not consume spawn budget");
             }
             catch (Exception error) { failures.Add(error.Message); }
         }

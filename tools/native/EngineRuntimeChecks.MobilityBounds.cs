@@ -95,10 +95,10 @@ internal static partial class EngineRuntimeChecks
         var action = new RuntimeEventActionSpec {
             ActionCode = RuntimeEventActionCode.MoveOwner, Mode = "blink_to_event_position",
             RangeTiles = 120, CooldownTicks = 60, SafeTileOnly = safe };
-        int budget = 0;
+        var budget = new RuntimeSpawnBudget(0);
         RuntimeProgramExecutor.ExecuteAction(GeneratedItemData.Placeholder(), new RuntimeEntitySpec(), action,
             player, new EntitySource_Misc("mobility boundary regression"), target,
-            Vector2.UnitX, null, 0, 0, ref budget);
+            Vector2.UnitX, null, 0, 0, budget);
     }
 
     private static void RecallUsesNativeBedValidityAndRejectsInvalidSpawn()

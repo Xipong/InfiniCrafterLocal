@@ -64,7 +64,7 @@ codex_auth.auth_status = lambda: {'authenticated': False}
 from infini_local.desktop.settings_controller import SettingsController
 from infini_local.desktop.web_studio import StudioController, StudioServer
 config = Path(sys.argv[1])
-config.write_text('INFINI_USE_LLM=0\\nINFINI_IMAGE_BACKEND=off\\nINFINI_SDCPP_SERVER_AUTOSTART=0\\n')
+config.write_text('# infini-config-format: json-string-v1\\nINFINI_USE_LLM=0\\nINFINI_IMAGE_BACKEND=off\\nINFINI_SDCPP_SERVER_AUTOSTART=0\\n')
 app = SettingsController(config_path=config)
 server = StudioServer(Path(sys.argv[2]))
 try:
@@ -102,7 +102,7 @@ def test_live_http_guards_and_concurrent_receipts(studio):
     controller.tick()
     controller.tick()
     for identifier in identifiers:
-        receipt = controller.action_results[identifier]
+        receipt = controller.app.actions.results[identifier]
         assert receipt['status'] == 'succeeded'
         assert 'isolated-fixture-secret' not in receipt['result']['content']
 
@@ -126,7 +126,7 @@ def test_oauth_timeout_or_cancel_retires_receipt_without_live_auth(studio, monke
     monkeypatch.setattr(codex_auth, 'logout', lambda: pytest.fail('Cancelling a pending login must not delete a session'))
     controller.apply({'id': 'login', 'action': 'codexLogin', 'values': {}, 'extra': {}})
     assert entered.wait(1)
-    assert controller.action_results['login']['status'] == 'running'
+    assert controller.app.actions.results['login']['status'] == 'running'
     if cancel_login:
         controller.apply({'id': 'cancel', 'action': 'codexLogout', 'values': {}, 'extra': {}})
     deadline = time.monotonic() + 3
@@ -134,7 +134,7 @@ def test_oauth_timeout_or_cancel_retires_receipt_without_live_auth(studio, monke
         app.pump()
         time.sleep(0.01)
     assert not app._codex_login_running
-    receipt = controller.action_results['login']
+    receipt = controller.app.actions.results['login']
     assert receipt['status'] == 'failed'
     assert ('cancelled' if cancel_login else 'timed out') in receipt['message']
-    assert not app._studio_async_ids
+    assert not app.actions.pending_ids

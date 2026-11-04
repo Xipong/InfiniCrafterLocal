@@ -46,15 +46,10 @@ FIELDS = [
     _field('INFINI_OPENAI_COMPAT_API_KEY', 'Ключ API', 'providers', secret=True),
     _field('INFINI_OPENAI_COMPAT_MODEL', 'Модель API', 'providers'),
     _field('INFINI_LLM_API_MODE', 'LLM 1 API mode', 'providers', options=['auto', 'responses', 'chat_completions'], hint='auto сначала пробует /responses и запоминает поддержку; при отказе тот же self-contained packet идёт через /chat/completions.'),
-    _field('INFINI_LLM_FALLBACK_PROVIDER', 'Fallback provider', 'providers', options=['', 'local', 'openrouter', 'openai_compat'], hint='Пусто = использовать тот же провайдер, что и основной. Нужен только если хочешь при падении уйти на другой pipeline.'),
-    _field('INFINI_LLM_FALLBACK_MODEL', 'Fallback model', 'providers', hint='Пусто = fallback выключен. Если основная модель умерла по бабкам/сети, сервер попробует эту модель.'),
-    _field('INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER', 'OpenRouter provider slug', 'providers', hint='Отдельная фиксация upstream для OpenRouter fallback. Пусто = auto, не наследует основной slug. При фиксации основного профиля переход сюда запрещён.'),
-    _field('INFINI_LLM_FALLBACK_BASE_URL', 'Fallback base URL', 'providers', hint='Пусто = взять base URL от fallback provider по умолчанию/из основных полей.'),
-    _field('INFINI_LLM_FALLBACK_API_KEY', 'Fallback API key', 'providers', hint='Пусто = использовать основной ключ выбранного fallback provider.', secret=True),
-    _field('INFINI_LLM_FALLBACK_NETWORK_FAILS', 'Fallback after transport fails', 'providers', hint='Сколько сетевых/timeout падений подряд терпеть на основной модели, прежде чем уходить на fallback. По умолчанию 2.'),
+    _field('INFINI_LLM_NETWORK_ATTEMPTS', 'Сетевые попытки', 'providers', hint='1 запрещает повтор и failover. Дополнительные провайдеры настраиваются в LLM pool.'),
     _field('INFINI_LLM_RESPONSE_FORMAT', 'Response format', 'providers', options=['auto', 'json_schema', 'json_object', 'off']),
     _field('INFINI_LLM_TEMPERATURE', 'Разнообразие ответа', 'providers', hint='Температура основной LLM, которая пишет gameplay/runtime contract. 0.30-0.45: стабильнее; 0.55-0.75: разнообразнее, но выше риск мусора в контракте. Не относится к fallback-модели.'),
-    _field('INFINI_LLM_REAUTHOR_TEMPERATURE', 'Температура исправлений', 'providers', hint='Пусто = 0.12. Обычно 0.0-0.2 для scoped Repair; явно заданный INFINI_LLM_REPAIR_TEMPERATURE имеет приоритет.'),
+    _field('INFINI_LLM_REPAIR_TEMPERATURE', 'Температура исправлений', 'providers', hint='Пусто = 0.12. Обычно 0.0-0.2 для scoped Repair.'),
     _field('INFINI_VISUAL_DIRECTOR_TEMPERATURE', 'Разнообразие образа', 'providers', hint='Температура отдельного LLM Visual Director для image prompts/visual kit. Это не sd.cpp temperature и не fallback; на sampler не влияет.'),
     _field('INFINI_CODEX_VISUAL_REASONING', 'Visual Director effort', 'providers', options=['inherit', 'model_default', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'], hint='Отдельный reasoning текстового Visual Director; inherit = усилие основной LLM, model_default = без effort в запросе; не image-модель.'),
     _field('INFINI_LLM_MAX_TOKENS', 'Бюджет ответа (токены)', 'providers', hint='Другие провайдеры: бюджет ответа. Codex /responses не принимает max_output_tokens: поле не отправляется и не ограничивает квоту; применяются только временные/байтовые ограничения.'),
@@ -180,8 +175,8 @@ def disabled_reasons(values, lan_enabled=False):
     set_field_enabled('INFINI_CODEX_LLM_MODEL', provider == 'openai_codex' and llm_enabled, 'Текстовая Codex-модель используется только при LLM provider=openai_codex и Use LLM=1.')
     set_field_enabled('INFINI_CODEX_VISUAL_REASONING', provider == 'openai_codex' and llm_enabled, 'Reasoning Visual Director используется только при текстовом Codex provider.')
     set_field_enabled('INFINI_LLM_MAX_TOKENS', provider != 'openai_codex', 'Codex /responses отвергает max_output_tokens; числовой лимит не отправляется и не ограничивает квоту.')
-    for key in ('INFINI_LLM_TEMPERATURE', 'INFINI_LLM_REAUTHOR_TEMPERATURE', 'INFINI_VISUAL_DIRECTOR_TEMPERATURE'):
-        enabled = provider != 'openai_codex' and (llm_enabled or key != 'INFINI_LLM_REAUTHOR_TEMPERATURE')
+    for key in ('INFINI_LLM_TEMPERATURE', 'INFINI_LLM_REPAIR_TEMPERATURE', 'INFINI_VISUAL_DIRECTOR_TEMPERATURE'):
+        enabled = provider != 'openai_codex' and (llm_enabled or key != 'INFINI_LLM_REPAIR_TEMPERATURE')
         reason = 'Codex /responses не принимает temperature; значение сохраняется для других провайдеров.' if provider == 'openai_codex' else 'Use LLM=0; scoped same-author repair не вызывается.'
         set_field_enabled(key, enabled, reason)
     set_field_enabled('INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD', attack_consumable_debug, 'Debug minimum выключен; поставь галочку выше, чтобы выбрать batch size.')
@@ -190,8 +185,6 @@ def disabled_reasons(values, lan_enabled=False):
         for suffix in ('PROVIDER', 'BASE_URL', 'API_KEY', 'MODEL', 'API_MODE'):
             set_field_enabled(f'INFINI_LLM_POOL_{slot}_{suffix}', enabled, f'LLM {slot} выключен; сначала установи Enabled = 1.')
         set_field_enabled(f'INFINI_LLM_POOL_{slot}_OPENROUTER_PROVIDER', enabled and value(f'INFINI_LLM_POOL_{slot}_PROVIDER', 'openai_compat').lower() == 'openrouter', 'Фиксация upstream доступна только для включённого OpenRouter профиля.')
-    fallback_provider = (value('INFINI_LLM_FALLBACK_PROVIDER', '') or provider).lower()
-    set_field_enabled('INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER', fallback_provider == 'openrouter' and bool(value('INFINI_LLM_FALLBACK_MODEL', '')), 'Нужны fallback model и OpenRouter в качестве fallback provider.')
     off_modes = {'', 'off', 'false', '0', 'disabled', 'disable', 'none', 'no_reasoning'}
     prompt_modes = {'prompt', 'prompt_light', 'prompt_strong', 'local_prompt', 'local_light', 'local_strong'}
     api_reasoning_active = provider != 'local' and reasoning_mode not in off_modes and (reasoning_mode not in prompt_modes)
