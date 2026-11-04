@@ -96,7 +96,7 @@ def llm_auth_snapshot() -> dict[str, Any]:
     This is intentionally config-only; it does not call remote APIs. It makes the
     common failure mode visible: OpenRouter selected, but no API key is loaded.
     """
-    primary = profiles._legacy_primary_llm_context()
+    primary = profiles._configured_primary_llm_context()
     provider = profiles.active_llm_provider(primary)
     pool_view = [
         {
@@ -115,17 +115,6 @@ def llm_auth_snapshot() -> dict[str, Any]:
         }
         for context in profiles.configured_llm_pool()
     ]
-    fallback = profiles._fallback_llm_context()
-    fallback_view = None
-    if fallback is not None:
-        fallback_view = {
-            "provider": fallback.get("provider"),
-            "baseUrl": fallback.get("base_url"),
-            "model": fallback.get("model"),
-            "apiKeyConfigured": bool(fallback.get("api_key")) if fallback.get("provider") in {"openrouter", "openai_compat"} else None,
-            "networkFailsBeforeSwitch": config.LLM_FALLBACK_NETWORK_FAILS,
-            "openrouterProvider": profiles._openrouter_provider(fallback),
-        }
     if provider == "openrouter":
         configured = bool(primary.get("api_key"))
         return {
@@ -136,7 +125,6 @@ def llm_auth_snapshot() -> dict[str, Any]:
             "apiKeyConfigured": configured,
             "status": "configured" if configured else "missing_api_key",
             "hint": "OK" if configured else "Set INFINI_OPENROUTER_API_KEY in config.env or choose the local LM Studio preset.",
-            "fallback": fallback_view,
             "pool": pool_view,
         }
     if provider == "openai_compat":
@@ -148,7 +136,6 @@ def llm_auth_snapshot() -> dict[str, Any]:
             "apiKeyConfigured": configured,
             "status": "configured" if configured else "missing_or_optional_api_key",
             "hint": "Set INFINI_OPENAI_COMPAT_API_KEY if your compatible endpoint requires Bearer auth.",
-            "fallback": fallback_view,
             "pool": pool_view,
         }
     if provider == "openai_codex":
@@ -164,7 +151,6 @@ def llm_auth_snapshot() -> dict[str, Any]:
             "apiKeyConfigured": None,
             "status": status,
             "hint": "Refresh the subscription catalog and select a model; status alone does not verify account access.",
-            "fallback": fallback_view,
             "pool": pool_view,
         }
     return {
@@ -174,7 +160,6 @@ def llm_auth_snapshot() -> dict[str, Any]:
         "apiKeyConfigured": None,
         "status": "local_endpoint_required",
         "hint": "LM Studio must be running and exposing /v1 on the configured URL.",
-        "fallback": fallback_view,
         "pool": pool_view,
     }
 
@@ -675,7 +660,7 @@ def _llm_json_single_context_with_length_retry(
     # content retry may silently turn one logical stage into a second HTTP
     # request. The malformed response is returned to the caller for normal
     # domain failure accounting.
-    if int(config.LLM_FALLBACK_NETWORK_FAILS or 2) <= 1:
+    if int(config.LLM_NETWORK_ATTEMPTS or 2) <= 1:
         return result
 
     retry_payload = copy.deepcopy(payload)
@@ -733,7 +718,7 @@ def llm_chat_json(payload: dict[str, Any], timeout: float = 10) -> dict[str, Any
                 if not _is_profile_failover_failure(profile_error):
                     raise
                 profiles._mark_profile_failed(context, profile_error)
-                if int(config.LLM_FALLBACK_NETWORK_FAILS or 2) <= 1:
+                if int(config.LLM_NETWORK_ATTEMPTS or 2) <= 1:
                     raise
                 next_context = profiles._next_lease_profile(lease, attempted)
                 if next_context is None:
@@ -743,11 +728,6 @@ def llm_chat_json(payload: dict[str, Any], timeout: float = 10) -> dict[str, Any
                 profiles._switch_lease_profile(lease, next_context, profile_error)
 
     primary = profiles._primary_llm_context()
-    fallback = (
-        profiles._fallback_llm_context()
-        if not profiles._openrouter_provider(primary) and (lease is None or lease.legacy_fallback_allowed)
-        else None
-    )
     primary_payload = payload
     if lease is not None and lease.profile_id != lease.initial_profile_id:
         primary_payload = _payload_without_model_override(payload)
@@ -756,70 +736,29 @@ def llm_chat_json(payload: dict[str, Any], timeout: float = 10) -> dict[str, Any
         return finish(result, primary_payload)
     except Exception as first_error:
         remaining_seconds(diagnostics._request_deadline(timeout))
-        if not fallback:
-            if not rejections._is_transport_error(first_error):
-                raise
-            last_error = first_error
-            retry_causes: list[str] = []
-            total_attempts = max(1, int(config.LLM_FALLBACK_NETWORK_FAILS or 2))
-            for attempt in range(2, total_attempts + 1):
-                retry_causes.append("transient_http")
-                diagnostics._attempt_reason("transient_http")
-                delay = min(1.5, 0.2 * (2 ** (attempt - 2)))
-                log_event("warn", "retrying transient LLM failure without fallback", {
-                    "attempt": attempt,
-                    "maxAttempts": total_attempts,
-                    "delaySeconds": delay,
-                    "provider": profiles.active_llm_provider(primary),
-                    "model": primary.get("model"),
-                    "status": getattr(last_error, "code", None),
-                })
-                _llm_backoff(delay)
-                try:
-                    result = _llm_json_single_context_with_length_retry(primary_payload, timeout, primary)
-                    return finish(_with_transport_retry_debug(result, retry_causes), primary_payload)
-                except Exception as retry_error:
-                    last_error = retry_error
-                    if not rejections._is_transport_error(retry_error):
-                        raise
-            raise last_error
-
-        if rejections._is_budget_or_auth_failure(first_error):
-            log_event("warn", "LLM primary failed; switching to fallback", {"reason": "budget_or_auth", "primaryProvider": profiles.active_llm_provider(primary), "primaryModel": primary.get("model"), "fallbackProvider": profiles.active_llm_provider(fallback), "fallbackModel": fallback.get("model")})
-            diagnostics._attempt_reason("legacy_fallback")
-            profiles._switch_lease_to_legacy_fallback(lease, fallback)
-            fallback_payload = _payload_without_model_override(payload)
-            result = _llm_json_single_context_with_length_retry(fallback_payload, timeout, fallback)
-            return finish(_with_transport_retry_debug(result, ["budget_or_auth_fallback"]), fallback_payload)
-
-        if rejections._is_transport_error(first_error):
-            last_error = first_error
-            retry_causes = []
-            total_attempts = max(1, int(config.LLM_FALLBACK_NETWORK_FAILS or 2))
-            for attempt in range(2, total_attempts + 1):
-                retry_causes.append("primary_transport")
-                diagnostics._attempt_reason("primary_transport")
-                try:
-                    log_event("warn", "retrying primary LLM transport before fallback", {"attempt": attempt, "maxAttempts": total_attempts, "provider": profiles.active_llm_provider(primary), "model": primary.get("model")})
-                    result = _llm_json_single_context_with_length_retry(primary_payload, timeout, primary)
-                    return finish(_with_transport_retry_debug(result, retry_causes), primary_payload)
-                except Exception as retry_error:
-                    last_error = retry_error
-                    if rejections._is_budget_or_auth_failure(retry_error):
-                        log_event("warn", "LLM primary changed from transport failure to budget/auth failure; switching to fallback", {"provider": profiles.active_llm_provider(primary), "fallbackProvider": profiles.active_llm_provider(fallback), "fallbackModel": fallback.get("model")})
-                        diagnostics._attempt_reason("legacy_fallback")
-                        profiles._switch_lease_to_legacy_fallback(lease, fallback)
-                        fallback_payload = _payload_without_model_override(payload)
-                        result = _llm_json_single_context_with_length_retry(fallback_payload, timeout, fallback)
-                        retry_causes.append("budget_or_auth_fallback")
-                        return finish(_with_transport_retry_debug(result, retry_causes), fallback_payload)
-                    if not rejections._is_transport_error(retry_error):
-                        raise
-            log_event("warn", "LLM primary transport failed repeatedly; switching to fallback", {"attempts": total_attempts, "primaryProvider": profiles.active_llm_provider(primary), "primaryModel": primary.get("model"), "fallbackProvider": profiles.active_llm_provider(fallback), "fallbackModel": fallback.get("model")})
-            diagnostics._attempt_reason("legacy_fallback")
-            profiles._switch_lease_to_legacy_fallback(lease, fallback)
-            fallback_payload = _payload_without_model_override(payload)
-            result = _llm_json_single_context_with_length_retry(fallback_payload, timeout, fallback)
-            retry_causes.append("primary_transport_fallback")
-            return finish(_with_transport_retry_debug(result, retry_causes), fallback_payload)
-        raise
+        if not rejections._is_transport_error(first_error):
+            raise
+        last_error = first_error
+        retry_causes: list[str] = []
+        total_attempts = max(1, int(config.LLM_NETWORK_ATTEMPTS or 2))
+        for attempt in range(2, total_attempts + 1):
+            retry_causes.append("transient_http")
+            diagnostics._attempt_reason("transient_http")
+            delay = min(1.5, 0.2 * (2 ** (attempt - 2)))
+            log_event("warn", "retrying transient LLM failure on selected profile", {
+                "attempt": attempt,
+                "maxAttempts": total_attempts,
+                "delaySeconds": delay,
+                "provider": profiles.active_llm_provider(primary),
+                "model": primary.get("model"),
+                "status": getattr(last_error, "code", None),
+            })
+            _llm_backoff(delay)
+            try:
+                result = _llm_json_single_context_with_length_retry(primary_payload, timeout, primary)
+                return finish(_with_transport_retry_debug(result, retry_causes), primary_payload)
+            except Exception as retry_error:
+                last_error = retry_error
+                if not rejections._is_transport_error(retry_error):
+                    raise
+        raise last_error

@@ -136,7 +136,7 @@ backend, без agent bridge. Нужны все обычные `--expected-*` а
 `--expected-image-model`, `--expected-image-quality`, `--expected-image-size`,
 `--expected-reasoning-effort`, `--attempt-budget` и `--parallel-crafts 1`.
 Endpoint expectation: `https://chatgpt.com/backend-api/codex/`.
-`INFINI_LLM_FALLBACK_NETWORK_FAILS=1`; `INFINI_SPRITE_RETRIES` должен совпасть с явным
+`INFINI_LLM_NETWORK_ATTEMPTS=1`; `INFINI_SPRITE_RETRIES` должен совпасть с явным
 `--image-retries` (по умолчанию0). Автоматических whole-craft повторов нет.
 
 Ledger должен быть заранее инициализирован владельцем кампании: CLI не создаёт и

@@ -25,6 +25,9 @@ from urllib.parse import urlsplit, urlunsplit
 from infini_local.services.visual_asset_pipeline import ImageOutputIOError, write_image_bytes
 
 
+DEFAULT_COMMAND_TEMPLATE = "{exe} --diffusion-model {model} -l {host} --listen-port {port} -W {width} -H {height} --steps {steps} --cfg-scale {cfg} --sampling-method {sampler} {extra}"
+
+
 @dataclass(frozen=True)
 class SdcppBackendConfig:
     default_command_template: str
@@ -150,10 +153,6 @@ def repair_command_template(template: str, default_template: str) -> tuple[str, 
             reasons.append("missing_required_placeholders")
         return default_template, True, "+".join(reasons)
     return raw, False, ""
-
-
-def command_mode_is_template(command_mode: str) -> bool:
-    return str(command_mode or "").strip().lower() in {"template", "raw_template", "custom_template"}
 
 
 def executable_path_for_subprocess(value: str) -> str:
@@ -338,7 +337,10 @@ def server_is_alive(server_url: str, health_paths: list[str], timeout: int = 2, 
 def build_server_command(cfg: SdcppBackendConfig, command_template: str = "") -> tuple[list[str] | str, bool]:
     """Build long-lived stable-diffusion.cpp server command."""
     extra = effective_extra_args(cfg)
-    if command_mode_is_template(cfg.command_mode):
+    mode = str(cfg.command_mode).strip().lower()
+    if mode not in {"safe_args", "template"}:
+        raise ValueError("INFINI_SDCPP_SERVER_COMMAND_MODE must be safe_args or template")
+    if mode == "template":
         template, _repaired, _reason = repair_command_template(command_template, cfg.default_command_template)
         mapping = {
             "exe": quote_cmd_arg(cfg.server_exe),
@@ -354,16 +356,7 @@ def build_server_command(cfg: SdcppBackendConfig, command_template: str = "") ->
         }
         return template.format(**mapping), True
 
-    exe = cfg.server_exe
-    exe_name = Path(exe).name.lower() if exe else ""
-    if "sd-server" in exe_name or exe_name in {"server.exe", "server"}:
-        args = base_arg_list(cfg)
-    else:
-        # Conservative legacy default. If the binary does not support --server,
-        # callers can set command mode=template.
-        args = [exe, "--server", "-m", cfg.model, "--host", cfg.host, "--port", str(cfg.port)]
-    args += effective_extra_arg_list(cfg)
-    return args, False
+    return base_arg_list(cfg) + effective_extra_arg_list(cfg), False
 
 
 def stringify_cmd(cmd: list[str] | str) -> str:

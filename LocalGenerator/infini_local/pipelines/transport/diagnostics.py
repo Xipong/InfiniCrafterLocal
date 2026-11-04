@@ -56,10 +56,10 @@ def _bounded_llm_call(call):
             token = _CURRENT_LLM_DEADLINE.set(deadline)
         diagnostic_token = None
         state = None
-        if call.__name__ == "llm_chat_json" and _CURRENT_LLM_DIAGNOSTICS.get() is None:
-            state = _new_llm_diagnostics(payload)
-            diagnostic_token = _CURRENT_LLM_DIAGNOSTICS.set(state)
         try:
+            if call.__name__ == "llm_chat_json" and _CURRENT_LLM_DIAGNOSTICS.get() is None:
+                state = _new_llm_diagnostics(payload)
+                diagnostic_token = _CURRENT_LLM_DIAGNOSTICS.set(state)
             remaining_seconds(deadline)
             result = call(payload, timeout, *args, **kwargs)
             if state is not None:

@@ -60,7 +60,7 @@ def codex_image(monkeypatch, tmp_path):
     from infini_local.pipelines.images import backends as backend
     from infini_local.pipelines.images import stage as generation
     from PIL import Image, ImageDraw
-    for name, value in {"INFINI_SPRITE_RETRIES": "1", "INFINI_LLM_FALLBACK_NETWORK_FAILS": "2"}.items():
+    for name, value in {"INFINI_SPRITE_RETRIES": "1", "INFINI_LLM_NETWORK_ATTEMPTS": "2"}.items():
         monkeypatch.setenv(name, value)
     for name, value in {"IMAGE_BACKEND": "openai_codex", "IMAGE_BACKEND_CONFIG_ERROR": "", "SPRITE_RETRIES": 1,
                         "VISUAL_STRICT_AI_AUTHORSHIP": True, "VISUAL_ALLOW_PROCEDURAL_FALLBACK": False}.items():
@@ -121,7 +121,7 @@ def test_image_503_replays_exact_request_without_touching_valid_gameplay_or_asse
 def test_text_503_has_one_transport_owner_and_one_logical_author_stage(monkeypatch):
     from infini_local.pipelines.transport import client as llm
     from infini_local.services import codex_text_backend as text
-    monkeypatch.setenv("INFINI_LLM_FALLBACK_NETWORK_FAILS", "2")
+    monkeypatch.setenv("INFINI_LLM_NETWORK_ATTEMPTS", "2")
     monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
     monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "synthetic-codex-model")
     monkeypatch.setattr(transport_http, "http_json", lambda *_a, **_k: pytest.fail("paid transport called"))
@@ -174,7 +174,7 @@ def test_connection_loss_during_body_retries_same_request_with_fresh_response(mo
             return io.BytesIO(b'{"ok":true}' if transport == "image" else event)
     monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *_args: Opener())
     monkeypatch.setenv("INFINI_SPRITE_RETRIES", "1")
-    monkeypatch.setenv("INFINI_LLM_FALLBACK_NETWORK_FAILS", "2")
+    monkeypatch.setenv("INFINI_LLM_NETWORK_ATTEMPTS", "2")
     result = (auth.post_json if transport == "image" else auth.post_sse)(url, payload, timeout=3)
     assert result == ({"ok": True} if transport == "image" else {"status": "completed", "output": []})
     assert len(requests) == 2 and requests[0] == requests[1]
@@ -185,7 +185,7 @@ def test_incomplete_503_diagnostic_keeps_status_and_same_retry_budget(monkeypatc
     from infini_local.services.codex_text_backend import RESPONSES_URL
     calls = []
     monkeypatch.setenv("INFINI_SPRITE_RETRIES", "1")
-    monkeypatch.setenv("INFINI_LLM_FALLBACK_NETWORK_FAILS", "2")
+    monkeypatch.setenv("INFINI_LLM_NETWORK_ATTEMPTS", "2")
     class BrokenDiagnostic(io.BytesIO):
         def read1(self, *_args):
             raise IncompleteRead(b"synthetic diagnostic", 100)
@@ -231,7 +231,7 @@ def test_image_transport_budget_exhaustion_never_enters_semantic_retry(codex_ima
 @pytest.mark.parametrize("status,budget,expected_calls", [(503, 2, 2), (503, 1, 1), (401, 2, 1), (429, 2, 1), (400, 2, 1)])
 def test_text_terminal_failures_do_not_multiply_logical_or_physical_budget(monkeypatch, status, budget, expected_calls):
     from infini_local.pipelines.transport import client as llm
-    monkeypatch.setenv("INFINI_LLM_FALLBACK_NETWORK_FAILS", str(budget))
+    monkeypatch.setenv("INFINI_LLM_NETWORK_ATTEMPTS", str(budget))
     monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
     monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "synthetic-codex-model")
     monkeypatch.setattr(transport_http, "http_json", lambda *_a, **_k: pytest.fail("paid transport called"))

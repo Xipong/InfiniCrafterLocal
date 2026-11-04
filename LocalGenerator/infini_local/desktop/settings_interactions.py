@@ -26,7 +26,7 @@ def begin_action(app):
 def saved_config_revision(config_path, *, example_path=None):
     """Fingerprint the exact saved source, including fresh-install provenance."""
     import hashlib
-    from infini_local.desktop.settings_paths import EXAMPLE_PATH
+    from infini_local.core.app_paths import EXAMPLE_PATH
     existing = config_path.exists()
     path = config_path if existing else (EXAMPLE_PATH if example_path is None else example_path)
     return hashlib.sha256((b'config:' if existing else b'example:') + path.read_bytes()).hexdigest()

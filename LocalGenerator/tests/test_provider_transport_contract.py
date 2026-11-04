@@ -144,9 +144,7 @@ def wire(monkeypatch):
         OPENROUTER_API_KEY="synthetic-primary-key", OPENROUTER_PROVIDER=PIN,
         OPENAI_COMPAT_BASE_URL="https://primary.example/v1", OPENAI_COMPAT_MODEL="primary-model",
         OPENAI_COMPAT_API_KEY="synthetic-compat-key", LMSTUDIO_URL="http://primary.local:1234",
-        LMSTUDIO_MODEL="primary-local", LLM_POOL_PROFILES=(), LLM_FALLBACK_PROVIDER="",
-        LLM_FALLBACK_MODEL="", LLM_FALLBACK_BASE_URL="", LLM_FALLBACK_API_KEY="",
-        LLM_FALLBACK_OPENROUTER_PROVIDER="", LLM_FALLBACK_NETWORK_FAILS=2,
+        LMSTUDIO_MODEL="primary-local", LLM_POOL_PROFILES=(), LLM_NETWORK_ATTEMPTS=2,
     )
     monkeypatch.delenv("INFINI_LLM_REPLAY_RAW", raising=False)
     monkeypatch.setattr(transport, "log_event", lambda *_args, **_kwargs: None)
@@ -165,8 +163,7 @@ def loopback_transport(monkeypatch):
     recorder.configure(
         LLM_PROVIDER="openrouter", LLM_API_MODE="chat_completions",
         OPENROUTER_MODEL="vendor/model", OPENROUTER_API_KEY="synthetic-loopback-key",
-        OPENROUTER_PROVIDER=PIN, LLM_POOL_PROFILES=(), LLM_FALLBACK_MODEL="",
-        LLM_FALLBACK_NETWORK_FAILS=2,
+        OPENROUTER_PROVIDER=PIN, LLM_POOL_PROFILES=(), LLM_NETWORK_ATTEMPTS=2,
     )
     monkeypatch.delenv("INFINI_LLM_REPLAY_RAW", raising=False)
     monkeypatch.setenv("NO_PROXY", "127.0.0.1,localhost")
@@ -431,7 +428,8 @@ def test_codex_stream_boundary_reports_only_owned_observations_without_generic_h
     from infini_local.services import codex_text_backend as codex
     from infini_local.services.codex_auth import CodexError
     wire.configure(LLM_PROVIDER="openai_codex", CODEX_LLM_MODEL="gpt-5.4", LLM_API_MODE="responses",
-                   LLM_FALLBACK_PROVIDER="openrouter", LLM_FALLBACK_MODEL="must-not-be-used")
+                   LLM_POOL_PROFILES=({"id": "llm_2", "enabled": True, "provider": "openrouter",
+                                      "model": "must-not-be-used"},))
     seen = []
     def generate(prepared, *, timeout):
         seen.append((copy.deepcopy(prepared), timeout))
@@ -522,7 +520,7 @@ def test_profile_selection_persists_for_every_stage(wire, preferred):
         try:
             selected.append(lease.profile_id)
             if preferred:
-                assert lease.pool_size == 1 and not lease.legacy_fallback_allowed
+                assert lease.pool_size == 1
                 assert lease.initial_profile_id == "llm_2"
             for stage in ("visual_director", "vfx_director"):
                 transport.llm_chat_json(packet(stage), timeout=1)
@@ -561,7 +559,7 @@ def test_responses_chain_keeps_full_authored_stage_dossier(wire):
 
 @pytest.mark.parametrize("mode,lease_mode,failure", [
     pytest.param("chat_completions", "pool", 402, id="quota-cannot-hop-pinned-pool"),
-    pytest.param("responses", "legacy_lease", 401, id="auth-cannot-use-fallback"),
+    pytest.param("responses", "single_lease", 401, id="auth-cannot-use-fallback"),
     pytest.param("chat_completions", "no_lease", "network", id="network-fails-on-selected-pin"),
     pytest.param("responses", "pool", "envelope", id="malformed-envelope-cannot-hop"),
 ])
@@ -569,9 +567,7 @@ def test_strict_pin_failure_never_crosses_profile_boundary(wire, mode, lease_mod
     profiles = ({"id": "llm_2", "enabled": True, "provider": "openrouter",
         "base_url": "https://secondary.example/v1", "model": "vendor/secondary",
         "api_mode": mode, "openrouter_provider": "OtherVendor/Secondary"},) if lease_mode == "pool" else ()
-    wire.configure(LLM_API_MODE=mode, LLM_POOL_PROFILES=profiles, LLM_FALLBACK_PROVIDER="openrouter",
-                   LLM_FALLBACK_MODEL="vendor/fallback", LLM_FALLBACK_BASE_URL="https://fallback.example/v1",
-                   LLM_FALLBACK_OPENROUTER_PROVIDER="OtherVendor/Fallback")
+    wire.configure(LLM_API_MODE=mode, LLM_POOL_PROFILES=profiles)
     reply = urllib.error.URLError("synthetic connection reset") if failure == "network" else failure
     if failure == "envelope":
         reply = {"status": "failed"} if mode == "responses" else {"choices": []}
@@ -595,16 +591,13 @@ def test_strict_pin_failure_never_crosses_profile_boundary(wire, mode, lease_mod
     assert llm_profiles.current_llm_item_lease() is None
 
 
-@pytest.mark.parametrize("target", ["pool", "legacy"], ids=["pool-adopts-target", "credit-adopts-legacy"])
-def test_failover_adopts_target_for_later_stages(wire, target):
+@pytest.mark.parametrize("failure", [503, 402], ids=["transport-adopts-pool", "quota-adopts-pool"])
+def test_failover_adopts_target_for_later_stages(wire, failure):
     secondary = {"id": "llm_2", "enabled": True, "provider": "openrouter",
         "base_url": "https://secondary.example/v1", "model": "vendor/secondary",
         "api_mode": "chat_completions", "api_key": "synthetic-secondary", "openrouter_provider": "TargetVendor/Endpoint"}
-    wire.configure(OPENROUTER_PROVIDER="", LLM_POOL_PROFILES=(secondary,) if target == "pool" else (),
-        LLM_FALLBACK_PROVIDER="openrouter", LLM_FALLBACK_MODEL="vendor/secondary",
-        LLM_FALLBACK_BASE_URL=secondary["base_url"], LLM_FALLBACK_API_KEY=secondary["api_key"],
-        LLM_FALLBACK_OPENROUTER_PROVIDER=secondary["openrouter_provider"])
-    wire.replies.append(503 if target == "pool" else 402)
+    wire.configure(OPENROUTER_PROVIDER="", LLM_POOL_PROFILES=(secondary,))
+    wire.replies.append(failure)
     with llm_profiles.llm_item_lease("failover-item") as lease:
         for stage in ("visual_director", "vfx_director"):
             request = packet(stage)
@@ -626,7 +619,7 @@ def test_failover_adopts_target_for_later_stages(wire, target):
     pytest.param("visual_director", "responses", 2, id="visual-bounded-content-retry"),
 ])
 def test_content_retry_keeps_selected_pin_model_and_logical_call(wire, stage, mode, attempts):
-    wire.configure(LLM_API_MODE=mode, LLM_FALLBACK_NETWORK_FAILS=attempts)
+    wire.configure(LLM_API_MODE=mode, LLM_NETWORK_ATTEMPTS=attempts)
     first = {"id": "resp_partial", "output_text": "{"} if mode == "responses" else {
         "choices": [{"finish_reason": "length", "message": {"content": "{"}}]}
     wire.replies.append(first)
@@ -658,8 +651,7 @@ def test_content_retry_keeps_selected_pin_model_and_logical_call(wire, stage, mo
     pytest.param("openrouter", "responses", 2, id="transient-retries-same-route"),
 ])
 def test_transient_retry_budget_never_changes_selected_route(wire, provider, mode, attempts):
-    wire.configure(LLM_PROVIDER=provider, LLM_API_MODE=mode, LLM_FALLBACK_NETWORK_FAILS=attempts,
-                   LLM_FALLBACK_PROVIDER="openai_compat", LLM_FALLBACK_MODEL="paid-fallback" if provider == "openrouter" else "")
+    wire.configure(LLM_PROVIDER=provider, LLM_API_MODE=mode, LLM_NETWORK_ATTEMPTS=attempts)
     wire.replies.append(503)
     request = packet("vfx_director")
     request[llm_provider_wire.LLM_MODEL_OVERRIDE_KEY] = "override/retry"
@@ -872,7 +864,7 @@ def test_real_urllib_quota_headers_reach_logical_diagnostics(loopback_transport,
                "ChatGPT-Account-Id": "synthetic-account-id"}
     base, observed = endpoint([{"status": status, "headers": headers}])
     monkeypatch.setattr(llm_config, "OPENROUTER_BASE_URL", base)
-    monkeypatch.setattr(llm_config, "LLM_FALLBACK_NETWORK_FAILS", 1)
+    monkeypatch.setattr(llm_config, "LLM_NETWORK_ATTEMPTS", 1)
     if status == 200:
         debug = transport.llm_chat_json(packet(), timeout=1)["_debug"]
     else:
@@ -1039,3 +1031,27 @@ def test_a1111_image_json_does_not_inherit_text_response_ceiling(loopback_transp
     paths = images.generate_a1111("literal", "", "batch", output_dir=tmp_path)
     assert len(paths) == 1
     assert Path(paths[0]).read_bytes() == png
+
+
+@pytest.mark.parametrize("provider", ["openai", "api", "remote", "or", "lmstudio", "lm_studio", "ollama", "typo"])
+def test_retired_provider_names_refuse_before_transport(wire, provider):
+    wire.configure(LLM_PROVIDER=provider)
+    with pytest.raises(ValueError, match="must be local, openrouter, openai_compat or openai_codex"):
+        transport.llm_chat_json(packet(), timeout=1)
+    assert wire.calls == []
+    assert transport_diagnostics._CURRENT_LLM_DEADLINE.get() is None
+    wire.configure(LLM_PROVIDER="openrouter")
+    assert transport.llm_chat_json(packet(), timeout=1)["choices"][0]["message"]["content"] == "{}"
+    assert len(wire.calls) == 1
+
+
+@pytest.mark.parametrize("mode", ["chat", "response", "chat_completion", "completions", "typo"])
+def test_retired_api_modes_refuse_before_transport(wire, mode):
+    wire.configure(LLM_API_MODE=mode)
+    with pytest.raises(ValueError, match="API mode must be"):
+        transport.llm_chat_json(packet(), timeout=1)
+    assert wire.calls == []
+    assert transport_diagnostics._CURRENT_LLM_DEADLINE.get() is None
+    wire.configure(LLM_API_MODE="chat_completions")
+    assert transport.llm_chat_json(packet(), timeout=1)["choices"][0]["message"]["content"] == "{}"
+    assert len(wire.calls) == 1

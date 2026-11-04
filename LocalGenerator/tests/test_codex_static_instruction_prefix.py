@@ -318,7 +318,6 @@ def test_user_json_cannot_self_declare_instruction_authority(native_wire):
 def test_public_dispatch_keeps_one_request_and_no_fallback(monkeypatch, native_wire, authorized, failure):
     source = packet(authorized=authorized)
     monkeypatch.setattr(llm_profiles, "_primary_llm_context", lambda: CONTEXT)
-    monkeypatch.setattr(llm_profiles, "_fallback_llm_context", lambda: pytest.fail("subscription fallback attempted"))
     if failure:
         class RefusedOpener:
             def open(self, request, timeout):

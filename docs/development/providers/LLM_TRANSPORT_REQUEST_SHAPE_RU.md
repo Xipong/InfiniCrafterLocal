@@ -34,7 +34,7 @@ Debug: `strictSchemaDowngraded=true`, cause `json_schema_to_json_object_fallback
 
 У logical call один абсолютный `time.monotonic()` deadline: rate wait, открытие/headers, body/error reads, negotiation, retry/backoff и разрешённый failover расходуют общий остаток, а не получают новый timeout. Непрерывная выдача малых порций не продлевает budget. Общий [HTTP I/O owner](../../../LocalGenerator/infini_local/core/http_io.py) не выбирает provider, не делает retries и не заменяет отдельный Codex/SSE adapter. Отмена блокирующего системного DNS resolver не реализована.
 
-[OpenRouter pin](../../user/OPENROUTER_ROUTING_RU.md#что-именно-запрещает-этот-выбор) запрещает другой профиль/legacy fallback, но сохраняется при same-upstream envelope/API downgrade. Основной Codex не уходит на paid API. Unpinned pool/lease/cooldown и legacy резерв — отдельная явно настроенная policy; пустой `INFINI_LLM_FALLBACK_MODEL` выключает резерв.
+[OpenRouter pin](../../user/OPENROUTER_ROUTING_RU.md#что-именно-запрещает-этот-выбор) запрещает другой профиль, но сохраняется при same-upstream envelope/API downgrade. Основной Codex не уходит на paid API. Дополнительные маршруты имеют единственного владельца: явно включённые `INFINI_LLM_POOL_2..4` с общей pool/lease/cooldown policy. Отдельный legacy fallback удалён; старые ключи требуют ручного выбора текущей линии без автоматического переноса credentials или модели.
 
 ## Диагностика
 

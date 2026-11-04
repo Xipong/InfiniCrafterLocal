@@ -94,7 +94,7 @@ def _check_sdcpp_lora_file_tag_helper_and_prompt_suffix() -> None:
     assert sdcpp_backend.lora_tag_from_file(r"C:\Games\sdcpp\loras\terraria_items.safetensors", "") == "<lora:terraria_items:0.25>"
 
     cfg = sdcpp_backend.SdcppBackendConfig(
-        default_command_template=visual_config.SDCPP_DEFAULT_COMMAND_TEMPLATE,
+        default_command_template=sdcpp_backend.DEFAULT_COMMAND_TEMPLATE,
         command_mode="safe_args",
         server_exe=r"C:\Games\sdcpp\sd-server.exe",
         model=r"C:\Games\sdcpp\models\z-image.gguf",

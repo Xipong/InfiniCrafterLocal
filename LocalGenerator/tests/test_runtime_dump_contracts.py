@@ -10,7 +10,7 @@ import sys
 from infini_local.services import runtime_dump_service as dumps
 
 
-def test_discovery_prefers_current_then_legacy_then_existing_packaged_dump(tmp_path, monkeypatch):
+def test_discovery_prefers_explicit_then_existing_packaged_dump(tmp_path, monkeypatch):
     current = tmp_path / "current.jsonl"
     legacy = tmp_path / "legacy.jsonl"
     packaged = tmp_path / "runtime_dumps" / "items.jsonl"
@@ -19,13 +19,13 @@ def test_discovery_prefers_current_then_legacy_then_existing_packaged_dump(tmp_p
     legacy.write_text("{}\n")
     monkeypatch.setenv("INFINI_TEST_DUMP", str(current))
     monkeypatch.setenv("INFINI_TEST_LEGACY_DUMP", str(legacy))
-    args = (tmp_path, "items.jsonl", "INFINI_TEST_DUMP", "INFINI_TEST_LEGACY_DUMP")
+    args = (tmp_path, "items.jsonl", "INFINI_TEST_DUMP")
     # An explicit missing file does not hide an existing discovered file.
     assert dumps.resolve_runtime_dump_path(*args) == packaged
     current.write_text("{}\n")
     assert dumps.resolve_runtime_dump_path(*args) == current
     monkeypatch.delenv("INFINI_TEST_DUMP")
-    assert dumps.resolve_runtime_dump_path(*args) == legacy
+    assert dumps.resolve_runtime_dump_path(*args) == packaged
 
 
 def test_jsonl_index_tolerates_missing_and_malformed_records(tmp_path):

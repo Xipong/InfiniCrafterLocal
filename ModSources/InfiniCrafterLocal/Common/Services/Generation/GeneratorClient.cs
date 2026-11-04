@@ -41,14 +41,6 @@ public sealed partial class GeneratorClient
 
     public string LastEndpointFailure => LocalHttpQuietFailure.LastMessage(EndpointGuardKey);
 
-    public bool LastRecipeFailureIsFatal { get; private set; }
-
-    public string LastRecipeFailureMessage { get; private set; } = "";
-
-    public string LastRecipeFailurePlayerMessage { get; private set; } = "";
-
-    public int LastRecipeFailureStatusCode { get; private set; }
-
     public string AssetBaseUrlForSharing(string preferred = "", CancellationToken cancellationToken = default)
     {
         string env = NormalizeAssetBaseUrl(Environment.GetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL") ?? "");
@@ -246,19 +238,15 @@ public sealed partial class GeneratorClient
         public Item RefundB { get; set; } = new();
         internal ClientTooltipObservation? ClientTooltipA { get; set; }
         internal ClientTooltipObservation? ClientTooltipB { get; set; }
-        // Request-local failure state: concurrent multi-dev lanes must never read
-        // another lane's shared LastRecipeFailure snapshot.
+        // Failure state belongs to this request, including concurrent craft lanes.
         public bool FailureIsFatal { get; set; }
         public int FailureStatusCode { get; set; }
         public string FailureMessage { get; set; } = "";
         public string FailurePlayerMessage { get; set; } = "";
     }
 
-    public PreparedGenerationRequest Prepare(Item a, Item b, Player player, string llmProfileId = "", bool multiDevCraft = false)
-        => Prepare(a, b, player, llmProfileId, multiDevCraft, null, null);
-
-    internal PreparedGenerationRequest Prepare(Item a, Item b, Player player, string llmProfileId, bool multiDevCraft,
-        ClientTooltipObservation? clientTooltipA, ClientTooltipObservation? clientTooltipB)
+    internal PreparedGenerationRequest Prepare(Item a, Item b, Player player, string llmProfileId = "", bool multiDevCraft = false,
+        ClientTooltipObservation? clientTooltipA = null, ClientTooltipObservation? clientTooltipB = null)
     {
         var refundA = a.Clone();
         refundA.stack = 1;
@@ -314,10 +302,6 @@ public sealed partial class GeneratorClient
         // when their request was retired before this worker could start.
         if (request.CancellationToken.IsCancellationRequested && request.Analysis is null)
             return null;
-        LastRecipeFailureIsFatal = false;
-        LastRecipeFailureMessage = "";
-        LastRecipeFailurePlayerMessage = "";
-        LastRecipeFailureStatusCode = 0;
         request.FailureIsFatal = false;
         request.FailureStatusCode = 0;
         request.FailureMessage = "";
@@ -327,9 +311,9 @@ public sealed partial class GeneratorClient
         catch (OperationCanceledException) { return null; }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
-            LastRecipeFailureIsFatal = request.FailureIsFatal = true;
-            LastRecipeFailureMessage = request.FailureMessage = "Parent source analysis failed: " + error.GetType().Name;
-            LastRecipeFailurePlayerMessage = request.FailurePlayerMessage = "Parent analysis failed. Materials will be refunded.";
+            request.FailureIsFatal = true;
+            request.FailureMessage = "Parent source analysis failed: " + error.GetType().Name;
+            request.FailurePlayerMessage = "Parent analysis failed. Materials will be refunded.";
             return null;
         }
 
@@ -365,10 +349,6 @@ public sealed partial class GeneratorClient
             // ingredients should be refunded and the user can manually craft again.
             if (result.IsFatalRecipeFailure)
             {
-                LastRecipeFailureIsFatal = true;
-                LastRecipeFailureStatusCode = result.StatusCode;
-                LastRecipeFailureMessage = result.Message;
-                LastRecipeFailurePlayerMessage = result.PlayerMessage;
                 request.FailureIsFatal = true;
                 request.FailureStatusCode = result.StatusCode;
                 request.FailureMessage = result.Message;
@@ -586,8 +566,6 @@ public sealed partial class GeneratorClient
             return new GenerationAttemptResult { FailureKind = GenerationFailureKind.Transient, Message = ex.Message };
         }
     }
-
-    private static void Normalize(GeneratedItemData data, Item a, Item b) => Normalize(data, CraftParentName(a), CraftParentName(b));
 
     private static void Normalize(GeneratedItemData data, string parentA, string parentB)
     {

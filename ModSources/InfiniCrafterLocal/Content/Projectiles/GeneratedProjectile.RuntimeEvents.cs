@@ -152,7 +152,7 @@ public sealed partial class GeneratedProjectile
     {
         if (!_configured || !HasBeamGeometry) return;
         double initial = BeamInitialDamage;
-        modifiers.SourceDamage *= (float)(initial + (1d - initial) * ChannelBeamWarmupProgress());
+        modifiers.SourceDamage *= (float)(initial + (1d - initial) * BeamWarmupProgress());
     }
 
     private float WhipCollisionWidth()

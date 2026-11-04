@@ -11,12 +11,13 @@ import pytest
 from infini_local.core.env_file import FORMAT_HEADER, encode_value, parse_env_text, read_env_file
 from infini_local.core.env_utils import load_env_file
 from infini_local.desktop import settings_defaults, settings_env
-from infini_local.desktop.settings_schema import DEFAULTS, SDCPP_DEFAULT_COMMAND_TEMPLATE
+from infini_local.desktop.settings_schema import DEFAULTS
+from infini_local.services.sdcpp_backend import DEFAULT_COMMAND_TEMPLATE
 
 
 VALUES = {
     'INFINI_SDCPP_LORA_PROMPT_TAGS': '<lora:first:0.2>\n<lora:second:0.3>',
-    'INFINI_SDCPP_SERVER_COMMAND_TEMPLATE': SDCPP_DEFAULT_COMMAND_TEMPLATE.replace('{exe}', '"{exe}"'),
+    'INFINI_SDCPP_SERVER_COMMAND_TEMPLATE': DEFAULT_COMMAND_TEMPLATE.replace('{exe}', '"{exe}"'),
     'INFINI_SDCPP_MODEL': 'C:\\new\\tools\\model #1.gguf',
     'INFINI_CUSTOM_UNC': '\\\\server\\share\\model.gguf',
     'INFINI_CUSTOM_EMPTY': '',
@@ -61,8 +62,8 @@ def test_writer_and_every_reader_roundtrip_exact_values(tmp_path, monkeypatch):
     assert all(os.environ[key] == value for key, value in VALUES.items())
     for key in (*DEFAULTS, *VALUES):
         monkeypatch.delenv(key, raising=False)
-    toolbox_module().load_config_env(project)
-    assert all(os.environ[key] == value for key, value in VALUES.items())
+    toolbox_values = toolbox_module().read_config_env(config)
+    assert all(toolbox_values[key] == value for key, value in VALUES.items())
 
 
 def test_environment_precedence_and_skip_config_are_preserved(tmp_path, monkeypatch):

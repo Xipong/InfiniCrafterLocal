@@ -23,9 +23,6 @@ from infini_local.core.contract_versions import TMODLOADER_GREY_ZONE_NOTES
 from infini_local.core.llm_config import (
     ALLOW_DETERMINISTIC_DEV_FALLBACK,
     LANGUAGE,
-    LMSTUDIO_MODEL,
-    OPENAI_COMPAT_MODEL,
-    OPENROUTER_MODEL,
     USE_LLM,
 )
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
@@ -88,9 +85,9 @@ from infini_local.web.http_response_helpers import (
     _combine_failure_payload,
     _is_client_disconnect,
 )
+from infini_local.web.trace_dashboard import render_trace_snapshot_html
 from infini_local.web.server_trace_snapshot import (
     build_trace_snapshot,
-    render_trace_snapshot_html,
 )
 from infini_local.web.server_utility_routes import (
     ServerUtilityRoutes,
@@ -167,9 +164,6 @@ def trace_snapshot() -> dict[str, Any]:
         visual_asset_mode=visual_config.VISUAL_ASSET_MODE,
         visual_director_llm=visual_config.VISUAL_DIRECTOR_LLM,
         vfx_llm_director_enabled=VFX_LLM_DIRECTOR_ENABLED,
-        openrouter_model=OPENROUTER_MODEL,
-        openai_compat_model=OPENAI_COMPAT_MODEL,
-        lmstudio_model=LMSTUDIO_MODEL,
         trace_prompts_enabled=TRACE_PROMPTS_ENABLED,
         trace_max_prompt_chars=TRACE_MAX_PROMPT_CHARS,
         trace_events_tail=TRACE_EVENTS_TAIL,

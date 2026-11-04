@@ -59,6 +59,17 @@ def test_cli_refuses_invalid_boundaries_before_bootstrap(monkeypatch, capsys, fl
     assert fragment in captured.err
 
 
+@pytest.mark.parametrize('key', ['INFINI_LLM_FALLBACK_MODEL', 'INFINI_LLM_REAUTHOR_TEMPERATURE'])
+def test_retired_config_is_refused_without_secret_values(monkeypatch, capsys, tmp_path, key):
+    config = tmp_path / 'private.env'
+    config.write_text(f'{key}=SECRET-OLD-VALUE\n')
+    code, captured = cli(monkeypatch, capsys, 'live10', '--config', config)
+    assert code == 2
+    assert key in captured.err
+    assert 'SECRET-OLD-VALUE' not in captured.out + captured.err
+    assert not (tmp_path / 'cache').exists()
+
+
 def test_private_config_is_checked_not_printed(monkeypatch, capsys, tmp_path):
     config = tmp_path / 'private.env'
     config.write_text('INFINI_LLM_PROVIDER=openai_compat\nINFINI_OPENAI_COMPAT_MODEL=qa-model\nINFINI_OPENAI_COMPAT_API_KEY=TOP-SECRET\nINFINI_OPENAI_COMPAT_BASE_URL=https://example.invalid/v1/\n')

@@ -6,7 +6,6 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from infini_local.web import trace_dashboard
 
 
 # AGENT MAP: debug trace snapshot payload shaping for server.py. It reads trace
@@ -18,7 +17,6 @@ ProviderName = Callable[[], str]
 PayloadCallable = Callable[[], dict[str, Any]]
 SdcppSnapshot = Callable[..., dict[str, Any]]
 TailNdjson = Callable[[Path, int], list[Any]]
-TraceClip = Callable[[Any, int | None], str]
 
 
 def build_trace_snapshot(
@@ -34,9 +32,6 @@ def build_trace_snapshot(
     visual_asset_mode: str,
     visual_director_llm: bool,
     vfx_llm_director_enabled: bool,
-    openrouter_model: str,
-    openai_compat_model: str,
-    lmstudio_model: str,
     trace_prompts_enabled: bool,
     trace_max_prompt_chars: int,
     trace_events_tail: int,
@@ -58,8 +53,6 @@ def build_trace_snapshot(
         pass
     provider = active_llm_provider()
     auth = llm_auth_snapshot()
-    legacy_model = (openrouter_model if provider == "openrouter" else openai_compat_model
-                    if provider == "openai_compat" else lmstudio_model if provider == "local" else "")
     return {
         "ok": True,
         "version": app_version,
@@ -79,7 +72,7 @@ def build_trace_snapshot(
         "pipeline": {
             "useLLM": use_llm,
             "llmProvider": provider,
-            "llmModel": str(auth.get("model", legacy_model) or ""),
+            "llmModel": str(auth.get("model") or ""),
             "llmAuth": auth,
             "imageBackend": image_backend,
             "visualAssetMode": visual_asset_mode,
@@ -95,11 +88,3 @@ def build_trace_snapshot(
         "pipelineTrace": tail_ndjson(trace_file, trace_events_tail),
         "promptTrace": tail_ndjson(prompt_trace_file, min(trace_events_tail, 80)),
     }
-
-
-def render_trace_snapshot_html(snapshot: dict[str, Any], *, app_version: str, trace_clip: TraceClip) -> str:
-    return trace_dashboard.render_trace_snapshot_html(
-        snapshot,
-        app_version=app_version,
-        trace_clip=trace_clip,
-    )

@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import os
+
 from typing import Any
 
-import os
 from pathlib import Path
 
 from infini_local.core.config_bootstrap import APP_VERSION, CACHE_DIR, RECIPE_IDENTITY_VERSION
 from infini_local.core.contract_versions import build_contract_versions
-from infini_local.core.env_utils import env_bool, env_float, env_int, env_str, env_first
+from infini_local.core.config_validation import reject_retired_config
+from infini_local.core.env_utils import env_bool, env_float, env_int, env_str
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
 from infini_local.services import sdcpp_backend, sdcpp_service
 from infini_local.storage.trace_runtime import log_event
@@ -15,26 +17,16 @@ from infini_local.storage.trace_runtime import log_event
 # AGENT MAP: canonical visual/image backend env/config and lifecycle state.
 # Consumers import this owner directly. No gameplay/runtime authoring logic belongs here.
 
-IMAGE_BACKEND_ALIASES = {
-    "stablediffusioncpp": "sdcpp",
-    "stable-diffusion.cpp": "sdcpp",
-    "stable_diffusion_cpp": "sdcpp",
-    "api_image": "image_api",
-    "openai_image": "image_api",
-    "openai_images": "image_api",
-    "openai_compat_image": "image_api",
-    "none": "off",
-    "disabled": "off",
-}
+reject_retired_config(os.environ)
 SUPPORTED_IMAGE_BACKENDS = frozenset({"off", "sdcpp", "a1111", "comfyui", "image_api", "openai_codex", "procedural"})
 IMAGE_BACKEND_RAW = env_str("INFINI_IMAGE_BACKEND", "sdcpp").strip().lower()
-IMAGE_BACKEND = IMAGE_BACKEND_ALIASES.get(IMAGE_BACKEND_RAW, IMAGE_BACKEND_RAW)
+IMAGE_BACKEND = IMAGE_BACKEND_RAW
 IMAGE_BACKEND_CONFIG_ERROR = "" if IMAGE_BACKEND in SUPPORTED_IMAGE_BACKENDS else f"unsupported image backend: {IMAGE_BACKEND_RAW or '<empty>'}"
 A1111_URL = env_str("INFINI_A1111_URL", "http://127.0.0.1:7860").rstrip("/")
 COMFYUI_URL = env_str("INFINI_COMFYUI_URL", "http://127.0.0.1:8188").rstrip("/")
 # stable-diffusion.cpp backend. v0.4.19 removes per-image CLI generation entirely.
 # Only persistent sd-server/http mode is supported for gameplay. The model must stay hot in memory.
-SDCPP_MODEL = env_first(("INFINI_SDCPP_MODEL", "SDCPP_MODEL"), "")
+SDCPP_MODEL = env_str("INFINI_SDCPP_MODEL", "")
 # Z-Image needs separate text encoder/LLM and VAE/AE files in stable-diffusion.cpp.
 # Keep them as dedicated fields so users do not have to hand-type fragile extra args.
 SDCPP_VAE = env_str("INFINI_SDCPP_VAE", "")
@@ -66,11 +58,9 @@ SDCPP_SERVER_PORT = env_int("INFINI_SDCPP_SERVER_PORT", 7861, lo=1, hi=65535)
 SDCPP_SERVER_AUTOSTART = env_bool("INFINI_SDCPP_SERVER_AUTOSTART", False)
 SDCPP_SERVER_EXE = env_str("INFINI_SDCPP_SERVER_EXE", "")
 SDCPP_ROCM_COMPAT_ROOT = env_str("INFINI_SDCPP_ROCM_COMPAT_ROOT", "")
-SDCPP_DEFAULT_COMMAND_TEMPLATE = "{exe} --diffusion-model {model} -l {host} --listen-port {port} -W {width} -H {height} --steps {steps} --cfg-scale {cfg} --sampling-method {sampler} {extra}"
 SDCPP_SERVER_COMMAND_MODE = env_str("INFINI_SDCPP_SERVER_COMMAND_MODE", "safe_args").lower()  # safe_args, template
 SDCPP_SERVER_COMMAND_TEMPLATE = env_str("INFINI_SDCPP_SERVER_COMMAND_TEMPLATE", "")
 SDCPP_SERVER_EXTRA_ARGS = env_str("INFINI_SDCPP_SERVER_EXTRA_ARGS", "")
-SDCPP_MODE = "server"
 SDCPP_TIMEOUT = env_int("INFINI_SDCPP_TIMEOUT", env_int("INFINI_VISUAL_GENERATION_TIMEOUT", 240, lo=1, hi=3600), lo=1, hi=3600)
 SDCPP_SERVER_HEALTH_PATHS = [x.strip() for x in env_str("INFINI_SDCPP_SERVER_HEALTH_PATHS", "/,/health,/sdapi/v1/sd-models").split(",") if x.strip()]
 SDCPP_SERVER_TXT2IMG_PATHS = [x.strip() for x in env_str("INFINI_SDCPP_SERVER_TXT2IMG_PATHS", "/sdapi/v1/txt2img,/txt2img,/generate").split(",") if x.strip()]
@@ -97,9 +87,9 @@ COMFYUI_WORKFLOW = env_str("INFINI_COMFYUI_WORKFLOW", "auto")
 COMFYUI_WORKFLOW_LORA = env_str("INFINI_COMFYUI_WORKFLOW_LORA", "")
 COMFYUI_WORKFLOW_NO_LORA = env_str("INFINI_COMFYUI_WORKFLOW_NO_LORA", "")
 COMFYUI_CHECKPOINT = env_str("INFINI_COMFYUI_CHECKPOINT", "")
-COMFYUI_LORA_NAME = env_first(("INFINI_COMFYUI_LORA_NAME", "INFINI_PIXEL_LORA_NAME"), "")
-COMFYUI_LORA_WEIGHT = env_first(("INFINI_COMFYUI_LORA_WEIGHT", "INFINI_PIXEL_LORA_WEIGHT"), "0.8")
-COMFYUI_TRIGGER = env_first(("INFINI_COMFYUI_TRIGGER", "INFINI_PIXEL_TRIGGER"), "")
+COMFYUI_LORA_NAME = env_str("INFINI_COMFYUI_LORA_NAME", "")
+COMFYUI_LORA_WEIGHT = env_str("INFINI_COMFYUI_LORA_WEIGHT", "0.8")
+COMFYUI_TRIGGER = env_str("INFINI_COMFYUI_TRIGGER", "")
 COMFYUI_WIDTH = env_int("INFINI_COMFYUI_WIDTH", 512)
 COMFYUI_HEIGHT = env_int("INFINI_COMFYUI_HEIGHT", COMFYUI_WIDTH, lo=64, hi=2048)
 COMFYUI_STEPS = env_int("INFINI_COMFYUI_STEPS", 16)
@@ -110,11 +100,11 @@ COMFYUI_DENOISE = env_float("INFINI_COMFYUI_DENOISE", 1.0)
 COMFYUI_TIMEOUT = env_int("INFINI_COMFYUI_TIMEOUT", env_int("INFINI_VISUAL_GENERATION_TIMEOUT", 240, lo=1, hi=3600), lo=1, hi=3600)
 COMFYUI_POLL_INTERVAL = env_float("INFINI_COMFYUI_POLL_INTERVAL", 0.75)
 COMFYUI_CLIENT_ID = env_str("INFINI_COMFYUI_CLIENT_ID", "infinicrafterlocal")
-IMAGE_API_BASE_URL = env_first(("INFINI_IMAGE_API_BASE_URL", "INFINI_OPENAI_COMPAT_IMAGE_BASE_URL"), "https://api.openai.com/v1").rstrip("/")
-IMAGE_API_KEY = env_first(("INFINI_IMAGE_API_KEY", "INFINI_OPENAI_COMPAT_IMAGE_API_KEY", "OPENAI_API_KEY"), "")
-IMAGE_API_MODEL = env_first(("INFINI_IMAGE_API_MODEL", "INFINI_OPENAI_COMPAT_IMAGE_MODEL"), "gpt-image-1")
+IMAGE_API_BASE_URL = env_str("INFINI_IMAGE_API_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+IMAGE_API_KEY = env_str("INFINI_IMAGE_API_KEY", "")
+IMAGE_API_MODEL = env_str("INFINI_IMAGE_API_MODEL", "gpt-image-1")
 IMAGE_API_PATH = env_str("INFINI_IMAGE_API_PATH", "/images/generations")
-IMAGE_API_SIZE = env_first(("INFINI_IMAGE_API_SIZE", "INFINI_OPENAI_COMPAT_IMAGE_SIZE"), "512x512")
+IMAGE_API_SIZE = env_str("INFINI_IMAGE_API_SIZE", "512x512")
 IMAGE_API_TIMEOUT = env_int("INFINI_IMAGE_API_TIMEOUT", env_int("INFINI_VISUAL_GENERATION_TIMEOUT", 240, lo=1, hi=3600), lo=1, hi=3600)
 IMAGE_API_EXTRA_HEADERS_JSON = env_str("INFINI_IMAGE_API_EXTRA_HEADERS_JSON", "")
 CODEX_IMAGE_MODEL = env_str("INFINI_CODEX_IMAGE_MODEL", "gpt-image-2")
@@ -223,11 +213,9 @@ __all__ = [
     "SDCPP_SERVER_PORT",
     "SDCPP_SERVER_AUTOSTART",
     "SDCPP_SERVER_EXE",
-    "SDCPP_DEFAULT_COMMAND_TEMPLATE",
     "SDCPP_SERVER_COMMAND_MODE",
     "SDCPP_SERVER_COMMAND_TEMPLATE",
     "SDCPP_SERVER_EXTRA_ARGS",
-    "SDCPP_MODE",
     "SDCPP_TIMEOUT",
     "SDCPP_SERVER_HEALTH_PATHS",
     "SDCPP_SERVER_TXT2IMG_PATHS",

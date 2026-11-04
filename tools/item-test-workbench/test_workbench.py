@@ -17,6 +17,18 @@ def trace():
             'snapshots':[{'tick':i,'player':actor,'dummy':dict(actor,x=80),'projectiles':[dict(actor,id=7,entityId='<unsafe>',vx=2,vy=0,active=True,x=20+i*2)]} for i in range(3)]}
 
 class WorkbenchTests(unittest.TestCase):
+    def test_loader_cli_rejects_retired_probe_pair_without_building(self):
+        from unittest.mock import patch
+        arguments = ['workbench', 'loader-run', '--native-item', 'WoodenBoomerang',
+                     '--scenario', 'unused.json', '--out', 'unused-output',
+                     '--probe-dll', 'old.dll', '--probe-mod-root', 'old-root']
+        with patch.object(sys, 'argv', arguments), \
+             patch.object(w, 'native_executable') as native:
+            with self.assertRaises(SystemExit) as raised:
+                w.main()
+            self.assertEqual(raised.exception.code, 2)
+            native.assert_not_called()
+
     def test_server_fixture_verifier_requires_hooks_not_client_firing(self):
         from unittest.mock import patch
         verifier_spec=importlib.util.spec_from_file_location('verify_multi_mod_loader',Path(__file__).with_name('verify_multi_mod_loader.py'))
@@ -51,7 +63,7 @@ class WorkbenchTests(unittest.TestCase):
             item.write_text('{}');scene.write_text('{"ticks":2}');dll.write_bytes(b'host')
             complete={'status':'passed','snapshots':[{'tick':0},{'tick':1}],'assertions':[{'status':'passed'}]}
             for i,(report,exit_code,valid) in enumerate([(complete,0,True),({'status':'passed'},0,False),(complete,1,False)]):
-                args=SimpleNamespace(timeout=10,item=item,scenario=scene,out=root/str(i),no_build=True,item_boundary='fresh',probe_dll=None,probe_mod_root=None)
+                args=SimpleNamespace(timeout=10,item=item,scenario=scene,out=root/str(i),no_build=True,item_boundary='fresh')
                 def run(command,**kwargs):
                     self.assertIn('--native-loader-scene',command)
                     Path(command[command.index('--output')+1]).write_text(json.dumps(report))
@@ -72,7 +84,7 @@ class WorkbenchTests(unittest.TestCase):
             for mutate in (False,True):
                 metadata.write_text('version=1')
                 args=SimpleNamespace(timeout=10,item=None,native_item='WoodenBoomerang',scenario=scene,
-                    out=root/str(mutate),no_build=True,item_boundary='fresh',probe_dll=None,probe_mod_root=None)
+                    out=root/str(mutate),no_build=True,item_boundary='fresh')
                 def run(command,**kwargs):
                     Path(command[command.index('--output')+1]).write_text(json.dumps(report))
                     if mutate:metadata.write_text('version=2')
@@ -105,7 +117,7 @@ class WorkbenchTests(unittest.TestCase):
             scene=root/'scene.json';scene.write_text('{"ticks":1}')
             archive=root/'fixture.tmod';archive.write_bytes(b'original')
             args=SimpleNamespace(timeout=10,item=None,native_item='Example/Item',scenario=scene,
-                out=root/'run',no_build=True,item_boundary='fresh',probe_dll=None,probe_mod_root=None,tmods=[archive],server_mode=True)
+                out=root/'run',no_build=True,item_boundary='fresh',tmods=[archive],server_mode=True)
             def run(command,**kwargs):
                 self.assertEqual(command[command.index('--tmod')+1],str(archive))
                 self.assertEqual(command[command.index('--server-mode')+1],'true')
@@ -135,7 +147,7 @@ class WorkbenchTests(unittest.TestCase):
             for mutate in (False,True):
                 texture=mods[0][1]/'Items'/'texture.png';texture.write_bytes(b'original')
                 args=SimpleNamespace(timeout=10,item=None,native_item='Example/Item',scenario=scene,
-                    out=root/str(mutate),no_build=True,item_boundary='fresh',probe_dll=None,probe_mod_root=None,mods=mods)
+                    out=root/str(mutate),no_build=True,item_boundary='fresh',mods=mods)
                 def run(command,**kwargs):
                     pairs=[(command[i+1],command[i+3]) for i,x in enumerate(command) if x=='--mod-dll']
                     self.assertEqual(pairs,[(str(dll),str(content)) for dll,content in mods])

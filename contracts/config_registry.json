@@ -1,6 +1,6 @@
 {
   "authority": "derived-evidence-only",
-  "documentedFieldCount": 132,
+  "documentedFieldCount": 127,
   "entries": [
     {
       "declarations": [
@@ -1767,158 +1767,6 @@
     {
       "declarations": [
         {
-          "default": "",
-          "file": "LocalGenerator/infini_local/core/llm_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        }
-      ],
-      "default": "",
-      "documented": true,
-      "example": null,
-      "gui": true,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_LLM_FALLBACK_API_KEY",
-      "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py"
-      ],
-      "secret": true,
-      "type": "string",
-      "visibility": "gui"
-    },
-    {
-      "declarations": [
-        {
-          "default": "",
-          "file": "LocalGenerator/infini_local/core/llm_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        }
-      ],
-      "default": "",
-      "documented": true,
-      "example": "",
-      "gui": true,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_LLM_FALLBACK_BASE_URL",
-      "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py"
-      ],
-      "secret": false,
-      "type": "string",
-      "visibility": "gui"
-    },
-    {
-      "declarations": [
-        {
-          "default": "",
-          "file": "LocalGenerator/infini_local/core/llm_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        }
-      ],
-      "default": "",
-      "documented": true,
-      "example": "",
-      "gui": true,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_LLM_FALLBACK_MODEL",
-      "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py"
-      ],
-      "secret": false,
-      "type": "string",
-      "visibility": "gui"
-    },
-    {
-      "declarations": [
-        {
-          "default": 2,
-          "file": "LocalGenerator/infini_local/core/llm_config.py",
-          "maximum": 10,
-          "minimum": 1,
-          "type": "integer"
-        },
-        {
-          "default": 2,
-          "file": "LocalGenerator/infini_local/services/codex_auth.py",
-          "maximum": 10,
-          "minimum": 1,
-          "type": "integer"
-        }
-      ],
-      "default": 2,
-      "documented": true,
-      "example": "2",
-      "gui": true,
-      "maximum": 10,
-      "minimum": 1,
-      "name": "INFINI_LLM_FALLBACK_NETWORK_FAILS",
-      "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py",
-        "LocalGenerator/infini_local/services/codex_auth.py"
-      ],
-      "secret": false,
-      "type": "integer",
-      "visibility": "gui"
-    },
-    {
-      "declarations": [
-        {
-          "default": "",
-          "file": "LocalGenerator/infini_local/core/llm_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        }
-      ],
-      "default": "",
-      "documented": true,
-      "example": "",
-      "gui": true,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER",
-      "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py"
-      ],
-      "secret": false,
-      "type": "string",
-      "visibility": "gui"
-    },
-    {
-      "declarations": [
-        {
-          "default": "",
-          "file": "LocalGenerator/infini_local/core/llm_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        }
-      ],
-      "default": "",
-      "documented": true,
-      "example": "",
-      "gui": true,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_LLM_FALLBACK_PROVIDER",
-      "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py"
-      ],
-      "secret": false,
-      "type": "string",
-      "visibility": "gui"
-    },
-    {
-      "declarations": [
-        {
           "default": false,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py",
           "maximum": null,
@@ -1985,6 +1833,38 @@
         "LocalGenerator/infini_local/core/llm_config.py"
       ],
       "secret": true,
+      "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": 2,
+          "file": "LocalGenerator/infini_local/core/llm_config.py",
+          "maximum": 10,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "default": 2,
+          "file": "LocalGenerator/infini_local/services/codex_auth.py",
+          "maximum": 10,
+          "minimum": 1,
+          "type": "integer"
+        }
+      ],
+      "default": 2,
+      "documented": true,
+      "example": "2",
+      "gui": true,
+      "maximum": 10,
+      "minimum": 1,
+      "name": "INFINI_LLM_NETWORK_ATTEMPTS",
+      "owners": [
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "LocalGenerator/infini_local/services/codex_auth.py"
+      ],
+      "secret": false,
       "type": "integer",
       "visibility": "gui"
     },
@@ -2519,14 +2399,14 @@
     {
       "declarations": [
         {
-          "default": "",
+          "default": "local",
           "file": "LocalGenerator/infini_local/core/llm_config.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
         }
       ],
-      "default": "",
+      "default": "local",
       "documented": true,
       "example": "local",
       "gui": true,
@@ -2619,41 +2499,17 @@
     {
       "declarations": [
         {
-          "default": "",
+          "default": null,
           "file": "LocalGenerator/infini_local/pipelines/author/request.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
         }
       ],
-      "default": "",
+      "default": null,
       "documented": true,
       "example": "",
       "gui": true,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_LLM_REAUTHOR_TEMPERATURE",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/author/request.py"
-      ],
-      "secret": false,
-      "type": "string",
-      "visibility": "gui"
-    },
-    {
-      "declarations": [
-        {
-          "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/author/request.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        }
-      ],
-      "default": "",
-      "documented": false,
-      "example": null,
-      "gui": false,
       "maximum": null,
       "minimum": null,
       "name": "INFINI_LLM_REPAIR_TEMPERATURE",
@@ -2662,7 +2518,7 @@
       ],
       "secret": false,
       "type": "string",
-      "visibility": "internal"
+      "visibility": "gui"
     },
     {
       "declarations": [
@@ -2978,102 +2834,6 @@
     {
       "declarations": [
         {
-          "default": "",
-          "file": "LocalGenerator/infini_local/core/images/config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        }
-      ],
-      "default": "",
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_OPENAI_COMPAT_IMAGE_API_KEY",
-      "owners": [
-        "LocalGenerator/infini_local/core/images/config.py"
-      ],
-      "secret": true,
-      "type": "string",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": "https://api.openai.com/v1",
-          "file": "LocalGenerator/infini_local/core/images/config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        }
-      ],
-      "default": "https://api.openai.com/v1",
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_OPENAI_COMPAT_IMAGE_BASE_URL",
-      "owners": [
-        "LocalGenerator/infini_local/core/images/config.py"
-      ],
-      "secret": false,
-      "type": "string",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": "gpt-image-1",
-          "file": "LocalGenerator/infini_local/core/images/config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        }
-      ],
-      "default": "gpt-image-1",
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_OPENAI_COMPAT_IMAGE_MODEL",
-      "owners": [
-        "LocalGenerator/infini_local/core/images/config.py"
-      ],
-      "secret": false,
-      "type": "string",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": "512x512",
-          "file": "LocalGenerator/infini_local/core/images/config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        }
-      ],
-      "default": "512x512",
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_OPENAI_COMPAT_IMAGE_SIZE",
-      "owners": [
-        "LocalGenerator/infini_local/core/images/config.py"
-      ],
-      "secret": false,
-      "type": "string",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
           "default": "auto",
           "file": "LocalGenerator/infini_local/core/llm_config.py",
           "maximum": null,
@@ -3260,54 +3020,6 @@
     {
       "declarations": [
         {
-          "default": "",
-          "file": "LocalGenerator/infini_local/core/images/config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        }
-      ],
-      "default": "",
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_PIXEL_LORA_NAME",
-      "owners": [
-        "LocalGenerator/infini_local/core/images/config.py"
-      ],
-      "secret": false,
-      "type": "string",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": "0.8",
-          "file": "LocalGenerator/infini_local/core/images/config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        }
-      ],
-      "default": "0.8",
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_PIXEL_LORA_WEIGHT",
-      "owners": [
-        "LocalGenerator/infini_local/core/images/config.py"
-      ],
-      "secret": false,
-      "type": "string",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
           "default": true,
           "file": "LocalGenerator/infini_local/core/images/config.py",
           "maximum": null,
@@ -3328,30 +3040,6 @@
       "secret": false,
       "type": "boolean",
       "visibility": "gui"
-    },
-    {
-      "declarations": [
-        {
-          "default": "",
-          "file": "LocalGenerator/infini_local/core/images/config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        }
-      ],
-      "default": "",
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_PIXEL_TRIGGER",
-      "owners": [
-        "LocalGenerator/infini_local/core/images/config.py"
-      ],
-      "secret": false,
-      "type": "string",
-      "visibility": "internal"
     },
     {
       "declarations": [],
@@ -5502,18 +5190,18 @@
     }
   ],
   "errors": [],
-  "fieldCount": 224,
-  "fingerprint": "ade98346b57ce5bc1cd8db84689e9460756c4b402d42946e515bd5e3601c3550",
+  "fieldCount": 211,
+  "fingerprint": "aeba56f09b08ee6f141ee58dc4519c10813881d579645bab313a1bee3efb16f3",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",
     "LocalGenerator/config.example.env",
     "C# INFINI_* references"
   ],
-  "guiFieldCount": 132,
+  "guiFieldCount": 127,
   "ok": true,
   "schema": "infini.config-registry.v1",
-  "secretFieldCount": 12,
+  "secretFieldCount": 10,
   "warnings": [
     {
       "field": "INFINI_CRAFT_HTTP_ATTEMPTS",

@@ -196,7 +196,7 @@ def test_shape_rejection_reaches_actual_author_failure_with_operator_diagnosis(w
 
 @pytest.mark.parametrize("failure", ["http-400", "malformed-content"])
 def test_single_attempt_local_request_has_no_negotiation_or_content_retry(wire, failure):
-    wire.configure(LLM_PROVIDER="local", LLM_FALLBACK_NETWORK_FAILS=1, LLM_FALLBACK_MODEL="")
+    wire.configure(LLM_PROVIDER="local", LLM_NETWORK_ATTEMPTS=1)
     wire.replies.append(400 if failure == "http-400" else {"choices": [{"finish_reason": "stop", "message": {"content": '{"broken":'}}]})
     request = {"messages": [], "model": "ignored", "response_format": {"type": "json_object"}, "reasoning": {"effort": "low"}}
     if failure == "http-400":

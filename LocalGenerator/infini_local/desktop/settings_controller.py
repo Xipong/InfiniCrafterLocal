@@ -15,12 +15,12 @@ from pathlib import Path
 from infini_local.desktop.settings_env import (
     CUSTOM_PRESET, USER_PRESET_PREFIX, load_user_presets, parse_env, write_env,
 )
-from infini_local.desktop.settings_schema import DEFAULTS, PRESETS, repair_sdcpp_command_template
-from infini_local.desktop.settings_paths import CONFIG_PATH, EXAMPLE_PATH
+from infini_local.desktop.settings_schema import DEFAULTS, PRESETS
+from infini_local.core.app_paths import CONFIG_PATH, EXAMPLE_PATH
 from infini_local.desktop.settings_fields import FIELDS, disabled_reasons
 from infini_local.desktop.studio_operations import StudioOperations
 from infini_local.desktop.settings_interactions import notify
-from infini_local.services.sdcpp_backend import lora_dir_from_file, lora_tag_from_file
+from infini_local.services.sdcpp_backend import DEFAULT_COMMAND_TEMPLATE, lora_dir_from_file, lora_tag_from_file, repair_command_template
 
 
 class SettingsController(StudioOperations):
@@ -120,7 +120,7 @@ class SettingsController(StudioOperations):
         data["INFINI_LANGUAGE"] = language
         data["INFINI_GUI_PIPELINE_PRESET"] = self.preset.strip()
         data["INFINI_SDCPP_SERVER_EXTRA_ARGS"] = " ".join(data.get("INFINI_SDCPP_SERVER_EXTRA_ARGS", "").split())
-        template, repaired, reason = repair_sdcpp_command_template(data.get("INFINI_SDCPP_SERVER_COMMAND_TEMPLATE", ""))
+        template, repaired, reason = repair_command_template(data.get("INFINI_SDCPP_SERVER_COMMAND_TEMPLATE", ""), DEFAULT_COMMAND_TEMPLATE)
         if repaired:
             data["INFINI_SDCPP_SERVER_COMMAND_TEMPLATE"] = template
             data["INFINI_SDCPP_SERVER_COMMAND_MODE"] = "safe_args"

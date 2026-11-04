@@ -22,8 +22,9 @@ from pathlib import Path, PureWindowsPath
 
 from infini_local.storage import trace_tools
 from infini_local.core import http_io
+from infini_local.core.config_validation import retired_config_errors
 from infini_local.services.sdcpp_backend import lora_dir_from_file
-from infini_local.desktop.settings_paths import (
+from infini_local.core.app_paths import (
     ROOT,
     STATE_ROOT,
 )
@@ -327,7 +328,7 @@ class StudioOperations:
 
     def validate_paths(self):
         data = self.collect()
-        warnings = []
+        warnings = retired_config_errors(data)
         backend = data.get("INFINI_IMAGE_BACKEND", "")
         if backend == "sdcpp" and data.get("INFINI_SDCPP_SERVER_AUTOSTART") == "1":
             exe = data.get("INFINI_SDCPP_SERVER_EXE", "")
@@ -431,6 +432,11 @@ class StudioOperations:
         owned_url = self.__dict__.get('_owned_server_base_url') if owned_running else None
         base_url = owned_url or (self._server_base_url() if restart else self._saved_or_owned_server_base_url())
         data = self.collect() if restart else None
+        if restart:
+            errors = retired_config_errors({**os.environ, **data})
+            if errors:
+                self.status = "Restart refused: retired configuration settings: " + "; ".join(errors)
+                return {"ok": False, "message": self.status}
         self.status = ("Force restart: checking identity…" if force else "Safe restart/stop: checking generation activity…")
         shutdown_acknowledged = threading.Event()
 
@@ -577,35 +583,15 @@ class StudioOperations:
         cache = self._cache_dir_from_environment(env)
         worlds = Path(env.get("INFINI_WORLD_RECIPES_DIR", str(cache / "world_recipes")).strip())
         worlds = (worlds if worlds.is_absolute() else STATE_ROOT / worlds).resolve()
-        provider = env.get("INFINI_LLM_PROVIDER", "").strip().lower().replace("-", "_")
-        # Read-only comparison normalization from llm_transport's main-profile
-        # rules; never import runtime bootstrap (which creates cache folders).
-        if provider in {"openrouter", "or"}:
-            provider = "openrouter"
-        elif provider in {"openai", "openai_compat", "api", "remote"}:
-            provider = "openai_compat"
-        elif provider in {"local", "lmstudio", "lm_studio", "ollama", ""}:
-            or_model = next((env[key].strip() for key in ("INFINI_OPENROUTER_MODEL", "OPENROUTER_MODEL") if env.get(key, "").strip()), "auto")
-            # Only the legacy implicit provider decision observes configured
-            # credential presence; no credential/value/hash is projected or kept.
-            implicit_or = not provider and any(env.get(key, "").strip() for key in ("INFINI_OPENROUTER_API_KEY", "OPENROUTER_API_KEY")) and or_model.lower() not in {"auto", "default"}
-            provider = "openrouter" if implicit_or else "local"
+        provider = env.get("INFINI_LLM_PROVIDER", "local").strip().lower()
         backend = env.get("INFINI_IMAGE_BACKEND", "sdcpp").strip().lower()
-        # These declared canonical aliases are parity-tested against the visual
-        # owner; this is display comparison only, never backend dispatch/config.
-        backend = {
-            "stablediffusioncpp": "sdcpp", "stable-diffusion.cpp": "sdcpp", "stable_diffusion_cpp": "sdcpp",
-            "api_image": "image_api", "openai_image": "image_api", "openai_images": "image_api",
-            "openai_compat_image": "image_api", "none": "off", "disabled": "off",
-        }.get(backend, backend)
         model_keys = {
-            "local": ("INFINI_LMSTUDIO_MODEL", "OPENAI_MODEL"),
-            "openrouter": ("INFINI_OPENROUTER_MODEL", "OPENROUTER_MODEL"),
-            "openai_compat": ("INFINI_OPENAI_COMPAT_MODEL", "OPENAI_MODEL"),
+            "local": ("INFINI_LMSTUDIO_MODEL",),
+            "openrouter": ("INFINI_OPENROUTER_MODEL",),
+            "openai_compat": ("INFINI_OPENAI_COMPAT_MODEL",),
             "openai_codex": ("INFINI_CODEX_LLM_MODEL",),
         }.get(provider, ())
-        # Match core.llm_config env_first and the primary auth snapshot: auto is
-        # config-only, never resolved through a catalog/provider request here.
+        # Compare only configured canonical values; never infer another provider.
         model = next((env[key].strip() for key in model_keys if env.get(key, "").strip()),
                      "" if provider == "openai_codex" else "auto")
         return {

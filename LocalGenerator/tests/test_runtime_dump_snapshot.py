@@ -47,7 +47,7 @@ def test_manifest_only_discovery_and_verified_pair(tmp_path, monkeypatch):
     root = tmp_path / "runtime_dumps"
     path, manifest = manifest_pair(root)
     for kind in ("items", "projectiles"):
-        selected = dumps.resolve_runtime_dump_path(tmp_path, f"{kind}_runtime_dump.jsonl", "INFINI_TEST_EMPTY", "INFINI_TEST_EMPTY_OLD")
+        selected = dumps.resolve_runtime_dump_path(tmp_path, f"{kind}_runtime_dump.jsonl", "INFINI_TEST_EMPTY")
         assert selected == root / f"{kind}_runtime_dump.jsonl"
     snapshot = dumps.load_runtime_dump_snapshot(root / "items_runtime_dump.jsonl", root / "projectiles_runtime_dump.jsonl")
     assert snapshot.provenance == {"status": "verified_snapshot", "snapshotId": "a" * 32,

@@ -27,7 +27,6 @@ def test_multidev_profiles_are_exact_pinned_and_have_independent_recipe_identity
         # Exact multi-dev lane: no adjacent pool profile and no legacy fallback.
         assert lease.pool_size == 1
         assert [row["profile_id"] for row in lease.profiles] == ["llm_2"]
-        assert lease.legacy_fallback_allowed is False
     finally:
         llm_profiles.end_llm_item_lease(lease, token)
 

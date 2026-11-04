@@ -72,10 +72,10 @@ def native_held_frame_facts(data: Mapping[str, Any], canvas: int | None = None) 
 
 
 def chroma_rgb() -> tuple[int, int, int]:
-    # Exact supported aliases only; a typo must never choose a different key.
+    # Literal configured colors; a typo must never choose a different key.
     colors = {
         "magenta": (255, 0, 255),
-        "green": (0, 255, 0), "lime": (0, 255, 0), "greenscreen": (0, 255, 0),
+        "green": (0, 255, 0),
         "blue": (0, 0, 255), "cyan": (0, 255, 255),
         "white": (255, 255, 255), "black": (0, 0, 0),
     }
@@ -102,14 +102,17 @@ def uses_key_background() -> bool:
     """One raw-background policy for prompts, adapters and postprocessing."""
     if str(visual_config.BG_COLOR).strip().lower() == "transparent":
         return False
-    mode = (visual_config.BG_REMOVE_MODE or "sprite_keyer").strip().lower().replace("-", "_")
-    return bool(visual_config.REMOVE_BG) and mode not in {"", "none", "off"}
+    if not visual_config.REMOVE_BG:
+        return False
+    if str(visual_config.BG_REMOVE_MODE).strip().lower() != "sprite_keyer":
+        raise ValueError("INFINI_BG_REMOVE_MODE must be sprite_keyer; use INFINI_REMOVE_BG=0 to disable keying")
+    return True
 
 
 def sprite_background_positive_clause() -> str:
     if not uses_key_background():
         return "on a transparent background, no scene, no floor, no cast shadow"
-    # The supported local keyer owns alpha, including legacy mode aliases.
+    # The supported local keyer owns alpha.
     return f"on a perfectly solid untextured {chroma_name()}, object fully separated from background, no floor, no cast shadow, no gradient"
 
 

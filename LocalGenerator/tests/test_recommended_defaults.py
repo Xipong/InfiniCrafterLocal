@@ -168,7 +168,7 @@ def test_multi_setting_accept_preserves_explicit_stage_budgets_and_unchanged_fie
                 b'INFINI_LLM_REASONING_MODE=off\nINFINI_LLM_TEMPERATURE=0.38\n'
                 b'INFINI_VISUAL_DIRECTOR_TEMPERATURE=0.42\n'
                 b'INFINI_VISUAL_DIRECTOR_MAX_TOKENS=22000\nINFINI_VFX_LLM_DIRECTOR_MAX_TOKENS=24000\n'
-                b'INFINI_VFX_LLM_DIRECTOR_TIMEOUT=700\nINFINI_LLM_REAUTHOR_TEMPERATURE=0.22\n'
+                b'INFINI_VFX_LLM_DIRECTOR_TIMEOUT=700\nINFINI_LLM_REPAIR_TEMPERATURE=0.22\n'
                 b'INFINI_LLM_PROVIDER=my-provider\nINFINI_GUI_PIPELINE_PRESET=Custom\n'
                 b'INFINI_CRAFT_HTTP_TIMEOUT_SECONDS=240\n')
     config.write_bytes(original)

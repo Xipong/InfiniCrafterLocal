@@ -41,7 +41,7 @@ class StudioServer:
     def __init__(self, assets: Path, *, port: int = 0):
         self.assets = assets
         self.token = secrets.token_urlsafe(32)
-        from infini_local.desktop.settings_paths import ROOT, STATE_ROOT
+        from infini_local.core.app_paths import ROOT, STATE_ROOT
         self.file_root = STATE_ROOT
         self.guide_path = ROOT.parent / 'START_HERE.html'
         self.commands: queue.Queue[dict] = queue.Queue(maxsize=32)
@@ -551,7 +551,7 @@ class StudioController:
                         'result': {'kind': 'folderSelection', 'key': key, 'path': selected}}
             app._run_gui_task('native-folder-picker', work, completed)
         elif action == 'help':
-            from infini_local.desktop.settings_paths import ROOT
+            from infini_local.core.app_paths import ROOT
             if not (ROOT.parent / 'START_HERE.html').is_file():
                 raise ValueError('Локальная инструкция не найдена.')
             return {'ok': True, 'message': 'Локальная инструкция готова.', 'result': {

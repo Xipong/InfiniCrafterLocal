@@ -20,8 +20,7 @@ namespace InfiniCrafterLocal.Common.Models;
 // Apply, runtime executors, tests, and docs before treating it as gameplay.
 public sealed partial class GeneratedItemData
 {
-    public string RuntimeApiVersion { get; set; } = RuntimeApiCurrent;
-    private const string RuntimeApiCurrent = InfiniRuntimeLimits.RuntimeApiCurrent;
+    public string RuntimeApiVersion { get; set; } = InfiniRuntimeLimits.RuntimeApiCurrent;
     public string Id { get; set; } = Guid.NewGuid().ToString("N")[..12];
     public string RecipeKey { get; set; } = "";
     public string Name { get; set; } = "Generated Item";
