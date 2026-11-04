@@ -105,6 +105,45 @@ internal static partial class EngineRuntimeChecks
             Equal(true, Math.Abs(body.rotation - body.velocity.ToRotation() - MathHelper.PiOver2) < .001, "return does not infer spin");
         });
     }
+    private static void ComposableMotionNpcSeekPublishesOwnerVelocity()
+    {
+        WithPlayer((owner, _) => {
+            using var actors = new NativeActorState();
+            Terraria.Main.npc = Enumerable.Range(0, Terraria.Main.maxNPCs).Select(i => new NPC { whoAmI = i }).ToArray();
+            var data = MotionDefinition("""
+              {"seek":[{"target":"nearest_npc","maxSpeed":3.2,"velocityLerpPerUpdate":0.1,
+                "limitSpeedToDistance":true,"searchRangeTiles":40,"requireLineOfSight":false}]}
+              """);
+            var (host, body) = MotionActor(data, owner, Vector2.UnitX * 6f);
+            host.AI(); // Complete one-time spawn before observing seek synchronization.
+            var target = Terraria.Main.npc[0] = new NPC { active = true, whoAmI = 0,
+                life = 100, lifeMax = 100, damage = 1, Center = body.Center + new Vector2(0, 80) };
+            foreach (var (mode, player, runs) in new[] {
+                (NetmodeID.SinglePlayer, 0, true), (NetmodeID.MultiplayerClient, 0, true),
+                (NetmodeID.MultiplayerClient, 1, false), (NetmodeID.Server, 255, false) }) {
+                Terraria.Main.netMode = mode; Terraria.Main.myPlayer = player;
+                body.velocity = Vector2.UnitX * 6f; body.netUpdate = false;
+                host.AI();
+                AssertVfxNear(runs ? new Vector2(5.4f, .32f) : Vector2.UnitX * 6f, body.velocity,
+                    "nearest NPC seek changes velocity only on its gameplay authority");
+                Equal(runs, body.netUpdate, "owner NPC seek must publish its changed native velocity");
+            }
+            Terraria.Main.netMode = NetmodeID.MultiplayerClient; Terraria.Main.myPlayer = 0;
+            var seek = data.RuntimeProgram.TryGetEntity(data.RuntimeProgram.PrimaryEntityId)!.Seek![0];
+            foreach (string scenario in new[] { "outside_range", "no_target", "zero_lerp", "unchanged_velocity", "inactive_window" }) {
+                target.active = scenario != "no_target";
+                target.Center = body.Center + new Vector2(0, scenario == "outside_range" ? 641 : 80);
+                seek.VelocityLerpPerUpdate = scenario == "zero_lerp" ? 0 : .1f;
+                if (scenario == "inactive_window")
+                    seek.Window = new RuntimeMotionWindowSpec { Phase = "returning" };
+                body.velocity = scenario == "unchanged_velocity" ? Vector2.UnitY * 3.2f : Vector2.UnitX * 6f;
+                Vector2 before = body.velocity; body.netUpdate = false;
+                host.AI();
+                AssertVfxNear(before, body.velocity, scenario + " preserves velocity");
+                Equal(false, body.netUpdate, scenario + " does not publish a nonexistent seek change");
+            }
+        });
+    }
     private static void ComposableMotionFreeBeamAndLashGeometry()
     {
         WithPlayer((owner, _) => {

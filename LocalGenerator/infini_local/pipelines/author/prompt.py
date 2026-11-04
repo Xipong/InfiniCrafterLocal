@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Any, Mapping, Sequence
 
 from infini_local.core.item_identity_tools import item_field
@@ -55,7 +56,8 @@ def concise_terraria_tick_guide_for_llm() -> dict[str, str]:
         "nativeSourceReferences": NATIVE_SOURCE_REFERENCE_RULE,
         "time": "Seconds resolve to the nearest world tick (60/s), half-tick ties upward. Positive effects that round to zero are rejected. immunity.localCooldown and projectile-update counters remain counts.",
         "distance": "World distances use blocks; Tiles also means blocks. 1 block = 16 world pixels.",
-        "speed": "Physical speed/acceleration use blocks/s and blocks/s^2; angular rates use radians/s. The engine applies the target's updatesPerTick conversion. Retention/lerp/multiplier controls keep their declared per-update meaning.",
+        "speed": "Physical speed/acceleration use blocks/s and blocks/s^2; angular rates use radians/s. Retention/lerp/multiplier controls keep their declared per-update meaning.",
+        "reach": "Attack reach comes from the executed body path and collision geometry. Native width/height and launch coefficients alone may not reproduce a parent's moving center or Colliding shape. Active attachment places the center and clears velocity at its motion stage; launch speed alone does not extend the attached path. Item useStyle, sprite size and VFX do not add projectile collision coverage. Choose range and motion for the new play experience; parent mechanics are references, not required templates.",
         "scope": "Author cards use player-facing units; raw parent facts and compiled wire retain engine units. Pixel geometry and normalized UV/grip coordinates retain their own units. Texture resolution is independent of rendered size and collision geometry.",
         "vanillaScaleReference": "Ordinary unmounted player: 20x42-pixel collision box; base run speed 11.25 blocks/s; normal jump initial upward velocity about 18.79 blocks/s.",
         "spread": "radians; total span",
@@ -79,24 +81,72 @@ def planner_priority_header_for_llm() -> list[str]:
     return [AUTHOR_DESIGN_QUALITY_RULE]
 
 
-def _source_path_objects(packet: Mapping[str, Any], path: str) -> list[Mapping[str, Any]]:
-    """Read the exact declared namespace; [] visits only that named array."""
-    values: list[Any] = [packet]
+def _source_path_instances(packet: Mapping[str, Any], path: str) -> list[tuple[str, Mapping[str, Any], Mapping[str, Any] | None]]:
+    """Keep concrete array identity and the enclosing entity's own clock."""
+    values: list[Any] = [("", packet, None)]
     for part in path.split("."):
         is_array = part.endswith("[]")
         key = part[:-2] if is_array else part
         next_values: list[Any] = []
-        for value in values:
+        for prefix, value, entity in values:
             if not isinstance(value, Mapping) or key not in value:
                 continue
             child = value[key]
+            concrete = f"{prefix}.{key}" if prefix else key
             if is_array:
                 if isinstance(child, list):
-                    next_values.extend(child)
+                    for index, row in enumerate(child):
+                        owner = row if concrete == "raw.generatedParent.runtimeProgram.entities" else entity
+                        next_values.append((f"{concrete}[{index}]", row, owner))
             else:
-                next_values.append(child)
+                next_values.append((concrete, child, entity))
         values = next_values
-    return [value for value in values if isinstance(value, Mapping)]
+    return [(path, value, entity) for path, value, entity in values if isinstance(value, Mapping)]
+
+
+def _source_path_objects(packet: Mapping[str, Any], path: str) -> list[Mapping[str, Any]]:
+    """Read the exact declared namespace; [] visits only that named array."""
+    return [value for _, value, _ in _source_path_instances(packet, path)]
+
+
+def _source_unit_readings(instances: Sequence[tuple[int, str, Mapping[str, Any], Mapping[str, Any] | None]],
+                          fields: Mapping[str, Any], specs: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Read-only unit projection, never an inferred call or an item rewrite."""
+    readings = []
+    for parent_index, path, container, entity in instances:
+        collision = entity.get("collision") if isinstance(entity, Mapping) else None
+        extra = collision.get("extraUpdates") if isinstance(collision, Mapping) else None
+        updates = extra + 1 if type(extra) is int and 0 <= extra <= 5 else None
+        values = {}
+        for field in fields:
+            spec = specs[field]
+            # Identity/equal-magnitude readings add no information. Missing/invalid clocks,
+            # nonnumeric facts and unknown alternatives stay unknown.
+            if not (spec.wire_offset or spec.wire_multiplier != 1 or spec.wire_divisor != 1 or spec.wire_updates_power):
+                continue
+            if spec.wire_updates_power and updates is None:
+                continue
+            owners, _, leaf = field.rpartition(".")
+            owners = _source_path_objects(container, owners) if owners else [container]
+            if len(owners) != 1:
+                continue
+            value = owners[0].get(leaf)
+            if type(value) not in (int, float):
+                continue
+            try:
+                if not math.isfinite(value):
+                    continue
+                authored = spec.from_wire(value, updates_per_tick=updates)
+                if not math.isfinite(authored) or authored == value:
+                    continue
+            except (OverflowError, ValueError):
+                continue
+            values[field] = {"value": authored, "units": spec.units}
+        if values:
+            readings.append({"parentIndex": parent_index, "source": path,
+                             **({"entityId": entity["id"]} if isinstance(entity, Mapping) and isinstance(entity.get("id"), str) else {}),
+                             **({"updatesPerTick": updates} if updates is not None else {}), "values": values})
+    return readings
 
 
 def source_wire_units_for_llm(
@@ -108,6 +158,7 @@ def source_wire_units_for_llm(
     units. Boolean projections are excluded; alternative paths explain units, not original Author choices.
     """
     scopes: dict[tuple[str, str, tuple[tuple[str, Any], ...]], dict[str, list[str]]] = {}
+    source_specs: dict[tuple[str, str, tuple[tuple[str, Any], ...]], dict[str, Any]] = {}
     if parent_packets is not None:
         # Match the stage-visible source representation. Native numeric facts
         # already expressed as explicit value/unit objects need no wire math;
@@ -146,17 +197,6 @@ def source_wire_units_for_llm(
             field_path = projection["wireName"]
             if not field_path or spec.wire_enum or spec.wire_boolean_true_value is not None:
                 continue
-            # The existing canonical projection owns both ratio terms and
-            # the target-update exponent; no capability-name unit table.
-            offset = spec.wire_offset
-            reading = (f"source - {offset}" if offset > 0 else f"source + {abs(offset)}") if offset else "source"
-            if projection["divisor"] != 1:
-                reading += f" * {projection['divisor']}"
-            power = projection["updatesPerTickPower"]
-            if power:
-                reading += " * updatesPerTick" + (f"^{power}" if power != 1 else "")
-            if projection["multiplier"] != 1:
-                reading += f" / {projection['multiplier']}"
             suffix = "." + field_path
             for path in capability.final_wire_paths:
                 if not path.endswith(suffix):
@@ -167,33 +207,38 @@ def source_wire_units_for_llm(
                     roots.append("raw.item")
                 for source in roots:
                     fields = scopes.setdefault((source, capability.name, condition), {})
-                    entry = [author_path, reading, spec.units]
+                    entry = [author_path, spec.units]
                     previous = fields.get(field_path)
                     if previous is not None:
-                        if previous[1:] != entry[1:]:
+                        previous_spec = source_specs[(source, capability.name, condition)][field_path]
+                        if any(getattr(previous_spec, key) != getattr(spec, key) for key in (
+                                "wire_offset", "wire_multiplier", "wire_divisor", "wire_updates_power", "units")):
                             raise ValueError("one wire field has incompatible unit readings in declared variants")
                         entry[0] = " | ".join(sorted(set(previous[0].split(" | ")) | {author_path}))
                     fields[field_path] = entry
+                    source_specs.setdefault((source, capability.name, condition), {})[field_path] = spec
     scope_rows = []
     for (source, fn, condition), fields in scopes.items():
+        instances = []
         if parent_packets is not None:
-            containers = [row for packet in parent_packets for row in _source_path_objects(packet, source)]
-            containers = [row for row in containers if all(
+            instances = [(index, path, row, entity) for index, packet in enumerate(parent_packets)
+                         for path, row, entity in _source_path_instances(packet, source)]
+            instances = [(index, path, row, entity) for index, path, row, entity in instances if all(
                 any(owner.get(path.rsplit(".", 1)[-1]) == expected for owner in (
                     _source_path_objects(row, path.rsplit(".", 1)[0]) if "." in path else [row]))
                 for path, expected in condition)]
             fields = {name: reading for name, reading in fields.items()
-                      if any(has_field(row, name, numeric=source == "raw.item") for row in containers)}
+                      if any(has_field(row, name, numeric=source == "raw.item") for _, _, row, _ in instances)}
         if fields:
-            scope_rows.append({"source": source, "fn": fn, **({"when": dict(condition)} if condition else {}), "fields": fields})
+            readings = _source_unit_readings(instances, fields, source_specs[(source, fn, condition)])
+            scope_rows.append({"source": source, "fn": fn, **({"when": dict(condition)} if condition else {}), "fields": fields,
+                               **({"readings": readings} if readings else {})})
     return {
         "readingRule": (
-            "Paths start at each parent packet; [] visits that array. Field keys are relative to the named source container. "
-            "Apply sourceToAuthor only to the stated source, fn and matching when discriminators; source alone means unchanged magnitude. "
-            "For update-scaled values, updatesPerTick = collision.extraUpdates + 1 on the same entity. "
-            "Unlisted fields or absent update context have no supplied conversion. Alternative authorParam paths share a unit reading."
+            "readings contains ready parent measurements in Author units. parentIndex is zero-based; source identifies unchanged raw evidence. "
+            "Missing readings are unspecified. Parent measurements are references, not required values or behavior for the new item."
         ),
-        "fieldColumns": ["authorParam", "sourceToAuthor", "authorUnits"],
+        "fieldColumns": ["authorParam", "authorUnits"],
         "scopes": scope_rows,
     }
 

@@ -10,7 +10,7 @@
       "capabilityCardsMatchSubset": true,
       "capabilitySubsetCount": 1,
       "directCapabilities": [],
-      "dossierChars": 29538,
+      "dossierChars": 29775,
       "errorCodes": [
         "shape_one_of",
         "shape_required"
@@ -42,7 +42,7 @@
       "directCapabilities": [
         "item_use"
       ],
-      "dossierChars": 28998,
+      "dossierChars": 29235,
       "errorCodes": [
         "binding_dependency"
       ],
@@ -77,7 +77,7 @@
         "scale_velocity",
         "seek"
       ],
-      "dossierChars": 67329,
+      "dossierChars": 67566,
       "errorCodes": [
         "missing_movement_component"
       ],
@@ -107,7 +107,7 @@
       "directCapabilities": [
         "item_use"
       ],
-      "dossierChars": 34376,
+      "dossierChars": 34613,
       "errorCodes": [
         "missing_item_capability_param"
       ],
@@ -147,7 +147,7 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-  "fullAuthorPayloadChars": 165726,
+  "fullAuthorPayloadChars": 165963,
   "fullCapabilityCatalogCount": 100,
   "ok": true,
   "policyCoverage": {
