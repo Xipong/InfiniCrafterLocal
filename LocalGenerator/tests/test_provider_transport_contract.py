@@ -1055,3 +1055,36 @@ def test_retired_api_modes_refuse_before_transport(wire, mode):
     wire.configure(LLM_API_MODE="chat_completions")
     assert transport.llm_chat_json(packet(), timeout=1)["choices"][0]["message"]["content"] == "{}"
     assert len(wire.calls) == 1
+
+
+@pytest.mark.parametrize("first_outcome", ["success", "rejected", "invalid_stage"])
+def test_logical_call_scope_is_released_before_the_next_stage(wire, monkeypatch, first_outcome):
+    events = []
+    monkeypatch.setattr(transport_diagnostics, "log_event", lambda level, message, data:
+                        events.append((message, copy.deepcopy(data))))
+    first = packet("planner")
+    if first_outcome == "invalid_stage":
+        first[llm_provider_wire.LLM_STAGE_KEY] = "not_a_pipeline_stage"
+    elif first_outcome == "rejected":
+        wire.replies.append(400)
+    with llm_profiles.llm_item_lease("independent-logical-calls") as lease:
+        if first_outcome == "success":
+            transport.llm_chat_json(first, timeout=1)
+        else:
+            with pytest.raises(ValueError if first_outcome == "invalid_stage" else urllib.error.HTTPError):
+                transport.llm_chat_json(first, timeout=1)
+        assert transport_diagnostics._CURRENT_LLM_DEADLINE.get() is None
+        assert transport_diagnostics._CURRENT_LLM_DIAGNOSTICS.get() is None
+        assert transport_diagnostics._CURRENT_LLM_ATTEMPT.get() is None
+        second = transport.llm_chat_json(packet("visual_director"), timeout=1)
+        assert lease.stages == (["visual_director"] if first_outcome == "invalid_stage"
+                                else ["planner", "visual_director"])
+        assert lease.call_count == len(lease.stages)
+    debug = second["_debug"]
+    assert debug["stage"] == "visual_director"
+    assert debug.get("transportRetryCount", 0) == 0
+    assert [message for message, _ in events] == (
+        ["LLM logical call finished"] if first_outcome == "invalid_stage" else
+        ["LLM logical call failed" if first_outcome == "rejected" else "LLM logical call finished",
+         "LLM logical call finished"])
+    assert len({data["logicalCallId"] for _, data in events}) == len(events)

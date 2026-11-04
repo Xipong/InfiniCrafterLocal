@@ -11,7 +11,6 @@ import re
 import subprocess
 import sys
 import threading
-from queue import Empty, Queue
 import time
 import urllib.error
 import urllib.request
@@ -30,92 +29,14 @@ from infini_local.core.app_paths import (
 )
 
 
-from infini_local.desktop.settings_interactions import notify, finish_action, begin_action, saved_config_revision
+from infini_local.desktop.settings_interactions import saved_config_revision
 
 
 class StudioOperations:
-    def _run_gui_task(self, name, work, on_result):
-        """Worker -> queue -> owner event loop; workers receive only captured plain data."""
-        if self.__dict__.get("_gui_closed", False):
-            return
-        tasks = self.__dict__.setdefault("_gui_tasks", {})
-        previous = tasks.get(name)
-        if previous:
-            previous["cancel"].set()
-            # Coalesce refresh clicks: one bounded in-flight worker and one
-            # newest captured request, never one thread per click.
-            if previous["pending"] is not None:
-                finish_action(self, previous["pending"][2], False, "Запрос заменён более новым.", cancelled=True)
-            previous["pending"] = (work, on_result, self.__dict__.get("_studio_command_id"))
-            return
-        state = {"cancel": threading.Event(), "results": Queue(maxsize=1), "after": None, "pending": None,
-                 "command_id": self.__dict__.get("_studio_command_id")}
-        tasks[name] = state
-
-        def worker():
-            try:
-                state["results"].put((True, work(state["cancel"])))
-            except Exception:
-                # Raw transport errors can include credentials/URLs. UI gets only
-                # a failure flag; a workflow may return its own safe diagnostics.
-                state["results"].put((False, None))
-
-        def poll():
-            if self.__dict__.get("_gui_closed", False) or tasks.get(name) is not state:
-                return
-            try:
-                result = state["results"].get_nowait()
-            except Empty:
-                state["after"] = self.after(100, poll)
-                return
-            tasks.pop(name, None)
-            if state["pending"] is not None:
-                finish_action(self, state["command_id"], False, "Запрос заменён более новым.", cancelled=True)
-                work_next, apply_next, identifier = state["pending"]
-                previous_id = self.__dict__.get("_studio_command_id")
-                self._studio_command_id = identifier
-                try:
-                    self._run_gui_task(name, work_next, apply_next)
-                finally:
-                    self._studio_command_id = previous_id
-            elif not state["cancel"].is_set():
-                previous_notice_id = self.__dict__.get("_studio_notification_action_id")
-                self._studio_notification_action_id = state["command_id"]
-                try:
-                    outcome = on_result(*result)
-                    if isinstance(outcome, dict):
-                        finish_action(self, state["command_id"], outcome.get("ok", result[0]), outcome.get("message", ""),
-                                      saved=outcome.get("saved", False), cancelled=outcome.get("cancelled", False),
-                                      result=outcome.get("result"))
-                    else:
-                        finish_action(self, state["command_id"], result[0], "Действие завершено." if result[0] else "Действие не выполнено.")
-                except Exception:
-                    # Transport and subprocess exceptions may contain secrets.
-                    finish_action(self, state["command_id"], False, "Не удалось завершить действие. Проверь настройки и журнал.")
-                    self.status = ("Не удалось завершить действие. Проверь настройки и журнал.")
-                finally:
-                    self._studio_notification_action_id = previous_notice_id
-            else:
-                finish_action(self, state["command_id"], False, "Действие отменено.", cancelled=True)
-
-        threading.Thread(target=worker, daemon=True, name="settings-" + name).start()
-        state["after"] = self.after(100, poll)
-
-    def _cancel_gui_task(self, name):
-        state = self.__dict__.get("_gui_tasks", {}).get(name)
-        if state:
-            state["cancel"].set()
-            if state["pending"] is not None:
-                finish_action(self, state["pending"][2], False, "Действие отменено.", cancelled=True)
-            state["pending"] = None
-            # Keep polling solely to reap the bounded in-flight worker. A new
-            # refresh coalesces until its network timeout/result returns.
-
     def ping_codex_image_account(self):
         """Read-only connectivity probe, with one bounded in-flight worker."""
         from infini_local.services import codex_catalog
 
-        begin_action(self)
         self.codex_image_account = "Проверка аккаунта через read-only текстовый endpoint…"
         self.status = "Codex: проверка аккаунта; image-доступ не проверяется."
 
@@ -129,13 +50,12 @@ class StudioOperations:
             self.status = self.codex_image_account
             return {"ok": ok, "message": self.codex_image_account}
 
-        self._run_gui_task("codex-image-ping", work, apply)
+        self.actions.run("codex-image-ping", work, apply)
 
     def refresh_codex_text_catalog(self):
         """Account catalog; only the owner loop publishes worker results."""
         from infini_local.services import codex_catalog
 
-        begin_action(self)
         self.codex_catalog = "Читаем текстовые модели текущего Codex-аккаунта…"
 
         def work(cancel):
@@ -155,7 +75,7 @@ class StudioOperations:
             self.status = self.codex_catalog
             return {"ok": ok, "message": self.codex_catalog}
 
-        self._run_gui_task("codex-catalog", work, apply)
+        self.actions.run("codex-catalog", work, apply)
 
     def codex_login(self):
         from queue import Queue
@@ -163,7 +83,7 @@ class StudioOperations:
         if getattr(self, "_codex_login_running", False):
             self.status = ("Codex OAuth: вход уже ожидает завершения в браузере.")
             return {"ok": False, "message": self.status}
-        self._codex_login_command_id = begin_action(self)
+        self._codex_login_command_id = self.actions.mark_pending()
         self._codex_login_running = True
         self._codex_login_cancel = threading.Event()
         self._codex_login_results = Queue()
@@ -191,7 +111,7 @@ class StudioOperations:
         ok, message = result
         self.status = (message)
         self._codex_account_status = message
-        finish_action(self, self.__dict__.get('_codex_login_command_id'), ok, message)
+        self.actions.finish(self.__dict__.get('_codex_login_command_id'), ok, message)
 
     def codex_status(self):
         from infini_local.services.codex_auth import auth_status
@@ -213,8 +133,8 @@ class StudioOperations:
             logout()
             # A worker may have fetched the previous account's catalog before
             # sign-out. Retire every queued UI result and remove account metadata.
-            self._cancel_gui_task("codex-catalog")
-            self._cancel_gui_task("codex-image-ping")
+            self.actions.cancel("codex-catalog")
+            self.actions.cancel("codex-image-ping")
             self._codex_text_models = {}
             current = self.values["INFINI_CODEX_LLM_MODEL"].strip()
             self.codex_models = list([current] if current else [])
@@ -383,11 +303,11 @@ class StudioOperations:
             if data.get("INFINI_HOST") != "0.0.0.0":
                 warnings.append("Radmin/LAN включён, но Host не 0.0.0.0 — друзья не достучатся до LocalGenerator asset host.")
         if warnings:
-            notify(self, "warning", "Проверка настроек", "\n".join(warnings))
+            self.actions.notify("warning", "Проверка настроек", "\n".join(warnings))
             self.status = ("Есть предупреждения по настройкам.")
             return {"ok": False, "message": "\n".join(warnings)}
         else:
-            notify(self, "info", "Проверка настроек", "Критичных проблем в настройках не вижу.")
+            self.actions.notify("info", "Проверка настроек", "Критичных проблем в настройках не вижу.")
             self.status = ("Проверка прошла без критичных предупреждений.")
             return {"ok": True, "message": "Проверка прошла без критичных предупреждений."}
 
@@ -424,10 +344,10 @@ class StudioOperations:
         return isinstance(reason, ConnectionRefusedError) or getattr(reason, "errno", None) in {111, 61, 10061}
 
     def _request_server_action(self, restart: bool, force: bool = False):
-        if "server-action" in self.__dict__.get("_gui_tasks", {}):
+        if "server-action" in self.actions.tasks:
             self.status = ("Server action already in progress; wait for its result.")
             return {"ok": False, "message": "Действие сервера уже выполняется."}
-        expected_revision = self.__dict__.get("_studio_expected_config_revision")
+        expected_revision = self.actions.expected_config_revision
         owned_running = self.proc is not None and self.proc.poll() is None
         owned_url = self.__dict__.get('_owned_server_base_url') if owned_running else None
         base_url = owned_url or (self._server_base_url() if restart else self._saved_or_owned_server_base_url())
@@ -470,7 +390,7 @@ class StudioOperations:
             if shutdown_acknowledged.is_set():
                 # Once shutdown was accepted, an earlier health response cannot
                 # keep certifying readiness even if closure remains unconfirmed.
-                self._cancel_gui_task("health-config")
+                self.actions.cancel("health-config")
                 self._applied_config_ack = None
                 self._server_lifecycle = "unknown"
                 self.applied_config = ("Runtime config unconfirmed: shutdown was requested; check connection.")
@@ -492,7 +412,7 @@ class StudioOperations:
                 self.__dict__.pop('_owned_launch_settings', None)
                 self.__dict__.pop('_owned_server_base_url', None)
                 self.__dict__.pop('_owned_server_launch_id', None)
-                self._cancel_gui_task("health-config")
+                self.actions.cancel("health-config")
                 self._applied_config_ack = None
                 scheduled = self.__dict__.get("_health_after_id")
                 if scheduled is not None:
@@ -503,12 +423,12 @@ class StudioOperations:
                 self.observe_runtime_notifications(poll=False)
                 return {"ok": True, "message": self.status}
 
-        self._run_gui_task("server-action", work, apply)
+        self.actions.run("server-action", work, apply)
 
     def _start_server_after_guard(self):
         # Only the acknowledged shutdown/free-port path reaches launch. Never
         # terminate/kill a PID here: that would bypass atomic busy admission.
-        self._cancel_gui_task("health-config")
+        self.actions.cancel("health-config")
         self._applied_config_ack = None
         self._update_applied_config_feedback()
         self.save()
@@ -551,7 +471,7 @@ class StudioOperations:
         except Exception:
             self._server_lifecycle = "unknown"
             message = "Настройки сохранены в config.env, но не удалось запустить server.py; проверь Python/права/порт. Runtime config не подтверждён."
-            notify(self, "error", "Не удалось запустить сервер", message)
+            self.actions.notify("error", "Не удалось запустить сервер", message)
             self.status = (message)
             # Saving and launching are separate outcomes. The failed launch must
             # still acknowledge this command's persisted baseline to its tab.
@@ -703,10 +623,10 @@ class StudioOperations:
                 if index == 1 and current[1] == "unknown" and current[0] != "responding":
                     continue  # The generator transition already explains lost observability.
                 if current[index] != previous[index] and current[index] in messages:
-                    notify(self, *messages[current[index]])
+                    self.actions.notify(*messages[current[index]])
         now = time.monotonic()
         if (poll and alive and self.__dict__.get("_health_after_id") is None and lifecycle != "stopped" and not self.__dict__.get("_gui_closed", False)
-                and not any(key in self.__dict__.get("_gui_tasks", {}) for key in ("health-config", "server-action"))
+                and not any(key in self.actions.tasks for key in ("health-config", "server-action"))
                 and now >= self.__dict__.get("_runtime_health_after", 0)):
             self._runtime_health_after = now + 5
             self._delayed_health_check()
@@ -716,7 +636,7 @@ class StudioOperations:
         # inputs here and return results through the same bounded queue pattern.
         if self.__dict__.get("_gui_closed", False):
             return
-        studio_request = bool(self.__dict__.get("_studio_command_id"))
+        studio_request = bool(self.actions.command_id)
         observed_proc = self.proc
         owned = observed_proc is not None and observed_proc.poll() is None
         base_url = self._saved_or_owned_server_base_url() if studio_request or owned else self._server_base_url()
@@ -772,7 +692,7 @@ class StudioOperations:
             self.status = (self.applied_config)
             return {"ok": True, "message": self.applied_config}
 
-        self._run_gui_task("health-config", work, apply)
+        self.actions.run("health-config", work, apply)
 
     def stop_server(self):
         return self._request_server_action(restart=False)
@@ -781,19 +701,8 @@ class StudioOperations:
         if self.__dict__.get("_gui_closed", False):
             return
         self._gui_closed = True
-        # Retire every receipt before removing callbacks; shutdown of Studio is
-        # independent from the owned generator process and never terminates it.
-        identifiers = set(self.__dict__.get("_studio_async_ids", set()))
-        for state in self.__dict__.get("_gui_tasks", {}).values():
-            state["cancel"].set()
-            identifiers.add(state["command_id"])
-            if state["pending"] is not None:
-                identifiers.add(state["pending"][2])
-            state["pending"] = None
-        identifiers.add(self.__dict__.get("_codex_login_command_id"))
-        for identifier in identifiers - {None}:
-            finish_action(self, identifier, False, "Студия закрыта; действие отменено.", cancelled=True)
-        self.__dict__.get("_gui_tasks", {}).clear()
+        # Finish pending actions before removing their control-loop callbacks.
+        self.actions.close()
         self._health_after_id = None
         if getattr(self, "_codex_login_running", False):
             self._codex_login_cancel.set()
@@ -889,10 +798,10 @@ class StudioOperations:
             self._render_trace_snapshot(snap)
             return {"ok": True, "message": status}
 
-        self._run_gui_task("trace", work, apply)
+        self.actions.run("trace", work, apply)
 
     def cancel_trace_refresh(self):
-        self._cancel_gui_task("trace")
+        self.actions.cancel("trace")
         self.trace_status = ("Trace refresh cancelled; any in-flight read is being retired.")
 
     def _render_trace_snapshot(self, snap: dict):
@@ -942,14 +851,14 @@ class StudioOperations:
         self.status = (f"Opened launch cache: {cache}")
 
     def clear_trace_files(self, *, confirmed=False):
-        if "trace-clear" in self.__dict__.get("_gui_tasks", {}):
+        if "trace-clear" in self.actions.tasks:
             self.trace_status = ("Trace clear already in progress.")
             return {"ok": False, "message": "Очистка журнала уже выполняется."}
         if not confirmed:
             return {"ok": False, "message": "Trace clear requires confirmation."}
         base_url = self._server_base_url()
         cache = self._effective_cache_dir()
-        self._cancel_gui_task("trace")
+        self.actions.cancel("trace")
         self.trace_status = ("Clearing trace…")
 
         def work(cancel):
@@ -1001,7 +910,7 @@ class StudioOperations:
                 self.refresh_trace(base_url=base_url, cache=cache)
             return {"ok": bool(ok and result and result.startswith("Trace cleared")), "message": result or "Trace clear unavailable; not confirmed."}
 
-        self._run_gui_task("trace-clear", work, apply)
+        self.actions.run("trace-clear", work, apply)
 
 
     def _set_trace_text(self, key: str, content: str):

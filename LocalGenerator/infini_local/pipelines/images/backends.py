@@ -85,7 +85,6 @@ from infini_local.core.images.config import (
     SDCPP_SERVER_REQUEST_TIMEOUT,
     SDCPP_SERVER_SHOW_CONSOLE,
     SDCPP_SERVER_STARTUP_TIMEOUT,
-    SDCPP_SERVER_STATE,
     SDCPP_SERVER_TXT2IMG_PATHS,
     SDCPP_SERVER_URL,
     SDCPP_STEPS,
@@ -94,7 +93,6 @@ from infini_local.core.images.config import (
     VISUAL_GENERATION_TIMEOUT,
     ZIMAGE_POSITIVE_ONLY,
     ZIMAGE_PROMPT_CONTRACT,
-    cleanup_sdcpp_server_process,
 )
 from infini_local.core.item_identity_tools import safe_file_part
 from infini_local.pipelines.images.prompts import (
@@ -106,6 +104,7 @@ from infini_local.services import (
     sdcpp_backend,
     sdcpp_service,
 )
+from infini_local.services.sdcpp_service import SDCPP_SERVER_STATE
 from infini_local.services.visual_asset_pipeline import ImageOutputIOError, write_image_bytes
 from infini_local.storage.trace_runtime import (
     log_event,
@@ -311,7 +310,7 @@ def sdcpp_debug_snapshot(include_log_tail: bool = True, *, probe_server: bool = 
 def ensure_sdcpp_server() -> bool:
     from infini_local.storage import trace_runtime
 
-    ok = sdcpp_service.ensure_server(
+    return sdcpp_service.ensure_server(
         state=SDCPP_SERVER_STATE,
         root=STATE_ROOT,
         cache_dir=CACHE_DIR,
@@ -323,13 +322,11 @@ def ensure_sdcpp_server() -> bool:
         server_is_alive=sdcpp_server_is_alive,
         build_command=build_sdcpp_server_command,
         stringify_cmd=sdcpp_backend.stringify_cmd,
-        cleanup_process=cleanup_sdcpp_server_process,
         log_event=log_event,
         tail_text_file=tail_text_file,
         process_env=sdcpp_backend.server_process_environment(_sdcpp_config()),
         diagnostics_enabled=trace_runtime.TRACE_PROMPTS_ENABLED,
     )
-    return ok
 
 def sdcpp_server_payload(prompt: str, negative: str, width: int, height: int, seed: int, style: str) -> dict[str, Any]:
     return sdcpp_backend.server_payload(

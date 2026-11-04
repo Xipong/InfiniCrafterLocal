@@ -307,7 +307,7 @@ def _llm_responses_json_single_context(payload: dict[str, Any], timeout: float, 
 
 
 def _record_llm_stage(payload: dict[str, Any]) -> str:
-    stage = offline_replay._llm_replay_stage_from_payload(payload)
+    stage = wire.llm_stage(payload)
     lease = profiles._CURRENT_LLM_ITEM_LEASE.get()
     if lease is not None:
         lease.call_count += 1
@@ -316,9 +316,8 @@ def _record_llm_stage(payload: dict[str, Any]) -> str:
 
 
 
-@diagnostics._bounded_llm_call
 def _llm_json_single_context(payload: dict[str, Any], timeout: float, context: dict[str, Any]) -> dict[str, Any]:
-    stage = offline_replay._llm_replay_stage_from_payload(payload)
+    stage = wire.llm_stage(payload)
     # Raw replay is an explicit offline seam.  Resolve it before choosing
     # Responses vs Chat so auto/responses profiles can never make a network
     # call merely because replay used to live inside the Chat-only helper.
@@ -428,11 +427,6 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: float, context: d
 
 
 
-def _json_object_response_format() -> dict[str, Any]:
-    return {"type": "json_object"}
-
-
-
 def _payload_without_strict_schema(payload: dict[str, Any]) -> dict[str, Any]:
     """Return the same request with strict provider-side schema relaxed to json_object.
 
@@ -441,7 +435,7 @@ def _payload_without_strict_schema(payload: dict[str, Any]) -> dict[str, Any]:
     requiredJsonShape and the runtime invariants — stays byte-identical.
     """
     relaxed = dict(payload)
-    relaxed["response_format"] = _json_object_response_format()
+    relaxed["response_format"] = {"type": "json_object"}
     return relaxed
 
 
@@ -455,7 +449,6 @@ def _strict_schema_capability_keys(payload: dict[str, Any], context: dict[str, A
 
 
 
-@diagnostics._bounded_llm_call
 def _llm_chat_json_single_context(payload: dict[str, Any], timeout: float, context: dict[str, Any]) -> dict[str, Any]:
     profiles.ensure_llm_auth_configured(context)
     prepared = dict(payload)
@@ -484,7 +477,7 @@ def _llm_chat_json_single_context(payload: dict[str, Any], timeout: float, conte
         # this one stays a short "what changed" line: three paragraphs of identical
         # prose in the server window would bury the fact that the craft recovered.
         log_event("warn", "LLM strict json_schema rejected; retrying same stage with json_object for this run", {
-            "stage": offline_replay._llm_replay_stage_from_payload(payload),
+            "stage": wire.llm_stage(payload),
             "profileId": context.get("profile_id"),
             "provider": profiles.active_llm_provider(context),
             "model": str(context.get("model") or ""),
@@ -513,7 +506,7 @@ def _llm_chat_json_single_context(payload: dict[str, Any], timeout: float, conte
             return result
         _STRICT_SCHEMA_CAPABILITY[schema_key if scope == "schema" else capability_key] = False
         log_event("info", "LLM schema negotiation accepted", {
-            "stage": offline_replay._llm_replay_stage_from_payload(payload), "profileId": context.get("profile_id"),
+            "stage": wire.llm_stage(payload), "profileId": context.get("profile_id"),
             "schemaCapabilityScope": scope, "knownWorkingResponseFormat": "json_object",
             "knownWorkingApiMode": "chat_completions",
         })
@@ -625,7 +618,6 @@ def _with_transport_retry_debug(
 
 
 
-@diagnostics._bounded_llm_call
 def _llm_json_single_context_with_length_retry(
     payload: dict[str, Any],
     timeout: float,
@@ -690,7 +682,7 @@ def _payload_without_model_override(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 
-@diagnostics._bounded_llm_call
+@diagnostics._logical_llm_call
 def llm_chat_json(payload: dict[str, Any], timeout: float = 10) -> dict[str, Any]:
     mode = _record_llm_stage(payload)
 

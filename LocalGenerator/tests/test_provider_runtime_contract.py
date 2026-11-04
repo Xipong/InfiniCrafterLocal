@@ -110,7 +110,7 @@ def test_server_startup_owns_cleanup_registration_before_bounded_bind(monkeypatc
     monkeypatch.setattr(server, "initialize_trace_storage", lambda: None)
     monkeypatch.setattr(server, "TRACE_PROMPTS_ENABLED", True)
     monkeypatch.setattr(server, "CONSOLE_EVENT_LEVELS", echo_levels)
-    monkeypatch.setattr(server.visual_config, "install_sdcpp_cleanup_handlers", lambda: events.append("cleanup"))
+    monkeypatch.setattr(server, "install_cleanup_handlers", lambda *_: events.append("cleanup"))
     monkeypatch.setattr(server, "ThreadingHTTPServer", lambda address, handler: events.append(address) or SimpleNamespace(serve_forever=lambda: events.append("served")))
     server.main()
     assert events == ["cleanup", ("127.0.0.1", expected), "served"]
@@ -186,7 +186,7 @@ def service_options(tmp_path):
         server_url="http://127.0.0.1:7861", server_autostart=True, startup_timeout=1,
         show_console=False, server_log_file=str(tmp_path / "sdcpp.log"), server_is_alive=lambda: False,
         build_command=lambda: (["fake-sdcpp"], False), stringify_cmd=lambda cmd: " ".join(cmd),
-        cleanup_process=lambda _reason: None, log_event=lambda *_args: None, tail_text_file=lambda *_args: "")
+        log_event=lambda *_args: None, tail_text_file=lambda *_args: "")
 
 
 def test_sdcpp_cleanup_is_lazy_worker_safe_and_registered_once(monkeypatch, service_options):
@@ -199,12 +199,12 @@ def test_sdcpp_cleanup_is_lazy_worker_safe_and_registered_once(monkeypatch, serv
     monkeypatch.setattr(sdcpp_service.signal, "getsignal", lambda _sig: sdcpp_service.signal.SIG_DFL)
     monkeypatch.setattr(sdcpp_service.signal, "signal", lambda sig, handler: signal_calls.append((sig, handler)))
     state = service_options["state"]
-    cleanup = lambda _reason: None
+    log_event = lambda *_args: None
     with ThreadPoolExecutor(max_workers=1) as workers:
-        workers.submit(sdcpp_service.install_cleanup_handlers, state, cleanup).result(timeout=5)
+        workers.submit(sdcpp_service.install_cleanup_handlers, state, log_event).result(timeout=5)
     assert state.cleanup_registered is True and state.signal_handlers_registered is False
     assert len(atexit_calls) == 1 and signal_calls == []
-    sdcpp_service.install_cleanup_handlers(state, cleanup)
+    sdcpp_service.install_cleanup_handlers(state, log_event)
     assert state.signal_handlers_registered is True
     assert len(atexit_calls) == 1 and len(signal_calls) == 2
 
@@ -329,3 +329,52 @@ def test_sdcpp_ready_is_owned_or_external_without_guessing(service_options):
     state.process = SimpleNamespace(poll=lambda: None)
     assert sdcpp_service.ensure_server(**options)
     assert state.lifecycle == 'ready'
+
+
+@pytest.mark.parametrize("trigger", ["atexit", "sigint", "sigterm", "ignored", "chained"])
+def test_sdcpp_registered_cleanup_owns_state_before_chaining(monkeypatch, trigger):
+    """Exit hooks release the registered owner's process, never a global neighbour."""
+    hooks, signals, events = [], {}, []
+    state = sdcpp_service.SdcppServerState()
+    neighbour = sdcpp_service.SdcppServerState(process=object())
+    monkeypatch.setattr(sdcpp_service, "SDCPP_SERVER_STATE", neighbour)
+    log_handle = io.StringIO()
+    code = [None]
+    process = SimpleNamespace(
+        poll=lambda: code[0], wait=lambda timeout: code[0],
+        _infini_log_handle=log_handle,
+    )
+    state.process = process
+    def terminate(owned, *, hard):
+        assert owned is process and not hard
+        events.append("terminate")
+        code[0] = 0
+    def previous(signum, frame):
+        assert state.process is None and log_handle.closed
+        events.append(("previous", signum, frame))
+    prior = previous if trigger == "chained" else sdcpp_service.signal.SIG_IGN if trigger == "ignored" else sdcpp_service.signal.SIG_DFL
+    monkeypatch.setattr(sdcpp_service, "_terminate_process_tree", terminate)
+    monkeypatch.setattr(sdcpp_service.atexit, "register", hooks.append)
+    monkeypatch.setattr(sdcpp_service.signal, "getsignal", lambda _sig: prior)
+    monkeypatch.setattr(sdcpp_service.signal, "signal", lambda sig, callback: signals.__setitem__(sig, callback))
+    sdcpp_service.install_cleanup_handlers(state, lambda *_: None)
+    sdcpp_service.install_cleanup_handlers(state, lambda *_: pytest.fail("registered twice"))
+    assert len(hooks) == 1 and len(signals) == 2
+    if trigger == "atexit":
+        hooks[0]()
+    else:
+        sig = sdcpp_service.signal.SIGINT if trigger == "sigint" else sdcpp_service.signal.SIGTERM
+        if trigger == "sigint":
+            with pytest.raises(KeyboardInterrupt):
+                signals[sig](sig, None)
+        elif trigger == "sigterm":
+            with pytest.raises(SystemExit) as exc:
+                signals[sig](sig, None)
+            assert exc.value.code == 128 + int(sig)
+        else:
+            signals[sig](sig, None)
+    assert state.process is None and state.lifecycle == "stopped" and log_handle.closed
+    assert neighbour.process is not None
+    assert events == (["terminate", ("previous", sdcpp_service.signal.SIGTERM, None)] if trigger == "chained" else ["terminate"])
+    hooks[0]()  # Repeated shutdown is harmless after confirmed exit.
+    assert events.count("terminate") == 1

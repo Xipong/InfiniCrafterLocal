@@ -8,6 +8,7 @@ import pytest
 
 from infini_local.desktop import studio_operations as operations
 from infini_local.desktop.settings_schema import DEFAULTS
+from infini_local.desktop.settings_interactions import StudioActions
 from infini_local.services import codex_auth, codex_catalog
 from infini_local.services.codex_catalog import CodexModel
 
@@ -29,8 +30,8 @@ class OperationHost(operations.StudioOperations):
         self.status = self.activity = self.applied_config = self.trace_status = ''
         self.codex_catalog = self.codex_image_account = ''
         self.codex_models = []
-        self.receipts = []
-        self._ui_action_sink = lambda *args, **kwargs: self.receipts.append((args, kwargs))
+        self._gui_closed = False
+        self.actions = StudioActions(self)
 
     def collect(self):
         assert threading.get_ident() == self.owner
@@ -82,7 +83,7 @@ def test_validate_paths_derives_unc_lora_directory_without_controller_helper(hos
 
 
 def test_worker_failure_is_redacted_and_applied_on_owner_loop(host):
-    host._studio_command_id = 'failure'
+    host.actions.start({'id': 'failure', 'action': 'trace'})
     seen = []
     def work(cancel):
         assert threading.get_ident() != host.owner
@@ -90,10 +91,10 @@ def test_worker_failure_is_redacted_and_applied_on_owner_loop(host):
     def apply(ok, result):
         assert threading.get_ident() == host.owner
         seen.append((ok, result))
-    host._run_gui_task('test', work, apply)
+    host.actions.run('test', work, apply)
     host.drain_until(lambda: bool(seen))
     assert seen == [(False, None)]
-    assert 'CANARY' not in str(host.receipts) + host.status
+    assert 'CANARY' not in str(host.actions.results) + host.status
 
 
 def test_latest_worker_replaces_pending_request_and_retires_all_receipts(host):
@@ -103,19 +104,19 @@ def test_latest_worker_replaces_pending_request_and_retires_all_receipts(host):
         started.set()
         assert release.wait(3)
         return 'first'
-    host._studio_command_id = 'first'
-    host._run_gui_task('trace', work, lambda ok, result: seen.append(result))
+    host.actions.start({'id': 'first', 'action': 'trace'})
+    host.actions.run('trace', work, lambda ok, result: seen.append(result))
     assert started.wait(1)
     try:
         for name in ('second', 'third'):
-            host._studio_command_id = name
-            host._run_gui_task('trace', lambda cancel, value=name: value, lambda ok, value: seen.append(value))
+            host.actions.start({'id': name, 'action': 'trace'})
+            host.actions.run('trace', lambda cancel, value=name: value, lambda ok, value: seen.append(value))
     finally:
         release.set()
-    host.drain_until(lambda: not host._gui_tasks)
+    host.drain_until(lambda: not host.actions.tasks)
     assert seen == ['third']
-    assert {args[0] for args, kwargs in host.receipts} == {'first', 'second', 'third'}
-    assert {args[0] for args, kwargs in host.receipts if kwargs.get('cancelled')} == {'first', 'second'}
+    assert set(host.actions.results) == {'first', 'second', 'third'}
+    assert {key for key, receipt in host.actions.results.items() if receipt['status'] == 'cancelled'} == {'first', 'second'}
 
 
 def test_catalog_preserves_saved_slug_and_unsupported_effort(host, monkeypatch):
@@ -169,7 +170,7 @@ def test_stop_never_shuts_down_unverified_identity(host, monkeypatch, health):
     monkeypatch.setattr(host, '_fetch_health_snapshot', lambda **kwargs: health)
     monkeypatch.setattr(host, '_try_http_shutdown_current_server', lambda **kwargs: pytest.fail('unsafe shutdown'))
     host.stop_server()
-    host.drain_until(lambda: not host._gui_tasks)
+    host.drain_until(lambda: not host.actions.tasks)
     assert 'refused' in host.status.lower()
 
 
@@ -182,7 +183,7 @@ def test_trace_clear_does_not_turn_timeout_into_local_truncation(host, monkeypat
         raise TimeoutError('SECRET-CANARY')
     monkeypatch.setattr(host, '_fetch_health_snapshot', unavailable)
     host.clear_trace_files(confirmed=True)
-    host.drain_until(lambda: not host._gui_tasks)
+    host.drain_until(lambda: not host.actions.tasks)
     assert events.read_text() == 'preserve\n'
     assert 'refused' in host.trace_status.lower()
     assert 'CANARY' not in host.trace_status
@@ -207,14 +208,16 @@ def test_close_cancels_oauth_and_callbacks_without_stopping_server(host):
 
 def test_close_finishes_running_pending_and_oauth_receipts_once(host):
     cancel = threading.Event()
-    host._gui_tasks = {'work': {'cancel': cancel, 'command_id': 'running', 'pending': (None, None, 'pending')}}
-    host._studio_async_ids = {'running', 'pending', 'oauth'}
+    host.actions.tasks = {'work': {'cancel': cancel, 'command_id': 'running', 'pending': (None, None, 'pending')}}
+    for identifier in ('running', 'pending', 'oauth'):
+        host.actions.start({'id': identifier, 'action': 'trace'})
+        host.actions.mark_pending()
     host._codex_login_command_id = 'oauth'
     host.on_close()
     assert cancel.is_set()
-    assert not host._studio_async_ids
-    assert sorted(args[0] for args, kwargs in host.receipts) == ['oauth', 'pending', 'running']
-    assert all(kwargs['cancelled'] for args, kwargs in host.receipts)
+    assert not host.actions.pending_ids
+    assert sorted(host.actions.results) == ['oauth', 'pending', 'running']
+    assert all(receipt['status'] == 'cancelled' for receipt in host.actions.results.values())
 
 
 @pytest.mark.parametrize('operation, task', [('refresh_codex_text_catalog', 'codex-catalog'), ('ping_codex_image_account', 'codex-image-ping')])
@@ -227,27 +230,26 @@ def test_repeated_account_requests_use_one_worker_and_one_pending(host, monkeypa
         assert release.wait(3)
         return []
     monkeypatch.setattr(codex_catalog, 'list_text_models', fetch)
-    host._studio_command_id = 'first'
+    host.actions.start({'id': 'first', 'action': 'trace'})
     getattr(host, operation)()
     assert started.wait(1)
     try:
         for i in range(20):
-            host._studio_command_id = str(i)
+            host.actions.start({'id': str(i), 'action': 'trace'})
             getattr(host, operation)()
         assert len(calls) == 1
-        assert set(host._gui_tasks) == {task}
+        assert set(host.actions.tasks) == {task}
     finally:
         release.set()
-    host.drain_until(lambda: not host._gui_tasks)
+    host.drain_until(lambda: not host.actions.tasks)
     assert len(calls) == 2
-    assert len(host.receipts) == 21
-    assert not host._studio_async_ids
+    assert len(host.actions.results) == 21
+    assert not host.actions.pending_ids
 
 
 def test_owned_lifecycle_notifications_are_transition_only_and_health_is_bounded(host, monkeypatch):
     from types import SimpleNamespace
-    notices, polls = [], []
-    host._ui_notification_sink = lambda *row: notices.append(row)
+    notices, polls = host.actions.notifications, []
     clock = [10.0]
     monkeypatch.setattr(operations.time, 'monotonic', lambda: clock[0])
     monkeypatch.setattr(host, '_delayed_health_check', lambda: polls.append(clock[0]))
@@ -264,10 +266,10 @@ def test_owned_lifecycle_notifications_are_transition_only_and_health_is_bounded
     host.observe_runtime_notifications()
     assert len(notices) == 3
     clock[0] = 16
-    host._gui_tasks = {'health-config': {}}
+    host.actions.tasks = {'health-config': {}}
     host.observe_runtime_notifications()
     assert polls == [10.0]
-    host._gui_tasks = {}
+    host.actions.tasks = {}
     host.observe_runtime_notifications()
     assert polls == [10.0, 16]
     host._server_lifecycle, host._sdcpp_lifecycle = 'unknown', 'unknown'

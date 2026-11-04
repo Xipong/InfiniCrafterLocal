@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from infini_local.core.config_bootstrap import APP_VERSION, ROOT, CACHE_DIR, SPRITE_DIR, WORLD_RECIPES_DIR
 from infini_local.core.image_dependencies import Image
-from infini_local.core.images.config import cleanup_sdcpp_server_process
+from infini_local.services.sdcpp_service import SDCPP_SERVER_STATE, cleanup_server_process
 from infini_local.pipelines import generation_debug
 from infini_local.pipelines.images.backends import ensure_sdcpp_server, sdcpp_debug_snapshot
 from infini_local.pipelines.images.prompts import asset_negative_prompt, normalize_asset_prompt
@@ -122,7 +122,7 @@ def shutdown(handler: Any, path: str = "") -> None:
     def _shutdown_later() -> None:
         time.sleep(0.15)
         try:
-            cleanup_sdcpp_server_process("http_shutdown")
+            cleanup_server_process(SDCPP_SERVER_STATE, trace_runtime.log_event, "http_shutdown")
         finally:
             try:
                 handler.server.shutdown()

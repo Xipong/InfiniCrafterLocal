@@ -10,7 +10,7 @@ from functools import wraps
 from typing import Any
 
 from infini_local.core.http_io import remaining_seconds
-from infini_local.pipelines.transport import admission, profiles, rejections, replay
+from infini_local.pipelines.transport import admission, profiles, rejections
 from infini_local.pipelines.transport import provider_wire as wire
 from infini_local.storage.trace_runtime import log_event
 
@@ -45,8 +45,12 @@ def _request_deadline(timeout: float) -> float:
 
 
 
-def _bounded_llm_call(call):
-    """Share one budget across negotiation, retries, failover and body reads."""
+def _logical_llm_call(call):
+    """Own one public call's budget and diagnostics across every transport attempt.
+
+    Private negotiation/retry helpers inherit this scope; they do not start
+    logical calls or infer ownership from the decorated function's name.
+    """
     @wraps(call)
     def bounded(payload, timeout=10, *args, **kwargs):
         deadline = _CURRENT_LLM_DEADLINE.get()
@@ -57,7 +61,7 @@ def _bounded_llm_call(call):
         diagnostic_token = None
         state = None
         try:
-            if call.__name__ == "llm_chat_json" and _CURRENT_LLM_DIAGNOSTICS.get() is None:
+            if _CURRENT_LLM_DIAGNOSTICS.get() is None:
                 state = _new_llm_diagnostics(payload)
                 diagnostic_token = _CURRENT_LLM_DIAGNOSTICS.set(state)
             remaining_seconds(deadline)
@@ -116,7 +120,7 @@ def _new_llm_diagnostics(payload: dict[str, Any]) -> dict[str, Any]:
     lease = profiles._CURRENT_LLM_ITEM_LEASE.get()
     return {
         "logicalCallId": f"{lease.lease_id if lease else 'standalone'}:call:{sequence}",
-        "stage": replay._llm_replay_stage_from_payload(payload), "leaseId": lease.lease_id if lease else "",
+        "stage": wire.llm_stage(payload), "leaseId": lease.lease_id if lease else "",
         "requestedApiMode": profiles._normalized_api_mode(profiles._primary_llm_context().get("api_mode")),
         "requestedResponseFormat": _format_diagnostic(payload), "requestedReasoning": _reasoning_diagnostic(payload),
         "physicalAttemptCount": 0, "physicalAttemptsDropped": 0, "physicalAttempts": [],

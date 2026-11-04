@@ -27,9 +27,9 @@ def studio(tmp_path):
 
 
 def apply(controller, action, values=None, extra=None):
-    identifier = str(len(controller.action_results))
+    identifier = str(len(controller.app.actions.results))
     controller.apply({'id': identifier, 'action': action, 'values': values or {}, 'extra': extra or {}})
-    return controller.action_results[identifier]
+    return controller.app.actions.results[identifier]
 
 
 def test_real_controller_import_and_run_without_tk_or_display(tmp_path):
@@ -83,7 +83,7 @@ def test_stale_revision_rejected_before_any_mutation(studio):
     with pytest.raises(ValueError, match='другой вкладке'):
         apply(controller, 'save', {'INFINI_PORT': '9192'}, {'savedRevision': revision})
     assert app.values == before
-    assert controller.last_action['status'] == 'failed'
+    assert controller.app.actions.last_action['status'] == 'failed'
 
 
 def test_save_unknown_values_and_multiline_codec(studio):

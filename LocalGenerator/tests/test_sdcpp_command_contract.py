@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from infini_local.web import server_status as server
 from infini_local.pipelines.images import backends as IMAGE_BACKEND_PIPELINE
-from infini_local.core.images import config as visual_config
+from infini_local.services.sdcpp_service import SDCPP_SERVER_STATE
 from infini_local.services import sdcpp_backend
 
 
@@ -177,7 +177,7 @@ def _check_shutdown_releases_the_owned_sdcpp_process(monkeypatch) -> None:
     from infini_local.services import combine_endpoint, sdcpp_service
     from infini_local.web import server_utility_routes
 
-    state = visual_config.SDCPP_SERVER_STATE
+    state = SDCPP_SERVER_STATE
     process = OwnedProcess()
     def completed_wait(**_kwargs):
         # Popen.wait() returning an exit code also makes subsequent poll terminal.
@@ -232,9 +232,7 @@ def test_helper_health_does_not_probe_image_servers(monkeypatch, backend):
 
 
 def _check_sdcpp_health_reads_canonical_state_fields() -> None:
-    import infini_local.core.images.config as pipeline_visual_config
-
-    state = pipeline_visual_config.SDCPP_SERVER_STATE
+    state = SDCPP_SERVER_STATE
     old_last_command = state.last_command
     old_last_start_error = state.last_start_error
     old_last_exit = state.last_exit

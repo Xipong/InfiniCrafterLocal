@@ -12,9 +12,8 @@ from infini_local.core.config_validation import reject_retired_config
 from infini_local.core.env_utils import env_bool, env_float, env_int, env_str
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
 from infini_local.services import sdcpp_backend, sdcpp_service
-from infini_local.storage.trace_runtime import log_event
 
-# AGENT MAP: canonical visual/image backend env/config and lifecycle state.
+# AGENT MAP: canonical visual/image backend env/config.
 # Consumers import this owner directly. No gameplay/runtime authoring logic belongs here.
 
 reject_retired_config(os.environ)
@@ -71,18 +70,6 @@ SDCPP_SERVER_REQUEST_TIMEOUT = env_int("INFINI_SDCPP_SERVER_REQUEST_TIMEOUT", SD
 # and verbose sd.cpp output can otherwise fill the pipe and stall the child process.
 SDCPP_SERVER_SHOW_CONSOLE = env_bool("INFINI_SDCPP_SERVER_SHOW_CONSOLE", os.name == "nt")
 SDCPP_SERVER_LOG_FILE = env_str("INFINI_SDCPP_SERVER_LOG_FILE", str(CACHE_DIR / "sdcpp_server.log"))
-SDCPP_SERVER_STATE = sdcpp_service.SdcppServerState()
-
-
-def cleanup_sdcpp_server_process(reason: str = "cleanup") -> None:
-    sdcpp_service.cleanup_server_process(SDCPP_SERVER_STATE, log_event, reason)
-
-
-def install_sdcpp_cleanup_handlers() -> None:
-    """Install process cleanup from the HTTP entrypoint's main thread."""
-    sdcpp_service.install_cleanup_handlers(SDCPP_SERVER_STATE, cleanup_sdcpp_server_process)
-
-
 COMFYUI_WORKFLOW = env_str("INFINI_COMFYUI_WORKFLOW", "auto")
 COMFYUI_WORKFLOW_LORA = env_str("INFINI_COMFYUI_WORKFLOW_LORA", "")
 COMFYUI_WORKFLOW_NO_LORA = env_str("INFINI_COMFYUI_WORKFLOW_NO_LORA", "")
@@ -224,8 +211,6 @@ __all__ = [
     "SDCPP_SERVER_REQUEST_TIMEOUT",
     "SDCPP_SERVER_SHOW_CONSOLE",
     "SDCPP_SERVER_LOG_FILE",
-    "SDCPP_SERVER_STATE",
-    "cleanup_sdcpp_server_process",
     "COMFYUI_WORKFLOW",
     "COMFYUI_WORKFLOW_LORA",
     "COMFYUI_WORKFLOW_NO_LORA",

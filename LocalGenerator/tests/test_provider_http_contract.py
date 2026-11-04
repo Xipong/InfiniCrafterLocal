@@ -131,7 +131,7 @@ def utility_routes(root, monkeypatch):
     for name in ("ROOT", "CACHE_DIR", "SPRITE_DIR", "WORLD_RECIPES_DIR"):
         monkeypatch.setattr(server_utility_routes, name, root)
     monkeypatch.setattr(server_utility_routes, "APP_VERSION", "test")
-    monkeypatch.setattr(server_utility_routes, "cleanup_sdcpp_server_process", lambda _: None)
+    monkeypatch.setattr(server_utility_routes, "cleanup_server_process", lambda *_: None)
     return server_utility_routes
 
 
@@ -219,7 +219,7 @@ def test_utility_and_debug_dispatch_use_exact_parsed_route(tmp_path, monkeypatch
         monkeypatch.setattr(routes, "threading", SimpleNamespace(Thread=lambda *, target, daemon:
             SimpleNamespace(start=lambda: scheduled.append(target))))
         monkeypatch.setattr(routes, "time", SimpleNamespace(sleep=lambda _: None))
-        monkeypatch.setattr(routes, "cleanup_sdcpp_server_process", lambda reason: lifecycle.append(reason))
+        monkeypatch.setattr(routes, "cleanup_server_process", lambda _state, _log, reason: lifecycle.append(reason))
         handler.server = SimpleNamespace(shutdown=lambda: lifecycle.append("server shutdown"))
     arguments = (handler, path, {"x": 1}) if method == "post" else (handler, path)
     assert getattr(routes, "handle_" + method)(*arguments) is accepted

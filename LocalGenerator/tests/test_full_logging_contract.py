@@ -512,12 +512,11 @@ def test_visible_sdcpp_console_also_persists_startup_failure(monkeypatch, tmp_pa
             kwargs["stdout"].flush()
         return Process()
     monkeypatch.setattr(service.subprocess, "Popen", spawn)
-    cleanup = lambda reason: service.cleanup_server_process(state, lambda *_: None, reason)
     result = service.ensure_server(
         state=state, root=tmp_path, cache_dir=tmp_path, server_url="http://127.0.0.1:1",
         server_autostart=True, startup_timeout=5, show_console=True, server_log_file="",
         server_is_alive=lambda: False, build_command=lambda: (["sd-server"], False),
-        stringify_cmd=lambda cmd: " ".join(cmd), cleanup_process=cleanup,
+        stringify_cmd=lambda cmd: " ".join(cmd),
         log_event=lambda *_: None, tail_text_file=lambda path, size: Path(path).read_text()[-size:],
     )
     assert result is False
@@ -622,7 +621,6 @@ def test_sdcpp_viewer_does_not_replace_or_break_owned_server(monkeypatch, tmp_pa
         server_autostart=True, startup_timeout=5, show_console=True, server_log_file="",
         server_is_alive=lambda: bool(calls) and mode not in ("startup_exit", "timeout"),
         build_command=lambda: (["sd-server"], False), stringify_cmd=lambda command: " ".join(command),
-        cleanup_process=lambda reason: service.cleanup_server_process(state, lambda *event: events.append(event), reason),
         log_event=lambda *event: events.append(event), tail_text_file=lambda path, size: Path(path).read_text()[-size:],
     )
     assert "captured model startup output" in (tmp_path / "sdcpp_server.log").read_text()

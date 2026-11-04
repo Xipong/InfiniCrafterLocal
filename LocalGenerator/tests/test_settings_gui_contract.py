@@ -555,7 +555,7 @@ def test_owned_launch_health_correlates_instance_not_wrapper_pid(applied_gui, he
     elif case == "process-exits-while-checking":
         gui.proc.poll = lambda: 0
     hold.release.set()
-    gui.drain_until(lambda: "health-config" not in gui._gui_tasks)
+    gui.drain_until(lambda: "health-config" not in gui.actions.tasks)
     assert bool(gui._applied_config_ack) is accepted
     assert gui._server_lifecycle == ("responding" if accepted else "unknown")
 
@@ -569,7 +569,7 @@ def test_external_same_root_health_keeps_existing_attachment_policy(applied_gui,
     gui._delayed_health_check()
     hold.assert_pending()
     hold.release.set()
-    gui.drain_until(lambda: "health-config" not in gui._gui_tasks)
+    gui.drain_until(lambda: "health-config" not in gui.actions.tasks)
     assert gui._applied_config_ack["pid"] == pid
 
 
@@ -621,7 +621,7 @@ def test_spawn_environment_health_echo_reaches_real_readiness(gui_workflow, held
     gui._delayed_health_check()
     hold.assert_pending()
     hold.release.set()
-    gui.drain_until(lambda: "health-config" not in gui._gui_tasks)
+    gui.drain_until(lambda: "health-config" not in gui.actions.tasks)
     assert gui._applied_config_ack["pid"] == health["pid"] != gui.proc.pid
     assert gui._server_lifecycle == "responding"
 
@@ -724,8 +724,7 @@ def test_owned_image_cleanup_health_to_notice_uses_verified_exit(applied_gui, mo
     from types import SimpleNamespace
     from infini_local.services import sdcpp_service
     gui, root, _config, effective = applied_gui
-    notices = []
-    gui._ui_notification_sink = lambda *row: notices.append(row)
+    notices = gui.actions.notifications
     gui.observe_runtime_notifications(poll=False)
     code = [None]
     child = SimpleNamespace(poll=lambda: code[0], wait=lambda timeout: code.__setitem__(0, 0))
@@ -743,7 +742,7 @@ def test_owned_image_cleanup_health_to_notice_uses_verified_exit(applied_gui, mo
                 'effectiveConfig': effective, 'sdcpp': image}
     monkeypatch.setattr(gui, '_fetch_health_snapshot', health)
     gui._delayed_health_check()
-    gui.drain_until(lambda: not gui._gui_tasks)
+    gui.drain_until(lambda: not gui.actions.tasks)
     assert gui._sdcpp_lifecycle == 'ready' and len(notices) == 2
     assert 'PRIVATE-COMMAND' not in str(gui._applied_config_ack) + str(notices)
     monkeypatch.setattr(sdcpp_service, '_terminate_process_tree', lambda *_a, **_k: None)
@@ -755,20 +754,20 @@ def test_owned_image_cleanup_health_to_notice_uses_verified_exit(applied_gui, mo
     assert state.log_viewer is viewer  # Viewer failure is not server failure.
     assert state.process is None and code[0] == 0
     gui._delayed_health_check()
-    gui.drain_until(lambda: not gui._gui_tasks)
+    gui.drain_until(lambda: not gui.actions.tasks)
     assert gui._sdcpp_lifecycle == 'stopped' and len(notices) == 3
     gui._delayed_health_check()
-    gui.drain_until(lambda: not gui._gui_tasks)
+    gui.drain_until(lambda: not gui.actions.tasks)
     assert len(notices) == 3
     state.lifecycle = 'external'
     gui._delayed_health_check()
-    gui.drain_until(lambda: not gui._gui_tasks)
+    gui.drain_until(lambda: not gui.actions.tasks)
     assert gui._sdcpp_lifecycle == 'external' and len(notices) == 3
     # Malformed and old health packets cannot certify managed readiness.
     for invalid in ({'secret': 'UNTRUSTED'}, ['ready'], None, 'unsupported', 'ready'):
         state.lifecycle = invalid
         gui._delayed_health_check()
-        gui.drain_until(lambda: not gui._gui_tasks)
+        gui.drain_until(lambda: not gui.actions.tasks)
         assert gui._sdcpp_lifecycle == 'unknown'
         assert gui._server_lifecycle == 'responding'
     def legacy_health(**kwargs):
@@ -777,6 +776,6 @@ def test_owned_image_cleanup_health_to_notice_uses_verified_exit(applied_gui, mo
         return packet
     monkeypatch.setattr(gui, '_fetch_health_snapshot', legacy_health)
     gui._delayed_health_check()
-    gui.drain_until(lambda: not gui._gui_tasks)
+    gui.drain_until(lambda: not gui.actions.tasks)
     assert gui._sdcpp_lifecycle == 'unknown'
     assert 'UNTRUSTED' not in str(gui._applied_config_ack) + str(notices)

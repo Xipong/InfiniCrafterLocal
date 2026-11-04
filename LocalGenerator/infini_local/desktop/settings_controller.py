@@ -19,7 +19,7 @@ from infini_local.desktop.settings_schema import DEFAULTS, PRESETS
 from infini_local.core.app_paths import CONFIG_PATH, EXAMPLE_PATH
 from infini_local.desktop.settings_fields import FIELDS, disabled_reasons
 from infini_local.desktop.studio_operations import StudioOperations
-from infini_local.desktop.settings_interactions import notify
+from infini_local.desktop.settings_interactions import StudioActions
 from infini_local.services.sdcpp_backend import DEFAULT_COMMAND_TEMPLATE, lora_dir_from_file, lora_tag_from_file, repair_command_template
 
 
@@ -30,7 +30,7 @@ class SettingsController(StudioOperations):
         self.values = parse_env(self.config_path if self.config_path.exists() else self.example_path)
         self.proc = None
         self._gui_closed = False
-        self._gui_tasks = {}
+        self.actions = StudioActions(self)
         self._applied_config_ack = None
         self._server_lifecycle = "unknown"
         self._health_after_id = None
@@ -183,7 +183,7 @@ class SettingsController(StudioOperations):
     def use_selected_lora(self):
         path = self._value("INFINI_SDCPP_LORA_FILE")
         if not path:
-            notify(self, "warning", "LoRA", "Сначала выбери LoRA file (*.safetensors/*.ckpt).")
+            self.actions.notify("warning", "LoRA", "Сначала выбери LoRA file (*.safetensors/*.ckpt).")
             return {"ok": False, "message": "Сначала выбери файл LoRA."}
         directory = lora_dir_from_file(path) or str(Path(path).parent)
         tag = lora_tag_from_file(path, self._value("INFINI_SDCPP_LORA_WEIGHT", "0.25"))
@@ -227,7 +227,7 @@ class SettingsController(StudioOperations):
         raw = self.status.lower()
         applied = self.applied_config
         applied_text = applied.lower() if applied is not None else ""
-        busy = "server-action" in self.__dict__.get("_gui_tasks", {}) or "checking" in raw or "checking" in applied_text
+        busy = "server-action" in self.actions.tasks or "checking" in raw or "checking" in applied_text
         ack = self.__dict__.get("_applied_config_ack")
         lifecycle = self.__dict__.get("_server_lifecycle", "unknown")
         if busy:

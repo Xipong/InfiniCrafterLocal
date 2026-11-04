@@ -160,11 +160,11 @@ def test_real_controller_metadata_and_save_preserve_full_setting_surface(tmp_pat
         assert saved['INFINI_PROMPT_STYLE'] == 'Terraria Like'
         assert SettingsController(config).values['INFINI_LANGUAGE'] == 'en'
         assert saved['INFINI_IMAGE_PARALLEL'] == '1'
-        assert controller.last_action['ok'] is True
+        assert controller.app.actions.last_action['ok'] is True
         controller.apply({'id':'unknown-edit','action':'save','values':{'INFINI_PRIVATE_UNKNOWN':'edited-explicitly'},'extra':{}})
         assert parse_env(config)['INFINI_PRIVATE_UNKNOWN'] == 'edited-explicitly'
         controller.apply({'id':'reset-proof','action':'resetSprite','values':{},'extra':{}})
-        assert controller.action_results['reset-proof']['values']['INFINI_SPRITE_DOWNSCALE_FILTER'] == 'box'
+        assert controller.app.actions.results['reset-proof']['values']['INFINI_SPRITE_DOWNSCALE_FILTER'] == 'box'
         # Browser drafts intentionally allow editing inactive provider settings.
         # Disabled controls must not discard explicit browser draft edits.
         key = 'INFINI_SDCPP_LORA_PROMPT_TAGS'
@@ -176,7 +176,7 @@ def test_real_controller_metadata_and_save_preserve_full_setting_surface(tmp_pat
             identifier = f'inactive-text-{index}'
             controller.apply({'id': identifier, 'action': 'save',
                               'values': {key: tags}, 'extra': {}})
-            receipt = controller.action_results[identifier]
+            receipt = controller.app.actions.results[identifier]
             assert receipt['ok'] is True
             assert app.values[key] == tags
             assert (not app.field_disabled_reasons.get(key)) == (backend == 'sdcpp')
@@ -236,7 +236,7 @@ def test_real_controller_defaults_consent_only_updates_offer_keys(tmp_path, monk
         assert app.preset == preset
         assert app._profile_baseline == baseline
         assert parse_env(config)['INFINI_PROMPT_STYLE'] == 'Default'
-        assert controller.last_action['ok'] is True
+        assert controller.app.actions.last_action['ok'] is True
     finally:
         server.close()
         app.on_close()
