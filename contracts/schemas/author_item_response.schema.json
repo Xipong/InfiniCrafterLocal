@@ -826,6 +826,7 @@
                         "x-infini-reference": {
                           "namespace": "call",
                           "capabilities": [
+                            "place_object",
                             "place_tile",
                             "place_wall"
                           ],
@@ -1355,6 +1356,7 @@
                         "x-infini-reference": {
                           "namespace": "call",
                           "capabilities": [
+                            "place_object",
                             "place_tile",
                             "place_wall"
                           ],
@@ -5362,6 +5364,83 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
+                    "const": "place_object"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "width": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 16,
+                        "description": "Occupied footprint width in tiles",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "height": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 16,
+                        "description": "Occupied footprint height in tiles",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "collision": {
+                        "type": "string",
+                        "enum": [
+                          "open",
+                          "solid"
+                        ],
+                        "description": "open permits movement through the object; solid blocks movement",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "support": {
+                        "type": "string",
+                        "enum": [
+                          "floor",
+                          "wall",
+                          "unanchored"
+                        ],
+                        "description": "floor requires ground below the footprint; wall requires backing walls; unanchored needs no supporting surface",
+                        "x-infini-semanticType": "bounded_text"
+                      }
+                    },
+                    "required": [
+                      "width",
+                      "height",
+                      "collision",
+                      "support"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable unique call id."
+                  },
+                  "fn": {
                     "const": "placed_sprite"
                   },
                   "target": {
@@ -5384,7 +5463,7 @@
                       "placementCallId": {
                         "type": "string",
                         "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "description": "Exact same-item place_tile call executed by a place_item binding; wall placements cannot carry this presentation",
+                        "description": "Exact same-item place_object call executed by a place_item binding; native tiles and walls cannot carry this presentation",
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-reference": {
                           "namespace": "call",
@@ -5555,7 +5634,7 @@
                       "placementCallId": {
                         "type": "string",
                         "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "description": "Exact same-item place_tile call executed by a place_item binding; no walls or unused placement",
+                        "description": "Exact same-item place_tile or place_object call executed by a place_item binding; no walls or unused placement",
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-reference": {
                           "namespace": "call",
@@ -5643,7 +5722,7 @@
                       "placementCallId": {
                         "type": "string",
                         "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "description": "Exact same-item place_tile call executed by a place_item binding; no walls or unused placement",
+                        "description": "Exact same-item place_tile or place_object call executed by a place_item binding; no walls or unused placement",
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-reference": {
                           "namespace": "call",
@@ -5658,7 +5737,7 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 32767,
-                        "description": "Inclusive actual top-left native TileFrameY lower bound, not animation age",
+                        "description": "Inclusive top-left TileFrameY lower bound, not animation age; owned objects use zero",
                         "x-infini-units": "native frame coordinate",
                         "x-infini-semanticType": "unitless_scalar"
                       },
@@ -5666,7 +5745,7 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 32767,
-                        "description": "Inclusive actual top-left native TileFrameY upper bound",
+                        "description": "Inclusive top-left TileFrameY upper bound; owned objects use zero",
                         "x-infini-units": "native frame coordinate",
                         "x-infini-semanticType": "unitless_scalar"
                       }

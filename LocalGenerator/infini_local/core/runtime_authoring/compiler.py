@@ -12,6 +12,7 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
 )
 from infini_local.core.runtime_authoring.capability_registry import (
     CAPABILITY_REGISTRY,
+    PLACEMENT_CAPABILITIES,
     CONTROLLER_OPCODE,
     MOVEMENT_OPCODE,
     PROJECTILE_MODIFIER_COMPONENTS,
@@ -440,7 +441,7 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     placement_calls_by_id = {
         str(call["id"]): call
         for call in calls
-        if str(call.get("fn") or "") in {"place_tile", "place_wall"}
+        if str(call.get("fn") or "") in PLACEMENT_CAPABILITIES
     }
     placed_components = [call for call in calls
                          if (cap := CAPABILITY_REGISTRY.get(str(call["fn"]))) is not None
@@ -474,14 +475,9 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
             raw_params = call.get("params")
             params = raw_params if isinstance(raw_params, Mapping) else {}
             for key, value in params.items():
-                ctx.receipts.append({
-                    "callId": str(call["id"]),
-                    "fn": str(call["fn"]),
-                    "authoredPath": f"runtimeProgram.calls[{source_call_index}].params.{key}",
-                    "finalPath": f"runtimeProgram.bindings[{final_index}].usePolicy.action.placement.{key}",
-                    "value": copy.deepcopy(value),
-                    "status": "delivered",
-                })
+                ctx.project_parameter(call=call, param=key, value=value,
+                    target=binding["usePolicy"]["action"]["placement"],
+                    prefix=f"runtimeProgram.bindings[{final_index}].usePolicy.action.placement")
             for key, value in CAPABILITY_REGISTRY[str(call["fn"])].fixed_wire_literals.items():
                 ctx.write_derived(call=call,
                     path=f"runtimeProgram.bindings[{final_index}].usePolicy.action.placement.{key}",
@@ -563,7 +559,7 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         compiled_entity = entities[entity_index]
         fn = str(call.get("fn") or "")
         cap = CAPABILITY_REGISTRY.get(fn)
-        if fn in {"place_tile", "place_wall"} or cap is not None and cap.category == "item_placed_body":
+        if fn in PLACEMENT_CAPABILITIES or cap is not None and cap.category == "item_placed_body":
             continue
         if target == item_entity_id and (cap is None or cap.category != "event"):
             _compile_item_call(

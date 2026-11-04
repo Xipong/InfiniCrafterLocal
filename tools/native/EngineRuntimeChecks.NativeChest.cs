@@ -7,13 +7,20 @@ using Terraria;
 using Terraria.ID;
 using Terraria.ObjectData;
 internal static partial class EngineRuntimeChecks {
+ private static bool NativeChestActorLive()
+ {
+  var groups=(System.Collections.IDictionary)typeof(GeneratedPlacementLedgerSystem).GetField("Groups",PersistenceStatic)!.GetValue(null)!;
+  object group=groups.Values.Cast<object>().Single();
+  return (bool)typeof(GeneratedPlacementLedgerSystem).GetMethod("NativeChestProjectionLive",PersistenceStatic)!.Invoke(null,new[]{group})!;
+ }
+
  private static void NativeChestAdmission(){
  WithNativeChestWorld((player,ledger)=>{
   const int tileType = TileID.Containers;
   var source=NativeChestItem(player,"native-admission",tileType:tileType,style:0);var placement=source.Data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
   var row=TileObjectData.GetTileData(tileType,0);Equal(true,TileID.Sets.BasicChest[tileType],"native BasicChest metadata family");
   Equal(nameof(Chest.FindEmptyChest),row.HookCheckIfCanPlace.hook.Method.Name,"native capacity callback");Equal(nameof(Chest.AfterPlacement_Hook),row.HookPostPlaceMyPlayer.hook.Method.Name,"native inventory callback");
-  Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,source.Data,placement,40,40),"native family authorizes with independent authored body");
+  Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,source.Data,placement,40,40),"native family authorizes with native visuals");
   Console.WriteLine($"NATIVE_CHEST_FAMILY tileId={tileType} supportedStyle=0");
  }); }
  private static void NativeChestBareTilesCannotCommit(){ WithNativeChestWorld((player,ledger)=>{
@@ -21,7 +28,7 @@ internal static partial class EngineRuntimeChecks {
  try { Terraria.Main.chest=new Chest[8000];TileObjectData.Initialize();Terraria.Main.tileSolid[1]=true;Terraria.Main.tileFrameImportant[21]=true;
  Terraria.Main.netMode=NetmodeID.SinglePlayer;
  for(int x=40;x<42;x++){var t=Terraria.Main.tile[x,41];t.HasTile=true;t.TileType=1;}
- var data=PlacedLedgerData("chest-bare-red");var p=data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;p.TileId=21;p.PlaceStyle=0;
+ var data=PersistencePlacementData("chest-bare-red");var p=data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;p.TileId=21;p.WallId=-1;p.PlaceStyle=0;
  player.inventory[0]=ReviewItem(data).Item;
  Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,data,p,40,40),"real chest authorized");
  var obj=new TileObject{xCoord=40,yCoord=39,type=21,style=0,alternate=0};
@@ -45,7 +52,7 @@ internal static partial class EngineRuntimeChecks {
  }finally{Array.Copy(chestDrops,Chest.chestItemSpawn,chestDrops.Length);Array.Copy(chestDrops2,Chest.chestItemSpawn2,chestDrops2.Length);Array.Copy(dresserDrops,Chest.dresserItemSpawn,dresserDrops.Length);Terraria.Main.guideItem=guide;Recipe.maxRecipes=recipes;foreach(var f in hookFields)f.SetValue(null,null);Terraria.Main.chest=old;Terraria.Main.tileSolid[1]=solid;Terraria.Main.tileFrameImportant[21]=frame;Terraria.Main.tileContainer[21]=container;Terraria.Main.tileFrameImportant[467]=frame2;Terraria.Main.tileContainer[467]=container2;Terraria.Main.dedServ=ded;Terraria.Main.myPlayer=my;Player.tileTargetX=tx;Player.tileTargetY=ty;}
  });}
  private static InfiniCrafterLocal.Content.Items.GeneratedItem NativeChestItem(Player player,string id="native-chest",int? nativeType=null,int tileType=TileID.Containers,int style=0){
- var data=PlacedLedgerData(id);var p=data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;p.TileId=tileType;p.PlaceStyle=style;
+ var data=PersistencePlacementData(id);InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.StampCurrentWorld(data);var p=data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;p.TileId=tileType;p.WallId=-1;p.PlaceStyle=style;
  var item=nativeType is int type ? (InfiniCrafterLocal.Content.Items.GeneratedItem)new Item(type).ModItem : ReviewItem(data);
  if(nativeType.HasValue)GeneratedPrefixSetData(item,data);
  player.inventory[0]=item.Item;item.Item.stack=3;item.Item.createTile=tileType;item.Item.placeStyle=style;return item;
@@ -103,7 +110,8 @@ internal static partial class EngineRuntimeChecks {
  Equal(false,Terraria.ModLoader.ItemLoader.ConsumeItem(item.Item,player),"native outcome cannot spend twice");
  var row=PlacedLedgerGroups(ledger).Single();Equal(4,row.GetList<Terraria.ModLoader.IO.TagCompound>("cells").Count,"exact four material cells");
  Equal(true,row.ContainsKey("nativeChest"),"lifecycle witness independent of optional body");
- Equal(true,row.ContainsKey("placedBody"),"authored body retained");
+ Equal(false,row.ContainsKey("placedBody"),"native container retains native art without generated PNG");
+ Equal(true,NativeChestActorLive(),"exact native actor remains live after placement");
  });}
 
  private static void NativeChestCallbackFaultRollsBack(){WithNativeChestWorld((player,ledger)=>{
@@ -332,12 +340,12 @@ internal static partial class EngineRuntimeChecks {
  var source=NativeChestItem(player,"chest-live-incarnation");var p=source.Data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
  Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,source.Data,p,40,40),"live identity intent");NativeChestPlayerPlace(player);
  int index=Chest.FindChest(40,39);var actor=Terraria.Main.chest[index];actor.item[0]=new Item(ItemID.Wood,19);
- Equal(true,GeneratedPlacementLedgerSystem.ShouldSuppressPlacedBody(40,39),"authored body selected for genuine native actor");
+ Equal(true,NativeChestActorLive(),"exact native actor remains live");
  var foreign=new Chest{x=40,y=39,item=Enumerable.Range(0,40).Select(_=>new Item()).ToArray()};foreign.item[0]=new Item(ItemID.StoneBlock,3);Terraria.Main.chest[index]=foreign;
- ledger.PostUpdateWorld();Equal(false,GeneratedPlacementLedgerSystem.ShouldSuppressPlacedBody(40,39),"foreign same-coordinate slot reuse is not the original body actor");
+ ledger.PostUpdateWorld();Equal(false,NativeChestActorLive(),"foreign same-coordinate slot reuse is not the original actor");
  Equal(1,PlacedLedgerGroups(ledger).Count,"foreign native replacement retains original exact material claim");Equal(19,actor.item[0].stack,"original contents never cleared");Equal(3,foreign.item[0].stack,"foreign contents never cleared");
  Terraria.Main.chest[index]=null!;Terraria.Main.chest[7]=actor;ledger.PostUpdateWorld();
- Equal(false,GeneratedPlacementLedgerSystem.ShouldSuppressPlacedBody(40,39),"runtime array relocation is not a legitimate world-load rebind");
+ Equal(false,NativeChestActorLive(),"runtime array relocation is not a legitimate world-load rebind");
  actor.item[0].TurnToAir();Equal(true,Chest.DestroyChest(40,39),"native owner can remove relocated empty actor");
  for(int x=40;x<42;x++)for(int y=39;y<41;y++){var cell=Terraria.Main.tile[x,y];cell.HasTile=false;}
  ledger.PostUpdateWorld();Equal(1,PlacedLedgerGroups(ledger).Count,"destruction cannot adopt a live relocated actor as authenticated removal");

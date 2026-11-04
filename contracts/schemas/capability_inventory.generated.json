@@ -3457,7 +3457,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Select one exact loaded tile and placement style for one referenced placement transaction. Supported native containers keep Terraria inventory, opening and persistence; generated-item identity and return remain with this same placement. Unsupported custom callback families are refused.",
+      "purpose": "Select one exact loaded tile and placement style for one referenced placement transaction. Native tiles retain their own art and behavior; placed_sprite is only for place_object. Supported native containers keep Terraria inventory, opening and persistence; generated-item identity and return remain with this same placement. Unsupported custom callback families are refused.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -3537,12 +3537,111 @@
     },
     {
       "authorityByEffect": {},
+      "capability": "place_object",
+      "componentSlot": "placeable",
+      "conflicts": [
+        "exclusive_group:placeable"
+      ],
+      "csharpOwner": "Content/Tiles/GeneratedOwnedTile.cs::SetStaticDefaults",
+      "dependencies": [
+        "placed_sprite"
+      ],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "placeable",
+      "finalWirePaths": [
+        "runtimeProgram.bindings[].usePolicy.action.placement.tileId",
+        "runtimeProgram.bindings[].usePolicy.action.placement.wallId",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placeStyle",
+        "runtimeProgram.bindings[].usePolicy.action.placement.ownedTile.width",
+        "runtimeProgram.bindings[].usePolicy.action.placement.ownedTile.height",
+        "runtimeProgram.bindings[].usePolicy.action.placement.ownedTile.collision",
+        "runtimeProgram.bindings[].usePolicy.action.placement.ownedTile.support"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "collision": {
+          "enum": [
+            "open",
+            "solid"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "height": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 16,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "support": {
+          "enum": [
+            "floor",
+            "wall",
+            "unanchored"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "width": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 16,
+          "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "purpose": "Place an owned generated object with an explicit 1..16 tile rectangular footprint (up to 16x16/256 cells), collision and support. Requires placed_sprite for its generated PNG. No native tile identity, container, crafting adjacency, wiring or inherited parent behavior.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "capability": "placed_sprite",
+          "kind": "capability_present",
+          "message": "An owned object requires an explicit placed_sprite selecting its PNG transform; no invisible or placeholder object is supplied.",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "place_item"
+          ],
+          "kind": "binding_action_reference",
+          "message": "The placement call must be referenced by exactly one binding action.placementCallId.",
+          "target": "item_body"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
       "capability": "placed_sprite",
       "componentSlot": "placed_body",
       "conflicts": [],
       "csharpOwner": "Common/Models/Contracts/RuntimeProgramSpec.cs::Validate",
       "dependencies": [
-        "place_tile"
+        "place_object"
       ],
       "emittedEvents": [],
       "events": [],
@@ -3696,17 +3795,17 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Draw the full root item PNG over the native placed tile, replacing its body/flame pictures. This single static image replaces native animation and on/off visuals; baked flames remain visible when switched off. Omit to retain native pictures. placed_vfx can add separate live effects. Native support, solidity, mining, wiring, interactions and light remain unchanged. Requires the place_tile footprint, up to 16x16/256 cells.",
+      "purpose": "Draw the full root item PNG for an owned place_object footprint, up to 16x16/256 cells. This required static image uses only the explicit transform; placed_vfx can add separate live effects. Collision and support come from place_object. Native place_tile retains native art and cannot accept this component.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
           "anyOf": [
             "place_item"
           ],
-          "capability": "place_tile",
+          "capability": "place_object",
           "equals": null,
           "kind": "executed_tile_placement_reference",
-          "message": "Reference an exact same-item tile-only placement used by an executable place_item binding, or explicitly delete this placed component call. No walls, inferred source, or unused reference.",
+          "message": "Reference the exact same-item place_object used by an executable place_item binding; native tile art cannot be replaced.",
           "param": "placementCallId",
           "target": "same_target"
         },
@@ -3735,9 +3834,7 @@
       "componentSlot": "placed_light",
       "conflicts": [],
       "csharpOwner": "Common/Systems/Placement/GeneratedPlacementLedgerSystem.PlacedLight.cs::TryGetPlacedLight",
-      "dependencies": [
-        "place_tile"
-      ],
+      "dependencies": [],
       "emittedEvents": [],
       "events": [],
       "exclusiveGroup": "",
@@ -3800,17 +3897,16 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Add persistent light at the center tile of the committed native footprint (up to 16x16/256 cells). Native tile light remains.",
+      "purpose": "Add persistent light at the center tile of the committed footprint (up to 16x16/256 cells). Native place_tile light remains; place_object has only explicitly authored light.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
           "anyOf": [
             "place_item"
           ],
-          "capability": "place_tile",
           "equals": null,
           "kind": "executed_tile_placement_reference",
-          "message": "Reference an exact same-item tile-only placement used by an executable place_item binding, or explicitly delete this placed component call. No walls, inferred source, or unused reference.",
+          "message": "Reference an exact same-item place_tile or place_object used by an executable place_item binding. No walls, inferred source, or unused reference.",
           "param": "placementCallId",
           "target": "same_target"
         },
@@ -3839,9 +3935,7 @@
       "componentSlot": "placed_vfx",
       "conflicts": [],
       "csharpOwner": "Common/Systems/Placement/GeneratedPlacementLedgerSystem.PlacedVfx.cs::TryGetPlacedVfxFrame",
-      "dependencies": [
-        "place_tile"
-      ],
+      "dependencies": [],
       "emittedEvents": [],
       "events": [],
       "exclusiveGroup": "",
@@ -3892,7 +3986,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Expose live placed-effect slots for this committed native footprint (up to 16x16/256 cells). Inclusive bounds select the top-left native TileFrameY; 0..32767 covers all nonnegative frames. VFX Director may add periodic self spriteElement/libraryParticle/lightCue effects to this placement binding, separately from the static root PNG.",
+      "purpose": "Expose live placed-effect slots for this committed footprint (up to 16x16/256 cells). Inclusive bounds select the top-left TileFrameY: native place_tile uses its actual state; place_object has stable origin frame zero and no on/off behavior. 0..32767 covers all nonnegative frames. VFX Director may add periodic self spriteElement/libraryParticle/lightCue effects separately from the static root PNG.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -3907,10 +4001,9 @@
           "anyOf": [
             "place_item"
           ],
-          "capability": "place_tile",
           "equals": null,
           "kind": "executed_tile_placement_reference",
-          "message": "Reference an exact same-item tile-only placement used by an executable place_item binding, or explicitly delete this placed component call. No walls, inferred source, or unused reference.",
+          "message": "Reference an exact same-item place_tile or place_object used by an executable place_item binding. No walls, inferred source, or unused reference.",
           "param": "placementCallId",
           "target": "same_target"
         },

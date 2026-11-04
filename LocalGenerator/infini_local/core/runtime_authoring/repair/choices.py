@@ -15,7 +15,7 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
 )
 from infini_local.core.runtime_authoring.binding_use_policy import complete_transaction as transaction
 from infini_local.core.runtime_authoring.binding_use_policy import target_id as binding_target_id
-from infini_local.core.runtime_authoring.capability_registry import BINDING_ACTION_REGISTRY, CAPABILITY_REGISTRY, INPUT_KIND_REGISTRY
+from infini_local.core.runtime_authoring.capability_registry import BINDING_ACTION_REGISTRY, CAPABILITY_REGISTRY, INPUT_KIND_REGISTRY, PLACEMENT_CAPABILITIES
 from infini_local.core.runtime_authoring.program_schema import binding_schema
 from infini_local.core.runtime_authoring.repair.facts import (
     _binding_target,
@@ -105,7 +105,7 @@ def _complete_binding_transactions(
         call_ids = sorted(
             str(call.get("id") or "")
             for call in rows.get("calls", [])
-            if str(call.get("fn") or "") in {"place_tile", "place_wall"}
+            if str(call.get("fn") or "") in PLACEMENT_CAPABILITIES
             and str(call.get("target") or "") == target_id
             and str(call.get("id") or "")
         )

@@ -24,6 +24,7 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
 from infini_local.core.runtime_authoring.capability_registry import (
     BINDING_ACTION_REGISTRY,
     CAPABILITY_REGISTRY,
+    PLACEMENT_CAPABILITIES,
     ENTITY_KIND_REGISTRY,
     EVENT_KIND_REGISTRY,
     INPUT_KIND_REGISTRY,
@@ -467,9 +468,11 @@ def _validate_requirement(
             return None
         def valid_placement(row: Mapping[str, Any]) -> bool:
             native = row.get("params")
-            return (row.get("fn") == requirement.capability and row.get("target") == target_id
-                    and isinstance(native, Mapping) and type(native.get("tileId")) is int
-                    and 0 <= native["tileId"] <= 65535
+            selected = CAPABILITY_REGISTRY.get(str(row.get("fn") or ""))
+            allowed_fns = (requirement.capability,) if requirement.capability else ("place_tile", "place_object")
+            return (row.get("fn") in allowed_fns and row.get("target") == target_id
+                    and selected is not None and isinstance(native, Mapping)
+                    and not strict_schema_errors(native, selected.provider_variant_schema()["properties"]["params"])
                     and any(action_kind(binding) in requirement.any_of
                             and binding_target_id(binding) == target_id
                             and placement_call_id(binding) == row.get("id")
@@ -1235,18 +1238,18 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         # invalidate an otherwise accepted placement-call identity for Repair.
         if (
             referenced_call is None
-            or str(referenced_call.get("fn") or "") not in {"place_tile", "place_wall"}
+            or str(referenced_call.get("fn") or "") not in PLACEMENT_CAPABILITIES
             or (binding_target_id(binding) == item_id
                 and str(referenced_call.get("target") or "") != binding_target_id(binding))
         ):
             issues.append(ValidationIssue(
                 f"$.runtimeProgram.bindings[{index}].action.placementCallId",
                 "missing_binding_dependency",
-                "place_item must reference one place_tile or place_wall call on the same item target.",
+                "place_item must reference one place_object, place_tile or place_wall call on the same item target.",
                 tuple(
                     str(row.get("id") or "")
                     for row in item_calls
-                    if str(row.get("fn") or "") in {"place_tile", "place_wall"}
+                    if str(row.get("fn") or "") in PLACEMENT_CAPABILITIES
                 ),
                 (str(binding.get("id") or ""), referenced_call_id),
             ))

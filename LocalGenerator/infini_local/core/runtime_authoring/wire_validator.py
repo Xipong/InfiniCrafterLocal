@@ -111,7 +111,7 @@ _EVENT_KEYS = frozenset({
 _BINDING_KEYS = frozenset({"id", "input", "role", "usePolicy"})
 _USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage", "stackConsumeChancePercent"})
 _BINDING_ACTION_KEYS = frozenset({"kind", "targetId", "placement", "effectGroupId", "fishing"})
-_PLACEMENT_KEYS = frozenset({"tileId", "wallId", "placeStyle", "placedBody", "placedLight", "placedVfx"})
+_PLACEMENT_KEYS = frozenset({"tileId", "wallId", "placeStyle", "ownedTile", "placedBody", "placedLight", "placedVfx"})
 _PLACED_BODY_KEYS = frozenset(name for name in CAPABILITY_REGISTRY["placed_sprite"].params if name != "placementCallId")
 _ITEM_USE_KEYS = frozenset({"configured", "useStyle", "hideUseGraphic", "disableMeleeHitbox", "channel", "handPose", "holdoutOffsetX", "holdoutOffsetY"})
 _ITEM_CONTACT_KEYS = frozenset({"hitboxScale", "contactForgivenessPx"})
@@ -1241,7 +1241,18 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             if contact_damage(binding):
                 errors.append({"path": f"{binding_path}.usePolicy.contactDamage", "code": "binding_action_mismatch", "message": "place_item cannot deal item-body contact damage."})
             if isinstance(placement, Mapping):
-                _reject_unknown(placement, _PLACEMENT_KEYS, f"{binding_path}.usePolicy.action.placement", errors)
+                placement_path = f"{binding_path}.usePolicy.action.placement"
+                _reject_unknown(placement, _PLACEMENT_KEYS, placement_path, errors)
+                owned = "ownedTile" in placement
+                if owned:
+                    owned_schema = CAPABILITY_REGISTRY["place_object"].provider_variant_schema()["properties"]["params"]
+                    for issue in strict_schema_errors(placement["ownedTile"], owned_schema, path=placement_path + ".ownedTile"):
+                        errors.append({**issue, "code": "invalid_owned_tile"})
+                    if any(type(placement.get(key)) is not int or placement[key] != value
+                           for key, value in CAPABILITY_REGISTRY["place_object"].fixed_wire_literals.items()):
+                        errors.append({"path": placement_path, "code": "invalid_owned_tile", "message": "Owned placement requires tileId=wallId=-1 and placeStyle=0; runtime resolves its structural tile identity."})
+                    if "placedBody" not in placement:
+                        errors.append({"path": placement_path + ".placedBody", "code": "required_object", "message": "Owned placement requires an explicit generated PNG transform."})
                 for component_cap in (cap for cap in CAPABILITY_REGISTRY.values() if cap.category == "item_placed_body"):
                     component = component_cap.params["placementCallId"].wire_name
                     if component not in placement:
@@ -1261,14 +1272,18 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                                 if type(low) is int and type(high) is int and low > high:
                                     errors.append({"path": body_path + "." + requirement.param,
                                                    "code": "invalid_placed_body", "message": requirement.message})
-                    if type(placement.get("tileId")) is not int or not 0 <= placement["tileId"] <= 65535 or type(placement.get("wallId")) is not int or placement["wallId"] != -1:
-                        errors.append({"path": body_path, "code": "placed_body_tile_only", "message": "Placed body requires tile-only placement."})
+                    if component == "placedBody" and not owned:
+                        errors.append({"path": body_path, "code": "placed_body_owned_only", "message": "Generated PNG presentation requires an owned object; native tiles keep native art."})
+                    elif not owned and (type(placement.get("tileId")) is not int or not 0 <= placement["tileId"] <= 65535 or type(placement.get("wallId")) is not int or placement["wallId"] != -1):
+                        errors.append({"path": body_path, "code": "placed_body_tile_only", "message": "Placed light/VFX requires native tile-only or owned object placement."})
+                if type(placement.get("placeStyle")) is not int or not 0 <= placement["placeStyle"] <= 1000:
+                    errors.append({"path": placement_path + ".placeStyle", "code": "invalid_placement_payload", "message": "Placement requires an explicit bounded integer style."})
                 tile_id = placement.get("tileId")
                 wall_id = placement.get("wallId")
                 if not isinstance(tile_id, int) or isinstance(tile_id, bool) or not isinstance(wall_id, int) or isinstance(wall_id, bool):
                     errors.append({"path": f"{binding_path}.usePolicy.action.placement", "code": "invalid_placement_payload", "message": "Placement requires exact integer tileId and wallId."})
-                elif tile_id < 0 and wall_id < 0:
-                    errors.append({"path": f"{binding_path}.usePolicy.action.placement", "code": "empty_component", "message": "Placement must enable a tile or wall."})
+                elif not owned and (not (0 <= tile_id <= 65535 and wall_id == -1) and not (0 <= wall_id <= 65535 and tile_id == -1)):
+                    errors.append({"path": f"{binding_path}.usePolicy.action.placement", "code": "empty_component", "message": "Placement must select exactly one native tile, native wall or owned object."})
             else:
                 errors.append({"path": f"{binding_path}.usePolicy.action.placement", "code": "required_object", "message": "place_item requires its lowered placement payload."})
         elif placement is not None:

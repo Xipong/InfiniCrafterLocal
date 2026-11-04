@@ -8,6 +8,7 @@ using System.Text;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Services;
 using InfiniCrafterLocal.Common.Systems;
+using InfiniCrafterLocal.Content.Tiles;
 using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader.IO;
@@ -19,6 +20,7 @@ internal static partial class EngineRuntimeChecks
     private static void WithPlacedLedger(Action<Player, GeneratedPlacementLedgerSystem> check)
     {
         using var boolSerializer = WithPersistenceBoolSerializer();
+        using var ownedTiles = new OwnedTileFixture();
         var field = typeof(Terraria.ObjectData.TileObjectData).GetField("_data", PersistenceStatic)!;
         object? old = field.GetValue(null);
         field.SetValue(null, Enumerable.Repeat<Terraria.ObjectData.TileObjectData>(null!, Terraria.ModLoader.TileLoader.TileCount).ToList());
@@ -35,7 +37,8 @@ internal static partial class EngineRuntimeChecks
         var data = PersistencePlacementData(id);
         GeneratedItemRegistryService.StampCurrentWorld(data);
         var placement = data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
-        placement.TileId = TileID.Stone; placement.WallId = -1;
+        placement.TileId = -1; placement.WallId = -1;
+        placement.OwnedTile = new RuntimeOwnedTileSpec { Width = 1, Height = 1, Collision = "open", Support = "unanchored" };
         placement.PlacedBody = new RuntimePlacedBodySpec { RenderSizePx = 37,
             FootprintAnchorX = 0.25, FootprintAnchorY = 1, ImagePivotX = 0.125, ImagePivotY = 0.75,
             OffsetXPx = -13, OffsetYPx = 17, RotationDegrees = -45.5, FlipX = true, FlipY = false };
@@ -139,7 +142,8 @@ internal static partial class EngineRuntimeChecks
             ["cells"] = new List<TagCompound> { new() { ["layer"] = 1, ["x"] = 1 + index % 90, ["y"] = 1 + index / 90 } },
         };
         row["placedBody"] = body ?? new TagCompound { ["version"] = 1, ["bindingId"] = "place",
-            ["definitionHash"] = GeneratedItemRegistryService.DefinitionIdentity(data), ["tileType"] = (int)TileID.Stone, ["nativeStyle"] = 0 };
+            ["definitionHash"] = GeneratedItemRegistryService.DefinitionIdentity(data), ["tileType"] = (int)TileID.Stone, ["nativeStyle"] = 0,
+            ["ownedTileKey"] = data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!.OwnedTile!.Key };
         return row;
     }
 

@@ -667,6 +667,7 @@
                     "x-infini-reference": {
                       "allowSelf": false,
                       "capabilities": [
+                        "place_object",
                         "place_tile",
                         "place_wall"
                       ],
@@ -1196,6 +1197,7 @@
                     "x-infini-reference": {
                       "allowSelf": false,
                       "capabilities": [
+                        "place_object",
                         "place_tile",
                         "place_wall"
                       ],
@@ -5290,6 +5292,83 @@
             "additionalProperties": false,
             "properties": {
               "fn": {
+                "const": "place_object"
+              },
+              "id": {
+                "description": "Stable unique call id.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "collision": {
+                    "description": "open permits movement through the object; solid blocks movement",
+                    "enum": [
+                      "open",
+                      "solid"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "height": {
+                    "description": "Occupied footprint height in tiles",
+                    "maximum": 16,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "support": {
+                    "description": "floor requires ground below the footprint; wall requires backing walls; unanchored needs no supporting surface",
+                    "enum": [
+                      "floor",
+                      "wall",
+                      "unanchored"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "width": {
+                    "description": "Occupied footprint width in tiles",
+                    "maximum": 16,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-semanticType": "unitless_scalar"
+                  }
+                },
+                "required": [
+                  "width",
+                  "height",
+                  "collision",
+                  "support"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
                 "const": "placed_sprite"
               },
               "id": {
@@ -5386,7 +5465,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "placementCallId": {
-                    "description": "Exact same-item place_tile call executed by a place_item binding; wall placements cannot carry this presentation",
+                    "description": "Exact same-item place_object call executed by a place_item binding; native tiles and walls cannot carry this presentation",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
                     "type": "string",
                     "x-infini-reference": {
@@ -5490,7 +5569,7 @@
                     "x-infini-semanticType": "runtime_color"
                   },
                   "placementCallId": {
-                    "description": "Exact same-item place_tile call executed by a place_item binding; no walls or unused placement",
+                    "description": "Exact same-item place_tile or place_object call executed by a place_item binding; no walls or unused placement",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
                     "type": "string",
                     "x-infini-reference": {
@@ -5560,7 +5639,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "maxFrameY": {
-                    "description": "Inclusive actual top-left native TileFrameY upper bound",
+                    "description": "Inclusive top-left TileFrameY upper bound; owned objects use zero",
                     "maximum": 32767,
                     "minimum": 0,
                     "type": "integer",
@@ -5568,7 +5647,7 @@
                     "x-infini-units": "native frame coordinate"
                   },
                   "minFrameY": {
-                    "description": "Inclusive actual top-left native TileFrameY lower bound, not animation age",
+                    "description": "Inclusive top-left TileFrameY lower bound, not animation age; owned objects use zero",
                     "maximum": 32767,
                     "minimum": 0,
                     "type": "integer",
@@ -5576,7 +5655,7 @@
                     "x-infini-units": "native frame coordinate"
                   },
                   "placementCallId": {
-                    "description": "Exact same-item place_tile call executed by a place_item binding; no walls or unused placement",
+                    "description": "Exact same-item place_tile or place_object call executed by a place_item binding; no walls or unused placement",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
                     "type": "string",
                     "x-infini-reference": {

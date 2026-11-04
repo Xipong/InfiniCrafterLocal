@@ -54,7 +54,7 @@ public partial class GeneratedItem
         Item.hammer = nativeToolAction ? Math.Max(0, Data.Gameplay.HammerPower) : 0;
         _nativeToolPowersSuppressed = !nativeToolAction;
         RuntimePlacementSpec? placement = action.Placement;
-        Item.createTile = placing ? placement!.TileId : -1;
+        Item.createTile = placing ? global::InfiniCrafterLocal.Content.Tiles.GeneratedOwnedTiles.Resolve(placement!) : -1;
         Item.createWall = placing ? placement!.WallId : -1;
         Item.placeStyle = placing ? placement!.PlaceStyle : 0;
         Item.useTurn = placing || Data.Gameplay.UseTurn;

@@ -214,8 +214,16 @@ def project_to_wire(
     if kind == PLACE_ITEM_ACTION:
         call_id = str(authored_action["placementCallId"])
         call = placement_calls_by_id[call_id]
-        wire_action["placement"] = {**copy.deepcopy(dict(call["params"])),
-                                    **placement_literals_by_fn[str(call["fn"])]}
+        from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+        placement = copy.deepcopy(dict(placement_literals_by_fn[str(call["fn"])]))
+        for name, value in call["params"].items():
+            for field in CAPABILITY_REGISTRY[str(call["fn"])].params[name].projected_fields(value, name):
+                target = placement
+                parts = field.wire_path.split(".")
+                for part in parts[:-1]:
+                    target = target.setdefault(part, {})
+                target[parts[-1]] = copy.deepcopy(field.value)
+        wire_action["placement"] = placement
     wire_policy = {
         "action": wire_action,
         "stackCost": int(policy["stackCost"]),

@@ -15,7 +15,7 @@ public sealed class GeneratedPlacedBodyDrawSystem : ModSystem
 {
     public override void PostDrawTiles()
     {
-        if (Main.dedServ || Main.gameMenu || Main.netMode == NetmodeID.Server || !GeneratedPlacedBodyNativeAdapter.FeatureAvailable) return;
+        if (Main.dedServ || Main.gameMenu || Main.netMode == NetmodeID.Server) return;
         var cache = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites;
         if (cache is null) return;
         bool began = false;

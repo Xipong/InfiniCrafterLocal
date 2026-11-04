@@ -26,6 +26,8 @@ from tests.vfx_material_fixtures import _history, _legacy, _shape, _sprite
 
 def test_campaign_placed_body_uses_authenticated_qa_root_png(tmp_path):
     authored = build_runtime_fixture("fishing_platform_tool")
+    next(c for c in authored["runtimeProgram"]["calls"] if c["fn"] == "place_tile").update(
+        fn="place_object", params={"width": 2, "height": 1, "collision": "solid", "support": "unanchored"})
     authored["runtimeProgram"]["calls"].append({
         "id": "placed_body", "fn": "placed_sprite", "target": "item",
         "params": {"placementCallId": "platform_result", "renderSizePx": 32,

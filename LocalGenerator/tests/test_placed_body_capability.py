@@ -25,12 +25,14 @@ from test_dual_use_placeable_contract import _dual_use_placeable
 from test_low_level_three_stage_pipeline import wire_transport as wire_transport
 
 FN = "placed_sprite"
+OWNED = dict(width=2, height=3, collision="open", support="floor")
 TRANSFORM = dict(renderSizePx=96, footprintAnchorX=0.25, footprintAnchorY=1,
                  imagePivotX=0.75, imagePivotY=1, offsetXPx=-13, offsetYPx=7,
                  rotationDegrees=-30.5, flipX=True, flipY=False)
 
 def placed():
     document = _dual_use_placeable()
+    next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "install_tile").update(fn="place_object", params=copy.deepcopy(OWNED))
     document["runtimeProgram"]["calls"].append(dict(
         id="placed_body", fn=FN,
         params={"placementCallId": "install_tile", **TRANSFORM}))
@@ -50,7 +52,7 @@ def test_explicit_capability_has_required_schema_and_exact_compiler_projection()
     assert set(schema["required"]) == {"placementCallId", *TRANSFORM}
     assert set(cap.prompt_card()["params"]) == {"placementCallId", "pivotSpace", *TRANSFORM}
     wire = compile_runtime_program(document)
-    assert placement(wire) == {"tileId":19, "wallId":-1, "placeStyle":0, "placedBody":{**TRANSFORM, "pivotSpace":"frame"}}
+    assert placement(wire) == {"tileId":-1, "wallId":-1, "placeStyle":0, "ownedTile":OWNED, "placedBody":{**TRANSFORM, "pivotSpace":"frame"}}
     assert wire["runtimeContract"]["technicalLoweringAudit"]["ok"]
     assert validate_runtime_wire(wire)["ok"], validate_runtime_wire(wire)
     receipts = [r for r in wire["runtimeContract"]["finalWireReceipts"] if r.get("fn") == FN]
@@ -131,7 +133,7 @@ def test_explicit_placed_png_is_required_even_with_legacy_optional_policy(monkey
     assert next(slot for slot in report["slots"] if slot["role"] == "item")["required"] is True
 
 
-def test_registry_witness_includes_executed_native_dependency():
+def test_registry_witness_includes_executed_owned_dependency():
     from infini_local.qa.capability_witnesses import build_capability_witness
     authored = build_capability_witness(FN)
     report = validate_runtime_program(authored)
@@ -281,7 +283,7 @@ def test_present_bad_container_is_not_absence(body):
     assert not validate_runtime_wire(wire)["ok"]
 
 
-def test_real_gameplay_repair_request_retains_frozen_transform_and_native_call(wire_transport):
+def test_real_gameplay_repair_request_retains_frozen_transform_and_owned_call(wire_transport):
     from infini_local.pipelines.author import request as gameplay
     responses, requests = wire_transport
     document = placed()
@@ -298,7 +300,7 @@ def test_real_gameplay_repair_request_retains_frozen_transform_and_native_call(w
     assert dossier["repairScope"]["create"]["calls"]["allowedFns"] == []
     wire = compile_runtime_program(result)
     assert placement(wire)["placedBody"] == {**TRANSFORM, "pivotSpace":"frame"}
-    assert placement(wire)["tileId"] == 19
+    assert placement(wire)["ownedTile"] == OWNED
     assert len(requests) == 1
 
 
@@ -422,3 +424,74 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     assert repaired_wire["runtimeProgram"] == wire["runtimeProgram"]
     assert audit_compiler_receipts(repaired_wire["runtimeContract"]["finalWireReceipts"], authored_document=repaired, final_document=repaired_wire)["ok"]
     assert json.dumps(doc, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("shape", [
+    {"width": 1, "height": 1, "collision": "open", "support": "unanchored"},
+    {"width": 16, "height": 16, "collision": "solid", "support": "wall"},
+    OWNED,
+])
+def test_owned_object_structure_is_explicit_lossless_and_receipted(shape):
+    document = placed()
+    call = next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == "place_object")
+    call["params"] = copy.deepcopy(shape)
+    before = copy.deepcopy(document)
+    wire = compile_runtime_program(document)
+    assert document == before
+    assert placement(wire)["ownedTile"] == shape
+    assert {key: placement(wire)[key] for key in ("tileId", "wallId", "placeStyle")} == {"tileId": -1, "wallId": -1, "placeStyle": 0}
+    assert validate_runtime_wire(wire)["ok"]
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    delivered = [row for row in receipts if row.get("fn") == "place_object" and row["status"] == "delivered"]
+    assert len(delivered) == 4
+    assert {row["finalPath"].rsplit(".ownedTile.", 1)[-1]: row["value"] for row in delivered} == shape
+    assert audit_compiler_receipts(receipts, authored_document=document, final_document=wire)["ok"]
+    receipts.remove(delivered[0])
+    assert not validate_runtime_wire(wire)["ok"]
+
+
+@pytest.mark.parametrize("field,bad", [("width", 0), ("width", 17), ("height", True), ("height", 1.5),
+    ("collision", "platform"), ("support", "infer_parent"), ("tileId", 19)])
+def test_owned_shape_invalid_or_missing_fields_are_never_inferred(field, bad):
+    document = placed()
+    params = next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == "place_object")["params"]
+    params[field] = bad
+    before = copy.deepcopy(document)
+    assert not validate_runtime_program(document)["ok"]
+    assert document == before
+    wire = compile_runtime_program(placed()); wire.pop("runtimeContract")
+    placement(wire)["ownedTile"][field] = bad
+    assert not validate_runtime_wire(wire)["ok"]
+    if field in OWNED:
+        document = placed()
+        next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == "place_object")["params"].pop(field)
+        assert not validate_runtime_program(document)["ok"]
+        wire = compile_runtime_program(placed()); wire.pop("runtimeContract")
+        placement(wire)["ownedTile"].pop(field)
+        assert not validate_runtime_wire(wire)["ok"]
+
+
+def test_owned_object_requires_sprite_and_native_tile_cannot_take_owned_sprite():
+    document = placed()
+    document["runtimeProgram"]["calls"].pop()
+    assert not validate_runtime_program(document)["ok"]
+    wire = compile_runtime_program(placed()); wire.pop("runtimeContract")
+    placement(wire).pop("placedBody")
+    assert not validate_runtime_wire(wire)["ok"]
+    document = placed()
+    next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == "place_object").update(fn="place_tile", params={"tileId": 19, "placeStyle": 0})
+    assert any(e["code"] == "placed_body_placement_reference" for e in validate_runtime_program(document)["errors"])
+    legacy = compile_runtime_program(placed()); legacy.pop("runtimeContract")
+    placement(legacy).pop("ownedTile"); placement(legacy)["tileId"] = 19
+    before = copy.deepcopy(legacy)
+    assert not validate_runtime_wire(legacy)["ok"]
+    assert legacy == before
+    # The genuine native primitive survives independently, with its own visuals.
+    assert validate_runtime_wire(compile_runtime_program(_dual_use_placeable()))["ok"]
+
+
+@pytest.mark.parametrize("leaf,value", [("tileId", 19), ("wallId", 1), ("placeStyle", 1)])
+def test_owned_structure_cannot_mix_native_identity(leaf, value):
+    wire = compile_runtime_program(placed()); wire.pop("runtimeContract")
+    placement(wire)[leaf] = value
+    assert not validate_runtime_wire(wire)["ok"]

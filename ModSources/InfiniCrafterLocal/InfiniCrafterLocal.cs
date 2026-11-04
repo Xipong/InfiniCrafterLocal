@@ -26,6 +26,7 @@ public sealed class InfiniCrafterLocalMod : Mod
     public override void Load()
     {
         Instance = this;
+        global::InfiniCrafterLocal.Content.Tiles.GeneratedOwnedTiles.Register(this);
         Generator = new GeneratorClient();
         Sprites = new RuntimeSpriteCache();
         AssetSync = new GeneratedAssetSyncService();
@@ -171,6 +172,7 @@ public sealed class InfiniCrafterLocalMod : Mod
 
     public override void Unload()
     {
+        global::InfiniCrafterLocal.Content.Tiles.GeneratedOwnedTiles.Clear();
         Studio?.Dispose();
         Studio = null;
         GeneratedHeldItemPresentation.ClearAssetRequests();

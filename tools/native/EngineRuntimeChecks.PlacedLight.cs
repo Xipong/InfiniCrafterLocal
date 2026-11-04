@@ -38,7 +38,7 @@ internal static partial class EngineRuntimeChecks
                 Equal(new Color(90,235,255).ToVector3()*0.625f,(Vector3)light.GetType().GetField("Color")!.GetValue(light)!,"explicit color/strength reach installed LightingEngine CPU queue");
             }
             AssertOwnLight();
-            Equal(false,GeneratedPlacementLedgerSystem.ShouldSuppressPlacedBody(40,40),"light does not select PNG or suppress native sprite");
+            Equal(false,GeneratedPlacementLedgerSystem.HasLivePlacedBody(40,40),"light does not select PNG or suppress native sprite");
             var saved=PersistenceNbtRoundtrip(PlacedLedgerSaved(ledger));
             ledger.ClearWorld(); lights.Clear(); ledger.PostUpdateEverything(); Equal(0,lights.Count,"clear retires derived lights");
             ledger.LoadWorldData(saved); AssertOwnLight();

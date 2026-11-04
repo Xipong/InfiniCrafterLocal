@@ -20,15 +20,13 @@ public sealed partial class GeneratedPlacementLedgerSystem
 
     public override void PostSetupContent()
     {
-        if (!GeneratedPlacedBodyNativeAdapter.TryInstall(ShouldSuppressPlacedBody,null,out string reason))
-            ReportPlacedBodyAdmissionFailure(reason);
         try { InstallNativeChestHooks(); }
         catch (Exception e) { ReportPlacedBodyAdmissionFailure("native chest source boundary unavailable: " + e.Message); }
     }
 
     public override void Unload()
     {
-        try { UnloadNativeChestHooks(); GeneratedPlacedBodyNativeAdapter.Unload(); }
+        try { UnloadNativeChestHooks(); }
         finally { ClearWorld(); PlacedBodyAdmissionDiagnostics.Clear(); _placedAdmissionFeedbackShown = false; }
     }
 
@@ -57,14 +55,25 @@ public sealed partial class GeneratedPlacementLedgerSystem
         Main.NewText(Language.GetTextValue("Mods.InfiniCrafterLocal.RuntimeTooltip.PlacementUnsupported"));
     }
 
-    private static bool AdmitPlacedBodyNativeBoundary(RuntimePlacementSpec placement)
+    private static bool AdmitPlacementBoundary(RuntimePlacementSpec placement)
     {
+        if (placement.OwnedTile is not null)
+        {
+            try
+            {
+                placement.NormalizeAndValidate();
+                return global::InfiniCrafterLocal.Content.Tiles.GeneratedOwnedTiles.Resolve(placement) >= 0;
+            }
+            catch (Exception e)
+            { ReportPlacedBodyAdmissionFailure(e.Message); ShowPlacedBodyAdmissionFailure(placement); return false; }
+        }
+        // Native primitives retain native art. Never silently mask a rejected old
+        // custom body with a parent's art or route a container to a generic tile.
+        if (placement.PlacedBody is not null)
+        { ReportPlacedBodyAdmissionFailure("native custom body retired; author place_object"); ShowPlacedBodyAdmissionFailure(placement); return false; }
         // Never route unsupported native chest styles through generic tile placement.
         if (IsNativeChestTile(placement.TileId)) return AdmitNativeChestMetadata(placement);
         if (placement.TileId < 0) return !placement.HasPlacedFootprint;
-        if (placement.PlacedBody is not null
-            && !GeneratedPlacedBodyNativeAdapter.TryAdmitNative(placement.TileId,null,false,out string reason))
-        { ReportPlacedBodyAdmissionFailure(reason); ShowPlacedBodyAdmissionFailure(placement); return false; }
         try
         {
             TileObjectData? data = TileObjectData.GetTileData(placement.TileId,placement.PlaceStyle);

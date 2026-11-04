@@ -643,6 +643,22 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "place_object",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Tiles/GeneratedOwnedTile.cs::SetStaticDefaults",
+      "outputs": [
+        "runtimeProgram.bindings[].usePolicy.action.placement.tileId",
+        "runtimeProgram.bindings[].usePolicy.action.placement.wallId",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placeStyle",
+        "runtimeProgram.bindings[].usePolicy.action.placement.ownedTile.width",
+        "runtimeProgram.bindings[].usePolicy.action.placement.ownedTile.height",
+        "runtimeProgram.bindings[].usePolicy.action.placement.ownedTile.collision",
+        "runtimeProgram.bindings[].usePolicy.action.placement.ownedTile.support"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "placed_sprite",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Models/Contracts/RuntimeProgramSpec.cs::Validate",

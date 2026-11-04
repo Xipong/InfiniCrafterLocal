@@ -15,19 +15,21 @@ using Terraria.ID;
 
 internal static partial class EngineRuntimeChecks
 {
-    // Reflection deliberately keeps the SAME observer compilable on pre-product
-    // source. Missing capability reaches a behavioral assertion, not a compile error.
-    // Only these placement tests use this explicit current-envelope counterpart.
-    private static string PlacedAlphaCurrentVisibilityControlJson(string archived)
+    // The frozen native-placement delivery remains refusal evidence. Current
+    // tests construct a separate owned definition with the same image transform.
+    private static string PlacedAlphaOwnedControlJson(string archived)
     {
-        Equal(true, GeneratedItemData.FromJson(archived) is null, "retired placement envelope refused");
-        var control = System.Text.Json.Nodes.JsonNode.Parse(archived)!;
-        Equal("immediate", control["gameplay"]!["releaseTiming"]!.GetValue<string>(), "exact saved placement visibility");
-        Equal("immediate", control["runtimeProgram"]!["itemUse"]!["releaseTiming"]!.GetValue<string>(), "exact saved item visibility");
-        control["gameplay"]!.AsObject().Remove("releaseTiming");
-        control["runtimeProgram"]!["itemUse"]!.AsObject().Remove("releaseTiming");
-        control["runtimeProgram"]!["itemUse"]!["hideUseGraphic"] = true;
-        return control.ToJsonString();
+        Equal(true, GeneratedItemData.FromJson(archived) is null, "retired native+PNG envelope refused");
+        // A newly constructed owned test definition reuses only the archived
+        // presentation transform. The archive is neither rewritten nor imported.
+        var old = System.Text.Json.Nodes.JsonNode.Parse(archived)!;
+        var oldPlacement = old["runtimeProgram"]!["bindings"]!.AsArray()
+            .Single(b => b!["id"]!.GetValue<string>() == "alternate_install")!["usePolicy"]!["action"]!["placement"]!;
+        var fresh = System.Text.Json.Nodes.JsonNode.Parse(PlacedLedgerData("alpha-current-owned-control").ToNetworkJson())!;
+        var binding = fresh["runtimeProgram"]!["bindings"]![0]!;
+        binding["id"] = "alternate_install";
+        binding["usePolicy"]!["action"]!["placement"]!["placedBody"] = oldPlacement["placedBody"]!.DeepClone();
+        return fresh.ToJsonString();
     }
 
     private static RuntimePlacedBodySpec AlphaBody(string? space, double px = .5, double py = 1,
@@ -189,16 +191,16 @@ internal static partial class EngineRuntimeChecks
         Equal(true,nullRefused,"explicit null is not omission");
         // The captured Python delivery remains frozen; its narrowly projected
         // current visibility envelope retains the exact placement/visual payload.
-        string delivered=PlacedAlphaCurrentVisibilityControlJson(File.ReadAllText(Path.Combine("tools","fixtures","placed-alpha-pivot-delivered.json")));
+        string delivered=PlacedAlphaOwnedControlJson(File.ReadAllText(Path.Combine("tools","fixtures","placed-alpha-pivot-delivered.json")));
         var data=GeneratedItemData.FromJson(delivered);
-        Equal(true,data is not null,"current placement control accepted by native reader");
+        Equal(true,data is not null,"new owned placement control accepted by strict reader");
         var selected=data!.RuntimeProgram.Bindings.Single(b=>b.Id=="alternate_install").UsePolicy.Action.Placement!.PlacedBody!;
         Equal("alpha_bounds",(string)property!.GetValue(selected)!,"final Python selector reaches real DTO");
         var historical=System.Text.Json.Nodes.JsonNode.Parse(delivered)!;
         var binding=historical["runtimeProgram"]!["bindings"]!.AsArray().Single(b=>b!["id"]!.GetValue<string>()=="alternate_install")!;
         binding["usePolicy"]!["action"]!["placement"]!["placedBody"]!.AsObject().Remove("pivotSpace");
         var old=GeneratedItemData.FromJson(historical.ToJsonString());
-        Equal(true,old is not null,"historical final wire without optional selector still admitted");
+        Equal(true,old is not null,"owned wire without optional pivot selector remains admitted");
         Equal(null,property.GetValue(old!.RuntimeProgram.Bindings.Single(b=>b.Id=="alternate_install").UsePolicy.Action.Placement!.PlacedBody!),"native read never auto-reanchors old wire");
     }
 
@@ -208,11 +210,11 @@ internal static partial class EngineRuntimeChecks
         byte[] source=File.ReadAllBytes(path);
         static string Hash(byte[] bytes)=>Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();
         Equal("90d1d3c16b4d6b0b5cf5ce69eaa25731bb3a9518b80bd8c8c896f09a585e7fa7",Hash(source),"frozen pre-product Python final wire was not refreshed");
-        var data=GeneratedItemData.FromJson(PlacedAlphaCurrentVisibilityControlJson(System.Text.Encoding.UTF8.GetString(source)));
-        Equal(true,data is not null,"current-envelope control preserves captured placed body");
+        var data=GeneratedItemData.FromJson(PlacedAlphaOwnedControlJson(System.Text.Encoding.UTF8.GetString(source)));
+        Equal(true,data is not null,"new owned definition preserves captured transform only");
         var body=data!.RuntimeProgram.Bindings.Single(b=>b.Id=="alternate_install").UsePolicy.Action.Placement!.PlacedBody!;
         var property=typeof(RuntimePlacedBodySpec).GetProperty("PivotSpace");
-        if(property is not null)Equal(null,property.GetValue(body),"old absence not materialized during read/Normalize");
+        if(property is not null)Equal(null,property.GetValue(body),"optional pivot absence not materialized during read/Normalize");
         string bodyJson=JsonSerializer.Serialize(body);
         Equal(false,bodyJson.Contains("pivotSpace",StringComparison.OrdinalIgnoreCase),"plain DTO serialization preserves old member absence");
         string identity=GeneratedItemRegistryService.DefinitionIdentity(data), network=data.ToNetworkJson(), saved=data.ToJson();
@@ -221,9 +223,9 @@ internal static partial class EngineRuntimeChecks
         Equal(identity,GeneratedItemRegistryService.DefinitionIdentity(GeneratedItemData.FromJson(network)!),"definition identity stable through network roundtrip");
         Equal(identity,GeneratedItemRegistryService.DefinitionIdentity(GeneratedItemData.FromJson(saved)!),"definition identity stable through saved roundtrip");
         Equal(bodyJson,JsonSerializer.Serialize(data.RuntimeProgram.Bindings.Single(b=>b.Id=="alternate_install").UsePolicy.Action.Placement!.PlacedBody),"hash/network serialization did not mutate old DTO");
-        // These hashes describe the named current-envelope control, not a claim
-        // that the retired original still has network/read compatibility.
-        Console.WriteLine("PLACED_ALPHA_LEGACY_IDENTITY definition="+identity+" networkSha256="+Hash(System.Text.Encoding.UTF8.GetBytes(network))+" bodySha256="+Hash(System.Text.Encoding.UTF8.GetBytes(bodyJson)));
+        // These hashes describe the newly authored owned test definition, never
+        // a claim that the retired native-placement wire remains compatible.
+        Console.WriteLine("PLACED_ALPHA_OWNED_IDENTITY definition="+identity+" networkSha256="+Hash(System.Text.Encoding.UTF8.GetBytes(network))+" bodySha256="+Hash(System.Text.Encoding.UTF8.GetBytes(bodyJson)));
     }
 
     private static void PlacedAlphaProjectionPreservesMaterialAndPhysics()
@@ -260,7 +262,7 @@ internal static partial class EngineRuntimeChecks
             Equal(height,player.inventory[player.selectedItem].height,"item physics height unchanged");
             Equal(scale,player.inventory[player.selectedItem].scale,"item physics scale unchanged");
             Equal(true,tile.HasTile&&tile.TileType==TileID.Stone,"native tile unchanged");
-            Equal(true,GeneratedPlacementLedgerSystem.ShouldSuppressPlacedBody(40,40),"failed explicit alpha draw never restores native body");
+            Equal(true,GeneratedPlacementLedgerSystem.HasLivePlacedBody(40,40),"failed explicit alpha draw never restores native body");
             var saved=PlacedLedgerSaved(ledger);ledger.LoadWorldData(PersistenceNbtRoundtrip(saved));ledger.PostUpdateEverything();
             views=((System.Collections.IEnumerable)typeof(GeneratedPlacementLedgerSystem).GetMethod("VisiblePlacedBodies",PersistenceStatic)!.Invoke(null,null)!).Cast<object>().ToArray();
             Equal("alpha_bounds",(string)prop.GetValue(views.Single().GetType().GetProperty("Body")!.GetValue(views.Single()))!,"native save/load retains opt-in choice");

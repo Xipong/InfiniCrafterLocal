@@ -136,7 +136,7 @@ def test_outgoing_placement_cards_keep_native_containers_at_existing_placement(w
         card = next(c for c in cards if c["fn"] == fn)
         summary = card["does"].lower()
         assert "footprint" in summary and "16x16/256 cells" in summary
-        assert "place_tile" in card["params"]["placementCallId"]["meaning"]
+        assert ("place_object" if fn == FN else "place_tile") in card["params"]["placementCallId"]["meaning"]
         assert "waterchest" not in summary and "tile 21/style 17" not in summary
     wire = compile_runtime_program(accepted)
     assert {"placedBody", "placedLight"} <= placement(wire).keys()
@@ -211,7 +211,7 @@ def test_frozen_leaf_repair_preserves_basis_and_absence(old):
     assert validate_runtime_wire(compile_runtime_program(result))["ok"]
 
 
-def test_frozen_body_absence_survives_current_visibility_control_sanitizer(tmp_path, monkeypatch):
+def test_frozen_native_body_is_retained_but_not_readmitted_by_current_sanitizer(tmp_path, monkeypatch):
     import hashlib
     from pathlib import Path
 
@@ -229,7 +229,7 @@ def test_frozen_body_absence_survives_current_visibility_control_sanitizer(tmp_p
     assert control["gameplay"].pop("releaseTiming") == "immediate"
     assert control["runtimeProgram"]["itemUse"].pop("releaseTiming") == "immediate"
     control["runtimeProgram"]["itemUse"]["hideUseGraphic"] = True
-    assert validate_runtime_wire(control)["ok"]
+    assert any(e["code"] == "placed_body_owned_only" for e in validate_runtime_wire(control)["errors"])
     assert placement(control) == placement(old)
     png = tmp_path / "placed.png"
     Image.new("RGBA", (32,32), (240,90,20,255)).save(png)
@@ -271,7 +271,8 @@ def test_real_final_delivery_sanitizer_keeps_alpha_choice_and_refuses_foreign_le
     report = validate_runtime_wire(expected)
     assert not report["ok"] and any(e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
     assert validate_runtime_wire(final_wire)["ok"]
-    assert placement(final_wire) == placement(expected)
+    assert placement(final_wire)["placedBody"] == placement(expected)["placedBody"]
+    assert "ownedTile" in placement(final_wire) and "ownedTile" not in placement(expected)
     # Fresh motion composition is independent of the retained native placement
     # witness. Keep complete sanitizer identity against the current input and
     # compare every retained presentation owner, including identity/multiplicity.
