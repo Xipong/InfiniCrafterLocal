@@ -85,17 +85,17 @@ def _request_visual_kit(
     )
     response_format = llm_json_response_format(
         "infini_visual_kit_repair_patch" if repair else "infini_visual_kit_runtime_entities",
-        schema=lambda: _provider_strict_projection(schema), strict=True, auto_preference="json_schema",
+        schema=lambda: _provider_strict_projection(schema, omit_annotations=True), strict=True, auto_preference="json_schema",
     )
-    sent_schema = response_format["json_schema"]["schema"] if response_format and response_format.get("type") == "json_schema" else schema
+    # Keep annotated guidance once in the instruction packet; the provider schema
+    # enforces the same projected shape without duplicating its descriptions.
+    sent_schema = _provider_strict_projection(schema) if response_format and response_format.get("type") == "json_schema" else schema
     if repair:
         system = (
             "You are the conditional Visual Repair. Return only a narrow patch for exact invalid visual fields/rows. "
             "You may return a complete broken row; deterministic merge freezes every already-valid old field and keeps "
             "the exact repaired or newly missing fields. Extra rewrites are ignored. Runtime gameplay is immutable. "
-            "The runtime entity with kind=item_body must use baked_sprite regardless of its entityId; set visualProjectRef=item and omit prompt/silhouette/visualIdentity; root item owns that design. "
-            "Only another non-item_body entity that is the same physical object as item_body may use reuse_item_icon with visualProjectRef=item; never create a second visual project for it. "
-            "Use assetModeCatalog as the exact PNG-delivery and runtime-draw contract. Return JSON only."
+            "Use assetModeCatalog for PNG delivery and runtime drawing, and responseSchema for patch shape. Return JSON only."
         )
         if isinstance(previous, MalformedVisualDirectorOutput):
             system += (
@@ -124,8 +124,6 @@ def _request_visual_kit(
                 visual_background_transport_rule(),
                 "already-valid fields and independent rows are frozen; extra rewrites are ignored",
                 "preserve already-valid child appearance and the accepted runtime entity set",
-                "the runtime entity with kind=item_body must use baked_sprite regardless of its entityId; set visualProjectRef=item and omit prompt/silhouette/visualIdentity; root item owns that design",
-                "only another non-item_body entity that is the same physical object as item_body may use reuse_item_icon with visualProjectRef=item and must not author a second visual project",
                 "when equipmentOverlayReadOnly.required is true, repair equipOverlayPatch as a separate wearable presentation asset",
             ],
             "responseSchema": sent_schema,
@@ -137,12 +135,7 @@ def _request_visual_kit(
             "Realize the authored concept as a coherent appearance compatible with the accepted mechanics. "
             "Make the relationship between the inventory object, its in-use bodies and its effects readable: physical continuity or deliberate transformation and detachment should be clear to the player. "
             "Collision geometry describes hit placement, not the complete object silhouette; absence of guaranteed hand contact is not itself a reason to design a floating weapon. "
-            "For each exact entityId choose one finite assetMode: "
-            "baked_sprite, reuse_item_icon, runtime_geometry, or no_asset. The entity with kind=item_body, regardless of its entityId, uses baked_sprite with visualProjectRef=item and only entityId/assetMode/visualProjectRef/scale; root item owns its prompt/silhouette/visualIdentity. "
-            "A distinct baked entity uses visualProjectRef=entity and authors prompt/silhouette/visualIdentity. reuse_item_icon uses visualProjectRef=item and omits those fields; runtime_geometry/no_asset use visualProjectRef=none and omit them. "
-            "Only another non-item_body entity that is the same physical object as item_body may use reuse_item_icon with visualProjectRef=item; never create a second visual project for it. "
-            "Use assetModeCatalog as the exact PNG-delivery and runtime-draw contract. "
-            "A baked sprite is mandatory delivery: never request or accept a placeholder. Return a strict JSON object with double-quoted JSON object keys and string values; no trailing commas or JavaScript expressions."
+            "Use assetModeCatalog for PNG delivery and runtime drawing, and responseSchema for the output contract. Return JSON only."
         )
         payload = {
             "task": "Author one visualKit for the accepted runtime program.",
@@ -156,18 +149,13 @@ def _request_visual_kit(
             "equipmentOverlayReadOnly": copy.deepcopy(equipment_overlay),
             "assetModeCatalog": visual_asset_mode_catalog(),
             "rules": [
-                "appearance only; runtime program is immutable",
                 "item.literalSynthesis, when present, is advisory authored appearance intent. Develop it into a coherent visual identity compatible with the accepted runtime. Parent visual references inform the design; they do not require copying whole objects. Visual Director owns appearance and asset choices; accepted mechanics remain authoritative.",
                 "Ordinary visible item_body uses Terraria native use-style framing on a centered canvas, not a PNG grip-to-hand binding. Draw the artwork in its intended native pose; forwardAngleDegrees describes the PNG and does not rotate this held body toward aim. Grip metadata still identifies the physical handle for composable entities reusing this image: both normalized coordinates refer to the final canvas after crop/fit/padding, before facing/gravity flips. Do not infer coordinates from entityId or request image analysis.",
                 "For a newly designed accessory choose equipOverlay.accessoryMount explicitly from chest/back/waist/shoulder/orbit to suit its authored appearance. It attaches the existing single PNG badge to the body pivot; it is not a full armor sheet or a behind-body occlusion guarantee. Optional omission selects the existing orbit presentation; never fill optional metadata during Repair unless its exact path is permitted.",
                 "literal furniture, tools and materials may remain literal",
                 "movement/controller names describe motion, not a weapon taxonomy",
-                "baked_sprite requires a real generated PNG; no placeholder",
                 visual_background_transport_rule(),
                 "never author impact sprite prompts here; VFX owns them only when it selects rendererKind=impactSprite",
-                "the runtime entity with kind=item_body must use baked_sprite regardless of its entityId; set visualProjectRef=item and omit prompt/silhouette/visualIdentity; root item owns that design",
-                "only another non-item_body entity that is the same physical object as item_body may use reuse_item_icon with visualProjectRef=item and must not author a second visual project",
-                "reuse_item_icon carries only entityId, assetMode, visualProjectRef=item and scale; do not duplicate prompt or identity fields",
                 "runtime_geometry carries entityId, assetMode, visualProjectRef=none, scale and explicit geometry; no_asset carries the same metadata without geometry. Geometry dimensions/color/opacity/axis are authored presentation, never copied from hitbox/light. collision_path requires an accepted beam/lash path; body_segment aim axis requires accepted aim.",
                 "when equipmentOverlayReadOnly.required is true, author equipOverlay as a separate transparent wearable layer for that exact slot, without drawing a player body",
             ],

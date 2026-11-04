@@ -256,7 +256,8 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
         facts["multipliers"] = multipliers
     grip_instruction = (
         " The visible handle region must contain the declared final-space grip, not the guard, blade or empty space. "
-        "It is a normalized final-canvas point after framing/padding, not a RAW-image coordinate; keep that contact region there before facing flips."
+        "Coordinates run from upper-left=(0,0) to lower-right=(1,1) on the final canvas after framing/padding, "
+        "not the raw image; keep that contact region there before facing flips."
         if "grip" in facts else ""
     )
     return (
@@ -279,8 +280,9 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
     authored = compact_visual_words(prompt, 1400)
     clause = role_contract_prompt_clause(role, canvas)
     text = compact_visual_words(f"{authored}. {clause}", 1800)
+    frame_clause = image_final_frame_prompt_clause(data, role, canvas, entity_id=entity_id)
     visual = data.get("visual")
-    if role == "item" and isinstance(visual, Mapping) and "grip" in visual:
+    if not frame_clause and role == "item" and isinstance(visual, Mapping) and "grip" in visual:
         # The Visual stage validates this atomic object. Forward it literally;
         # do not infer the contact point or truncate art to make room for metadata.
         grip = json.dumps(visual["grip"], separators=(",", ":"), allow_nan=False)
@@ -290,7 +292,7 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
         )
     # Append after the authored-art bound: style must not displace
     # literal geometry, framing/background or the accepted hand-contact point.
-    return text + image_final_frame_prompt_clause(data, role, canvas, entity_id=entity_id) + image_generation_prompt_suffix()
+    return text + frame_clause + image_generation_prompt_suffix()
 
 
 __all__ = [

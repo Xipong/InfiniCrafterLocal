@@ -204,6 +204,9 @@ def test_image_composition_preserves_prospective_grip_and_literal_topology(monke
     root_prompt, arrow_prompt = (call["prompt"] for call in calls)
     item_facts, arrow_facts = _framing(root_prompt), _framing(arrow_prompt)
     assert item_facts["grip"] == data["visualKit"]["item"]["grip"]
+    # The selected project facts own the coordinates; avoid a second conflicting
+    # coordinate instruction while preserving the independent entity's absence.
+    assert root_prompt.count('"normalizedX"') == root_prompt.count('"normalizedY"') == 1
     assert item_facts["silhouette"] == data["visualKit"]["item"]["silhouette"]
     assert item_facts["visualIdentity"] == data["visualKit"]["item"]["visualIdentity"]
     assert item_facts["nativeHeldCanvas"]["nativeBodyBindsPngGrip"] is False

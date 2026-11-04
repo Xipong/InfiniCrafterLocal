@@ -16,11 +16,11 @@ from infini_local.core.provider_schema import _provider_strict_projection, proje
 
 
 AUTHOR_DESIGN_QUALITY_RULE = (
-    "Create a new Terraria item based on the combination of these parents. Freely choose how they influence the result. Aim for a coherent concept and interesting gameplay use. "
-    "Choose a worthwhile gameplay use, considering the functions and resources the player gives up in this craft and the effort, resources and opportunities its use costs. Strengths and tradeoffs should make sense together; a different role need not retain every parental function. "
-    "Design the actual play sequence: where the player and targets are, how effects reach them, and what visible motion communicates the action. "
-    "Make the relationship between the player and the visible item or effect intentional: a held body, an independently moving object or a detached effect should read as that choice throughout its motion. "
-    "Choose geometry for its executed motion and contact shape; later art and VFX dress that motion rather than replace it."
+    "Create a coherent Terraria item with an interesting, worthwhile gameplay use. "
+    "Freely choose how the parents influence it; a new role need not retain their functions. "
+    "Consider what the player gives up in crafting and using the result, and make its strengths and tradeoffs worth those costs. "
+    "Implement the intended play sequence: player inputs, how effects reach targets, and motion and contact geometry that communicate the action. "
+    "Later art and VFX dress that gameplay; they do not replace its execution."
 )
 
 AUTHOR_STATUS_COMPOSITION_RULE = (
@@ -29,9 +29,6 @@ AUTHOR_STATUS_COMPOSITION_RULE = (
 )
 
 
-PRIMARY_REPAIR_SYSTEM_RULE = (
-    f"Use {PRIMARY_ENTITY_SELECTION_FIELD} whenever its repair transaction is enabled."
-)
 RUNTIME_ROW_SHAPE_RULE = (
     "Rows illustrate alternative forms. Calls may omit target only for item-body-only capabilities, "
     "and params only for zero-argument capabilities. "
@@ -40,27 +37,11 @@ RUNTIME_ROW_SHAPE_RULE = (
     "place_item stackCost=1; native_fishing stackCost=0; both contactDamage=false. Other active kind, stackCost and contactDamage are explicit. "
     "placementCallId belongs only to place_item; effectGroupId belongs only to apply_item_effects, "
     "where absence selects ungrouped effects."
-    " Physical composition: owner_mounted is owner.MountedCenter, not the hand. "
-    "attach reads an anchor; front_arm_pose independently writes the front arm, whose native stretch length is only 4 to 10px. "
-    "Aim, attachment, arm pose and sprite rotation are separate. "
-    "set_aim, attach and front_arm_pose do not themselves turn the body PNG. "
-    "Without rotate_sprite, body-forward starts at world angle 0 (right) and follows the movement driver; a stationary body retains its last orientation. Aim and attachment do not supply rotation. "
-    "Independent poses remain valid. "
-    "There is no automatic arm follow of body motion. front_hand reads the native hand but does not cancel "
-    "physical axis/normal offsets or reachCurve: they translate actual body center and collision geometry. "
-    "The selected PNG grip adapter compensates attachment offsets only, not reachCurve. "
-    "For constant contact of a rigid PNG grip, use front_hand with the selected grip and no reachCurve; "
-    "its static attachment offsets remain compensated by that PNG adapter. A hand-rooted beam/path needs its "
-    "authored line origin at the hand; front_arm_pose independently chooses arm motion, not line displacement. "
-    "PNG grip metadata is needed only by PNG consumers. Deliberately displaced bodies remain valid. "
-    "beam_geometry uses the same Aim world unit axis (MotionAxis): start=body center+axis*startOffsetBlocks, "
-    "end=start+axis*length, with blocks converted to world pixels; omitted offset is zero. "
-    "Its signed offset changes only the line origin, never length, width, attachment/reach, body physics or PNG scale. "
-    "An inventory grip or hidden root PNG does not anchor a separate path surface. "
-    "For native-like held motion, projectile.Center is not the grip: a rigid body may extend behind its pivot "
-    "while its hilt region slides beneath the palm. A held claim draws a selected body PNG in the native held-projectile pass, "
-    "where the front hand can cover it; detached VFX layers do not imply that occlusion. This is not a fixed grip-point guarantee. "
-    "Visual/VFX cannot repair accepted attachment, pose or geometry. These facts grant no Repair edit permissions."
+    " Aim, attachment, arm pose and sprite rotation are independent; their execution is described by the corresponding capability cards. "
+    "Without rotate_sprite, body-forward starts at world angle 0 (right) and follows the movement driver; a stationary body retains its last orientation. "
+    "A held representation draws the selected body PNG in the native held-projectile pass, where the front hand may cover it. "
+    "projectile.Center is not necessarily the grip; detached VFX layers do not provide that hand occlusion. "
+    "Visual/VFX preserve accepted motion and geometry. These facts grant no Repair edit permissions."
 )
 
 
@@ -265,7 +246,6 @@ def project_provider_author_item_to_local(
 
 __all__ = [
     "AUTHOR_DESIGN_QUALITY_RULE",
-    "PRIMARY_REPAIR_SYSTEM_RULE",
     "author_item_prompt_shape_card",
     "author_item_provider_repair_response_schema",
     "author_item_provider_response_schema",

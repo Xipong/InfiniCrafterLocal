@@ -35,7 +35,7 @@ def validation_retry_notes(validation: dict[str, Any] | None, role: str = "item"
         else "use native alpha with empty transparent space around the authored subject"
     )
     dense_area = (
-        "remove any white/pink poster card or inner background; only the actual sprite body may remain outside the configured key"
+        "remove any opaque poster card or inner background; only the authored sprite body may remain outside the configured key"
         if keyed
         else "remove any opaque poster card or inner background; preserve only the authored sprite body and native alpha"
     )
@@ -78,16 +78,14 @@ def build_retry_prompt_from_validation(prompt: str, validation: dict[str, Any] |
         retry_parts = [
             str(prompt or ""),
             f"Revision {attempt}: preserve the same exact {role} subject, quantity, action, state, materials, and colors.",
-            f"Composition correction: keep the authored {role} components within the sprite bounds and make their physical arrangement clearer.",
             str(contract),
             f"Background correction: {bg}.",
             ("Technical correction: " + notes) if notes else "",
         ]
         return compact_zimage_asset_prompt(retry_parts, role, limit=env_int("INFINI_ZIMAGE_RETRY_PROMPT_LIMIT", 2200)) + guidance
     extra = (
-        f" STRICT RETRY {attempt}: draw the authored {role} physical arrangement, keep visible components within the sprite bounds, make it readable, "
-        f"{contract}, {bg}, "
-        "no checkerboard, no UI, no text, no scene, no ground, no shadow, no crop"
+        f"Revision {attempt}: preserve the authored {role} subject, components, arrangement, materials and colors. "
+        f"{contract}, {bg}."
     )
     if notes:
         extra += ", fix these technical issues: " + notes
