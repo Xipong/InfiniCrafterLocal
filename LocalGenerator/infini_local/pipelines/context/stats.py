@@ -72,6 +72,66 @@ def _scaled(value: int | float, factor: str) -> float:
     return float(Decimal(str(value)) * Decimal(factor))
 
 
+def _native_motion_units(raw: dict[str, Any]) -> dict[str, Any]:
+    """Read exact captured members, not source expressions or fired-shot state."""
+    values: list[dict[str, Any]] = []
+
+    def observe(profile: Any, path: str, *, projectile: bool = False) -> None:
+        if (not isinstance(profile, dict) or profile.get("unavailable") is True
+                or "sameAs" in profile or "sourceSameAs" in profile):
+            return
+        extra = profile.get("extraUpdates") if projectile else None
+        # The producer captures a native int32. An absent or malformed clock
+        # cannot borrow the item's clock, another candidate's clock, or u=1.
+        updates = extra + 1 if type(extra) is int and 0 <= extra < 2**31 - 1 else None
+        fields = ("itemShootSpeed", "sourceItemShootSpeed", "timeLeft") if projectile else ("shootSpeed",)
+        for field in fields:
+            value = profile.get(field)
+            lifetime = field == "timeLeft"
+            if not _number(value) or lifetime and (type(value) is not int or not 0 <= value < 2**31):
+                continue
+            row: dict[str, Any] = {
+                "sourcePath": f"{path}.{field}",
+                "nativeMember": "Terraria.Projectile.timeLeft" if lifetime else "Terraria.Item.shootSpeed",
+                "value": value,
+                "units": "projectile updates" if lifetime else "pixels/projectile update",
+            }
+            if updates is not None:
+                number = Decimal(str(value))
+                equivalent = float(number / (60 * updates) if lifetime else number * 60 * updates / 16)
+                if math.isfinite(equivalent):
+                    row["clock"] = {"sourcePath": f"{path}.extraUpdates", "updatesPerTick": updates}
+                    row["equivalent"] = {"value": equivalent, "units": "seconds" if lifetime else "blocks/s"}
+            values.append(row)
+
+    observe(raw.get("item"), "raw.item")
+    for name in ("directProjectile", "effectiveProjectile"):
+        observe(raw.get(name), f"raw.{name}", projectile=True)
+    ammo = raw.get("ammo")
+    if isinstance(ammo, dict):
+        observe(ammo.get("ammoItemRaw"), "raw.ammo.ammoItemRaw")
+        for name in ("projectileRaw", "weaponShootFieldProjectileRaw"):
+            observe(ammo.get(name), f"raw.ammo.{name}", projectile=True)
+        for name, projectile in (("playerInventoryAmmoRaw", False), ("fallbackAmmoRaw", False),
+                                 ("playerInventoryProjectileRaw", True), ("fallbackProjectileRaw", True),
+                                 ("nativeReplacementProjectileRaw", True)):
+            candidates = ammo.get(name)
+            if isinstance(candidates, list):
+                for index, profile in enumerate(candidates):
+                    observe(profile, f"raw.ammo.{name}[{index}]", projectile=projectile)
+    if not values:
+        return {}
+    return {
+        "scope": "Read-only unit equivalents of captured native members; sourcePath is relative to this parent packet. "
+                 "Item.shootSpeed is a stored item/ammo coefficient, not an observed outgoing shot. A projectile profile "
+                 "supplies its captured SetDefaults clock. Equivalent values are in blocks/s or seconds at that snapshot, "
+                 "not measured speed, flight duration or range. "
+                 "Ammo selection, shoot hooks, AI, collision and later clock/lifetime changes are not evaluated. "
+                 "Missing clocks stay unknown; source values and source/ammo flags remain unchanged.",
+        "values": values,
+    }
+
+
 def _npc_regen(row: dict[str, Any]) -> dict[str, Any]:
     """Use the producer's proved counter relation, not assumed NPC scheduling."""
     keys = _EFFECT_FIELDS | {"unitEvidence", "nominalHpLossPerSecondAt60Updates", "nominalRateScope"}
@@ -243,4 +303,7 @@ def parent_stat_context(raw: dict[str, Any]) -> dict[str, Any]:
             "Item lifeRegen is a stored regeneration contribution in HP/s before other effects, "
             "not a measured player rate or guaranteed healing. Original captured parents are unchanged."
         )
+    motion = _native_motion_units(raw)
+    if motion:
+        result["sourceMotionUnits"] = motion
     return result

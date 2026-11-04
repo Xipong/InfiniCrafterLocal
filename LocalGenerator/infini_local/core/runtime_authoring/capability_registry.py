@@ -1259,7 +1259,7 @@ _CAPS: list[CapabilitySpec] = [
         "source": _p("string", "Axis source.", enum=("initial", "cursor", "facing", "velocity")),
         "turnOwner": _p("boolean", "Turn the owner toward the axis.", required=False, default=False, neutral=False),
     }, window=False, persisted_name='set_projectile_aim'),
-    _motion_cap("attach", "Set body center from a native anchor and axis/normal offsets. Always-active attachment bypasses native integration and requires tileCollide=false; a phase/timing-limited attachment allows tile collision during free flight.", {
+    _motion_cap("attach", "Set body center from a native anchor and axis/normal offsets, clearing velocity at this motion stage while active. Always-active attachment bypasses native integration and requires tileCollide=false; a phase/timing-limited attachment allows tile collision during free flight.", {
         "anchor": _p("string", "owner_center reads owner.Center; owner_mounted reads owner.MountedCenter, not the hand. front_hand reads the native front hand, with no automatic arm follow; front_arm_pose independently writes its pose. Multiple attachments can share that hand. front_hand does not cancel physical axis/normal offsets or reachCurve displacement. Its PNG grip adapter compensates attachment offsets only, not reachCurve or beam origin.", enum=("owner_center", "owner_mounted", "front_hand")),
         "axisOffsetBlocks": replace(_motion_number("axisOffsetPx", "Signed axial offset.", -4096, 4096, multiplier=16, units="blocks"), required=False, default=0, neutral=0),
         "normalOffsetBlocks": replace(_motion_number("normalOffsetPx", "Signed normal offset.", -4096, 4096, multiplier=16, units="blocks"), required=False, default=0, neutral=0),

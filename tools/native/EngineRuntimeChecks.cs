@@ -158,6 +158,7 @@ internal static partial class EngineRuntimeChecks
             ("composable motion ForcesAndIndependentPresentation", ComposableMotionForcesAndIndependentPresentation),
             ("composable motion AttachmentPoseAndReach", ComposableMotionAttachmentPoseAndReach),
             ("composable motion TimedReturnNoHiddenController", ComposableMotionTimedReturnNoHiddenController),
+            ("composable motion nearest NPC seek publishes owner velocity", ComposableMotionNpcSeekPublishesOwnerVelocity),
             ("composable motion FreeBeamAndLashGeometry", ComposableMotionFreeBeamAndLashGeometry),
             ("composable motion PhaseOnlyAttachmentAndReleasedModifiers", ComposableMotionPhaseOnlyAttachmentAndReleasedModifiers),
             ("composable motion OrbitConsumesTilePolicyAndOwnerControl", ComposableMotionOrbitConsumesTilePolicyAndOwnerControl),

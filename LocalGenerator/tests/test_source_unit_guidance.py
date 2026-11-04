@@ -79,8 +79,7 @@ def test_source_wire_glossary_reads_nested_velocity_with_exact_entity_update_con
                  and row["source"] == "raw.generatedParent.runtimeProgram.entities[].spawn")
     minimum = spawn["fields"]["velocityDistribution.minSpeedPxPerUpdate"]
     assert "velocity.radial.minSpeed" in minimum[0]
-    assert minimum[1] == "source * 60 * updatesPerTick / 16"
-    assert minimum[2] == "blocks/s"
+    assert minimum[1] == "blocks/s"
     assert json.dumps(source, ensure_ascii=False) == before
     sent = _serialized_chat_request(monkeypatch, request)
     dynamic = json.loads(sent["messages"][-1]["content"])
@@ -95,19 +94,19 @@ def test_author_explains_scoped_wire_units_without_converting_source(monkeypatch
     guide = packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]
     assert "sourceWireUnits" not in guide, "parent-dependent paths must stay outside the static catalog"
     glossary = packet["sourceWireUnits"]
-    assert glossary["fieldColumns"] == ["authorParam", "sourceToAuthor", "authorUnits"]
+    assert glossary["fieldColumns"] == ["authorParam", "authorUnits"]
     for path in ("raw.item.axePower", "raw.generatedParent.gameplay.axePower"):
         assert _mapping(glossary, path, "tool_stats") == [
-            "axePower", "source * 5", "tooltip percent"]
+            "axePower",  "tooltip percent"]
     for owner in ("accessory", "armor"):
         assert _mapping(glossary, f"raw.generatedParent.{owner}.movementSpeed", owner) == [
-            "moveSpeedBonus", "source * 100", "additive_percent"]
+            "moveSpeedBonus",  "additive_percent"]
         assert _mapping(glossary, f"raw.generatedParent.{owner}.lifeRegen", owner) == [
-            "lifeRegen", "source / 2", "HP/s"]
+            "lifeRegen",  "HP/s"]
     assert _mapping(glossary, "raw.generatedParent.gameplay.generatedBuff.movementSpeed", "generated_buff_on_use") == [
-        "moveSpeedBonus", "source * 100", "additive_percent"]
+        "moveSpeedBonus",  "additive_percent"]
     assert _mapping(glossary, "raw.generatedParent.gameplay.generatedBuff.lifeRegen", "generated_buff_on_use") == [
-        "lifeRegen", "source / 2", "HP/s"]
+        "lifeRegen",  "HP/s"]
     raw = packet["parents"]["A"]["packet"]["raw"]
     assert raw["item"]["axePower"] == 9
     assert raw["item"]["tooltipLines"] == source["tooltipLines"]
@@ -354,15 +353,15 @@ def test_packet_glossary_is_derived_from_registry_metadata_not_capability_name(m
     _, packet = _author_request(monkeypatch, mode, source)
     glossary = packet["sourceWireUnits"]
     assert _mapping(glossary, "raw.generatedParent.armor.unfamiliar", arbitrary.name) == [
-        "arbitraryPercent", "source * 37", "probe percent"]
+        "arbitraryPercent",  "probe percent"]
     assert _mapping(glossary, "raw.generatedParent.gameplay.generatedBuff.another", arbitrary.name) == [
-        "arbitraryRate", "source / 7", "probe rate"]
+        "arbitraryRate",  "probe rate"]
     assert _mapping(glossary, "raw.generatedParent.accessory.same", arbitrary.name) == [
-        "identityAmount", "source", "probe units"]
+        "identityAmount",  "probe units"]
     assert _mapping(glossary, "raw.generatedParent.gameplay.ratio", arbitrary.name) == [
-        "ratioAmount", "source * 37 / 7", "ratio units"]
+        "ratioAmount",  "ratio units"]
     assert _mapping(glossary, "raw.generatedParent.gameplay.shifted", arbitrary.name) == [
-        "shiftedCount", "source + 1", "count"]
+        "shiftedCount",  "count"]
     assert "not_a_param" not in json.dumps(glossary)
     assert "raw.item.unfamiliar" not in json.dumps(glossary)
 
@@ -461,7 +460,9 @@ def test_repair_source_units_cover_every_registry_path_without_changing_scope(mo
     item = _broken_item()
     _, with_sources = _repair_request(monkeypatch, mode, source, item)
     _, without_sources = _repair_request(monkeypatch, mode, {}, item)
-    assert with_sources["sourceWireUnits"] == full
+    assert {**with_sources["sourceWireUnits"], "scopes": [
+        {key: value for key, value in row.items() if key != "readings"}
+        for row in with_sources["sourceWireUnits"]["scopes"]]} == full
     assert without_sources["sourceWireUnits"]["scopes"] == []
     # Source availability only changes source data and its reading aid, never
     # allowed calls, schema, errors, accepted context or repair permissions.
@@ -526,7 +527,7 @@ def test_repair_unit_filter_keeps_zero_null_and_exact_array_namespaces(monkeypat
         ("raw.generatedParent.runtimeProgram.entities[].spawn", "spawn", "velocityDistribution.minSpeedPxPerUpdate"),
     }
     spawn = next(row for row in dossier["sourceWireUnits"]["scopes"] if row["fn"] == "spawn")
-    assert spawn["fields"]["velocityDistribution.minSpeedPxPerUpdate"][1] == "source * 60 * updatesPerTick / 16"
+    assert spawn["fields"]["velocityDistribution.minSpeedPxPerUpdate"][1] == "blocks/s"
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
@@ -543,7 +544,7 @@ def test_source_unit_guides_match_stage_visible_stat_types(monkeypatch, mode, ge
             assert raw["item"]["lifeRegen"] == 4
             assert raw["generatedParent"]["accessory"]["lifeRegen"] == 4
             assert _mapping(packet["sourceWireUnits"], "raw.generatedParent.accessory.lifeRegen", "accessory") == [
-                "lifeRegen", "source / 2", "HP/s"]
+                "lifeRegen",  "HP/s"]
         else:
             assert raw["item"]["lifeRegen"] == {"value": 2, "units": "HP/s"}
             assert all("lifeRegen" not in row["fields"] for row in packet["sourceWireUnits"]["scopes"]
@@ -554,3 +555,203 @@ def test_source_unit_guides_match_stage_visible_stat_types(monkeypatch, mode, ge
             if row["source"] == "raw.item":
                 for field in row["fields"]:
                     assert type(raw["item"][field]) in {int, float}
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_author_and_repair_show_concrete_parent_units_without_repeated_speed_decay(monkeypatch, mode):
+    # Synthetic values reproduce the captured source -> Author unit confusion.
+    source = _source()
+    entities = [
+        {"id": "slow", "kind": "free_projectile", "collision": {"extraUpdates": 0},
+         "spawn": {"speedPxPerTick": 4.266667}, "lifetimeTicks": 180},
+        {"id": "fast_updates", "kind": "child_projectile", "collision": {"extraUpdates": 2},
+         "spawn": {"speedPxPerTick": 2.0}, "lifetimeTicks": 90},
+        {"id": "zero", "kind": "stationary_projectile", "collision": {"extraUpdates": 0},
+         "spawn": {"speedPxPerTick": 0.0}},
+    ]
+    source["generatedData"]["runtimeProgram"]["entities"] = entities
+    before = copy.deepcopy(source)
+    _, author_packet = _author_request(monkeypatch, mode, source)
+    _, repair_packet = _repair_request(monkeypatch, mode, source, _broken_item())
+    assert author_packet["sourceWireUnits"] == repair_packet["sourceWireUnits"]
+    spawn = next(row for row in author_packet["sourceWireUnits"]["scopes"] if row["fn"] == "spawn")
+    readings = spawn["readings"]
+    assert [(r["parentIndex"], r["entityId"], r["updatesPerTick"]) for r in readings] == [
+        (0, "slow", 1), (0, "fast_updates", 3)]
+    assert [r["source"] for r in readings] == [
+        f"raw.generatedParent.runtimeProgram.entities[{n}].spawn" for n in range(2)]
+    assert [r["values"]["speedPxPerTick"]["value"] for r in readings] == pytest.approx([16.00000125, 22.5])
+    assert author_packet["parents"]["A"]["packet"]["raw"]["generatedParent"]["runtimeProgram"]["entities"][2]["spawn"]["speedPxPerTick"] == 0
+    # Retaining that physical speed in a new target with a different clock
+    # must not apply 16/60 to the parent's native magnitude a second time.
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+    from infini_local.qa.capability_witnesses import build_capability_witness
+    speed = CAPABILITY_REGISTRY["spawn"].params["velocity"].alternatives[0].properties["speed"]
+    for row, entity in zip(readings, entities):
+        human = row["values"]["speedPxPerTick"]["value"]
+        for updates in (1, 2, 6):
+            wire = speed.to_wire(human, updates_per_tick=updates)
+            assert wire * updates == pytest.approx(entity["spawn"]["speedPxPerTick"] * row["updatesPerTick"])
+            authored = build_capability_witness("move_straight")
+            for call in authored["runtimeProgram"]["calls"]:
+                if call["fn"] == "spawn":
+                    call["params"]["velocity"] = {"speed": human}
+                elif call["fn"] == "projectile_collision":
+                    call["params"]["updatesPerTick"] = updates
+            compiled = compile_runtime_program(authored)
+            assert validate_runtime_wire(compiled)["ok"]
+            projectile = next(e for e in compiled["runtimeProgram"]["entities"] if e["id"] == "witness_entity")
+            assert projectile["spawn"]["speedPxPerTick"] == pytest.approx(wire)
+    assert source == before
+    assert repair_packet["repairScope"]["fieldPermissions"]["calls"] == [
+        {"id": "held_lantern_pike_life", "paths": ["params.lifetimeSeconds"]}]
+
+
+@pytest.mark.parametrize("extra", [None, -1, 6, 1.0, True])
+def test_concrete_unit_readings_never_guess_invalid_or_missing_projectile_clock(extra):
+    from infini_local.pipelines.author.prompt import source_wire_units_for_llm
+    entity = {"id": "uncertain", "spawn": {"speedPxPerTick": 8}, "lifetimeTicks": 60}
+    if extra is not None:
+        entity["collision"] = {"extraUpdates": extra}
+    packet = {"raw": {"generatedParent": {"runtimeProgram": {"entities": [entity]}}}}
+    source = copy.deepcopy(packet)
+    rows = source_wire_units_for_llm([packet])["scopes"]
+    spawn = next(row for row in rows if row["fn"] == "spawn")
+    assert not spawn.get("readings"), "unknown update clocks must not silently mean one update"
+    lifetime = next(row for row in rows if row["fn"] == "projectile_lifetime")
+    assert lifetime["readings"][0]["values"]["lifetimeTicks"] == {"value": 1, "units": "seconds"}
+    assert packet == source
+
+
+def test_concrete_units_keep_parent_identity_and_do_not_select_missing_variant():
+    from infini_local.pipelines.author.prompt import source_wire_units_for_llm
+    def packet(law, extra):
+        return {"raw": {"generatedParent": {"runtimeProgram": {"entities": [{
+            "id": "same_id", "collision": {"extraUpdates": extra},
+            "oscillation": {"law": law, "amplitude": 0.25},
+        }]}}}}
+    rows = source_wire_units_for_llm([packet("angular_sine", 0), packet("lateral_velocity_sine", 1), packet("unknown", 0)])["scopes"]
+    rows = [row for row in rows if row["fn"] == "oscillate_velocity"]
+    assert len(rows) == 2
+    assert [(row["readings"][0]["parentIndex"], row["readings"][0]["values"]["amplitude"]["value"])
+            for row in rows] == [(0, 15), (1, 1.875)]
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_author_and_scoped_repair_receive_canonical_attach_card(monkeypatch, mode):
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+    from infini_local.qa.capability_witnesses import build_capability_witness
+
+    source, item = _source(), build_capability_witness("attach")
+    attached = next(call for call in item["runtimeProgram"]["calls"] if call["id"] == "witness_call")
+    attached["params"]["anchor"] = "unsupported_anchor"
+    before = copy.deepcopy((source, item))
+    author_request, author_packet = _author_request(monkeypatch, mode, source)
+    repair_request, repair_packet = _repair_request(monkeypatch, mode, source, item)
+    capability = CAPABILITY_REGISTRY["attach"]
+    cards = author_packet["runtimeCapabilityContract"]["catalog"]["capabilities"]
+    assert [card["does"] for card in cards if card["fn"] == "attach"] == [capability.summary]
+    repair_cards = repair_packet["existingBrokenCapabilityCards"]
+    assert [card for card in repair_cards if card["fn"] == "attach"] == [capability.prompt_card()]
+    # Attachment semantics belong to its canonical card, not an extra global
+    # reach lesson. Repair receives this card only through its exact blocker.
+    assert "reach" not in author_packet["runtimeCapabilityContract"]["technicalNotes"]
+    assert "reach" not in repair_packet["runtimeExecutionTruth"]["units"]["playerFacingUnits"]
+    for request in (author_request, repair_request):
+        sent = _serialized_chat_request(monkeypatch, request)
+        assert any(capability.summary in row["content"] for row in sent["messages"])
+    assert (source, item) == before
+    assert repair_packet["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
+    assert repair_packet["repairScope"]["fieldPermissions"]["calls"] == [
+        {"id": "witness_call", "paths": ["params.anchor"]}]
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_serialized_author_and_repair_supply_ready_values_without_conversion_instructions(monkeypatch, mode):
+    source = {"generatedData": {"runtimeProgram": {"entities": [{
+        "id": "parent_shot", "kind": "free_projectile", "collision": {"extraUpdates": 0},
+        "spawn": {"speedPxPerTick": 2.1333334}, "lifetimeTicks": 180,
+    }]}}}
+    for request, packet in (_author_request(monkeypatch, mode, source),
+                            _repair_request(monkeypatch, mode, source, _broken_item())):
+        view = packet["sourceWireUnits"]
+        speed = next(row for row in view["scopes"] if row["fn"] == "spawn")["readings"][0]["values"]["speedPxPerTick"]
+        assert speed == {"value": pytest.approx(8.00000025), "units": "blocks/s"}
+        serialized = _serialized_chat_request(monkeypatch, request)
+        text = json.dumps(serialized, ensure_ascii=False)
+        for obsolete in ("sourceToAuthor", "source * 60", "source / 16", "Apply sourceToAuthor",
+                         "copying the raw engine number", "[sourceValue, authorUnitValue]"):
+            assert obsolete not in text
+        assert next(row for row in view["scopes"] if row["fn"] == "projectile_lifetime")["readings"][0]["values"]["lifetimeTicks"] == {"value": 3, "units": "seconds"}
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("provider,base,model", [
+    ("local", "http://unit-guidance.invalid/v1", "offline-unit-guidance"),
+    ("openai_compat", "https://api.openai.com/v1", "gpt-5.6"),
+    ("openrouter", "https://openrouter.ai/api/v1", "openai/gpt-5.6"),
+    ("openai_codex", "https://chatgpt.com/backend-api/codex", "gpt-5.4"),
+])
+def test_responses_author_and_frozen_repair_deliver_ready_source_measurements(monkeypatch, mode, provider, base, model):
+    from infini_local.services import codex_text_backend as codex
+
+    source = {"generatedData": {"runtimeProgram": {"entities": [{
+        "id": "parent_shot", "kind": "free_projectile", "collision": {"extraUpdates": 2},
+        "spawn": {"speedPxPerTick": 2}, "lifetimeTicks": 180,
+    }]}}}
+    item = _broken_item()
+    original = copy.deepcopy((source, item))
+    for request, packet in (_author_request(monkeypatch, mode, source),
+                            _repair_request(monkeypatch, mode, source, item)):
+        sent = []
+
+        def stop(http_request, **kwargs):
+            sent.append(json.loads(http_request.data.decode("utf-8")))
+            raise _Captured()
+
+        def stop_subscription(prepared, **kwargs):
+            # Subscription auth/SSE is a separate boundary. Exercise its real
+            # payload builder without opening credentials or a connection.
+            sent.append(codex._request_payload(prepared))
+            raise _Captured()
+
+        before = copy.deepcopy(request)
+        with monkeypatch.context() as patch:
+            patch.setattr(transport_http, "urlopen_no_redirect", stop)
+            patch.setattr(llm_admission, "_reserve_remote_rate_slot", lambda *args, **kwargs: None)
+            patch.setattr(codex, "generate_chat", stop_subscription)
+            with pytest.raises(_Captured):
+                transport._llm_json_single_context(request, 10, {
+                    "provider": provider, "base_url": base, "model": model, "api_mode": "responses",
+                    "api_key": "offline-test-key", "profile_id": "offline-unit-guidance",
+                })
+        assert len(sent) == 1
+        assert request == before
+        body = sent[0]
+        # Both Responses message forms carry the literal dynamic JSON dossier.
+        texts = [row["content"] if isinstance(row["content"], str) else
+                 "".join(block["text"] for block in row["content"] if block["type"] == "input_text")
+                 for row in body["input"]]
+        dynamic = [json.loads(text) for text in texts if '"sourceWireUnits"' in text]
+        assert len(dynamic) == 1
+        delivered = dynamic[0]
+        assert delivered["sourceWireUnits"] == packet["sourceWireUnits"]
+        assert delivered["parents"] == packet["parents"]
+        scopes = delivered["sourceWireUnits"]["scopes"]
+        speed = next(row for row in scopes if row["fn"] == "spawn")["readings"][0]
+        assert speed["updatesPerTick"] == 3
+        assert speed["values"]["speedPxPerTick"] == {"value": 22.5, "units": "blocks/s"}
+        lifetime = next(row for row in scopes if row["fn"] == "projectile_lifetime")["readings"][0]
+        assert lifetime["values"]["lifetimeTicks"] == {"value": 3, "units": "seconds"}
+        if "repairScope" in packet:
+            assert delivered["repairScope"] == packet["repairScope"]
+            assert delivered["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
+            assert delivered["repairScope"]["fieldPermissions"]["calls"] == [
+                {"id": "held_lantern_pike_life", "paths": ["params.lifetimeSeconds"]}]
+        serialized = json.dumps(body, ensure_ascii=False)
+        for obsolete in ("sourceToAuthor", "source * 60", "source / 16", "Apply sourceToAuthor",
+                         "copying the raw engine number", "[sourceValue, authorUnitValue]"):
+            assert obsolete not in serialized
+    assert (source, item) == original
