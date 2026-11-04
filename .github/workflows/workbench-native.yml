@@ -99,6 +99,18 @@ jobs:
           python tools/item-test-workbench/workbench.py build 2>&1 | tee artifacts/workbench-ci/build.log
           python tools/item-test-workbench/verify_vfx.py --no-build --out artifacts/workbench-ci/evidence \
             2>&1 | tee artifacts/workbench-ci/verify.log
+      - name: Verify native and owned placement consumers
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=tools/item-test-workbench
+          host="$base/bin/Release/net8.0/ItemTestWorkbench.dll"
+          dotnet "$host" --check-assertions
+          dotnet "$host" --check-owned-registration
+          python "$base/verify_world.py" --no-build --out artifacts/workbench-ci/world \
+            2>&1 | tee artifacts/workbench-ci/world.log
+          python "$base/verify_quality.py" --native-dll "$host" --out artifacts/workbench-ci/owned-quality \
+            2>&1 | tee artifacts/workbench-ci/owned-quality.log
       - name: Verify independently loaded dependent tModLoader mods
         shell: bash
         run: |

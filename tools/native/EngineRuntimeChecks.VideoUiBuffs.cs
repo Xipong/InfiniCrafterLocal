@@ -42,6 +42,19 @@ internal static partial class EngineRuntimeChecks
         // Named test counterpart: remove only obsolete empty presentation leaves.
         control["gameplay"]!.AsObject().Remove("releaseTiming");
         control["runtimeProgram"]!["itemUse"]!.AsObject().Remove("releaseTiming");
+        if (id == "g_89cda498eb1f9925")
+        {
+            Equal(null,GeneratedItemData.FromJson(control.ToJsonString()),"retired native+PNG keg stays refused after visibility-only projection");
+            // Explicit new test counterpart for the independent buff/stack checks.
+            // Its 1x1 open/unanchored shape is a declared fixture choice, not an
+            // inferred native tile conversion. The captured file remains untouched.
+            var placement=control["runtimeProgram"]!["bindings"]!.AsArray()
+                .Single(binding=>binding!["id"]!.GetValue<string>()=="place_honey_station")!["usePolicy"]!["action"]!["placement"]!;
+            placement["tileId"]=-1;placement["wallId"]=-1;placement["placeStyle"]=0;
+            placement["ownedTile"]=new System.Text.Json.Nodes.JsonObject {
+                ["width"]=1,["height"]=1,["collision"]="open",["support"]="unanchored" };
+            Equal(raw,File.ReadAllText("tools/fixtures/video-ui-buffs/"+id+".json"),"archived keg bytes remain unchanged");
+        }
         return GeneratedItemData.FromJson(control.ToJsonString())
             ?? throw new InvalidOperationException("native reader refused current UI-buff control " + id);
     }

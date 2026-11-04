@@ -21,7 +21,6 @@ internal sealed class WNativePlacedBodies : IDisposable
     public JsonObject Report {get;}=new(){["scope"]="Original GeneratedPlacedBodyDrawSystem.PostDrawTiles over native ledger views; neutral background, not complete terrain/world rendering",["frames"]=new JsonArray()};
     public WNativePlacedBodies()
     {
-        if(!GeneratedPlacedBodyNativeAdapter.FeatureAvailable)throw new InvalidOperationException("Native placed-body adapter unavailable: "+GeneratedPlacedBodyNativeAdapter.UnsupportedBoundary);
         observer=new Hook(typeof(GeneratedPlacedBodyDrawSystem).GetMethod("DrawBody",BindingFlags.NonPublic|BindingFlags.Static)!,
             (DrawObserver)((orig,batch,texture,body,footprint,camera,color,alpha)=>{
                 bool drawn=false;var geometry=WNativeVisualGeometry.Capture(()=>drawn=orig(batch,texture,body,footprint,camera,color,alpha),supportY:footprint.Bottom);

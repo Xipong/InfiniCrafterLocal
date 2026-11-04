@@ -357,8 +357,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
     {
         if (!IsNativeChestPlacement(placement) || NativeChestHooks.Count != 6 || _nativeChestSaveGuard is null
             || _nativeChestPostAllocationGuard is null || _nativeChestCreateAllocationGuard is null
-            || placement.PlacedBody is not null
-                && !GeneratedPlacedBodyNativeAdapter.TryAdmitNative(placement.TileId,null,false,out _)) return false;
+            || placement.PlacedBody is not null) return false;
         try
         {
             var data = TileObjectData.GetTileData(placement.TileId,placement.PlaceStyle);

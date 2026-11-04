@@ -25,6 +25,13 @@ def cases(fixtures):
     yield 'placement-missing-support',fixtures/'synthetic-world-campfire.json',unsupported,0,None
     wrong=copy.deepcopy(place);wrong['assertions']=[{'kind':'generated_world_items_at','tick':99,'value':2}]
     yield 'negative-duplicate-return',fixtures/'synthetic-world-campfire.json',wrong,1,['generated_world_items_at']
+    owned=w.read_json(w.HERE/'scenarios/world-owned-placement.json')
+    yield 'owned-placement-return',fixtures/'synthetic-world-owned.json',owned,0,None
+    yield 'owned-no-use',fixtures/'synthetic-world-owned.json',copy.deepcopy(miss),0,None
+    yield 'owned-missing-support',fixtures/'synthetic-world-owned.json',copy.deepcopy(unsupported),0,None
+    wrong_owned=copy.deepcopy(owned)
+    wrong_owned['assertions']=[dict(kind='tile_at',tick=30,tileX=54,tileY=46,hasTile=True,ownedTileKey='GeneratedOwned_3x2_solid_floor')]
+    yield 'negative-owned-identity',fixtures/'synthetic-world-owned.json',wrong_owned,1,['tile_at']
     yield 'native-mining',fixtures/'synthetic-world-mining.json',mine,0,None
     no_use=copy.deepcopy(mine);no_use['actions']=[a for a in no_use['actions'] if a['kind']!='primary'];no_use['assertions']=[{'kind':'tile_at','tick':99,'tileX':54,'tileY':46,'hasTile':True,'tileId':0}]
     yield 'no-use-no-mining',fixtures/'synthetic-world-mining.json',no_use,0,None

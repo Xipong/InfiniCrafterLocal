@@ -12,7 +12,7 @@ from infini_local.core.runtime_authoring.technical_lowering import audit_compile
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 
-_ADDED_CAPABILITIES = frozenset({"reduce_heal_cooldown_on_event"})
+_ADDED_CAPABILITIES = frozenset({"reduce_heal_cooldown_on_event", "place_object"})
 
 _CAPTURE = json.loads(gzip.decompress((Path(__file__).parent / "fixtures" / "gameplay_vocabulary_wire_baseline.json.gz").read_bytes()))
 
@@ -72,6 +72,14 @@ def assert_archived_vocabulary_boundary(wire):
 def test_canonical_choices_preserve_captured_execution_in_current_visibility_envelope(case):
     before = deepcopy(case)
     source = current_vocabulary_source(case["author"])
+    if case["previousFn"] == "present_placed_item_sprite":
+        # Clean owned transition deliberately retires native+PNG replacement.
+        # Keep the archived evidence unchanged; never relabel its parent behavior
+        # as an equivalent owned structure.
+        assert not validate_runtime_program(source)["ok"]
+        assert not validate_runtime_wire(current_vocabulary_wire_control(case["wire"]))["ok"]
+        assert case == before
+        return
     assert validate_runtime_program(source)["ok"]
     wire = compile_runtime_program(source)
     actual = executable_wire(wire)
@@ -183,8 +191,17 @@ def test_post_capture_capabilities_have_current_executable_witness(name):
     assert validate_runtime_program(source)["ok"]
     wire = compile_runtime_program(source)
     assert validate_runtime_wire(wire)["ok"]
-    assert any(event["actionCode"] == 12 and event["cooldownReductionTicks"] > 0
-               for entity in wire["runtimeProgram"]["entities"] for event in entity.get("events", []))
+    if name == "place_object":
+        placement = next(binding["usePolicy"]["action"]["placement"]
+                         for binding in wire["runtimeProgram"]["bindings"]
+                         if binding["usePolicy"]["action"]["kind"] == "place_item")
+        assert placement["tileId"] == placement["wallId"] == -1
+        assert placement["ownedTile"] == next(call["params"] for call in source["runtimeProgram"]["calls"]
+                                              if call["fn"] == "place_object")
+        assert "placedBody" in placement
+    else:
+        assert any(event["actionCode"] == 12 and event["cooldownReductionTicks"] > 0
+                   for entity in wire["runtimeProgram"]["entities"] for event in entity.get("events", []))
     assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
         authored_document=source, final_document=wire)["ok"]
 

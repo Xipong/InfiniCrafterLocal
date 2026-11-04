@@ -177,7 +177,7 @@ def test_independent_body_light_and_vfx_components_compose_without_new_defaults(
     from test_placed_light_capability import lit
     d=placed();d['runtimeProgram']['calls'].extend([lit()['runtimeProgram']['calls'][-1],authored()['runtimeProgram']['calls'][-1]])
     wire=compile_runtime_program(d)
-    assert set(placement(wire))=={'tileId','wallId','placeStyle','placedBody','placedLight','placedVfx'}
+    assert set(placement(wire))=={'tileId','wallId','placeStyle','ownedTile','placedBody','placedLight','placedVfx'}
     assert validate_runtime_wire(wire)['ok']
 
 

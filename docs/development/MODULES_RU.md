@@ -78,7 +78,7 @@ WebUI работает без CDN; локальные Manrope/Cormorant WOFF2 и
 
 ### Placement и возврат
 
-Все partials `GeneratedPlacementLedgerSystem` остаются **одним** владельцем material claims: authorization, accepted-placement receipt/однократный stack debit, persistent groups/returns, prefix, placed-body admission/net/view/light. `GeneratedPlacedBodyNativeAdapter*` владеет guarded native boundaries; read-only drawing/light не заводят новую ledger.
+Все partials `GeneratedPlacementLedgerSystem` остаются **одним** владельцем material claims: authorization, accepted-placement receipt/однократный stack debit, persistent groups/returns, prefix, placed-body admission/net/view/light. `GeneratedOwnedTile` владеет явно выбранной структурой собственных объектов; отдельный native chest путь сохраняет свои guards. Read-only drawing/light не заводят новую ledger.
 
 - Break атомарно переводит group в `PendingReturns` с item ID, `DefinitionJson` и server-observed native prefix exact held instance, снятым до stack debit. Авторитетная выдача — server/singleplayer; клиент сообщает placement через `NotifyGeneratedPlacement`.
 - Полный/cooling world-item pool — transient failure: durable claim сохраняется, очередь повторяет попытку без потери/вытеснения чужого drop. Отсутствие registry entry не мешает восстановлению из сохранённой **валидной** definition; совпадающий registry ID не позволяет подменить повреждённую definition.

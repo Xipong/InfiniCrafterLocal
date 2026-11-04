@@ -59,7 +59,7 @@ def test_active_placement_id_is_never_disabled_or_guessed(layer, bad):
 
 def test_placed_item_sprite_cannot_be_attached_to_a_wall_alias():
     source, _ = _source("placed_sprite")
-    placement = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "place_tile")
+    placement = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "place_object")
     placement.update(fn="place_wall", params={"wallId": 1, "placeStyle": 0})
     report = validate_runtime_program(source)
     assert not report["ok"] and any(row["code"] == "placed_body_placement_reference" for row in report["errors"])

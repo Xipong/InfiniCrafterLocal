@@ -33,9 +33,10 @@ internal readonly record struct GeneratedPlacementKey(GeneratedPlacementLayer La
 /// </summary>
 public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
 {
-    private const int PayloadVersion = 4;
-    private const int PlacementProtocolVersion = 6;
+    private const int PayloadVersion = 5;
+    private const int PlacementProtocolVersion = 7;
     private const string SaveKey = "infiniGeneratedPlacementLedgerV2";
+    private static bool _legacyPlacementLoadRejected;
     private const string PendingSaveKey = "infiniGeneratedPlacementReturnsV2";
     private const string QuarantineSaveKey = "infiniGeneratedPlacementReturnQuarantineV1";
     private const string RawQuarantineEnvelopeSaveKey = "infiniGeneratedPlacementRawQuarantineEnvelopesV1";
@@ -168,7 +169,11 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
     private sealed record PlacementReceipt(Player Player,Item Item,GeneratedItemData Data,int ExpiresAtTick);
     private static readonly Dictionary<int, PlacementReceipt> PlacementReceiptExpiryByPlayer = new();
 
-    public override void OnWorldUnload() => ClearWorld();
+    public override void OnWorldUnload()
+    {
+        ClearWorld();
+        _legacyPlacementLoadRejected = false;
+    }
 
     public override void ClearWorld()
     {
@@ -194,6 +199,8 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
 
     public override void SaveWorldData(TagCompound tag)
     {
+        if (_legacyPlacementLoadRejected)
+            throw new InvalidDataException("Legacy custom tile world was refused; its placement ledger must not be overwritten. Restore the previous mod version or use a new world.");
         tag[SaveKey] = Groups.Values
             .OrderBy(x => x.GroupId, StringComparer.Ordinal)
             .Select(SavePlacementGroup).ToList();
@@ -213,8 +220,40 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         return row;
     }
 
+    private static bool HasRetiredNativeBody(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return false;
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(json);
+            if (!document.RootElement.TryGetProperty("runtimeProgram", out var program)
+                || !program.TryGetProperty("bindings", out var bindings)
+                || bindings.ValueKind != System.Text.Json.JsonValueKind.Array) return false;
+            foreach (var binding in bindings.EnumerateArray())
+                if (binding.TryGetProperty("usePolicy", out var policy)
+                    && policy.TryGetProperty("action", out var action)
+                    && action.TryGetProperty("placement", out var placement)
+                    && placement.ValueKind == System.Text.Json.JsonValueKind.Object
+                    && placement.TryGetProperty("placedBody", out _)
+                    && !placement.TryGetProperty("ownedTile", out _)) return true;
+        }
+        catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException)
+        { /* Existing raw claim retention owns corrupt definitions. */ }
+        return false;
+    }
+
     public override void LoadWorldData(TagCompound tag)
     {
+        // Clean transition is explicit, not a save-key rename or a hidden importer.
+        // Detect retired native+PNG definitions BEFORE clearing any live claims.
+        // A failed load also blocks saving an empty replacement ledger.
+        foreach (TagCompound row in tag.GetList<TagCompound>(SaveKey))
+        {
+            if (!HasRetiredNativeBody(row.GetString("definitionJson"))) continue;
+            _legacyPlacementLoadRejected = true;
+            throw new InvalidDataException("This world contains retired native-tile custom sprites. Back up the world and use the previous mod version to recover items, or start a new world. No placement ledger was migrated or deleted.");
+        }
+        _legacyPlacementLoadRejected = false;
         ClearWorld();
         foreach (TagCompound row in tag.GetList<TagCompound>(SaveKey).Take(MaxGroups))
         {
@@ -475,11 +514,12 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
             || sourceItem.ModItem is not GeneratedItem sourceGenerated
             || !ReferenceEquals(sourceGenerated.Data, data))
             return false;
-        bool tile = placement.TileId >= 0 && placement.WallId < 0;
-        bool wall = placement.WallId >= 0 && placement.TileId < 0;
+        int resolvedTile = global::InfiniCrafterLocal.Content.Tiles.GeneratedOwnedTiles.Resolve(placement);
+        bool tile = resolvedTile >= 0 && placement.WallId < 0;
+        bool wall = placement.WallId >= 0 && placement.TileId < 0 && placement.OwnedTile is null;
         if (!tile && !wall)
             return false;
-        if (!AdmitPlacedBodyNativeBoundary(placement)) return false;
+        if (!AdmitPlacementBoundary(placement)) return false;
         if (IsNativeChestPlacement(placement) && (Main.chest is not { Length: 8000 }
             || Chest.FindEmptyChest(targetX,targetY-1,placement.TileId,placement.PlaceStyle,1,0)<0)) return false;
         bool replacesExistingAuthorization = PendingAuthorizations.ContainsKey(player.whoAmI);
@@ -490,7 +530,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
             return false;
 
         var layer = tile ? GeneratedPlacementLayer.Tile : GeneratedPlacementLayer.Wall;
-        int expectedType = tile ? placement.TileId : placement.WallId;
+        int expectedType = tile ? resolvedTile : placement.WallId;
         if (!WorldGen.InWorld(targetX, targetY, AuthorizationRadiusTiles) || !WithinPlacementReach(player, targetX, targetY))
             return false;
         if (PendingAuthorizations.TryGetValue(player.whoAmI, out PlacementAuthorization? existing)
@@ -744,7 +784,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
     {
         if (Main.netMode != NetmodeID.MultiplayerClient)
             return AuthorizePlacement(player, data, placement);
-        if (!AdmitPlacedBodyNativeBoundary(placement)) return false;
+        if (!AdmitPlacementBoundary(placement)) return false;
         int x = Player.tileTargetX, y = Player.tileTargetY, now = (int)Main.GameUpdateCount;
         if (player.whoAmI != Main.myPlayer || player.HeldItem is null || player.HeldItem.IsAir
             || !WorldGen.InWorld(x, y, AuthorizationRadiusTiles) || !WithinPlacementReach(player, x, y)) return false;
@@ -1013,10 +1053,35 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
             Y = y,
         };
         PendingReturns.Add(pending);
+        ClearReturnedOwnedFootprint(group);
         PublishPlacedBodyGroupChange(group, removed: true);
         if (TrySpawnPendingReturn(pending) == PendingSpawnOutcome.Spawned)
             PendingReturns.Remove(pending);
         return true;
+    }
+
+    private static void ClearReturnedOwnedFootprint(PlacementGroup group)
+    {
+        if (group.PlacedBody is not {} witness || !witness.ContainsKey("ownedTileKey")
+            || !TryReadPlacedBodySelection(witness,out _,out _,out int tileType,out _)
+            || !HasPlacedBodyInt(witness,"originX") || !HasPlacedBodyInt(witness,"originY")
+            || !HasPlacedBodyInt(witness,"width") || !HasPlacedBodyInt(witness,"height")) return;
+        int left = witness.GetInt("originX"), top = witness.GetInt("originY");
+        int width = witness.GetInt("width"), height = witness.GetInt("height");
+        // The claim has already moved to pending returns. Remove only this exact
+        // owned structure; never invoke native drops or erase a replacement cell.
+        foreach (var cell in group.Cells)
+            if (cell.Layer == GeneratedPlacementLayer.Tile && WorldGen.InWorld(cell.X,cell.Y,1)
+                && Main.tile[cell.X,cell.Y].HasTile && Main.tile[cell.X,cell.Y].TileType == tileType
+                && TryResolveMaterialFootprint(cell.X,cell.Y,tileType,0,
+                    out int x,out int y,out int w,out int h)
+                && x == left && y == top && w == width && h == height)
+                Main.tile[cell.X,cell.Y].ClearTile();
+        if (Main.netMode == NetmodeID.Server && width is > 0 and <= 16 && height is > 0 and <= 16)
+        {
+            try { NetMessage.SendTileSquare(-1,left,top,width,height); }
+            catch { /* A socket failure cannot undo the already durable material return. */ }
+        }
     }
 
     private enum PendingSpawnOutcome

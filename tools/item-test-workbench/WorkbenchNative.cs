@@ -283,6 +283,10 @@ internal static partial class EngineRuntimeChecks
             report["scene"]!["sourceWorldScoped"]=data?.RecipeMeta.WorldScoped;
             report["scene"]!["currentWorldSource"]=data is null?null:InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.IsCurrentWorldData(data);
             typeof(Terraria.Main).GetMethod("Initialize_TileAndNPCData1",PersistenceStatic)!.Invoke(null,null);
+            if(scenario["world"] is not null)
+                typeof(Terraria.Main).GetMethod("Initialize_TileAndNPCData2",PersistenceStatic)!.Invoke(null,null);
+            using var ownedTiles=data?.RuntimeProgram.Bindings.Any(b=>b.UsePolicy.Action.Placement?.OwnedTile is not null)==true
+                ? new WOwnedTileRegistration() : null;
             TorchID.Initialize(); // Main.Initialize_AlmostEverything normally owns native torch light providers.
             foreach(var player in Terraria.Main.player) player.active=false;
             WFishingScene.Validate(scenario["fishing"],fullPlayer,worldWidthTiles);
@@ -352,6 +356,9 @@ internal static partial class EngineRuntimeChecks
                 typeof(ProjectileLoader).GetMethod("ResizeArrays",PersistenceStatic)!.Invoke(null,new object[]{false});
                 Terraria.ObjectData.TileObjectData.Initialize();
                 typeof(TileLoader).GetMethod("ResizeArrays",PersistenceStatic)!.Invoke(null,new object[]{false});
+                if(ownedTiles is not null)report["execution"]!["ownedTileRegistration"]=new JsonObject{
+                    ["count"]=ownedTiles.Setup(),["entrypoint"]="Production GeneratedOwnedTiles.Register -> Mod.AddContent -> native TileLoader registration and ModTile.SetupContent",
+                    ["scope"]="Owned structural content only; not complete mod autoload"};
                 if(renderClient) typeof(WallLoader).GetMethod("ResizeArrays",PersistenceStatic)!.Invoke(null,new object[]{false});
                 typeof(BuffLoader).GetMethod("ResizeArrays",PersistenceStatic)!.Invoke(null,null);
                 using var equipmentRegistration=new WEquipmentRegistration(host);

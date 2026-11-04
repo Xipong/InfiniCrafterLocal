@@ -29,7 +29,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
             GeneratedPlacementKey? missing = group.Cells.FirstOrDefault(cell =>
                 cell.Layer == GeneratedPlacementLayer.Tile && (!WorldGen.InWorld(cell.X,cell.Y,1)
                     || !Main.tile[cell.X,cell.Y].HasTile
-                    || group.PlacedBody!.ContainsKey("tileType") && group.PlacedBody["tileType"] is int type
+                    || TryReadPlacedBodySelection(group.PlacedBody!,out _,out _,out int type,out _)
                         && Main.tile[cell.X,cell.Y].TileType != type));
             if (missing is { Layer: GeneratedPlacementLayer.Tile } cell)
                 TryQueueReturn(cell.Layer,cell.X,cell.Y);
@@ -60,9 +60,10 @@ public sealed partial class GeneratedPlacementLedgerSystem
 
     private static bool SupportsPlacedBodyFootprint(RuntimePlacementSpec placement)
     {
-        if (placement.TileId < 0 || placement.WallId >= 0) return false;
-        TileObjectData? native = TileObjectData.GetTileData(placement.TileId, placement.PlaceStyle);
-        return native is null ? !Main.tileFrameImportant[placement.TileId]
+        int tileType = global::InfiniCrafterLocal.Content.Tiles.GeneratedOwnedTiles.Resolve(placement);
+        if (tileType < 0 || placement.WallId >= 0) return false;
+        TileObjectData? native = TileObjectData.GetTileData(tileType, placement.PlaceStyle);
+        return native is null ? !Main.tileFrameImportant[tileType]
             : native.Width > 0 && native.Height > 0
                 && (long)native.Width * native.Height <= MaxCellsPerGroup
                 && native.CoordinateWidth > 0 && native.CoordinateFullWidth > 0
@@ -159,6 +160,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
             ["tileType"] = authorization.ExpectedType,
             ["nativeStyle"] = authorization.ExactPlacement.PlaceStyle,
         };
+        if (authorization.ExactPlacement.OwnedTile is {} owned) witness["ownedTileKey"] = owned.Key;
         if (authorization.ExactPlacement.PlacedBody is null) witness["lightOnly"] = 1;
         if (authorization.ExactPlacement.PlacedLight is not null || authorization.ExactPlacement.PlacedVfx is not null)
         {

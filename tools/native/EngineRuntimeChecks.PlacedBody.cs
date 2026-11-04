@@ -13,45 +13,42 @@ internal static partial class EngineRuntimeChecks
 
     private static void PlacedBodyLedgerKeepsExplicitIdentityAcrossSaveAndNetwork()
     {
-        var tileDataField = typeof(Terraria.ObjectData.TileObjectData).GetField("_data", PersistenceStatic)!;
-        object? oldTileData = tileDataField.GetValue(null);
-        var tileData = new System.Collections.Generic.List<Terraria.ObjectData.TileObjectData>();
-        for (int i = 0; i < Terraria.ModLoader.TileLoader.TileCount; i++) tileData.Add(null!);
-        tileDataField.SetValue(null, tileData);
-        try
-        {
-        WithPersistenceTilemap((player, ledger) =>
+        WithPlacedLedger((player, ledger) =>
         {
             Terraria.Main.netMode = NetmodeID.SinglePlayer;
-            var data = PersistencePlacementData("placed-body-witness");
+            var data = PlacedLedgerData("placed-body-witness");
             player.inventory[player.selectedItem] = ReviewItem(data).Item;
             InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.StampCurrentWorld(data);
             var placement = data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
-            placement.TileId = TileID.Stone; placement.WallId = -1;
             placement.PlacedBody = new RuntimePlacedBodySpec { RenderSizePx = 37,
                 FootprintAnchorX = 0.25, FootprintAnchorY = 1, ImagePivotX = 0.125, ImagePivotY = 0.75,
                 OffsetXPx = -13, OffsetYPx = 17, RotationDegrees = -45.5, FlipX = true, FlipY = false };
             var native = Terraria.Main.tile[40,40]; native.HasTile = false;
             var adjacent = Terraria.Main.tile[41,40]; adjacent.HasTile = false;
-            PlacedNativeCall("Unload");
-            Equal(false, GeneratedPlacementLedgerSystem.AuthorizePlacement(player,data,placement,40,40),"unsupported complete native adapter refuses before material mutation");
-            Equal(false,native.HasTile,"refusal leaves native world untouched");
-            var pending = (System.Collections.IDictionary)typeof(GeneratedPlacementLedgerSystem).GetField("PendingAuthorizations",PersistenceStatic)!.GetValue(null)!;
-            Equal(0,pending.Count,"unsupported body acquires no placement authorization");
-            ledger.PostSetupContent();
+            var owned = OwnedTileFixture.Map;
+            var registered = owned[placement.OwnedTile!.Key];
+            owned.Remove(placement.OwnedTile.Key);
+            try
+            {
+                Equal(false, GeneratedPlacementLedgerSystem.AuthorizePlacement(player,data,placement,40,40),"missing owned registration refuses before material mutation");
+                Equal(false,native.HasTile,"refusal leaves world untouched");
+                var pending = (System.Collections.IDictionary)typeof(GeneratedPlacementLedgerSystem).GetField("PendingAuthorizations",PersistenceStatic)!.GetValue(null)!;
+                Equal(0,pending.Count,"unsupported body acquires no placement authorization");
+            }
+            finally { owned.Add(placement.OwnedTile.Key, registered); }
             Equal(true, GeneratedPlacementLedgerSystem.AuthorizePlacement(player, data, placement, 40,40), "explicit selected binding authorizes");
             native.HasTile = adjacent.HasTile = true; native.TileType = adjacent.TileType = TileID.Stone;
             Equal(true, GeneratedPlacementLedgerSystem.TryCommitAuthorizedPlacement(player), "exact committed material group");
-            MethodInfo? suppress = typeof(GeneratedPlacementLedgerSystem).GetMethod("ShouldSuppressPlacedBody", PersistenceStatic);
+            MethodInfo? suppress = typeof(GeneratedPlacementLedgerSystem).GetMethod("HasLivePlacedBody", PersistenceStatic);
             Equal(true,suppress is not null,"literal placed-body suppression predicate exists");
             ledger.PostUpdateEverything();
-            Equal(true,(bool)suppress!.Invoke(null,new object[] { 40,40 })!,"opted-in cell hides native body independent of PNG availability");
-            Equal(false,(bool)suppress.Invoke(null,new object[] { 41,40 })!,"unowned same-type neighbor keeps native body");
+            Equal(true,(bool)suppress!.Invoke(null,new object[] { 40,40 })!,"owned selected cell remains live independent of PNG availability");
+            Equal(false,(bool)suppress.Invoke(null,new object[] { 41,40 })!,"unowned neighboring cell cannot inherit the generated body");
             var groupOwner = (System.Collections.IDictionary)typeof(GeneratedPlacementLedgerSystem).GetField("Groups",PersistenceStatic)!.GetValue(null)!;
             object selectedGroup = groupOwner.Values.Cast<object>().Single();
             var presentation = (TagCompound)selectedGroup.GetType().GetProperty("PlacedBody",BindingFlags.Public|BindingFlags.Instance)!.GetValue(selectedGroup)!;
             presentation["failure"] = "fixture_cosmetic_pose_unavailable";
-            Equal(true,(bool)suppress.Invoke(null,new object[] { 40,40 })!,"accepted selected body never silently restores native image on cosmetic pose failure");
+            Equal(true,(bool)suppress.Invoke(null,new object[] { 40,40 })!,"accepted owned body never substitutes another image on cosmetic pose failure");
             presentation.Remove("failure");
             var saved = new TagCompound(); ledger.SaveWorldData(saved);
             var group = saved.GetList<TagCompound>("infiniGeneratedPlacementLedgerV2")[0];
@@ -94,7 +91,5 @@ internal static partial class EngineRuntimeChecks
             Equal(0, broken.GetList<TagCompound>("infiniGeneratedPlacementLedgerV2").Count, "missing native footprint retires placed presentation");
             Equal(1, broken.GetList<TagCompound>("infiniGeneratedPlacementReturnsV2").Count, "support loss keeps one durable exact generated return");
         });
-        }
-        finally { new GeneratedPlacementLedgerSystem().Unload(); tileDataField.SetValue(null, oldTileData); }
     }
 }

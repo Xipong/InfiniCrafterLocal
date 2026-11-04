@@ -80,6 +80,7 @@ def _params(fn: str) -> dict[str, Any]:
             "lightColor": "white", "treasureSense": False, "moveSpeedBonus": 0.0,
             "jumpSpeedBonus": 0.0, "manaRegen": 0, "lifeRegen": 0,
         },
+        "place_object": {"width": 2, "height": 3, "collision": "open", "support": "floor"},
         "place_tile": {"tileId": 4, "placeStyle": 0},
         "place_wall": {"wallId": 1, "placeStyle": 0},
         "placed_sprite": {"placementCallId": "native_placement"},
@@ -220,10 +221,14 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
                 calls.append(_call("held_utility_effect", "generated_buff_on_use", "item", effect))
             action = "use_item_body"
             input_kind = "primary_use"
-            if fn in {"place_tile", "place_wall"} or cap.category == "item_placed_body":
+            if fn in {"place_object", "place_tile", "place_wall"} or cap.category == "item_placed_body":
                 action = "place_item"
                 if cap.category == "item_placed_body":
-                    calls.append(_call("native_placement", "place_tile", "item"))
+                    calls.append(_call("native_placement", "place_object" if fn == "placed_sprite" else "place_tile", "item"))
+                if fn == "place_object":
+                    body = _params("placed_sprite")
+                    body["placementCallId"] = "witness_call"
+                    calls.append(_call("owned_sprite", "placed_sprite", "item", body))
             elif fn in {"accessory", "armor", "equipment_damage_bonus"}:
                 action = "equip_passive"; input_kind = "equipped"
             elif fn in BINDING_ACTION_REGISTRY["apply_item_effects"].required_item_capabilities_any_of:

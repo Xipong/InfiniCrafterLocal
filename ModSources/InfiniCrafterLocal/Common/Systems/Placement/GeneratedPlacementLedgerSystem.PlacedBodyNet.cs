@@ -88,7 +88,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
         // Preserve the complete raw witness in authoritative NBT, but do not let
         // optional cosmetic serialization prevent a compact material snapshot.
         var diagnostic = new TagCompound { ["failure"] = failure };
-        foreach (string key in new[] { "version", "bindingId", "definitionHash", "tileType", "nativeStyle" })
+        foreach (string key in new[] { "version", "bindingId", "definitionHash", "tileType", "nativeStyle", "ownedTileKey" })
             if (body.ContainsKey(key) && (body[key] is int || body[key] is string text && text.Length <= 96))
                 diagnostic[key] = body[key];
         using var fallback = new MemoryStream(); TagIO.ToStream(diagnostic,fallback,compress: true);
@@ -168,7 +168,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
             RuntimePlacementSpec? placement = binding?.UsePolicy.Action.Placement;
             if (binding?.UsePolicy.Action.Kind != RuntimeBindingAction.PlaceItem || binding.UsePolicy.StackCost != 1
                 || placement?.HasPlacedFootprint != true || group.Cells.Any(c => c.Layer != GeneratedPlacementLayer.Tile)
-                || placement.TileId != tileType
+                || global::InfiniCrafterLocal.Content.Tiles.GeneratedOwnedTiles.Resolve(placement) != tileType
                 || placement.PlaceStyle != nativeStyle) return false;
             if (registry.TryGet(group.GeneratedItemId,out GeneratedItemData existing)
                 && GeneratedItemRegistryService.DefinitionIdentity(existing) != identity)

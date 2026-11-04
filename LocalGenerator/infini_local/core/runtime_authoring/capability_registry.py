@@ -1030,7 +1030,7 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
 
 _ACCESSORY_PRIMITIVES = _equipment_params(armor=False)
 _ARMOR_PRIMITIVES = _equipment_params(armor=True)
-PLACEMENT_CAPABILITIES: Final[tuple[str, ...]] = ("place_tile", "place_wall")
+PLACEMENT_CAPABILITIES: Final[tuple[str, ...]] = ("place_object", "place_tile", "place_wall")
 
 def _immunity_param() -> ParamSpec:
     return _p("union", "Choose owner_shared, once_per_npc, or {localCooldown:0..600} raw unscaled engine counts; independent of penetration and updatesPerTick.",
@@ -1622,7 +1622,7 @@ _CAPS: list[CapabilitySpec] = [
     *(
         _cap(
             "place_" + layer, "Select one exact loaded " + layer + " and placement style for one referenced placement transaction."
-            + (" Supported native containers keep Terraria inventory, opening and persistence; generated-item identity and return remain with this same placement. Unsupported custom callback families are refused." if layer == "tile" else ""),
+            + (" Native tiles retain their own art and behavior; placed_sprite is only for place_object. Supported native containers keep Terraria inventory, opening and persistence; generated-item identity and return remain with this same placement. Unsupported custom callback families are refused." if layer == "tile" else ""),
             "item_placeable", ("item_body",),
             {layer + "Id": _p("integer", "Exact loaded " + layer + " ID; copy from parent facts, do not guess", minimum=0, maximum=65535, semantic_type="loaded_" + layer + "_id"),
              "placeStyle": _p("integer", "Exact Item.placeStyle for the selected loaded placement", minimum=0, maximum=255)},
@@ -1635,12 +1635,27 @@ _CAPS: list[CapabilitySpec] = [
         ) for layer, inactive in (("tile", "wall"), ("wall", "tile"))
     ),
     _cap(
+        "place_object", "Place an owned generated object with an explicit 1..16 tile rectangular footprint (up to 16x16/256 cells), collision and support. Requires placed_sprite for its generated PNG. No native tile identity, container, crafting adjacency, wiring or inherited parent behavior.",
+        "item_placeable", ("item_body",),
+        {
+            "width": _p("integer", "Occupied footprint width in tiles", minimum=1, maximum=16, wire_name="ownedTile.width"),
+            "height": _p("integer", "Occupied footprint height in tiles", minimum=1, maximum=16, wire_name="ownedTile.height"),
+            "collision": _p("string", "open permits movement through the object; solid blocks movement", enum=("open", "solid"), wire_name="ownedTile.collision"),
+            "support": _p("string", "floor requires ground below the footprint; wall requires backing walls; unanchored needs no supporting surface", enum=("floor", "wall", "unanchored"), wire_name="ownedTile.support"),
+        },
+        requirements=(RequirementSpec("capability_present", capability="placed_sprite", message="An owned object requires an explicit placed_sprite selecting its PNG transform; no invisible or placeholder object is supplied."),),
+        py=_COMPILER_OWNER, cs="Content/Tiles/GeneratedOwnedTile.cs::SetStaticDefaults",
+        component_slot="placeable", exclusive_group="placeable",
+        wire=tuple("runtimeProgram.bindings[].usePolicy.action.placement." + name for name in
+                   ("tileId", "wallId", "placeStyle", "ownedTile.width", "ownedTile.height", "ownedTile.collision", "ownedTile.support")),
+        fixed_wire_literals={"tileId": -1, "wallId": -1, "placeStyle": 0}, persisted_name="configure_owned_object_placement"),
+    _cap(
         "placed_sprite",
-        "Draw the full root item PNG over the native placed tile, replacing its body/flame pictures. This single static image replaces native animation and on/off visuals; baked flames remain visible when switched off. Omit to retain native pictures. placed_vfx can add separate live effects. Native support, solidity, mining, wiring, interactions and light remain unchanged. Requires the place_tile footprint, up to 16x16/256 cells.",
+        "Draw the full root item PNG for an owned place_object footprint, up to 16x16/256 cells. This required static image uses only the explicit transform; placed_vfx can add separate live effects. Collision and support come from place_object. Native place_tile retains native art and cannot accept this component.",
         "item_placed_body",
         ("item_body",),
         {
-            "placementCallId": _p("string", "Exact same-item place_tile call executed by a place_item binding; wall placements cannot carry this presentation", pattern=r"^[a-z][a-z0-9_]{0,47}$", reference=ReferenceSpec("call", ("item_body",)), wire_name="placedBody"),
+            "placementCallId": _p("string", "Exact same-item place_object call executed by a place_item binding; native tiles and walls cannot carry this presentation", pattern=r"^[a-z][a-z0-9_]{0,47}$", reference=ReferenceSpec("call", ("item_body",)), wire_name="placedBody"),
             "renderSizePx": _p("integer", "Longest side of the final full PNG frame in world pixels; aspect preserved, independent of item scale, dropped worldScale and Visual renderSizePx", minimum=1, maximum=512, units="world pixels"),
             "footprintAnchorX": _p("number", "Normalized committed footprint rectangle X: 0 left, 1 right", minimum=0, maximum=1),
             "footprintAnchorY": _p("number", "Normalized committed footprint rectangle Y: 0 top, 1 bottom", minimum=0, maximum=1),
@@ -1665,10 +1680,10 @@ _CAPS: list[CapabilitySpec] = [
                          "runtimeProgram.bindings[].action.placementCallId"), persisted_name='present_placed_item_sprite'),
     _cap(
         "placed_light",
-        "Add persistent light at the center tile of the committed native footprint (up to 16x16/256 cells). Native tile light remains.",
+        "Add persistent light at the center tile of the committed footprint (up to 16x16/256 cells). Native place_tile light remains; place_object has only explicitly authored light.",
         "item_placed_body", ("item_body",),
         {
-            "placementCallId": _p("string", "Exact same-item place_tile call executed by a place_item binding; no walls or unused placement", pattern=r"^[a-z][a-z0-9_]{0,47}$", reference=ReferenceSpec("call", ("item_body",)), wire_name="placedLight"),
+            "placementCallId": _p("string", "Exact same-item place_tile or place_object call executed by a place_item binding; no walls or unused placement", pattern=r"^[a-z][a-z0-9_]{0,47}$", reference=ReferenceSpec("call", ("item_body",)), wire_name="placedLight"),
             "strength": _p("number", "RGB coefficient multiplying the explicit color, not tile radius", minimum=0.01, maximum=1.5, units="engine units: RGB coefficient", consumer_storage="float64", execution_phase="PostUpdateEverything: persistent committed placement light; final native RGB converts to float32"),
             "color": _p("string", "Canonical light color", enum=_COLOR, execution_phase="PostUpdateEverything: persistent committed placement light"),
         },
@@ -1682,12 +1697,12 @@ _CAPS: list[CapabilitySpec] = [
                          "runtimeProgram.bindings[].action.targetId", "runtimeProgram.bindings[].action.placementCallId"), persisted_name='add_placed_light'),
     _cap(
         "placed_vfx",
-        "Expose live placed-effect slots for this committed native footprint (up to 16x16/256 cells). Inclusive bounds select the top-left native TileFrameY; 0..32767 covers all nonnegative frames. VFX Director may add periodic self spriteElement/libraryParticle/lightCue effects to this placement binding, separately from the static root PNG.",
+        "Expose live placed-effect slots for this committed footprint (up to 16x16/256 cells). Inclusive bounds select the top-left TileFrameY: native place_tile uses its actual state; place_object has stable origin frame zero and no on/off behavior. 0..32767 covers all nonnegative frames. VFX Director may add periodic self spriteElement/libraryParticle/lightCue effects separately from the static root PNG.",
         "item_placed_body", ("item_body",),
         {
-            "placementCallId": _p("string", "Exact same-item place_tile call executed by a place_item binding; no walls or unused placement", pattern=r"^[a-z][a-z0-9_]{0,47}$", reference=ReferenceSpec("call", ("item_body",)), wire_name="placedVfx"),
-            "minFrameY": _p("integer", "Inclusive actual top-left native TileFrameY lower bound, not animation age", minimum=0, maximum=32767, units="native frame coordinate", execution_phase="PostUpdateEverything: authenticated placed source gate"),
-            "maxFrameY": _p("integer", "Inclusive actual top-left native TileFrameY upper bound", minimum=0, maximum=32767, units="native frame coordinate", execution_phase="PostUpdateEverything: authenticated placed source gate"),
+            "placementCallId": _p("string", "Exact same-item place_tile or place_object call executed by a place_item binding; no walls or unused placement", pattern=r"^[a-z][a-z0-9_]{0,47}$", reference=ReferenceSpec("call", ("item_body",)), wire_name="placedVfx"),
+            "minFrameY": _p("integer", "Inclusive top-left TileFrameY lower bound, not animation age; owned objects use zero", minimum=0, maximum=32767, units="native frame coordinate", execution_phase="PostUpdateEverything: authenticated placed source gate"),
+            "maxFrameY": _p("integer", "Inclusive top-left TileFrameY upper bound; owned objects use zero", minimum=0, maximum=32767, units="native frame coordinate", execution_phase="PostUpdateEverything: authenticated placed source gate"),
         },
         component_slot="placed_vfx",
         requirements=(RequirementSpec("ordered_params", param="minFrameY", other_param="maxFrameY", message="minFrameY must not exceed maxFrameY."),),
@@ -2887,9 +2902,9 @@ def _derived_requirements(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
         return tuple(rows)
     if cap.category == "item_placed_body":
         return (
-            RequirementSpec("executed_tile_placement_reference", capability="place_tile",
+            RequirementSpec("executed_tile_placement_reference", capability="place_object" if cap.name == "placed_sprite" else "",
                             param="placementCallId", any_of=("place_item",),
-                            message="Reference an exact same-item tile-only placement used by an executable place_item binding, or explicitly delete this placed component call. No walls, inferred source, or unused reference."),
+                            message=("Reference the exact same-item place_object used by an executable place_item binding; native tile art cannot be replaced." if cap.name == "placed_sprite" else "Reference an exact same-item place_tile or place_object used by an executable place_item binding. No walls, inferred source, or unused reference.")),
             RequirementSpec("unique_call_reference", param="placementCallId",
                             message="Only one call of this operation may reference a placement call; independent placed sprite and light calls may compose."),
         )

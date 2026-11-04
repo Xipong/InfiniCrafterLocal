@@ -785,6 +785,22 @@ over the real placement ledger and records successful original `DrawBody` calls.
 cannot count as visual-path coverage. No native terrain texture or background is
 invented. This verifies the authored placed-body renderer, not the complete world.
 
+Owned rendering uses the explicit `synthetic-world-owned.json` fixture and
+`scenarios/world-owned-placement.json`, separate from the genuine native campfire
+fixture. The partial host calls production `GeneratedOwnedTiles.Register` through
+real `Mod.AddContent` and native tile setup, without substituting a vanilla tile
+or replacing the symbolic resolver. Tile assertions select exactly one native
+`tileId` or canonical `ownedTileKey` (for example `GeneratedOwned_3x2_open_floor`).
+Snapshots retain the numeric ID and observe the symbolic name from the actual
+registered `GeneratedOwnedTile`; numeric load order is not an owned identity.
+
+`verify_world.py` covers both native and owned placement, missing support, no-use,
+one-return conservation and wrong owned identity. `verify_placed_render.py`
+requires successful original body drawing, retirement, missing-PNG refusal and
+rejection of retired native-tile-plus-custom-body input. `verify_quality.py`
+also checks original dropped-item drawing and native settling. Full-loader smoke
+checks independently verify all 1,536 production owned registrations.
+
 Returned material telemetry includes both the retained canonical source and returned
 `ToNetworkJson` hashes. `generated_world_items_at` also rejects any returned item
 whose canonical definition differs from the source; item ID/count alone is not

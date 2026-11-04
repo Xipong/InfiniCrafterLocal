@@ -39,10 +39,16 @@ public sealed partial class GeneratedPlacementLedgerSystem
             || hashValue.Length != 64 || !hashValue.All(Uri.IsHexDigit)) return false;
         binding = bindingValue; hash = hashValue;
         tileType = witness.GetInt("tileType"); nativeStyle = witness.GetInt("nativeStyle");
+        if (witness.ContainsKey("ownedTileKey"))
+        {
+            if (witness["ownedTileKey"] is not string key || key.Length > 96) return false;
+            tileType = global::InfiniCrafterLocal.Content.Tiles.GeneratedOwnedTiles.Resolve(key);
+            if (tileType < 0) return false;
+        }
         return true;
     }
 
-    internal static bool ShouldSuppressPlacedBody(int x, int y)
+    internal static bool HasLivePlacedBody(int x, int y)
     {
         if (!Placements.TryGetValue(new(GeneratedPlacementLayer.Tile,x,y),out string? id)
             || !Groups.TryGetValue(id,out PlacementGroup? group) || group.PlacedBody is null)
@@ -88,7 +94,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
                 RuntimePlacementSpec? placement = binding?.UsePolicy.Action.Placement;
                 if (placement?.HasPlacedFootprint != true
                     || binding!.UsePolicy.Action.Kind != RuntimeBindingAction.PlaceItem
-                    || placement.TileId != tileType || placement.PlaceStyle != nativeStyle) continue;
+                    || global::InfiniCrafterLocal.Content.Tiles.GeneratedOwnedTiles.Resolve(placement) != tileType || placement.PlaceStyle != nativeStyle) continue;
                 body?.Validate();
                 placement.PlacedLight?.Validate();
                 placement.PlacedVfx?.Validate();
@@ -125,7 +131,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
                 || !ReferenceEquals(projection.Source,group) || projection.DefinitionJson != group.DefinitionJson) continue;
             bool live = true;
             foreach (GeneratedPlacementKey cell in group.Cells)
-                if (!ShouldSuppressPlacedBody(cell.X,cell.Y)) { live = false; break; }
+                if (!HasLivePlacedBody(cell.X,cell.Y)) { live = false; break; }
             if (live) yield return view;
         }
     }

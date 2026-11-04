@@ -639,6 +639,13 @@ public sealed class RuntimePlacementSpec
     public int TileId { get; set; } = -1;
     public int WallId { get; set; } = -1;
     public int PlaceStyle { get; set; }
+    private RuntimeOwnedTileSpec? _ownedTile;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeOwnedTileSpec? OwnedTile
+    {
+        get => _ownedTile;
+        set => _ownedTile = value ?? throw new InvalidDataException("present ownedTile cannot be null");
+    }
     private RuntimePlacedBodySpec? _placedBody;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimePlacedBodySpec? PlacedBody
@@ -647,7 +654,7 @@ public sealed class RuntimePlacementSpec
         set => _placedBody = value ?? throw new InvalidDataException("present placedBody cannot be null");
     }
 
-    [JsonIgnore] internal bool HasPlacedFootprint => PlacedBody is not null || PlacedLight is not null || PlacedVfx is not null;
+    [JsonIgnore] internal bool HasPlacedFootprint => OwnedTile is not null || PlacedBody is not null || PlacedLight is not null || PlacedVfx is not null;
 
     private RuntimePlacedVfxSpec? _placedVfx;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -671,28 +678,50 @@ public sealed class RuntimePlacementSpec
             throw new InvalidDataException($"tile ID {TileId} is not loaded");
         if (WallId < -1 || WallId >= WallLoader.WallCount)
             throw new InvalidDataException($"wall ID {WallId} is not loaded");
-        if (TileId < 0 && WallId < 0)
-            throw new InvalidDataException("placement must enable a tile or wall");
+        if ((TileId >= 0 ? 1 : 0) + (WallId >= 0 ? 1 : 0) + (OwnedTile is not null ? 1 : 0) != 1)
+            throw new InvalidDataException("placement must select exactly one native tile, wall or owned tile");
+        if (OwnedTile is not null)
+        {
+            OwnedTile.Validate();
+            if (PlaceStyle != 0) throw new InvalidDataException("owned tile has only style zero");
+            if (PlacedBody is null) throw new InvalidDataException("owned tile requires explicit placedBody");
+        }
         if (PlaceStyle is < 0 or > 1000)
             throw new InvalidDataException("placement style must be 0..1000");
         if (PlacedVfx is not null)
         {
-            if (TileId < 0 || WallId >= 0)
+            if (TileId < 0 && OwnedTile is null || WallId >= 0)
                 throw new InvalidDataException("placedVfx requires exact tile-only placement");
             PlacedVfx.Validate();
         }
         if (PlacedLight is not null)
         {
-            if (TileId < 0 || WallId >= 0)
+            if (TileId < 0 && OwnedTile is null || WallId >= 0)
                 throw new InvalidDataException("placedLight requires exact tile-only placement");
             PlacedLight.Validate();
         }
         if (PlacedBody is not null)
         {
-            if (TileId < 0 || WallId >= 0)
-                throw new InvalidDataException("placedBody requires exact tile-only placement");
+            if (OwnedTile is null || TileId != -1 || WallId != -1)
+                throw new InvalidDataException("placedBody requires explicit owned tile placement; native tile art is not replaced");
             PlacedBody.Validate();
         }
+    }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed class RuntimeOwnedTileSpec
+{
+    [JsonRequired] public int Width { get; init; }
+    [JsonRequired] public int Height { get; init; }
+    [JsonRequired] public string Collision { get; init; } = null!;
+    [JsonRequired] public string Support { get; init; } = null!;
+    [JsonIgnore] internal string Key => FormattableString.Invariant($"GeneratedOwned_{Width}x{Height}_{Collision}_{Support}");
+    public void Validate()
+    {
+        if (Width is < 1 or > 16 || Height is < 1 or > 16
+            || Collision is not ("open" or "solid") || Support is not ("floor" or "wall" or "unanchored"))
+            throw new InvalidDataException("owned tile requires explicit bounded width/height, collision and support");
     }
 }
 

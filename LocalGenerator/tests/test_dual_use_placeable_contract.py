@@ -323,13 +323,68 @@ def test_repair_placement_reference_changes_only_the_rejected_source_leaf() -> N
     assert _changed_paths(current, repaired) == {"$.runtimeProgram.bindings[1].action.placementCallId"}
 
 
-@pytest.mark.parametrize("reverse_bindings", [False, True])
-def test_captured_fishing_input_repair_preserves_frozen_action(reverse_bindings: bool) -> None:
+def _captured_fishing_replay(reverse_bindings: bool) -> tuple[dict[str, Any], dict[str, Any]]:
     replay = json.loads((Path(__file__).with_name("fixtures") / "dual_use_fishing_repair.json").read_text(encoding="utf-8"))
     authored, patch = replay["author"], replay["repairPatch"]
     if reverse_bindings:
         authored["runtimeProgram"]["bindings"].reverse()
         patch["bindingsUpsert"].reverse()
+    return authored, patch
+
+
+def _assert_native_trap_and_fishing(repaired: dict[str, Any]) -> None:
+    wire = compile_runtime_program(repaired)
+    assert validate_runtime_wire(wire)["ok"]
+    bindings = wire["runtimeProgram"]["bindings"]
+    fishing = next(row for row in bindings if row["id"] == "bind_alternate")
+    assert fishing["input"] == "primary_use"
+    assert fishing["usePolicy"]["action"]["fishing"] == {"power": 15, "castSpeedPxPerTick": 11.0 * 16 / 60}
+    placement = next(row for row in bindings if row["id"] == "bind_primary")
+    assert placement["input"] == "alternate_use"
+    assert placement["usePolicy"]["action"]["placement"] == {"tileId": 137, "wallId": -1, "placeStyle": 0}
+    # Native trap identity owns wiring. Repair must not substitute an owned object.
+    assert not any(call["fn"] == "place_object" for call in repaired["runtimeProgram"]["calls"])
+
+
+@pytest.mark.parametrize("reverse_bindings", [False, True])
+def test_captured_native_overlay_requires_explicit_scoped_removal(reverse_bindings: bool) -> None:
+    # Keep the historical capture intact: #316 deliberately retired native-tile
+    # PNG overlays. The original lane-only patch cannot silently remove one.
+    authored, patch = _captured_fishing_replay(reverse_bindings)
+    frozen = copy.deepcopy(authored)
+    report = validate_runtime_program(authored)
+    assert "placed_body_placement_reference" in _codes(report)
+    scope = build_runtime_repair_scope(authored, report["errors"])
+    assert scope["deletable"]["callIds"] == ["sprite_call"]
+    filtered, audit = filter_repair_patch_scope(authored, patch, scope)
+    assert not audit["ok"]
+    refused = apply_repair_patch(authored, filtered)
+    assert _codes(validate_runtime_program(refused)) == {"placed_body_placement_reference"}
+    assert next(call for call in refused["runtimeProgram"]["calls"] if call["id"] == "sprite_call") == frozen["runtimeProgram"]["calls"][-1]
+
+    explicit = copy.deepcopy(patch)
+    explicit["callIdsDelete"] = ["sprite_call"]
+    filtered, audit = filter_repair_patch_scope(authored, explicit, scope)
+    assert audit["ok"], audit
+    assert filtered["callIdsDelete"] == ["sprite_call"]
+    repaired = apply_repair_patch(authored, filtered)
+    expected = copy.deepcopy(frozen)
+    expected["runtimeProgram"]["calls"] = [call for call in expected["runtimeProgram"]["calls"] if call["id"] != "sprite_call"]
+    expected["runtimeProgram"]["calls"][0]["params"]["damage"] = 0
+    for binding in expected["runtimeProgram"]["bindings"]:
+        binding["input"] = "alternate_use" if binding["id"] == "bind_primary" else "primary_use"
+    assert repaired == expected
+    assert authored == frozen
+    assert validate_runtime_program(repaired)["ok"]
+    _assert_native_trap_and_fishing(repaired)
+
+
+@pytest.mark.parametrize("reverse_bindings", [False, True])
+def test_captured_fishing_input_repair_preserves_frozen_action(reverse_bindings: bool) -> None:
+    authored, patch = _captured_fishing_replay(reverse_bindings)
+    # Current native-lane variant, derived in memory only. The separate capture
+    # test above owns the intentionally retired custom native presentation.
+    authored["runtimeProgram"]["calls"] = [call for call in authored["runtimeProgram"]["calls"] if call["id"] != "sprite_call"]
     report = validate_runtime_program(authored)
     assert "dual_use_placeable_input_contract" in _codes(report)
     scope = build_runtime_repair_scope(authored, report["errors"])
@@ -345,11 +400,7 @@ def test_captured_fishing_input_repair_preserves_frozen_action(reverse_bindings:
         "$.runtimeProgram.bindings[0].input", "$.runtimeProgram.bindings[1].input",
         "$.runtimeProgram.calls[0].params.damage",
     }
-    wire = compile_runtime_program(repaired)
-    assert validate_runtime_wire(wire)["ok"]
-    fishing = next(row for row in wire["runtimeProgram"]["bindings"] if row["id"] == "bind_alternate")
-    assert fishing["input"] == "primary_use"
-    assert fishing["usePolicy"]["action"]["fishing"] == {"power": 15, "castSpeedPxPerTick": 11.0 * 16 / 60}
+    _assert_native_trap_and_fishing(repaired)
 
     # Input-only repair is not authority to change the accepted fishing design.
     hostile = copy.deepcopy(patch)

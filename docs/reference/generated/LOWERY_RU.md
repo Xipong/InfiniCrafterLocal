@@ -94,6 +94,9 @@ Exact-repetition policy: `{'kind': 'exact_repetition', 'minimumRepeatedPlacement
 | collect_seeds | fresh Author | gameplay.collectSeedsFromGrass | True |
 | place_tile | fresh Author | runtimeProgram.bindings[].usePolicy.action.placement.wallId | -1 |
 | place_wall | fresh Author | runtimeProgram.bindings[].usePolicy.action.placement.tileId | -1 |
+| place_object | fresh Author | runtimeProgram.bindings[].usePolicy.action.placement.tileId | -1 |
+| place_object | fresh Author | runtimeProgram.bindings[].usePolicy.action.placement.wallId | -1 |
+| place_object | fresh Author | runtimeProgram.bindings[].usePolicy.action.placement.placeStyle | 0 |
 | recall_home_on_use | fresh Author | gameplay.mobilityMode | 'recall_home' |
 | recall_home_on_use | fresh Author | runtimeProgram.effectGroups[].mobilityMode | 'recall_home' |
 | recall_home_on_use | fresh Author | gameplay.mobilityRangeTiles | 0 |

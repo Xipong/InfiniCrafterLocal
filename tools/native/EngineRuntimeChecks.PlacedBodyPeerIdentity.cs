@@ -68,7 +68,7 @@ internal static partial class EngineRuntimeChecks
     private static int PlacedIdentityProtocol()
         => (int)typeof(GeneratedPlacementLedgerSystem).GetField("PlacementProtocolVersion", PersistenceStatic)!.GetRawConstantValue()!;
     private static bool PlacedIdentitySuppresses()
-        => (bool)typeof(GeneratedPlacementLedgerSystem).GetMethod("ShouldSuppressPlacedBody", PersistenceStatic)!
+        => (bool)typeof(GeneratedPlacementLedgerSystem).GetMethod("HasLivePlacedBody", PersistenceStatic)!
             .Invoke(null, new object[] { 40, 40 })!;
     private static int PlacedIdentityProjectionCount()
         => ((IEnumerable)typeof(GeneratedPlacementLedgerSystem).GetMethod("VisiblePlacedBodies", PersistenceStatic)!
@@ -133,6 +133,7 @@ internal static partial class EngineRuntimeChecks
                     Equal(scenario == "selected_tile", PlacedIdentitySuppresses(), "selected presentation survives absent PNG before authoritative echo");
                     ledger.PostUpdateEverything();
                     Equal(scenario == "selected_tile" ? 1 : 0, PlacedIdentityProjectionCount(), "local selected projection does not require root PNG");
+                    var clientWorldCell=(cell.HasTile,cell.TileType,cell.WallType,cell.TileFrameX,cell.TileFrameY);
                     states.Server(); peers.Mode(NetmodeID.Server,255); Terraria.Main.player[0] = server;
                     Equal(0, PlacedLedgerGroups(ledger).Count, "server never borrows original client material group");
                     MaterialClock(140); peers.Receive(notify,0); peers.Receive(notify,0);
@@ -145,6 +146,11 @@ internal static partial class EngineRuntimeChecks
                     Equal(1, PlacedLedgerSaved(ledger).GetList<Terraria.ModLoader.IO.TagCompound>("infiniGeneratedPlacementReturnsV2").Count,
                         "server keeps one durable exact return when native spawning is unavailable");
                     states.Client(); peers.Mode(NetmodeID.MultiplayerClient,0); Terraria.Main.player[0] = client;
+                    // Actual peers have separate tilemaps. The server's owned
+                    // footprint cleanup is not a received client tile packet.
+                    // Restore the exact client cell pending delivery of its echo.
+                    cell.HasTile=clientWorldCell.HasTile;cell.TileType=clientWorldCell.TileType;
+                    cell.WallType=clientWorldCell.WallType;cell.TileFrameX=clientWorldCell.TileFrameX;cell.TileFrameY=clientWorldCell.TileFrameY;
                     Equal(true, ReferenceEquals(clientGroups,PlacedIdentityMap("Groups")), "resume exact original client dictionary, no clearing/reload");
                     Equal(true, ReferenceEquals(clientCells,PlacedIdentityMap("Placements")), "resume exact original client cell owner");
                     Equal(true, ReferenceEquals(localGroup,PlacedIdentityMap("Groups")[localId]), "original Consume-created group is still retained");
