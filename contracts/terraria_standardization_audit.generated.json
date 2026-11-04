@@ -1,8 +1,8 @@
 {
   "schema": "infini.terraria-standardization-audit.v1",
   "ok": true,
-  "score": 88,
-  "scoreMax": 88,
+  "score": 86,
+  "scoreMax": 86,
   "metrics": {
     "capabilities": 100,
     "canonicalDamageClasses": 10,
@@ -430,16 +430,6 @@
       "name": "lowery:псевдотокены `none`/`mod",
       "ok": true,
       "detail": "lowery.md missing guardrail: псевдотокены `none`/`modded`"
-    },
-    {
-      "name": "provider_aliases_documented",
-      "ok": true,
-      "detail": "documented provider aliases must match profile normalization"
-    },
-    {
-      "name": "image_backend_aliases_documented",
-      "ok": true,
-      "detail": "documented image backend aliases must match visual config"
     },
     {
       "name": "current_categories_without_aliases",

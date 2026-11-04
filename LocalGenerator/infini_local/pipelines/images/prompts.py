@@ -35,13 +35,11 @@ def chroma_name() -> str:
 
 
 def image_backend_is_zimage() -> bool:
-    backend = str(getattr(visual_config, "IMAGE_BACKEND", "") or "").strip().lower()
-    raw = str(getattr(visual_config, "IMAGE_BACKEND_RAW", "") or "").strip().lower()
-    return backend in {"sdcpp", "sd.cpp", "zimage", "z-image"} or raw in {"sdcpp", "sd.cpp", "zimage", "z-image"}
+    return visual_config.IMAGE_BACKEND == "sdcpp"
 
 
 def zimage_positive_only_enabled() -> bool:
-    return bool(getattr(visual_config, "ZIMAGE_POSITIVE_ONLY", False))
+    return bool(visual_config.ZIMAGE_POSITIVE_ONLY)
 
 
 def compact_visual_words(value: Any, limit: int = 180) -> str:

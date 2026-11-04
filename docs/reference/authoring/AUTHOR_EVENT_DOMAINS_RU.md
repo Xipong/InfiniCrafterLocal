@@ -90,7 +90,7 @@ owner-only wire тоже не мигрируется. Старый fresh fn `pul
 
 `score = distance × (1 − bias)`
 
-Для остальных NPC score равен distance. При `hardRange=false` native selector выбирает минимальный score строго меньше `rangeTiles × 16`. Поэтому soft range для предыдущей цели является score threshold: предыдущая NPC на расстоянии 100 px с bias 0.9 может выиграть у NPC на 15 px при range 20 px. При явно выбранном `hardRange=true` геометрическая граница проверяется до discount; `requireLineOfSight` и `targetPolicy` остаются независимыми решениями Author. Это не вероятность повторного попадания. Текущий firing caller использует `FindFiringTarget`; retained `FindNearestNpc` сохраняет прежний soft-score consumer для других movement paths.
+Для остальных NPC score равен distance. При `hardRange=false` native selector выбирает минимальный score строго меньше `rangeTiles × 16`. Поэтому soft range для предыдущей цели является score threshold: предыдущая NPC на расстоянии 100 px с bias 0.9 может выиграть у NPC на 15 px при range 20 px. При явно выбранном `hardRange=true` геометрическая граница проверяется до discount; `requireLineOfSight` и `targetPolicy` остаются независимыми решениями Author. Это не вероятность повторного попадания. Текущий firing caller использует `FindFiringTarget`. Movement consumers обращаются напрямую к `ResolveMotionNpc`: он выбирает ближайшую допустимую NPC по расстоянию без same-target bias.
 
 Для current strict wire действует тот же registry domain **0…0.9**, включая delivery без receipts. Прежние значения 0.95/1 и widened receipt domain больше не принимаются; значения не clamp-ятся и не переписываются. Единственный owner `params.sameTargetBias` задаёт schema, cards, validation, Repair и source-free scalar audit.
 

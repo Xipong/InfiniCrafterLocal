@@ -28,7 +28,7 @@ def studio(tmp_path, monkeypatch):
 
 def command(controller, name, identifier='command', values=None, extra=None):
     controller.apply({'id': identifier, 'action': name, 'values': values or {}, 'extra': extra or {}})
-    return controller.action_results[identifier]
+    return controller.app.actions.results[identifier]
 
 
 def test_snapshot_publishes_only_bounded_existing_text_catalog_metadata(studio, monkeypatch):
@@ -49,7 +49,7 @@ def test_snapshot_publishes_only_bounded_existing_text_catalog_metadata(studio, 
     assert account['textModels']['model-0'] == {'efforts': ['low', 'high'], 'defaultEffort': 'high'}
     assert 'DO-NOT-PUBLISH' not in json.dumps(account)
     assert not config.exists()
-    assert not app._gui_tasks
+    assert not app.actions.tasks
     auth['authenticated'] = False
     app._codex_text_models = {}
     account = controller.snapshot()['account']
@@ -61,7 +61,7 @@ def test_malformed_saved_config_keeps_polling_stop_and_recovery_available(studio
     from infini_local.desktop import settings_env
 
     app, controller, server, config = studio
-    config.write_text('INFINI_PROMPT_STYLE=last good disk\n', encoding='utf-8')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_PROMPT_STYLE=last good disk\n'), encoding='utf-8')
     good = controller.snapshot()
     app.proc = SimpleNamespace(pid=123456, poll=lambda: None)
     app._owned_launch_settings = dict(good['savedValues'])
@@ -82,11 +82,11 @@ def test_malformed_saved_config_keeps_polling_stop_and_recovery_available(studio
     assert server._state['savedRevision'] is None
     assert 'Не удалось проверить сохранённую конфигурацию' in server._state['status']
     assert app._scheduled_ids, 'Polling must remain scheduled after the read failure'
-    app.drain_until(lambda: controller.action_results['stop-with-malformed-config']['status'] != 'running')
-    assert controller.action_results['stop-with-malformed-config']['status'] == 'succeeded'
+    app.drain_until(lambda: controller.app.actions.results['stop-with-malformed-config']['status'] != 'running')
+    assert controller.app.actions.results['stop-with-malformed-config']['status'] == 'succeeded'
     assert app.proc is None
     monkeypatch.setattr(settings_env, 'parse_env', parse_env)
-    config.write_text('INFINI_PROMPT_STYLE=repaired disk\n', encoding='utf-8')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_PROMPT_STYLE=repaired disk\n'), encoding='utf-8')
     controller.tick()
     assert server._state['savedValues']['INFINI_PROMPT_STYLE'] == 'repaired disk'
     assert server._state['savedRevision'] is not None
@@ -101,7 +101,7 @@ def test_validation_and_missing_lora_are_browser_results(studio):
     result = command(controller, 'validate')
     assert result['status'] == 'failed'
     assert 'OpenRouter' in result['message']
-    assert controller.notifications[-1]['level'] == 'warning'
+    assert controller.app.actions.notifications[-1]['level'] == 'warning'
     result = command(controller, 'useLora', 'lora')
     assert result['ok'] is False
     assert 'LoRA' in result['message']
@@ -140,7 +140,7 @@ def test_open_config_never_saves_and_masks_credential_assignments(studio):
         command(controller, 'openConfig', values={'INFINI_PROMPT_STYLE': 'unsaved'})
     assert not config.exists()
     assert app.values['INFINI_PROMPT_STYLE'] != 'unsaved'
-    config.write_text('INFINI_OPENAI_COMPAT_API_KEY=secret-fixture\nINFINI_LLM_MAX_TOKENS=12345\n', encoding='utf-8')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_OPENAI_COMPAT_API_KEY=secret-fixture\nINFINI_LLM_MAX_TOKENS=12345\n'), encoding='utf-8')
     result = command(controller, 'openConfig', 'view')
     assert result['result']['kind'] == 'document'
     assert 'secret-fixture' not in result['result']['content']
@@ -156,7 +156,7 @@ def test_config_folder_uses_active_override_without_saving_or_reading_secrets(st
     config.parent.mkdir()
     app.config_path = config
     if existing_file:
-        config.write_text('INFINI_PRIVATE_TOKEN=DO-NOT-DISCLOSE\n', encoding='utf-8')
+        config.write_text(('# infini-config-format: json-string-v1\nINFINI_PRIVATE_TOKEN=DO-NOT-DISCLOSE\n'), encoding='utf-8')
     before = dict(app.values)
     opened = []
     monkeypatch.setattr(controls, 'os', SimpleNamespace(name=platform, startfile=lambda path: opened.append(path)))
@@ -168,7 +168,7 @@ def test_config_folder_uses_active_override_without_saving_or_reading_secrets(st
     assert app.values == before
     assert config.exists() is existing_file
     if existing_file:
-        assert config.read_text() == 'INFINI_PRIVATE_TOKEN=DO-NOT-DISCLOSE\n'
+        assert config.read_text() == '# infini-config-format: json-string-v1\nINFINI_PRIVATE_TOKEN=DO-NOT-DISCLOSE\n'
     assert 'DO-NOT-DISCLOSE' not in json.dumps(result)
     assert controller.snapshot()['configPath'] == str(config)
 
@@ -208,7 +208,7 @@ def test_config_folder_http_action_reaches_active_controller_without_path_author
         queued = json.load(response)
     assert queued['ok'] is True and not opened
     controller.tick()
-    assert controller.action_results[queued['id']]['status'] == 'succeeded'
+    assert controller.app.actions.results[queued['id']]['status'] == 'succeeded'
     assert opened == [config.parent] and not config.exists()
 
 
@@ -227,7 +227,7 @@ def test_rejected_cross_tab_launch_preserves_first_guarded_launch(studio, monkey
     from infini_local.desktop.settings_interactions import saved_config_revision
 
     app, controller, _server, config = studio
-    config.write_text('INFINI_PROMPT_STYLE=original\n', encoding='utf-8')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_PROMPT_STYLE=original\n'), encoding='utf-8')
     revision = saved_config_revision(config)
     hold = held_gui_call(app, '_fetch_health_snapshot', ConnectionRefusedError())
     launches = []
@@ -266,7 +266,7 @@ def test_rejected_cross_tab_launch_preserves_first_guarded_launch(studio, monkey
 @pytest.mark.parametrize('confirm', [None, False, 'true', 1])
 def test_unconfirmed_force_restart_cannot_adopt_browser_draft(studio, monkeypatch, confirm):
     app, controller, _server, config = studio
-    config.write_text('INFINI_DISK_EXTENSION=latest on disk\n', encoding='utf-8')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_DISK_EXTENSION=latest on disk\n'), encoding='utf-8')
     app.values['INFINI_DISK_EXTENSION'] = 'cached value'
     app.values['INFINI_REMOVED_EXTENSION'] = 'retained only in controller'
     before = (dict(app.values), app.preset, app.lan_enabled,
@@ -277,8 +277,8 @@ def test_unconfirmed_force_restart_cannot_adopt_browser_draft(studio, monkeypatc
                 extra={'confirm': confirm, 'lanEnabled': not app.lan_enabled})
     assert (app.values, app.preset, app.lan_enabled,
             app._profile_baseline, app._profile_baseline_label, config.read_bytes()) == before
-    assert controller.last_action['status'] == 'failed'
-    assert not controller.last_action.get('saved') and not app._gui_tasks
+    assert controller.app.actions.last_action['status'] == 'failed'
+    assert not controller.app.actions.last_action.get('saved') and not app.actions.tasks
 
 
 @pytest.mark.parametrize('action', ['start', 'forceRestart'])
@@ -287,7 +287,7 @@ def test_async_launch_failure_acknowledges_saved_settings_and_allows_retry(studi
     from infini_local.desktop.settings_interactions import saved_config_revision
 
     app, controller, _server, config = studio
-    config.write_text('INFINI_PROMPT_STYLE=original\n', encoding='utf-8')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_PROMPT_STYLE=original\n'), encoding='utf-8')
     original_revision = saved_config_revision(config)
     submitted = {'INFINI_PROMPT_STYLE': 'submitted draft', 'INFINI_PRIVATE_UNKNOWN': 'retained value',
                  'INFINI_OPENAI_COMPAT_API_KEY': 'dummy-new-key'}
@@ -303,7 +303,7 @@ def test_async_launch_failure_acknowledges_saved_settings_and_allows_retry(studi
     app.drain_until(lambda: result['status'] != 'running')
     assert result['status'] == 'failed'
     assert result['ok'] is False and result['saved'] is True
-    assert controller.notifications[-1]['level'] == 'error'
+    assert controller.app.actions.notifications[-1]['level'] == 'error'
     assert 'сохранены в config.env' in result['message'] and 'server.py' in result['message']
     assert 'DO-NOT-EXPOSE' not in result['message']
     saved = parse_env(config)
@@ -326,7 +326,7 @@ def test_async_launch_failure_acknowledges_saved_settings_and_allows_retry(studi
 @pytest.mark.parametrize('failure', ['guard', 'save'])
 def test_start_failure_before_persistence_does_not_acknowledge_draft(studio, monkeypatch, failure):
     app, controller, _server, config = studio
-    original = 'INFINI_PROMPT_STYLE=original\n'
+    original = ('# infini-config-format: json-string-v1\nINFINI_PROMPT_STYLE=original\n')
     config.write_text(original, encoding='utf-8')
     if failure == 'guard':
         app._fetch_health_snapshot = lambda **kwargs: {'ok': True, 'serverRoot': '/foreign', 'pid': 123}
@@ -383,7 +383,7 @@ def test_desktop_launcher_opens_browser_studio(monkeypatch):
 
 def test_config_viewer_masks_parser_equivalent_whitespace_and_retained_keys(studio):
     _app, controller, _server, config = studio
-    config.write_text('  INFINI_OPENAI_COMPAT_API_KEY = spaced-secret\nCUSTOM_PASSWORD = other-secret\nINFINI_LLM_MAX_TOKENS=123\n', encoding='utf-8')
+    config.write_text(('# infini-config-format: json-string-v1\n  INFINI_OPENAI_COMPAT_API_KEY = spaced-secret\nCUSTOM_PASSWORD = other-secret\nINFINI_LLM_MAX_TOKENS=123\n'), encoding='utf-8')
     content = command(controller, 'openConfig')['result']['content']
     assert 'spaced-secret' not in content
     assert 'other-secret' not in content
@@ -393,15 +393,15 @@ def test_config_viewer_masks_parser_equivalent_whitespace_and_retained_keys(stud
 def test_stale_save_rejected_before_mutating_shared_state(studio):
     app, controller, _server, config = studio
     from infini_local.desktop.settings_interactions import saved_config_revision
-    config.write_text('INFINI_PROMPT_STYLE=original\n')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_PROMPT_STYLE=original\n'))
     baseline = saved_config_revision(config)
     app.values['INFINI_PROMPT_STYLE'] = 'controller-original'
-    config.write_text('INFINI_PROMPT_STYLE=other-tab-save\n')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_PROMPT_STYLE=other-tab-save\n'))
     with pytest.raises(ValueError, match='другой вкладке'):
         command(controller, 'save', values={'INFINI_PROMPT_STYLE': 'stale-tab'}, extra={'savedRevision': baseline})
     assert app.values['INFINI_PROMPT_STYLE'] == 'controller-original'
-    assert config.read_text() == 'INFINI_PROMPT_STYLE=other-tab-save\n'
-    assert controller.action_results['command']['status'] == 'failed'
+    assert config.read_text() == '# infini-config-format: json-string-v1\nINFINI_PROMPT_STYLE=other-tab-save\n'
+    assert controller.app.actions.results['command']['status'] == 'failed'
 
 
 @pytest.mark.parametrize('action', ['save', 'start', 'forceRestart'])
@@ -411,7 +411,7 @@ def test_persistence_does_not_resurrect_removed_retained_keys(studio, monkeypatc
     from infini_local.desktop.settings_interactions import saved_config_revision
 
     app, controller, _server, config = studio
-    config.write_text('INFINI_KEEP=saved value\n', encoding='utf-8')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_KEEP=saved value\n'), encoding='utf-8')
     app.values.update(INFINI_KEEP='old value', INFINI_REMOVED='stale removed value')
     app.values = {'INFINI_REMOVED': 'stale removed value'}
     values = parse_env(config)
@@ -443,7 +443,7 @@ def test_partial_save_keeps_current_disk_retained_keys(studio):
     from infini_local.desktop.settings_env import parse_env
 
     app, controller, _server, config = studio
-    config.write_text('INFINI_KEEP=current disk value\n', encoding='utf-8')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_KEEP=current disk value\n'), encoding='utf-8')
     app.values.update(INFINI_KEEP='stale adapter value', INFINI_REMOVED='stale removed value')
     app.values = {'INFINI_REMOVED': 'stale removed value'}
     result = command(controller, 'save', values={'INFINI_PROMPT_STYLE': 'edited'})
@@ -457,11 +457,11 @@ def test_diagnostic_draft_does_not_mutate_other_tabs_launch_settings(studio):
     app.values['INFINI_PROMPT_STYLE'] = 'shared-draft'
     app.values['INFINI_IMAGE_BACKEND'] = 'off'
     app.values['INFINI_LLM_PROVIDER'] = 'local'
-    config.write_text('INFINI_PROMPT_STYLE=saved\n')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_PROMPT_STYLE=saved\n'))
     command(controller, 'validate', values={'INFINI_PROMPT_STYLE': 'other-tab', 'INFINI_PRIVATE_EXTENSION': 'temp'})
     assert app.values['INFINI_PROMPT_STYLE'] == 'shared-draft'
     assert 'INFINI_PRIVATE_EXTENSION' not in app.values
-    assert config.read_text() == 'INFINI_PROMPT_STYLE=saved\n'
+    assert config.read_text() == '# infini-config-format: json-string-v1\nINFINI_PROMPT_STYLE=saved\n'
     command(controller, 'cancelTrace', 'cancel', values={'INFINI_PROMPT_STYLE': 'unrelated'})
     assert app.values['INFINI_PROMPT_STYLE'] == 'shared-draft'
 
@@ -522,17 +522,17 @@ def test_action_receipts_bounded_without_overwriting_earlier_results(studio):
     app.values['INFINI_LLM_PROVIDER'] = 'local'
     for index in range(140):
         command(controller, 'validate', str(index))
-    assert len(controller.action_results) == 128
-    assert '139' in controller.action_results
-    assert '12' in controller.action_results
-    assert len(controller.notifications) == 64
+    assert len(controller.app.actions.results) == 128
+    assert '139' in controller.app.actions.results
+    assert '12' in controller.app.actions.results
+    assert len(controller.app.actions.notifications) == 64
 
 
 def test_guarded_start_rechecks_saved_revision_before_launch(studio, monkeypatch):
     import threading
     from infini_local.desktop.settings_interactions import saved_config_revision
     app, controller, _server, config = studio
-    config.write_text('INFINI_PROMPT_STYLE=original\n')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_PROMPT_STYLE=original\n'))
     revision = saved_config_revision(config)
     entered, release = threading.Event(), threading.Event()
     def held(**kwargs):
@@ -544,19 +544,19 @@ def test_guarded_start_rechecks_saved_revision_before_launch(studio, monkeypatch
     monkeypatch.setattr(controls.subprocess, 'Popen', lambda *args, **kwargs: launches.append(True))
     result = command(controller, 'start', extra={'savedRevision': revision})
     assert entered.wait(1)
-    config.write_text('INFINI_PROMPT_STYLE=external-save\n')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_PROMPT_STYLE=external-save\n'))
     release.set()
     app.drain_until(lambda: result['status'] != 'running')
     assert result['status'] == 'failed'
     assert not launches
-    assert config.read_text() == 'INFINI_PROMPT_STYLE=external-save\n'
+    assert config.read_text() == '# infini-config-format: json-string-v1\nINFINI_PROMPT_STYLE=external-save\n'
 
 
 def test_other_tab_diagnostic_draft_cannot_change_pending_start(studio, monkeypatch):
     import threading
     from infini_local.desktop.settings_interactions import saved_config_revision
     app, controller, _server, config = studio
-    config.write_text('INFINI_PROMPT_STYLE=original\n')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_PROMPT_STYLE=original\n'))
     app.values['INFINI_PROMPT_STYLE'] = 'original'
     app.values['INFINI_IMAGE_BACKEND'] = 'off'
     app.values['INFINI_LLM_PROVIDER'] = 'local'
@@ -597,7 +597,7 @@ def test_fixed_offline_guide_route_requires_session(studio):
 
 def test_health_uses_saved_target_not_submitted_or_hidden_draft(studio):
     app, controller, _server, config = studio
-    config.write_text('INFINI_HOST=127.0.0.1\nINFINI_PORT=5055\n')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_HOST=127.0.0.1\nINFINI_PORT=5055\n'))
     app.values['INFINI_PORT'] = '6066'
     seen = []
     def health(**kwargs):
@@ -630,7 +630,7 @@ def test_transform_receipt_captures_lan_and_restores_controller(studio):
 
 def test_stop_targets_owned_launch_after_saved_port_changes(studio):
     app, controller, _server, config = studio
-    config.write_text('INFINI_HOST=127.0.0.1\nINFINI_PORT=6066\n')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_HOST=127.0.0.1\nINFINI_PORT=6066\n'))
     app.values['INFINI_PORT'] = '7077'
     app.proc = SimpleNamespace(pid=123456, poll=lambda: None)
     app._owned_launch_settings = {'INFINI_HOST': '127.0.0.1', 'INFINI_PORT': '5055'}
@@ -721,3 +721,88 @@ def test_inactive_extra_arguments_setter_updates_plain_state(studio):
     app.values['INFINI_SDCPP_SERVER_EXTRA_ARGS'] = '--old'
     app.update_values({'INFINI_SDCPP_SERVER_EXTRA_ARGS': '--new value'})
     assert app.values['INFINI_SDCPP_SERVER_EXTRA_ARGS'] == '--new value'
+
+
+def test_command_state_survives_replacing_http_adapter(studio, held_gui_call):
+    app, controller, server, _config = studio
+    hold = held_gui_call(app, '_fetch_trace_snapshot', {'events': []})
+    receipt = command(controller, 'trace', 'pending-trace')
+    hold.assert_pending()
+    app.actions.notify('info', 'Existing notice', 'Keep this notice')
+    replacement = StudioController(app, server)
+    snapshot = replacement.snapshot()
+    assert snapshot['actionResults'] == [receipt]
+    assert snapshot['notifications'][-1]['message'] == 'Keep this notice'
+    hold.release.set()
+    app.drain_until(lambda: receipt['status'] != 'running')
+    assert receipt['status'] == 'succeeded'
+    assert replacement.snapshot()['lastAction'] == receipt
+    assert not app.actions.pending_ids
+
+
+def test_late_completion_cannot_rewrite_cancelled_receipt(studio, held_gui_call):
+    import copy
+    app, controller, _server, _config = studio
+    hold = held_gui_call(app, '_fetch_trace_snapshot', {'events': []})
+    receipt = command(controller, 'trace', 'cancelled-trace')
+    hold.assert_pending()
+    app.on_close()
+    terminal = copy.deepcopy(receipt)
+    assert terminal['status'] == 'cancelled'
+    revision = app.actions.revision
+    hold.release.set()
+    assert hold.finished.wait(1)
+    # A terminal result is immutable even if a stale completion is delivered.
+    app.actions.finish('cancelled-trace', True, 'stale success', result={'private': 'late'})
+    assert receipt == terminal
+    assert app.actions.revision == revision
+    assert not app.actions.pending_ids
+
+
+def test_saved_receipt_read_failure_is_terminal_failure_not_success(studio, monkeypatch):
+    from infini_local.desktop import settings_env
+    app, controller, _server, config = studio
+    save = app.save
+    def fail_read(_path):
+        raise OSError('Saved revision read failed')
+    def save_then_fail_read():
+        save()
+        monkeypatch.setattr(settings_env, 'parse_env', fail_read)
+    monkeypatch.setattr(app, 'save', save_then_fail_read)
+    with pytest.raises(OSError, match='Saved revision read failed'):
+        controller.apply({'id': 'save-with-unreadable-receipt', 'action': 'save', 'values': {}, 'extra': {}})
+    receipt = app.actions.results['save-with-unreadable-receipt']
+    assert config.exists(), 'The save happened; its baseline could not be certified'
+    assert receipt['status'] == 'failed' and receipt['ok'] is False
+    assert 'savedValues' not in receipt and 'savedRevision' not in receipt
+    assert not app.actions.pending_ids
+
+
+@pytest.mark.parametrize('coalesced', [False, True])
+def test_worker_start_failure_retires_command_and_allows_retry(studio, held_gui_call, monkeypatch, coalesced):
+    import threading
+    app, controller, _server, _config = studio
+    hold = held_gui_call(app, '_fetch_trace_snapshot', {'events': []})
+    if coalesced:
+        first = command(controller, 'trace', 'first-worker')
+        hold.assert_pending()
+    original_start = threading.Thread.start
+    def fail_start(thread):
+        if thread.name == 'settings-trace':
+            raise RuntimeError('cannot start thread: private diagnostic')
+        return original_start(thread)
+    monkeypatch.setattr(threading.Thread, 'start', fail_start)
+    failed = command(controller, 'trace', 'failed-worker')
+    if coalesced:
+        hold.release.set()
+        app.drain_until(lambda: failed['status'] != 'running')
+        assert first['status'] == 'cancelled'
+    assert failed['status'] == 'failed' and failed['ok'] is False
+    assert 'private diagnostic' not in failed['message']
+    assert not app.actions.tasks and not app.actions.pending_ids
+    monkeypatch.setattr(threading.Thread, 'start', original_start)
+    hold.release.set()
+    retry = command(controller, 'trace', 'retry-worker')
+    app.drain_until(lambda: retry['status'] != 'running')
+    assert retry['status'] == 'succeeded'
+    assert not app.actions.tasks and not app.actions.pending_ids

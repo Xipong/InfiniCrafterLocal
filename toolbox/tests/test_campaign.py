@@ -25,7 +25,7 @@ def test_real_campaign_entry_records_synthetic_sender_without_network_or_live_in
                INFINI_LLM_PROVIDER='openai_compat', INFINI_OPENAI_COMPAT_MODEL='qa-model',
                INFINI_OPENAI_COMPAT_BASE_URL='https://example.invalid/v1/', INFINI_LLM_API_MODE='chat_completions',
                INFINI_LLM_RESPONSE_FORMAT='json_object', INFINI_LLM_MAX_TOKENS='512', INFINI_LLM_TEMPERATURE='0.5',
-               INFINI_LLM_FALLBACK_NETWORK_FAILS='1', INFINI_VISUAL_DIRECTOR_TEMPERATURE='0.5')
+               INFINI_LLM_NETWORK_ATTEMPTS='1', INFINI_VISUAL_DIRECTOR_TEMPERATURE='0.5')
     script = textwrap.dedent('''
         import json, runpy, subprocess, sys
         from pathlib import Path

@@ -11,3 +11,4 @@ ROOT = Path(__file__).resolve().parents[2]
 _data_dir = env_str("INFINI_DATA_DIR", "")
 STATE_ROOT = Path(_data_dir).expanduser().resolve() if _data_dir else ROOT
 CONFIG_PATH = STATE_ROOT / "config.env"
+EXAMPLE_PATH = ROOT / "config.example.env"

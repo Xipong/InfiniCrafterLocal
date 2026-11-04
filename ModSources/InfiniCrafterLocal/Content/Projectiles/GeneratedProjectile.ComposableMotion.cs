@@ -225,8 +225,15 @@ public sealed partial class GeneratedProjectile
                     ? ResolveMotionNpc(seek.SearchRangeTiles!.Value * 16f, seek.RequireLineOfSight == true)?.Center : null,
                 _ => null,
             };
-            if (target.HasValue) SeekVelocity(target.Value, seek.MaxSpeed, seek.VelocityLerpPerUpdate,
-                seek.LimitSpeedToDistance, seek.MinimumSpeed ?? 0f);
+            if (target.HasValue) {
+                Vector2 previousVelocity = Projectile.velocity;
+                SeekVelocity(target.Value, seek.MaxSpeed, seek.VelocityLerpPerUpdate,
+                    seek.LimitSpeedToDistance, seek.MinimumSpeed ?? 0f);
+                // NPC selection is owner-only. Peers need the resulting native
+                // velocity, just as they do for the angular homing modifier.
+                if (seek.Target == "nearest_npc" && Projectile.velocity != previousVelocity)
+                    Projectile.netUpdate = true;
+            }
         }
         // Fixed new stage order: seek -> signed gravity -> retention -> sine ->
         // PR148 turn/speed/angular homing (caller) -> rotation/presentation.

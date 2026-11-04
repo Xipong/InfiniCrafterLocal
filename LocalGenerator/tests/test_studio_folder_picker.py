@@ -11,7 +11,7 @@ def picker_studio(tmp_path, monkeypatch):
     from infini_local.desktop.settings_controller import SettingsController
     from infini_local.desktop.web_studio import StudioController, StudioServer
     config = tmp_path / 'override config.env'
-    config.write_text('INFINI_USE_LLM=0\nINFINI_IMAGE_BACKEND=off\n', encoding='utf-8')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_USE_LLM=0\nINFINI_IMAGE_BACKEND=off\n'), encoding='utf-8')
     app = SettingsController(config_path=config)
     server = StudioServer(Path(__file__).parents[1] / 'infini_local/desktop/webui')
     server.file_root = tmp_path
@@ -30,7 +30,7 @@ def picker_studio(tmp_path, monkeypatch):
 
 def finish_picker(app, callbacks):
     # Synchronize on the actual worker delivery, not an arbitrary sleep.
-    task = app._gui_tasks['native-folder-picker']
+    task = app.actions.tasks['native-folder-picker']
     delivered = task['results'].get(timeout=5)
     task['results'].put_nowait(delivered)
     callbacks.pop(0)()
@@ -43,7 +43,7 @@ def test_native_folder_action_returns_only_selected_field_and_preserves_config(p
                       'values': {'INFINI_LLM_MAX_TOKENS': '999'},
                       'extra': {'key': 'INFINI_SDCPP_ROCM_COMPAT_ROOT', 'path': str(chosen.parent)}})
     finish_picker(app, callbacks)
-    receipt = controller.action_results['folder-1']
+    receipt = controller.app.actions.results['folder-1']
     assert receipt['status'] == 'succeeded'
     assert receipt['result'] == {'kind': 'folderSelection', 'key': 'INFINI_SDCPP_ROCM_COMPAT_ROOT', 'path': str(chosen)}
     assert calls == [str(chosen.parent)]
@@ -62,7 +62,7 @@ def test_cancel_and_failed_selection_leave_draft_and_disk_untouched(picker_studi
     controller.apply({'id': 'failure', 'action': 'browse', 'values': {'INFINI_PORT': '7'},
                       'extra': {'key': 'INFINI_SDCPP_ROCM_COMPAT_ROOT', 'path': ''}})
     finish_picker(app, callbacks)
-    receipt = controller.action_results['failure']
+    receipt = controller.app.actions.results['failure']
     assert receipt['status'] == ('cancelled' if outcome == 'cancel' else 'failed')
     assert 'result' not in receipt and 'private OS detail' not in receipt['message']
     assert app.values == values and config.read_bytes() == before
@@ -84,14 +84,14 @@ def test_busy_dialog_is_not_duplicated_and_missing_initial_uses_existing_parent(
         with pytest.raises(ValueError, match='уже открыто'):
             controller.apply({**command, 'id': 'duplicate'})
         assert calls == [str(chosen)]
-        assert controller.action_results['first']['status'] == 'running'
+        assert controller.app.actions.results['first']['status'] == 'running'
     finally:
         release.set(); finish_picker(app, callbacks)
-    assert controller.action_results['first']['status'] == 'succeeded'
-    assert controller.action_results['duplicate']['status'] == 'failed'
+    assert controller.app.actions.results['first']['status'] == 'succeeded'
+    assert controller.app.actions.results['duplicate']['status'] == 'failed'
     controller.apply({**command, 'id': 'repeat'})
     finish_picker(app, callbacks)
-    assert controller.action_results['repeat']['status'] == 'succeeded' and len(calls) == 2
+    assert controller.app.actions.results['repeat']['status'] == 'succeeded' and len(calls) == 2
 
 
 @pytest.mark.parametrize('extra', [
@@ -103,7 +103,7 @@ def test_native_picker_rejects_unregistered_fields_and_network_initial_before_os
     before = dict(app.values)
     with pytest.raises(ValueError):
         controller.apply({'id': 'invalid', 'action': 'browse', 'values': {'INFINI_PORT': '7'}, 'extra': extra})
-    assert calls == [] and not app._gui_tasks and app.values == before
+    assert calls == [] and not app.actions.tasks and app.values == before
 
 
 def test_non_windows_keeps_browser_picker_and_does_not_start_os_worker(picker_studio):
@@ -112,7 +112,7 @@ def test_non_windows_keeps_browser_picker_and_does_not_start_os_worker(picker_st
     with pytest.raises(ValueError, match='Windows'):
         controller.apply({'id': 'unsupported', 'action': 'browse', 'values': {},
                           'extra': {'key': 'INFINI_SDCPP_ROCM_COMPAT_ROOT'}})
-    assert calls == [] and not app._gui_tasks
+    assert calls == [] and not app.actions.tasks
 
 
 def test_shutdown_never_applies_late_worker_selection(picker_studio):
@@ -132,11 +132,11 @@ def test_shutdown_never_applies_late_worker_selection(picker_studio):
         assert app._gui_closed
     finally:
         release.set()
-        task = app._gui_tasks.get('native-folder-picker')
+        task = app.actions.tasks.get('native-folder-picker')
         if task is not None:
             task['results'].get(timeout=5)
         for callback in callbacks: callback()
-    assert controller.action_results['closing']['status'] != 'succeeded'
+    assert controller.app.actions.results['closing']['status'] != 'succeeded'
     assert config.read_bytes() == before
 
 
@@ -158,5 +158,5 @@ def test_folder_action_requires_session_token_before_queueing_os_request(picker_
     with opener.open(request(server.token), timeout=3) as response:
         queued = json.load(response)
     controller.apply(server.commands.get(timeout=3)); finish_picker(app, callbacks)
-    assert controller.action_results[queued['id']]['result']['path'] == str(chosen)
+    assert controller.app.actions.results[queued['id']]['result']['path'] == str(chosen)
     assert calls == [str(chosen)]

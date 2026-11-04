@@ -112,7 +112,8 @@ def test_serialized_author_all_projectile_surfaces_keep_exact_observations(monke
         parent = {"name": "fixture", "fingerprint": source}
     elif origin == "runtime_dump":
         parent = {"name": "fixture", "shoot": 42, "ammoRaw": ammo, "effectiveProjectileRaw": effective}
-        monkeypatch.setattr(context, "runtime_projectile_lookup", lambda projectile_id: copy.deepcopy(direct))
+        monkeypatch.setattr(context.runtime_dump_service.RuntimeDumpSnapshot, "lookup",
+                            lambda self, kind, identity, **kwargs: copy.deepcopy(direct) if kind == "projectile" else {})
     else:
         parent = {"name": "fixture", **source}
     before = copy.deepcopy(parent)

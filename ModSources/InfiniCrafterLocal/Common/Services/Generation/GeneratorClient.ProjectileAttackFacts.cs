@@ -30,16 +30,85 @@ public sealed partial class GeneratorClient
         var refusal = new JsonObject { ["source"] = "read_only_native_attack_source", ["coverage"] = new JsonObject
             { ["unresolved"] = "native_module_certificate_unavailable_or_nonvanilla_identity" } };
         if (!moduleVerified || projectile.ModProjectile is not null || projectile.type <= ProjectileID.None || projectile.type >= ProjectileID.Count) return refusal;
-        JsonObject result = JsonNode.Parse(ProjectileAttackSource(projectile.type, projectile.aiStyle).Source)!.AsObject();
-        // Literal admission observations are not geometry or guaranteed hits.
-        result["admission"] = new JsonObject { ["ownerHitCheck"] = projectile.ownerHitCheck,
+        int type = projectile.type, style = projectile.aiStyle;
+        var admission = new JsonObject { ["ownerHitCheck"] = projectile.ownerHitCheck,
             ["ownerHitCheckDistance"] = projectile.ownerHitCheckDistance, ["usesOwnerMeleeHitCD"] = projectile.usesOwnerMeleeHitCD,
             ["scope"] = "current_projectile_fields; native_target_immunity_and_mod_hook_admission_unresolved" };
+        JsonObject Analyze()
+        {
+            JsonObject result = JsonNode.Parse(ProjectileAttackSource(type, style).Source)!.AsObject();
+            result["admission"] = admission.DeepClone();
+            return result;
+        }
+        return currentParentAnalysis is { } analysis ? analysis.Defer(Analyze) : Analyze();
+    }
+
+    private static readonly object AttackProgramCacheGate = new();
+    private static long attackProgramCharacters;
+    private static readonly HashSet<(int Type, int Style)> countedAttackPrograms = new();
+    private static ProjectileAttackCapture ProjectileAttackSource(int type, int style)
+    {
+        Lazy<ProjectileAttackCapture> program;
+        ProjectileAttackCapture result;
+        while (true)
+        {
+            lock (AttackProgramCacheGate)
+            {
+                if (!AttackSourcePrograms.TryGetValue((type, style), out program!))
+                {
+                    // Bound native identity JSON as well as method syntax. Eviction
+                    // only causes recomputation, never loss of source observations.
+                    if (AttackSourcePrograms.Count >= 256 || attackProgramCharacters >= 16 * 1024 * 1024)
+                    { AttackSourcePrograms.Clear(); countedAttackPrograms.Clear(); attackProgramCharacters = 0; }
+                    program = new Lazy<ProjectileAttackCapture>(() =>
+                    {
+                        var complete = BuildProjectileAttackSource(type, style);
+                        // Projection refusal handlers may have caught cancellation.
+                        // Never retain their partial result as a completed program.
+                        currentParentAnalysis?.ThrowIfCancelled();
+                        return complete;
+                    });
+                    AttackSourcePrograms[(type, style)] = program;
+                }
+            }
+            try { result = program.Value; break; }
+            catch (System.OperationCanceledException)
+            {
+                lock (AttackProgramCacheGate)
+                    if (AttackSourcePrograms.TryGetValue((type, style), out var failed) && ReferenceEquals(failed, program))
+                        AttackSourcePrograms.TryRemove((type, style), out _);
+                // A concurrent caller may have waited on another craft's Lazy.
+                // Retry with its own live context; the retired owner still exits.
+                currentParentAnalysis?.ThrowIfCancelled();
+            }
+        }
+        lock (AttackProgramCacheGate)
+        {
+            if (AttackSourcePrograms.TryGetValue((type, style), out var retained) && ReferenceEquals(retained, program)
+                && countedAttackPrograms.Add((type, style)))
+            {
+                long size = result.Source.Length + (long)result.Spawns.Length;
+                if (size > 16 * 1024 * 1024)
+                { AttackSourcePrograms.TryRemove((type, style), out _); countedAttackPrograms.Remove((type, style)); }
+                else
+                {
+                    if (attackProgramCharacters + size > 16 * 1024 * 1024)
+                    {
+                        AttackSourcePrograms.Clear(); countedAttackPrograms.Clear(); attackProgramCharacters = 0;
+                        AttackSourcePrograms[(type, style)] = program; countedAttackPrograms.Add((type, style));
+                    }
+                    attackProgramCharacters += size;
+                }
+            }
+        }
         return result;
     }
 
-    private static ProjectileAttackCapture ProjectileAttackSource(int type, int style)
-        => AttackSourcePrograms.GetOrAdd((type, style), key => new Lazy<ProjectileAttackCapture>(() => BuildProjectileAttackSource(key.Type, key.Style))).Value;
+    private static void ClearProjectileAttackCaches()
+    {
+        lock (AttackProgramCacheGate)
+        { AttackSourcePrograms.Clear(); countedAttackPrograms.Clear(); attackProgramCharacters = 0; AttackSourceCode.Clear(); }
+    }
 
     private static JsonArray ProjectileSpawnReferences(Projectile projectile)
         => projectile.ModProjectile is null
@@ -66,7 +135,7 @@ public sealed partial class GeneratorClient
             {
                 var next = slice is null ? null : AttackCode(method).Zip(AttackCode(method).Skip(1), (a, b) => (a.Offset, b.Offset))
                     .ToDictionary(p => p.Item1, p => p.Item2);
-                var body = new ParentSourceMethod(method, slice ?? AttackCode(method), next);
+                var body = slice is null ? ReadCompleteSourceMethod(method) : new ParentSourceMethod(method, slice, next);
                 JsonObject? specialized = null;
                 AttackSourceObservation? selectedObservation = null;
                 string? selectionFailure = null;
@@ -177,7 +246,7 @@ public sealed partial class GeneratorClient
         {
             try
             {
-                var body = new ParentSourceMethod(drawRoot, AttackCode(drawRoot));
+                var body = ReadCompleteSourceMethod(drawRoot);
                 var selected = SelectedProjectileDispatch(body, type, style).ToArray();
                 var helpers = selected.Select(v => v.Operand).OfType<MethodInfo>().Where(m => m.DeclaringType == typeof(Main)
                     && m.GetParameters().Any(p => p.ParameterType == typeof(Projectile)) && m.GetMethodBody() is not null).Distinct().ToArray();
@@ -205,7 +274,7 @@ public sealed partial class GeneratorClient
                     + " Assumes captured Projectile.type/aiStyle at UpdatePosition entry; enclosing caller identity preservation is not proved.";
             if (program["identitySelected"] is JsonObject selected && program["predicates"] is JsonArray)
             {
-                try { selected["identityAlternatives"] = DescribeIdentityAlternatives(new ParentSourceMethod(integration, AttackCode(integration)), program, selected); }
+                try { selected["identityAlternatives"] = DescribeIdentityAlternatives(ReadCompleteSourceMethod(integration), program, selected); }
                 catch (Exception error) when (error is not OutOfMemoryException)
                 { selected["identityAlternatives"] = new JsonObject { ["coverage"] = "unknown", ["unresolved"] = error is NotSupportedException ? error.Message : error.GetType().Name }; }
             }

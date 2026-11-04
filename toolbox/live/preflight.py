@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from argparse import Namespace
 import hashlib
+import importlib.util
 import math
 import os
 from pathlib import Path
@@ -10,7 +11,7 @@ import subprocess
 from urllib.parse import urlsplit
 from typing import Any
 
-from toolbox.infini_toolbox import discover_project, read_config_env
+from toolbox.infini_toolbox import BASE_ROOT, discover_project, read_config_env
 from toolbox.live.panels import load_case_input_payloads, load_selection
 
 
@@ -23,6 +24,15 @@ def read_environment(project: Path, config: Path | None) -> dict[str, str]:
     if config or (not skip_default and path.exists()):
         for key, value in read_config_env(path).items():
             env.setdefault(key, value)
+    # Load the same pure settings validator as the generator without importing
+    # runtime bootstrap or exposing configured secrets in an offline preflight.
+    source = BASE_ROOT / 'LocalGenerator/infini_local/core/config_validation.py'
+    spec = importlib.util.spec_from_file_location('_toolbox_config_validation', source)
+    if spec is None or spec.loader is None:
+        raise RuntimeError('Cannot load canonical config validation')
+    validator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(validator)
+    validator.reject_retired_config(env)
     return env
 
 
@@ -94,9 +104,7 @@ def prepare(args: Namespace) -> tuple[dict[str, Any], dict[str, str]]:
     llm_enabled = env.get('INFINI_USE_LLM', '').strip().lower() in {'1', 'true', 'yes', 'on'}
     if args.run and not llm_enabled:
         raise ValueError('--run requires INFINI_USE_LLM=1 in the private environment')
-    fallback = any(env.get(key, '').strip() for key in (
-        'INFINI_LLM_FALLBACK_PROVIDER', 'INFINI_LLM_FALLBACK_MODEL', 'INFINI_LLM_REAUTHOR_MODEL',
-    )) or any(env.get(f'INFINI_LLM_POOL_{i}_ENABLED', '0').strip() == '1' for i in (2, 3, 4))
+    fallback = any(env.get(f'INFINI_LLM_POOL_{i}_ENABLED', '0').strip() == '1' for i in (2, 3, 4))
     if (args.run or args.require_no_fallback) and fallback:
         raise ValueError('fallback/model hopping is configured')
     image_settings = None
@@ -120,8 +128,8 @@ def prepare(args: Namespace) -> tuple[dict[str, Any], dict[str, str]]:
             visual_effort = env.get('INFINI_CODEX_VISUAL_REASONING', 'inherit').strip()
             if visual_effort not in {'inherit', args.expected_reasoning_effort}:
                 raise ValueError('Codex Visual reasoning override differs from frozen effort')
-            if int(env.get('INFINI_LLM_FALLBACK_NETWORK_FAILS', '2')) != 1:
-                raise ValueError('real-images requires INFINI_LLM_FALLBACK_NETWORK_FAILS=1; no hidden text retry')
+            if int(env.get('INFINI_LLM_NETWORK_ATTEMPTS', '2')) != 1:
+                raise ValueError('real-images requires INFINI_LLM_NETWORK_ATTEMPTS=1; no hidden text retry')
             if int(env.get('INFINI_SPRITE_RETRIES', '2')) != args.image_retries:
                 raise ValueError('configured image retries differ from explicit --image-retries')
             if args.parallel_crafts != 1:

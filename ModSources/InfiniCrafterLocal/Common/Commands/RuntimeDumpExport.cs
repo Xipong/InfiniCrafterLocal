@@ -7,11 +7,13 @@ using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using InfiniCrafterLocal.Common.Services;
 
 namespace InfiniCrafterLocal.Common.Commands;
 
-// Main-thread producer, bounded pure-data handoff, file-only consumer. Never
-// put SetDefaults, native hooks, Main, ModContent or GPU access in Task.Run.
+// Main-thread producer, bounded snapshot handoff, source-analysis/file consumer.
+// Live dependency snapshots return through ParentAnalysis.Pump; workers never
+// execute SetDefaults/native hooks or access Main, ModContent or GPU state.
 internal sealed class RuntimeDumpExport
 {
     internal const int QueueCapacity = 4;
@@ -25,7 +27,7 @@ internal sealed class RuntimeDumpExport
     private readonly CancellationTokenSource cancellation = new();
     private int item = 1, projectile = 1, stage;
     private Record? pending;
-    private sealed record Record(JsonObject? Snapshot, bool EndStage);
+    private sealed record Record(JsonObject? Snapshot, bool EndStage, GeneratorClient.ParentAnalysis? Analysis = null);
     internal Task<JsonObject> Completion { get; }
     internal int CapturedItems => item - 1;
     internal int CapturedProjectiles => projectile - 1;
@@ -44,18 +46,32 @@ internal sealed class RuntimeDumpExport
         CancellationToken token = cancellation.Token;
         Completion = Task.Run(() =>
         {
-            InfiniDumpCommand.CompleteDumpEnvironmentFileHashes(environment);
             void Drain(TextWriter writer)
             {
                 while (true)
                 {
                     Record row = reader.ReadAsync(token).AsTask().GetAwaiter().GetResult();
-                    token.ThrowIfCancellationRequested();
-                    if (row.EndStage) return;
-                    if (row.Snapshot is not null) writer.WriteLine(row.Snapshot.ToJsonString());
+                    using (row.Analysis)
+                    {
+                        token.ThrowIfCancellationRequested();
+                        if (row.EndStage) return;
+                        if (row.Snapshot is not null)
+                            writer.WriteLine((row.Analysis?.Resolve(row.Snapshot, token) ?? row.Snapshot).ToJsonString());
+                    }
                 }
             }
-            return InfiniDumpCommand.PublishSnapshot(root, Drain, Drain, environment, token);
+            try
+            {
+                InfiniDumpCommand.CompleteDumpEnvironmentFileHashes(environment);
+                return InfiniDumpCommand.PublishSnapshot(root, Drain, Drain, environment, token);
+            }
+            finally
+            {
+                cancellation.Cancel();
+                rows.Writer.TryComplete();
+                Interlocked.Exchange(ref pending, null)?.Analysis?.Dispose();
+                while (reader.TryRead(out var abandoned)) abandoned.Analysis?.Dispose();
+            }
         });
     }
 
@@ -66,40 +82,48 @@ internal sealed class RuntimeDumpExport
         var elapsed = Stopwatch.StartNew();
         for (int n = 0; n < RecordsPerUpdate && (n == 0 || elapsed.Elapsed < CaptureBudget); n++)
         {
-            if (pending is not null)
+            Record? row = Interlocked.Exchange(ref pending, null);
+            if (row is not null)
             {
-                if (!rows.Writer.TryWrite(pending)) return;
-                pending = null;
+                if (!TryWrite(row)) return;
                 if (stage == 2) { rows.Writer.TryComplete(); return; }
-                // A full queue must yield rather than block the game thread.
                 if (rows.Reader.Count >= QueueCapacity) return;
             }
-            if (rows.Reader.Count >= QueueCapacity || Completion.IsCompleted) return;
+            if (rows.Reader.Count >= QueueCapacity || Completion.IsCompleted || cancellation.IsCancellationRequested) return;
             if (stage == 0 && item < itemCount)
-                pending = new Record(Capture(item++, captureItem), false);
+                row = CaptureRecord(item++, captureItem);
             else if (stage == 1 && projectile < projectileCount)
-                pending = new Record(Capture(projectile++, captureProjectile), false);
+                row = CaptureRecord(projectile++, captureProjectile);
             else
-            { stage++; pending = new Record(null, true); }
-            if (!rows.Writer.TryWrite(pending)) return;
-            pending = null;
+            { stage++; row = new Record(null, true); }
+            if (!TryWrite(row)) return;
             if (stage == 2) { rows.Writer.TryComplete(); return; }
         }
+    }
+
+    private bool TryWrite(Record row)
+    {
+        if (rows.Writer.TryWrite(row)) return true;
+        // Publish only a finished main-thread capture. Cancellation can safely
+        // take this slot without touching an in-progress hook or snapshot.
+        Interlocked.Exchange(ref pending, row)?.Analysis?.Dispose();
+        if (cancellation.IsCancellationRequested || Completion.IsCompleted)
+            Interlocked.Exchange(ref pending, null)?.Analysis?.Dispose();
+        return false;
     }
 
     internal void Cancel()
     {
         RequireCaptureThread();
         RequestCancellation();
-        pending = null;
     }
 
-    // Mod unloading may occur on the loader thread. Cancellation never waits
-    // for the file worker or touches pending native capture state.
+    // Loader/world cancellation never waits for the capture thread or worker.
     internal void RequestCancellation()
     {
         cancellation.Cancel();
         rows.Writer.TryComplete();
+        Interlocked.Exchange(ref pending, null)?.Analysis?.Dispose();
     }
 
     private void RequireCaptureThread()
@@ -108,10 +132,18 @@ internal sealed class RuntimeDumpExport
             throw new InvalidOperationException("Runtime dump capture must stay on its originating game thread.");
     }
 
-    private static JsonObject? Capture(int type, Func<int, JsonObject?> capture)
+    private Record CaptureRecord(int type, Func<int, JsonObject?> capture)
     {
-        try { return capture(type); }
+        var analysis = new GeneratorClient.ParentAnalysis(cancellation.Token);
+        try
+        {
+            using var scope = analysis.Enter();
+            return new Record(capture(type), false, analysis);
+        }
         catch (Exception error) when (error is not OutOfMemoryException)
-        { return new JsonObject { ["type"] = type, ["unavailable"] = true, ["captureError"] = error.GetType().Name }; }
+        {
+            analysis.Dispose();
+            return new Record(new JsonObject { ["type"] = type, ["unavailable"] = true, ["captureError"] = error.GetType().Name }, false);
+        }
     }
 }

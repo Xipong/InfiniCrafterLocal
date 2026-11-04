@@ -48,8 +48,6 @@ public static class InfiniRuntimeAuthority
         return IsLocalPlayer(player.whoAmI);
     }
 
-    public static bool ShouldRunVisuals(Entity entity) => entity is not null && !IsServer;
-
     public static void SyncTeleport(Player player, Microsoft.Xna.Framework.Vector2 destination)
     {
         if (player is null) return;

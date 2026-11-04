@@ -1,105 +1,70 @@
+"""Read-only trace snapshot and HTML projection from canonical owners."""
 from __future__ import annotations
 
 import json
 import os
 import time
-from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from infini_local.web import trace_dashboard
-
-
-# AGENT MAP: debug trace snapshot payload shaping for server.py. It reads trace
-# files and status callables only; it must not run generation or mutate gameplay
-# output/cache state.
-
-FailureSummary = Callable[[], dict[str, Any]]
-ProviderName = Callable[[], str]
-PayloadCallable = Callable[[], dict[str, Any]]
-SdcppSnapshot = Callable[..., dict[str, Any]]
-TailNdjson = Callable[[Path, int], list[Any]]
-TraceClip = Callable[[Any, int | None], str]
+from infini_local.core import config_bootstrap as config, llm_config
+from infini_local.core.images import config as visual_config
+from infini_local.core.vfx import config as vfx_config
+from infini_local.pipelines import generation_debug
+from infini_local.pipelines.images.backends import sdcpp_debug_snapshot
+from infini_local.pipelines.transport.client import llm_auth_snapshot
+from infini_local.pipelines.transport.profiles import active_llm_provider
+from infini_local.storage import trace_runtime
+from infini_local.storage.trace_tools import tail_ndjson
+from infini_local.web.trace_dashboard import render_trace_snapshot_html
 
 
-def build_trace_snapshot(
-    *,
-    app_version: str,
-    root: Path,
-    config_path: Path,
-    cache_dir: Path,
-    recipe_identity_version: str,
-    world_recipes_dir: Path,
-    use_llm: bool,
-    image_backend: str,
-    visual_asset_mode: str,
-    visual_director_llm: bool,
-    vfx_llm_director_enabled: bool,
-    openrouter_model: str,
-    openai_compat_model: str,
-    lmstudio_model: str,
-    trace_prompts_enabled: bool,
-    trace_max_prompt_chars: int,
-    trace_events_tail: int,
-    prompt_trace_file: Path,
-    trace_file: Path,
-    last_combine_failure_file: Path,
-    last_combine_failure_summary: FailureSummary,
-    active_llm_provider: ProviderName,
-    llm_auth_snapshot: PayloadCallable,
-    contract_versions_payload: PayloadCallable,
-    sdcpp_debug_snapshot: SdcppSnapshot,
-    tail_ndjson: TailNdjson,
-) -> dict[str, Any]:
-    failure: Any = last_combine_failure_summary()
+def trace_snapshot() -> dict[str, Any]:
+    failure: Any = generation_debug.last_combine_failure_summary()
     try:
-        if last_combine_failure_file.exists():
-            failure = json.loads(last_combine_failure_file.read_text(encoding="utf-8"))
+        if generation_debug.LAST_COMBINE_FAILURE_FILE.exists():
+            failure = json.loads(generation_debug.LAST_COMBINE_FAILURE_FILE.read_text(encoding="utf-8"))
     except Exception:
         pass
     provider = active_llm_provider()
     auth = llm_auth_snapshot()
-    legacy_model = (openrouter_model if provider == "openrouter" else openai_compat_model
-                    if provider == "openai_compat" else lmstudio_model if provider == "local" else "")
     return {
         "ok": True,
-        "version": app_version,
+        "version": config.APP_VERSION,
         "time": int(time.time()),
-        "serverRoot": str(root),
-        "configPath": str(config_path),
+        "serverRoot": str(config.ROOT),
+        "configPath": str(config.CONFIG_PATH),
         "pid": os.getpid(),
-        "cacheDir": str(cache_dir),
+        "cacheDir": str(config.CACHE_DIR),
         "traceConfig": {
-            "tracePrompts": trace_prompts_enabled,
-            "maxPromptChars": trace_max_prompt_chars,
-            "eventsTail": trace_events_tail,
-            "promptTraceFile": str(prompt_trace_file),
-            "pipelineTraceFile": str(trace_file),
-            "eventsFile": str(cache_dir / "events.ndjson"),
+            "tracePrompts": trace_runtime.TRACE_PROMPTS_ENABLED,
+            "maxPromptChars": trace_runtime.TRACE_MAX_PROMPT_CHARS,
+            "eventsTail": trace_runtime.TRACE_EVENTS_TAIL,
+            "promptTraceFile": str(trace_runtime.PROMPT_TRACE_FILE),
+            "pipelineTraceFile": str(trace_runtime.TRACE_FILE),
+            "eventsFile": str(config.CACHE_DIR / "events.ndjson"),
         },
         "pipeline": {
-            "useLLM": use_llm,
+            "useLLM": llm_config.USE_LLM,
             "llmProvider": provider,
-            "llmModel": str(auth.get("model", legacy_model) or ""),
+            "llmModel": str(auth.get("model") or ""),
             "llmAuth": auth,
-            "imageBackend": image_backend,
-            "visualAssetMode": visual_asset_mode,
-            "visualDirectorLLM": visual_director_llm,
-            "vfxLlmDirector": vfx_llm_director_enabled,
-            "recipeIdentityVersion": recipe_identity_version,
-            "contractVersions": contract_versions_payload(),
-            "worldRecipesDir": str(world_recipes_dir),
+            "imageBackend": visual_config.IMAGE_BACKEND,
+            "visualAssetMode": visual_config.VISUAL_ASSET_MODE,
+            "visualDirectorLLM": visual_config.VISUAL_DIRECTOR_LLM,
+            "vfxLlmDirector": vfx_config.VFX_LLM_DIRECTOR_ENABLED,
+            "recipeIdentityVersion": config.RECIPE_IDENTITY_VERSION,
+            "contractVersions": visual_config.contract_versions_payload(),
+            "worldRecipesDir": str(config.WORLD_RECIPES_DIR),
         },
         "sdcpp": sdcpp_debug_snapshot(include_log_tail=True),
         "lastCombineFailure": failure,
-        "events": tail_ndjson(cache_dir / "events.ndjson", trace_events_tail),
-        "pipelineTrace": tail_ndjson(trace_file, trace_events_tail),
-        "promptTrace": tail_ndjson(prompt_trace_file, min(trace_events_tail, 80)),
+        "events": tail_ndjson(config.CACHE_DIR / "events.ndjson", trace_runtime.TRACE_EVENTS_TAIL),
+        "pipelineTrace": tail_ndjson(trace_runtime.TRACE_FILE, trace_runtime.TRACE_EVENTS_TAIL),
+        "promptTrace": tail_ndjson(trace_runtime.PROMPT_TRACE_FILE, min(trace_runtime.TRACE_EVENTS_TAIL, 80)),
     }
 
 
-def render_trace_snapshot_html(snapshot: dict[str, Any], *, app_version: str, trace_clip: TraceClip) -> str:
-    return trace_dashboard.render_trace_snapshot_html(
-        snapshot,
-        app_version=app_version,
-        trace_clip=trace_clip,
+def trace_snapshot_html() -> str:
+    return render_trace_snapshot_html(
+        trace_snapshot(), app_version=config.APP_VERSION, trace_clip=trace_runtime._trace_clip,
     )

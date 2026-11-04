@@ -18,8 +18,8 @@ from PIL import Image, ImageDraw
 from prompt_packet_helpers import request_dossier
 
 CHROMA = {
-    "magenta": (255, 0, 255), "green": (0, 255, 0), "lime": (0, 255, 0),
-    "greenscreen": (0, 255, 0), "blue": (0, 0, 255), "cyan": (0, 255, 255),
+    "magenta": (255, 0, 255), "green": (0, 255, 0),
+    "blue": (0, 0, 255), "cyan": (0, 255, 255),
     "white": (255, 255, 255), "black": (0, 0, 0),
 }
 
@@ -86,9 +86,9 @@ def test_invalid_chroma_is_diagnostic(monkeypatch, name):
 
 @pytest.mark.parametrize("color,remove_bg,mode,keyed,repair", [
     ("cyan", True, "sprite_keyer", True, False),
-    ("cyan", True, "chroma", True, True),
+    ("cyan", True, "sprite_keyer", True, True),
     ("cyan", False, "sprite_keyer", False, True),
-    ("cyan", True, "off", False, False),
+    ("cyan", False, "sprite_keyer", False, False),
     ("transparent", True, "sprite_keyer", False, True),
 ])
 def test_delivered_visual_rules_match_raw_background_transport(monkeypatch, color, remove_bg, mode, keyed, repair):
@@ -523,3 +523,26 @@ def test_native_alpha_checker_pattern_is_not_a_semantic_rejection(tmp_path, monk
     raw.save(source)
     result = post.postprocess_sprite(str(source), "pattern-result", 32, "runtime:child_projectile", output_dir=tmp_path)
     assert post_validation.validate_processed_sprite(result, "runtime:child_projectile", expected_canvas=32)["ok"]
+
+
+@pytest.mark.parametrize("mode", ["chroma", "magic_wand", "sprite-keyer", "off", "none", "typo"])
+def test_retired_background_modes_cannot_silently_change_processing(monkeypatch, mode):
+    from infini_local.core.images import config
+    from infini_local.pipelines.images.keyer import apply_background_removal
+    from PIL import Image
+    monkeypatch.setattr(config, "BG_COLOR", "magenta")
+    monkeypatch.setattr(config, "REMOVE_BG", True)
+    monkeypatch.setattr(config, "BG_REMOVE_MODE", mode)
+    raw = Image.new("RGBA", (4, 4), (255, 0, 255, 255))
+    before = raw.tobytes()
+    with pytest.raises(ValueError, match="INFINI_BG_REMOVE_MODE must be sprite_keyer"):
+        apply_background_removal(raw)
+    assert raw.tobytes() == before
+
+
+@pytest.mark.parametrize("color", ["lime", "greenscreen"])
+def test_retired_background_color_aliases_are_refused(monkeypatch, color):
+    from infini_local.core.images import config
+    monkeypatch.setattr(config, "BG_COLOR", color)
+    with pytest.raises(ValueError, match="Invalid INFINI_BG_COLOR"):
+        contracts.chroma_rgb()

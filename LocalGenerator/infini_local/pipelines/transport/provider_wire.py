@@ -316,6 +316,11 @@ def _normalized_llm_stage(value: Any) -> str:
     return stage
 
 
+def llm_stage(payload: Mapping[str, Any]) -> str:
+    """Read explicit finite transport metadata, independently of replay or prompts."""
+    return _normalized_llm_stage(payload.get(LLM_STAGE_KEY))
+
+
 def with_llm_stage(payload: dict[str, Any], stage: str) -> dict[str, Any]:
     """Attach internal finite stage metadata without mutating the provider payload."""
     out = dict(payload)

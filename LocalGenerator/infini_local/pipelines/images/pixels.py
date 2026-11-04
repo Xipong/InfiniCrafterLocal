@@ -209,7 +209,7 @@ def sprite_resample_filter(stage: str = "final") -> Any:
     if Image is None:
         return 0
     mode = (SPRITE_DOWNSCALE_FILTER or "box").lower()
-    if mode in {"lanczos", "antialias"}:
+    if mode == "lanczos":
         return Image.Resampling.LANCZOS
     if mode in {"bicubic"}:
         return Image.Resampling.BICUBIC

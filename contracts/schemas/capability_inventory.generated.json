@@ -923,7 +923,7 @@
         }
       },
       "positionOwnership": "owns_position_while_active",
-      "purpose": "Set body center from a native anchor and axis/normal offsets. Always-active attachment bypasses native integration and requires tileCollide=false; a phase/timing-limited attachment allows tile collision during free flight.",
+      "purpose": "Set body center from a native anchor and axis/normal offsets, clearing velocity at this motion stage while active. Always-active attachment bypasses native integration and requires tileCollide=false; a phase/timing-limited attachment allows tile collision during free flight.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {

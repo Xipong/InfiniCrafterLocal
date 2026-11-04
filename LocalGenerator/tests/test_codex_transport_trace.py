@@ -36,7 +36,7 @@ def recording(monkeypatch, tmp_path):
     monkeypatch.setattr(trace, "TRACE_FILE", tmp_path / "pipeline_trace.ndjson")
     monkeypatch.setattr(trace, "PROMPT_TRACE_FILE", tmp_path / "prompt_trace.ndjson")
     monkeypatch.setattr(trace, "TRACE_PROMPTS_ENABLED", True)
-    monkeypatch.setenv("INFINI_LLM_FALLBACK_NETWORK_FAILS", "2")
+    monkeypatch.setenv("INFINI_LLM_NETWORK_ATTEMPTS", "2")
     monkeypatch.setenv("INFINI_SPRITE_RETRIES", "1")
     # These are fixture strings, never loaded from the user's session store.
     monkeypatch.setattr(auth, "get_credentials", lambda: auth.Credentials("fixture-access-secret", "fixture-refresh-secret", "fixture-account-secret", 9999999999))
@@ -288,7 +288,7 @@ def test_incomplete_error_body_is_labelled_not_presented_as_complete_empty_respo
     class Broken(MemoryResponse):
         def read1(self, *_a):
             raise IncompleteRead(b"fixture partial", 100)
-    monkeypatch.setenv("INFINI_LLM_FALLBACK_NETWORK_FAILS", "1")
+    monkeypatch.setenv("INFINI_LLM_NETWORK_ATTEMPTS", "1")
     def opened(req, *, deadline):
         raise HTTPError(req.full_url, 503, "fixture busy", Message(), Broken())
     install_opener(monkeypatch, opened)

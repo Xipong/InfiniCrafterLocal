@@ -10,13 +10,15 @@ import pytest
 
 from infini_local.core.env_file import FORMAT_HEADER, encode_value, parse_env_text, read_env_file
 from infini_local.core.env_utils import load_env_file
+from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 from infini_local.desktop import settings_defaults, settings_env
-from infini_local.desktop.settings_schema import DEFAULTS, SDCPP_DEFAULT_COMMAND_TEMPLATE
+from infini_local.desktop.settings_schema import DEFAULTS
+from infini_local.services.sdcpp_backend import DEFAULT_COMMAND_TEMPLATE
 
 
 VALUES = {
     'INFINI_SDCPP_LORA_PROMPT_TAGS': '<lora:first:0.2>\n<lora:second:0.3>',
-    'INFINI_SDCPP_SERVER_COMMAND_TEMPLATE': SDCPP_DEFAULT_COMMAND_TEMPLATE.replace('{exe}', '"{exe}"'),
+    'INFINI_SDCPP_SERVER_COMMAND_TEMPLATE': DEFAULT_COMMAND_TEMPLATE.replace('{exe}', '"{exe}"'),
     'INFINI_SDCPP_MODEL': 'C:\\new\\tools\\model #1.gguf',
     'INFINI_CUSTOM_UNC': '\\\\server\\share\\model.gguf',
     'INFINI_CUSTOM_EMPTY': '',
@@ -61,8 +63,8 @@ def test_writer_and_every_reader_roundtrip_exact_values(tmp_path, monkeypatch):
     assert all(os.environ[key] == value for key, value in VALUES.items())
     for key in (*DEFAULTS, *VALUES):
         monkeypatch.delenv(key, raising=False)
-    toolbox_module().load_config_env(project)
-    assert all(os.environ[key] == value for key, value in VALUES.items())
+    toolbox_values = toolbox_module().read_config_env(config)
+    assert all(toolbox_values[key] == value for key, value in VALUES.items())
 
 
 def test_environment_precedence_and_skip_config_are_preserved(tmp_path, monkeypatch):
@@ -77,22 +79,22 @@ def test_environment_precedence_and_skip_config_are_preserved(tmp_path, monkeypa
     assert 'INFINI_CUSTOM_TEST' not in os.environ
 
 
-@pytest.mark.parametrize('raw, expected', [
-    ('bare value', 'bare value'), ('"quoted value"', 'quoted value'), ("'quoted value'", 'quoted value'),
-    ('"C:\\new\\tools\\model.gguf"', 'C:\\new\\tools\\model.gguf'),
-    ('"C:\\new\\tools\\"', 'C:\\new\\tools\\'),
-    ('"{exe}" --model "{model}"', '"{exe}" --model "{model}"'),
-    ('"{exe}" --model {model}', '"{exe}" --model {model}'),
-    ('quoted tail"', 'quoted tail"'), (r'"literal\nvalue"', r'literal\nvalue'),
-    ('', ''),
-])
-def test_legacy_quotes_and_backslashes_are_not_reinterpreted(raw, expected):
-    assert parse_env_text('INFINI_TEST=' + raw)['INFINI_TEST'] == expected
+@pytest.mark.parametrize('raw', ['bare', '"quoted"', "'quoted'", '"C:\\new\\tools\\"', '"{exe}" --model "{model}"', '"first\nlast"'])
+def test_unversioned_files_fail_without_environment_or_file_mutation(tmp_path, monkeypatch, raw):
+    config = tmp_path / 'config.env'
+    original = ('INFINI_UNVERSIONED=' + raw + '\n').encode()
+    config.write_bytes(original)
+    monkeypatch.delenv('INFINI_UNVERSIONED', raising=False)
+    for reader in (load_env_file, settings_env.parse_env, settings_defaults.defaults_offer, toolbox_module().read_config_env):
+        with pytest.raises(ValueError, match='Missing config.env format declaration'):
+            reader(config)
+    assert config.read_bytes() == original
+    assert 'INFINI_UNVERSIONED' not in os.environ
 
 
 def test_first_duplicate_matches_runtime_for_all_readers(tmp_path, monkeypatch):
     config = tmp_path / 'config.env'
-    config.write_text('INFINI_DUPLICATE=first\nINFINI_DUPLICATE=second\n')
+    config.write_text(FORMAT_HEADER + '\nINFINI_DUPLICATE=first\nINFINI_DUPLICATE=second\n')
     assert settings_env.parse_env(config)['INFINI_DUPLICATE'] == 'first'
     monkeypatch.delenv('INFINI_DUPLICATE', raising=False)
     load_env_file(config)
@@ -118,7 +120,7 @@ def test_unknown_or_late_version_is_not_silently_loaded(header):
 
 
 def test_default_acceptance_preserves_encoded_personal_bytes_and_line_endings(tmp_path, monkeypatch):
-    monkeypatch.setitem(DEFAULTS, 'INFINI_LLM_MAX_TOKENS', '18000')
+    monkeypatch.setitem(GENERATION_DEFAULTS, 'INFINI_LLM_MAX_TOKENS', '18000')
     config = tmp_path / 'config.env'
     original = ('\ufeff' + FORMAT_HEADER + '\r\n'
         '# keep comments\r\nINFINI_LLM_MAX_TOKENS = "9000"  \r\n'
@@ -134,14 +136,12 @@ def test_default_acceptance_preserves_encoded_personal_bytes_and_line_endings(tm
     assert read_env_file(config)['INFINI_SDCPP_LORA_PROMPT_TAGS'] == VALUES['INFINI_SDCPP_LORA_PROMPT_TAGS']
 
 
-def test_full_save_migrates_legacy_values_without_guessing_lost_content(tmp_path):
+def test_full_save_preserves_current_values_without_migration(tmp_path):
     config = tmp_path / 'config.env'
-    config.write_text('INFINI_SDCPP_MODEL="C:\\new\\tools\\model.gguf"\nINFINI_CUSTOM="{exe}" --model "{model}"\n')
-    legacy = settings_env.parse_env(config)
-    settings_env.write_env(config, legacy)
-    assert config.read_text().splitlines()[1] == FORMAT_HEADER
+    settings_env.write_env(config, VALUES)
     current = settings_env.parse_env(config)
-    assert current == legacy
+    settings_env.write_env(config, current)
+    assert settings_env.parse_env(config) == current
 
 
 def test_atomic_replace_failure_keeps_original_and_cleans_temporary(tmp_path, monkeypatch):
@@ -203,45 +203,39 @@ def test_invalid_environment_codepoints_rejected_before_any_mutation(tmp_path, m
         encode_value(json.loads('"' + escaped + '"'))
 
 
-def test_cr_only_legacy_records_share_decoder_and_defaults_patch(tmp_path, monkeypatch):
-    monkeypatch.setitem(DEFAULTS, 'INFINI_LLM_MAX_TOKENS', '18000')
+def test_cr_only_records_share_decoder_and_defaults_patch(tmp_path, monkeypatch):
+    monkeypatch.setitem(GENERATION_DEFAULTS, 'INFINI_LLM_MAX_TOKENS', '18000')
     config = tmp_path / 'config.env'
-    original = b'# legacy Mac record endings\rINFINI_LLM_MAX_TOKENS=9000\rINFINI_CUSTOM=preserve\r'
+    original = (FORMAT_HEADER + '\r').encode() + b'# Mac record endings\rINFINI_LLM_MAX_TOKENS=9000\rINFINI_CUSTOM=preserve\r'
     config.write_bytes(original)
     assert read_env_file(config) == parse_env_text(original.decode())
     offer = settings_defaults.defaults_offer(config)
     assert {row['key'] for row in offer['changes']} == {'INFINI_LLM_MAX_TOKENS'}
     settings_defaults.decide_defaults(config, offer['revision'], accept=True)
-    assert config.read_bytes() == original.replace(b'9000', b'18000')
+    assert config.read_bytes() == original.replace(b'9000', b'"18000"')
 
 
-@pytest.mark.parametrize('value', [
-    '<lora:first:0.2>\n<lora:second:0.3>',
-    'first "quote"\nlast',
-    'first\nlast\\',
-    'first \\"quote\"\nlast',
-    'first\nINFINI_PORT=6066\nlast',
+@pytest.mark.parametrize('raw, expected', [
+    ('bare value', 'bare value'),
+    ("'literal quotes'", "'literal quotes'"),
+    ('C:\\new\\tools\\', 'C:\\new\\tools\\'),
+    ('"line\\nnext"', 'line\nnext'),
 ])
-@pytest.mark.parametrize('key', ['CUSTOM', 'CUSTOM.OPTION', 'CUSTOM-OPTION'])
-def test_recognizable_legacy_multiline_fails_before_truncating_migration(tmp_path, value, key):
-    config = tmp_path / 'config.env'
-    # Exact old writer grammar: quotes escaped, backslashes left literal.
-    encoded = '"' + value.replace('"', '\\"') + '"'
-    original = (key + '=' + encoded + '\nINFINI_PORT=5055\n').encode()
-    config.write_bytes(original)
-    with pytest.raises(ValueError, match='Legacy multiline') as error:
-        settings_env.write_env(config, settings_env.parse_env(config))
-    assert value not in str(error.value)
-    assert config.read_bytes() == original
+def test_current_manual_values_use_only_the_declared_codec(raw, expected):
+    assert parse_env_text(FORMAT_HEADER + '\nVALUE=' + raw) == {'VALUE': expected}
 
 
-def test_unmatched_legacy_quote_alone_is_not_guessed_or_rejected():
-    text = 'INFINI_LITERAL="unfinished literal\nINFINI_NEXT="complete independent value"\n'
-    parsed = parse_env_text(text)
-    assert parsed['INFINI_LITERAL'] == '"unfinished literal'
-    assert parsed['INFINI_NEXT'] == 'complete independent value'
+def test_current_example_is_readable_without_migration():
+    example = Path(__file__).parents[1] / 'config.example.env'
+    original = example.read_bytes()
+    values = read_env_file(example)
+    assert values['INFINI_LLM_MAX_TOKENS'] == '18000'
+    assert example.read_bytes() == original
 
 
-def test_legacy_quoted_folder_with_trailing_backslash_does_not_consume_following_assignment():
-    text = 'INFINI_PATH="C:\\new\\tools\\"\nINFINI_NEXT="ordinary"\n'
-    assert parse_env_text(text) == {'INFINI_PATH': 'C:\\new\\tools\\', 'INFINI_NEXT': 'ordinary'}
+def test_selective_patch_encodes_multiline_and_ignores_absent_keys():
+    from infini_local.core.env_file import replace_env_values
+    original = FORMAT_HEADER + '\r\n# keep\r\nEXISTING = old  \r\nUNKNOWN=retain'
+    patched = replace_env_values(original, {'EXISTING': 'new\nvalue', 'ABSENT': 'never inserted'})
+    assert patched == original.replace('old', '"new\\nvalue"')
+    assert parse_env_text(patched) == {'EXISTING': 'new\nvalue', 'UNKNOWN': 'retain'}
