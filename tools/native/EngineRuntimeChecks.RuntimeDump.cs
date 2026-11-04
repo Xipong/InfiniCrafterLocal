@@ -53,6 +53,17 @@ internal static partial class EngineRuntimeChecks
                 foreach (string key in new[] { "motionReference", "collisionReference", "onHitStatusReference", "attackReference", "armorPenetration", "aiStyle" })
                     Equal(true, JsonNode.DeepEquals(direct[key], projectile[key]), "standalone projectile and item projectile share source facts: " + key);
             }
+            Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(91);
+            var exportCapture = typeof(InfiniDumpCommand).GetMethod("CaptureItemSnapshotForExport", BindingFlags.Static | BindingFlags.NonPublic)!;
+            JsonObject withoutTextures = (JsonObject)exportCapture.Invoke(null, new object[] { item, false })!;
+            Equal(true, withoutTextures["textureMetrics"]!["unavailable"]!.GetValue<bool>(), "default export explicitly skips GPU diagnostics");
+            Equal("not_requested; use /infinidump textures", withoutTextures["textureMetrics"]!["note"]!.GetValue<string>(), "opt-in diagnostic availability is disclosed");
+            var expectedWithoutTextures = dump.DeepClone().AsObject();
+            expectedWithoutTextures.Remove("textureMetrics"); withoutTextures.Remove("textureMetrics");
+            if (expectedWithoutTextures["directProjectileRaw"] is JsonObject expectedDirect) expectedDirect.Remove("textureMetrics");
+            if (withoutTextures["directProjectileRaw"] is JsonObject noTextureDirect) noTextureDirect.Remove("textureMetrics");
+            Equal(true, JsonNode.DeepEquals(expectedWithoutTextures, JsonNode.Parse(withoutTextures.ToJsonString())),
+                "skipping optional texture diagnostics preserves every gameplay/source/AI field");
             Equal(item.damage, dump["damage"]!.GetValue<int>(), "capture does not rebalance parent");
             Equal(item.damage, live["damage"]!.GetValue<int>(), "capture does not mutate consumed item");
             packets.Add(dump);

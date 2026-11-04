@@ -35,7 +35,18 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         LineageClip = new RasterizerState { ScissorTestEnable = true, CullMode = CullMode.None };
     }
 
-    public override void Unload() { ResetSession(); UnloadBookSkin(); LineageClip?.Dispose(); LineageClip = null; ToggleJournalKey = null!; _toggleJournalTrigger = ""; }
+    public override void Unload()
+    {
+        ResetSession();
+        UnloadBookSkin();
+        // Capture this generation before queueing graphics cleanup, just like
+        // the prepared skin textures. A delayed callback cannot own a new load.
+        var retiredClip = LineageClip;
+        LineageClip = null;
+        if (retiredClip is not null) Main.QueueMainThreadAction(() => DisposeRetiredJournalGraphics(retiredClip));
+        ToggleJournalKey = null!;
+        _toggleJournalTrigger = "";
+    }
 
     internal static bool CanToggleFromKey(bool focused, bool menu, bool dead, bool writing,
         bool chat, bool blocked, bool rebinding)
@@ -198,13 +209,15 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         if (book.Width < 260 || book.Height < 240 || layout.Rows == 0 || layout.Columns == 0)
         {
             SetSearchFocus(false);
-            Label(sb, Text("Title"), book.TopLeft() + new Vector2(24, 18), Gold, 0.75f, book.Width - 48);
+            var smallHeader = RecipeJournalView.HeaderRow(book);
+            HeaderLabel(sb, Text("Title"), new Rectangle(book.X + 24, smallHeader.Y, book.Width - 48, smallHeader.Height), Gold, .75f);
             if (Button(sb, new Rectangle(book.X + 12, book.Y + Math.Min(62, book.Height - 34), Math.Max(0, book.Width - 24), 24), Text("Close"), click, cursor)) Close();
             if (book.Height >= 140) Paragraph(sb, Text("SpaceHint"), new Rectangle(book.X + 24, book.Y + 102, book.Width - 48, book.Height - 126), Muted, 0.65f);
             if (click && book.Contains(cursor.ToPoint())) Main.mouseLeftRelease = false;
             return true;
         }
-        Label(sb, Text("Title"), new Vector2(book.X + 36, book.Y + 17), Gold, 0.85f, book.Width - 110);
+        var header = RecipeJournalView.HeaderRow(book);
+        HeaderLabel(sb, Text("Title"), new Rectangle(header.X, header.Y, Math.Max(0, controls.Close.X - header.X - 12), header.Height), Gold, .85f);
         if (LineageButton(sb, controls.Close, "×", click, cursor)) { Close(); return true; }
         Rectangle search = controls.Search;
         DrawPaperSlip(sb, search, _searchFocus);
@@ -264,8 +277,6 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         CenterLabel(sb, Text("Page", _page + 1, pages), controls.Page, Ink, 0.6f);
         if (Button(sb, controls.Next, "›", click, cursor, enabled: _page + 1 < pages)) _page++;
         if (layout.Detail.X > layout.List.Right) Label(sb, Text("ReadOnly"), new Vector2(layout.Detail.X + 12, bottom + 3), Muted, 0.55f, layout.Detail.Width - 24);
-        // In stacked layouts the pager owns the bottom-right corner.
-        if (layout.Detail.X > layout.List.Right) DrawBookFold(sb, book);
         if (click && book.Contains(cursor.ToPoint())) Main.mouseLeftRelease = false;
         if (_hoverText.Length > 0) Main.instance.MouseText(_hoverText);
         return true;
@@ -438,6 +449,29 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         // MagicPixel is 1x1000 in Terraria, not a 1x1 texture. Sampling the
         // whole asset makes each connector a thousand-pixel-wide strip.
         sb.Draw(TextureAssets.MagicPixel.Value, from, SolidPixelSource, PremultipliedUiColor(color), MathF.Atan2(delta.Y, delta.X), new Vector2(0, .5f), new Vector2(delta.Length(), 1), SpriteEffects.None, 0f);
+    }
+    internal static float VisibleTextCenter(DynamicSpriteFont font, string text)
+    {
+        // DynamicSpriteFont.MeasureString includes line spacing below short
+        // glyphs. Center their actual glyph rectangles, including native padding.
+        float top = float.PositiveInfinity, bottom = float.NegativeInfinity, line = 0;
+        foreach (char character in text)
+        {
+            if (character == '\n') { line += font.LineSpacing; continue; }
+            if (char.IsWhiteSpace(character)) continue;
+            var glyph = font.SpriteCharacters.TryGetValue(character, out var found) ? found : font.DefaultCharacterData;
+            if (glyph.Glyph.Height <= 0) continue;
+            float y = line + glyph.Padding.Y;
+            top = Math.Min(top, y); bottom = Math.Max(bottom, y + glyph.Glyph.Height);
+        }
+        return float.IsPositiveInfinity(top) ? font.MeasureString(text).Y * .5f : (top + bottom) * .5f;
+    }
+    private static void HeaderLabel(SpriteBatch sb, string text, Rectangle row, Color color, float scale)
+    {
+        if (row.Width <= 0 || row.Height <= 0) return;
+        var font = FontAssets.MouseText.Value;
+        text = ClipLineageLabel(text ?? "", row.Width / scale);
+        Label(sb, text, new Vector2(row.X, row.Center.Y - VisibleTextCenter(font, text) * scale), color, scale, row.Width);
     }
     private static void CenterLabel(SpriteBatch sb, string text, Rectangle rect, Color color, float scale)
     {

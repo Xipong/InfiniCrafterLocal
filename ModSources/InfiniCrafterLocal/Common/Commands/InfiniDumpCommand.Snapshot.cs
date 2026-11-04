@@ -7,6 +7,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Threading;
+using System.Collections.Generic;
 using Terraria;
 using Terraria.ModLoader;
 
@@ -22,7 +24,7 @@ public sealed partial class InfiniDumpCommand
     // One atomic pointer selects an immutable pair. Never overwrite the pair
     // selected by the previous manifest; a crash/failed capture cannot mix it.
     internal static JsonObject PublishSnapshot(string root, Action<TextWriter> writeItems,
-        Action<TextWriter> writeProjectiles, JsonObject environment)
+        Action<TextWriter> writeProjectiles, JsonObject environment, CancellationToken cancellation = default)
     {
         Directory.CreateDirectory(root);
         string id = Guid.NewGuid().ToString("N");
@@ -69,6 +71,7 @@ public sealed partial class InfiniDumpCommand
             if (bytes.Length > 1024 * 1024) throw new InvalidDataException("Dump manifest byte bound");
             using (var file = new FileStream(pending, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             { file.Write(bytes); file.Flush(flushToDisk: true); }
+            cancellation.ThrowIfCancellationRequested();
             File.Move(pending, Path.Combine(root, DumpManifestName), overwrite: true);
             published = true;
             return manifest;
@@ -85,17 +88,19 @@ public sealed partial class InfiniDumpCommand
         }
     }
 
-    private static JsonObject CaptureDumpEnvironment()
+    private static JsonObject CaptureDumpEnvironment() => CaptureDumpEnvironmentCore(includeFileHash: true);
+
+    private static JsonObject CaptureDumpEnvironmentCore(bool includeFileHash)
     {
         var mods = new JsonArray();
         foreach (Mod mod in (ModLoader.Mods ?? Array.Empty<Mod>()).OrderBy(m => m.Name, StringComparer.Ordinal))
             mods.Add(new JsonObject { ["name"] = mod.Name, ["version"] = mod.Version.ToString(),
-                ["module"] = DescribeAssembly(mod.GetType().Assembly) });
+                ["module"] = DescribeAssembly(mod.GetType().Assembly, includeFileHash) });
         return new JsonObject
         {
             ["gameVersion"] = Main.versionNumber,
-            ["tModLoader"] = DescribeAssembly(typeof(ModLoader).Assembly),
-            ["exporter"] = DescribeAssembly(typeof(InfiniDumpCommand).Assembly),
+            ["tModLoader"] = DescribeAssembly(typeof(ModLoader).Assembly, includeFileHash),
+            ["exporter"] = DescribeAssembly(typeof(InfiniDumpCommand).Assembly, includeFileHash),
             ["mods"] = mods, ["modSetStatus"] = ModLoader.Mods is null ? "unavailable" : "observed",
             // A reproducible roster fingerprint, not a claim that another
             // process has the same runtime mods or that this dump is current.
@@ -104,20 +109,47 @@ public sealed partial class InfiniDumpCommand
         };
     }
 
-    private static JsonObject DescribeAssembly(Assembly assembly)
+    private static JsonObject DescribeAssembly(Assembly assembly, bool includeFileHash)
     {
-        string? hash = null;
+        string path = assembly.IsDynamic ? "" : assembly.Location;
+        var identity = new JsonObject { ["assembly"] = assembly.GetName().Name,
+            ["version"] = assembly.GetName().Version?.ToString(),
+            ["mvid"] = assembly.ManifestModule.ModuleVersionId.ToString(),
+            ["fileSha256"] = includeFileHash ? TryAssemblyFileHash(path) : null,
+            ["informationalVersion"] = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion };
+        // Internal transfer field. Removed before serialization/publication.
+        if (!includeFileHash) identity["captureFile"] = path;
+        return identity;
+    }
+
+    private static string? TryAssemblyFileHash(string path)
+    {
         try
         {
-            if (!string.IsNullOrEmpty(assembly.Location) && File.Exists(assembly.Location))
-            { using var stream = File.OpenRead(assembly.Location); hash = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant(); }
+            if (!string.IsNullOrEmpty(path) && File.Exists(path))
+            { using var stream = File.OpenRead(path); return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant(); }
         }
-        catch (IOException) { } // In-memory/unreadable module: retain observed MVID, never invent a build hash.
+        catch (IOException) { }
         catch (UnauthorizedAccessException) { }
-        return new JsonObject { ["assembly"] = assembly.GetName().Name,
-            ["version"] = assembly.GetName().Version?.ToString(),
-            ["mvid"] = assembly.ManifestModule.ModuleVersionId.ToString(), ["fileSha256"] = hash,
-            ["informationalVersion"] = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion };
+        return null;
+    }
+
+    internal static void CompleteDumpEnvironmentFileHashes(JsonObject environment)
+    {
+        var hashes = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var mods = environment["mods"]!.AsArray();
+        var identities = mods.OfType<JsonObject>().Select(mod => mod["module"]!.AsObject())
+            .Concat(new[] { environment["tModLoader"]!.AsObject(), environment["exporter"]!.AsObject() });
+        foreach (JsonObject identity in identities)
+        {
+            if (identity["captureFile"] is not JsonValue file) continue;
+            string path = file.GetValue<string>();
+            identity.Remove("captureFile");
+            if (!hashes.TryGetValue(path, out string? hash)) hashes[path] = hash = TryAssemblyFileHash(path);
+            identity["fileSha256"] = hash;
+        }
+        environment["modSetSha256"] = Convert.ToHexString(SHA256.HashData(
+            Encoding.UTF8.GetBytes(mods.ToJsonString(DumpJsonOptions)))).ToLowerInvariant();
     }
 
     private sealed class BoundedDumpWriter : StreamWriter
