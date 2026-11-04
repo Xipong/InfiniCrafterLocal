@@ -23,7 +23,6 @@ from infini_local.pipelines.images.prompts import image_backend_is_zimage
 from infini_local.pipelines.images.validation import validate_processed_sprite, sprite_validation_fatal
 from infini_local.pipelines.visual.assets import equipment_overlay_requirement
 from infini_local.services import asset_sync_service
-from infini_local.web.server_utility_routes import MAX_ASSET_RESPONSE_BYTES
 
 
 MAX_DELIVERABLE_ASSET_FILES = 32
@@ -101,7 +100,7 @@ class _DeliveryAssetAssessment:
             try:
                 facts["snapshot"] = _file_snapshot(path)
                 facts["size"] = facts["snapshot"][2]
-                if facts["size"] <= MAX_ASSET_RESPONSE_BYTES:
+                if facts["size"] <= asset_sync_service.MAX_ASSET_RESPONSE_BYTES:
                     ingredient = self.ingredients.get(key)
                     if ingredient is None:
                         facts["complete"] = asset_sync_service.is_complete_png_file(path)
@@ -126,7 +125,7 @@ class _DeliveryAssetAssessment:
 
     def ingredient_validation(self, asset: dict[str, Any]) -> dict[str, Any]:
         facts = self.facts(asset.get("spritePath"))
-        if facts["size"] > MAX_ASSET_RESPONSE_BYTES:
+        if facts["size"] > asset_sync_service.MAX_ASSET_RESPONSE_BYTES:
             return {"ok": False, "reasons": ["asset_png_byte_limit_exceeded"]}
         if not facts["complete"]:
             return {"ok": False, "reasons": ["invalid_png_envelope"]}
@@ -199,9 +198,9 @@ def _asset_roster_problems(paths: list[Any], *, _assessment: _DeliveryAssetAsses
         facts = assessment.facts(value)
         size = facts["size"]
         sizes[key] = size
-        if size > MAX_ASSET_RESPONSE_BYTES:
+        if size > asset_sync_service.MAX_ASSET_RESPONSE_BYTES:
             problems.append({"code": "asset_roster_file_byte_limit_exceeded", **detail,
-                             "message": f"Runtime PNG {name!r} is {size} bytes; maximum is {MAX_ASSET_RESPONSE_BYTES}."})
+                             "message": f"Runtime PNG {name!r} is {size} bytes; maximum is {asset_sync_service.MAX_ASSET_RESPONSE_BYTES}."})
         elif not facts["complete"]:
             problems.append({"code": "asset_roster_invalid_png", **detail,
                              "message": f"Runtime PNG {name!r} is not a complete PNG."})

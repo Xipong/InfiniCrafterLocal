@@ -19,9 +19,9 @@ from test_provider_transport_contract import loopback_transport  # noqa: F401 - 
 from infini_local.pipelines.transport import client as transport
 from infini_local.storage import world_storage
 from infini_local.web.http_response_helpers import _combine_failure_http_response, _combine_failure_payload
-from infini_local.web.server_handler import JSON_BODY_READ_TIMEOUT_SECONDS, MAX_JSON_BODY_BYTES, build_handler
-from infini_local.web.server_utility_routes import MAX_ASSET_RESPONSE_BYTES, ServerUtilityRoutes
-from infini_local.web.vfx_debug_routes import VfxDebugRoutes
+from infini_local.web import server_handler, server_utility_routes, vfx_debug_routes
+from infini_local.web.server_handler import JSON_BODY_READ_TIMEOUT_SECONDS, MAX_JSON_BODY_BYTES, Handler
+from infini_local.services.asset_sync_service import MAX_ASSET_RESPONSE_BYTES
 
 
 class ReadProbe(io.BytesIO):
@@ -94,36 +94,15 @@ class UtilityProbe:
         return False
 
 
-class WorldScopeMissing(Exception):
-    pass
-
-
-class VisualDeliveryBlocked(Exception):
-    pass
-
-
-class PlannerUnavailable(Exception):
-    pass
-
-
-def boundary_handler(*, path="/combine", body=b"{}", length=None, address="127.0.0.1", internal_error=False, utility=None, event_logger=None):
+def boundary_handler(monkeypatch, *, path="/combine", body=b"{}", length=None, address="127.0.0.1", internal_error=False, utility=None, event_logger=None):
     capture = Capture()
     endpoint = SimpleNamespace(handle_combine_request=(
         lambda *_args, **_kw: (_ for _ in ()).throw(ValueError("internal invariant failed"))
         if internal_error else _kw["json"]({"ok": True, "route": "combine"})))
-    handler_class = build_handler(
-        app_version="test", utility_routes=(lambda: utility) if utility is not None else UtilityProbe,
-        vfx_debug_routes=lambda: SimpleNamespace(handle_get=lambda *_: False, handle_post=lambda *_: False),
-        combine_endpoint=endpoint, combine_cache_lookup=lambda *_a, **_k: None,
-        sanitize_recipe_for_delivery=lambda *_a, **_k: None, combine=lambda *_a, **_k: None,
-        trace_event=lambda *_a, **_k: None, log_event=event_logger or (lambda *_a, **_k: None),
-        is_client_disconnect=lambda _e: False, world_scope_missing=WorldScopeMissing,
-        visual_delivery_blocked=VisualDeliveryBlocked, planner_unavailable=PlannerUnavailable,
-        clear_combine_failure=lambda _r: None,
-        combine_failure_http_response=lambda _e, _s: (500, "failure", False, "failure"),
-        combine_failure_payload=lambda *_a, **_k: {"ok": False, "error": "failure"}, ascii_reason=lambda _m: "error",
-    )
-    handler = handler_class.__new__(handler_class)
+    monkeypatch.setattr(server_handler, "combine_endpoint", endpoint)
+    monkeypatch.setattr(server_handler, "utility_routes", utility if utility is not None else UtilityProbe())
+    monkeypatch.setattr(server_handler, "log_event", event_logger or (lambda *_a, **_k: None))
+    handler = Handler.__new__(Handler)
     handler.path, handler.client_address = path, (address, 1234)
     handler.headers = {"Content-Length": str(length if length is not None else len(body)), "Host": "127.0.0.1:5055"}
     handler.server = SimpleNamespace(server_port=5055)
@@ -139,29 +118,21 @@ def boundary_handler(*, path="/combine", body=b"{}", length=None, address="127.0
     {"Origin": "https://untrusted.example"}, {"Origin": "null"},
     {"Sec-Fetch-Site": "cross-site"}, {"Host": "rebound.example:5055"},
 ])
-def test_local_generation_mutations_reject_foreign_browser_origins(path, headers):
+def test_local_generation_mutations_reject_foreign_browser_origins(monkeypatch, path, headers):
     body = ReadProbe(b"{}", forbidden=True)
-    handler, capture = boundary_handler(path=path, body=body, length=2)
+    handler, capture = boundary_handler(monkeypatch, path=path, body=body, length=2)
     handler.headers.update(headers)
     handler.do_POST()
     assert capture.code == 403
     assert body.read_calls == 0
 
 
-def utility_routes(root):
-    return ServerUtilityRoutes(
-        app_version="test", root=root, cache_dir=root, sprite_dir=root, world_recipes_dir=root,
-        trace_files=(), trace_dashboard=SimpleNamespace(render_mp_connect_html=lambda _: "<html/>"),
-        asset_sync_service=SimpleNamespace(safe_asset_file_from_query=lambda *_a, **_k: None,
-            find_asset_file=lambda *_a, **_k: None, asset_content_type=lambda _: "image/png"),
-        health_payload=lambda: {"ok": True}, multiplayer_connect_info=lambda: {"host": "127.0.0.1"},
-        trace_snapshot=lambda: {}, trace_snapshot_html=lambda: "<html/>", trace_event=lambda *_a, **_k: None,
-        sdcpp_start=lambda: True, sdcpp_debug_snapshot=lambda include_log_tail: {"ok": True},
-        read_json_file=lambda _: None, last_combine_failure_payload=lambda: {}, cleanup_for_shutdown=lambda _: None,
-        maybe_generate_sprite=lambda p: p,
-        normalize_asset_prompt=lambda *_a, **_k: "", generate_visual_asset=lambda *_a, **_k: ("", "", 0.0, {}),
-        asset_negative_prompt=lambda _: "", alpha_stats=lambda _: {}, image_module=None,
-    )
+def utility_routes(root, monkeypatch):
+    for name in ("ROOT", "CACHE_DIR", "SPRITE_DIR", "WORLD_RECIPES_DIR"):
+        monkeypatch.setattr(server_utility_routes, name, root)
+    monkeypatch.setattr(server_utility_routes, "APP_VERSION", "test")
+    monkeypatch.setattr(server_utility_routes, "cleanup_sdcpp_server_process", lambda _: None)
+    return server_utility_routes
 
 
 @pytest.mark.parametrize("headers", [
@@ -171,9 +142,9 @@ def utility_routes(root):
     [("Transfer-Encoding", "identity"), ("Content-Length", "2")],
     [("Content-Length", "+2")], [("Content-Length", "0_2")],
 ])
-def test_ambiguous_request_framing_never_reaches_combine(headers):
+def test_ambiguous_request_framing_never_reaches_combine(monkeypatch, headers):
     body = ReadProbe(b"{}", forbidden=True)
-    handler, capture = boundary_handler(body=body, length=2)
+    handler, capture = boundary_handler(monkeypatch, body=body, length=2)
     handler.headers = Message()
     handler.headers["Host"] = "127.0.0.1:5055"
     handler.server = SimpleNamespace(server_port=5055)
@@ -192,9 +163,9 @@ def test_ambiguous_request_framing_never_reaches_combine(headers):
     pytest.param("POST", "/missing", "127.0.0.1", 404, None, 0, id="unknown-post-no-read"),
     pytest.param("POST", "/combine", "::ffff:127.0.0.1", 200, {"ok": True, "route": "combine"}, 1, id="mapped-loopback"),
 ])
-def test_ingress_route_authority_precedes_body_read(method, path, address, status, payload, reads):
+def test_ingress_route_authority_precedes_body_read(monkeypatch, method, path, address, status, payload, reads):
     body = ReadProbe(b"{}", forbidden=not reads)
-    handler, capture = boundary_handler(path=path, body=body, length=2, address=address)
+    handler, capture = boundary_handler(monkeypatch, path=path, body=body, length=2, address=address)
     getattr(handler, "do_" + method)()
     assert capture.code == status
     if isinstance(payload, dict):
@@ -216,9 +187,9 @@ def test_ingress_route_authority_precedes_body_read(method, path, address, statu
     pytest.param(b"", 6, 408, "request_timeout", 1, True, False, id="bounded-timeout"),
     pytest.param(b"{}", 2, 500, "internal_error", 1, False, True, id="internal-value-error-not-json"),
 ])
-def test_post_body_validation_has_bounded_exact_failure(body, length, status, error, reads, timeout, internal):
+def test_post_body_validation_has_bounded_exact_failure(monkeypatch, body, length, status, error, reads, timeout, internal):
     stream = ReadProbe(body, forbidden=not reads, timeout=timeout)
-    handler, capture = boundary_handler(body=stream, length=length, internal_error=internal)
+    handler, capture = boundary_handler(monkeypatch, body=stream, length=length, internal_error=internal)
     handler.do_POST()
     assert capture.code == status
     assert capture.payload["error"] == error
@@ -236,19 +207,29 @@ def test_utility_and_debug_dispatch_use_exact_parsed_route(tmp_path, monkeypatch
     from infini_local.services import combine_endpoint
 
     monkeypatch.setattr(combine_endpoint, "_GENERATION_ACCEPTING", True)
-    routes = utility_routes(tmp_path) if owner == "utility" else VfxDebugRoutes(
-        app_version="test", normalize_world_id_from_payload=lambda _: "world",
-        read_world_recipe_cache=lambda *_a, **_k: None, write_world_recipe_cache=lambda *_a, **_k: None,
-        final_normalize=lambda data: data,
-    )
-    if method == "post":
-        object.__setattr__(routes, "select_manifest", lambda payload: {"payload": payload})
+    routes = utility_routes(tmp_path, monkeypatch) if owner == "utility" else vfx_debug_routes
+    monkeypatch.setattr(vfx_debug_routes, "APP_VERSION", "test")
+    if method == "post" and owner == "vfx":
+        monkeypatch.setattr(routes, "select_manifest", lambda payload: {"payload": payload})
     handler = Capture()
+    scheduled, lifecycle = [], []
+    if owner == "utility":
+        # Keep the delayed callback inside fixture lifetime: module dependencies
+        # must not be restored while a background shutdown can still use them.
+        monkeypatch.setattr(routes, "threading", SimpleNamespace(Thread=lambda *, target, daemon:
+            SimpleNamespace(start=lambda: scheduled.append(target))))
+        monkeypatch.setattr(routes, "time", SimpleNamespace(sleep=lambda _: None))
+        monkeypatch.setattr(routes, "cleanup_sdcpp_server_process", lambda reason: lifecycle.append(reason))
+        handler.server = SimpleNamespace(shutdown=lambda: lifecycle.append("server shutdown"))
     arguments = (handler, path, {"x": 1}) if method == "post" else (handler, path)
     assert getattr(routes, "handle_" + method)(*arguments) is accepted
     assert handler.called == int(accepted)
     if accepted and owner == "utility":
         assert handler.payload is not None and handler.payload["message"] == "shutdown scheduled"
+        assert not lifecycle
+        assert len(scheduled) == 1
+        scheduled[0]()
+        assert lifecycle == ["http_shutdown", "server shutdown"]
     elif accepted and method == "get":
         assert handler.payload["ok"] is True and handler.payload["version"] == "test"
         assert handler.payload["schema"] and handler.payload["sampleRuntimeEvents"]
@@ -257,13 +238,13 @@ def test_utility_and_debug_dispatch_use_exact_parsed_route(tmp_path, monkeypatch
 
 
 @pytest.mark.parametrize("kind", ["encoded-traversal", "outside-symlink"])
-def test_sprite_path_cannot_escape_serving_root(tmp_path, kind):
+def test_sprite_path_cannot_escape_serving_root(monkeypatch, tmp_path, kind):
     root = tmp_path / "sprites"
     root.mkdir()
     outside = tmp_path / "outside.png"
     outside.write_bytes(b"not-a-real-png")
-    routes = utility_routes(tmp_path)
-    routes.sprite_dir = root
+    routes = utility_routes(tmp_path, monkeypatch)
+    monkeypatch.setattr(routes, "SPRITE_DIR", root)
     if kind == "outside-symlink":
         (root / "leak.png").symlink_to(outside)
     handler = Capture()
@@ -272,19 +253,19 @@ def test_sprite_path_cannot_escape_serving_root(tmp_path, kind):
 
 
 def test_health_acknowledges_only_allowlisted_applied_config(tmp_path, monkeypatch):
-    from infini_local.web import server
+    from infini_local.web import server_status as server
 
     monkeypatch.setattr(server.combine_endpoint, "_GENERATION_ACCEPTING", True)
     monkeypatch.setattr(server, "CACHE_DIR", tmp_path / "cache")
     monkeypatch.setattr(server, "WORLD_RECIPES_DIR", tmp_path / "worlds")
     monkeypatch.setattr(server, "sdcpp_debug_snapshot", lambda **_: {"autostart": False, "command": []})
-    monkeypatch.setattr(server, "_multiplayer_connect_info", lambda: {})
+    monkeypatch.setattr(server, "multiplayer_connect_info", lambda: {})
     monkeypatch.setattr(server, "llm_auth_snapshot", lambda: {
         "provider": "openrouter", "model": "fixture/model", "openrouterProvider": "Exact/slug",
         "api_key": "SYNTHETIC-SECRET-MUST-NOT-ENTER-PROJECTION",
         "baseUrl": "https://fixture.invalid/?key=SYNTHETIC-URL-SECRET",
     })
-    health = server._health_payload()
+    health = server.health_payload()
     assert health["effectiveConfig"] == {
         "cacheDir": str((tmp_path / "cache").resolve()),
         "worldRecipesDir": str((tmp_path / "worlds").resolve()),
@@ -348,7 +329,7 @@ def test_shutdown_admission_and_activity_are_atomic(tmp_path, monkeypatch, phase
     worker.start()
     try:
         assert entered.wait(5)
-        utility_routes(tmp_path).handle_post(shutdown, "/shutdown?force=1" if forced else "/shutdown", {})
+        utility_routes(tmp_path, monkeypatch).handle_post(shutdown, "/shutdown?force=1" if forced else "/shutdown", {})
         assert shutdown.code == (200 if forced else 409)
         if forced:
             assert shutdown.payload["forced"] is True
@@ -384,7 +365,7 @@ def test_safe_shutdown_closes_admission_before_acknowledging(tmp_path, monkeypat
     shutdown, generated = Capture(), Capture()
     stopped = threading.Event()
     shutdown.server = SimpleNamespace(shutdown=stopped.set)
-    routes = utility_routes(tmp_path)
+    routes = utility_routes(tmp_path, monkeypatch)
     routes.handle_post(shutdown, "/shutdown", {})
     assert shutdown.code == 200
     endpoint.handle_combine_request(
@@ -400,10 +381,10 @@ def test_safe_shutdown_closes_admission_before_acknowledging(tmp_path, monkeypat
 
 
 @pytest.mark.parametrize("view,recipe_reads,rows", [("recipes", 50, 50), ("health", 100, 100), ("latest", 1, 1), ("contracts", 1, 1)])
-def test_debug_views_read_only_selected_recipe_bodies(tmp_path, view, recipe_reads, rows):
+def test_debug_views_read_only_selected_recipe_bodies(monkeypatch, tmp_path, view, recipe_reads, rows):
     import os
 
-    routes = utility_routes(tmp_path)
+    routes = utility_routes(tmp_path, monkeypatch)
     for index in range(200):
         world = tmp_path / f"world_{index % 2}"
         recipes = world / "recipes"
@@ -420,7 +401,7 @@ def test_debug_views_read_only_selected_recipe_bodies(tmp_path, view, recipe_rea
         reads.append(path)
         return world_storage.read_json_file(path)
 
-    routes.read_json_file = read
+    monkeypatch.setattr(routes, "read_json_file", read)
     handler = Capture()
     route = {"recipes": "/debug/recipes", "health": "/debug/recipe_health",
              "latest": "/debug/latest_recipe", "contracts": "/debug/contracts"}[view]
@@ -437,7 +418,7 @@ def test_debug_views_read_only_selected_recipe_bodies(tmp_path, view, recipe_rea
     assert sum(p.name == "manifest.json" for p in reads) <= 2
 
 
-def test_debug_views_skip_unreadable_without_mutating_authority(tmp_path):
+def test_debug_views_skip_unreadable_without_mutating_authority(monkeypatch, tmp_path):
     import os
 
     directory = tmp_path / "world_test" / "recipes"
@@ -447,8 +428,8 @@ def test_debug_views_skip_unreadable_without_mutating_authority(tmp_path):
     broken.write_text("{broken")
     os.utime(good, (1000, 1000))
     os.utime(broken, (1001, 1001))
-    routes = utility_routes(tmp_path)
-    routes.read_json_file = world_storage.read_json_file
+    routes = utility_routes(tmp_path, monkeypatch)
+    monkeypatch.setattr(routes, "read_json_file", world_storage.read_json_file)
     before = {p: p.read_bytes() for p in (good, broken)}
     assert routes.debug_latest_recipe_dump()["name"] == "valid"
     assert [row["key"] for row in routes.debug_recipes()] == ["valid"]
@@ -465,21 +446,21 @@ def test_debug_views_skip_unreadable_without_mutating_authority(tmp_path):
     ("sdcpp", True, True, True, False, False),
     ("a1111", False, False, False, False, True),
 ])
-def test_visual_doctor_checks_selected_backend_ownership(
+def test_visual_doctor_checks_selected_backend_ownership(monkeypatch,
     tmp_path, backend, autostart, alive, configured, local_files, expected,
 ):
-    routes = utility_routes(tmp_path)
-    routes.health_payload = lambda: {
+    routes = utility_routes(tmp_path, monkeypatch)
+    monkeypatch.setattr(routes, "health_payload", lambda: {
         "imageBackend": backend, "visualRequireItemSprite": True,
         "visualRequireZImageBackend": False, "pillowAvailable": True,
-    }
+    })
     local = tmp_path / "local-component"
     if local_files:
         local.write_bytes(b"fixture")
     snapshot = {"autostart": autostart, "serverAlive": alive, "serverConfigured": configured,
                 "serverUrl": "http://127.0.0.1:8080", "serverExe": str(local), "model": str(local)}
     calls = []
-    routes.sdcpp_debug_snapshot = lambda **_: calls.append("sdcpp") or snapshot
+    monkeypatch.setattr(routes, "sdcpp_debug_snapshot", lambda **_: calls.append("sdcpp") or snapshot)
     result = routes.visual_doctor_payload("/visual_doctor.json")
     assert result["ok"] is expected, result["checks"]
     checks = {check["name"]: check for check in result["checks"]}
@@ -494,7 +475,7 @@ def test_visual_doctor_checks_selected_backend_ownership(
 def test_asset_response_pins_open_handle_and_bounds_body(tmp_path, monkeypatch, mutation):
     from infini_local.web import server_utility_routes as routes_module
 
-    monkeypatch.setattr(routes_module, "MAX_ASSET_RESPONSE_BYTES", 128)
+    monkeypatch.setattr(routes_module.asset_sync_service, "MAX_ASSET_RESPONSE_BYTES", 128)
     path = tmp_path / "mutable.png"
     initial = b"original" * 8
     path.write_bytes(initial)
@@ -509,10 +490,10 @@ def test_asset_response_pins_open_handle_and_bounds_body(tmp_path, monkeypatch, 
             path.write_bytes(initial[:8])
 
     handler.end_headers = mutate_after_headers
-    ServerUtilityRoutes.send_bounded_asset_file(handler, path, "image/png", immutable=True)
+    server_utility_routes.send_bounded_asset_file(handler, path, "image/png", immutable=True)
     assert handler.code == 200
     assert int(handler.headers["Content-Length"]) == len(initial)
-    assert len(handler.wfile.getvalue()) <= len(initial) <= routes_module.MAX_ASSET_RESPONSE_BYTES
+    assert len(handler.wfile.getvalue()) <= len(initial) <= routes_module.asset_sync_service.MAX_ASSET_RESPONSE_BYTES
     if mutation == "truncate":
         assert handler.wfile.getvalue() == initial[:8]
         assert getattr(handler, "close_connection", False), "short body must close the HTTP connection"
@@ -529,7 +510,7 @@ def test_asset_streaming_enforces_server_byte_bound(tmp_path, oversized):
     else:
         path.write_bytes(b"small-png-payload")
     handler = Capture()
-    ServerUtilityRoutes.send_bounded_asset_file(handler, path, "image/png", immutable=True)
+    server_utility_routes.send_bounded_asset_file(handler, path, "image/png", immutable=True)
     assert handler.code == (413 if oversized else 200)
     assert handler.wfile.getvalue() == (b"" if oversized else b"small-png-payload")
     if not oversized:
@@ -548,19 +529,18 @@ def test_debug_manifest_never_adopts_forced_authority(monkeypatch) -> None:
         data["vfxManifest"] = {"slots": []}
         return data
 
-    routes = VfxDebugRoutes(
-        app_version="test",
-        normalize_world_id_from_payload=lambda _payload: "world",
-        read_world_recipe_cache=lambda *_args, **_kwargs: {
+    routes = vfx_routes
+    monkeypatch.setattr(routes, 'APP_VERSION', "test")
+    monkeypatch.setattr(routes, 'normalize_world_id_from_payload', lambda _payload: "world")
+    monkeypatch.setattr(routes, 'read_world_recipe_cache', lambda *_args, **_kwargs: {
             "id": "cached",
             "recipeMeta": {"recipeKey": "cached", "vfxForcedRecipeId": "stale-force"},
             "attack": {"enabled": True},
-        },
-        write_world_recipe_cache=lambda _key, _world, data, **_kwargs: written_meta.append(
+        })
+    monkeypatch.setattr(routes, 'write_world_recipe_cache', lambda _key, _world, data, **_kwargs: written_meta.append(
             dict(data.get("recipeMeta") or {})
-        ),
-        final_normalize=lambda data: data,
-    )
+        ))
+    monkeypatch.setattr(routes, 'final_normalize', lambda data: data)
     monkeypatch.setattr(vfx_routes, "attach_vfx_manifest", attach)
 
     routes.select_manifest({
@@ -587,8 +567,8 @@ def test_debug_views_consume_authoritative_recipe_files(tmp_path: Path, monkeypa
     monkeypatch.setattr(visual_delivery_gate, "WORLD_RECIPES_DIR", tmp_path)
     for name in ("generated-a.png", "generated-b.png", "debug.png"):
         write_no_image_fixture_png(tmp_path / name)
-    routes = utility_routes(tmp_path)
-    routes.read_json_file = world_storage.read_json_file
+    routes = utility_routes(tmp_path, monkeypatch)
+    monkeypatch.setattr(routes, "read_json_file", world_storage.read_json_file)
 
     from infini_local.web.vfx_debug_routes import _sample_data
     from infini_local.pipelines.vfx.stage import attach_vfx_manifest
@@ -853,11 +833,12 @@ def test_control_requests_reject_browser_csrf_and_rebinding_before_mutation(tmp_
     from infini_local.services import combine_endpoint
 
     monkeypatch.setattr(combine_endpoint, "_GENERATION_ACCEPTING", True)
-    routes = utility_routes(tmp_path)
+    routes = utility_routes(tmp_path, monkeypatch)
     trace = tmp_path / "events.ndjson"
     trace.write_text("retain diagnostic history\n")
-    routes.trace_files = (trace,)
-    handler, capture = boundary_handler(path=path, utility=routes)
+    monkeypatch.setattr(routes.trace_runtime, "TRACE_FILE", trace)
+    monkeypatch.setattr(routes.trace_runtime, "PROMPT_TRACE_FILE", tmp_path / "prompt.ndjson")
+    handler, capture = boundary_handler(monkeypatch, path=path, utility=routes)
     handler.headers.update({"Host": "127.0.0.1:5055", **headers})
     stopped = threading.Event()
     handler.server = SimpleNamespace(server_port=5055, shutdown=stopped.set)
@@ -881,7 +862,7 @@ def test_broken_access_log_console_preserves_http_delivery(monkeypatch, tmp_path
     from infini_local.storage import trace_runtime, trace_tools
     from contextlib import redirect_stdout
 
-    handler, _ = boundary_handler(path=path, utility=utility_routes(tmp_path),
+    handler, _ = boundary_handler(monkeypatch, path=path, utility=utility_routes(tmp_path, monkeypatch),
         event_logger=lambda *args: trace_tools.log_event(tmp_path, *args, echo_levels=("warn",)))
     # Exercise the real response writer, including BaseHTTPRequestHandler.log_request.
     for name in ("json", "json_status", "json_error", "send_error"):
@@ -910,3 +891,20 @@ def test_broken_access_log_console_preserves_http_delivery(monkeypatch, tmp_path
     assert len(events) == 1
     assert events[0]["payload"]["error"] == repr(error)
     assert path in events[0]["payload"]["accessLog"]
+
+
+@pytest.mark.parametrize("entrypoint", [
+    "infini_local.pipelines.visual.delivery",
+    "infini_local.web.server",
+    "infini_local.web.server_handler",
+])
+def test_production_entrypoints_import_in_fresh_process_without_starting_services(entrypoint, tmp_path):
+    import os
+    import subprocess
+    import sys
+    environment = dict(os.environ, INFINI_SKIP_CONFIG_FILE="1", INFINI_DATA_DIR=str(tmp_path))
+    result = subprocess.run([sys.executable, "-c", "import importlib, sys; importlib.import_module(sys.argv[1])", entrypoint],
+                            env=environment, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == ""
+    assert not list(tmp_path.iterdir())

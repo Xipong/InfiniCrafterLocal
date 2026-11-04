@@ -169,7 +169,7 @@ def test_server_startup_reads_and_validates_selected_language(language):
     env = {**os.environ, "INFINI_LANGUAGE": language, "INFINI_SKIP_CONFIG_FILE": "1"}
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
     result = subprocess.run(
-        [sys.executable, "-c", "import json; from infini_local.web import server; print(json.dumps(server.LANGUAGE))"],
+        [sys.executable, "-c", "import json; from infini_local.web import server; from infini_local.core.llm_config import LANGUAGE; print(json.dumps(LANGUAGE))"],
         env=env, text=True, capture_output=True, timeout=30,
     )
     if language == "unsupported":

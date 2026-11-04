@@ -11,7 +11,7 @@ _FALSE_VALUES = {"0", "false", "no", "off", "n", "f"}
 
 
 def load_env_file(path: Path) -> None:
-    """Load legacy or versioned config.env strings through the canonical codec.
+    """Load versioned config.env strings through the canonical codec.
 
     Existing process environment variables win over file values. This helper is
     deliberately tiny because the local generator must keep working on Windows

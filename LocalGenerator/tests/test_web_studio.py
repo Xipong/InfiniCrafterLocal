@@ -138,7 +138,7 @@ def test_real_controller_metadata_and_save_preserve_full_setting_surface(tmp_pat
     from infini_local.desktop.settings_controller import SettingsController
     from infini_local.desktop.settings_env import parse_env
     config = tmp_path / 'config.env'
-    config.write_text('INFINI_PRIVATE_UNKNOWN=preserved\nINFINI_LLM_MAX_TOKENS=12345\nINFINI_OPENAI_COMPAT_API_KEY=keep-me\n', encoding='utf-8')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_PRIVATE_UNKNOWN=preserved\nINFINI_LLM_MAX_TOKENS=12345\nINFINI_OPENAI_COMPAT_API_KEY=keep-me\n'), encoding='utf-8')
     app = SettingsController(config)
     server = module.StudioServer(tmp_path)
     try:
@@ -200,12 +200,12 @@ def test_real_controller_defaults_consent_only_updates_offer_keys(tmp_path, monk
     from infini_local.desktop.settings_env import parse_env
     monkeypatch.setitem(DEFAULTS, 'INFINI_LLM_MAX_TOKENS', '18000')
     config = tmp_path / 'config.env'
-    original = (b'# isolated consent proof\r\nINFINI_LLM_MAX_TOKENS=9000\r\n'
+    original = ((b'# infini-config-format: json-string-v1\n# isolated consent proof\r\nINFINI_LLM_MAX_TOKENS=9000\r\n'
                 b'INFINI_USE_LLM=0\r\nINFINI_IMAGE_BACKEND=off\r\n'
                 b'INFINI_SDCPP_SERVER_AUTOSTART=0\r\nINFINI_LLM_PROVIDER=local\r\n'
                 b'INFINI_OPENAI_COMPAT_API_KEY=opaque-fixture\r\nINFINI_PRIVATE_UNKNOWN=keep\r\n'
                 b'INFINI_SDCPP_MODEL=C:\\Models\\keep.gguf\r\nINFINI_PROMPT_STYLE=Default\r\n'
-                b'INFINI_CACHE_DIR=' + str(tmp_path / 'cache').encode() + b'\r\n')
+                b'INFINI_CACHE_DIR=' + str(tmp_path / 'cache').encode() + b'\r\n'))
     config.write_bytes(original)
     app = SettingsController(config)
     server = bridge_module().StudioServer(tmp_path)
@@ -228,7 +228,7 @@ def test_real_controller_defaults_consent_only_updates_offer_keys(tmp_path, monk
         controller.apply({'id': 'accept-offer', 'action': 'acceptDefaults',
                           'values': {'INFINI_PRIVATE_UNKNOWN': 'malicious-draft', 'INFINI_PROMPT_STYLE': 'sent-draft'},
                           'extra': {'revision': offer['revision'], 'lanEnabled': True}})
-        assert config.read_bytes() == original.replace(b'9000', b'18000')
+        assert config.read_bytes() == original.replace(b'9000', b'"18000"')
         assert app.values['INFINI_LLM_MAX_TOKENS'] == '18000'
         assert app.values['INFINI_PROMPT_STYLE'] == 'Unsaved controller draft'
         assert app.values['INFINI_PRIVATE_UNKNOWN'] == 'keep'

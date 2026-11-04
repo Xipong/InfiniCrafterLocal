@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from infini_local.web import server
+from infini_local.web import server_status as server
 from infini_local.pipelines.images import backends as IMAGE_BACKEND_PIPELINE
 from infini_local.core.images import config as visual_config
 from infini_local.services import sdcpp_backend
@@ -206,7 +206,7 @@ def _check_shutdown_releases_the_owned_sdcpp_process(monkeypatch) -> None:
     # Exercise the real route -> cleanup callback -> process owner. Wrappers and
     # module aliases may change, but shutdown must terminate the owned child.
     try:
-        assert server._utility_routes().handle_post(handler, "/shutdown?force=1", {})
+        assert server_utility_routes.handle_post(handler, "/shutdown?force=1", {})
         assert stopped.wait(5), "shutdown never completed"
     finally:
         for worker in workers:
@@ -223,9 +223,9 @@ def _check_shutdown_releases_the_owned_sdcpp_process(monkeypatch) -> None:
 def test_helper_health_does_not_probe_image_servers(monkeypatch, backend):
     monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "sdcpp_server_is_alive", lambda: pytest.fail("health performed a blocking image-server probe"))
     monkeypatch.setattr(server.visual_config, "IMAGE_BACKEND", backend)
-    monkeypatch.setattr(server, "_multiplayer_connect_info", lambda: {})
+    monkeypatch.setattr(server, "multiplayer_connect_info", lambda: {})
     monkeypatch.setattr(server, "llm_auth_snapshot", lambda: {"provider": "openai_codex", "model": "test-model"})
-    health = server._health_payload()
+    health = server.health_payload()
     assert health["ok"] is True
     assert health["sdcpp"]["serverAlive"] is None
     assert health["sdcpp"]["serverAliveProbed"] is False
@@ -246,7 +246,7 @@ def _check_sdcpp_health_reads_canonical_state_fields() -> None:
         state.last_exit = {"returncode": 23, "signal": None}
         state.last_log_file = "/tmp/canonical-sdcpp.log"
 
-        health = server._health_payload()
+        health = server.health_payload()
 
         assert health["sdcpp"]["lastCommand"] == "test canonical command"
         assert health["sdcpp"]["lastStartError"] == "test canonical start error"

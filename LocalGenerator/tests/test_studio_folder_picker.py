@@ -11,7 +11,7 @@ def picker_studio(tmp_path, monkeypatch):
     from infini_local.desktop.settings_controller import SettingsController
     from infini_local.desktop.web_studio import StudioController, StudioServer
     config = tmp_path / 'override config.env'
-    config.write_text('INFINI_USE_LLM=0\nINFINI_IMAGE_BACKEND=off\n', encoding='utf-8')
+    config.write_text(('# infini-config-format: json-string-v1\nINFINI_USE_LLM=0\nINFINI_IMAGE_BACKEND=off\n'), encoding='utf-8')
     app = SettingsController(config_path=config)
     server = StudioServer(Path(__file__).parents[1] / 'infini_local/desktop/webui')
     server.file_root = tmp_path

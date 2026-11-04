@@ -123,7 +123,7 @@ def test_failure_artifact_redacts_without_truncating_partial_diagnostic(monkeypa
 
 def test_http_access_diagnostics_are_silent_off_and_redacted_on(monkeypatch, capsys):
     from test_provider_http_contract import boundary_handler
-    handler, _capture = boundary_handler()
+    handler, _capture = boundary_handler(monkeypatch)
     monkeypatch.setattr(trace_runtime, "TRACE_PROMPTS_ENABLED", False)
     handler.log_message('"GET /health HTTP/1.1" %s', 200)
     assert capsys.readouterr().out == ""
@@ -267,7 +267,7 @@ def test_unlimited_json_diagnostic_fallback_does_not_erase_non_json_string():
 def test_recording_save_reload_and_presets_respect_explicit_off(tmp_path, saved):
     config = tmp_path / "config.env"
     if saved is not None:
-        config.write_text("INFINI_TRACE_PROMPTS=" + saved + "\n")
+        config.write_text(('# infini-config-format: json-string-v1\n' + "INFINI_TRACE_PROMPTS=" + saved + "\n"))
     gui = SettingsController(config)
     assert gui.values["INFINI_TRACE_PROMPTS"] == (saved or "1")
     gui.update_values({"INFINI_TRACE_PROMPTS": "0"})
@@ -475,7 +475,7 @@ def test_health_response_survives_unusable_stdout(monkeypatch):
         def flush(self):
             pass
 
-    handler, _ = boundary_handler(path="/health")
+    handler, _ = boundary_handler(monkeypatch, path="/health")
     server = ThreadingHTTPServer(("127.0.0.1", 0), type(handler))
     worker = threading.Thread(target=server.serve_forever)
     worker.start()

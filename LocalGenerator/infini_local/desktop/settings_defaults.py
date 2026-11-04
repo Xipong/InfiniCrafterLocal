@@ -6,11 +6,10 @@ import json
 import math
 import os
 from pathlib import Path
-import re
 import tempfile
 
-from infini_local.desktop.settings_schema import DEFAULTS
-from infini_local.core.env_file import config_format, decode_value, encode_value, legacy_quote, parse_env_text, physical_lines
+from infini_local.core.generation_defaults import GENERATION_DEFAULTS
+from infini_local.core.env_file import parse_env_text, replace_env_values
 
 DEFAULTS_VERSION = '0.5.02'
 # Only defaults deliberately revised by this patch are eligible. Personal
@@ -47,7 +46,7 @@ def _decision_path(path: Path) -> Path:
 
 
 def _revision(raw: bytes) -> str:
-    recommendations = {key: DEFAULTS[key] for key in UPDATED_DEFAULTS}
+    recommendations = {key: GENERATION_DEFAULTS[key] for key in UPDATED_DEFAULTS}
     return hashlib.sha256(raw + DEFAULTS_VERSION.encode() + json.dumps(recommendations, sort_keys=True).encode()).hexdigest()
 
 
@@ -72,7 +71,7 @@ def defaults_offer(path: Path) -> dict:
         raw = path.read_bytes()
     except FileNotFoundError:
         raw = b''
-    recommendations = {key: DEFAULTS[key] for key in UPDATED_DEFAULTS}
+    recommendations = {key: GENERATION_DEFAULTS[key] for key in UPDATED_DEFAULTS}
     revision = _revision(raw)
     changes = []
     # Absent keys and blank numeric controls inherit new defaults. A present
@@ -100,22 +99,7 @@ def decide_defaults(path: Path, revision: str, *, accept: bool) -> dict[str, str
         if _revision(original) != revision:
             raise ValueError('config.env изменился после предпросмотра. Открой список изменений заново.')
         text = original.decode('utf-8-sig')
-        version = config_format(text)
-        lines = []
-        for line in physical_lines(text, keepends=True):
-            match = re.match(r'^(\s*([^=\r\n]+?)\s*=)([^\r\n]*)(\r\n|\r|\n)?$', line)
-            if match and not match[2].lstrip().startswith('#') and match[2].strip() in changes:
-                value = match[3]
-                leading = value[:len(value) - len(value.lstrip())]
-                trailing = value[len(value.rstrip()):]
-                stripped = value.strip()
-                quote = legacy_quote(stripped)
-                new_value = changes[match[2].strip()]
-                if decode_value(stripped, version) != new_value:
-                    encoded = encode_value(new_value) if version == 'json-string-v1' else quote + new_value + quote
-                    line = match[1] + leading + encoded + trailing + (match[4] or '')
-            lines.append(line)
-        output = ''.join(lines).encode('utf-8')
+        output = replace_env_values(text, changes).encode('utf-8')
         if original.startswith(b'\xef\xbb\xbf'):
             output = b'\xef\xbb\xbf' + output
         # Match the full config writer without changing decision-sidecar writes.
@@ -126,7 +110,7 @@ def decide_defaults(path: Path, revision: str, *, accept: bool) -> dict[str, str
     if not accept:
         # Acceptance is witnessed by the actual config values. A second write can
         # fail after a committed update and would falsely report that it failed.
-        recommendations = {key: DEFAULTS[key] for key in UPDATED_DEFAULTS}
+        recommendations = {key: GENERATION_DEFAULTS[key] for key in UPDATED_DEFAULTS}
         signature = hashlib.sha256(json.dumps(recommendations, sort_keys=True).encode()).hexdigest()
         _atomic_write(_decision_path(path), (json.dumps({'version': DEFAULTS_VERSION, 'recommendations': signature, 'accepted': False}) + '\n').encode())
     return changes if accept else {}

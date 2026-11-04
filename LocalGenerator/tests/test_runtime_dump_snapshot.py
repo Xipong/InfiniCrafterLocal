@@ -39,8 +39,6 @@ def manifest_pair(root: Path, snapshot_id: str = "a" * 32, *, item_rows=None, pr
 
 def use_snapshot(monkeypatch, snapshot):
     monkeypatch.setattr(dumps, "RUNTIME_DUMP_SNAPSHOT", snapshot)
-    monkeypatch.setattr(dumps, "RUNTIME_PROJECTILES_BY_TYPE", snapshot.projectiles)
-    monkeypatch.setattr(dumps, "RUNTIME_ITEMS_BY_TYPE", {row["type"]: row for row in snapshot.items})
 
 
 def test_manifest_only_discovery_and_verified_pair(tmp_path, monkeypatch):
@@ -52,15 +50,15 @@ def test_manifest_only_discovery_and_verified_pair(tmp_path, monkeypatch):
     snapshot = dumps.load_runtime_dump_snapshot(root / "items_runtime_dump.jsonl", root / "projectiles_runtime_dump.jsonl")
     assert snapshot.provenance == {"status": "verified_snapshot", "snapshotId": "a" * 32,
                                    "capturedAtUtc": manifest["capturedAtUtc"]}
-    assert snapshot.items == [{"type": 97, "shoot": 42}]
+    assert snapshot.items == {97: {"type": 97, "shoot": 42}}
     assert snapshot.projectiles[43]["unavailable"] is True
     # Explicit configuration can name the manifest instead of two payloads.
     assert dumps.load_runtime_dump_snapshot(path, path) == snapshot
     use_snapshot(monkeypatch, snapshot)
-    raw = dumps.runtime_projectile_lookup(42)
+    raw = dumps.RUNTIME_DUMP_SNAPSHOT.lookup("projectile", 42)
     assert raw["runtimeDumpProvenance"]["compatibility"] == "unverified"
     raw["timeLeft"] = 0
-    assert dumps.runtime_projectile_lookup(42)["timeLeft"] == 90
+    assert dumps.RUNTIME_DUMP_SNAPSHOT.lookup("projectile", 42)["timeLeft"] == 90
 
 
 @pytest.mark.parametrize("mutation", ["tamper", "missing", "bad_rows", "bad_count", "bad_schema", "bad_date", "bad_hash"])
@@ -87,7 +85,7 @@ def test_invalid_pair_admits_neither_file_or_legacy_fallback(tmp_path, mutation,
     (tmp_path / "items_runtime_dump.jsonl").write_text('{"type":2}\n')
     (tmp_path / "projectiles_runtime_dump.jsonl").write_text('{"type":42,"timeLeft":123}\n')
     snapshot = dumps.load_runtime_dump_snapshot(path, path)
-    assert snapshot.items == [] and snapshot.projectiles == {}
+    assert snapshot.items == {} and snapshot.projectiles == {}
     assert snapshot.provenance["status"] == "invalid_snapshot"
     use_snapshot(monkeypatch, snapshot)
     refusal = parents.compact_projectile_profile(parents.projectile_profile_of({"shoot": 42}))
@@ -131,16 +129,19 @@ def test_different_manifest_roots_do_not_form_a_pair(tmp_path):
     assert snapshot.provenance["status"] == "invalid_snapshot"
 
 
-def test_legacy_remains_explicitly_unverified_and_live_observation_wins(tmp_path, monkeypatch):
+def test_missing_manifest_refuses_old_dump_and_live_observation_wins(tmp_path, monkeypatch):
     items, projectiles = tmp_path / "items.jsonl", tmp_path / "projectiles.jsonl"
     items.write_text('{"type":97}\n')
     projectiles.write_text('{"type":42,"timeLeft":90}\n')
     snapshot = dumps.load_runtime_dump_snapshot(items, projectiles)
-    assert snapshot.provenance == {"status": "legacy_unverified"}
+    assert snapshot.provenance == {"status": "invalid_snapshot", "reason": "snapshot_manifest_required"}
+    assert snapshot.items == snapshot.projectiles == {}
     use_snapshot(monkeypatch, snapshot)
     profile = parents.compact_projectile_profile(parents.projectile_profile_of({"shoot": 42}))
-    assert profile["timeLeft"] == 90
-    assert profile["runtimeDumpProvenance"] == {"status": "legacy_unverified", "compatibility": "unverified"}
+    assert profile["unavailable"] is True and "timeLeft" not in profile
+    assert profile["runtimeDumpProvenance"]["reason"] == "snapshot_manifest_required"
+    assert items.read_text() == '{"type":97}\n'
+    assert projectiles.read_text() == '{"type":42,"timeLeft":90}\n'
     direct = {"type": 42, "unavailable": True}
     live = parents.projectile_profile_of({"shoot": 42, "directProjectileRaw": direct})
     assert live["unavailable"] is True and "runtimeDumpProvenance" not in live
@@ -170,7 +171,7 @@ def test_unpublished_new_pair_cannot_change_loaded_snapshot(tmp_path, monkeypatc
     use_snapshot(monkeypatch, snapshot)
     manifest_pair(tmp_path, "b" * 32)
     # A process retains the original snapshot until restart, even after publication.
-    assert dumps.runtime_projectile_lookup(42)["runtimeDumpProvenance"]["snapshotId"] == old["snapshotId"]
+    assert dumps.RUNTIME_DUMP_SNAPSHOT.lookup("projectile", 42)["runtimeDumpProvenance"]["snapshotId"] == old["snapshotId"]
     assert dumps.load_runtime_dump_snapshot(path, path).provenance["snapshotId"] == "b" * 32
 
 
@@ -185,7 +186,7 @@ def test_noncomparable_module_does_not_prove_mod_set_compatibility(tmp_path, mon
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("state", ["verified_snapshot", "legacy_unverified", "invalid_snapshot", "identity_mismatch"])
+@pytest.mark.parametrize("state", ["verified_snapshot", "missing_manifest", "invalid_snapshot", "identity_mismatch"])
 def test_provenance_reaches_actual_serialized_author_request(tmp_path, monkeypatch, mode, state):
     import socket
     from infini_local.core import llm_config
@@ -199,7 +200,7 @@ def test_provenance_reaches_actual_serialized_author_request(tmp_path, monkeypat
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     path, manifest = manifest_pair(tmp_path)
     item = {"name": "Synthetic parent", "shoot": 42}
-    if state == "legacy_unverified":
+    if state == "missing_manifest":
         path.unlink()
         items = tmp_path / "items_runtime_dump.jsonl"
         projectiles = tmp_path / "projectiles_runtime_dump.jsonl"
@@ -217,10 +218,25 @@ def test_provenance_reaches_actual_serialized_author_request(tmp_path, monkeypat
     dossier = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
     direct = dossier["parents"]["A"]["packet"]["raw"]["directProjectile"]
     provenance = direct["runtimeDumpProvenance"]
-    assert provenance["status"] == ("verified_snapshot" if state == "identity_mismatch" else state)
-    if state in ("invalid_snapshot", "identity_mismatch"):
+    assert provenance["status"] == ("verified_snapshot" if state == "identity_mismatch" else "invalid_snapshot" if state == "missing_manifest" else state)
+    if state in ("invalid_snapshot", "identity_mismatch", "missing_manifest"):
         assert direct["unavailable"] is True and "timeLeft" not in direct
     else:
         assert direct["timeLeft"] == 90 and provenance["compatibility"] == "unverified"
     assert len(json.dumps(provenance)) < 320
     assert "environment" not in provenance and "files" not in provenance
+
+
+def test_lookup_retains_its_snapshot_identity_when_another_is_installed(tmp_path, monkeypatch):
+    first_path, _ = manifest_pair(tmp_path / "first", "a" * 32,
+        projectile_rows=[{"type": 42, "timeLeft": 30, "fullName": "Example/First"}])
+    first = dumps.load_runtime_dump_snapshot(first_path, first_path)
+    second_path, _ = manifest_pair(tmp_path / "second", "b" * 32,
+        projectile_rows=[{"type": 42, "timeLeft": 90, "fullName": "Example/Second"}])
+    second = dumps.load_runtime_dump_snapshot(second_path, second_path)
+    use_snapshot(monkeypatch, second)
+    old = first.lookup("projectile", 42, expected_full_name="Example/First")
+    current = second.lookup("projectile", 42, expected_full_name="Example/Second")
+    assert old["timeLeft"] == 30 and old["runtimeDumpProvenance"]["snapshotId"] == "a" * 32
+    assert current["timeLeft"] == 90 and current["runtimeDumpProvenance"]["snapshotId"] == "b" * 32
+    assert old["runtimeDumpProvenance"]["compatibility"] == current["runtimeDumpProvenance"]["compatibility"] == "matched_available_identity"

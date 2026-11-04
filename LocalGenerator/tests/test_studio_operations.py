@@ -17,7 +17,7 @@ class OperationHost(operations.StudioOperations):
     def __init__(self, root):
         self.config_path = root / 'config.env'
         self.example_path = root / 'example.env'
-        self.example_path.write_text('INFINI_PORT=5055\n')
+        self.example_path.write_text(('# infini-config-format: json-string-v1\nINFINI_PORT=5055\n'))
         self.values = dict(DEFAULTS)
         self.values['INFINI_CACHE_DIR'] = str(root / 'cache')
         self.owner = threading.get_ident()

@@ -1365,7 +1365,7 @@
         },
         {
           "default": "127.0.0.1",
-          "file": "LocalGenerator/infini_local/web/server.py",
+          "file": "LocalGenerator/infini_local/web/server_status.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -1379,7 +1379,8 @@
       "minimum": null,
       "name": "INFINI_HOST",
       "owners": [
-        "LocalGenerator/infini_local/web/server.py"
+        "LocalGenerator/infini_local/web/server.py",
+        "LocalGenerator/infini_local/web/server_status.py"
       ],
       "secret": false,
       "type": "string",
@@ -3069,7 +3070,7 @@
         },
         {
           "default": 5055,
-          "file": "LocalGenerator/infini_local/web/server.py",
+          "file": "LocalGenerator/infini_local/web/server_status.py",
           "maximum": 65535,
           "minimum": 1,
           "type": "integer"
@@ -3083,7 +3084,8 @@
       "minimum": 1,
       "name": "INFINI_PORT",
       "owners": [
-        "LocalGenerator/infini_local/web/server.py"
+        "LocalGenerator/infini_local/web/server.py",
+        "LocalGenerator/infini_local/web/server_status.py"
       ],
       "secret": false,
       "type": "integer",
@@ -4379,7 +4381,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/web/server.py",
+          "file": "LocalGenerator/infini_local/web/server_status.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -4393,7 +4395,7 @@
       "minimum": null,
       "name": "INFINI_STUDIO_LAUNCH_ID",
       "owners": [
-        "LocalGenerator/infini_local/web/server.py"
+        "LocalGenerator/infini_local/web/server_status.py"
       ],
       "secret": false,
       "type": "string",
@@ -5191,7 +5193,7 @@
   ],
   "errors": [],
   "fieldCount": 211,
-  "fingerprint": "aeba56f09b08ee6f141ee58dc4519c10813881d579645bab313a1bee3efb16f3",
+  "fingerprint": "472b572a5ef79ff26df0274f85d91abec3cd09ba34bc41fd2339d1bb96618062",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

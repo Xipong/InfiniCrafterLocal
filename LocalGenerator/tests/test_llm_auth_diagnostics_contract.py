@@ -9,7 +9,7 @@ from infini_local.pipelines.transport import profiles as llm_profiles
 
 @pytest.mark.parametrize("selected_model", ["gpt-6-sol", ""])
 def test_exported_trace_names_the_selected_codex_model(monkeypatch, tmp_path, selected_model):
-    from infini_local.web import server
+    from infini_local.web import server_trace_snapshot as server
 
     auth = {"provider": "openai_codex", "model": selected_model, "status": "signed_in_unverified"}
     monkeypatch.setattr(server, "active_llm_provider", lambda: "openai_codex")
@@ -27,10 +27,10 @@ def test_exported_trace_names_the_selected_codex_model(monkeypatch, tmp_path, se
 
 def test_openrouter_auth_diagnostics_are_exposed_and_fail_fast(monkeypatch):
     # Config-only boundary: exercise actual health shaping, not a source literal.
-    from infini_local.web import server
+    from infini_local.web import server_status as server
 
     monkeypatch.setattr(server, "sdcpp_debug_snapshot", lambda **kwargs: {"autostart": False, "command": []})
-    monkeypatch.setattr(server, "_multiplayer_connect_info", lambda: {})
+    monkeypatch.setattr(server, "multiplayer_connect_info", lambda: {})
     monkeypatch.setattr(server.generation_debug, "last_combine_failure_summary", lambda: None)
     primary = {"provider": "openrouter", "base_url": "https://openrouter.ai/api/v1",
                "model": "test-model", "api_key": ""}
@@ -42,14 +42,14 @@ def test_openrouter_auth_diagnostics_are_exposed_and_fail_fast(monkeypatch):
     assert snapshot["status"] == "missing_api_key"
     assert "INFINI_OPENROUTER_API_KEY" in snapshot["hint"]
     assert "api_key" not in snapshot
-    assert server._health_payload()["llmAuth"] == snapshot
+    assert server.health_payload()["llmAuth"] == snapshot
     with pytest.raises(RuntimeError, match="INFINI_OPENROUTER_API_KEY"):
         llm_profiles.ensure_llm_auth_configured(primary)
     primary["api_key"] = "test-key-not-real"
     configured = llm_transport.llm_auth_snapshot()
     assert configured["status"] == "configured"
     llm_profiles.ensure_llm_auth_configured(primary)
-    health = server._health_payload()
+    health = server.health_payload()
     assert health["llmAuth"] == configured
     assert "api_key" not in health["llmAuth"]
     assert primary["api_key"] not in repr(health)

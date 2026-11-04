@@ -64,7 +64,7 @@ codex_auth.auth_status = lambda: {'authenticated': False}
 from infini_local.desktop.settings_controller import SettingsController
 from infini_local.desktop.web_studio import StudioController, StudioServer
 config = Path(sys.argv[1])
-config.write_text('INFINI_USE_LLM=0\\nINFINI_IMAGE_BACKEND=off\\nINFINI_SDCPP_SERVER_AUTOSTART=0\\n')
+config.write_text('# infini-config-format: json-string-v1\\nINFINI_USE_LLM=0\\nINFINI_IMAGE_BACKEND=off\\nINFINI_SDCPP_SERVER_AUTOSTART=0\\n')
 app = SettingsController(config_path=config)
 server = StudioServer(Path(sys.argv[2]))
 try:

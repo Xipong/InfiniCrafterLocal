@@ -92,7 +92,8 @@ docs/                           user / development / reference / archive
 | Model-facing cards/prompt и Author calls | `pipelines/author/item_contract.py`, `pipelines/author/prompt.py`, `pipelines/author/request.py` |
 | Selected sprite size/axis/grip dependencies | `core/visual_contract_schema.py::grip_schema/front_hand_sprite_errors`; Visual projection — `pipelines/visual/stage.py`; strict optional-present DTO — `core/runtime_authoring/wire_validator.py::_validate_sprite_presentation` |
 | Whole craft/stage orchestration | `pipelines/combine_pipeline.py`; numeric advice `pipelines/combine_balance.py` |
-| Request-local HTTP admission/response | `services/combine_endpoint.py`, `web/server_handler.py`, `web/http_response_helpers.py` |
+| Generator entrypoint / readiness | `web/server.py::main`; `web/server_status.py::health_payload` / `multiplayer_connect_info` |
+| Request-local HTTP admission/response | `services/combine_endpoint.py`, `web/server_handler.py::Handler`, `web/http_response_helpers.py`; route functions: `web/server_utility_routes.py`, `web/vfx_debug_routes.py`; trace projection: `web/server_trace_snapshot.py` |
 | LLM retry/negotiation; HTTP; logical deadline/physical attempts; rejection; offline replay | `pipelines/transport/{client,http,diagnostics,rejections,replay}.py`; Codex auth/SSE: `services/codex_auth.py`, `services/codex_text_backend.py` |
 | Provider selection, item lease, profile health | `pipelines/transport/profiles.py`; scalar settings: `core/llm_config.py` |
 | FIFO quota/rate admission | `pipelines/transport/admission.py` |

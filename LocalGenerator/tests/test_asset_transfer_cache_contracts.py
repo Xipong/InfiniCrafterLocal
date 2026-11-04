@@ -15,7 +15,7 @@ from infini_local.pipelines.visual.assets import build_visual_asset_plan
 from infini_local.pipelines.combine_pipeline import _cached_payload_report
 from infini_local.services import asset_sync_service
 from infini_local.storage import world_storage
-from infini_local.web.server_utility_routes import ServerUtilityRoutes
+from infini_local.web import server_utility_routes as routes
 import threading
 from infini_local.pipelines.visual.stage import _apply_kit
 from infini_local.pipelines.visual.contract import _validate_kit
@@ -28,13 +28,11 @@ from pipeline_test_support import isolated_serving_roots, png_assessments, selec
 
 
 def _get_asset(filename: str) -> HttpCapture:
-    # These are exactly the three dependencies used by the unchanged asset route.
-    routes = ServerUtilityRoutes.__new__(ServerUtilityRoutes)
-    routes.sprite_dir = visual_delivery_gate.SPRITE_DIR
-    routes.world_recipes_dir = visual_delivery_gate.WORLD_RECIPES_DIR
-    routes.asset_sync_service = asset_sync_service
     handler = HttpCapture()
-    assert routes.handle_get(handler, "/get_asset?" + urlencode({"file": filename}))
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(routes, "SPRITE_DIR", visual_delivery_gate.SPRITE_DIR)
+        patch.setattr(routes, "WORLD_RECIPES_DIR", visual_delivery_gate.WORLD_RECIPES_DIR)
+        assert routes.handle_get(handler, "/get_asset?" + urlencode({"file": filename}))
     return handler
 
 def _assert_cache_refusal(data: dict, root: Path) -> None:
@@ -159,7 +157,7 @@ def test_final_png_dimension_admission_matches_client_512_ceiling(
 
 
 def test_whole_roster_exact_byte_limits_include_inactive_members_and_cache(offline_backend, tmp_path):
-    from infini_local.web.server_utility_routes import MAX_ASSET_RESPONSE_BYTES
+    from infini_local.services.asset_sync_service import MAX_ASSET_RESPONSE_BYTES
 
     data = visual_sprite_generation.maybe_generate_visual_assets(_data([_request(layout="strip")]))
     item = Path(data["visual"]["spritePath"])
@@ -626,7 +624,7 @@ TRANSFER_SELECTIONS = (
 def test_transfer_selection_matches_readiness_and_cache(offline_backend, tmp_path, form, member, damage, http_status, accepted, legacy):
     from PIL import Image
     from PIL.PngImagePlugin import PngInfo
-    from infini_local.web.server_utility_routes import MAX_ASSET_RESPONSE_BYTES
+    from infini_local.services.asset_sync_service import MAX_ASSET_RESPONSE_BYTES
     data = visual_sprite_generation.maybe_generate_visual_assets(_data([]) if legacy else _data([_request(layout="strip")]))
     assert world_storage.is_deliverable_recipe_payload(data) and _cached_payload_report(data)["ok"]
     asset = data["vfxManifest"]["assets"][0] if not legacy else None
