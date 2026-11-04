@@ -49,19 +49,39 @@ public sealed partial class GeneratorClient
     private static ProjectileAttackCapture ProjectileAttackSource(int type, int style)
     {
         Lazy<ProjectileAttackCapture> program;
-        lock (AttackProgramCacheGate)
+        ProjectileAttackCapture result;
+        while (true)
         {
-            if (!AttackSourcePrograms.TryGetValue((type, style), out program!))
+            lock (AttackProgramCacheGate)
             {
-                // Bound native identity JSON as well as method syntax. Eviction
-                // only causes recomputation, never loss of source observations.
-                if (AttackSourcePrograms.Count >= 256 || attackProgramCharacters >= 16 * 1024 * 1024)
-                { AttackSourcePrograms.Clear(); countedAttackPrograms.Clear(); attackProgramCharacters = 0; }
-                program = new Lazy<ProjectileAttackCapture>(() => BuildProjectileAttackSource(type, style));
-                AttackSourcePrograms[(type, style)] = program;
+                if (!AttackSourcePrograms.TryGetValue((type, style), out program!))
+                {
+                    // Bound native identity JSON as well as method syntax. Eviction
+                    // only causes recomputation, never loss of source observations.
+                    if (AttackSourcePrograms.Count >= 256 || attackProgramCharacters >= 16 * 1024 * 1024)
+                    { AttackSourcePrograms.Clear(); countedAttackPrograms.Clear(); attackProgramCharacters = 0; }
+                    program = new Lazy<ProjectileAttackCapture>(() =>
+                    {
+                        var complete = BuildProjectileAttackSource(type, style);
+                        // Projection refusal handlers may have caught cancellation.
+                        // Never retain their partial result as a completed program.
+                        currentParentAnalysis?.ThrowIfCancelled();
+                        return complete;
+                    });
+                    AttackSourcePrograms[(type, style)] = program;
+                }
+            }
+            try { result = program.Value; break; }
+            catch (System.OperationCanceledException)
+            {
+                lock (AttackProgramCacheGate)
+                    if (AttackSourcePrograms.TryGetValue((type, style), out var failed) && ReferenceEquals(failed, program))
+                        AttackSourcePrograms.TryRemove((type, style), out _);
+                // A concurrent caller may have waited on another craft's Lazy.
+                // Retry with its own live context; the retired owner still exits.
+                currentParentAnalysis?.ThrowIfCancelled();
             }
         }
-        var result = program.Value;
         lock (AttackProgramCacheGate)
         {
             if (AttackSourcePrograms.TryGetValue((type, style), out var retained) && ReferenceEquals(retained, program)

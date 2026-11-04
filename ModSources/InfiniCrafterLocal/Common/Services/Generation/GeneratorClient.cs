@@ -310,7 +310,9 @@ public sealed partial class GeneratorClient
 
     public GeneratedItemData? GeneratePreparedBlocking(PreparedGenerationRequest request)
     {
-        if (request.CancellationToken.IsCancellationRequested)
+        // Pending captures still need CompleteAnalysis's cancellation cleanup
+        // when their request was retired before this worker could start.
+        if (request.CancellationToken.IsCancellationRequested && request.Analysis is null)
             return null;
         LastRecipeFailureIsFatal = false;
         LastRecipeFailureMessage = "";
@@ -331,6 +333,8 @@ public sealed partial class GeneratorClient
             return null;
         }
 
+        if (request.CancellationToken.IsCancellationRequested)
+            return null;
         if (LocalHttpQuietFailure.ShouldSkip(EndpointGuardKey))
             return null;
 

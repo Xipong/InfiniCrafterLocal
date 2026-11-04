@@ -12,6 +12,44 @@ using Terraria.ID;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static void ProjectileSourceCancellationDoesNotPoisonSharedCache()
+    {
+        using var state = new NativeActorState();
+        var projectile = new Projectile();
+        projectile.SetDefaults(ProjectileID.Bullet);
+        JsonNode expected = GeneratorClient.CaptureProjectileAttackReference(projectile);
+        GeneratorClient.ParentAnalysis.Invalidate();
+        using var cancellation = new CancellationTokenSource();
+        using var analysis = new GeneratorClient.ParentAnalysis(cancellation.Token);
+        cancellation.Cancel();
+        bool cancelled = false;
+        using (analysis.Enter())
+        {
+            // Enter the real cache factory with a cancelled context, equivalent
+            // to retirement while its source projections are being constructed.
+            // Projection-level refusal handlers must never cache partial work.
+            try
+            {
+                typeof(GeneratorClient).GetMethod("ProjectileAttackSource", BindingFlags.Static | BindingFlags.NonPublic)!
+                    .Invoke(null, new object[] { projectile.type, projectile.aiStyle });
+            }
+            catch (TargetInvocationException error) when (error.InnerException is OperationCanceledException)
+            { cancelled = true; }
+        }
+        Equal(true, cancelled, "cancelled native source construction is not admitted as a complete cached program");
+        JsonNode recovered = GeneratorClient.CaptureProjectileAttackReference(projectile);
+        Equal(true, JsonNode.DeepEquals(expected, recovered), "a later craft obtains the complete source after another session was cancelled");
+        var client = new GeneratorClient();
+        var request = client.PrepareDeferred(new Item(ItemID.SilverWatch), new Item(ItemID.Wood), new Player());
+        request.Cancel();
+        Equal(true, Task.Run(() => client.GeneratePreparedBlocking(request)).GetAwaiter().GetResult() is null,
+            "a request cancelled before its worker starts never reaches HTTP");
+        Equal(true, request.Analysis is null, "pre-start cancellation releases the captured analysis session");
+        bool withheld = false;
+        try { _ = request.PayloadJson; } catch (InvalidOperationException) { withheld = true; }
+        Equal(true, withheld, "cancelled unresolved payload remains inaccessible after cleanup");
+    }
+
     private static void PumpParentAnalysis(Task task)
     {
         var elapsed = System.Diagnostics.Stopwatch.StartNew();

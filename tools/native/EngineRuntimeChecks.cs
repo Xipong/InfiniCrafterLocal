@@ -102,6 +102,7 @@ internal static partial class EngineRuntimeChecks
             ("parent quantified snapshots and ammo observation identity", ParentQuantifiedFactsKeepSnapshotsAndObservationIdentity),
             ("parent native item scale penetration and use limit", ParentNativeItemStatsSurviveCaptureAndNormalization),
             ("parent analysis worker snapshots and cancellation", ParentAnalysisWorkerSnapshotsAndCancellation),
+            ("parent source cancellation cannot poison shared projectile cache", ProjectileSourceCancellationDoesNotPoisonSharedCache),
             ("parent analysis export cancellation and world retirement", ParentAnalysisExportCancellationAndWorldRetirement),
             ("runtime dump writer exact UTF8 byte and row bounds", RuntimeDumpWriterExactByteAndRowBounds),
             ("parent deferred craft complete synchronous parity", ParentDeferredCraftMatchesSynchronousFacts),
