@@ -194,7 +194,7 @@ public sealed partial class GeneratedProjectile
         Projectile.timeLeft = 2;
         Projectile.tileCollide = _entity!.Collision.TileCollide;
         ApplyOwnerLiveness(owner, true, "keep_alive", false);
-        Projectile.friendly = ChannelBeamWarmupProgress() >= (_entity.Controller.Params.DamageStartProgress ?? 1d);
+        Projectile.friendly = BeamWarmupProgress() >= (_entity.Controller.Params.DamageStartProgress ?? 1d);
         return true;
     }
 
@@ -202,8 +202,6 @@ public sealed partial class GeneratedProjectile
     {
         return _entity!.Controller.Params.ManaPayment != "each_use_time" || PaySustainedMana(owner);
     }
-
-    private double ChannelBeamWarmupProgress() => BeamWarmupProgress();
 
     private bool ApplyChargeThenRelease()
     {
@@ -353,12 +351,9 @@ public sealed partial class GeneratedProjectile
         Projectile.netUpdate = true;
     }
 
-    private NPC? FindNearestNpc(Vector2 center, float range)
-        => ResolveMotionNpc(range, false, legacyDistance: true);
-
     private void Home(float rangeTiles, float strength)
     {
-        NPC? target = FindNearestNpc(Projectile.Center, Math.Max(16f, rangeTiles * 16f));
+        NPC? target = ResolveMotionNpc(Math.Max(16f, rangeTiles * 16f), false, legacyDistance: true);
         if (target is null) return;
         float speed = Math.Max(1f, Projectile.velocity.Length());
         SeekVelocity(target.Center, speed, Math.Clamp(strength, 0.001f, 1f), false);
@@ -424,7 +419,7 @@ public sealed partial class GeneratedProjectile
 
     private void ProximityMissile(RuntimeParamsSpec p)
     {
-        NPC? target = FindNearestNpc(Projectile.Center, Math.Max(16f, p.RangeTiles * 16f));
+        NPC? target = ResolveMotionNpc(Math.Max(16f, p.RangeTiles * 16f), false, legacyDistance: true);
         if (target is null) return;
         Home(p.RangeTiles, p.HomingStrength);
         if (Projectile.Distance(target.Center) <= Math.Max(4f, p.ProximityRadiusPx))

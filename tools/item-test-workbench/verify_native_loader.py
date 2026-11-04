@@ -31,10 +31,10 @@ def report_from_stdout(output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--native-dll', type=Path, required=True, help='Built ItemTestWorkbench.dll with a sibling IFC DLL')
-    parser.add_argument('--probe-dll', type=Path, required=True, help='Separately built WorkbenchObserverFixture DLL')
-    parser.add_argument('--probe-mod-root', type=Path, default=HERE / 'fixtures/WorkbenchObserverFixture')
+    parser.add_argument('--mod-dll', type=Path, required=True, help='Separately built WorkbenchObserverFixture DLL')
+    parser.add_argument('--mod-root', type=Path, default=HERE / 'fixtures/WorkbenchObserverFixture')
     args = parser.parse_args()
-    host, probe, root = args.native_dll.resolve(strict=True), args.probe_dll.resolve(strict=True), args.probe_mod_root.resolve(strict=True)
+    host, probe, root = args.native_dll.resolve(strict=True), args.mod_dll.resolve(strict=True), args.mod_root.resolve(strict=True)
     production = host.parent / 'InfiniCrafterLocal.dll'
     build_file = root / 'build.txt'
     if not production.is_file() or not build_file.is_file():
@@ -44,8 +44,8 @@ def main():
     with tempfile.TemporaryDirectory(prefix='ifc-native-loader-') as directory:
         temp = Path(directory)
         observer = temp / 'observer.json'
-        command = [dotnet, str(host), '--check-native-loader', '--probe-dll', str(probe),
-                   '--probe-mod-root', str(root), '--probe-npc', 'WorkbenchObserverFixture/ProbeNpc']
+        command = [dotnet, str(host), '--check-native-loader', '--mod-dll', str(probe),
+                   '--mod-root', str(root), '--probe-npc', 'WorkbenchObserverFixture/ProbeNpc']
         env = os.environ.copy()
         env['IFC_WORKBENCH_OBSERVER_OUTPUT'] = str(observer)
         positive = subprocess.run(command, env=env, capture_output=True, text=True, timeout=180)
@@ -77,8 +77,8 @@ def main():
         (missing_root / 'build.txt').write_text(original.rstrip() + '\nmodReferences = WorkbenchMissingDependency\n', encoding='utf-8')
         missing_observer = temp / 'missing-observer.json'
         env['IFC_WORKBENCH_OBSERVER_OUTPUT'] = str(missing_observer)
-        missing_command = [dotnet, str(host), '--check-native-loader', '--probe-dll', str(probe),
-                           '--probe-mod-root', str(missing_root), '--probe-npc', 'WorkbenchObserverFixture/ProbeNpc']
+        missing_command = [dotnet, str(host), '--check-native-loader', '--mod-dll', str(probe),
+                           '--mod-root', str(missing_root), '--probe-npc', 'WorkbenchObserverFixture/ProbeNpc']
         negative = subprocess.run(missing_command, env=env, capture_output=True, text=True, timeout=180)
         if negative.returncode != 2 or 'dependencies not loaded' not in negative.stderr or 'WorkbenchMissingDependency' not in negative.stderr:
             raise AssertionError(f'Missing dependency did not fail closed ({negative.returncode}): {negative.stderr}')
@@ -91,8 +91,8 @@ def main():
         weak_root = temp / 'missing-weak-dependency'
         weak_root.mkdir()
         (weak_root / 'build.txt').write_text(original.rstrip() + '\nweakReferences = WorkbenchMissingWeakDependency\n', encoding='utf-8')
-        weak_command = [dotnet, str(host), '--check-native-loader', '--probe-dll', str(probe),
-                        '--probe-mod-root', str(weak_root), '--probe-npc', 'WorkbenchObserverFixture/ProbeNpc']
+        weak_command = [dotnet, str(host), '--check-native-loader', '--mod-dll', str(probe),
+                        '--mod-root', str(weak_root), '--probe-npc', 'WorkbenchObserverFixture/ProbeNpc']
         weak = subprocess.run(weak_command, env=env, capture_output=True, text=True, timeout=180)
         if weak.returncode != 2 or 'dependencies not loaded' not in weak.stderr or 'WorkbenchMissingWeakDependency' not in weak.stderr:
             raise AssertionError(f'Missing weak dependency did not fail closed ({weak.returncode}): {weak.stderr}')

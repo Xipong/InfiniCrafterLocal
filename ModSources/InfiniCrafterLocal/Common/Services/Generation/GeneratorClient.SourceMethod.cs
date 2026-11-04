@@ -40,6 +40,9 @@ public sealed partial class GeneratorClient
         internal readonly List<string> Unknown = new();
         internal readonly List<AmmoIl> Code;
         private readonly HashSet<int> sliceEntries = new();
+        private readonly Dictionary<int, List<Block>> predecessors = new();
+        private static readonly Dictionary<string, OpCode> OpcodesByName = AmmoOpcodes.Values
+            .Where(op => op.Name is not null).ToDictionary(op => op.Name!, StringComparer.Ordinal);
         private readonly Dictionary<int, HashSet<int>> reachable = new();
         private Dictionary<int, HashSet<int>>? postdominators;
         private readonly Dictionary<int, HashSet<int>> controlRegions = new();
@@ -82,7 +85,10 @@ public sealed partial class GeneratorClient
             return result;
         }
 
+        private readonly object memoGate = new();
         internal HashSet<int> Reach(int start)
+        { lock (memoGate) return ReachCore(start); }
+        private HashSet<int> ReachCore(int start)
         {
             if (reachable.TryGetValue(start, out var cached)) return cached;
             var reached = new HashSet<int>(); var pending = new Stack<int>(); pending.Push(start);
@@ -95,6 +101,8 @@ public sealed partial class GeneratorClient
         }
 
         internal HashSet<int> ControlledRegion(int start)
+        { lock (memoGate) return ControlledRegionCore(start); }
+        private HashSet<int> ControlledRegionCore(int start)
         {
             if (controlRegions.TryGetValue(start, out var cached)) return cached;
             Block block = Blocks[start];
@@ -110,6 +118,7 @@ public sealed partial class GeneratorClient
                 bool changed = true; int passes = 0;
                 while (changed)
                 {
+                    currentParentAnalysis?.ThrowIfCancelled();
                     if (++passes > 2048) throw new NotSupportedException("control_dependency_bound");
                     changed = false;
                     foreach (Block current in Blocks.Values.Reverse().Where(b => b.Height >= 0))
@@ -136,6 +145,7 @@ public sealed partial class GeneratorClient
 
         internal ParentSourceMethod(MethodBase method, List<AmmoIl>? sourceSlice = null, Dictionary<int, int>? sourceNext = null, Dictionary<int, int>? selectedSuccessors = null)
         {
+            currentParentAnalysis?.ThrowIfCancelled();
             Method = method;
             // A full method containing exception regions is unsupported regardless
             // of its instructions. Refuse before decoding potentially huge IL.
@@ -195,6 +205,9 @@ public sealed partial class GeneratorClient
                         throw new NotSupportedException("identity_selection_invalid_successor");
                     block.Next = new List<int> { successor };
                 }
+            foreach (int start in Blocks.Keys) predecessors[start] = new();
+            foreach (Block predecessor in Blocks.Values)
+                foreach (int next in predecessor.Next.Distinct()) predecessors[next].Add(predecessor);
             DetermineHeights();
             foreach (Block block in Blocks.Values.Where(b => b.Height >= 0)) DecodeBlock(block);
             LinkLocals();
@@ -202,7 +215,7 @@ public sealed partial class GeneratorClient
                 for (int slot = 0; slot < block.Height; slot++)
                 {
                     var input = Values[Entry(block.Start, slot)];
-                    foreach (Block predecessor in ordered.Where(p => p.Next.Contains(block.Start) && p.Height >= 0))
+                    foreach (Block predecessor in predecessors[block.Start].Where(p => p.Height >= 0))
                         input.Inputs.Add(predecessor.Exit[slot]);
                 }
         }
@@ -225,7 +238,7 @@ public sealed partial class GeneratorClient
                     i.Op == "newobj" || call is MethodInfo info && info.ReturnType != typeof(void) ? 1 : 0);
             }
             if (i.Op == "ret") return (Method is MethodInfo m && m.ReturnType != typeof(void) ? 1 : 0, 0);
-            OpCode opcode = AmmoOpcodes.Values.First(op => op.Name == i.Op);
+            OpCode opcode = OpcodesByName[i.Op];
             int pop = opcode.StackBehaviourPop switch
             {
                 StackBehaviour.Pop0 => 0,
@@ -277,6 +290,7 @@ public sealed partial class GeneratorClient
 
         private void DecodeBlock(Block block)
         {
+            currentParentAnalysis?.ThrowIfCancelled();
             var stack = new List<string>();
             for (int slot = 0; slot < block.Height; slot++)
             {
@@ -320,12 +334,13 @@ public sealed partial class GeneratorClient
             int passes = 0;
             while (changed)
             {
+                currentParentAnalysis?.ThrowIfCancelled();
                 if (++passes > 512) throw new NotSupportedException("local_dataflow_bound");
                 changed = false;
                 foreach (Block block in Blocks.Values.Where(b => b.Height >= 0))
                 {
                     var incoming = sliceEntries.Contains(block.Start) ? CopyDefinitions(entryDefinitions) : new Dictionary<int, HashSet<string>>();
-                    foreach (Block predecessor in Blocks.Values.Where(p => p.Height >= 0 && p.Next.Contains(block.Start)))
+                    foreach (Block predecessor in predecessors[block.Start].Where(p => p.Height >= 0))
                         foreach (var pair in predecessor.Outgoing)
                         {
                             if (!incoming.TryGetValue(pair.Key, out var defs)) incoming[pair.Key] = defs = new HashSet<string>();

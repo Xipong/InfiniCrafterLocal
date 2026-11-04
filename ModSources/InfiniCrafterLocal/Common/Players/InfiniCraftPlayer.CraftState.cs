@@ -534,8 +534,8 @@ public sealed partial class InfiniCraftPlayer
         _awaitingServerCommit = false;
         _serverCraftWaitTicks = 0;
 
-        // Only the HTTP call runs in the background. Item/Projectile introspection has already
-        // happened on the main thread while building PreparedGenerationRequest.
+        // Live Item/Player/Projectile observations were captured on the game thread.
+        // Source-only analysis completes on this worker before the HTTP request.
         _generationAttempt = 0;
         _retryWaitTicks = 0;
         _lastRetryNoticeTick = 0;
@@ -627,7 +627,7 @@ public sealed partial class InfiniCraftPlayer
         if (_awaitingServerCommit)
         {
             // Multiplayer clients do not run LocalGenerator and do not submit GeneratedItemData.
-            // This state only waits for the authoritative host to finish PacketRequestServerCraft.
+            // This state only waits for the authoritative host to finish InfiniNetPacketIds.RequestServerCraft.
             _serverCraftWaitTicks++;
             _totalCraftTicks++;
             if (_elapsedTicks < CraftDurationTicks)

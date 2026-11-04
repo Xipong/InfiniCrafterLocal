@@ -7,11 +7,10 @@ from infini_local.desktop import settings_env, settings_schema as schema
 from infini_local.desktop.settings_fields import FIELDS, disabled_reasons
 
 MAIN = "INFINI_OPENROUTER_PROVIDER"
-FALLBACK = "INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER"
 POOL = [f"INFINI_LLM_POOL_{slot}_OPENROUTER_PROVIDER" for slot in (2, 3, 4)]
 
 
-@pytest.mark.parametrize("key", [MAIN, FALLBACK, *POOL])
+@pytest.mark.parametrize("key", [MAIN, *POOL])
 def test_routing_fields_default_to_auto_and_are_saved_in_normal_order(key):
     assert schema.DEFAULTS[key] == ""
     assert schema.FIELD_ORDER.count(key) == 1
@@ -21,7 +20,7 @@ def test_routing_fields_default_to_auto_and_are_saved_in_normal_order(key):
 def test_exact_provider_slugs_survive_save_reload_and_provider_switch(tmp_path):
     path = tmp_path / "config.env"
     values = dict(schema.DEFAULTS)
-    expected = dict(zip([MAIN, FALLBACK, *POOL], ["Acme/region-a", "chutes", "deepinfra/turbo", "", "novita"]))
+    expected = dict(zip([MAIN, *POOL], ["Acme/region-a", "deepinfra/turbo", "", "novita"]))
     values.update(expected)
     values.update(INFINI_LLM_PROVIDER="openai_compat", INFINI_OPENROUTER_MODEL="owner/model:free")
     settings_env.write_env(path, values)
@@ -32,24 +31,16 @@ def test_exact_provider_slugs_survive_save_reload_and_provider_switch(tmp_path):
 
 def test_pin_visibility_tracks_exact_profile_provider_without_erasing_values():
     values = dict(schema.DEFAULTS)
-    values.update({MAIN: "Acme/region-a", FALLBACK: "chutes", POOL[0]: "novita"})
+    values.update({MAIN: "Acme/region-a", POOL[0]: "novita"})
     values.update(INFINI_LLM_PROVIDER="openrouter", INFINI_LLM_POOL_2_ENABLED="1",
-                      INFINI_LLM_POOL_2_PROVIDER="openrouter", INFINI_LLM_FALLBACK_PROVIDER="openrouter",
-                      INFINI_LLM_FALLBACK_MODEL="owner/model")
+                  INFINI_LLM_POOL_2_PROVIDER="openrouter")
     disabled = disabled_reasons(values, False)
-    assert not disabled[MAIN] and not disabled[FALLBACK] and not disabled[POOL[0]]
+    assert not disabled[MAIN] and not disabled[POOL[0]]
     assert disabled[POOL[1]] and disabled[POOL[2]]
-    values.update(INFINI_LLM_PROVIDER="local", INFINI_LLM_POOL_2_PROVIDER="openai_compat",
-                      INFINI_LLM_FALLBACK_PROVIDER="local")
+    values.update(INFINI_LLM_PROVIDER="local", INFINI_LLM_POOL_2_PROVIDER="openai_compat")
     disabled = disabled_reasons(values, False)
-    assert disabled[MAIN] and disabled[FALLBACK] and disabled[POOL[0]]
-    assert [values[key] for key in (MAIN, FALLBACK, POOL[0])] == ["Acme/region-a", "chutes", "novita"]
-    values.update(INFINI_LLM_PROVIDER="openrouter", INFINI_LLM_FALLBACK_PROVIDER="")
-    disabled = disabled_reasons(values, False)
-    assert not disabled[FALLBACK]  # Empty fallback provider inherits the primary route.
-    values["INFINI_LLM_FALLBACK_MODEL"] = ""
-    disabled = disabled_reasons(values, False)
-    assert disabled[FALLBACK]
+    assert disabled[MAIN] and disabled[POOL[0]]
+    assert [values[key] for key in (MAIN, POOL[0])] == ["Acme/region-a", "novita"]
 
 
 def test_multidev_metadata_has_one_provider_pin_for_each_pool_profile():

@@ -11,10 +11,10 @@ import tempfile
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--native-dll', type=Path, required=True)
-    parser.add_argument('--probe-dll', type=Path, required=True)
-    parser.add_argument('--probe-mod-root', type=Path, required=True)
+    parser.add_argument('--mod-dll', type=Path, required=True)
+    parser.add_argument('--mod-root', type=Path, required=True)
     args = parser.parse_args()
-    dll, probe, root = args.native_dll.resolve(), args.probe_dll.resolve(), args.probe_mod_root.resolve()
+    dll, probe, root = args.native_dll.resolve(), args.mod_dll.resolve(), args.mod_root.resolve()
     dotnet = os.environ.get('DOTNET', 'dotnet')
     here = Path(__file__).resolve().parent
     with tempfile.TemporaryDirectory(prefix='ifc-loader-scene-') as directory:
@@ -41,7 +41,7 @@ def main():
             env = os.environ.copy()
             env.pop('IFC_FIXTURE_DISABLE_DAMAGE_MODIFIERS', None)
             if with_probe:
-                command += ['--probe-dll', str(probe), '--probe-mod-root', str(root)]
+                command += ['--mod-dll', str(probe), '--mod-root', str(root)]
                 env['IFC_WORKBENCH_OBSERVER_OUTPUT'] = str(observer_path)
                 if disable_fixture_modifiers: env['IFC_FIXTURE_DISABLE_DAMAGE_MODIFIERS'] = '1'
             else:

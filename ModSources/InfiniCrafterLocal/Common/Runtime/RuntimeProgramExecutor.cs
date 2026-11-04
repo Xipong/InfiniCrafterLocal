@@ -79,25 +79,6 @@ internal static class RuntimeProgramExecutor
         NPC? directTarget,
         int damageDone,
         int childDepth,
-        ref int remainingSpawnBudget)
-    {
-        var budget = new RuntimeSpawnBudget(remainingSpawnBudget);
-        ExecuteAction(data, sourceEntity, action, owner, source, eventPosition, direction,
-            directTarget, damageDone, childDepth, budget);
-        remainingSpawnBudget = budget.Remaining;
-    }
-
-    public static void ExecuteAction(
-        GeneratedItemData data,
-        RuntimeEntitySpec sourceEntity,
-        RuntimeEventActionSpec action,
-        Player owner,
-        IEntitySource source,
-        Vector2 eventPosition,
-        Vector2 direction,
-        NPC? directTarget,
-        int damageDone,
-        int childDepth,
         RuntimeSpawnBudget budget,
         int reservedSpawnBudget = 0,
         RuntimeParentCombat? parentCombat = null,

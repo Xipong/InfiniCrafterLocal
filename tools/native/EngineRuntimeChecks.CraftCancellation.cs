@@ -81,7 +81,10 @@ internal static partial class EngineRuntimeChecks
         {
             Environment.SetEnvironmentVariable("INFINI_CRAFT_CACHE_RECOVERY_SECONDS", "0");
             Environment.SetEnvironmentVariable("INFINI_CRAFT_HTTP_ATTEMPTS", "2");
-            await using var retryServer = new CraftHttpFixture(0) { RejectSecondGeneration = true };
+            await using var retryServer = new CraftHttpFixture(0) {
+                RejectSecondGeneration = true,
+                FailureJson = "{\"error\":\"authored_invalid\",\"message\":\"request-owned failure\",\"playerMessage\":\"Materials returned.\"}",
+            };
             var retryClient = new GeneratorClient { Endpoint = retryServer.Endpoint };
             var retryRequest = new GeneratorClient.PreparedGenerationRequest();
             Equal(true, await Task.Run(() => retryClient.GeneratePreparedBlocking(retryRequest)).WaitAsync(TimeSpan.FromSeconds(5)) is null,
@@ -95,11 +98,21 @@ internal static partial class EngineRuntimeChecks
                 var data = GeneratedItemData.Placeholder();
                 data.Id = "craft-cancellation-control"; data.Name = "Craft cancellation control"; data.SourceMode = "test_fixture";
                 await using var successServer = new CraftHttpFixture(0) { SuccessJson = data.ToJson(), CacheHit = cacheHit };
-                var successClient = new GeneratorClient { Endpoint = successServer.Endpoint };
+                // The same client serves all lanes. Another request must neither
+                // inherit this rejection nor reset its owning request's outcome.
+                retryClient.Endpoint = successServer.Endpoint;
                 var successRequest = new GeneratorClient.PreparedGenerationRequest();
-                var result = await Task.Run(() => successClient.GeneratePreparedBlocking(successRequest)).WaitAsync(TimeSpan.FromSeconds(5));
+                var result = await Task.Run(() => retryClient.GeneratePreparedBlocking(successRequest)).WaitAsync(TimeSpan.FromSeconds(5));
                 Equal(data.Id, result?.Id ?? "", "active request delivers " + (cacheHit ? "cached" : "fresh") + " result");
                 Equal(false, successRequest.CancellationToken.IsCancellationRequested, "delivery does not cancel before owner consumes result");
+                Equal(false, successRequest.FailureIsFatal, "fresh request does not inherit another lane's rejection");
+                Equal(0, successRequest.FailureStatusCode, "fresh request has no prior HTTP status");
+                Equal("", successRequest.FailureMessage, "fresh request has no prior diagnostic");
+                Equal("", successRequest.FailurePlayerMessage, "fresh request has no prior player message");
+                Equal(true, retryRequest.FailureIsFatal, "successful independent lane preserves rejected request");
+                Equal(422, retryRequest.FailureStatusCode, "rejected request retains its own status");
+                Equal("authored_invalid: request-owned failure", retryRequest.FailureMessage, "rejected request retains its own diagnostic");
+                Equal("Materials returned.", retryRequest.FailurePlayerMessage, "rejected request retains its own player message");
                 successRequest.Cancel();
                 Equal(data.Id, result!.Id, "retirement leaves already delivered result intact");
             }

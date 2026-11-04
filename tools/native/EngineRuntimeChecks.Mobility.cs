@@ -82,10 +82,10 @@ internal static partial class EngineRuntimeChecks
                         var action = new RuntimeEventActionSpec {
                             ActionCode = RuntimeEventActionCode.MoveOwner, Mode = "blink_to_event_position",
                             RangeTiles = 120, CooldownTicks = 60, SafeTileOnly = true };
-                        int remainingBudget = 0;
+                        var remainingBudget = new RuntimeSpawnBudget(0);
                         RuntimeProgramExecutor.ExecuteAction(data, new RuntimeEntitySpec(), action,
                             player, new EntitySource_Misc("event cooldown regression"),
-                            arrived + new Vector2(64f, 0f), Vector2.UnitX, null, 0, 0, ref remainingBudget);
+                            arrived + new Vector2(64f, 0f), Vector2.UnitX, null, 0, 0, remainingBudget);
                         Equal(arrived, player.Center, label + " event blink shares owner mobility cooldown");
                     });
                 }

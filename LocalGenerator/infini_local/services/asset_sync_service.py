@@ -9,6 +9,9 @@ from typing import Any
 from urllib.parse import urlparse
 
 
+# Shared delivery/HTTP ceiling for a single generated asset.
+MAX_ASSET_RESPONSE_BYTES = 8 * 1024 * 1024
+
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 _MAX_PNG_BYTES = 32 * 1024 * 1024
 # Final gameplay/sync PNG ceiling matches GeneratedAssetSyncService in C#.

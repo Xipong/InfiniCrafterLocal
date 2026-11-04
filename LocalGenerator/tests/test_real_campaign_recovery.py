@@ -153,7 +153,7 @@ def test_real_preflight_settings_and_existing_budget_are_read_only(tmp_path, bud
     env = {'INFINI_LLM_PROVIDER': 'openai_codex', 'INFINI_CODEX_LLM_MODEL': 'terra-test',
            'INFINI_LLM_API_MODE': 'responses', 'INFINI_LLM_RESPONSE_FORMAT': 'json_object',
            'INFINI_USE_LLM': '1', 'INFINI_IMAGE_BACKEND': 'openai_codex',
-           'INFINI_LLM_FALLBACK_NETWORK_FAILS': '1', 'INFINI_SPRITE_RETRIES': '0'}
+           'INFINI_LLM_NETWORK_ATTEMPTS': '1', 'INFINI_SPRITE_RETRIES': '0'}
     monkeypatch.setattr(preflight, 'read_environment', lambda *_: env)
     commands = []
     def git_output(command, **_):
@@ -180,7 +180,7 @@ def test_real_preflight_settings_and_existing_budget_are_read_only(tmp_path, bud
     for key, value, match in (
         ('INFINI_IMAGE_BACKEND', 'procedural', 'canonical Codex'),
         ('INFINI_CODEX_IMAGE_MODEL', 'other', 'image model'),
-        ('INFINI_LLM_FALLBACK_NETWORK_FAILS', '2', 'hidden text retry'),
+        ('INFINI_LLM_NETWORK_ATTEMPTS', '2', 'hidden text retry'),
         ('INFINI_SPRITE_RETRIES', '2', 'image retries'),
     ):
         old = env.get(key)

@@ -7,9 +7,12 @@ IR. The remaining endpoints inspect or regenerate only exact entity/event slots.
 """
 
 import time
-from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 from urllib.parse import urlparse
+
+from infini_local.core.config_bootstrap import APP_VERSION
+from infini_local.pipelines.final_normalize import final_normalize
+from infini_local.storage.world_recipe_runtime import normalize_world_id_from_payload, read_world_recipe_cache, write_world_recipe_cache
 
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION, RUNTIME_WIRE_SCHEMA
 from infini_local.core.runtime_authoring.wire_views import runtime_event_inventory
@@ -53,77 +56,69 @@ def _sample_data() -> dict[str, Any]:
     }
 
 
-@dataclass(frozen=True)
-class VfxDebugRoutes:
-    app_version: str
-    normalize_world_id_from_payload: Callable[[dict[str, Any]], str]
-    read_world_recipe_cache: Callable[..., dict[str, Any] | None]
-    write_world_recipe_cache: Callable[..., None]
-    final_normalize: Callable[[dict[str, Any]], dict[str, Any]]
-
-    def handle_get(self, handler: Any, path: str) -> bool:
-        request_path = urlparse(path).path
-        if not request_path.startswith("/debug/vfx"):
-            return False
-        if request_path in {"/debug/vfx_contract", "/debug/vfx_matrix", "/debug/vfx_recipes"}:
-            sample = _sample_data()
-            handler.json({
-                "ok": True,
-                "version": self.app_version,
-                "schema": VFX_MANIFEST_SCHEMA,
-                "directorSurface": vfx_director_surface(sample),
-                "sampleRuntimeEvents": runtime_event_inventory(sample),
-                "note": "VFX slots bind only to exact runtimeProgram entityId/event pairs.",
-            })
-            return True
-        if request_path == "/debug/vfx_timeline":
-            handler.json({"ok": True, "version": self.app_version, "message": "Timeline is runtime event driven; inspect vfxManifest.slots."})
-            return True
+def handle_get(handler: Any, path: str) -> bool:
+    request_path = urlparse(path).path
+    if not request_path.startswith("/debug/vfx"):
         return False
-
-    def handle_post(self, handler: Any, path: str, payload: dict[str, Any]) -> bool:
-        request_path = urlparse(path).path
-        if request_path == "/debug/vfx_select":
-            handler.json(self.select_manifest(payload))
-            return True
-        if request_path == "/debug/vfx_validate":
-            data = payload.get("data") if isinstance(payload.get("data"), dict) else _sample_data()
-            authored = payload.get("vfx") if isinstance(payload.get("vfx"), dict) else payload
-            handler.json(validate_vfx_director_output(authored, data))
-            return True
-        if request_path == "/debug/vfx_reroll":
-            handler.json(self.reroll_cached_manifest(payload))
-            return True
-        return False
-
-    def select_manifest(self, payload: dict[str, Any]) -> dict[str, Any]:
-        data = dict(payload.get("data")) if isinstance(payload.get("data"), dict) else _sample_data()
-        meta = data.setdefault("recipeMeta", {})
-        if isinstance(meta, dict):
-            meta.pop("vfxForcedRecipeId", None)
-            meta.pop("vfxRerollSalt", None)
-        key = str(payload.get("recipeKey") or data.get("recipeKey") or data.get("id") or "debug_vfx")
-        out = attach_vfx_manifest(data, key)
-        return {"ok": True, "version": self.app_version, "recipeKey": key, "runtimeEvents": runtime_event_inventory(out), "vfxManifest": out.get("vfxManifest")}
-
-    def reroll_cached_manifest(self, payload: dict[str, Any]) -> dict[str, Any]:
-        world_id = self.normalize_world_id_from_payload(payload)
-        world_name = str(payload.get("worldName") or "").strip()
-        recipe_key_value = str(payload.get("recipeKey") or "").strip()
-        if not recipe_key_value:
-            raise ValueError("missing recipeKey for VFX reroll")
-        data = self.read_world_recipe_cache(recipe_key_value, world_id, world_name)
-        if not data:
-            raise FileNotFoundError(f"recipe not found for worldId={world_id} recipeKey={recipe_key_value}")
-        meta = data.setdefault("recipeMeta", {})
-        if isinstance(meta, dict):
-            meta.pop("vfxForcedRecipeId", None)
-            meta.pop("vfxRerollSalt", None)
-        data.setdefault("debug", {})["vfxRerollRequestedAt"] = time.time()
-        data = attach_vfx_manifest(data, recipe_key_value)
-        data = self.final_normalize(data)
-        self.write_world_recipe_cache(recipe_key_value, world_id, data, world_name=world_name)
-        return {"ok": True, "version": self.app_version, "worldId": str(world_id), "recipeKey": recipe_key_value, "vfxManifest": data.get("vfxManifest"), "data": data if bool(payload.get("returnData")) else None}
+    if request_path in {"/debug/vfx_contract", "/debug/vfx_matrix", "/debug/vfx_recipes"}:
+        sample = _sample_data()
+        handler.json({
+            "ok": True,
+            "version": APP_VERSION,
+            "schema": VFX_MANIFEST_SCHEMA,
+            "directorSurface": vfx_director_surface(sample),
+            "sampleRuntimeEvents": runtime_event_inventory(sample),
+            "note": "VFX slots bind only to exact runtimeProgram entityId/event pairs.",
+        })
+        return True
+    if request_path == "/debug/vfx_timeline":
+        handler.json({"ok": True, "version": APP_VERSION, "message": "Timeline is runtime event driven; inspect vfxManifest.slots."})
+        return True
+    return False
 
 
-__all__ = ["VfxDebugRoutes"]
+def handle_post(handler: Any, path: str, payload: dict[str, Any]) -> bool:
+    request_path = urlparse(path).path
+    if request_path == "/debug/vfx_select":
+        handler.json(select_manifest(payload))
+        return True
+    if request_path == "/debug/vfx_validate":
+        data = payload.get("data") if isinstance(payload.get("data"), dict) else _sample_data()
+        authored = payload.get("vfx") if isinstance(payload.get("vfx"), dict) else payload
+        handler.json(validate_vfx_director_output(authored, data))
+        return True
+    if request_path == "/debug/vfx_reroll":
+        handler.json(reroll_cached_manifest(payload))
+        return True
+    return False
+
+
+def select_manifest(payload: dict[str, Any]) -> dict[str, Any]:
+    data = dict(payload.get("data")) if isinstance(payload.get("data"), dict) else _sample_data()
+    meta = data.setdefault("recipeMeta", {})
+    if isinstance(meta, dict):
+        meta.pop("vfxForcedRecipeId", None)
+        meta.pop("vfxRerollSalt", None)
+    key = str(payload.get("recipeKey") or data.get("recipeKey") or data.get("id") or "debug_vfx")
+    out = attach_vfx_manifest(data, key)
+    return {"ok": True, "version": APP_VERSION, "recipeKey": key, "runtimeEvents": runtime_event_inventory(out), "vfxManifest": out.get("vfxManifest")}
+
+
+def reroll_cached_manifest(payload: dict[str, Any]) -> dict[str, Any]:
+    world_id = normalize_world_id_from_payload(payload)
+    world_name = str(payload.get("worldName") or "").strip()
+    recipe_key_value = str(payload.get("recipeKey") or "").strip()
+    if not recipe_key_value:
+        raise ValueError("missing recipeKey for VFX reroll")
+    data = read_world_recipe_cache(recipe_key_value, world_id, world_name)
+    if not data:
+        raise FileNotFoundError(f"recipe not found for worldId={world_id} recipeKey={recipe_key_value}")
+    meta = data.setdefault("recipeMeta", {})
+    if isinstance(meta, dict):
+        meta.pop("vfxForcedRecipeId", None)
+        meta.pop("vfxRerollSalt", None)
+    data.setdefault("debug", {})["vfxRerollRequestedAt"] = time.time()
+    data = attach_vfx_manifest(data, recipe_key_value)
+    data = final_normalize(data)
+    write_world_recipe_cache(recipe_key_value, world_id, data, world_name=world_name)
+    return {"ok": True, "version": APP_VERSION, "worldId": str(world_id), "recipeKey": recipe_key_value, "vfxManifest": data.get("vfxManifest"), "data": data if bool(payload.get("returnData")) else None}

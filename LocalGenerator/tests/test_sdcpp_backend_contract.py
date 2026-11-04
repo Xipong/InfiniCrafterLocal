@@ -283,3 +283,20 @@ def test_probe_publication_ignores_late_older_result_without_lifecycle_wait(monk
         release.set()
         worker.join(timeout=5)
         assert not worker.is_alive()
+
+
+def test_safe_args_use_current_server_contract_even_for_renamed_executable():
+    cfg = _cfg(server_exe="custom-server-name", extra_args="")
+    cmd, shell = sdcpp_backend.build_server_command(cfg)
+    assert shell is False
+    assert cmd[0] == "custom-server-name"
+    assert cmd[cmd.index("--diffusion-model") + 1] == cfg.model
+    assert cmd[cmd.index("--listen-port") + 1] == str(cfg.port)
+    assert "--server" not in cmd and "-m" not in cmd
+
+
+def test_retired_template_modes_are_not_shell_execution_aliases():
+    import pytest
+    for mode in ("raw_template", "custom_template", "typo"):
+        with pytest.raises(ValueError, match="must be safe_args or template"):
+            sdcpp_backend.build_server_command(_cfg(command_mode=mode))

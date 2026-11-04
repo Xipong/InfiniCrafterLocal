@@ -133,15 +133,6 @@ def _extract_python() -> tuple[list[Declaration], dict[str, set[str]]]:
             if not isinstance(node, ast.Call):
                 continue
             fn = node.func.id if isinstance(node.func, ast.Name) else node.func.attr if isinstance(node.func, ast.Attribute) else ""
-            if fn in {"env_first", "env_first_allow_empty"} and node.args:
-                names = resolved(node.args[0])
-                default = resolved(node.args[1]) if len(node.args) > 1 else ""
-                if isinstance(names, (list, tuple)):
-                    for env_name in names:
-                        if isinstance(env_name, str) and env_name.startswith("INFINI_"):
-                            declarations.append(Declaration(env_name, "string", default, None, None, rel, int(getattr(node, "lineno", 0))))
-                            references[env_name].add(rel)
-                continue
             if fn not in ENV_FUNCTIONS or not node.args:
                 continue
             env_name = resolved(node.args[0])
