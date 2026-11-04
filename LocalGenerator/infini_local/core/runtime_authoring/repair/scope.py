@@ -9,6 +9,7 @@ from typing import Any, Iterable, Mapping
 from infini_local.core.repair_merge import json_path_child, json_path_relative
 from infini_local.core.runtime_authoring.binding_use_policy import (
     action_kind,
+    canonical_transaction,
     contact_damage,
     expected_placeable_input,
     placement_call_id,
@@ -781,13 +782,17 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 mark("bindings", binding_id)
                 binding_input_change_ids.add(binding_id)
                 grant("bindings", binding_id, "input")
-                binding_alternative_overrides[binding_id] = [transaction(
-                    input_name=expected_input,
-                    action_name=action_name,
-                    target=target_id,
-                    stack_cost_value=(1 if action_name == "place_item" else stack_cost(binding)),
-                    contact_damage_value=(False if action_name == "place_item" else contact_damage(binding)),
-                    placement_call=placement_call_id(binding),
+                # This repair changes only input. Preserve every frozen action
+                # selector (including fishing values and effectGroupId) rather
+                # than reconstructing an incomplete generic transaction.
+                candidate = copy.deepcopy(dict(binding))
+                candidate["input"] = expected_input
+                if action_name == "place_item":
+                    # The placement transaction has fixed literals; their
+                    # actual mutation still needs separate field permissions.
+                    candidate.update(stackCost=1, contactDamage=False)
+                binding_alternative_overrides[binding_id] = [canonical_transaction(
+                    candidate, item_body_id=sole_item_entity_id,
                 )]
                 context["entities"].add(target_id)
 
