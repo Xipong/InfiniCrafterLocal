@@ -15,6 +15,7 @@ from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_prompt_cache import with_instruction_segments
 from infini_local.core.llm_stage_messages import (
+    generation_art_direction,
     stage_accounting,
     stage_chat_message,
 )
@@ -430,6 +431,7 @@ def build_gameplay_repair_dossier(
             "Each upsert is a complete schema-valid node. Copy existing nodes from readOnlySourceFragments.brokenFragments, preserving required values, accepted optional values and absences outside exact fieldPermissions. Extra frozen rewrites are ignored.",
             RUNTIME_ROW_SHAPE_RULE,
             STACK_COST_RULE,
+            "Independent poses and deliberately displaced bodies remain valid. Compose with low-level capabilities; do not introduce a weapon family, archetype, semantic root, or code-authored default.",
             "New nodes are allowed only by the exact blocker/dependency create policy and must satisfy the full capability requirements. Keep existing ids; use new ids only for permitted missing nodes. Defaults describe Author omission, not Repair edits.",
             "Existing target/entity references come from immutableProgramIndex.entities[*].id. Where create.calls.allowedTargetKinds permits a new target, emit it exactly once in entitiesUpsert with an allowed kind and use that same id consistently.",
             "Remove exact deletable.callPropertyKeys through callPropertyKeysDelete {callId,key}. For exact deletable.callParamKeys, use callParamKeysDelete or omit the invalid key from its complete callsUpsert row.",
@@ -517,8 +519,10 @@ def repair_author_item_after_failure(
         "Resolve exactValidationErrors within repairScope using the dossier rules and supplied alternatives. "
         "Preserve all accepted values and absences outside that scope. Return only the JSON patch defined by requiredJsonShape."
     )
+    direction = generation_art_direction()
+    art_context = ("\n\nArt direction is advisory and does not override the output contract, accepted gameplay or frozen fields. " + direction) if direction else ""
     messages = [
-        stage_chat_message("system", "author_repair_contract", repair_system + _item_language_instruction() + llm_reasoning_system_suffix(model_name)),
+        stage_chat_message("system", "author_repair_contract", repair_system + _item_language_instruction() + art_context + llm_reasoning_system_suffix(model_name)),
         stage_chat_message("user", "author_repair_context", repair_user),
     ]
     request = apply_llm_common_options({

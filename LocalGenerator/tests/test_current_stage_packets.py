@@ -127,7 +127,8 @@ def test_actual_outgoing_packets_preserve_roles_schema_and_frozen_authority(capt
             from test_codex_subscription_contract import _assert_structured_outputs_subset
             _assert_structured_outputs_subset(schema)
             if stage.startswith("visual"):
-                assert schema == full["responseSchema"]
+                from infini_local.core.provider_schema import _provider_strict_projection
+                assert schema == _provider_strict_projection(full["responseSchema"], omit_annotations=True)
             elif stage.startswith("vfx"):
                 from infini_local.core.provider_schema import _provider_strict_projection, defer_provider_cross_field_constraints
                 assert schema == _provider_strict_projection(defer_provider_cross_field_constraints(full["outputSchema"]), omit_annotations=True)

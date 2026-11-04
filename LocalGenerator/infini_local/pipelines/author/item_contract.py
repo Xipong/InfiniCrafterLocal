@@ -20,6 +20,7 @@ AUTHOR_DESIGN_QUALITY_RULE = (
     "Freely choose how the parents influence it; a new role need not retain their functions. "
     "Consider what the player gives up in crafting and using the result, and make its strengths and tradeoffs worth those costs. "
     "Implement the intended play sequence: player inputs, how effects reach targets, and motion and contact geometry that communicate the action. "
+    "Make the relationship between the player and the visible item or effect intentional: a held body, an independently moving object or a detached effect should read as that choice throughout its motion. "
     "Later art and VFX dress that gameplay; they do not replace its execution."
 )
 

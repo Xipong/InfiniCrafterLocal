@@ -164,6 +164,8 @@ def test_real_retry_compactor_retains_selected_frame_with_long_art_and_png_diagn
         assert len(validation["reasons"]) >= 2
         notes = post_retry.validation_retry_notes(validation, role)
         assert notes and notes in retry["prompt"]
+        assert "arrangement" in retry["prompt"] and "within sprite bounds and readable" in retry["prompt"]
+        assert "No checkerboard, UI" in retry["prompt"]
         from infini_local.services.sdcpp_backend import server_payload
         for call in (first, retry):
             payload = server_payload(backend._sdcpp_config(), call["prompt"], "not sent", 512, 512, 42, "a1111", is_zimage=zimage, positive_only=True)

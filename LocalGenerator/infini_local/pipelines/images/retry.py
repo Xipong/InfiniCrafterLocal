@@ -74,19 +74,16 @@ def build_retry_prompt_from_validation(prompt: str, validation: dict[str, Any] |
     bg = sprite_background_positive_clause()
     contract = role_contract_prompt_clause(role, canvas)
     notes = validation_retry_notes(validation, role)
-    if image_backend_is_zimage():
-        retry_parts = [
-            str(prompt or ""),
-            f"Revision {attempt}: preserve the same exact {role} subject, quantity, action, state, materials, and colors.",
-            str(contract),
-            f"Background correction: {bg}.",
-            ("Technical correction: " + notes) if notes else "",
-        ]
-        return compact_zimage_asset_prompt(retry_parts, role, limit=env_int("INFINI_ZIMAGE_RETRY_PROMPT_LIMIT", 2200)) + guidance
-    extra = (
-        f"Revision {attempt}: preserve the authored {role} subject, components, arrangement, materials and colors. "
+    revision = (
+        f"Revision {attempt}: preserve the authored {role} subject, quantity, action, state, arrangement, materials and colors. "
+        "Keep components within sprite bounds and readable. No checkerboard, UI, text, scene, ground, shadow or crop. "
         f"{contract}, {bg}."
     )
     if notes:
-        extra += ", fix these technical issues: " + notes
-    return (str(prompt or "") + ", " + extra)[:2800] + guidance
+        revision += " Technical correction: " + notes
+    if image_backend_is_zimage():
+        # Reserve the complete corrective tail even when the authored prompt is long.
+        return compact_zimage_asset_prompt([prompt, revision], role, limit=env_int("INFINI_ZIMAGE_RETRY_PROMPT_LIMIT", 2200)) + guidance
+    # Reserve the correction before bounding the descriptive part.
+    body_budget = max(0, 2800 - len(revision) - 2)
+    return (prompt[:body_budget] + ", " + revision).lstrip(", ") + guidance

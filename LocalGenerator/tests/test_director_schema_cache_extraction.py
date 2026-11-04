@@ -117,7 +117,7 @@ def _assert_visual_size_repair_packet(packet, data, mode):
     }, "required": ["schema", "note", "itemPatch"]}
     if mode == "json_schema":
         expected = provider_schema._provider_strict_projection(expected)
-        assert packet["response_format"]["json_schema"]["schema"] == expected
+        assert packet["response_format"]["json_schema"]["schema"] == provider_schema._provider_strict_projection(expected, omit_annotations=True)
     assert dynamic["responseSchema"] == dossier["responseSchema"] == expected
     source = _visual_kit(data)
     assert dossier["brokenFragments"]["item"] == dict(source["item"], renderSizePx=None)
@@ -205,7 +205,7 @@ def test_visual_caches_literal_entity_grammar_not_roster(monkeypatch, stage, mod
         canonical = (visual_contract._visual_repair_schema if stage.endswith("repair") else visual_contract._response_schema)(ids, False, data["runtimeProgram"]["itemEntityId"])
         if mode == "json_schema":
             canonical = provider_schema._provider_strict_projection(canonical)
-            assert packet["response_format"]["json_schema"]["schema"] == canonical
+            assert packet["response_format"]["json_schema"]["schema"] == provider_schema._provider_strict_projection(canonical, omit_annotations=True)
         assert request_dossier(packet)["responseSchema"] == canonical
         assert branches[0]["properties"]["entityId"]["enum"] == [data["runtimeProgram"]["itemEntityId"]]
         assert branches[1]["properties"]["entityId"]["enum"] == ids[1:]
@@ -244,7 +244,7 @@ def test_visual_item_only_roster_preserves_optional_equipment_contract(monkeypat
     canonical = (visual_contract._visual_repair_schema if stage.endswith("repair") else visual_contract._response_schema)(ids, overlay, ids[0])
     if mode == "json_schema":
         canonical = provider_schema._provider_strict_projection(canonical)
-        assert packet["response_format"]["json_schema"]["schema"] == canonical
+        assert packet["response_format"]["json_schema"]["schema"] == provider_schema._provider_strict_projection(canonical, omit_annotations=True)
     assert request_dossier(packet)["responseSchema"] == canonical
     static, dynamic = [json.loads(row["content"]) for row in packet["messages"][1:]]
     slot = dynamic["responseSchema"]["properties"]["entitiesUpsert" if stage.endswith("repair") else "entities"]["items"]
@@ -414,7 +414,7 @@ def test_reference_schema_reconstructs_owner_admission_and_refusal(monkeypatch, 
         assert '"$ref"' not in json.dumps(compact)
     inline = request_dossier(packet)[key]
     if mode == "json_schema":
-        expected_wire = inline if visual_stage else provider_schema._provider_strict_projection(
+        expected_wire = provider_schema._provider_strict_projection(inline, omit_annotations=True) if visual_stage else provider_schema._provider_strict_projection(
             provider_schema.defer_provider_cross_field_constraints(inline), omit_annotations=True,
         )
         assert expected_wire == packet["response_format"]["json_schema"]["schema"]

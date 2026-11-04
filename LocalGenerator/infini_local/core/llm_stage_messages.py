@@ -46,7 +46,7 @@ def generation_system_suffix() -> str:
     return (
         "\n\nTarget game: Terraria (tModLoader). Design an item or its in-game presentation, not a standalone illustration. "
         "For new designs, freely choose the parents' influence. Follow the requested output contract; "
-        "art direction does not override accepted gameplay or frozen fields."
+        "art direction is advisory and does not override the output contract, accepted gameplay or frozen fields."
     ) + (f"\n\n{direction}" if direction else "")
 
 

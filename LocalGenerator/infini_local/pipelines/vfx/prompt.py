@@ -66,7 +66,8 @@ _READABILITY_RULE = (
     "Keep visual coverage consistent with actual gameplay coverage; sound alone does not communicate visible area. "
     "For delayed cues shape/spriteElement/libraryParticle/nativeDust/nativeLight use event-relative startTick. "
     "An on_hit cue starts from that hit occurrence, not automatically from a gameplay action's delayed execution; "
-    "match the accepted delayTicks and radiusPx using the actual event anchor and renderer controls. "
+    "Match the accepted delay only with a renderer that consumes timing, and use the actual event anchor and renderer controls for radiusPx. "
+    "For a physical child, prefer accents on that exact child's available spawn/periodic/hit pairs rather than decorative debris that could be mistaken for damaging bodies. "
     "Deliberate absence/zero remains valid; there is no automatic VFX insertion or minimum brightness. "
     "In Repair this goal applies only within diagnosed permissions."
 )

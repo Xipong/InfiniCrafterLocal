@@ -52,7 +52,7 @@ def test_shared_guidance_reaches_wire_once_and_fallback_retains_contract(monkeyp
     assert packet == before
 
 
-@pytest.mark.parametrize("stage", ["author", "repair", "format"])
+@pytest.mark.parametrize("stage", ["author", "format"])
 @pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
 def test_presentation_art_style_does_not_change_gameplay_or_syntax_packets(monkeypatch, stage, mode):
     from infini_local.core import llm_config
@@ -62,3 +62,39 @@ def test_presentation_art_style_does_not_change_gameplay_or_syntax_packets(monke
     monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Terraria Like")
     styled, = stage_packets(monkeypatch, stage, format_mode=mode, labels=("same-design",))
     assert styled == default
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
+def test_gameplay_repair_receives_user_art_direction_without_changing_scope(monkeypatch, mode):
+    from infini_local.core import llm_config
+    from infini_local.core.llm_stage_messages import generation_art_direction
+
+    monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Default")
+    default, = stage_packets(monkeypatch, "repair", format_mode=mode, labels=("same-design",))
+    monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Terraria Like")
+    styled, = stage_packets(monkeypatch, "repair", format_mode=mode, labels=("same-design",))
+    direction = generation_art_direction()
+    assert direction and direction not in default["messages"][0]["content"]
+    assert styled["messages"][0]["content"].count(direction) == 1
+    normalized = copy.deepcopy(styled)
+    normalized["messages"][0]["content"] = normalized["messages"][0]["content"].replace("\n\nArt direction is advisory and does not override the output contract, accepted gameplay or frozen fields. " + direction, "")
+    assert normalized == default
+
+
+@pytest.mark.parametrize("stage", ["vfx", "vfx_repair"])
+def test_vfx_packet_guides_actual_child_events_and_supported_timing(monkeypatch, stage):
+    packet, = stage_packets(monkeypatch, stage, labels=("child-cue",))
+    wire = "\n".join(message["content"] for message in packet["messages"])
+    assert "exact child's available spawn/periodic/hit pairs" in wire
+    assert "only with a renderer that consumes timing" in wire
+    assert "on_hit cue starts from that hit occurrence" in wire
+
+
+def test_author_and_repair_deliver_composition_context(monkeypatch):
+    author, = stage_packets(monkeypatch, "author", labels=("composition",))
+    repair, = stage_packets(monkeypatch, "repair", labels=("composition",))
+    author_text = "\n".join(message["content"] for message in author["messages"])
+    repair_text = "\n".join(message["content"] for message in repair["messages"])
+    assert "held body, an independently moving object or a detached effect" in author_text
+    assert "Independent poses and deliberately displaced bodies remain valid" in repair_text
+    assert "weapon family, archetype, semantic root, or code-authored default" in repair_text
