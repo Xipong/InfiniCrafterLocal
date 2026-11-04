@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Systems;
 using InfiniCrafterLocal.Content.Items;
+using InfiniCrafterLocal.Content.Tiles;
 using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
@@ -23,6 +24,15 @@ internal static partial class EngineRuntimeChecks
         placement.Gameplay.UseStyleName="swing";
         InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.StampCurrentWorld(placement);
         System.IO.File.WriteAllText(System.IO.Path.Combine(directory,"synthetic-world-campfire.json"),SwarmWire(placement).ToJson());
+        var owned=PlacedLedgerData("workbench-synthetic-owned-object");
+        owned.RuntimeProgram.ItemUse.Channel=false;
+        owned.Gameplay.UseTime=owned.Gameplay.UseAnimation=20;
+        owned.Gameplay.UseStyleName="swing";
+        var ownedPlacement=owned.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
+        ownedPlacement.OwnedTile=new RuntimeOwnedTileSpec { Width=3,Height=2,Collision="open",Support="floor" };
+        ownedPlacement.PlacedBody=new RuntimePlacedBodySpec { RenderSizePx=48,FootprintAnchorX=.5,FootprintAnchorY=1,
+            ImagePivotX=.5,ImagePivotY=1,OffsetXPx=0,OffsetYPx=0,RotationDegrees=0,FlipX=false,FlipY=false,PivotSpace="alpha_bounds" };
+        System.IO.File.WriteAllText(System.IO.Path.Combine(directory,"synthetic-world-owned.json"),SwarmWire(owned).ToJson());
         var mining=GeneratedItemData.FromJson(System.IO.File.ReadAllText("tools/item-test-workbench/fixtures/synthetic-client-contact.json"))!;
         mining.Id="workbench-synthetic-mining"; mining.Gameplay.PickPower=59;
         System.IO.File.WriteAllText(System.IO.Path.Combine(directory,"synthetic-world-mining.json"),SwarmWire(mining).ToJson());
@@ -57,13 +67,19 @@ internal static partial class EngineRuntimeChecks
     {
         if(scenario["world"] is null) throw new ArgumentException("World assertions require explicit world settings");
         string kind=assertion["kind"]!.GetValue<string>();
-        WKeys(assertion,"world assertion",kind=="tile_at"?new[]{"kind","tick","tileX","tileY","hasTile","tileId"}:new[]{"kind","tick","value"});
+        WKeys(assertion,"world assertion",kind=="tile_at"?new[]{"kind","tick","tileX","tileY","hasTile","tileId","ownedTileKey"}:new[]{"kind","tick","value"});
         if(WInt(assertion,"tick",-1)<0 || WInt(assertion,"tick",-1)>=ticks) throw new ArgumentException("World assertion tick outside scenario");
         if(kind=="tile_at") {
             WWorldCoordinates(assertion);
             if(assertion["hasTile"] is null) throw new ArgumentException("tile_at requires hasTile");
             if(!scenario["world"]!["trackTiles"]!.AsArray().Any(c=>WInt(c,"tileX",-1)==WInt(assertion,"tileX",-2)&&WInt(c,"tileY",-1)==WInt(assertion,"tileY",-2))) throw new ArgumentException("tile_at must name a tracked cell");
-            if(assertion["hasTile"]!.GetValue<bool>() && (WInt(assertion,"tileId",-1)<0 || WInt(assertion,"tileId",-1)>=TileID.Count)) throw new ArgumentException("Active tile assertion requires vanilla tileId");
+            bool active=assertion["hasTile"]!.GetValue<bool>();
+            bool native=assertion.AsObject().ContainsKey("tileId"),owned=assertion.AsObject().ContainsKey("ownedTileKey");
+            if(active) {
+                if(native==owned)throw new ArgumentException("Active tile assertion requires exactly one vanilla tileId or ownedTileKey");
+                if(native && (WInt(assertion,"tileId",-1)<0 || WInt(assertion,"tileId",-1)>=TileID.Count))throw new ArgumentException("Native tile assertion requires vanilla tileId");
+                if(owned)WOwnedShapeForKey(assertion["ownedTileKey"]?.GetValue<string>()??throw new ArgumentException("ownedTileKey cannot be null"));
+            } else if(native || owned)throw new ArgumentException("Absent tile assertion cannot specify tile identity");
         } else if(WInt(assertion,"value",-1)<0) throw new ArgumentException("World count assertion requires nonnegative value");
     }
     private static bool WWorldAssertion(JsonNode assertion, JsonArray frames)
@@ -74,7 +90,9 @@ internal static partial class EngineRuntimeChecks
         if(kind=="tile_at") {
             var cell=world["tiles"]!.AsArray().Single(c=>WInt(c,"tileX",-1)==WInt(assertion,"tileX",-2)&&WInt(c,"tileY",-1)==WInt(assertion,"tileY",-2));
             bool expected=assertion["hasTile"]!.GetValue<bool>();
-            return cell!["hasTile"]!.GetValue<bool>()==expected && (!expected || WInt(cell,"tileId",-1)==WInt(assertion,"tileId",-2));
+            return cell!["hasTile"]!.GetValue<bool>()==expected && (!expected || (assertion["ownedTileKey"] is JsonNode key
+                ? cell["ownedTileKey"]?.GetValue<string>()==key.GetValue<string>()
+                : WInt(cell,"tileId",-1)==WInt(assertion,"tileId",-2) && cell["ownedTileKey"] is null));
         }
         string field=kind switch {"placement_groups_at"=>"placementGroups","placement_pending_at"=>"pendingReturns",_=>"generatedWorldItemUnits"};
         return WInt(world,field,-1)==WInt(assertion,"value",-2)
@@ -96,7 +114,6 @@ internal static partial class EngineRuntimeChecks
         public WWorldScene(JsonObject settings, GeneratedPlacementLedgerSystem ledger, GeneratedItemData? data, JsonObject report)
         {
             this.ledger=ledger;updateDroppedItems=settings["updateDroppedItems"]?.GetValue<bool>()??false;this.itemId=data?.Id??"";sourceNetworkDefinitionHash=data is null?"":NetworkDefinitionHash(data);cells=settings["trackTiles"]!.AsArray();
-            typeof(Terraria.Main).GetMethod("Initialize_TileAndNPCData2",PersistenceStatic)!.Invoke(null,null);
             // The native loader executes the unmodified production GlobalTile callback.
             // No fake CanDrop, placement outcome, return spawn or tile mutation is injected.
             oldDrop=dropField.GetValue(null);
@@ -130,7 +147,9 @@ internal static partial class EngineRuntimeChecks
             var pending=saved.GetList<TagCompound>("infiniGeneratedPlacementReturnsV2");
             var items=Terraria.Main.item.Where(i=>i is {active:true,stack:>0} && i.ModItem is GeneratedItem g && g.Data.Id==itemId).ToArray();
             var tiles=new JsonArray();
-            foreach(var c in cells) {int x=WInt(c,"tileX",0),y=WInt(c,"tileY",0);var t=Terraria.Main.tile[x,y];tiles.Add(new JsonObject{["tileX"]=x,["tileY"]=y,["hasTile"]=t.HasTile,["tileId"]=(int)t.TileType,["wallId"]=(int)t.WallType,["frameX"]=(int)t.TileFrameX,["frameY"]=(int)t.TileFrameY});}
+            foreach(var c in cells) {int x=WInt(c,"tileX",0),y=WInt(c,"tileY",0);var t=Terraria.Main.tile[x,y];tiles.Add(new JsonObject{["tileX"]=x,["tileY"]=y,["hasTile"]=t.HasTile,["tileId"]=(int)t.TileType,
+                ["ownedTileKey"]=t.HasTile && TileLoader.GetTile(t.TileType) is GeneratedOwnedTile owned?owned.Name:null,
+                ["wallId"]=(int)t.WallType,["frameX"]=(int)t.TileFrameX,["frameY"]=(int)t.TileFrameY});}
             return new JsonObject{["droppedItemUpdateScope"]=updateDroppedItems?"Original Item.UpdateItem each active native world item; no complete Main.UpdateWorld ecology":"notRun",["sourceNetworkDefinitionSha256"]=sourceNetworkDefinitionHash,["mismatchedReturnedDefinitions"]=items.Count(i=>NetworkDefinitionHash(((GeneratedItem)i.ModItem).Data)!=sourceNetworkDefinitionHash),["tiles"]=tiles,["targetX"]=Player.tileTargetX,["targetY"]=Player.tileTargetY,["placementGroups"]=groups.Count,["pendingReturns"]=pending.Count,["quarantinedReturns"]=saved.GetList<TagCompound>("infiniGeneratedPlacementReturnQuarantineV1").Count,["returnFailures"]=new JsonArray(saved.GetList<TagCompound>("infiniGeneratedPlacementReturnQuarantineV1").Select(q=>(JsonNode?)JsonValue.Create(q.GetString("cause"))).ToArray()),["generatedWorldItemUnits"]=items.Sum(i=>i.stack),["returnedItems"]=new JsonArray(items.Select(i=>(JsonNode?)new JsonObject{["slot"]=i.whoAmI,["x"]=i.position.X,["y"]=i.position.Y,["vx"]=i.velocity.X,["vy"]=i.velocity.Y,["width"]=i.width,["height"]=i.height,["stack"]=i.stack,["itemId"]=((GeneratedItem)i.ModItem).Data.Id,["networkDefinitionSha256"]=NetworkDefinitionHash(((GeneratedItem)i.ModItem).Data),["definitionMatchesSource"]=NetworkDefinitionHash(((GeneratedItem)i.ModItem).Data)==sourceNetworkDefinitionHash,["definitionSha256"]=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(((GeneratedItem)i.ModItem).Data.ToJson()))).ToLowerInvariant()}).ToArray())};
         }
         public void Dispose(){WActiveWorld=null;ledger.Unload();boolSerializer.Dispose();dropField.SetValue(null,oldDrop);Player.tileTargetX=oldX;Player.tileTargetY=oldY;WorldGen.gen=oldGen;Terraria.Main.mapEnabled=oldMap;}

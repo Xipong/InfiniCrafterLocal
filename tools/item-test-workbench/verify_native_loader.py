@@ -52,7 +52,7 @@ def main():
         if positive.returncode != 0:
             raise AssertionError(f'Native loader failed ({positive.returncode}): {positive.stderr}')
         report = report_from_stdout(positive.stdout)
-        if not report.get('nativePlayerAttached') or not report.get('npcSpawnHook') or report.get('ContentCount', 0) < 1:
+        if not report.get('nativePlayerAttached') or not report.get('npcSpawnHook') or report.get('ContentCount', 0) < 1 or report.get('ownedTiles') != 1536:
             raise AssertionError(f'IFC lifecycle not confirmed: {report}')
         extra = report.get('additionalMod') or {}
         if extra.get('name') != 'WorkbenchObserverFixture' or extra.get('sha256') != baseline[probe]:

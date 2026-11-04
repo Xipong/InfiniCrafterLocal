@@ -29,6 +29,7 @@ internal static partial class EngineRuntimeChecks
         }
         CheckWorkbenchTargetHitAssertions();
         CheckWorkbenchVfxContracts();
+        CheckWorkbenchWorldAssertions();
         Console.WriteLine("PASS: finite and final-frame player/dummy/projectile/hostile snapshot and target-specific hit assertion controls (not gameplay)");
     }
     // Assertions read observed native state/events. They never drive item/projectile logic.

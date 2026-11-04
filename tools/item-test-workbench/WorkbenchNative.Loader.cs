@@ -265,7 +265,7 @@ internal sealed class WNativeLoader : IDisposable
         PrepareHeadlessAssets(mod, mod.CreateDefaultContentSource());
     }
 
-    private static void PrepareSourceMod(Mod mod, Assembly assembly, string root, string sandbox, bool requireAssets)
+    internal static void PrepareSourceMod(Mod mod, Assembly assembly, string root, string sandbox, bool requireAssets)
     {
         string buildFile = Path.Combine(root, "build.txt");
         if (!File.Exists(buildFile)) throw new FileNotFoundException("Mod source build.txt missing", buildFile);
@@ -331,6 +331,7 @@ internal static partial class EngineRuntimeChecks
         string? configured = Environment.GetEnvironmentVariable("INFINI_MOD_SOURCE_ROOT");
         string root = !string.IsNullOrWhiteSpace(configured) ? Path.GetFullPath(configured) : Path.Combine(AppContext.BaseDirectory, "native-mod");
         using var loader = WNativeLoader.Bootstrap(sandbox, root, mods, serverMode);
+        int ownedTiles = WCheckOwnedTileRegistrations(loader.Mod);
         var player = new Player();
         if (player.GetModPlayer<InfiniCraftPlayer>() is null) throw new InvalidOperationException("Native PlayerLoader did not attach InfiniCraftPlayer");
         Terraria.Main.npc = Enumerable.Range(0, Terraria.Main.maxNPCs + 1).Select(_ => new NPC()).ToArray();
@@ -345,7 +346,7 @@ internal static partial class EngineRuntimeChecks
             throw new InvalidOperationException("Native NPC.NewNPC did not dispatch registered IFC OnSpawn");
         typeof(SystemLoader).GetMethod("PostUpdateEverything", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, null);
         Console.WriteLine(JsonSerializer.Serialize(new { status = "passed", loader.ContentCount,
-            productionAssembly = loader.Mod.Code.Location, nativePlayerAttached = true, npcSpawnHook = true,
+            productionAssembly = loader.Mod.Code.Location, nativePlayerAttached = true, npcSpawnHook = true, ownedTiles,
             missingIfcModDependencies = loader.MissingIfcDependencies, networkMode = Terraria.Main.netMode, requestedServerMode = serverMode,
             additionalMods = loader.AdditionalMods.Select(m => new { name = m.Name, assembly = m.Code.Location }).ToArray(),
             additionalMod = loader.AdditionalMod is null ? null : new { name = loader.AdditionalMod.Name,

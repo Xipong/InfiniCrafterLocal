@@ -35,6 +35,7 @@ internal static class WorkbenchProgram
                 EngineRuntimeChecks.CheckWorkbenchNativeLoader(sandbox, ModInputs(dll, root, modDlls, modRoots, tmods), npc, probeServerMode); return 0;
             }
             if (args.Length == 1 && args[0] == "--check-assertions") { EngineRuntimeChecks.CheckWorkbenchAssertions(); return 0; }
+            if (args.Length == 1 && args[0] == "--check-owned-registration") { EngineRuntimeChecks.CheckWorkbenchOwnedRegistration(); return 0; }
             if (args.Length == 2 && args[0] == "--write-fixtures") { EngineRuntimeChecks.WriteWorkbenchFixtures(args[1]); return 0; }
             if(nativeLoaderScene) args=args.Where(a=>a!="--native-loader-scene").ToArray();
             string itemBoundary="fresh"; string? item = null, nativeItem = null, scenario = null, probeDll = null, probeRoot = null; int? vanillaItem = null;
