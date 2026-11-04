@@ -407,7 +407,6 @@ Lowery — технический lowering, не lore и не автор доп�
 | time | Seconds resolve to the nearest world tick (60/s), half-tick ties upward. Positive effects that round to zero are rejected. immunity.localCooldown and projectile-update counters remain counts. |
 | distance | World distances use blocks; Tiles also means blocks. 1 block = 16 world pixels. |
 | speed | Physical speed/acceleration use blocks/s and blocks/s^2; angular rates use radians/s. Retention/lerp/multiplier controls keep their declared per-update meaning. |
-| reach | Attack reach comes from the executed body path and collision geometry. Native width/height and launch coefficients alone may not reproduce a parent's moving center or Colliding shape. Active attachment places the center and clears velocity at its motion stage; launch speed alone does not extend the attached path. Item useStyle, sprite size and VFX do not add projectile collision coverage. Choose range and motion for the new play experience; parent mechanics are references, not required templates. |
 | scope | Author cards use player-facing units; raw parent facts and compiled wire retain engine units. Pixel geometry and normalized UV/grip coordinates retain their own units. Texture resolution is independent of rendered size and collision geometry. |
 | vanillaScaleReference | Ordinary unmounted player: 20x42-pixel collision box; base run speed 11.25 blocks/s; normal jump initial upward velocity about 18.79 blocks/s. |
 | spread | radians; total span |

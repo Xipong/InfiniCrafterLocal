@@ -640,23 +640,32 @@ def test_concrete_units_keep_parent_identity_and_do_not_select_missing_variant()
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-def test_author_and_frozen_repair_receive_the_same_nonprescriptive_reach_context(monkeypatch, mode):
-    source, item = _source(), _broken_item()
+def test_author_and_scoped_repair_receive_canonical_attach_card(monkeypatch, mode):
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+    from infini_local.qa.capability_witnesses import build_capability_witness
+
+    source, item = _source(), build_capability_witness("attach")
+    attached = next(call for call in item["runtimeProgram"]["calls"] if call["id"] == "witness_call")
+    attached["params"]["anchor"] = "unsupported_anchor"
     before = copy.deepcopy((source, item))
     author_request, author_packet = _author_request(monkeypatch, mode, source)
     repair_request, repair_packet = _repair_request(monkeypatch, mode, source, item)
-    reach = author_packet["runtimeCapabilityContract"]["technicalNotes"]["reach"]
-    assert isinstance(reach, str) and reach
-    assert repair_packet["runtimeExecutionTruth"]["units"]["playerFacingUnits"]["reach"] == reach
-    # The reading aid is shared instruction context, not a new authored field,
-    # changed source value, generated geometry, or a broader Repair permission.
+    capability = CAPABILITY_REGISTRY["attach"]
+    cards = author_packet["runtimeCapabilityContract"]["catalog"]["capabilities"]
+    assert [card["does"] for card in cards if card["fn"] == "attach"] == [capability.summary]
+    repair_cards = repair_packet["existingBrokenCapabilityCards"]
+    assert [card for card in repair_cards if card["fn"] == "attach"] == [capability.prompt_card()]
+    # Attachment semantics belong to its canonical card, not an extra global
+    # reach lesson. Repair receives this card only through its exact blocker.
+    assert "reach" not in author_packet["runtimeCapabilityContract"]["technicalNotes"]
+    assert "reach" not in repair_packet["runtimeExecutionTruth"]["units"]["playerFacingUnits"]
     for request in (author_request, repair_request):
         sent = _serialized_chat_request(monkeypatch, request)
-        assert any(reach in row["content"] for row in sent["messages"] if row["role"] in ("system", "developer"))
+        assert any(capability.summary in row["content"] for row in sent["messages"])
     assert (source, item) == before
     assert repair_packet["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
     assert repair_packet["repairScope"]["fieldPermissions"]["calls"] == [
-        {"id": "held_lantern_pike_life", "paths": ["params.lifetimeSeconds"]}]
+        {"id": "witness_call", "paths": ["params.anchor"]}]
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
