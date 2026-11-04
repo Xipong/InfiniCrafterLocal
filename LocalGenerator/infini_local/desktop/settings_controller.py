@@ -18,8 +18,7 @@ from infini_local.desktop.settings_env import (
 )
 from infini_local.desktop.settings_schema import DEFAULTS, PRESETS
 from infini_local.core.app_paths import CONFIG_PATH, EXAMPLE_PATH
-from infini_local.core.config_migration import migrate_config_file, environment_migration_status
-from infini_local.core.env_file import read_env_file
+from infini_local.core.config_migration import migrate_config_file, environment_migration_status, explicit_config_keys
 from infini_local.core.env_utils import env_str
 from infini_local.desktop.settings_fields import FIELDS, disabled_reasons
 from infini_local.desktop.studio_operations import StudioOperations
@@ -68,7 +67,7 @@ class SettingsController(StudioOperations):
         changes = environment_migration_status()['changes']
         if not changes:
             return values
-        explicit = read_env_file(source)
+        explicit = explicit_config_keys(self.config_path)
         # A migrated inherited value must not disappear behind UI defaults on a
         # fresh install. Actual canonical file fields still have precedence.
         for change in changes:

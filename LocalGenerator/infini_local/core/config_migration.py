@@ -6,6 +6,7 @@ are retained privately in this process, never written to persistent OS settings.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -117,7 +118,7 @@ def migrate_values(values: Mapping[str, str], *, environment: Mapping[str, str] 
                 for suffix in FALLBACK_SUFFIXES if 'INFINI_LLM_FALLBACK_' + suffix in current}
     if fallback:
         prefix = 'INFINI_LLM_POOL_2_'
-        provider = _provider(fallback.get('PROVIDER', '').strip() or current.get('INFINI_LLM_PROVIDER', '').strip() or 'local')
+        provider = _provider(fallback.get('PROVIDER', '').strip() or context.get('INFINI_LLM_PROVIDER', current.get('INFINI_LLM_PROVIDER', '')).strip() or 'local')
         candidates = dict(fallback)
         candidates['PROVIDER'] = provider
         candidates['API_MODE'] = 'responses' if provider == 'openai_codex' else 'chat_completions'
@@ -159,10 +160,15 @@ def migrate_values(values: Mapping[str, str], *, environment: Mapping[str, str] 
 
 def migrate_environment(environ: MutableMapping[str, str]) -> dict:
     """Migrate this process only; preserve displaced values privately in memory."""
+    after, changes = migrate_values(dict(environ))
+    return apply_environment_values(environ, after, changes)
+
+
+def apply_environment_values(environ: MutableMapping[str, str], after: Mapping[str, str], changes: list[dict]) -> dict:
+    """Apply an already-resolved file/process mapping without redoing precedence."""
     global _ENVIRONMENT_RECEIPT
     before = dict(environ)
-    after, changes = migrate_values(before)
-    if not changes:
+    if before == after:
         return {'changed': False, 'changes': []}
     # Retain before applying, so recovery data survives even a custom mapping's
     # failure. os.environ is the production caller; no registry/setx mutation.
@@ -177,7 +183,9 @@ def migrate_environment(environ: MutableMapping[str, str]) -> dict:
         environ.clear()
         environ.update(before)
         raise
-    _ENVIRONMENT_RECEIPT = {'changed': True, 'changes': [*_ENVIRONMENT_RECEIPT['changes'], *changes]}
+    cumulative = { (row['action'], row['source'], row['target']): row
+                   for row in [*_ENVIRONMENT_RECEIPT['changes'], *changes] }
+    _ENVIRONMENT_RECEIPT = {'changed': True, 'changes': list(cumulative.values())}
     return {'changed': True, 'changes': changes}
 
 
@@ -204,6 +212,63 @@ def read_migration_receipt(path: Path) -> dict:
     return receipt
 
 
+def _source_provenance(path: Path) -> tuple[dict[str, str], dict]:
+    try:
+        contents = Path(path).read_bytes()
+    except FileNotFoundError:
+        return {}, {}
+    values = parse_env_text(contents.decode('utf-8-sig'), allow_legacy=True)
+    receipt = read_migration_receipt(path)
+    if (_hash(contents) != receipt.get('target_sha256')
+            or not isinstance(receipt.get('original_keys'), list)
+            or not isinstance(receipt.get('derived_keys'), list)):
+        return values, {}
+    known_targets = set(SIMPLE_ALIASES.values()) | {
+        'INFINI_LLM_POOL_2_' + suffix for suffix in (*FALLBACK_SUFFIXES, 'ENABLED', 'API_MODE')}
+    # A sidecar is metadata, not authority to delete arbitrary user settings.
+    receipt['derived_keys'] = [key for key in receipt['derived_keys']
+                               if isinstance(key, str) and key in known_targets and key not in receipt['original_keys']]
+    receipt['original_keys'] = [key for key in receipt['original_keys'] if isinstance(key, str)]
+    blank_keys = receipt.get('empty_legacy_keys', [])
+    allowed_blank_keys = {'INFINI_LLM_FALLBACK_' + suffix for suffix in FALLBACK_SUFFIXES}
+    receipt['empty_legacy_keys'] = [key for key in blank_keys
+                                    if isinstance(key, str) and key in allowed_blank_keys]
+    return values, receipt
+
+
+def read_migration_source(path: Path) -> dict[str, str]:
+    """Read original key provenance while untouched migrated bytes remain.
+
+    Reconstruct only values actually copied to current keys. Quarantined or
+    displaced originals remain exclusively in the private exact-byte backup.
+    A user save changes the hash and makes all saved keys explicit canonical.
+    """
+    current, receipt = _source_provenance(path)
+    if not receipt:
+        return current
+    original_keys = set(receipt['original_keys'])
+    source = {key: value for key, value in current.items() if key not in receipt['derived_keys']}
+    for change in receipt['changes']:
+        if not isinstance(change, dict):
+            continue
+        old, new = change.get('source'), change.get('target')
+        allowed = {**SIMPLE_ALIASES, **{'INFINI_LLM_FALLBACK_' + suffix: 'INFINI_LLM_POOL_2_' + suffix
+                                      for suffix in FALLBACK_SUFFIXES}}
+        if (isinstance(old, str) and allowed.get(old) == new
+                and change.get('action') in {'rename', 'profile_migration'} and old in original_keys
+                and old not in current and new in current):
+            # An originally blank fallback inherited its effective primary at
+            # startup. Do not reconstruct the copied file-primary default as
+            # an explicit legacy override of the process primary credentials.
+            source[old] = '' if old in receipt.get('empty_legacy_keys', []) else current[new]
+    return source
+
+
+def explicit_config_keys(path: Path) -> set[str]:
+    current, receipt = _source_provenance(path)
+    return set(current) if not receipt else set(current).difference(receipt['derived_keys'])
+
+
 def _hash(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -223,7 +288,79 @@ def _atomic_write(path: Path, data: bytes, *, mode: int = 0o600) -> None:
             temporary.unlink(missing_ok=True)
 
 
+def _publish_backup(backup: Path, original: bytes) -> None:
+    """Publish only a complete fsynced backup, atomically without replacement."""
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=backup.parent, prefix='.' + backup.name + '.', suffix='.tmp', delete=False) as stream:
+            temporary = Path(stream.name)
+            os.chmod(temporary, 0o600)
+            stream.write(original)
+            stream.flush()
+            os.fsync(stream.fileno())
+        try:
+            os.link(temporary, backup)
+        except FileExistsError:
+            if backup.is_symlink() or backup.read_bytes() != original:
+                raise OSError('Configuration migration backup conflict; original unchanged.') from None
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+@contextmanager
+def _configuration_lock(destination: Path):
+    """Serialize config plus receipt publication; kernel releases crash locks.
+
+    The restrictive lockfile deliberately persists: unlinking it while waiters
+    hold an open descriptor would permit a second independent lock inode.
+    """
+    lock_path = destination.with_name(destination.name + '.migration.lock')
+    if lock_path.is_symlink():
+        raise OSError('Configuration migration lock must not be a symbolic link.')
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0)
+    descriptor = os.open(lock_path, flags, 0o600)
+    with os.fdopen(descriptor, 'r+b', buffering=0) as stream:
+        os.chmod(lock_path, 0o600)
+        if os.fstat(stream.fileno()).st_size == 0:
+            stream.write(b'\0')
+        stream.seek(0)
+        if os.name == 'nt':
+            import msvcrt
+            msvcrt.locking(stream.fileno(), msvcrt.LK_LOCK, 1)
+            try:
+                yield
+            finally:
+                stream.seek(0)
+                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+
+
 def migrate_config_file(path: Path, *, environment: Mapping[str, str] | None = None) -> dict:
+    """Migrate once under an OS transaction lock, without touching current files."""
+    path = Path(path)
+    if not path.exists():
+        return {'changed': False, 'changes': []}
+    destination = path.resolve(strict=True) if path.is_symlink() else path
+    # Read-only preflight keeps current/invalid files free of new sidecars. The
+    # transaction always re-reads after locking; this snapshot is never written.
+    text = destination.read_bytes().decode('utf-8-sig')
+    parsed = parse_env_text(text, allow_legacy=True)
+    _, changes = migrate_values(parsed, environment=environment)
+    if not changes and not (config_format(text) == 'legacy' and parsed):
+        return {'changed': False, 'changes': []}
+    with _configuration_lock(destination):
+        return _migrate_config_file_locked(destination, environment=environment)
+
+
+def _migrate_config_file_locked(path: Path, *, environment: Mapping[str, str] | None = None) -> dict:
+
     """Back up bytes, prepare a receipt, then atomically publish current format.
 
     Existing current files are never rewritten. Prepared receipts include the
@@ -253,24 +390,17 @@ def migrate_config_file(path: Path, *, environment: Mapping[str, str] | None = N
     receipt_path = destination.with_name(destination.name + '.migration.json')
     receipt = {'changed': True, 'changes': changes, 'backup_path': str(backup),
                'receipt_path': str(receipt_path), 'source_sha256': source_hash,
-               'target_sha256': target_hash, 'state': 'prepared'}
-    # Never follow or overwrite an unexpected backup. Exclusive creation retains
-    # the first exact source even if an earlier publication attempt was aborted.
-    try:
-        descriptor = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        if backup.is_symlink() or backup.read_bytes() != original:
-            raise OSError('Configuration migration backup conflict; original unchanged.') from None
-    else:
-        try:
-            with os.fdopen(descriptor, 'wb') as stream:
-                stream.write(original)
-                stream.flush()
-                os.fsync(stream.fileno())
-        except Exception:
-            backup.unlink(missing_ok=True)
-            raise
-    if destination.read_bytes() != original:
+               'target_sha256': target_hash, 'state': 'prepared',
+               'original_keys': sorted(parsed), 'derived_keys': sorted(set(migrated) - set(parsed)),
+               'empty_legacy_keys': sorted(key for key, value in parsed.items()
+                                           if key in {'INFINI_LLM_FALLBACK_' + suffix for suffix in FALLBACK_SUFFIXES}
+                                           and not value.strip())}
+    _publish_backup(backup, original)
+    observed = destination.read_bytes()
+    if observed == target:
+        receipt['state'] = 'completed'
+        return receipt
+    if observed != original:
         raise OSError('Configuration changed during migration; retry with the new file.')
     _atomic_write(receipt_path, json.dumps(receipt, ensure_ascii=False, indent=2).encode('utf-8'))
     # Stage separately so all disk writes/fsync finish before the race check.
@@ -282,9 +412,11 @@ def migrate_config_file(path: Path, *, environment: Mapping[str, str] | None = N
             stream.write(target)
             stream.flush()
             os.fsync(stream.fileno())
-        if destination.read_bytes() != original:
+        observed = destination.read_bytes()
+        if observed not in (original, target):
             raise OSError('Configuration changed during migration; original not replaced.')
-        os.replace(temporary, destination)
+        if observed == original:
+            os.replace(temporary, destination)
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)

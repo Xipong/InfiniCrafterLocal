@@ -4,8 +4,9 @@ import os
 import re
 from pathlib import Path
 
-from infini_local.core.env_file import read_env_file
-from infini_local.core.config_migration import migrate_config_file, migrate_environment
+from infini_local.core.config_migration import (
+    apply_environment_values, migrate_config_file, migrate_environment, migrate_values, read_migration_source,
+)
 
 _TRUE_VALUES = {"1", "true", "yes", "on", "y", "t"}
 _FALSE_VALUES = {"0", "false", "no", "off", "n", "f"}
@@ -21,15 +22,14 @@ def load_env_file(path: Path) -> None:
     if os.environ.get("INFINI_SKIP_CONFIG_FILE", "").strip().lower() in _TRUE_VALUES:
         migrate_environment(os.environ)
         return
-    # Migration is an explicit one-time boundary with a byte-exact backup. The
-    # runtime parser and validators continue to accept only current settings.
-    migrate_config_file(path, environment=os.environ)
-    values = read_env_file(path)
-    # Canonical file keys win over old environment aliases; explicit canonical
-    # process variables retain normal precedence over the file.
-    for key, value in values.items():
-        os.environ.setdefault(key, value)
-    migrate_environment(os.environ)
+    # Resolve both original sources before applying canonical values. A key
+    # created by migration is not an explicit modern setting; persisted
+    # provenance retains that distinction until the user edits/saves the file.
+    inherited = dict(os.environ)
+    migrate_config_file(path, environment=inherited)
+    source = read_migration_source(path)
+    effective, changes = migrate_values({**source, **inherited})
+    apply_environment_values(os.environ, effective, changes)
 
 
 def env_str(name: str, default: str = "", *, strip: bool = True) -> str:

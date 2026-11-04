@@ -329,3 +329,245 @@ def test_legacy_image_endpoint_cannot_capture_unpaired_canonical_key():
                                                   'INFINI_IMAGE_API_KEY': 'new-secret'})
     assert converted == {'INFINI_IMAGE_API_KEY': 'new-secret'}
     assert changes[0]['review']
+
+
+def _effective_start(config, original_environment):
+    migration.migrate_config_file(config, environment=original_environment)
+    source = migration.read_migration_source(config)
+    after, changes = migration.migrate_values({**source, **original_environment})
+    effective = dict(original_environment)
+    migration.apply_environment_values(effective, after, changes)
+    return effective
+
+
+def test_legacy_environment_wins_legacy_file_on_first_repeat_and_save(tmp_path):
+    config = tmp_path / 'config.env'
+    original = b'INFINI_LLM_FALLBACK_NETWORK_FAILS=2\nINFINI_OPENAI_COMPAT_IMAGE_API_KEY=file-secret\n'
+    config.write_bytes(original)
+    env = {'INFINI_LLM_FALLBACK_NETWORK_FAILS': '7', 'INFINI_OPENAI_COMPAT_IMAGE_API_KEY': 'env-secret'}
+    for _ in range(2):
+        effective = _effective_start(config, env)
+        assert effective['INFINI_LLM_NETWORK_ATTEMPTS'] == '7'
+        assert effective['INFINI_IMAGE_API_KEY'] == 'env-secret'
+        assert 'env-secret' not in config.read_text()
+        assert 'INFINI_LLM_NETWORK_ATTEMPTS' not in migration.explicit_config_keys(config)
+        assert migration.read_migration_source(config)['INFINI_OPENAI_COMPAT_IMAGE_API_KEY'] == 'file-secret'
+    receipt = migration.read_migration_receipt(config)
+    assert Path(receipt['backup_path']).read_bytes() == original
+    assert 'env-secret' not in json.dumps(receipt)
+    # Explicit GUI save adopts current effective values and breaks provenance.
+    from infini_local.desktop.settings_env import write_env
+    write_env(config, effective)
+    assert 'INFINI_LLM_NETWORK_ATTEMPTS' in migration.explicit_config_keys(config)
+    assert migration.read_migration_source(config)['INFINI_IMAGE_API_KEY'] == 'env-secret'
+    changed_old_env = {**env, 'INFINI_LLM_FALLBACK_NETWORK_FAILS': '9'}
+    assert _effective_start(config, changed_old_env)['INFINI_LLM_NETWORK_ATTEMPTS'] == '7'
+
+
+@pytest.mark.parametrize('canonical', ['', '4'])
+def test_explicit_canonical_file_wins_legacy_environment_with_provenance(tmp_path, canonical):
+    config = tmp_path / 'config.env'
+    config.write_text('INFINI_LLM_NETWORK_ATTEMPTS=' + canonical + '\nINFINI_LLM_FALLBACK_NETWORK_FAILS=2\n')
+    for _ in range(2):
+        effective = _effective_start(config, {'INFINI_LLM_FALLBACK_NETWORK_FAILS': '7'})
+        assert effective['INFINI_LLM_NETWORK_ATTEMPTS'] == canonical
+        assert 'INFINI_LLM_NETWORK_ATTEMPTS' in migration.explicit_config_keys(config)
+        assert 'INFINI_LLM_FALLBACK_NETWORK_FAILS' not in migration.read_migration_source(config)
+
+
+def test_context_primary_provider_inferred_but_context_secret_stays_process_only(tmp_path):
+    config = tmp_path / 'config.env'
+    config.write_text('INFINI_LLM_FALLBACK_MODEL=backup-model\n')
+    environment = {'INFINI_LLM_PROVIDER': 'openrouter', 'INFINI_OPENROUTER_API_KEY': 'process-secret',
+                   'INFINI_OPENROUTER_BASE_URL': 'https://process.example/v1'}
+    for _ in range(2):
+        effective = _effective_start(config, environment)
+        persisted = read_env_file(config)
+        assert persisted['INFINI_LLM_POOL_2_PROVIDER'] == 'openrouter'
+        assert 'process-secret' not in config.read_text()
+        assert 'process.example' not in config.read_text()
+        assert 'INFINI_LLM_POOL_2_API_KEY' not in persisted
+        assert effective['INFINI_LLM_POOL_2_PROVIDER'] == 'openrouter'
+        assert effective['INFINI_LLM_POOL_2_API_KEY'] == 'process-secret'
+        assert effective['INFINI_LLM_POOL_2_BASE_URL'] == 'https://process.example/v1'
+        assert migration.read_migration_source(config) == {'INFINI_LLM_FALLBACK_MODEL': 'backup-model'}
+
+
+def test_quarantined_values_never_reconstructed_from_backup(tmp_path):
+    config = tmp_path / 'config.env'
+    config.write_text('INFINI_LLM_POOL_2_MODEL=new\nINFINI_LLM_FALLBACK_MODEL=old\nINFINI_LLM_FALLBACK_API_KEY=old-secret\n')
+    migration.migrate_config_file(config)
+    source = migration.read_migration_source(config)
+    assert source == {'INFINI_LLM_POOL_2_MODEL': 'new'}
+    assert 'old-secret' not in json.dumps(source)
+
+
+@pytest.mark.parametrize('different_contexts', [False, True])
+def test_concurrent_migrations_serialize_entire_config_receipt_transaction(tmp_path, monkeypatch, different_contexts):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    from contextlib import contextmanager
+    config = tmp_path / 'config.env'
+    original = b'INFINI_LLM_FALLBACK_MODEL=old-model\nINFINI_LLM_FALLBACK_API_KEY=old-secret\n'
+    config.write_bytes(original)
+    first_inside = threading.Event()
+    second_waiting = threading.Event()
+    release_first = threading.Event()
+    real_transaction = migration._migrate_config_file_locked
+    real_lock = migration._configuration_lock
+    entries = []
+    @contextmanager
+    def observed_lock(path):
+        if first_inside.is_set():
+            second_waiting.set()
+        with real_lock(path):
+            yield
+    def observed_transaction(path, **kwargs):
+        entries.append(dict(kwargs.get('environment') or {}))
+        if len(entries) == 1:
+            first_inside.set()
+            assert release_first.wait(timeout=5)
+        return real_transaction(path, **kwargs)
+    monkeypatch.setattr(migration, '_configuration_lock', observed_lock)
+    monkeypatch.setattr(migration, '_migrate_config_file_locked', observed_transaction)
+    first_context = {'INFINI_LLM_PROVIDER': 'openrouter'}
+    second_context = {'INFINI_LLM_POOL_2_ENABLED': '1', 'INFINI_LLM_POOL_2_BASE_URL': 'https://new.example'} if different_contexts else first_context
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(migration.migrate_config_file, config, environment=first_context)
+        assert first_inside.wait(timeout=5)
+        second = executor.submit(migration.migrate_config_file, config, environment=second_context)
+        assert second_waiting.wait(timeout=5)
+        assert len(entries) == 1
+        release_first.set()
+        results = [first.result(timeout=5), second.result(timeout=5)]
+    assert results[0]['state'] == 'completed'
+    assert results[1] == {'changed': False, 'changes': []}
+    assert len(entries) == 2
+    assert len(list(tmp_path.glob('*.bak'))) == 1
+    assert next(tmp_path.glob('*.bak')).read_bytes() == original
+    receipt = migration.read_migration_receipt(config)
+    assert receipt['target_sha256'] == migration._hash(config.read_bytes())
+    assert read_env_file(config)['INFINI_LLM_POOL_2_PROVIDER'] == 'openrouter'
+    assert read_env_file(config)['INFINI_LLM_POOL_2_ENABLED'] == '0'
+    assert not list(tmp_path.glob('*.tmp'))
+    lock = tmp_path / 'config.env.migration.lock'
+    assert lock.exists()
+    if os.name != 'nt':
+        assert lock.stat().st_mode & 0o777 == 0o600
+
+
+def test_abandoned_partial_backup_temp_cannot_poison_migration(tmp_path, monkeypatch):
+    config = tmp_path / 'config.env'
+    original = b'INFINI_LLM_FALLBACK_NETWORK_FAILS=2\n'
+    config.write_bytes(original)
+    abandoned = tmp_path / '.config.env.pre-migration-abandoned.bak.crashed.tmp'
+    abandoned.write_bytes(b'INFINI_')
+    real_link = os.link
+    def inspect_publication(source, destination):
+        assert Path(source).read_bytes() == original
+        assert not Path(destination).exists()
+        return real_link(source, destination)
+    monkeypatch.setattr(migration.os, 'link', inspect_publication)
+    result = migration.migrate_config_file(config)
+    assert Path(result['backup_path']).read_bytes() == original
+    assert abandoned.read_bytes() == b'INFINI_'
+
+
+def test_backup_link_failure_leaves_no_partial_visible_backup(tmp_path, monkeypatch):
+    config = tmp_path / 'config.env'
+    original = b'INFINI_LLM_FALLBACK_NETWORK_FAILS=2\n'
+    config.write_bytes(original)
+    monkeypatch.setattr(migration.os, 'link', lambda *_: (_ for _ in ()).throw(OSError('synthetic link failure')))
+    with pytest.raises(OSError, match='link failure'):
+        migration.migrate_config_file(config)
+    assert config.read_bytes() == original
+    assert set(tmp_path.iterdir()) == {config, tmp_path / 'config.env.migration.lock'}
+
+
+def test_reconstructed_alias_application_is_noop_when_environment_already_matches(tmp_path, monkeypatch):
+    config = tmp_path / 'config.env'
+    config.write_text('INFINI_LLM_FALLBACK_NETWORK_FAILS=2\n')
+    monkeypatch.setattr(migration, '_ENVIRONMENT_RECEIPT', {'changed': False, 'changes': []})
+    first = _effective_start(config, {})
+    original_status = migration.environment_migration_status()
+    source = migration.read_migration_source(config)
+    after, changes = migration.migrate_values({**source, **first})
+    assert changes
+    assert migration.apply_environment_values(first, after, changes) == {'changed': False, 'changes': []}
+    assert migration.environment_migration_status() == original_status
+    another = {}
+    migration.apply_environment_values(another, after, changes)
+    rows = migration.environment_migration_status()['changes']
+    assert len(rows) == len({(row['action'], row['source'], row['target']) for row in rows})
+
+
+def test_receipt_cannot_remove_or_rename_unknown_user_settings(tmp_path):
+    config = tmp_path / 'config.env'
+    config.write_text('CUSTOM_USER_SETTING=keep\nINFINI_LLM_FALLBACK_NETWORK_FAILS=2\n')
+    report = migration.migrate_config_file(config)
+    receipt_path = Path(report['receipt_path'])
+    receipt = json.loads(receipt_path.read_text())
+    receipt['derived_keys'].append('CUSTOM_USER_SETTING')
+    receipt['original_keys'].remove('CUSTOM_USER_SETTING')
+    receipt['original_keys'].append('EVIL_ALIAS')
+    receipt['changes'].append({'action': 'rename', 'source': 'EVIL_ALIAS', 'target': 'CUSTOM_USER_SETTING'})
+    receipt_path.write_text(json.dumps(receipt))
+    source = migration.read_migration_source(config)
+    assert source['CUSTOM_USER_SETTING'] == 'keep'
+    assert 'EVIL_ALIAS' not in source
+    assert 'CUSTOM_USER_SETTING' in migration.explicit_config_keys(config)
+
+
+def test_blank_legacy_fallback_inheritance_uses_effective_primary_first_repeat_and_same_process(tmp_path):
+    config = tmp_path / 'config.env'
+    config.write_text('INFINI_LLM_PROVIDER=openrouter\nINFINI_OPENROUTER_API_KEY=file-secret\n'
+                      'INFINI_OPENROUTER_BASE_URL=https://file.example/v1\n'
+                      'INFINI_LLM_FALLBACK_PROVIDER=\nINFINI_LLM_FALLBACK_MODEL=secondary\n'
+                      'INFINI_LLM_FALLBACK_BASE_URL=\nINFINI_LLM_FALLBACK_API_KEY=\n')
+    original_environment = {'INFINI_OPENROUTER_API_KEY': 'env-secret',
+                            'INFINI_OPENROUTER_BASE_URL': 'https://env.example/v1'}
+    for _ in range(2):
+        effective = _effective_start(config, original_environment)
+        assert effective['INFINI_LLM_POOL_2_API_KEY'] == 'env-secret'
+        assert effective['INFINI_LLM_POOL_2_BASE_URL'] == 'https://env.example/v1'
+        assert effective['INFINI_LLM_POOL_2_PROVIDER'] == 'openrouter'
+        assert 'env-secret' not in config.read_text()
+        assert 'env.example' not in config.read_text()
+        source = migration.read_migration_source(config)
+        assert source['INFINI_LLM_FALLBACK_API_KEY'] == ''
+        assert source['INFINI_LLM_FALLBACK_BASE_URL'] == ''
+        assert source['INFINI_LLM_FALLBACK_PROVIDER'] == ''
+    assert _effective_start(config, effective) == effective
+    receipt = migration.read_migration_receipt(config)
+    assert set(receipt['empty_legacy_keys']) == {
+        'INFINI_LLM_FALLBACK_PROVIDER', 'INFINI_LLM_FALLBACK_API_KEY', 'INFINI_LLM_FALLBACK_BASE_URL'}
+    assert 'env-secret' not in json.dumps(receipt)
+    assert 'file-secret' not in json.dumps(receipt)
+
+
+def test_explicit_legacy_profile_values_remain_explicit_with_primary_environment(tmp_path):
+    config = tmp_path / 'config.env'
+    config.write_text('INFINI_LLM_PROVIDER=openrouter\nINFINI_LLM_FALLBACK_PROVIDER=openai_compat\n'
+                      'INFINI_LLM_FALLBACK_MODEL=secondary\nINFINI_LLM_FALLBACK_API_KEY=explicit-secret\n'
+                      'INFINI_LLM_FALLBACK_BASE_URL=https://explicit.example/v1\n')
+    for _ in range(2):
+        effective = _effective_start(config, {'INFINI_OPENROUTER_API_KEY': 'env-secret',
+                                             'INFINI_OPENROUTER_BASE_URL': 'https://env.example/v1'})
+        assert effective['INFINI_LLM_POOL_2_API_KEY'] == 'explicit-secret'
+        assert effective['INFINI_LLM_POOL_2_BASE_URL'] == 'https://explicit.example/v1'
+        assert effective['INFINI_LLM_POOL_2_PROVIDER'] == 'openai_compat'
+    assert migration.read_migration_receipt(config)['empty_legacy_keys'] == []
+
+
+def test_blank_legacy_profile_provenance_cannot_override_explicit_current_profile(tmp_path):
+    config = tmp_path / 'config.env'
+    config.write_text('INFINI_LLM_PROVIDER=openrouter\nINFINI_LLM_FALLBACK_PROVIDER=\n'
+                      'INFINI_LLM_FALLBACK_MODEL=secondary\nINFINI_LLM_FALLBACK_API_KEY=\n'
+                      'INFINI_LLM_FALLBACK_BASE_URL=\nINFINI_LLM_POOL_2_MODEL=current-model\n'
+                      'INFINI_LLM_POOL_2_API_KEY=current-secret\nINFINI_LLM_POOL_2_BASE_URL=https://current.example/v1\n')
+    for _ in range(2):
+        effective = _effective_start(config, {'INFINI_OPENROUTER_API_KEY': 'env-secret'})
+        assert effective['INFINI_LLM_POOL_2_API_KEY'] == 'current-secret'
+        assert effective['INFINI_LLM_POOL_2_BASE_URL'] == 'https://current.example/v1'
+        assert effective['INFINI_LLM_POOL_2_MODEL'] == 'current-model'
+        assert not any(key.startswith('INFINI_LLM_FALLBACK_') for key in migration.read_migration_source(config))
