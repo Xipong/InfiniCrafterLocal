@@ -143,13 +143,12 @@ def test_default_debug_reroll_refuses_unsupported_runtime_before_vfx_stage(cache
         raise AssertionError("default debug path started VFX for non-admitted runtime")
 
     monkeypatch.setattr(vfx_debug_routes, "attach_vfx_manifest", forbidden_stage)
-    routes = vfx_debug_routes.VfxDebugRoutes(
-        app_version="storage-regression",
-        normalize_world_id_from_payload=world_recipe_runtime.normalize_world_id_from_payload,
-        read_world_recipe_cache=world_recipe_runtime.read_world_recipe_cache,
-        write_world_recipe_cache=lambda *_a, **_k: pytest.fail("invalid gameplay must not be rewritten"),
-        final_normalize=lambda _: pytest.fail("invalid gameplay must not be normalized"),
-    )
+    routes = vfx_debug_routes
+    monkeypatch.setattr(routes, 'APP_VERSION', "storage-regression")
+    monkeypatch.setattr(routes, 'normalize_world_id_from_payload', world_recipe_runtime.normalize_world_id_from_payload)
+    monkeypatch.setattr(routes, 'read_world_recipe_cache', world_recipe_runtime.read_world_recipe_cache)
+    monkeypatch.setattr(routes, 'write_world_recipe_cache', lambda *_a, **_k: pytest.fail("invalid gameplay must not be rewritten"))
+    monkeypatch.setattr(routes, 'final_normalize', lambda _: pytest.fail("invalid gameplay must not be normalized"))
     with pytest.raises(FileNotFoundError, match="recipe not found"):
         routes.reroll_cached_manifest({"recipeKey": key, "worldId": request["worldId"]})
     assert stages == []
@@ -329,13 +328,12 @@ def test_default_debug_positive_control_uses_admitted_gameplay(cache_record, mon
         return admitted  # identity-only offline stage, no model or generation
 
     monkeypatch.setattr(vfx_debug_routes, "attach_vfx_manifest", offline_vfx_stage)
-    routes = vfx_debug_routes.VfxDebugRoutes(
-        app_version="storage-regression",
-        normalize_world_id_from_payload=world_recipe_runtime.normalize_world_id_from_payload,
-        read_world_recipe_cache=world_recipe_runtime.read_world_recipe_cache,
-        write_world_recipe_cache=world_recipe_runtime.write_world_recipe_cache,
-        final_normalize=world_storage.sanitize_recipe_for_delivery,
-    )
+    routes = vfx_debug_routes
+    monkeypatch.setattr(routes, 'APP_VERSION', "storage-regression")
+    monkeypatch.setattr(routes, 'normalize_world_id_from_payload', world_recipe_runtime.normalize_world_id_from_payload)
+    monkeypatch.setattr(routes, 'read_world_recipe_cache', world_recipe_runtime.read_world_recipe_cache)
+    monkeypatch.setattr(routes, 'write_world_recipe_cache', world_recipe_runtime.write_world_recipe_cache)
+    monkeypatch.setattr(routes, 'final_normalize', world_storage.sanitize_recipe_for_delivery)
     result = routes.reroll_cached_manifest({"recipeKey": key, "worldId": request["worldId"], "returnData": True})
 
     assert result["ok"] and len(observed) == 1

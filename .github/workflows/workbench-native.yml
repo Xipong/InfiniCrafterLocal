@@ -111,8 +111,8 @@ jobs:
           host="$base/bin/Release/net8.0/ItemTestWorkbench.dll"
           dependency="$base/fixture-mod/bin/Release/net8.0/WorkbenchObserverFixture.dll"
           dependent="$base/fixture-mod/WorkbenchDependentFixture/bin/Release/net8.0/WorkbenchDependentFixture.dll"
-          python "$base/verify_native_loader.py" --native-dll "$host" --probe-dll "$dependency" \
-            --probe-mod-root "$base/fixtures/WorkbenchObserverFixture" \
+          python "$base/verify_native_loader.py" --native-dll "$host" --mod-dll "$dependency" \
+            --mod-root "$base/fixtures/WorkbenchObserverFixture" \
             2>&1 | tee artifacts/workbench-ci/loader-single.log
           python "$base/verify_multi_mod_loader.py" --native-dll "$host" \
             --dependency-dll "$dependency" --dependency-root "$base/fixtures/WorkbenchObserverFixture" \

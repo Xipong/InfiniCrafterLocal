@@ -131,11 +131,11 @@ def test_real_studio_defaults_consent_dismissal_and_delayed_accept(tmp_path, mon
     from infini_local.desktop.web_studio import StudioServer, StudioController
     monkeypatch.setitem(DEFAULTS, 'INFINI_LLM_MAX_TOKENS', '18000')
     config = tmp_path / 'config.env'
-    original = (b'# consent browser proof\r\nINFINI_LLM_MAX_TOKENS=9000\r\n'
+    original = ((b'# infini-config-format: json-string-v1\n# consent browser proof\r\nINFINI_LLM_MAX_TOKENS=9000\r\n'
                 b'INFINI_USE_LLM=0\r\nINFINI_IMAGE_BACKEND=off\r\nINFINI_SDCPP_SERVER_AUTOSTART=0\r\n'
                 b'INFINI_LLM_PROVIDER=local\r\nINFINI_PRIVATE_UNKNOWN=retained\r\n'
                 b'INFINI_OPENAI_COMPAT_API_KEY=opaque-test-key\r\nINFINI_SDCPP_MODEL=C:\\Models\\keep.gguf\r\n'
-                b'INFINI_HOST=127.0.0.1\r\nINFINI_CACHE_DIR=' + str(tmp_path / 'cache').encode() + b'\r\n')
+                b'INFINI_HOST=127.0.0.1\r\nINFINI_CACHE_DIR=' + str(tmp_path / 'cache').encode() + b'\r\n'))
     config.write_bytes(original)
     app = SettingsController(config_path=config)
     def forbidden(*_args, **_kwargs):
@@ -232,7 +232,7 @@ def test_real_studio_defaults_consent_dismissal_and_delayed_accept(tmp_path, mon
                     assert page.locator('#field-INFINI_LLM_MAX_TOKENS').input_value() == '19000'
                     assert page.locator('#field-INFINI_PRIVATE_UNKNOWN').input_value() == 'newer-other-key'
                     assert page.locator('#save-tray').is_visible()
-                    assert config.read_bytes() == original.replace(b'9000', b'18000') + b'# external edit\r\n'
+                    assert config.read_bytes() == original.replace(b'9000', b'"18000"') + b'# external edit\r\n'
                     assert not page_errors
                 finally:
                     browser.close()

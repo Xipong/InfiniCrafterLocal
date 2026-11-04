@@ -114,5 +114,5 @@ def test_codex_text_and_visual_controls_follow_llm_provider(tmp_path):
     assert (not gui.field_disabled_reasons.get("INFINI_CODEX_VISUAL_REASONING")) is True
     assert (not gui.field_disabled_reasons.get("INFINI_CODEX_IMAGE_QUALITY")) is True
     assert (not gui.field_disabled_reasons.get("INFINI_LLM_MAX_TOKENS")) is False
-    for key in ("INFINI_LLM_TEMPERATURE", "INFINI_LLM_REAUTHOR_TEMPERATURE", "INFINI_VISUAL_DIRECTOR_TEMPERATURE", "INFINI_LLM_REASONING_EXCLUDE"):
+    for key in ("INFINI_LLM_TEMPERATURE", "INFINI_LLM_REPAIR_TEMPERATURE", "INFINI_VISUAL_DIRECTOR_TEMPERATURE", "INFINI_LLM_REASONING_EXCLUDE"):
         assert (not gui.field_disabled_reasons.get(key)) is False, key

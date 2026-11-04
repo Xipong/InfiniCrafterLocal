@@ -1,3 +1,4 @@
+using InfiniCrafterLocal.Common;
 using System;
 using System.Collections;
 using System.IO;
@@ -21,7 +22,7 @@ internal static partial class EngineRuntimeChecks
         using (var deflate = new DeflateStream(compressed, CompressionLevel.Fastest, true)) deflate.Write(raw);
         byte[] packed = compressed.ToArray(); using var wire = new MemoryStream();
         using (var writer = new BinaryWriter(wire, Encoding.UTF8, true)) {
-            writer.Write(GeneratedItemRegistryService.PacketNotifyGeneratedItem); writer.Write((byte)1);
+            writer.Write(InfiniNetPacketIds.NotifyGeneratedItem); writer.Write((byte)1);
             writer.Write(data.Id); writer.Write(hashOverride ?? Convert.ToHexString(SHA256.HashData(raw)).ToLowerInvariant());
             writer.Write(raw.Length); writer.Write(packed.Length); writer.Write((ushort)0); writer.Write((ushort)1);
             writer.Write((byte)1); writer.Write("valid.png"); writer.Write(AssetOwnerCanonical.Length);
@@ -44,9 +45,9 @@ internal static partial class EngineRuntimeChecks
                 mod.HandlePacket(new BinaryReader(new MemoryStream(valid.Take(length).ToArray())), 256);
                 Equal(false, registry.TryGet(data.Id, out _), "every truncated header/descriptor/chunk refuses before definition mutation; length=" + length);
             }
-            registry.HandlePacket(GeneratedItemRegistryService.PacketNotifyGeneratedItem, new BinaryReader(new MemoryStream()), 256);
-            mod.HandlePacket(new BinaryReader(new MemoryStream(new[] { GeneratedItemRegistryService.PacketNotifyGeneratedItem, (byte)2 })), 256);
-            byte[] hugeString = { GeneratedItemRegistryService.PacketNotifyGeneratedItem, 1, 255, 255, 255, 255, 7 };
+            registry.HandlePacket(InfiniNetPacketIds.NotifyGeneratedItem, new BinaryReader(new MemoryStream()), 256);
+            mod.HandlePacket(new BinaryReader(new MemoryStream(new[] { InfiniNetPacketIds.NotifyGeneratedItem, (byte)2 })), 256);
+            byte[] hugeString = { InfiniNetPacketIds.NotifyGeneratedItem, 1, 255, 255, 255, 255, 7 };
             mod.HandlePacket(new BinaryReader(new MemoryStream(hugeString)), 256);
             mod.HandlePacket(new BinaryReader(new MemoryStream(AssetLifecycleDefinitionPacket(data, new string('0', 64)))), 256);
             Equal(false, registry.TryGet(data.Id, out _), "wrong compressed definition SHA refuses");

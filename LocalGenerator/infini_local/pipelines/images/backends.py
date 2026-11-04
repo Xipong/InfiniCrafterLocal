@@ -62,7 +62,6 @@ from infini_local.core.images.config import (
     REMOVE_BG,
     REQUIRE_PILLOW,
     SDCPP_CFG,
-    SDCPP_DEFAULT_COMMAND_TEMPLATE,
     SDCPP_HEIGHT,
     SDCPP_LLM,
     SDCPP_LORA_DIR,
@@ -86,7 +85,6 @@ from infini_local.core.images.config import (
     SDCPP_SERVER_REQUEST_TIMEOUT,
     SDCPP_SERVER_SHOW_CONSOLE,
     SDCPP_SERVER_STARTUP_TIMEOUT,
-    SDCPP_SERVER_STATE,
     SDCPP_SERVER_TXT2IMG_PATHS,
     SDCPP_SERVER_URL,
     SDCPP_STEPS,
@@ -95,7 +93,6 @@ from infini_local.core.images.config import (
     VISUAL_GENERATION_TIMEOUT,
     ZIMAGE_POSITIVE_ONLY,
     ZIMAGE_PROMPT_CONTRACT,
-    cleanup_sdcpp_server_process,
 )
 from infini_local.core.item_identity_tools import safe_file_part
 from infini_local.pipelines.images.prompts import (
@@ -107,6 +104,7 @@ from infini_local.services import (
     sdcpp_backend,
     sdcpp_service,
 )
+from infini_local.services.sdcpp_service import SDCPP_SERVER_STATE
 from infini_local.services.visual_asset_pipeline import ImageOutputIOError, write_image_bytes
 from infini_local.storage.trace_runtime import (
     log_event,
@@ -248,10 +246,6 @@ def fetch_comfyui_image(image_meta: dict[str, Any], out_path: Path) -> str:
     write_image_bytes(out_path, data)
     return str(out_path)
 
-def sdcpp_repair_command_template(template: str) -> tuple[str, bool, str]:
-    return sdcpp_backend.repair_command_template(template, SDCPP_DEFAULT_COMMAND_TEMPLATE)
-
-
 def sdcpp_effective_extra_args() -> str:
     return sdcpp_backend.effective_extra_args(_sdcpp_config())
 
@@ -283,9 +277,6 @@ def sdcpp_server_is_alive() -> bool:
 def build_sdcpp_server_command() -> tuple[list[str] | str, bool]:
     return sdcpp_backend.build_server_command(_sdcpp_config(), SDCPP_SERVER_COMMAND_TEMPLATE)
 
-def _stringify_cmd(cmd: list[str] | str) -> str:
-    return sdcpp_backend.stringify_cmd(cmd)
-
 def sdcpp_debug_snapshot(include_log_tail: bool = True, *, probe_server: bool = True) -> dict[str, Any]:
     snap = sdcpp_service.debug_snapshot(
         state=SDCPP_SERVER_STATE,
@@ -303,10 +294,10 @@ def sdcpp_debug_snapshot(include_log_tail: bool = True, *, probe_server: bool = 
         lora_weight=SDCPP_LORA_WEIGHT,
         command_mode=SDCPP_SERVER_COMMAND_MODE,
         command_template=SDCPP_SERVER_COMMAND_TEMPLATE,
-        template_repair=sdcpp_repair_command_template(SDCPP_SERVER_COMMAND_TEMPLATE),
+        template_repair=sdcpp_backend.repair_command_template(SDCPP_SERVER_COMMAND_TEMPLATE, sdcpp_backend.DEFAULT_COMMAND_TEMPLATE),
         manual_extra_args=SDCPP_SERVER_EXTRA_ARGS,
         effective_extra_args=sdcpp_effective_extra_args(),
-        command=SDCPP_SERVER_STATE.last_command or _stringify_cmd(build_sdcpp_server_command()[0]),
+        command=SDCPP_SERVER_STATE.last_command or sdcpp_backend.stringify_cmd(build_sdcpp_server_command()[0]),
         server_log_file=SDCPP_SERVER_LOG_FILE,
         server_is_alive=sdcpp_server_is_alive() if probe_server else None,
         server_is_configured=sdcpp_server_is_configured(),
@@ -319,7 +310,7 @@ def sdcpp_debug_snapshot(include_log_tail: bool = True, *, probe_server: bool = 
 def ensure_sdcpp_server() -> bool:
     from infini_local.storage import trace_runtime
 
-    ok = sdcpp_service.ensure_server(
+    return sdcpp_service.ensure_server(
         state=SDCPP_SERVER_STATE,
         root=STATE_ROOT,
         cache_dir=CACHE_DIR,
@@ -330,14 +321,12 @@ def ensure_sdcpp_server() -> bool:
         server_log_file=SDCPP_SERVER_LOG_FILE,
         server_is_alive=sdcpp_server_is_alive,
         build_command=build_sdcpp_server_command,
-        stringify_cmd=_stringify_cmd,
-        cleanup_process=cleanup_sdcpp_server_process,
+        stringify_cmd=sdcpp_backend.stringify_cmd,
         log_event=log_event,
         tail_text_file=tail_text_file,
         process_env=sdcpp_backend.server_process_environment(_sdcpp_config()),
         diagnostics_enabled=trace_runtime.TRACE_PROMPTS_ENABLED,
     )
-    return ok
 
 def sdcpp_server_payload(prompt: str, negative: str, width: int, height: int, seed: int, style: str) -> dict[str, Any]:
     return sdcpp_backend.server_payload(
@@ -740,7 +729,7 @@ def _effective_sdcpp_lora_dir() -> str:
 
 def _sdcpp_config() -> sdcpp_backend.SdcppBackendConfig:
     return sdcpp_backend.SdcppBackendConfig(
-        default_command_template=SDCPP_DEFAULT_COMMAND_TEMPLATE,
+        default_command_template=sdcpp_backend.DEFAULT_COMMAND_TEMPLATE,
         command_mode=SDCPP_SERVER_COMMAND_MODE,
         server_exe=SDCPP_SERVER_EXE,
         model=SDCPP_MODEL,

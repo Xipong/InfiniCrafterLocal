@@ -10,12 +10,6 @@ from infini_local.pipelines.transport import provider_wire as wire
 from infini_local.storage.trace_runtime import log_event
 
 
-def _llm_replay_stage_from_payload(payload: dict[str, Any]) -> str:
-    """Read explicit finite transport metadata; never inspect prompt content."""
-    return wire._normalized_llm_stage(payload.get(wire.LLM_STAGE_KEY))
-
-
-
 def _replay_content_from_json_object(obj: Any, stage: str) -> str | None:
     if isinstance(obj, str):
         return obj
@@ -96,7 +90,7 @@ def _llm_replay_json_response(payload: dict[str, Any]) -> dict[str, Any] | None:
     spec = env_str("INFINI_LLM_REPLAY_RAW", "")
     if not spec:
         return None
-    stage = _llm_replay_stage_from_payload(payload)
+    stage = wire.llm_stage(payload)
     content, source = _load_llm_replay_raw(spec, stage)
     log_event("info", "LLM replay raw response used", {"stage": stage, "source": source, "chars": len(content)})
     return {

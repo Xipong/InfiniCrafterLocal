@@ -49,8 +49,8 @@ def test_unrecognized_or_incomplete_child_evidence_stays_literal(kind):
 def test_author_native_card_reaches_child_without_external_catalog(monkeypatch):
     from infini_local.pipelines.context import parents
     def unavailable(*a, **k): raise AssertionError("request-local references must not require a dump")
-    monkeypatch.setattr(parents, "runtime_projectile_lookup", unavailable)
-    monkeypatch.setattr(parents, "runtime_item_lookup", lambda *a, **k: {})
+    monkeypatch.setattr(parents.runtime_dump_service.RuntimeDumpSnapshot, "lookup",
+                        lambda self, kind, *args, **kwargs: unavailable() if kind == "projectile" else {})
     item = {"name": "Fixture", "type": 10, "shoot": 101, "directProjectileRaw": reference_fixture()}
     card = raw_parent_card_for_llm(item)
     dossier = parent_context_for_stage({"A": {"packet": card}, "B": {"packet": copy.deepcopy(card)}}, stage="author")

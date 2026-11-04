@@ -224,7 +224,7 @@ public sealed partial class InfiniCraftPlayer
         try
         {
             var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
-            packet.Write(PacketRequestStationEscrow);
+            packet.Write(InfiniNetPacketIds.RequestStationEscrow);
             WriteRemoteStationScope(packet);
             packet.Write(_stationEscrowClientId);
             packet.Write(_pendingStationEscrowOperationId);
@@ -689,7 +689,7 @@ public sealed partial class InfiniCraftPlayer
         if (Main.netMode == NetmodeID.SinglePlayer)
             return;
         var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
-        packet.Write(PacketSyncGeneratedUtilityBuff);
+        packet.Write(InfiniNetPacketIds.SyncGeneratedUtilityBuff);
         WriteGeneratedBuffState(packet);
         packet.Send(toWho, fromWho);
     }
@@ -1088,7 +1088,7 @@ public sealed partial class InfiniCraftPlayer
         try
         {
             var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
-            packet.Write(PacketCancelServerCraft);
+            packet.Write(InfiniNetPacketIds.CancelServerCraft);
             WriteRemoteStationScope(packet);
             packet.Write(_stationEscrowClientId);
             packet.Write(_serverRequestId);
@@ -1370,7 +1370,7 @@ public sealed partial class InfiniCraftPlayer
         if (Main.netMode != NetmodeID.Server)
             return;
         var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
-        packet.Write(PacketStationEscrowResult);
+        packet.Write(InfiniNetPacketIds.StationEscrowResult);
         packet.Write(RemoteStationProtocolVersion);
         packet.Write(GeneratedStationEscrowStateSystem.AuthorityScope);
         packet.Write(operationId ?? "");
@@ -1386,7 +1386,7 @@ public sealed partial class InfiniCraftPlayer
         if (Main.netMode != NetmodeID.Server)
             return;
         var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
-        packet.Write(PacketCraftCommitResult);
+        packet.Write(InfiniNetPacketIds.CraftCommitResult);
         packet.Write(RemoteStationProtocolVersion);
         packet.Write(GeneratedStationEscrowStateSystem.AuthorityScope);
         packet.Write(requestId ?? "");

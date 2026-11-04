@@ -142,7 +142,7 @@ def test_gui_save_reload_preserves_choices_and_unknown_settings(gui_workflow):
 def test_gui_saves_named_profile_separately_and_restores_exact_settings(gui_workflow, monkeypatch):
     from infini_local.desktop.settings_env import load_user_presets
     gui, _root, config = gui_workflow
-    config.write_text("INFINI_MANUAL_KNOB=disk\n", encoding="utf-8")
+    config.write_text(('# infini-config-format: json-string-v1\n' + "INFINI_MANUAL_KNOB=disk\n"), encoding="utf-8")
     before = config.read_bytes()
     gui.values["INFINI_MANUAL_KNOB"] = "keep"
     gui.values["INFINI_PROMPT_STYLE"] = "Terraria Like"
@@ -224,7 +224,7 @@ def test_cancel_or_close_discards_held_trace_results(gui_workflow, held_gui_call
 @pytest.mark.parametrize("identity", ["matching", "foreign-health", "changed-pid"])
 def test_trace_http_uses_verified_server_or_selected_local_cache(gui_workflow, identity):
     gui, root, config = gui_workflow
-    config.write_text("INFINI_CACHE_DIR=selected-cache\n", encoding="utf-8")
+    config.write_text(('# infini-config-format: json-string-v1\n' + "INFINI_CACHE_DIR=selected-cache\n"), encoding="utf-8")
     cache = root / "selected-cache"
     cache.mkdir()
     (cache / "events.ndjson").write_text('{"message":"local-fixture"}\n', encoding="utf-8")
@@ -249,7 +249,7 @@ def test_trace_http_uses_verified_server_or_selected_local_cache(gui_workflow, i
 @pytest.mark.parametrize("online", [False, True])
 def test_open_and_clear_use_selected_cache_and_preserve_recipes_pngs_and_other_roots(gui_workflow, monkeypatch, online):
     gui, root, config = gui_workflow
-    config.write_text("INFINI_CACHE_DIR=selected-cache\n", encoding="utf-8")
+    config.write_text(('# infini-config-format: json-string-v1\n' + "INFINI_CACHE_DIR=selected-cache\n"), encoding="utf-8")
     selected, other = root / "selected-cache", root / "cache"
     preserved = {}
     for cache in (selected, other):
@@ -292,7 +292,7 @@ def test_open_and_clear_use_selected_cache_and_preserve_recipes_pngs_and_other_r
 
 def test_clear_refuses_a_different_live_cache_without_local_fallback(gui_workflow, monkeypatch):
     gui, root, config = gui_workflow
-    config.write_text("INFINI_CACHE_DIR=selected-cache\n", encoding="utf-8")
+    config.write_text(('# infini-config-format: json-string-v1\n' + "INFINI_CACHE_DIR=selected-cache\n"), encoding="utf-8")
     selected = root / "selected-cache"
     selected.mkdir()
     trace = selected / "events.ndjson"
@@ -331,7 +331,7 @@ def test_offline_clear_refuses_symlinked_trace_before_touching_cache_bytes(gui_w
 def guarded_restart(gui_workflow, monkeypatch):
     """One saved launch and one recording owned process; never spawn a helper."""
     gui, root, config = gui_workflow
-    config.write_bytes(b"INFINI_CACHE_DIR=saved-cache\nINFINI_IMAGE_BACKEND=off\nINFINI_MANUAL_KEY=keep\n")
+    config.write_bytes((b'# infini-config-format: json-string-v1\n' + b"INFINI_CACHE_DIR=saved-cache\nINFINI_IMAGE_BACKEND=off\nINFINI_MANUAL_KEY=keep\n"))
     actions = []
     gui.proc = OwnedProcess(actions)
     monkeypatch.setattr(gui, "_wait_until_helper_stops", lambda *a, **k: True)
@@ -446,10 +446,10 @@ def test_server_actions_return_while_health_is_held_and_do_not_duplicate_work(gu
 def applied_gui(gui_workflow):
     gui, root, config = gui_workflow
     config.write_text(
-        "INFINI_CACHE_DIR=selected-cache\nINFINI_WORLD_RECIPES_DIR=selected-worlds\n"
+        ('# infini-config-format: json-string-v1\n' + "INFINI_CACHE_DIR=selected-cache\nINFINI_WORLD_RECIPES_DIR=selected-worlds\n"
         "INFINI_IMAGE_BACKEND=off\nINFINI_LLM_PROVIDER=openrouter\n"
         "INFINI_OPENROUTER_MODEL=Provider/Model\nINFINI_OPENROUTER_PROVIDER=Exact-Slug\n"
-        "INFINI_SDCPP_SERVER_AUTOSTART=0\nINFINI_OPENROUTER_API_KEY=FAKE-SAVED-SECRET-CANARY\n",
+        "INFINI_SDCPP_SERVER_AUTOSTART=0\nINFINI_OPENROUTER_API_KEY=FAKE-SAVED-SECRET-CANARY\n"),
         encoding="utf-8",
     )
     gui.values = settings_env.parse_env(config)
@@ -555,7 +555,7 @@ def test_owned_launch_health_correlates_instance_not_wrapper_pid(applied_gui, he
     elif case == "process-exits-while-checking":
         gui.proc.poll = lambda: 0
     hold.release.set()
-    gui.drain_until(lambda: "health-config" not in gui._gui_tasks)
+    gui.drain_until(lambda: "health-config" not in gui.actions.tasks)
     assert bool(gui._applied_config_ack) is accepted
     assert gui._server_lifecycle == ("responding" if accepted else "unknown")
 
@@ -569,7 +569,7 @@ def test_external_same_root_health_keeps_existing_attachment_policy(applied_gui,
     gui._delayed_health_check()
     hold.assert_pending()
     hold.release.set()
-    gui.drain_until(lambda: "health-config" not in gui._gui_tasks)
+    gui.drain_until(lambda: "health-config" not in gui.actions.tasks)
     assert gui._applied_config_ack["pid"] == pid
 
 
@@ -595,15 +595,15 @@ def test_launch_correlation_is_fresh_child_environment_only_and_clears_on_failur
 
 @pytest.mark.parametrize("launch_id", ["a" * 32, "", "bad-value", "A" * 32, "a" * 33, " " + "a" * 32])
 def test_health_echoes_only_bounded_launch_correlation(monkeypatch, launch_id):
-    from infini_local.web import server
+    from infini_local.web import server_status as server
     monkeypatch.setenv("INFINI_STUDIO_LAUNCH_ID", launch_id)
-    health = server._health_payload()
+    health = server.health_payload()
     assert health["studioLaunchId"] == (launch_id if launch_id == "a" * 32 else None)
     assert "studioLaunchId" not in health["effectiveConfig"]
 
 
 def test_spawn_environment_health_echo_reaches_real_readiness(gui_workflow, held_gui_call, monkeypatch):
-    from infini_local.web import server
+    from infini_local.web import server_status as server
 
     gui, root, _config = gui_workflow
     launches = []
@@ -616,12 +616,12 @@ def test_spawn_environment_health_echo_reaches_real_readiness(gui_workflow, held
     monkeypatch.setenv("INFINI_STUDIO_LAUNCH_ID", launches[0]["env"]["INFINI_STUDIO_LAUNCH_ID"])
     monkeypatch.setattr(server, "os", SimpleNamespace(getpid=lambda: gui.proc.pid + 1))
     monkeypatch.setattr(server, "ROOT", root)
-    health = server._health_payload()
+    health = server.health_payload()
     hold = held_gui_call(gui, "_fetch_health_snapshot", health)
     gui._delayed_health_check()
     hold.assert_pending()
     hold.release.set()
-    gui.drain_until(lambda: "health-config" not in gui._gui_tasks)
+    gui.drain_until(lambda: "health-config" not in gui.actions.tasks)
     assert gui._applied_config_ack["pid"] == health["pid"] != gui.proc.pid
     assert gui._server_lifecycle == "responding"
 
@@ -724,8 +724,7 @@ def test_owned_image_cleanup_health_to_notice_uses_verified_exit(applied_gui, mo
     from types import SimpleNamespace
     from infini_local.services import sdcpp_service
     gui, root, _config, effective = applied_gui
-    notices = []
-    gui._ui_notification_sink = lambda *row: notices.append(row)
+    notices = gui.actions.notifications
     gui.observe_runtime_notifications(poll=False)
     code = [None]
     child = SimpleNamespace(poll=lambda: code[0], wait=lambda timeout: code.__setitem__(0, 0))
@@ -743,7 +742,7 @@ def test_owned_image_cleanup_health_to_notice_uses_verified_exit(applied_gui, mo
                 'effectiveConfig': effective, 'sdcpp': image}
     monkeypatch.setattr(gui, '_fetch_health_snapshot', health)
     gui._delayed_health_check()
-    gui.drain_until(lambda: not gui._gui_tasks)
+    gui.drain_until(lambda: not gui.actions.tasks)
     assert gui._sdcpp_lifecycle == 'ready' and len(notices) == 2
     assert 'PRIVATE-COMMAND' not in str(gui._applied_config_ack) + str(notices)
     monkeypatch.setattr(sdcpp_service, '_terminate_process_tree', lambda *_a, **_k: None)
@@ -755,20 +754,20 @@ def test_owned_image_cleanup_health_to_notice_uses_verified_exit(applied_gui, mo
     assert state.log_viewer is viewer  # Viewer failure is not server failure.
     assert state.process is None and code[0] == 0
     gui._delayed_health_check()
-    gui.drain_until(lambda: not gui._gui_tasks)
+    gui.drain_until(lambda: not gui.actions.tasks)
     assert gui._sdcpp_lifecycle == 'stopped' and len(notices) == 3
     gui._delayed_health_check()
-    gui.drain_until(lambda: not gui._gui_tasks)
+    gui.drain_until(lambda: not gui.actions.tasks)
     assert len(notices) == 3
     state.lifecycle = 'external'
     gui._delayed_health_check()
-    gui.drain_until(lambda: not gui._gui_tasks)
+    gui.drain_until(lambda: not gui.actions.tasks)
     assert gui._sdcpp_lifecycle == 'external' and len(notices) == 3
     # Malformed and old health packets cannot certify managed readiness.
     for invalid in ({'secret': 'UNTRUSTED'}, ['ready'], None, 'unsupported', 'ready'):
         state.lifecycle = invalid
         gui._delayed_health_check()
-        gui.drain_until(lambda: not gui._gui_tasks)
+        gui.drain_until(lambda: not gui.actions.tasks)
         assert gui._sdcpp_lifecycle == 'unknown'
         assert gui._server_lifecycle == 'responding'
     def legacy_health(**kwargs):
@@ -777,6 +776,6 @@ def test_owned_image_cleanup_health_to_notice_uses_verified_exit(applied_gui, mo
         return packet
     monkeypatch.setattr(gui, '_fetch_health_snapshot', legacy_health)
     gui._delayed_health_check()
-    gui.drain_until(lambda: not gui._gui_tasks)
+    gui.drain_until(lambda: not gui.actions.tasks)
     assert gui._sdcpp_lifecycle == 'unknown'
     assert 'UNTRUSTED' not in str(gui._applied_config_ack) + str(notices)

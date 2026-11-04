@@ -37,7 +37,7 @@ def test_actual_request_and_parser_through_campaign_hooks(tmp_path, mutation, ex
             INFINI_WORLD_RECIPES_DIR=str(output / 'worlds'), INFINI_SDCPP_SERVER_AUTOSTART='0',
             INFINI_LLM_PROVIDER='openai_compat', INFINI_OPENAI_COMPAT_MODEL='qa-model',
             INFINI_OPENAI_COMPAT_BASE_URL='https://example.invalid/v1/', INFINI_LLM_API_MODE=api_mode, INFINI_LLM_MAX_TOKENS='512',
-            INFINI_LLM_RESPONSE_FORMAT='json_object', INFINI_LLM_FALLBACK_NETWORK_FAILS='1',
+            INFINI_LLM_RESPONSE_FORMAT='json_object', INFINI_LLM_NETWORK_ATTEMPTS='1',
             INFINI_LLM_TEMPERATURE='0.5')
         def offline(event, args):
             if event in ('socket.connect', 'socket.getaddrinfo', 'socket.sendto'):

@@ -125,7 +125,7 @@ def test_full_live_card_is_identical_with_or_without_dump(saved_row, monkeypatch
     item = copy.deepcopy(saved_row)
     before = copy.deepcopy(item)
     enriched = cards.raw_parent_card_for_llm(item, include_visual_reference=True)
-    monkeypatch.setattr(dumps, "RUNTIME_ITEMS_BY_TYPE", {})
+    use_snapshot(monkeypatch, dumps.RuntimeDumpSnapshot({}, {}, {"status": "absent"}, {}))
     without = cards.raw_parent_card_for_llm(item, include_visual_reference=True)
     assert enriched == without and item == before
     assert "runtimeDumpProvenance" not in enriched["raw"]
@@ -134,7 +134,7 @@ def test_full_live_card_is_identical_with_or_without_dump(saved_row, monkeypatch
 def test_broken_optional_manifest_does_not_change_full_live_card(saved_row, monkeypatch):
     item = copy.deepcopy(saved_row)
     before = cards.raw_parent_card_for_llm(item, include_visual_reference=True)
-    invalid = dumps.RuntimeDumpSnapshot([], {}, {"status": "invalid_snapshot", "reason": "manifest_or_pair_validation_failed"}, {})
+    invalid = dumps.RuntimeDumpSnapshot({}, {}, {"status": "invalid_snapshot", "reason": "manifest_or_pair_validation_failed"}, {})
     use_snapshot(monkeypatch, invalid)
     after = cards.raw_parent_card_for_llm(item, include_visual_reference=True)
     assert after == before and item == saved_row
@@ -153,24 +153,23 @@ def test_known_identity_collision_refuses_item_enrichment(saved_row, change, rea
     assert "nativeShootReference" not in raw["item"] and "tooltipLines" not in raw["item"]
     assert "runtimeDumpProvenance" not in raw
     full_name = item["sourceMod"] + "/" + item["internalName"]
-    result = dumps.runtime_item_lookup(97, expected_full_name=full_name,
+    result = dumps.RUNTIME_DUMP_SNAPSHOT.lookup("item", 97, expected_full_name=full_name,
         expected_modules=item.get("parentSourceGraph", {}).get("modules"), expected_shoot=item["shoot"])
     assert result["unavailable"] is True and result["runtimeDumpProvenance"]["reason"] == reason
 
 
-def test_unknown_identity_and_legacy_do_not_enable_new_item_route(saved_row, monkeypatch):
+def test_unknown_identity_and_missing_manifest_do_not_enable_item_route(saved_row, monkeypatch):
     raw = cards.raw_parent_card_for_llm({"id": 97})["raw"]
     assert "nativeShootReference" not in raw["item"]
     assert "runtimeDumpProvenance" not in raw
-    assert dumps.runtime_item_lookup(97)["runtimeDumpProvenance"]["reason"] == "stable_item_identity_unavailable"
-    old = dumps.RUNTIME_DUMP_SNAPSHOT
-    legacy = dumps.RuntimeDumpSnapshot(old.items, old.projectiles, {"status": "legacy_unverified"}, {})
-    use_snapshot(monkeypatch, legacy)
+    assert dumps.RUNTIME_DUMP_SNAPSHOT.lookup("item", 97)["runtimeDumpProvenance"]["reason"] == "stable_item_identity_unavailable"
+    rejected = dumps.RuntimeDumpSnapshot({}, {}, {"status": "invalid_snapshot", "reason": "snapshot_manifest_required"}, {})
+    use_snapshot(monkeypatch, rejected)
     raw = cards.raw_parent_card_for_llm(sparse_item())["raw"]
     assert "runtimeDumpProvenance" not in raw
-    assert dumps.runtime_item_lookup(97, expected_full_name="Example/Parent")["runtimeDumpProvenance"]["reason"] == "item_snapshot_not_integrity_verified"
+    assert dumps.RUNTIME_DUMP_SNAPSHOT.lookup("item", 97, expected_full_name="Example/Parent")["runtimeDumpProvenance"]["reason"] == "snapshot_manifest_required"
     assert "nativeShootReference" not in raw["item"]
-    assert raw["directProjectile"]["runtimeDumpProvenance"]["status"] == "legacy_unverified"
+    assert raw["directProjectile"]["runtimeDumpProvenance"]["status"] == "invalid_snapshot"
 
 
 @pytest.mark.parametrize("marker", [{"generatedData": {}}, {"generatedData": {"runtimeProgram": {}}},

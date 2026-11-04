@@ -4,9 +4,10 @@ import os
 from pathlib import Path
 
 from infini_local.core.generation_defaults import GENERATION_DEFAULTS
+from infini_local.services import sdcpp_backend
 
 
-from infini_local.desktop.settings_paths import STATE_ROOT
+from infini_local.core.app_paths import STATE_ROOT
 
 
 # AGENT MAP: static browser Studio settings schema.
@@ -54,15 +55,10 @@ FIELD_ORDER = [
     "INFINI_LLM_POOL_4_MODEL",
     "INFINI_LLM_POOL_4_OPENROUTER_PROVIDER",
     "INFINI_LLM_POOL_4_API_MODE",
-    "INFINI_LLM_FALLBACK_PROVIDER",
-    "INFINI_LLM_FALLBACK_MODEL",
-    "INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER",
-    "INFINI_LLM_FALLBACK_BASE_URL",
-    "INFINI_LLM_FALLBACK_API_KEY",
-    "INFINI_LLM_FALLBACK_NETWORK_FAILS",
+    "INFINI_LLM_NETWORK_ATTEMPTS",
     "INFINI_LLM_RESPONSE_FORMAT",
     "INFINI_LLM_TEMPERATURE",
-    "INFINI_LLM_REAUTHOR_TEMPERATURE",
+    "INFINI_LLM_REPAIR_TEMPERATURE",
     "INFINI_VISUAL_DIRECTOR_TEMPERATURE",
     "INFINI_CODEX_VISUAL_REASONING",
     "INFINI_LLM_MAX_TOKENS",
@@ -148,7 +144,6 @@ FIELD_ORDER = [
     "INFINI_CONSOLE_EVENT_LEVEL",
 ]
 
-SDCPP_DEFAULT_COMMAND_TEMPLATE = "{exe} --diffusion-model {model} -l {host} --listen-port {port} -W {width} -H {height} --steps {steps} --cfg-scale {cfg} --sampling-method {sampler} {extra}"
 
 SDCPP_EXTRA_PROFILES = {
     # Official sd.cpp backend syntax allows per-module runtime placement such as
@@ -159,24 +154,6 @@ SDCPP_EXTRA_PROFILES = {
     # runtime/performance flags.
     "flux2_klein4b_rx6800xt_hybrid": "-v --backend diffusion=rocm0,vae=vulkan0,te=rocm0 --params-backend te=cpu --rng cuda --flow-shift 3 --eager-load --diffusion-conv-direct --vae-conv-direct",
 }
-
-
-def repair_sdcpp_command_template(template: str) -> tuple[str, bool, str]:
-    raw = str(template or "").strip()
-    if not raw:
-        return SDCPP_DEFAULT_COMMAND_TEMPLATE, True, "empty_template"
-    required = ("{exe}", "{model}", "{host}", "{port}", "{width}", "{height}", "{steps}", "{cfg}", "{sampler}", "{extra}")
-    lowered = raw.lower()
-    preset_bleed = any(x in lowered for x in ("openrouter + local", "lm studio + local", "z-image/sd.cppethod"))
-    broken_sampling = "--sampling-method" not in raw and "sampling-m" in raw
-    missing_required = any(tok not in raw for tok in required)
-    if preset_bleed or broken_sampling or missing_required:
-        reasons = []
-        if preset_bleed: reasons.append("pipeline preset text leaked into command")
-        if broken_sampling: reasons.append("broken --sampling-method flag")
-        if missing_required: reasons.append("missing placeholders")
-        return SDCPP_DEFAULT_COMMAND_TEMPLATE, True, "; ".join(reasons)
-    return raw, False, ""
 
 
 DEFAULTS = {
@@ -220,15 +197,10 @@ DEFAULTS = {
     "INFINI_LLM_POOL_4_MODEL": "",
     "INFINI_LLM_POOL_4_OPENROUTER_PROVIDER": "",
     "INFINI_LLM_POOL_4_API_MODE": "auto",
-    "INFINI_LLM_FALLBACK_PROVIDER": "",
-    "INFINI_LLM_FALLBACK_MODEL": "",
-    "INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER": "",
-    "INFINI_LLM_FALLBACK_BASE_URL": "",
-    "INFINI_LLM_FALLBACK_API_KEY": "",
-    "INFINI_LLM_FALLBACK_NETWORK_FAILS": "2",
+    "INFINI_LLM_NETWORK_ATTEMPTS": "2",
     "INFINI_LLM_RESPONSE_FORMAT": "auto",
     "INFINI_LLM_TEMPERATURE": GENERATION_DEFAULTS["INFINI_LLM_TEMPERATURE"],
-    "INFINI_LLM_REAUTHOR_TEMPERATURE": "",
+    "INFINI_LLM_REPAIR_TEMPERATURE": "",
     "INFINI_VISUAL_DIRECTOR_TEMPERATURE": GENERATION_DEFAULTS["INFINI_VISUAL_DIRECTOR_TEMPERATURE"],
     "INFINI_CODEX_VISUAL_REASONING": "inherit",
     "INFINI_LLM_MAX_TOKENS": GENERATION_DEFAULTS["INFINI_LLM_MAX_TOKENS"],
@@ -254,7 +226,7 @@ DEFAULTS = {
     "INFINI_SDCPP_SERVER_URL": "http://127.0.0.1:7861",
     "INFINI_SDCPP_SERVER_AUTOSTART": "1",
     "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
-    "INFINI_SDCPP_SERVER_COMMAND_TEMPLATE": SDCPP_DEFAULT_COMMAND_TEMPLATE,
+    "INFINI_SDCPP_SERVER_COMMAND_TEMPLATE": sdcpp_backend.DEFAULT_COMMAND_TEMPLATE,
     "INFINI_SDCPP_SERVER_EXTRA_ARGS": "",
     "INFINI_SDCPP_SERVER_SHOW_CONSOLE": "1" if os.name == "nt" else "0",
     "INFINI_SDCPP_SERVER_LOG_FILE": str(STATE_ROOT / "cache" / "sdcpp_server.log"),
@@ -360,7 +332,6 @@ PRESETS = {
 FIELD_HELP = {
     "INFINI_PROMPT_STYLE": "Все режимы генерируют предметы для Terraria. Default — базовое направление промптов; Terraria Like добавляет акцент на vanilla-like спрайты, палитру, читаемость и согласованные эффекты. Это не пресет механик. Стиль независим от provider/backend pipeline preset; не меняет модели, ключи, resize, LoRA, схему контракта, инвентарь или установленную игру.",
     "INFINI_OPENROUTER_PROVIDER": "Точный slug провайдера/endpoint OpenRouter для этого профиля. Пусто = auto. Непусто = provider.only и запрет fallback: при недоступности ошибка, а не другая площадка. Значения других профилей независимы.",
-    "INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER": "Точный slug провайдера/endpoint OpenRouter для этого профиля. Пусто = auto. Непусто = provider.only и запрет fallback: при недоступности ошибка, а не другая площадка. Значения других профилей независимы.",
     "INFINI_LLM_POOL_2_OPENROUTER_PROVIDER": "Точный slug провайдера/endpoint OpenRouter для этого профиля. Пусто = auto. Непусто = provider.only и запрет fallback: при недоступности ошибка, а не другая площадка. Значения других профилей независимы.",
     "INFINI_LLM_POOL_3_OPENROUTER_PROVIDER": "Точный slug провайдера/endpoint OpenRouter для этого профиля. Пусто = auto. Непусто = provider.only и запрет fallback: при недоступности ошибка, а не другая площадка. Значения других профилей независимы.",
     "INFINI_LLM_POOL_4_OPENROUTER_PROVIDER": "Точный slug провайдера/endpoint OpenRouter для этого профиля. Пусто = auto. Непусто = provider.only и запрет fallback: при недоступности ошибка, а не другая площадка. Значения других профилей независимы.",
@@ -395,14 +366,10 @@ FIELD_HELP = {
     "INFINI_OPENAI_COMPAT_API_KEY": "Ключ стороннего OpenAI-compatible API.",
     "INFINI_OPENAI_COMPAT_MODEL": "Имя/slug модели стороннего OpenAI-compatible API.",
     "INFINI_LLM_POOL_FAILURE_COOLDOWN_SECONDS": "После provider failure временно исключить profile из выбора новых items; текущий stage сразу пробует следующий profile.",
-    "INFINI_LLM_FALLBACK_PROVIDER": "Опциональный fallback provider. Пусто = использовать тот же провайдер, но другую модель. Полезно, если хочешь primary OpenRouter, а fallback — local/compat.",
-    "INFINI_LLM_FALLBACK_MODEL": "Опциональная запасная модель. Если основная модель умерла по бабкам/quota/auth или два раза подряд не достучалась по сети, сервер переключится на эту модель.",
-    "INFINI_LLM_FALLBACK_BASE_URL": "Опциональный base URL fallback-маршрута. Пусто = брать URL выбранного fallback provider из основных полей.",
-    "INFINI_LLM_FALLBACK_API_KEY": "Опциональный отдельный ключ для fallback-маршрута. Пусто = использовать основной ключ соответствующего provider.",
-    "INFINI_LLM_FALLBACK_NETWORK_FAILS": "Сколько сетевых/timeout сбоев подряд терпеть на primary, прежде чем переключаться на fallback. По умолчанию 2.",
+    "INFINI_LLM_NETWORK_ATTEMPTS": "Число попыток при временном сетевом сбое на выбранном профиле. 1 запрещает повтор и failover. Дополнительные профили задаются в LLM pool.",
     "INFINI_LLM_RESPONSE_FORMAT": "Как просить JSON у модели. json_object — проверенный рабочий выбор для Gemini/OpenRouter. json_schema отклоняется Google Gemini (400 INVALID_ARGUMENT на большой схеме Author) и оставлен опционально; auto для удалённых API тоже разворачивается в json_schema.",
     "INFINI_LLM_TEMPERATURE": "Температура основного LLM planner: выше = больше вариативности/риска, ниже = стабильнее/однообразнее. Это не Z-Image; картинки регулируются seed/CFG/steps/flow-shift.",
-    "INFINI_LLM_REAUTHOR_TEMPERATURE": "Температура единственного scoped repair. Пусто = 0.12; явно заданный INFINI_LLM_REPAIR_TEMPERATURE имеет приоритет. Это не verifier и не полный reauthor: модель возвращает только разрешённые repair-поля.",
+    "INFINI_LLM_REPAIR_TEMPERATURE": "Температура единственного scoped repair. Пусто = 0.12. Это не verifier и не полный reauthor: модель возвращает только разрешённые repair-поля.",
     "INFINI_VISUAL_DIRECTOR_TEMPERATURE": "Температура LLM Visual Director, который пишет visual kit/prompt-ы для Z-Image. Выше = больше художественной вариативности, но больше риск ухода от предмета.",
     "INFINI_LLM_MAX_TOKENS": "Лимит ответа LLM. Для reasoning-моделей нужен запас, иначе модель может не успеть вернуть JSON.",
     "INFINI_LLM_TIMEOUT": "Общее ожидание каждой LLM-стадии и её условного Repair, секунды; по умолчанию 600. Не HTTP-дедлайн игрового клиента.",
@@ -597,9 +564,7 @@ for _bool_key in [
 
 __all__ = [
     "FIELD_ORDER",
-    "SDCPP_DEFAULT_COMMAND_TEMPLATE",
     "SDCPP_EXTRA_PROFILES",
-    "repair_sdcpp_command_template",
     "DEFAULTS",
     "PRESETS",
     "FIELD_HELP",

@@ -592,15 +592,19 @@ def _runtime_entities(data: dict[str, Any]) -> list[dict[str, Any]]:
     return [row for row in runtime.get("entities") or [] if isinstance(row, dict)]
 
 
-def _independent_image_jobs(data: dict[str, Any], plan: list[dict[str, Any]]):
+def _independent_image_jobs(data: dict[str, Any], plan: list[dict[str, Any]], asset_mode: str):
     """Only authored text-to-image jobs; icon reuse is projected after joining.
 
-    No request consumes a sibling PNG. Keep selection identical to the delivery
-    loop below, including disabled entity images and invalid registry roles.
+    Canonical requests for both sequential and parallel execution. No request
+    consumes a sibling PNG; delivery projects reuse only after item hydration.
+    Jobs contain data only: the executor owns backend callables and I/O seams.
     """
-    yield "item", maybe_generate_sprite, (), {}
-    kit = data.get("visualKit") or {}
-    negative = str((kit.get("item") or {}).get("negativePrompt") or "").strip()
+    yield "item", (), {}
+    raw_kit = data.get("visualKit")
+    kit = raw_kit if isinstance(raw_kit, dict) else {}
+    raw_item = kit.get("item")
+    item = raw_item if isinstance(raw_item, dict) else {}
+    negative = str(item.get("negativePrompt") or "").strip()
     for slot in plan:
         role = slot["role"]
         kwargs = {}
@@ -616,7 +620,7 @@ def _independent_image_jobs(data: dict[str, Any], plan: list[dict[str, Any]]):
             slot_negative = slot["negativePrompt"]
         elif role.startswith("entity:") and slot["assetMode"] == "baked_sprite":
             expected = VISUAL_ROLE_BY_ENTITY_KIND.get(slot["entityKind"])
-            if (VISUAL_ASSET_MODE not in {"full", "projectile", "all", "visualpack", "assetpack"}
+            if (asset_mode not in {"full", "projectile", "all", "visualpack", "assetpack"}
                     or not expected or (slot["visualRole"] and slot["visualRole"] != expected)):
                 continue
             backend_role = "runtime:" + expected
@@ -624,16 +628,16 @@ def _independent_image_jobs(data: dict[str, Any], plan: list[dict[str, Any]]):
             slot_negative = negative
         else:
             continue
-        yield role, generate_visual_asset, (backend_role, slot["prompt"], slot_negative, slot["assetId"], slot["canvas"]), kwargs
+        yield role, (backend_role, slot["prompt"], slot_negative, slot["assetId"], slot["canvas"]), kwargs
 
 
 def _run_independent_image(job, snapshot):
-    role, function, args, kwargs = job
+    role, args, kwargs = job
     local = copy.deepcopy(snapshot)
     # Generation writes diagnostics, never consumes historical receipts. Fresh
     # keys avoid stale siblings and repeated-role/prefix-related ID collisions.
     local["debug"] = {}
-    result = function(local, *args, **kwargs)
+    result = maybe_generate_sprite(local) if role == "item" else generate_visual_asset(local, *args, **kwargs)
     prefix = "item" if role == "item" else args[0]
     return result, local["debug"], prefix
 
@@ -650,7 +654,7 @@ class _ImageBatch:
             if future.done():
                 future.result()  # Do not enqueue new VFX work after an earlier exception.
         snapshot = copy.deepcopy(data)
-        for job in _independent_image_jobs(snapshot, plan):
+        for job in _independent_image_jobs(snapshot, plan, VISUAL_ASSET_MODE):
             role = job[0]
             if role not in self.futures:
                 self.futures[role] = self.pool.submit(copy_context().run, _run_independent_image, job, snapshot)
@@ -736,15 +740,12 @@ def maybe_generate_visual_assets(data: dict[str, Any], pending=None) -> dict[str
 
     plan = build_visual_asset_plan(data)
     by_id = {str(row.get("id") or ""): row for row in _runtime_entities(data)}
-    raw_kit = data.get("visualKit")
-    visual_kit: dict[str, Any] = raw_kit if isinstance(raw_kit, dict) else {}
-    raw_item_kit = visual_kit.get("item")
-    item_kit: dict[str, Any] = raw_item_kit if isinstance(raw_item_kit, dict) else {}
-    director_negative = str(item_kit.get("negativePrompt") or "").strip()
+    jobs = {job[0]: job for job in _independent_image_jobs(data, plan, VISUAL_ASSET_MODE)}
 
-    def image_result(role, *args, **kwargs):
+    def image_result(role):
         if role in completed:
             return _join_image_result(data, completed, role)
+        _, args, kwargs = jobs[role]
         return generate_visual_asset(data, *args, **kwargs)
 
     for slot in plan:
@@ -753,24 +754,12 @@ def maybe_generate_visual_assets(data: dict[str, Any], pending=None) -> dict[str
         role = str(slot.get("role") or "")
         if role.startswith("vfx:"):
             asset = next(row for row in data["vfxManifest"]["assets"] if row["id"] == slot["vfxAssetId"])
-            path, url, score, status = image_result(
-                role, role, slot["prompt"], slot["negativePrompt"], slot["assetId"], slot["canvas"],
-                processing_role=slot["processingRole"],
-            )
+            path, url, score, status = image_result(role)
             asset.update(spritePath=path, spriteUrl=url, spriteStatus=status, spriteTechnicalScore=score)
             slot.update(path=path, url=url, status=status, technicalScore=score)
             continue
         if role == "equip_overlay":
-            prompt = str(slot.get("prompt") or visual.get("equipOverlayPrompt") or "")
-            canvas = int(slot.get("canvas") or 48)
-            path, url, score, status = image_result(
-                role,
-                "equip_overlay",
-                prompt,
-                director_negative,
-                str(slot.get("assetId") or f"{data.get('id')}_equip_overlay"),
-                canvas,
-            )
+            path, url, score, status = image_result(role)
             final_prompt = str(data.get("debug", {}).get("equip_overlayFinalPrompt") or "")
             if final_prompt:
                 slot["prompt"] = final_prompt
@@ -798,17 +787,8 @@ def maybe_generate_visual_assets(data: dict[str, Any], pending=None) -> dict[str
             entity_visual = entity.setdefault("visual", {})
             prompt = str(slot.get("prompt") or "")
             negative = str(slot.get("negativePrompt") or "")
-            canvas = int(slot.get("canvas") or 32)
             backend_role = "impact"
-            path, url, score, status = image_result(
-                role,
-                backend_role,
-                prompt,
-                negative,
-                str(slot.get("assetId") or f"{data.get('id')}_{entity_id}_impact"),
-                canvas,
-                publication_entity_id=entity_id,
-            )
+            path, url, score, status = image_result(role)
             final_prompt = str(data.get("debug", {}).get(f"{backend_role}FinalPrompt") or "")
             entity_visual["impactPrompt"] = final_prompt or prompt
             entity_visual["impactNegativePrompt"] = negative
@@ -856,8 +836,6 @@ def maybe_generate_visual_assets(data: dict[str, Any], pending=None) -> dict[str
             entity_visual["spriteStatus"] = "skipped_disabled_by_settings"
             slot["status"] = "skipped_disabled_by_settings"
             continue
-        prompt = str(slot.get("prompt") or entity_visual.get("prompt") or "")
-        canvas = int(slot.get("canvas") or 32)
         expected_role = VISUAL_ROLE_BY_ENTITY_KIND.get(str(slot.get("entityKind") or ""))
         declared_role = str(slot.get("visualRole") or "")
         if not expected_role or (declared_role and declared_role != expected_role):
@@ -867,15 +845,7 @@ def maybe_generate_visual_assets(data: dict[str, Any], pending=None) -> dict[str
         # Exact registry projection, not a name/prose router. The namespace keeps
         # runtime pose independent of the legacy +X projectile processing path.
         backend_role = "runtime:" + expected_role
-        path, url, score, status = image_result(
-            role,
-            backend_role,
-            prompt,
-            director_negative,
-            str(slot.get("assetId") or f"{data.get('id')}_{entity_id}"),
-            canvas,
-            entity_id=entity_id,
-        )
+        path, url, score, status = image_result(role)
         final_prompt = str(data.get("debug", {}).get(f"{backend_role}FinalPrompt") or "")
         if final_prompt:
             slot["prompt"] = final_prompt

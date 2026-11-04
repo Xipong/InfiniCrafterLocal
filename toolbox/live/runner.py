@@ -47,7 +47,6 @@ configured_response_format = preflight['configured']['responseFormat']
 expected_provider = args.expected_provider
 expected_model = args.expected_model
 expected_base_url = configured_base_url
-fallback_state = {'provider': '', 'model': '', 'legacyRepairModel': '', 'enabledPools': []}
 git_head = preflight['gitHead']
 git_status = ''
 args.require_zero_transport_retries = True
@@ -62,7 +61,7 @@ os.environ['INFINI_VISUAL_REQUIRE_ITEM_SPRITE'] = '0'
 # Pacing is owned by this harness. Do not permit lower-level transport retries
 # to fire immediately, or their attempts would escape the one-minute ledger.
 if args.transport_retries > 0 or args.require_zero_transport_retries:
-    os.environ['INFINI_LLM_FALLBACK_NETWORK_FAILS'] = '1'
+    os.environ['INFINI_LLM_NETWORK_ATTEMPTS'] = '1'
 sys.path.insert(0, str(LOCAL))
 
 SUPPORT_PATH = Path(__file__).with_name("support.py")
@@ -90,10 +89,10 @@ from toolbox.live.support import (  # noqa: E402
     valid_author_call_budget,
 )
 
-if (args.transport_retries > 0 or args.require_zero_transport_retries) and int(llm_transport.config.LLM_FALLBACK_NETWORK_FAILS) != 1:
+if (args.transport_retries > 0 or args.require_zero_transport_retries) and int(llm_transport.config.LLM_NETWORK_ATTEMPTS) != 1:
     raise SystemExit(
         "paced case retries require one physical HTTP attempt per logical call "
-        f"(loaded {llm_transport.config.LLM_FALLBACK_NETWORK_FAILS})"
+        f"(loaded {llm_transport.config.LLM_NETWORK_ATTEMPTS})"
     )
 
 LOGICAL = OUT / 'logical_llm.ndjson'
@@ -537,7 +536,6 @@ campaign_identity = {
     ),
     'expectedReasoningEffort': args.expected_reasoning_effort,
     'samplingFreezeStages': list(FROZEN_LLM_STAGES),
-    'fallbackState': fallback_state,
     'cases': [case[0] for case in selected_cases],
     'casesFile': cases_file_path,
     'casesFileSha256': cases_file_sha256,
@@ -547,7 +545,7 @@ campaign_identity = {
     'transportRetryDelaySeconds': args.transport_retry_delay_seconds,
     'transportRetryScope': 'case_only_after_confirmed_logical_transport_error',
     'requireZeroTransportRetries': bool(args.require_zero_transport_retries),
-    'networkAttemptBudget': int(llm_transport.config.LLM_FALLBACK_NETWORK_FAILS),
+    'networkAttemptBudget': int(llm_transport.config.LLM_NETWORK_ATTEMPTS),
     'parallelCrafts': args.parallel_crafts,
     'imagesDisabled': True,
     'deliveryReadinessObserver': 'synthetic_no_image_execution_control',

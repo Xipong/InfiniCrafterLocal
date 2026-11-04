@@ -41,7 +41,6 @@ INFINI_OPENROUTER_PROVIDER=deepinfra
 | Дополнительная 2 | `INFINI_LLM_POOL_2_OPENROUTER_PROVIDER` |
 | Дополнительная 3 | `INFINI_LLM_POOL_3_OPENROUTER_PROVIDER` |
 | Дополнительная 4 | `INFINI_LLM_POOL_4_OPENROUTER_PROVIDER` |
-| Запасной источник | `INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER` |
 
 Если несколько линий включены, начальный выбор может распределяться между ними. Чтобы все предметы шли через один выбранный профиль, отключи остальные линии. Пустое поле в другой линии оставляет её автоматическую маршрутизацию. Для LM Studio, Совместимого API и ChatGPT/Codex это поле не используется.
 

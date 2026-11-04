@@ -627,7 +627,7 @@ public sealed partial class InfiniCraftPlayer
         if (_awaitingServerCommit)
         {
             // Multiplayer clients do not run LocalGenerator and do not submit GeneratedItemData.
-            // This state only waits for the authoritative host to finish PacketRequestServerCraft.
+            // This state only waits for the authoritative host to finish InfiniNetPacketIds.RequestServerCraft.
             _serverCraftWaitTicks++;
             _totalCraftTicks++;
             if (_elapsedTicks < CraftDurationTicks)
