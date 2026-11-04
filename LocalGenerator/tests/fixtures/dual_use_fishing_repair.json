@@ -1,0 +1,185 @@
+{
+  "source": {
+    "recipeKey": "r_aa9bba21f49c7c0db1d4f443",
+    "pipelineLines": [
+      797,
+      798,
+      799,
+      800
+    ],
+    "promptResponseLine": 688,
+    "requestArtifact": "96a5bb64f2ab7f2d5d06fd70fcd31f930d94c1b7c0924ed07f60372270d7eb4c",
+    "note": "Exact captured acceptedItemContext and filteredPatch from failed repair; no parent packets."
+  },
+  "author": {
+    "name": "Trap-Caster's Reel",
+    "category": "hybrid",
+    "realization": {
+      "description": "Primary use places a sturdy Dart Trap tile that can be wired or used defensively. Alternate use casts a fishing line with 15 fishing power and swift 11 blocks/second cast speed, merging angling utility with tactical trap placement.",
+      "selfEvaluation": "Successfully merges Parent A's fishing pole mechanics and Parent B's placeable dart trap properties into a cohesive hybrid tool."
+    },
+    "concept": "A mechanical hybrid combining a reinforced fishing pole with a dart trap mechanism, capable of placing mechanical dart traps on primary use and casting a swift fishing line on alternate use.",
+    "runtimeProgram": {
+      "apiVersion": "infini.runtime-program.v5",
+      "schema": "infini.runtime-program.authoring.v7",
+      "primaryEntityId": "item_body",
+      "entities": [
+        {
+          "id": "item_body",
+          "kind": "item_body"
+        }
+      ],
+      "bindings": [
+        {
+          "id": "bind_primary",
+          "input": "primary_use",
+          "action": {
+            "kind": "place_item",
+            "targetId": "item_body",
+            "placementCallId": "place_trap_call"
+          },
+          "stackCost": 1,
+          "contactDamage": false
+        },
+        {
+          "id": "bind_alternate",
+          "input": "alternate_use",
+          "action": {
+            "kind": "native_fishing",
+            "targetId": "item_body",
+            "fishing": {
+              "power": 15,
+              "castSpeed": 11.0
+            }
+          },
+          "stackCost": 0,
+          "contactDamage": false
+        }
+      ],
+      "calls": [
+        {
+          "id": "call_stats",
+          "fn": "item_stats",
+          "target": "item_body",
+          "params": {
+            "damage": -1,
+            "damageClass": "default",
+            "knockback": 0,
+            "useTimeSeconds": 0.13333333,
+            "useAnimationSeconds": 0.23333333,
+            "rarity": 0,
+            "valueCopper": 11000,
+            "maxStack": 9999,
+            "craftYield": 1,
+            "widthPx": 24,
+            "heightPx": 24,
+            "scale": 1
+          }
+        },
+        {
+          "id": "call_use",
+          "fn": "item_use",
+          "target": "item_body",
+          "params": {
+            "useStyle": "swing",
+            "autoReuse": true,
+            "useTurn": true,
+            "hideUseGraphic": false,
+            "disableMeleeHitbox": false,
+            "channel": false
+          }
+        },
+        {
+          "id": "place_trap_call",
+          "fn": "place_tile",
+          "target": "item_body",
+          "params": {
+            "tileId": 137,
+            "placeStyle": 0
+          }
+        },
+        {
+          "id": "sprite_call",
+          "fn": "placed_sprite",
+          "target": "item_body",
+          "params": {
+            "placementCallId": "place_trap_call",
+            "renderSizePx": 32,
+            "footprintAnchorX": 0.5,
+            "footprintAnchorY": 0.5,
+            "pivotSpace": "frame",
+            "imagePivotX": 0.5,
+            "imagePivotY": 0.5,
+            "offsetXPx": 0,
+            "offsetYPx": 0,
+            "rotationDegrees": 0,
+            "flipX": false,
+            "flipY": false
+          }
+        }
+      ]
+    }
+  },
+  "repairPatch": {
+    "bindingIdsDelete": [],
+    "bindingIndicesDelete": [],
+    "bindingsUpsert": [
+      {
+        "action": {
+          "kind": "place_item",
+          "placementCallId": "place_trap_call",
+          "targetId": "item_body"
+        },
+        "contactDamage": false,
+        "id": "bind_primary",
+        "input": "alternate_use",
+        "stackCost": 1
+      },
+      {
+        "action": {
+          "fishing": {
+            "castSpeed": 11.0,
+            "power": 15
+          },
+          "kind": "native_fishing",
+          "targetId": "item_body"
+        },
+        "contactDamage": false,
+        "id": "bind_alternate",
+        "input": "primary_use",
+        "stackCost": 0
+      }
+    ],
+    "callIdsDelete": [],
+    "callIndicesDelete": [],
+    "callParamKeysDelete": [],
+    "callPropertyKeysDelete": [],
+    "callsUpsert": [
+      {
+        "fn": "item_stats",
+        "id": "call_stats",
+        "params": {
+          "craftYield": 1,
+          "damage": 0,
+          "damageClass": "default",
+          "heightPx": 24,
+          "knockback": 0,
+          "maxStack": 9999,
+          "rarity": 0,
+          "scale": 1,
+          "useAnimationSeconds": 0.23333333,
+          "useTimeSeconds": 0.13333333,
+          "valueCopper": 11000,
+          "widthPx": 24
+        },
+        "target": "item_body"
+      }
+    ],
+    "entitiesUpsert": [],
+    "entityIdsDelete": [],
+    "entityIndicesDelete": [],
+    "exclusiveInputSelections": [],
+    "metadataPatch": {},
+    "note": "Repair bindings to satisfy hybrid placeable input contract and update item stats damage minimum."
+  }
+}
