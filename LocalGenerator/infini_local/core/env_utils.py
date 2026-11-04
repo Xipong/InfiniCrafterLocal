@@ -4,7 +4,9 @@ import os
 import re
 from pathlib import Path
 
-from infini_local.core.env_file import read_env_file
+from infini_local.core.config_migration import (
+    apply_environment_values, migrate_config_file, migrate_environment, migrate_values, read_migration_source,
+)
 
 _TRUE_VALUES = {"1", "true", "yes", "on", "y", "t"}
 _FALSE_VALUES = {"0", "false", "no", "off", "n", "f"}
@@ -18,11 +20,16 @@ def load_env_file(path: Path) -> None:
     GUI/bat launches without adding another dependency.
     """
     if os.environ.get("INFINI_SKIP_CONFIG_FILE", "").strip().lower() in _TRUE_VALUES:
+        migrate_environment(os.environ)
         return
-    # Parse the entire file before setting anything; invalid encoded strings
-    # cannot leave a partially loaded process environment.
-    for key, value in read_env_file(path).items():
-        os.environ.setdefault(key, value)
+    # Resolve both original sources before applying canonical values. A key
+    # created by migration is not an explicit modern setting; persisted
+    # provenance retains that distinction until the user edits/saves the file.
+    inherited = dict(os.environ)
+    migrate_config_file(path, environment=inherited)
+    source = read_migration_source(path)
+    effective, changes = migrate_values({**source, **inherited})
+    apply_environment_values(os.environ, effective, changes)
 
 
 def env_str(name: str, default: str = "", *, strip: bool = True) -> str:

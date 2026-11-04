@@ -298,10 +298,10 @@ class StudioController:
 
     def snapshot(self):
         from itertools import islice
-        from infini_local.core.config_bootstrap import APP_VERSION
+        from infini_local import APP_VERSION
+        from infini_local.core.config_migration import read_migration_receipt, environment_migration_status
         from infini_local.desktop.settings_schema import DEFAULTS, FIELD_HELP, PRESETS
         from infini_local.desktop.settings_defaults import defaults_offer
-        from infini_local.desktop.settings_env import parse_env
         CONFIG_PATH, EXAMPLE_PATH = self.app.config_path, self.app.example_path
         from infini_local.services.codex_auth import auth_status
         from infini_local.services.codex_text_backend import EFFORTS
@@ -314,7 +314,7 @@ class StudioController:
         saved_revision = None
         try:
             # Match SettingsGui startup: a fresh install loads the example.
-            saved_values = parse_env(CONFIG_PATH if CONFIG_PATH.exists() else EXAMPLE_PATH)
+            saved_values = self.app.read_saved_settings()
             self._saved_values = dict(saved_values)
             saved_revision = saved_config_revision(CONFIG_PATH, example_path=self.app.example_path)
         except (OSError, ValueError, UnicodeError) as exc:
@@ -327,6 +327,12 @@ class StudioController:
             # A recommendation read must not take the entire control plane down.
             defaults_update = {'changes': [], 'dismissed': True}
             saved_error = saved_error or f'Не удалось проверить рекомендации: {exc}'
+        try:
+            migration_file = read_migration_receipt(CONFIG_PATH)
+        except OSError:
+            migration_file = {'changed': False, 'changes': [], 'error': 'Не удалось прочитать отчёт миграции настроек.'}
+            saved_error = saved_error or migration_file['error']
+        migration = {'file': migration_file, 'environment': environment_migration_status()}
         saved_values['INFINI_GUI_PIPELINE_PRESET'] = self.app._pipeline_preset_from_config(saved_values, self.app.user_presets)
         saved_lan = saved_values.get('INFINI_HOST') == '0.0.0.0' or bool(saved_values.get('INFINI_ASSET_PUBLIC_BASE_URL'))
         fields = [dict(field, disabled=self.app.field_disabled_reasons.get(field['key'], '')) for field in self.fields]
@@ -348,6 +354,7 @@ class StudioController:
         return {
             'values': values, 'savedValues': saved_values, 'savedLanEnabled': saved_lan, 'savedRevision': saved_revision,
             'defaults': DEFAULTS, 'fieldHelp': FIELD_HELP, 'defaultsUpdate': defaults_update,
+            'configMigration': migration,
             'fields': fields, 'presets': PRESETS,
             'userPresets': self.app.user_presets, 'status': saved_error or self.app.status,
             'activity': self.app.activity, 'appliedConfig': self.app.applied_config,
@@ -623,7 +630,10 @@ def main(argv=None):
     parser.add_argument('--managed', action='store_true', help='Stop when the owning tModLoader process closes stdin.')
     args = parser.parse_args(argv)
     from infini_local.desktop.settings_controller import SettingsController
+    from infini_local.core.app_paths import CONFIG_PATH
+    from infini_local.core.env_utils import load_env_file
     try:
+        load_env_file(CONFIG_PATH)
         app = SettingsController()
     except (ValueError, UnicodeError) as exc:
         raise SystemExit(f'Не удалось прочитать config.env: {exc} '

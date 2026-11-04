@@ -13,7 +13,7 @@ from infini_local.core.config_validation import reject_retired_config
 from infini_local.core.app_paths import CONFIG_PATH, ROOT, STATE_ROOT
 from infini_local.core.env_utils import env_path, env_str, load_env_file
 
-APP_VERSION = "0.5.7"
+from infini_local import APP_VERSION
 
 DATA_DIR = ROOT / "data"
 

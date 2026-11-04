@@ -2,6 +2,18 @@
 'use strict';
 (() => {
   const en = {
+  "Настройки обновлены; проверь перенесённые значения": "Settings migrated; review the transferred values",
+  "Настройки обновлены до текущего формата": "Settings migrated to the current format",
+  "Исходный файл сохранён:": "Original file backed up:",
+  "Переменные среды преобразованы только для этого запуска. Настройки Windows не изменены.": "Environment variables were migrated for this process only. Windows settings were not changed.",
+  "Прежний fallback перенесён в выключенный профиль 2. Новый пул может выбирать его сразу, а не только после ошибки. Проверь источник, модель и адрес перед включением.": "The former fallback was moved to disabled profile 2. The new pool may select it immediately, not only after an error. Review its provider, model and endpoint before enabling it.",
+  "Новые явные настройки сохранены. Конфликтующие старые значения не смешаны с ними и доступны в исходной копии файла или среде запуска.": "Explicit current settings were kept. Conflicting old values were not mixed into them and remain in the original file backup or launch environment.",
+  "Какие параметры обновлены": "Migrated settings",
+  "Устаревшие настройки блокируют запуск генератора": "Retired settings block generator startup",
+  "Среда процесса": "Process environment",
+  "Очисти устаревшие поля в полном списке и сохрани настройки. Замены настраиваются отдельно; ничего не переносится автоматически.": "Clear retired fields in the full list and save settings. Configure replacements separately; nothing is migrated automatically.",
+  "Параметры из среды процесса исправь в переменных среды, затем перезапусти Studio и tModLoader.": "Correct process-environment settings in your environment variables, then restart Studio and tModLoader.",
+  "Открыть полный список": "Open full settings list",
   "Сбросить доп. аргументы": "Clear extra arguments",
   "API (OpenAI-compatible) + локальные изображения sd.cpp": "API (OpenAI-compatible) + local sd.cpp images",
   "API (OpenAI-compatible) + Image API": "API (OpenAI-compatible) + Image API",

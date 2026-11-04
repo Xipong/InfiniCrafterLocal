@@ -300,10 +300,22 @@
     syncInputs();
     if ($('#account-status')) $('#account-status').textContent=accountText(state.page);
     $$('[data-account-auth]').forEach(element=>element.textContent=remote.account?.authenticated ? t('Вход выполнен'):t('Требуется вход'));
+    updateRetiredConfig();
     $('#version').textContent = t("Версия {0}", remote.version || 'α');
     if($('#defaults-summary')) $('#defaults-summary').textContent=defaultsSummary();
     restoreActionFocus(finished);
     return true;
+  }
+  function updateRetiredConfig() {
+    const banner=$('#retired-config'), report=state.remote?.configMigration || {};
+    const file=report.file || {}, environment=report.environment || {};
+    const applied=file.state !== 'not_applied' && file.changed;
+    const changes=[...(applied ? file.changes || []:[]),...(environment.changes || [])];
+    banner.hidden=!changes.length;
+    if(!changes.length) {banner.textContent='';return;}
+    const review=changes.some(change=>change.review);
+    const rows=[...new Set(changes.map(change=>`${change.source}${change.target && change.target !== change.source ? ' → ' + change.target:''}`))];
+    banner.innerHTML=`<div><strong>${t(review ? 'Настройки обновлены; проверь перенесённые значения':'Настройки обновлены до текущего формата')}</strong>${applied && file.backup_path ? `<p>${t('Исходный файл сохранён:')} <span>${esc(file.backup_path)}</span></p>`:''}${environment.changed ? `<p>${t('Переменные среды преобразованы только для этого запуска. Настройки Windows не изменены.')}</p>`:''}${changes.some(change=>change.action === 'pool_requires_review_round_robin') ? `<p>${t('Прежний fallback перенесён в выключенный профиль 2. Новый пул может выбирать его сразу, а не только после ошибки. Проверь источник, модель и адрес перед включением.')}</p>`:''}${changes.some(change=>change.action === 'canonical_wins' || ['pool_conflict_preserved_in_backup','image_profile_conflict_preserved_in_backup'].includes(change.action)) ? `<p>${t('Новые явные настройки сохранены. Конфликтующие старые значения не смешаны с ними и доступны в исходной копии файла или среде запуска.')}</p>`:''}<details><summary>${t('Какие параметры обновлены')}</summary><ul>${rows.map(row=>`<li>${esc(row)}</li>`).join('')}</ul></details></div><button data-ui="retired-config">${t('Открыть полный список')}</button>`;
   }
   async function poll() {
     clearTimeout(state.pollTimer);
@@ -1133,6 +1145,7 @@
       case 'close-dialog':if (button.closest('dialog')?.dataset.kind !== 'defaults' || !(state.pending || state.posting)) button.closest('dialog')?.close();break;
       case 'menu':setMenu(!$('.rail').classList.contains('is-open'));break;
       case 'close-menu':setMenu(false);break;
+      case 'retired-config':state.openDetails.add('all-settings');location.hash='configure';navigate();break;
       case 'help':showHelp();break;
       case 'force-restart':confirm(t('Прервать крафт и перезапустить?'),t('Активный и ожидающий крафт будет прерван. Это не подтверждает возврат материалов в игре. Используй только если безопасный перезапуск недоступен.'),'forceRestart',{confirm:true},t('Прервать и перезапустить'));break;
       case 'stop':confirm(t('Остановить генератор?'),t('Проверим активный крафт перед остановкой собственного запущенного сервера. Черновик адреса не меняет цель; чужие процессы не изменяются.'),'stop',{},t('Остановить безопасно'));break;

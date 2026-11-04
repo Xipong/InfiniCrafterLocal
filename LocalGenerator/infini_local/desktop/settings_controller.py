@@ -8,6 +8,7 @@ return results through queues; HTTP workers read published immutable snapshots.
 
 import heapq
 import itertools
+import os
 import re
 import time
 from pathlib import Path
@@ -17,6 +18,8 @@ from infini_local.desktop.settings_env import (
 )
 from infini_local.desktop.settings_schema import DEFAULTS, PRESETS
 from infini_local.core.app_paths import CONFIG_PATH, EXAMPLE_PATH
+from infini_local.core.config_migration import migrate_config_file, environment_migration_status, explicit_config_keys
+from infini_local.core.env_utils import env_str
 from infini_local.desktop.settings_fields import FIELDS, disabled_reasons
 from infini_local.desktop.studio_operations import StudioOperations
 from infini_local.desktop.settings_interactions import StudioActions
@@ -27,7 +30,8 @@ class SettingsController(StudioOperations):
     def __init__(self, config_path=None, *, example_path=None):
         self.config_path = Path(config_path) if config_path is not None else CONFIG_PATH
         self.example_path = Path(example_path) if example_path is not None else EXAMPLE_PATH
-        self.values = parse_env(self.config_path if self.config_path.exists() else self.example_path)
+        migrate_config_file(self.config_path, environment=os.environ)
+        self.values = self.read_saved_settings()
         self.proc = None
         self._gui_closed = False
         self.actions = StudioActions(self)
@@ -55,6 +59,22 @@ class SettingsController(StudioOperations):
         self.preset = self._pipeline_preset_from_config(self.values, self.user_presets)
         self._capture_profile_baseline()
         self._refresh_visibility()
+
+    def read_saved_settings(self):
+        from infini_local.desktop.settings_env import parse_env as read_settings
+        source = self.config_path if self.config_path.exists() else self.example_path
+        values = read_settings(source)
+        changes = environment_migration_status()['changes']
+        if not changes:
+            return values
+        explicit = explicit_config_keys(self.config_path)
+        # A migrated inherited value must not disappear behind UI defaults on a
+        # fresh install. Actual canonical file fields still have precedence.
+        for change in changes:
+            target = change.get('target', '')
+            if target in os.environ and (not self.config_path.exists() or target not in explicit):
+                values[target] = env_str(target, strip=False)
+        return values
 
     def after(self, milliseconds, callback):
         """Schedule control-loop work without a GUI toolkit or timer thread."""

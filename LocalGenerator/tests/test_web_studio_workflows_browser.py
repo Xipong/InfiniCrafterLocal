@@ -611,3 +611,39 @@ def test_lifecycle_toasts_stack_deduplicate_and_close(browser_studio, viewport):
     # Wait for the next real poll: the dismissed notice must not reappear.
     page.wait_for_timeout(1800)
     expect(page.locator('#toasts .toast')).to_have_count(1)
+
+
+@pytest.mark.parametrize('viewport', [{'width': 1440, 'height': 1000}, {'width': 390, 'height': 844}])
+def test_migration_notice_opens_review_without_exposing_credentials(browser_studio, viewport):
+    page, server, snapshot = browser_studio
+    expect = pytest.importorskip('playwright.sync_api').expect
+    secret = 'synthetic-migrated-credential'
+    snapshot['values'].update(INFINI_LLM_POOL_2_API_KEY=secret, INFINI_LLM_POOL_2_ENABLED='0',
+                              INFINI_LLM_NETWORK_ATTEMPTS='2')
+    snapshot['savedValues'] = dict(snapshot['values'])
+    snapshot['configMigration'] = {
+        'file': {'changed': True, 'state': 'completed',
+                 'backup_path': 'C:/Users/Example/Studio/data/config.env.pre-migration-1234.bak',
+                 'changes': [
+                     {'action': 'rename', 'source': 'INFINI_LLM_FALLBACK_NETWORK_FAILS',
+                      'target': 'INFINI_LLM_NETWORK_ATTEMPTS', 'review': False},
+                     {'action': 'pool_requires_review_round_robin', 'source': 'INFINI_LLM_FALLBACK_MODEL',
+                      'target': 'INFINI_LLM_POOL_2_ENABLED', 'review': True}]},
+        'environment': {'changed': False, 'changes': []}}
+    server.publish(snapshot)
+    page.set_viewport_size(viewport)
+    page.goto(server.url)
+    banner = page.locator('#retired-config')
+    expect(banner).to_be_visible()
+    expect(banner).to_contain_text('выключенный профиль 2')
+    assert secret not in banner.inner_text()
+    banner.locator('button').click()
+    expect(page.locator('details[data-details="all-settings"]')).to_have_attribute('open', '')
+    key = page.locator('#field-INFINI_LLM_POOL_2_API_KEY')
+    expect(key).to_have_attribute('type', 'password')
+    expect(key).to_have_value(secret)
+    assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+    page.locator('#language-select').select_option('en')
+    expect(banner).to_contain_text('disabled profile 2')
+    expect(key).to_have_value(secret)
+    assert secret not in banner.inner_text()
