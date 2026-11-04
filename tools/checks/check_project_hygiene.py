@@ -149,7 +149,7 @@ def _version_literal(path: str, pattern: str, label: str) -> str:
 
 def check_version_sync() -> None:
     versions = {
-        "config_bootstrap.py APP_VERSION": _version_literal("LocalGenerator/infini_local/core/config_bootstrap.py", r'APP_VERSION = "([^"]+)"', "bootstrap APP_VERSION"),
+        "infini_local APP_VERSION": _version_literal("LocalGenerator/infini_local/__init__.py", r'APP_VERSION = "([^"]+)"', "bootstrap APP_VERSION"),
         "InfiniCrafterLocal.cs Version": _version_literal("ModSources/InfiniCrafterLocal/InfiniCrafterLocal.cs", r'Version = "([^"]+)"', "C# mod Version"),
         "build.txt version": _version_literal("ModSources/InfiniCrafterLocal/build.txt", r'version = ([^\s]+)', "tModLoader build.txt"),
     }
@@ -392,7 +392,7 @@ def check_agent_metadata() -> None:
 
 
 def check_release_docs_version() -> None:
-    version = re.search(r'APP_VERSION = "([^"]+)"', read("LocalGenerator/infini_local/core/config_bootstrap.py"))
+    version = re.search(r'APP_VERSION = "([^"]+)"', read("LocalGenerator/infini_local/__init__.py"))
     if not version:
         fail("could not read canonical APP_VERSION for docs check")
     current = version.group(1)

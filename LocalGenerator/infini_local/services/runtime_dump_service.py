@@ -20,6 +20,7 @@ from typing import Any, Literal
 from infini_local.core.config_bootstrap import DATA_DIR
 from infini_local.core import strict_json
 from infini_local.core.config_validation import reject_retired_config
+from infini_local.core.config_migration import migrate_environment
 from infini_local.core.env_utils import env_str
 
 
@@ -248,6 +249,7 @@ def load_runtime_dump_snapshot(items_path: Path, projectiles_path: Path) -> Runt
 
 # One startup snapshot; a newly exported pair requires a generator restart.
 # Integrity is not live-runtime compatibility or proof of complete AI behavior.
+migrate_environment(os.environ)
 reject_retired_config(os.environ)
 ITEMS_RUNTIME_DUMP_PATH = resolve_runtime_dump_path(
     DATA_DIR, "items_runtime_dump.jsonl", "INFINI_ITEMS_RUNTIME_DUMP",

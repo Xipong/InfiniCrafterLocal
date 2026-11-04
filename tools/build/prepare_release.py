@@ -28,7 +28,7 @@ def digest(data: bytes) -> str:
 def validate_package(root: Path, artifact: Path, version: str, sha: str) -> dict:
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) or not re.fullmatch(r"[0-9a-f]{40}", sha):
         raise ValueError("Invalid release identity")
-    owners = (("LocalGenerator/infini_local/core/config_bootstrap.py", r'APP_VERSION = "([^"]+)"'),
+    owners = (("LocalGenerator/infini_local/__init__.py", r'APP_VERSION = "([^"]+)"'),
               ("ModSources/InfiniCrafterLocal/InfiniCrafterLocal.cs", r'ModVersion = "([^"]+)"'),
               ("ModSources/InfiniCrafterLocal/build.txt", r'(?m)^version = (\S+)$'))
     for name, pattern in owners:

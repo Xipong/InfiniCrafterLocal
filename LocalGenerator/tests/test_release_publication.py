@@ -27,7 +27,7 @@ def encoded(value):
 @pytest.fixture
 def package(tmp_path):
     root=tmp_path/'source'; artifact=tmp_path/'artifact'; artifact.mkdir()
-    for name,text in [('LocalGenerator/infini_local/core/config_bootstrap.py','APP_VERSION = "0.5.5"'),
+    for name,text in [('LocalGenerator/infini_local/__init__.py','APP_VERSION = "0.5.5"'),
         ('ModSources/InfiniCrafterLocal/InfiniCrafterLocal.cs','ModVersion = "0.5.5"'),
         ('ModSources/InfiniCrafterLocal/build.txt','version = 0.5.5\nmodReferences = Luminance\n')]:
         p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(text)

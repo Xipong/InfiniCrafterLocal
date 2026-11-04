@@ -3,10 +3,12 @@ from __future__ import annotations
 import os
 
 from infini_local.core.config_validation import reject_retired_config
+from infini_local.core.config_migration import migrate_environment
 from infini_local.core.env_utils import env_bool, env_int, env_str
 from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 
 
+migrate_environment(os.environ)
 reject_retired_config(os.environ)
 
 # LLM transport and generation policy configuration. This module owns env-derived

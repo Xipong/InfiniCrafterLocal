@@ -9,6 +9,7 @@ from pathlib import Path
 from infini_local.core.config_bootstrap import APP_VERSION, CACHE_DIR, RECIPE_IDENTITY_VERSION
 from infini_local.core.contract_versions import build_contract_versions
 from infini_local.core.config_validation import reject_retired_config
+from infini_local.core.config_migration import migrate_environment
 from infini_local.core.env_utils import env_bool, env_float, env_int, env_str
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
 from infini_local.services import sdcpp_backend, sdcpp_service
@@ -16,6 +17,7 @@ from infini_local.services import sdcpp_backend, sdcpp_service
 # AGENT MAP: canonical visual/image backend env/config.
 # Consumers import this owner directly. No gameplay/runtime authoring logic belongs here.
 
+migrate_environment(os.environ)
 reject_retired_config(os.environ)
 SUPPORTED_IMAGE_BACKENDS = frozenset({"off", "sdcpp", "a1111", "comfyui", "image_api", "openai_codex", "procedural"})
 IMAGE_BACKEND_RAW = env_str("INFINI_IMAGE_BACKEND", "sdcpp").strip().lower()

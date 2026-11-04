@@ -1348,3 +1348,9 @@ body:has(#save-tray:not([hidden])) .draft-indicator { background: var(--accent);
   .trace-readout dd { font-size: 13px; }
   .trace-view .trace-inspector h3 { font-size: 24px; }
 }
+
+/* Migration details stay readable beside the review action on narrow screens. */
+#retired-config { align-items: flex-start; }
+#retired-config > div { min-width: 0; }
+#retired-config p, #retired-config li { overflow-wrap: anywhere; }
+#retired-config details { margin-top: 8px; }

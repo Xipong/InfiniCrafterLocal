@@ -14,7 +14,8 @@ RETIRED_CONFIG_REPLACEMENTS = {
     **{f"INFINI_LLM_FALLBACK_{suffix}": f"INFINI_LLM_POOL_2_{suffix} (enable the profile explicitly)"
        for suffix in ("PROVIDER", "MODEL", "BASE_URL", "API_KEY", "OPENROUTER_PROVIDER")},
     **{f"INFINI_OPENAI_COMPAT_IMAGE_{suffix}": f"INFINI_IMAGE_API_{suffix}"
-       for suffix in ("BASE_URL", "API_KEY", "MODEL", "SIZE")},
+       for suffix in ("BASE_URL", "MODEL", "SIZE")},
+    "INFINI_OPENAI_COMPAT_IMAGE_API_KEY": "INFINI_IMAGE_API_KEY",
     **{f"INFINI_PIXEL_{suffix}": f"INFINI_COMFYUI_{suffix}"
        for suffix in ("LORA_NAME", "LORA_WEIGHT", "TRIGGER")},
     "INFINI_ITEMS_DUMP": "INFINI_ITEMS_RUNTIME_DUMP",
