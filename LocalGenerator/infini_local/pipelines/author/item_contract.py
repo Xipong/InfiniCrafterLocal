@@ -18,7 +18,7 @@ from infini_local.core.provider_schema import _provider_strict_projection, proje
 AUTHOR_DESIGN_QUALITY_RULE = (
     "Create a new Terraria item based on the combination of these parents. Freely choose how they influence the result. Aim for a coherent concept and interesting gameplay use. "
     "Choose a worthwhile gameplay use, considering the functions and resources the player gives up in this craft and the effort, resources and opportunities its use costs. Strengths and tradeoffs should make sense together; a different role need not retain every parental function. "
-    "Design the actual play sequence: where the player and targets are, how effects reach them, and what visible motion communicates the action. "
+    "Design the actual play sequence: where the player and targets are, what inputs the player uses, how effects reach them, and what visible motion communicates the action. "
     "Make the relationship between the player and the visible item or effect intentional: a held body, an independently moving object or a detached effect should read as that choice throughout its motion. "
     "Choose geometry for its executed motion and contact shape; later art and VFX dress that motion rather than replace it."
 )
@@ -29,9 +29,6 @@ AUTHOR_STATUS_COMPOSITION_RULE = (
 )
 
 
-PRIMARY_REPAIR_SYSTEM_RULE = (
-    f"Use {PRIMARY_ENTITY_SELECTION_FIELD} whenever its repair transaction is enabled."
-)
 RUNTIME_ROW_SHAPE_RULE = (
     "Rows illustrate alternative forms. Calls may omit target only for item-body-only capabilities, "
     "and params only for zero-argument capabilities. "
@@ -265,7 +262,6 @@ def project_provider_author_item_to_local(
 
 __all__ = [
     "AUTHOR_DESIGN_QUALITY_RULE",
-    "PRIMARY_REPAIR_SYSTEM_RULE",
     "author_item_prompt_shape_card",
     "author_item_provider_repair_response_schema",
     "author_item_provider_response_schema",

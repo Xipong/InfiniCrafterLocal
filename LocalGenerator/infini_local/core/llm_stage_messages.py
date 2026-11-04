@@ -44,10 +44,9 @@ def generation_system_suffix() -> str:
     """Shared target-game guidance, without selecting authored mechanics."""
     direction = generation_art_direction()
     return (
-        "\n\nTarget game: Terraria (tModLoader). Create a generated item or its presentation assets for that game, "
-        "not a standalone illustration. When creating a new design, freely choose how the parents influence the result. "
-        "Follow the exact requested output contract. "
-        "Art direction is advisory, never permission to change accepted gameplay or frozen fields."
+        "\n\nTarget game: Terraria (tModLoader). Design an item or its in-game presentation, not a standalone illustration. "
+        "For new designs, freely choose the parents' influence. Follow the requested output contract; "
+        "art direction is advisory and does not override the output contract, accepted gameplay or frozen fields."
     ) + (f"\n\n{direction}" if direction else "")
 
 

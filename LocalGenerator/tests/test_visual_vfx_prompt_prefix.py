@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import json
 
 import pytest
 
@@ -24,6 +25,7 @@ from test_low_level_three_stage_pipeline import _accepted_visual_data, _visual_k
 @pytest.mark.parametrize("director,repair,mode", [
     pytest.param("visual", False, "json_schema", id="visual-director-schema"),
     pytest.param("visual", True, "json_object", id="visual-scoped-repair-object"),
+    pytest.param("visual", True, "json_schema", id="visual-scoped-repair-schema"),
     pytest.param("vfx", False, "json_object", id="vfx-director-object"),
     pytest.param("vfx", True, "json_schema", id="vfx-scoped-repair-schema"),
 ])
@@ -61,10 +63,13 @@ def test_provider_instructions_stay_static_while_recipe_and_parent_facts_change(
         schema = packet["responseSchema" if director == "visual" else "outputSchema"]
         if mode == "json_schema":
             assert request["response_format"]["json_schema"]["strict"] is True
-            expected_wire = schema if director == "visual" else provider_schema._provider_strict_projection(
+            expected_wire = provider_schema._provider_strict_projection(schema, omit_annotations=True) if director == "visual" else provider_schema._provider_strict_projection(
                 provider_schema.defer_provider_cross_field_constraints(schema), omit_annotations=True,
             )
             assert request["response_format"]["json_schema"]["schema"] == expected_wire
+            if director == "visual":
+                assert '"description":' in json.dumps(schema)
+                assert '"description":' not in json.dumps(expected_wire)
         if director == "visual":
             assert packet["itemReadOnly" if repair else "item"]["literalSynthesis"] == data["concept"]["literalSynthesis"]
             parent_reference = (packet["parentSizeReferencesReadOnly"]["parentA"]["spriteReference"] if repair

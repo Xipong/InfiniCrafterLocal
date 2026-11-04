@@ -20,13 +20,25 @@ from infini_local.core.vfx.contract import (
     MalformedVfxDirectorOutput,
     _rows,
 )
-from infini_local.core.vfx.materials import ASSET_ID_PATTERN
+from infini_local.core.vfx.materials import ASSET_ID_PATTERN, path_schema
 from infini_local.core.vfx.schema import _director_schema
 from infini_local.core.vfx.validation import vfx_png_dependencies
 
 
 def vfx_repair_schema(data: Mapping[str, Any]) -> dict[str, Any]:
     return _vfx_repair_schema_from_packet({"outputSchema": _director_schema(data)})
+
+
+def _path_source_companions(path: Mapping[str, Any], *, selected: bool = False) -> set[str]:
+    """Absent required companions of an editable path source, never authored values."""
+    return {
+        name
+        for clause in path_schema().get("allOf", [])
+        if "source" in clause.get("if", {}).get("properties", {})
+        and (not selected or not strict_schema_errors(path, clause["if"]))
+        for name in clause.get("then", {}).get("required", [])
+        if name not in path or selected
+    }
 
 
 def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str, Any]:
@@ -127,6 +139,17 @@ def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str,
                 allow_create_assets = True
             elif len(assets) > 16:
                 delete_asset_indices.update(range(16, len(assets)))
+    # A diagnosed discriminator can select a branch that requires an absent
+    # companion. Expose that canonical choice without filling it or thawing any
+    # existing value; filtering below admits it only for the selected branch.
+    for index, row in enumerate(slots):
+        if index in duplicate_slot_indices or not isinstance(row, Mapping) or row.get("rendererKind") != "texturedPath":
+            continue
+        slot_id = str(row.get("id") or "")
+        path = row.get("path")
+        if "path.source" in slot_paths.get(slot_id, ()) and isinstance(path, Mapping):
+            for name in _path_source_companions(path):
+                grant_slot(slot_id, "path." + name)
     if whole_response:
         allow_create_slots = True
         allow_create_assets = True
@@ -307,8 +330,16 @@ def _filter_vfx_repair_patch(
                 if not json_values_equal(dict(candidate), dict(original)):
                     ignored.append(_vfx_filter_ignored(path, candidate, original, "independent_valid_slot_frozen"))
                 continue
+            mutable_paths = slot_permissions.get(slot_id, ())
+            original_path = original.get("path")
+            candidate_path = candidate.get("path")
+            if ("path.source" in mutable_paths and original.get("rendererKind") == "texturedPath"
+                    and isinstance(original_path, Mapping)):
+                selected_path = {**original_path, **(candidate_path if isinstance(candidate_path, Mapping) else {})}
+                inactive = _path_source_companions(original_path) - _path_source_companions(selected_path, selected=True)
+                mutable_paths = tuple(value for value in mutable_paths if value not in {"path." + name for name in inactive})
             merged, row_ignored, row_accepted = merge_frozen_subtree(
-                original, candidate, mutable_paths=slot_permissions.get(slot_id, ()), audit_path=path, allow_additions=False,
+                original, candidate, mutable_paths=mutable_paths, audit_path=path, allow_additions=False,
                 delete_paths=slot_delete_permissions.get(slot_id, ()), array_leaves=True,
             )
             ignored.extend(row_ignored)
