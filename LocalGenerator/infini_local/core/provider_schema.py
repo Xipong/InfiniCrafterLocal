@@ -17,13 +17,11 @@ def provider_nullable_transport_rule(response_format: Mapping[str, Any] | None) 
     if not isinstance(response_format, Mapping) or response_format.get("type") != "json_schema":
         return ""
     return (
-        " JSON Schema nullable transport: only when the supplied response schema requires an otherwise "
-        "optional object property and explicitly allows null, emit null to represent omission. "
-        "This is transport encoding, not an authored value or permission to default invalid values. "
-        "Omission retains its meaning in the requested output contract. "
-        "Never use this rule for unknown keys, required non-null fields, or array elements. "
-        "If no JSON Schema is supplied (json_object/off), omit optional fields instead; explicit null "
-        "is not an omission alias."
+        " JSON Schema transport: when the supplied response schema requires an otherwise optional object property "
+        "and explicitly allows null, use null for omission, retaining its contract meaning. "
+        "This encodes omission only, not a value or a default for invalid data; it never applies to unknown keys, "
+        "required non-null fields or array elements. Without a supplied JSON Schema (json_object/off), "
+        "omit optional fields; null is not an omission alias."
     )
 
 

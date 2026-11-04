@@ -29,6 +29,7 @@ from infini_local.pipelines.author.stage import authored_item_validation_report
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from pipeline_test_support import RepairTransaction
+from prompt_packet_helpers import request_dossier
 from test_low_level_three_stage_pipeline import (
     _accepted_visual_data,
     _binding_row,
@@ -200,7 +201,8 @@ def test_exact_call_key_deletion(scenario):
     assert key not in (result_call if scenario == "call-property" else result_call["params"])
     if scenario == "call-property":
         dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, failure_report=report)
-        assert any("callPropertyKeysDelete" in rule and "note claiming removal" in rule for rule in dossier["rules"])
+        assert any("callPropertyKeysDelete" in rule for rule in dossier["rules"])
+        assert any("Notes do not change the program" in rule for rule in dossier["rules"])
     else:
         filtered_call = next(c for c in filtered["callsUpsert"] if c["id"] == call["id"])
         assert key not in filtered_call["params"]
@@ -433,8 +435,9 @@ def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(wi
         current, {}, {}, "missing-item-body", failure_report=report,
     )
     assert len(requests) == 1 and not responses
-    repair_system = requests[0]["messages"][0]["content"]
-    assert "create.calls.allowedTargetKinds" in repair_system
+    dossier = request_dossier(requests[0])
+    assert any("create.calls.allowedTargetKinds" in rule for rule in dossier["rules"])
+    assert dossier["repairScope"]["create"]["calls"]["allowedTargetKinds"] == ["item_body"]
     assert validate_runtime_program(llm_repaired)["ok"]
 
 
