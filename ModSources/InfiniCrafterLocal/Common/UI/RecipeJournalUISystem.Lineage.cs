@@ -183,19 +183,20 @@ public sealed partial class RecipeJournalUISystem
         if (inside) { Main.LocalPlayer.mouseInterface = true; PlayerInput.LockVanillaMouseScroll("InfiniCrafterLocal: Lineage"); }
         Fill(sb, new Rectangle(0, 0, Main.screenWidth, Main.screenHeight), new Color(0, 0, 0, 75));
         DrawBook(sb, book);
-        if (LineageButton(sb, new Rectangle(book.X + 18, book.Y + 16, 66, 28), Text("Back"), click, cursor)) { GoBack(); Main.mouseLeftRelease = false; return true; }
-        LineageLabel(sb, Text("Lineage"), new Vector2(book.X + 96, book.Y + 17), new Color(216, 185, 115), .9f, Math.Max(0, book.Width - 340));
-        if (LineageButton(sb, new Rectangle(book.Right - 48, book.Y + 16, 30, 28), "×", click, cursor)) { Close(); Main.mouseLeftRelease = false; return true; }
+        var header = RecipeJournalView.HeaderRow(book);
+        if (LineageButton(sb, new Rectangle(book.X + 18, header.Y, 66, 28), Text("Back"), click, cursor)) { GoBack(); Main.mouseLeftRelease = false; return true; }
+        HeaderLabel(sb, Text("Lineage"), new Rectangle(book.X + 96, header.Y, Math.Max(0, book.Width - 340), header.Height), new Color(216, 185, 115), .9f);
+        if (LineageButton(sb, new Rectangle(book.Right - 50, header.Y, 30, header.Height), "×", click, cursor)) { Close(); Main.mouseLeftRelease = false; return true; }
         if (canvas.Width < 60 || canvas.Height < 60) return true;
         EnsureLineage();
         if (_lineageCanvas != canvas) { _lineageCanvas = canvas; FitLineage(canvas); }
         Vector2 anchor = canvas.Size() * .5f;
         if (book.Width >= 340)
         {
-        if (LineageButton(sb, new Rectangle(book.Right - 222, book.Y + 16, 30, 28), "−", click, cursor)) ZoomLineage(_lineageZoom / 1.2f, anchor);
-        LineageCenterLabel(sb, $"{_lineageZoom:P0}", new Rectangle(book.Right - 190, book.Y + 20, 64, 24), new Color(216,185,115), .6f);
-        if (LineageButton(sb, new Rectangle(book.Right - 124, book.Y + 16, 30, 28), "+", click, cursor)) ZoomLineage(_lineageZoom * 1.2f, anchor);
-        if (LineageButton(sb, new Rectangle(book.Right - 88, book.Y + 16, 30, 28), "⊙", click, cursor)) FitLineage(canvas);
+        if (LineageButton(sb, new Rectangle(book.Right - 222, header.Y, 30, 28), "−", click, cursor)) ZoomLineage(_lineageZoom / 1.2f, anchor);
+        LineageCenterLabel(sb, $"{_lineageZoom:P0}", new Rectangle(book.Right - 190, header.Y, 64, header.Height), new Color(216,185,115), .6f);
+        if (LineageButton(sb, new Rectangle(book.Right - 124, header.Y, 30, 28), "+", click, cursor)) ZoomLineage(_lineageZoom * 1.2f, anchor);
+        if (LineageButton(sb, new Rectangle(book.Right - 88, header.Y, 30, 28), "⊙", click, cursor)) FitLineage(canvas);
         }
         if (_lineage is null) { Paragraph(sb, Text("LineageMissing"), canvas, MapInk, .7f); return true; }
         bool onCanvas = canvas.Contains(cursor.ToPoint());
@@ -208,7 +209,6 @@ public sealed partial class RecipeJournalUISystem
         _lineagePan = ClampLineagePan(_lineagePan, canvas.Size(), new Vector2(_lineage.Width, _lineage.Height), _lineageZoom);
         UpdateLineageHighlight(hoverIndex);
         DrawLineageGraph(sb, canvas, hoverIndex);
-        DrawBookFold(sb, book);
         if (hoverIndex >= 0 && !_lineageDragging)
         {
             var node = _lineage.Nodes[hoverIndex];

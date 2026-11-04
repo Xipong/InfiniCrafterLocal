@@ -80,6 +80,9 @@ internal static class RecipeJournalView
             new Rectangle(area.Right - 12 - saveWidth, area.Y + 10, saveWidth, height));
     }
 
+    internal static Rectangle HeaderRow(Rectangle book)
+        => new(book.X + 36, book.Y + 18, Math.Max(0, book.Width - 72), 28);
+
     internal readonly record struct Controls(Rectangle Search, Rectangle Favorites, Rectangle Filter,
         Rectangle ClearIngredient, Rectangle Previous, Rectangle Page, Rectangle Next, Rectangle Close);
     internal static Controls BookControls(Layout layout)
@@ -92,7 +95,7 @@ internal static class RecipeJournalView
         return new(search, new Rectangle(search.Right + 6, search.Y, Math.Min(104, list.Width), 30), filter,
             new Rectangle(filter.Right + 6, filter.Y, Math.Max(0, book.Right - filter.Right - 38), 26),
             new Rectangle(list.X, bottom, 30, 24), new Rectangle(list.X + 34, bottom + 3, Math.Max(0, list.Width - 68), 20),
-            new Rectangle(list.Right - 30, bottom, 30, 24), new Rectangle(book.Right - 62, book.Y + 14, 30, 28));
+            new Rectangle(list.Right - 30, bottom, 30, 24), new Rectangle(book.Right - 50, HeaderRow(book).Y, 30, HeaderRow(book).Height));
     }
 
     internal readonly record struct Layout(Rectangle Book, Rectangle List, Rectangle Detail, int Rows, int Columns);

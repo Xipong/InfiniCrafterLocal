@@ -103,7 +103,10 @@ public sealed partial class GeneratorClient
             if (postdominators is null)
             {
                 var all = Blocks.Values.Where(b => b.Height >= 0).Select(b => b.Start).Append(-1).ToHashSet();
-                postdominators = all.ToDictionary(b => b, b => b == -1 ? new HashSet<int> { -1 } : new HashSet<int>(all));
+                // Publish memoized control facts only after convergence. A
+                // refusal/exception must not make a later projection consume a
+                // partially solved CFG (including another row in an export).
+                var solved = all.ToDictionary(b => b, b => b == -1 ? new HashSet<int> { -1 } : new HashSet<int>(all));
                 bool changed = true; int passes = 0;
                 while (changed)
                 {
@@ -112,12 +115,13 @@ public sealed partial class GeneratorClient
                     foreach (Block current in Blocks.Values.Reverse().Where(b => b.Height >= 0))
                     {
                         var next = current.Next.Count == 0 ? new[] { -1 } : current.Next.ToArray();
-                        var common = new HashSet<int>(postdominators[next[0]]);
-                        foreach (int successor in next.Skip(1)) common.IntersectWith(postdominators[successor]);
+                        var common = new HashSet<int>(solved[next[0]]);
+                        foreach (int successor in next.Skip(1)) common.IntersectWith(solved[successor]);
                         common.Add(current.Start);
-                        if (!common.SetEquals(postdominators[current.Start])) { postdominators[current.Start] = common; changed = true; }
+                        if (!common.SetEquals(solved[current.Start])) { solved[current.Start] = common; changed = true; }
                     }
                 }
+                postdominators = solved;
             }
             int join = postdominators[start].Where(b => b != start).OrderByDescending(b => postdominators[b].Count).FirstOrDefault(-1);
             var pending = new Stack<int>(block.Next);
@@ -133,6 +137,10 @@ public sealed partial class GeneratorClient
         internal ParentSourceMethod(MethodBase method, List<AmmoIl>? sourceSlice = null, Dictionary<int, int>? sourceNext = null, Dictionary<int, int>? selectedSuccessors = null)
         {
             Method = method;
+            // A full method containing exception regions is unsupported regardless
+            // of its instructions. Refuse before decoding potentially huge IL.
+            if (sourceSlice is null && method.GetMethodBody()?.ExceptionHandlingClauses.Count > 0)
+                throw new NotSupportedException("exception_regions");
             Code = sourceSlice ?? ReadAmmoIl(method, preserveStructure: true, sourceGraph: true);
             if (Code.Count == 0) throw new NotSupportedException("no_il");
             var leaders = SourceBranchTargets(Code);
