@@ -232,7 +232,9 @@ def recover_object_with_syntax_only_repairs(text: str) -> dict[str, Any] | None:
                             continue
             output.append(char)
             index += 1
-        if containers or in_string or edits > 64:
+        # An unmatched closer aborts the scan. Never accept its valid prefix
+        # while silently dropping the rest of an explicit authored output.
+        if index != len(candidate) or containers or in_string or edits > 64:
             continue
 
         try:
