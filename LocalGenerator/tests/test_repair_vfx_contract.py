@@ -299,3 +299,78 @@ def test_vfx_repair_optional_edit_absence_is_not_null(monkeypatch, field):
     assert not strict_schema_errors(_patch(), schema)
     assert strict_schema_errors(_patch(**{field: None}), schema)
     assert bool(strict_schema_errors(_patch(**{field: []}), schema)) is (field != "slotsUpsert")
+
+
+@pytest.mark.parametrize("choice", ["mountedCenter", "frontHand", "missing"])
+def test_captured_path_source_repair_keeps_explicit_required_companion(monkeypatch, choice):
+    """2026-11-03 Thorium Electro-Shard: preserve authored ownerLink anchor."""
+    fixture = json.loads((Path(__file__).parent / "fixtures" / "vfx_captured_owner_link_repair.json").read_text())
+    data, raw, patch = fixture["data"], fixture["raw"], fixture["patch"]
+    before = copy.deepcopy(raw)
+    candidate = patch["slotsUpsert"][0]["path"]
+    if choice == "missing":
+        candidate.pop("ownerAnchor")
+    else:
+        candidate["ownerAnchor"] = choice
+    candidate["widthPx"] = 72  # Already-valid companions remain frozen.
+    captured = _offline_transport(monkeypatch, "captured-owner-link", [raw, patch])
+    if choice == "missing":
+        with pytest.raises(PlannerUnavailable, match="ownerAnchor"):
+            vfx_stage.attach_vfx_manifest(data, "captured-owner-link", llm_director=stage.call_llm_vfx_director)
+        return
+    final = vfx_stage.attach_vfx_manifest(data, "captured-owner-link", llm_director=stage.call_llm_vfx_director)
+    assert len(captured) == 2
+    packet = request_dossier(captured[1])
+    candidate["widthPx"] = before["slots"][3]["path"]["widthPx"]
+    assert not strict_schema_errors(vfx_model_payload(patch), packet["outputSchema"])
+    delivered = final["debug"]["vfxDirectorRaw"]
+    expected = copy.deepcopy(before)
+    expected["slots"][3]["path"].update(source="ownerLink", ownerAnchor=choice)
+    assert delivered == expected
+    assert final["vfxManifest"]["slots"][3]["path"]["ownerAnchor"] == choice
+    assert vfx_validation.validate_vfx_manifest_wire(final)["ok"]
+    audit = final["debug"]["vfxRepairFilterAudit"]
+    assert any(row["path"].endswith(".path.widthPx") for row in audit["ignoredChanges"])
+
+
+def test_valid_path_source_does_not_open_absent_owner_anchor():
+    fixture = json.loads((Path(__file__).parent / "fixtures" / "vfx_captured_owner_link_repair.json").read_text())
+    raw, patch, data = fixture["raw"], fixture["patch"], fixture["data"]
+    path = raw["slots"][3]["path"]
+    path.update(source="anchorHistory", historyTicks=5)
+    raw["slots"][3].pop("alpha")
+    patch["slotsUpsert"][0]["alpha"] = 1
+    report = vfx_validation.validate_vfx_director_output(raw, data)
+    scope = vfx_repair._build_vfx_repair_scope(raw, report["errors"])
+    final, audit = vfx_repair._apply_vfx_repair_patch(data, raw, patch, scope, return_audit=True)
+    assert vfx_validation.validate_vfx_director_output(final, data)["ok"]
+    assert final["slots"][3]["path"] == path
+    assert any(row["path"].endswith("ownerAnchor") and row["reason"] == "addition_not_permitted" for row in audit["ignoredChanges"])
+
+
+@pytest.mark.parametrize("source,capability", [("beam", "beam_geometry"), ("anchorHistory", "")])
+def test_path_source_repair_ignores_inapplicable_companion(source, capability):
+    data = _data(capability)
+    raw = _path(data, source)
+    original = copy.deepcopy(raw)
+    raw["slots"][0]["path"]["source"] = "invalid-source"
+    candidate = copy.deepcopy(original["slots"][0])
+    candidate["path"]["ownerAnchor"] = "mountedCenter"
+    report = vfx_validation.validate_vfx_director_output(raw, data)
+    scope = vfx_repair._build_vfx_repair_scope(raw, report["errors"])
+    result, audit = vfx_repair._apply_vfx_repair_patch(data, raw, _patch(slotsUpsert=[candidate]), scope, return_audit=True)
+    assert result == original
+    assert vfx_validation.validate_vfx_director_output(result, data)["ok"]
+    assert any(row["path"].endswith("ownerAnchor") and row["reason"] == "addition_not_permitted" for row in audit["ignoredChanges"])
+
+
+def test_path_source_repair_preserves_existing_valid_companion():
+    fixture = json.loads((Path(__file__).parent / "fixtures" / "vfx_captured_owner_link_repair.json").read_text())
+    raw, patch, data = fixture["raw"], fixture["patch"], fixture["data"]
+    raw["slots"][3]["path"].update(source="invalid-source", ownerAnchor="frontHand")
+    report = vfx_validation.validate_vfx_director_output(raw, data)
+    scope = vfx_repair._build_vfx_repair_scope(raw, report["errors"])
+    result, audit = vfx_repair._apply_vfx_repair_patch(data, raw, patch, scope, return_audit=True)
+    assert vfx_validation.validate_vfx_director_output(result, data)["ok"]
+    assert result["slots"][3]["path"]["ownerAnchor"] == "frontHand"
+    assert any(row["path"].endswith("ownerAnchor") for row in audit["ignoredChanges"])
