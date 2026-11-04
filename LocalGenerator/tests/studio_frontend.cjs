@@ -548,6 +548,8 @@ assert.equal(document.querySelector('#retired-config').hidden,false);
 assert(/выключенный профиль 2|disabled profile 2/.test(document.querySelector('#retired-config').innerHTML));
 assert(!document.querySelector('#retired-config').innerHTML.includes(migrationSecret));
 assert(studio.makeFields(state.remote).find(field=>field.key === 'INFINI_LLM_POOL_2_API_KEY').secret);
+acceptSnapshot(snapshot({}, {configMigration:{file:{changed:true,state:'completed',backup_path:'config.env.pre-migration-1234.bak',changes:[{action:'image_profile_conflict_preserved_in_backup',source:'INFINI_OPENAI_COMPAT_IMAGE_API_KEY',target:'INFINI_IMAGE_API_KEY',review:true}]},environment:{changed:false,changes:[]}}}));
+assert(/не смешаны|not mixed/.test(document.querySelector('#retired-config').innerHTML),'image credential conflicts are explained, not just listed');
 acceptSnapshot(snapshot());
 assert.equal(document.querySelector('#retired-config').hidden,true);
 console.log('Studio frontend regressions passed');}).catch(error=>{console.error(error);process.exitCode=1;});
