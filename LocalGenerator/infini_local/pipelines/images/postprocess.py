@@ -62,6 +62,10 @@ from infini_local.pipelines.images.pixels import (
 from infini_local.pipelines.images.validation import alpha_stats, edge_touch_ratio, sprite_validation_fatal, validate_processed_sprite
 
 
+class RawSpriteFrameError(ValueError):
+    """Provider frame cannot preserve explicit normalized square-canvas coordinates."""
+
+
 class RawSpriteBackgroundError(ValueError):
     """Provider pixels violate the requested background-removal contract."""
 
@@ -204,6 +208,7 @@ def postprocess_sprite(
     output_dir: Path | None = None,
     master_output: Path | None = None,
     prepared: PreparedKeyer | None = None,
+    preserve_frame: bool = False,
 ) -> str:
     """Process an authored image through the selected technical role contract.
 
@@ -221,6 +226,10 @@ def postprocess_sprite(
     try:
         raw = load_image_input(path, Image)
         decoded = True
+        if preserve_frame and raw.width != raw.height:
+            raise RawSpriteFrameError(
+                "authored_grip_requires_square_frame: padding or stretching would change the declared contact or orientation"
+            )
         # A canvas fit adds transparent padding. It must not manufacture evidence
         # that a fully opaque provider background satisfied native-alpha delivery.
         # Full-frame UV strips are not fitted/padded; their final alpha gate owns
@@ -268,8 +277,10 @@ def postprocess_sprite(
             bg_removed = denoise_alpha_singletons(bg_removed)
         bg_removed = scrub_transparent_rgb(bg_removed)
         save_stage(bg_removed, sprite_id, "10_sprite_keyer_fullres", output_dir=output_dir)
-        if role == "vfx_strip":
-            # Full-frame UVs are authored data. Only key/alpha cleanup and uniform
+        if role == "vfx_strip" or preserve_frame:
+            # Normalization: uniform square-frame resizing preserves every explicit
+            # normalized grip coordinate. Never infer or relocate a contact.
+            # Full-frame grip coordinates and UVs are authored data. Only key/alpha cleanup and uniform
             # full-frame resize are allowed; never crop, rotate, center or refit.
             forward_axis = {"rotated": False, "flipped": False}
             master = bg_removed
@@ -317,11 +328,12 @@ def postprocess_sprite(
                 "bgMode": BG_REMOVE_MODE,
                 "alpha": stats,
                 "projectileForwardAxis": forward_axis,
+                "framePolicy": "preserve_authored_grip" if preserve_frame else "role_contract",
                 "validation": validation,
             },
         )
         return str(out)
-    except (ImageOutputIOError, RawSpriteBackgroundError):
+    except (ImageOutputIOError, RawSpriteBackgroundError, RawSpriteFrameError):
         raise
     except Exception as e:
         if decoded and isinstance(e, OSError):
@@ -367,6 +379,7 @@ def postprocess_sprite(
                 {
                     "spriteId": sprite_id,
                     "sourceStage": stage,
+                    "framePolicy": "preserve_authored_grip" if preserve_frame else "role_contract",
                     "targetSize": target_size,
                     "out": str(out),
                     "originalError": repr(e),
@@ -385,6 +398,7 @@ def postprocess_sprite(
                 {
                     "spriteId": sprite_id,
                     "sourceStage": stage,
+                    "framePolicy": "preserve_authored_grip" if preserve_frame else "role_contract",
                     "originalError": repr(e),
                     "recoveryError": repr(recovery_error),
                 },

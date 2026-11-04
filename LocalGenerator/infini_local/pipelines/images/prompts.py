@@ -147,6 +147,26 @@ def _image_equipment_frame_prompt_clause(data: Mapping[str, Any], canvas: int) -
     )
 
 
+def selected_main_image_visual(data: Mapping[str, Any], role: str, *, entity_id: str = "") -> Mapping[str, Any] | None:
+    """Select the same explicit PNG owner for image instructions and pixel framing."""
+    root = data.get("visual")
+    root = root if isinstance(root, Mapping) else {}
+    if role == "item":
+        return root
+    runtime = data.get("runtimeProgram")
+    if not role.startswith(("runtime:", "entity:")) or not entity_id or not isinstance(runtime, Mapping):
+        return None
+    entity = next((row for row in runtime.get("entities") or []
+                   if isinstance(row, Mapping) and row.get("id") == entity_id), None)
+    if entity is None:
+        return None
+    visual = entity.get("visual")
+    visual = visual if isinstance(visual, Mapping) else {}
+    if entity.get("kind") == "item_body" or visual.get("assetMode") == "reuse_item_icon":
+        return root
+    return visual if visual.get("assetMode") == "baked_sprite" else None
+
+
 def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: int, *, entity_id: str = "") -> str:
     """Read-only selected PNG facts; no guesses from hitboxes or prose."""
     if role == "equip_overlay":
@@ -157,20 +177,12 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
     raw_root = data.get("visual")
     root: Mapping[str, Any] = raw_root if isinstance(raw_root, Mapping) else {}
     entity = next((row for row in entities if row.get("id") == entity_id), None) if entity_id else None
-    owner: Mapping[str, Any]
-    if role == "item":
-        owner = root
-        root_project = True
-    elif role.startswith(("runtime:", "entity:")) and entity is not None:
-        raw_entity_visual = entity.get("visual")
-        entity_visual: Mapping[str, Any] = raw_entity_visual if isinstance(raw_entity_visual, Mapping) else {}
-        root_project = entity.get("kind") == "item_body" or entity_visual.get("assetMode") == "reuse_item_icon"
-        if not root_project and entity_visual.get("assetMode") != "baked_sprite":
-            return ""
-        owner = root if root_project else entity_visual
-    else:
-        # Dedicated impacts and UV ingredients do not use main-body R.
-        return ""
+    owner = selected_main_image_visual(data, role, entity_id=entity_id)
+    if owner is None:
+        return ""  # Dedicated impacts and UV ingredients do not use main-body R.
+    entity_visual = entity.get("visual") if entity is not None else None
+    root_project = role == "item" or (entity is not None and (
+        entity.get("kind") == "item_body" or isinstance(entity_visual, Mapping) and entity_visual.get("assetMode") == "reuse_item_icon"))
     if "runtimeProgram" in data and any(field not in owner for field in ("renderSizePx", "forwardAngleDegrees")):
         raise ValueError("Selected main PNG requires explicit renderSizePx and forwardAngleDegrees")
     if not any(field in owner for field in ("renderSizePx", "forwardAngleDegrees")):
@@ -256,7 +268,8 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
         facts["multipliers"] = multipliers
     grip_instruction = (
         " The visible handle region must contain the declared final-space grip, not the guard, blade or empty space. "
-        "It is a normalized final-canvas point after framing/padding, not a RAW-image coordinate; keep that contact region there before facing flips."
+        "It is a normalized final-canvas point before facing flips. Return a square image with the contact region at those same "
+        "normalized coordinates: its full frame is resized without cropping or recentering to preserve that contact."
         if "grip" in facts else ""
     )
     return (
