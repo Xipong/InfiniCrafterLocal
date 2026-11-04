@@ -77,24 +77,74 @@ def test_parameter_repair_uses_exact_scoped_schema_and_retains_accepted_omission
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("report_value", [pytest.param("absent", id="missing"), pytest.param(None, id="null")])
-def test_real_repair_accepts_missing_optional_report_without_mutating_source(monkeypatch, mode, report_value):
+@pytest.mark.parametrize("original", ["missing", "null", "present"])
+@pytest.mark.parametrize("operation", ["omit", "null", "replace", "clear", "empty_description"])
+def test_real_repair_report_operations_preserve_explicit_intent(monkeypatch, mode, original, operation):
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from repair_test_helpers import gameplay_repair
 
     item = build_runtime_fixture("workbench_blade")
+    if original == "missing":
+        item.pop("realization", None)
+    else:
+        item["realization"] = None if original == "null" else {
+            "description": "  Original description 🌟\r\n", "selfEvaluation": "Original debug"}
+    expected = copy.deepcopy(item)
     fixed = copy.deepcopy(_call(item, "item_stats"))
     _call(item, "item_stats")["params"]["damage"] = -1
     before = copy.deepcopy(item)
     patch = {"note": "exact executable correction only", "callsUpsert": [fixed]}
-    if report_value != "absent":
-        patch["realizationReplacement"] = report_value
+    if operation != "omit":
+        patch["realizationReplacement"] = {
+            "null": None, "replace": {"description": "New description"},
+            "clear": {}, "empty_description": {"description": ""},
+        }[operation]
+    if operation not in {"omit", "null"}:
+        expected["realization"] = copy.deepcopy(patch["realizationReplacement"])
     repaired, _ = gameplay_repair(monkeypatch, item, patch, mode)
-    assert _call(repaired, "item_stats")["params"]["damage"] == fixed["params"]["damage"]
-    if mode == "json_schema" or report_value == "absent":
-        assert repaired["realization"] == before["realization"]
-    else:
-        assert repaired["realization"] is None
-    assert item == before
+    debug = repaired.pop("debug")
+    assert repaired == expected and item == before
+    assert compile_runtime_program(repaired)["runtimeProgram"] == compile_runtime_program(expected)["runtimeProgram"]
+    if operation == "null":
+        assert debug["gameplayRepairRawPatch"]["realizationReplacement"] is None
+    assert debug["gameplayRepairScope"] == build_runtime_repair_scope(item, validate_runtime_program(item)["errors"])
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_captured_null_report_repair_retains_description_and_exact_gameplay(monkeypatch, mode):
+    from pathlib import Path
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+    from infini_local.pipelines.context.generated_summary import generated_parent_summary_from_data
+    from repair_test_helpers import gameplay_repair
+
+    case = json.loads((Path(__file__).parent / "fixtures" / "repair_advisory_null.json").read_text())
+    source, incoming = case["source"], case["patch"]
+    before = copy.deepcopy(source)
+    assert incoming["realizationReplacement"] is None
+    repaired, _ = gameplay_repair(monkeypatch, source, incoming, mode)
+    assert repaired["realization"] == source["realization"]
+    assert repaired["debug"]["gameplayRepairRawPatch"]["realizationReplacement"] is None
+    compiled = compile_runtime_program(repaired)
+    wire = copy.deepcopy(compiled["runtimeProgram"])
+    for entity in wire["entities"]:
+        entity.pop("visual", None)  # Later Visual delivery is outside Gameplay Repair.
+    assert wire == case["expectedRuntimeProgram"]
+    assert generated_parent_summary_from_data(compiled)["description"] == source["realization"]["description"]
+    assert source == before
+
+
+@pytest.mark.parametrize("source", [{}, {"realization": None}, {"realization": {"description": "Keep me"}}])
+def test_direct_patch_null_is_declared_noop_not_global_null_normalization(source):
+    patch = {"note": "No report replacement", "realizationReplacement": None}
+    schema = contract.author_item_repair_response_schema(capability_names=[])
+    Draft202012Validator(schema).validate(patch)
+    before = copy.deepcopy(source)
+    result = apply_repair_patch(source, patch)
+    assert ("realization" in result) is ("realization" in source)
+    assert result.get("realization") == source.get("realization")
+    assert source == before
+    assert contract_provider_schema.project_provider_nullable_optionals_to_local(
+        patch, schema, response_format={"type": "json_object"}) == patch
 
 
 def test_single_function_schema_never_decodes_an_unknown_function_by_object_type():
