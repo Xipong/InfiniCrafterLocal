@@ -1,0 +1,505 @@
+{
+  "provenance": {
+    "source": "cache.zip",
+    "sha256": "29895d2cacb450ed7b876c614a35eb6a4fd773f58cb1ef786f7c2c412bb9c8f1",
+    "recipeKey": "r_0d3cf8be68bd8fb2ab5994b3",
+    "authorResponseLine": 184,
+    "repairResponseLine": 186
+  },
+  "source": {
+    "name": "Solar Fledgling's Quantum Beacon",
+    "category": "combat",
+    "concept": "A fusion of the Baby Bird summon's avian companion theme and the Quantum Solar Bomb's exploding, bouncing quantum payload that releases star shards and blinks the user.",
+    "realization": {
+      "description": "Throws a radiant quantum solar bomb that bounces off terrain, illuminates the surroundings in bright yellow light, and upon expiration detonates in a burst of area damage, scattering a fan of solar star shards while instantly blinking the player to the detonation site.",
+      "selfEvaluation": "Successfully integrates throwing bomb mechanics with expiration effects, shard spawning, and player teleportation."
+    },
+    "runtimeProgram": {
+      "apiVersion": "infini.runtime-program.v5",
+      "schema": "infini.runtime-program.authoring.v7",
+      "primaryEntityId": "quantum_solar_bomb_proj",
+      "entities": [
+        {
+          "id": "solar_quantum_nest_item",
+          "kind": "item_body"
+        },
+        {
+          "id": "quantum_solar_bomb_proj",
+          "kind": "free_projectile"
+        },
+        {
+          "id": "solar_star_shard",
+          "kind": "child_projectile"
+        }
+      ],
+      "bindings": [
+        {
+          "id": "b_throw",
+          "input": "primary_use",
+          "action": {
+            "kind": "spawn_entity",
+            "targetId": "quantum_solar_bomb_proj"
+          },
+          "stackCost": 1,
+          "stackConsumeChancePercent": 100,
+          "contactDamage": false
+        }
+      ],
+      "calls": [
+        {
+          "id": "c_stats",
+          "fn": "item_stats",
+          "target": "solar_quantum_nest_item",
+          "params": {
+            "damageClass": "generic",
+            "damage": 35,
+            "knockback": 4,
+            "useTimeSeconds": 0.41666666666667,
+            "useAnimationSeconds": 0.41666666666667,
+            "rarity": 2,
+            "valueCopper": 500,
+            "maxStack": 999,
+            "widthPx": 16,
+            "heightPx": 16,
+            "scale": 1.0
+          }
+        },
+        {
+          "id": "c_use",
+          "fn": "item_use",
+          "target": "solar_quantum_nest_item",
+          "params": {
+            "useStyle": "swing",
+            "autoReuse": false,
+            "hideUseGraphic": true,
+            "disableMeleeHitbox": true,
+            "channel": false
+          }
+        },
+        {
+          "id": "c_spawn_proj",
+          "fn": "spawn",
+          "target": "quantum_solar_bomb_proj",
+          "params": {
+            "velocity": {
+              "speed": 9.1
+            },
+            "count": 1,
+            "spreadRadians": 0.0,
+            "offsetBlocks": 0.0,
+            "aim": "cursor",
+            "position": {
+              "at": "owner_center"
+            }
+          }
+        },
+        {
+          "id": "c_dmg_proj",
+          "fn": "projectile_damage",
+          "target": "quantum_solar_bomb_proj",
+          "params": {
+            "damageClass": "generic",
+            "damage": 35,
+            "knockback": 4.0,
+            "ownerHitCheck": false
+          }
+        },
+        {
+          "id": "c_life_proj",
+          "fn": "projectile_lifetime",
+          "target": "quantum_solar_bomb_proj",
+          "params": {
+            "lifetimeSeconds": 3.0
+          }
+        },
+        {
+          "id": "c_box_proj",
+          "fn": "projectile_hitbox",
+          "target": "quantum_solar_bomb_proj",
+          "params": {
+            "widthPx": 14,
+            "heightPx": 14,
+            "drawScale": 1.0,
+            "hitboxScale": 1.0
+          }
+        },
+        {
+          "id": "c_col_proj",
+          "fn": "projectile_collision",
+          "target": "quantum_solar_bomb_proj",
+          "params": {
+            "tileCollide": true,
+            "ignoreWater": false,
+            "bounceCount": 1,
+            "bounceSpeedRetention": 0.6,
+            "pierce": 1,
+            "updatesPerTick": 1,
+            "immunity": "once_per_npc"
+          }
+        },
+        {
+          "id": "c_move_proj",
+          "fn": "move_straight",
+          "target": "quantum_solar_bomb_proj",
+          "params": {}
+        },
+        {
+          "id": "c_light_proj",
+          "fn": "projectile_light",
+          "target": "quantum_solar_bomb_proj",
+          "params": {
+            "strength": 0.8,
+            "color": "yellow"
+          }
+        },
+        {
+          "id": "c_ev_dmg",
+          "fn": "damage_nearby_on_event",
+          "target": "quantum_solar_bomb_proj",
+          "params": {
+            "when": "on_expire",
+            "radius": 4.0,
+            "damageMultiplier": 1.0
+          }
+        },
+        {
+          "id": "c_ev_spawn",
+          "fn": "spawn_on_event",
+          "target": "quantum_solar_bomb_proj",
+          "params": {
+            "when": "on_expire",
+            "entity": "solar_star_shard",
+            "count": 4,
+            "spreadRadians": 3.14159,
+            "damageBasis": "live_parent",
+            "knockbackBasis": "live_parent",
+            "damageMultiplier": 0.5
+          }
+        },
+        {
+          "id": "c_ev_teleport",
+          "fn": "move_owner_on_event",
+          "target": "quantum_solar_bomb_proj",
+          "params": {
+            "when": "on_expire",
+            "range": 120,
+            "cooldown": 1.0,
+            "safeTileOnly": true
+          }
+        },
+        {
+          "id": "c_spawn_shard",
+          "fn": "spawn",
+          "target": "solar_star_shard",
+          "params": {
+            "velocity": {
+              "speed": 9.1
+            },
+            "count": 1,
+            "spreadRadians": 0.0,
+            "offsetBlocks": 0.0,
+            "aim": "velocity",
+            "position": {
+              "at": "activation_origin"
+            }
+          }
+        },
+        {
+          "id": "c_dmg_shard",
+          "fn": "projectile_damage",
+          "target": "solar_star_shard",
+          "params": {
+            "damageClass": "generic",
+            "damage": 15,
+            "knockback": 2.0,
+            "ownerHitCheck": false
+          }
+        },
+        {
+          "id": "c_life_shard",
+          "fn": "projectile_lifetime",
+          "target": "solar_star_shard",
+          "params": {
+            "lifetimeSeconds": 0.6
+          }
+        },
+        {
+          "id": "c_box_shard",
+          "fn": "projectile_hitbox",
+          "target": "solar_star_shard",
+          "params": {
+            "widthPx": 10,
+            "heightPx": 10,
+            "drawScale": 1.0,
+            "hitboxScale": 1.0
+          }
+        },
+        {
+          "id": "c_col_shard",
+          "fn": "projectile_collision",
+          "target": "solar_star_shard",
+          "params": {
+            "tileCollide": true,
+            "ignoreWater": false,
+            "bounceCount": 0,
+            "pierce": 1,
+            "updatesPerTick": 1,
+            "immunity": "once_per_npc"
+          }
+        },
+        {
+          "id": "c_move_shard",
+          "fn": "move_straight",
+          "target": "solar_star_shard",
+          "params": {}
+        }
+      ]
+    },
+    "id": "g_85164e5ae227f329",
+    "recipeKey": "r_0d3cf8be68bd8fb2ab5994b3"
+  },
+  "patch": {
+    "entitiesUpsert": [],
+    "entityIdsDelete": [],
+    "entityIndicesDelete": [],
+    "bindingsUpsert": [],
+    "bindingIdsDelete": [],
+    "bindingIndicesDelete": [],
+    "callsUpsert": [
+      {
+        "id": "c_stats",
+        "fn": "item_stats",
+        "target": "solar_quantum_nest_item",
+        "params": {
+          "damageClass": "generic",
+          "damage": 35,
+          "knockback": 4,
+          "useTimeSeconds": 0.41666666666667,
+          "useAnimationSeconds": 0.41666666666667,
+          "rarity": 2,
+          "valueCopper": 500,
+          "maxStack": 999,
+          "widthPx": 16,
+          "heightPx": 16,
+          "scale": 1.0,
+          "craftYield": 1
+        }
+      },
+      {
+        "id": "c_use",
+        "fn": "item_use",
+        "target": "solar_quantum_nest_item",
+        "params": {
+          "useStyle": "swing",
+          "autoReuse": false,
+          "hideUseGraphic": true,
+          "disableMeleeHitbox": true,
+          "channel": false,
+          "useTurn": false
+        }
+      },
+      {
+        "id": "c_ev_spawn",
+        "fn": "spawn_on_event",
+        "target": "quantum_solar_bomb_proj",
+        "params": {
+          "when": "on_expire",
+          "entity": "solar_star_shard",
+          "count": 4,
+          "spreadRadians": 3.14159,
+          "damageBasis": "live_parent",
+          "knockbackBasis": "live_parent",
+          "damageMultiplier": 0.5,
+          "delay": 0.0
+        }
+      }
+    ],
+    "callIdsDelete": [],
+    "callIndicesDelete": [],
+    "callParamKeysDelete": [],
+    "callPropertyKeysDelete": [],
+    "primaryEntitySelection": null,
+    "exclusiveInputSelections": [],
+    "metadataPatch": {},
+    "realizationReplacement": null,
+    "note": "Added missing required parameters craftYield, useTurn, and delay"
+  },
+  "expectedRuntimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "bindings": [
+      {
+        "id": "b_throw",
+        "input": "primary_use",
+        "role": "primary",
+        "usePolicy": {
+          "action": {
+            "kind": "spawn_entity",
+            "targetId": "quantum_solar_bomb_proj"
+          },
+          "contactDamage": false,
+          "stackConsumeChancePercent": 100,
+          "stackCost": 1
+        }
+      }
+    ],
+    "entities": [
+      {
+        "events": [],
+        "id": "solar_quantum_nest_item",
+        "kind": "item_body",
+        "visualRole": "inventory_item"
+      },
+      {
+        "collision": {
+          "bounceCount": 1,
+          "bounceSpeedRetention": 0.6,
+          "extraUpdates": 0,
+          "ignoreWater": false,
+          "localNpcHitCooldownTicks": -1,
+          "npcImmunityMode": "local",
+          "pierce": 1,
+          "tileCollide": true
+        },
+        "damage": {
+          "damage": 35,
+          "damageClass": "generic",
+          "enabled": true,
+          "knockback": 4.0,
+          "ownerHitCheck": false
+        },
+        "events": [
+          {
+            "action": "damage_nearby_on_event",
+            "actionCode": 10,
+            "damageMultiplier": 1.0,
+            "event": "on_expire",
+            "id": "c_ev_dmg",
+            "maxTargets": 16,
+            "radiusPx": 64
+          },
+          {
+            "action": "spawn_entity_on_event",
+            "actionCode": 1,
+            "count": 4,
+            "damageBasis": "live_parent",
+            "damageMultiplier": 0.5,
+            "delayTicks": 0,
+            "entityId": "solar_star_shard",
+            "event": "on_expire",
+            "id": "c_ev_spawn",
+            "knockbackBasis": "live_parent",
+            "spreadRadians": 3.14159
+          },
+          {
+            "action": "move_owner_on_event",
+            "actionCode": 7,
+            "cooldownTicks": 60,
+            "event": "on_expire",
+            "id": "c_ev_teleport",
+            "mode": "blink_to_event_position",
+            "rangeTiles": 120,
+            "safeTileOnly": true
+          }
+        ],
+        "hitbox": {
+          "drawScale": 1.0,
+          "heightPx": 14,
+          "hitboxScale": 1.0,
+          "widthPx": 14
+        },
+        "id": "quantum_solar_bomb_proj",
+        "kind": "free_projectile",
+        "lifetimeTicks": 180,
+        "light": {
+          "color": "yellow",
+          "strength": 0.8
+        },
+        "movement": {
+          "code": 0,
+          "name": "move_straight",
+          "params": {}
+        },
+        "spawn": {
+          "aim": "cursor",
+          "count": 1,
+          "enabled": true,
+          "offsetPx": 0,
+          "overTarget": {
+            "delayTicks": 0,
+            "heightTiles": 0
+          },
+          "placement": "owner_center",
+          "speedPxPerTick": 2.4266666666666667,
+          "spreadRadians": 0.0
+        },
+        "visualRole": "projectile"
+      },
+      {
+        "collision": {
+          "bounceCount": 0,
+          "bounceSpeedRetention": 1,
+          "extraUpdates": 0,
+          "ignoreWater": false,
+          "localNpcHitCooldownTicks": -1,
+          "npcImmunityMode": "local",
+          "pierce": 1,
+          "tileCollide": true
+        },
+        "damage": {
+          "damage": 15,
+          "damageClass": "generic",
+          "enabled": true,
+          "knockback": 2.0,
+          "ownerHitCheck": false
+        },
+        "events": [],
+        "hitbox": {
+          "drawScale": 1.0,
+          "heightPx": 10,
+          "hitboxScale": 1.0,
+          "widthPx": 10
+        },
+        "id": "solar_star_shard",
+        "kind": "child_projectile",
+        "lifetimeTicks": 36,
+        "movement": {
+          "code": 0,
+          "name": "move_straight",
+          "params": {}
+        },
+        "spawn": {
+          "aim": "velocity",
+          "count": 1,
+          "enabled": true,
+          "offsetPx": 0,
+          "overTarget": {
+            "delayTicks": 0,
+            "heightTiles": 0
+          },
+          "placement": "item_use_origin",
+          "speedPxPerTick": 2.4266666666666667,
+          "spreadRadians": 0.0
+        },
+        "visualRole": "child_projectile"
+      }
+    ],
+    "itemEntityId": "solar_quantum_nest_item",
+    "itemUse": {
+      "channel": false,
+      "configured": true,
+      "disableMeleeHitbox": true,
+      "hideUseGraphic": true,
+      "holdoutOffsetX": 0,
+      "holdoutOffsetY": 0,
+      "useStyle": "swing"
+    },
+    "limits": {
+      "maxChildDepth": 3,
+      "maxEntityCount": 12,
+      "maxEventSpawnsPerActivation": 32
+    },
+    "primaryEntityId": "quantum_solar_bomb_proj",
+    "primaryOwner": "projectile",
+    "schema": "infini.runtime-program.wire.v3"
+  }
+}

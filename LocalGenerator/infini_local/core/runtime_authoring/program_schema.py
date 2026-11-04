@@ -248,7 +248,8 @@ def author_item_repair_schema(
     None requests the complete local contract. An explicit empty set permits
     only an empty callsUpsert array, never the full catalog. Scope permissions
     and the frozen merge remain separate authorities after parsing. Optional
-    realizationReplacement is advisory; omission leaves existing prose unchanged.
+    realizationReplacement is advisory; omission or null leaves existing prose unchanged.
+    An explicit object replaces the report; an empty object clears it.
     """
     variants = capability_provider_union(shared_refs=True)
     if capability_names is not None:
@@ -330,7 +331,10 @@ def author_item_repair_schema(
                     "concept": author_item_response_schema()["properties"]["concept"],
                 },
             },
-            "realizationReplacement": realization_schema(),
+            "realizationReplacement": {
+                "anyOf": [realization_schema(), {"type": "null"}],
+                "description": "Optional advisory replacement: omission or null leaves the report unchanged; an object replaces it, including an empty object to clear it.",
+            },
             "note": _strict_string(min_len=1, max_len=500),
         },
         "required": ["note"],
@@ -610,7 +614,9 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
         for key in ("name", "category", "concept"):
             if key in metadata:
                 out[key] = copy.deepcopy(metadata[key])
-    if "realizationReplacement" in patch:
+    # This patch-local no-op preserves absence too. Initial Author and other
+    # nullable fields keep their own contracts; explicit empty reports still clear.
+    if "realizationReplacement" in patch and patch["realizationReplacement"] is not None:
         out["realization"] = copy.deepcopy(patch["realizationReplacement"])
     return out
 

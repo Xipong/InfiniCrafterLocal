@@ -90,6 +90,15 @@ def test_vfx_packet_guides_actual_child_events_and_supported_timing(monkeypatch,
     assert "on_hit cue starts from that hit occurrence" in wire
 
 
+@pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
+def test_gameplay_repair_delivers_null_report_noop_contract(monkeypatch, mode):
+    packet, = stage_packets(monkeypatch, "repair", format_mode=mode, labels=("null-report",))
+    guidance = "Omit it or use null to leave the report unchanged; an object replaces it, including {} to clear it."
+    wire = "\n".join(message["content"] for message in packet["messages"])
+    assert wire.count(guidance) == 1
+    assert guidance not in packet["messages"][0]["content"]
+
+
 def test_author_and_repair_deliver_composition_context(monkeypatch):
     author, = stage_packets(monkeypatch, "author", labels=("composition",))
     repair, = stage_packets(monkeypatch, "repair", labels=("composition",))
