@@ -97,7 +97,9 @@ def _capture_backend(monkeypatch, tmp_path: Path, *, retries: bool = False) -> l
             # (an empty PNG short-circuits validation to only empty_alpha_bbox).
             image.paste((170, 90, 40, 255), (32, 32, 34, 34))
         else:
-            image.paste((170, 90, 40, 255), (18, 8, 46, 56))
+            # Grip-bearing images keep their full provider frame. This accepted
+            # fixture meets the item fill contract without a corrective bbox fit.
+            image.paste((170, 90, 40, 255), (18, 4, 46, 60))
         image.save(raw)
         calls.append(dict(prompt=prompt, negative=negative, canvas=canvas, raw=str(raw), bytes=raw.read_bytes(),
                           attempt=int(output_dir.name.removeprefix("attempt-"))))

@@ -53,7 +53,7 @@ from infini_local.pipelines.images.postprocess import pick_best_sprite, postproc
 from infini_local.pipelines.images.validation import sprite_validation_fatal, technical_validation_score, validate_processed_sprite
 from infini_local.pipelines.images.manifest import write_visual_manifest
 from infini_local.pipelines.visual.assets import build_visual_asset_plan
-from infini_local.pipelines.images.prompts import image_final_frame_prompt_clause, image_generation_prompt_suffix, normalize_asset_prompt
+from infini_local.pipelines.images.prompts import image_final_frame_prompt_clause, image_generation_prompt_suffix, normalize_asset_prompt, selected_main_image_visual
 from infini_local.pipelines.images.soul import attach_visual_soul_from_sprite
 
 
@@ -158,6 +158,7 @@ def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
         topology=topology, part_count_min=minimum, part_count_max=maximum,
         policy=_PublicationPolicy.ITEM, publication_identity=_runtime_publication_identity(data, "item", "", str(data.get("id") or "sprite")),
         final_frame_clause=image_final_frame_prompt_clause(data, "item", canvas),
+        preserve_frame="grip" in (selected_main_image_visual(data, "item") or {}),
     )
     result = _execute_image_request(data, request)
     visual["finalItemPrompt"] = result.final_prompt
@@ -302,6 +303,7 @@ class _ImageRequest:
     policy: _PublicationPolicy
     publication_identity: bytes
     final_frame_clause: str = ""
+    preserve_frame: bool = False
 
 
 @dataclass(frozen=True)
@@ -356,6 +358,7 @@ def _finish_image_request(data: dict[str, Any], request: _ImageRequest, result: 
     prefix = "item" if request.policy is _PublicationPolicy.ITEM else request.audit_role
     debug[prefix + "FinalPrompt"] = result.final_prompt
     debug[prefix + "FinalPromptAttempt"] = result.final_prompt_attempt
+    debug[prefix + "SpriteFramePolicy"] = "preserve_authored_grip" if request.preserve_frame else "role_contract"
     debug[prefix + "SpriteValidation"] = json.dumps(attempts, ensure_ascii=False)
     if result.private_dir:
         debug[prefix + "SpriteDiagnostics"] = json.dumps({
@@ -416,6 +419,8 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
         part_count_max=request.part_count_max, expected_canvas=request.canvas,
     )
     process_kwargs: dict[str, Any] = dict(topology=request.topology, part_count_min=request.part_count_min, part_count_max=request.part_count_max)
+    if request.preserve_frame:
+        process_kwargs["preserve_frame"] = True
     last_path = ""
     terminal = False
     for attempt in range(max(1, int(SPRITE_RETRIES) + 1)):
@@ -480,7 +485,7 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
             validation = validate_processed_sprite(final, request.processing_role, **validation_kwargs)
             refit_path = ""
             refit_validation = None
-            if request.processing_role != "vfx_strip" and not validation.get("ok") and not sprite_validation_fatal(validation):
+            if not request.preserve_frame and request.processing_role != "vfx_strip" and not validation.get("ok") and not sprite_validation_fatal(validation):
                 phase = "processing"
                 refit_path = refit_processed_sprite_to_contract(final, attempt_id, request.canvas, request.processing_role, validation, output_dir=output_dir,
                     master_path=master_path if master_path is not None and master_path.exists() else None)
@@ -582,7 +587,8 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
         prompt=base_prompt, negative=str(negative or ""), canvas=canvas, topology=topology,
         part_count_min=minimum, part_count_max=maximum, policy=policy,
         publication_identity=_runtime_publication_identity(data, role, publication_entity_id or entity_id, asset_id),
-        final_frame_clause=frame_clause)
+        final_frame_clause=frame_clause,
+        preserve_frame="grip" in (selected_main_image_visual(data, contract_role, entity_id=entity_id) or {}))
     result = _execute_image_request(data, request)
     return result.public_path, result.url, round(result.technical_score, 3), result.status
 
