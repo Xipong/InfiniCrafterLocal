@@ -125,7 +125,8 @@ def test_static_definitions_remain_case_independent_across_runtime_domains(monke
     schema_key = "responseSchema" if stage.startswith("visual") else "outputSchema"
     if mode == "json_schema":
         expected = request_dossier(other)[schema_key]
+        from infini_local.core.provider_schema import _provider_strict_projection, defer_provider_cross_field_constraints
         if stage.startswith("vfx"):
-            from infini_local.core.provider_schema import _provider_strict_projection, defer_provider_cross_field_constraints
-            expected = _provider_strict_projection(defer_provider_cross_field_constraints(expected), omit_annotations=True)
+            expected = defer_provider_cross_field_constraints(expected)
+        expected = _provider_strict_projection(expected, omit_annotations=True)
         assert other["response_format"]["json_schema"]["schema"] == expected

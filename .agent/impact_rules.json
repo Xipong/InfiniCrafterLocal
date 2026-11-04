@@ -197,6 +197,18 @@
       ]
     },
     {
+      "id": "offline-support-bundle",
+      "area": "tooling",
+      "patterns": [
+        "tools/diagnostics/export_support_bundle.py",
+        "LocalGenerator/tests/test_support_bundle.py"
+      ],
+      "checks": ["project_hygiene"],
+      "tests": ["LocalGenerator/tests/test_support_bundle.py"],
+      "entrypoints": ["tools/diagnostics/export_support_bundle.py"],
+      "context": ["docs/user/DIAGNOSTICS_RU.md"]
+    },
+    {
       "id": "offline-craft-audit",
       "area": "tooling",
       "patterns": [

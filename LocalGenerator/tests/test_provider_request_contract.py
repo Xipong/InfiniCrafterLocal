@@ -435,6 +435,8 @@ def test_llm_json_rejects_ambiguous_or_nonfinite_candidates(text):
     pytest.param('{"damage":42,"damage":43,}', None, id="duplicate-key"),
     pytest.param('{"mode":recall_home}', None, id="no-invented-enum"),
     pytest.param('{"array":[1,,2]}', None, id="array-middle-hole"),
+    pytest.param('```json\n{"damage":12}]\n```', None, id="explicit-unmatched-closer"),
+    pytest.param('```json\n{"damage":12}]}{"damage":99}\n```', None, id="explicit-trailing-authored-object"),
 ])
 def test_json_syntax_recovery_never_invents_or_rewrites_values(text, expected):
     assert recover_object_with_syntax_only_repairs(text) == expected

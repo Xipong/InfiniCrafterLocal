@@ -36,7 +36,7 @@ _ACCEPTED_GAMEPLAY_CONTEXT_RULE = (
     "useTime/useAnimation are base item cadence/animation in world ticks (60/s); itemScale is the "
     "held-root dimensionless multiplier, not a VFX slot scale or PNG frame size. Do not infer "
     "missing values, live attack-speed modifiers or event frequency from names/prose. "
-    "runtimePairs owns event availability; acceptedRuntimeProgramReadOnly owns exact bindings/events and "
+    "runtimePairs owns event availability; acceptedRuntimeProgramReadOnly owns exact geometry, collision, lifetime, bindings/events and "
     "independent motion fields, including ordered seek. attachment reads an anchor; armPose alone does not "
     "attach a body. bodyPresentation.frame carries only present native wire operands: distances are world pixels, "
     "not Gameplay Author blocks; durations are world ticks. While its window is active, the attachment step sets body center to "
@@ -190,6 +190,7 @@ def build_vfx_repair_packet(
             _PLACED_VFX_RULE,
             _ACCEPTED_GAMEPLAY_CONTEXT_RULE,
             _READABILITY_RULE,
+            "acceptedRuntimeProgramReadOnly contains the actual accepted mechanics, not another design request. Read its exact movement, controller, lifetime, collision, bindings and event parameters when composing presentation; runtimePairs still owns event availability. Do not invent missing geometry from names or the prose summary. Visual attachment and particle motion never change the source entity's gameplay.",
         ],
     }
     # Parent ancestry informs new artwork, not corrections to an accepted

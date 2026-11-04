@@ -15,7 +15,7 @@ from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_prompt_cache import with_instruction_segments
 from infini_local.core.llm_stage_messages import (
-    generation_system_suffix,
+    generation_art_direction,
     stage_accounting,
     stage_chat_message,
 )
@@ -38,7 +38,6 @@ from infini_local.core.runtime_authoring.repair.schema import runtime_repair_sch
 from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.pipelines.author.item_contract import (
-    PRIMARY_REPAIR_SYSTEM_RULE,
     RUNTIME_ROW_SHAPE_RULE,
     author_item_generation_provider_schema,
     author_item_provider_repair_response_schema,
@@ -191,7 +190,7 @@ def _repair_malformed_author_json(
             "Do not redesign, add, drop, replace, normalize, or reinterpret gameplay. This call repairs only JSON syntax/container damage.",
             "Call params must use allowedCallParamsReadOnly for their exact fn; do not invent undeclared params even if they sound plausible.",
             "malformedRawText is the sole design source; never introduce a choice absent from it. Keep every source key and array row, including optional advisory text.",
-            "Return exactly one strict full Author JSON object with no markdown or prose.",
+            "Return exactly one strict full Author JSON object with no markdown or prose, not the key index.",
         ],
         "allowedCallParamsReadOnly": {
             name: sorted(CAPABILITY_REGISTRY[name].params) for name in functions
@@ -206,13 +205,12 @@ def _repair_malformed_author_json(
     }
     user_content = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
     system = (
-        "You are the single conditional Gameplay Format Repair for InfiniCrafterLocal. "
-        "Repair only JSON syntax/container damage in malformedRawText. Preserve the Author's exact recoverable design and executable choices; "
-        "do not reauthor or complete missing gameplay; do not invent undeclared params. "
-        "Use allowedCallParamsReadOnly to check each call's fn. Return strict full Author JSON only."
+        "You are the conditional Gameplay Format Repair for InfiniCrafterLocal. "
+        "Repair only JSON syntax/container damage in malformedRawText under the supplied preservation rules. "
+        "Do not reauthor or complete missing gameplay or invent undeclared params. Return the full Author JSON object."
     )
     messages = [
-        stage_chat_message("system", "author_repair_contract", system + generation_system_suffix() + llm_reasoning_system_suffix(model_name)),
+        stage_chat_message("system", "author_repair_contract", system + llm_reasoning_system_suffix(model_name)),
         stage_chat_message("user", "author_repair_context", user_content),
     ]
     request = apply_llm_common_options({
@@ -429,24 +427,21 @@ def build_gameplay_repair_dossier(
         "schema": GAMEPLAY_REPAIR_DOSSIER_SCHEMA,
         "task": "Repair only the deterministic mutable scope of this low-level runtime program.",
         "rules": [
-            "Return exactly the repair patch schema; never return the full item.",
-            "Every upsert entry must be a complete schema-valid node. Copy the existing node from readOnlySourceFragments.brokenFragments, changing only permitted fields; preserve unchanged required fields and accepted optional values or absences. Do not add or remove target/params merely to match an example; only exact fieldPermissions authorize edits.",
+            "Return only a JSON patch matching requiredJsonShape, not the item or dossier. note is required; omit unchanged root fields. Omission means no change.",
+            "Each upsert is a complete schema-valid node. Copy existing nodes from readOnlySourceFragments.brokenFragments, preserving required values, accepted optional values and absences outside exact fieldPermissions. Do not add or remove target/params merely to match an example. Extra frozen rewrites are ignored.",
             RUNTIME_ROW_SHAPE_RULE,
             STACK_COST_RULE,
-            "Fix only exact fieldPermissions paths and explicitly allowed blocker/dependency nodes; do not add unrelated optional design fields.",
-            "For existing nodes, omission means no change, not reset to a card default. Preserve accepted absences too; an optional default describes the full Author object after frozen-first merge, never permission to add or delete a field. New nodes must satisfy the full capability requirements.",
-            "Extra rewrites of frozen values or independent ids are ignored rather than cancelling a useful repair.",
-            "For each exact repairScope.deletable.callPropertyKeys entry that must be removed, emit the matching callPropertyKeysDelete {callId,key}; a note claiming removal does not mutate the program.",
-            "Use create permissions only for the exact blocker or its declared support dependency.",
-            "Keep stable ids when repairing existing nodes; use a new id only for an explicitly allowed missing node.",
-            "immutableProgramIndex.entities[*].id is the exact allowlist for every target and entity-reference value that points to an existing entity in this patch; never carry an id from another item. When repairScope.create.calls.allowedTargetKinds is non-empty, a new call may instead target an id emitted exactly once in entitiesUpsert whose kind is listed there; use that same new id consistently and do not invent any other target.",
-            "Do not introduce a weapon family, archetype, semantic root, or code-authored default.",
-            "Resolve every exact error and re-check references, target kinds, inputs, cycles, and budgets.",
-            "realizationReplacement is optional advisory context about the post-merge program, never an observed run or an acceptance requirement. Do not repair or complete prose or self-evaluation. acceptedItemContext.runtimeProgram is the exact read-only pre-repair source, including invalid fields; overlay only edits admitted by repairScope and keep every frozen value and absence unchanged.",
-            f"When repairTransactions.{PRIMARY_ENTITY_SELECTION_FIELD}.allowed is true, set {PRIMARY_ENTITY_SELECTION_FIELD} to exactly one listed candidate; Lowery materializes technical wire roles from that exact authored identity.",
-            "For each repairRequirements row with requiredBindingUpdates, emit every listed existing binding exactly once using one of its complete allowed transactions; mustApplyAll means these updates are one coupled repair, not alternatives. When mustCreateExactlyOne is true, emit exactly one allowedBindingTransactions row and it must have a new id. When mustChooseExactlyOne is true without mustCreateExactlyOne, emit exactly one complete allowedBindingTransactions choice: an existing id is eligible only when it appears in that row's allowedExistingBindingIds and its complete tuple is projected by bindingAlternatives; a new id is eligible only when repairScope.create.bindings permits it. Global mutability never authorizes an id for another requirement; never update every listed lane.",
-            "For each repairTransactions.exclusiveInputSelections group, either retarget/delete conflicting bindings through exact fieldPermissions or emit one exclusiveInputSelections row choosing the keepBindingId; do not do both after the conflict is resolved.",
-            "For each repairScope.eventAlternatives row, choose one complete alternative: author its exact event plus every listed required call/binding in the same patch, and emit no support from unselected alternatives. The engine never chooses or inserts an event producer for you.",
+            "Compose with low-level capabilities; do not introduce a weapon family, archetype, semantic root, or code-authored default.",
+            "New nodes are allowed only by the exact blocker/dependency create policy and must satisfy the full capability requirements. Keep existing ids; use new ids only for permitted missing nodes. Defaults describe Author omission, not Repair edits.",
+            "Existing target/entity references come from immutableProgramIndex.entities[*].id. Where create.calls.allowedTargetKinds permits a new target, emit it exactly once in entitiesUpsert with an allowed kind and use that same id consistently.",
+            "Remove exact deletable.callPropertyKeys through callPropertyKeysDelete {callId,key}. For exact deletable.callParamKeys, use callParamKeysDelete or omit the invalid key from its complete callsUpsert row.",
+            "Binding updates use complete input/action/target transactions from bindingAlternatives, never a cross-product of their fields. Each repairRequirements row owns its allowed transactions and existing ids; permissions from another row do not apply.",
+            "requiredBindingUpdates with mustApplyAll are coupled: emit every listed existing binding exactly once. mustCreateExactlyOne requires one allowed transaction with a new id. mustChooseExactlyOne without mustCreateExactlyOne requires one transaction: an existing id must be in that row's allowedExistingBindingIds and bindingAlternatives; a new id requires create.bindings permission.",
+            f"When repairTransactions.{PRIMARY_ENTITY_SELECTION_FIELD}.allowed is true, choose exactly one listed candidate through {PRIMARY_ENTITY_SELECTION_FIELD}; the compiler derives technical wire roles from that identity.",
+            "For an exclusiveInputSelections group, either resolve the conflict through permitted retarget/delete edits or emit one keepBindingId selection; a resolved conflict needs no redundant selection.",
+            "For each repairScope.eventAlternatives row, choose one complete alternative: emit its exact event and every listed required call/binding together, with no support from unselected alternatives. The engine does not insert event producers.",
+            "Close every llmRepairable repairRequirement. For requiredOneOfCapabilities, either an authorized structural delete/retarget closes the blocker or callsUpsert supplies one complete listed capability on an affected target. Notes do not change the program. Check references, kinds, inputs, cycles and budgets after the permitted edits.",
+            "realizationReplacement is optional advisory context, never an acceptance requirement or observed test. acceptedItemContext.runtimeProgram is the read-only pre-repair source, including invalid fields. Describe only the program after permitted edits; prose and self-evaluation are not repair targets.",
         ],
         "runtimeVersions": {
             "authorSchema": RUNTIME_PROGRAM_SCHEMA,
@@ -520,20 +515,14 @@ def repair_author_item_after_failure(
         capability_names=runtime_repair_schema_capabilities(scope))
     repair_user = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
     repair_system = (
-        "You are the conditional Gameplay Repair for InfiniCrafterLocal. Close exactValidationErrors through repairScope permissions, repairTransactions, eventAlternatives and repairScope.blockerPlan; never repair the whole item. "
-        f"{PRIMARY_REPAIR_SYSTEM_RULE} For each exclusive-input transaction, either repair the conflicting binding input/delete path or choose one keepBindingId; do not emit a redundant choice after retargeting resolves the conflict. "
-        "Every target or entity-reference id that points to an existing entity must be copied from immutableProgramIndex.entities[*].id; never carry an id from another item. When repairScope.create.calls.allowedTargetKinds is non-empty, a new call target may instead use an id emitted exactly once in entitiesUpsert whose kind is listed there; use that same new id consistently and never invent any other target. "
-        "For every bindingId in repairScope.bindingAlternatives that you update, copy one complete input/action/target tuple verbatim into bindingsUpsert; never cross-product fields from different alternatives. When a repairRequirement sets mustChooseExactlyOne without mustCreateExactlyOne, emit exactly one complete allowed binding transaction: an existing id must be listed by that exact row's allowedExistingBindingIds and bindingAlternatives; a new id must be permitted by create.bindings. Global mutability does not let one blocker satisfy another; never update all candidate bindings. "
-        "For every repairScope.eventAlternatives row, choose one complete event alternative, author every listed required call/binding in the same patch, and emit no call/binding from unselected alternatives; no event dependency is inserted automatically. "
-        "Every llmRepairable repairRequirement whose requiredOneOfCapabilities is non-empty must be absent after the patch. An independently authorized delete/retarget may close it structurally; otherwise callsUpsert must patch or create one complete listed call on an affected target. A note claiming closure does not satisfy it. "
-        "For an exact shape_additional_property under calls[*].params, remove only the matching repairScope.deletable.callParamKeys entry: either emit callParamKeysDelete or omit that key from the complete callsUpsert row. "
-
-        "Omit unchanged root patch fields: absent optional arrays/metadataPatch mean no change; note is required; realizationReplacement is optional advisory text. Do not copy dossier keys into the patch, especially readOnlySourceFragments or any of its diagnostic children. Every upsert row must be complete and schema-valid; copy every unchanged required field from readOnlySourceFragments.brokenFragments and modify only permitted paths. "
-        "Deterministic merge will freeze already-valid old values and accept the exact broken or mandatory missing fields. Independent valid nodes and optional unreported fields are read-only; extra "
-        "rewrites are ignored. New nodes are allowed only by the exact blocker create policy. The final requiredJsonShape field of the user JSON is solely the output patch shape; emit only its listed root keys with your chosen values, never source-context keys or requiredJsonShape itself. Return strict patch JSON only."
+        "You are the conditional Gameplay Repair for InfiniCrafterLocal. "
+        "Resolve exactValidationErrors within repairScope using the dossier rules and supplied alternatives. "
+        "Preserve all accepted values and absences outside that scope. Return only the JSON patch defined by requiredJsonShape."
     )
+    direction = generation_art_direction()
+    art_context = ("\n\nArt direction is advisory and does not override the output contract, accepted gameplay or frozen fields. " + direction) if direction else ""
     messages = [
-        stage_chat_message("system", "author_repair_contract", repair_system + _item_language_instruction() + generation_system_suffix() + llm_reasoning_system_suffix(model_name)),
+        stage_chat_message("system", "author_repair_contract", repair_system + _item_language_instruction() + art_context + llm_reasoning_system_suffix(model_name)),
         stage_chat_message("user", "author_repair_context", repair_user),
     ]
     request = apply_llm_common_options({
