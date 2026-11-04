@@ -3,8 +3,7 @@
 This source is an independent test mod, not part of InfiniCrafterLocal. Build
 `../../fixture-mod/WorkbenchObserverFixture.Standalone.csproj` against matching
 tModLoader DLLs; no IFC reference or `.tmod` packaging is required. Supply the
-resulting DLL and this directory through `loader-run --probe-dll` and
-`--probe-mod-root`. The workbench must not register or call these classes by name.
+resulting DLL and this directory through `loader-run --mod DLL SOURCE_ROOT`. The workbench must not register or call these classes by name.
 
 Set `IFC_WORKBENCH_OBSERVER_OUTPUT` to an absolute JSON file path whose parent
 directory already exists **before starting tModLoader**. When unset, no file is

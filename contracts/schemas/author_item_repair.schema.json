@@ -11534,26 +11534,34 @@
       ]
     },
     "realizationReplacement": {
-      "additionalProperties": false,
-      "properties": {
-        "description": {
-          "maxLength": 4000,
-          "minLength": 0,
-          "type": "string"
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "maxLength": 4000,
+              "minLength": 0,
+              "type": "string"
+            },
+            "playerExperience": {
+              "maxLength": 3000,
+              "minLength": 0,
+              "type": "string"
+            },
+            "selfEvaluation": {
+              "maxLength": 4000,
+              "minLength": 0,
+              "type": "string"
+            }
+          },
+          "required": [],
+          "type": "object"
         },
-        "playerExperience": {
-          "maxLength": 3000,
-          "minLength": 0,
-          "type": "string"
-        },
-        "selfEvaluation": {
-          "maxLength": 4000,
-          "minLength": 0,
-          "type": "string"
+        {
+          "type": "null"
         }
-      },
-      "required": [],
-      "type": "object"
+      ],
+      "description": "Optional advisory replacement: omission or null leaves the report unchanged; an object replaces it, including an empty object to clear it."
     }
   },
   "required": [

@@ -297,8 +297,10 @@ recipe identity, fingerprint и исходный input не изменяются
 не используют этот путь. Provenance с перечнем добавленных полей проходит в
 Author/Visual/VFX cards, включая честный dump-origin для projectile.
 
-Legacy JSONL без manifest сохраняет прежний **projectile-only** lookup с меткой
-`legacy_unverified`; новый item enrichment на него не распространяется. Если
+Item и projectile lookup принадлежат одному `RuntimeDumpSnapshot`: его индексы,
+module identity и provenance нельзя независимо подменить или смешать с другой парой.
+JSONL без manifest не допускаются: `invalid_snapshot` / `snapshot_manifest_required`,
+без пропуска ошибочных строк, numeric-only legacy lookup и миграции файлов. Если
 полную item-строку подают как исходный parent, её уже присутствующие поля идут
 обычным projection, без нового восстановления. Непокрытые/отказанные native
 AI/source окна остаются unknown и в live, и в dump, и в card: отсутствие cadence

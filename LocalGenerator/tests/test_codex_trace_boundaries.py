@@ -87,16 +87,15 @@ def test_completed_calls_cannot_reappear_after_live_trace_clear(recording, monke
     try:
         assert entered.wait(5)
         trace.trace_codex_transport({"event": "call_end", "transportCallId": "finished-before-clear", "outcome": "success"})
-        from infini_local.web.server_utility_routes import ServerUtilityRoutes
+        from infini_local.web import server_utility_routes as route
 
-        route = object.__new__(ServerUtilityRoutes)
-        route.app_version = "fixture"
-        route.trace_files = tuple(recording / name for name in ["events.ndjson", "prompt_trace.ndjson", "pipeline_trace.ndjson"])
+        monkeypatch.setattr(route, "CACHE_DIR", recording)
+        trace_files = (trace.TRACE_FILE, trace.PROMPT_TRACE_FILE, recording / "events.ndjson")
         replies = []
         handler = type("Handler", (), {"json": lambda self, response: replies.append(response)})()
         route.trace_clear(handler)
         assert replies[0]["ok"] is True
-        assert set(replies[0]["cleared"]) == set(map(str, route.trace_files))
+        assert set(replies[0]["cleared"]) == set(map(str, trace_files))
         assert trace.TRACE_FILE.read_text() == ""
     finally:
         release.set()

@@ -18,10 +18,7 @@ from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_ITEM_RAW_KEYS,
     LLM_PROJECTILE_RAW_KEYS,
 )
-from infini_local.services.runtime_dump_service import (
-    runtime_projectile_lookup,
-    runtime_item_lookup,
-)
+from infini_local.services import runtime_dump_service
 
 
 def _raw_section_dict(item: dict[str, Any], *names: str) -> dict[str, Any]:
@@ -95,7 +92,7 @@ def native_item_context_from_dump(item: dict[str, Any]) -> dict[str, Any]:
             full_name = name if name.startswith(mod + "/") else mod + "/" + name
     _, graph = _observed_parent_field(item, "parentSourceGraph")
     _, shoot = _observed_parent_field(item, "shoot")
-    source = runtime_item_lookup(identity, expected_full_name=full_name,
+    source = runtime_dump_service.RUNTIME_DUMP_SNAPSHOT.lookup("item", identity, expected_full_name=full_name,
         expected_modules=graph.get("modules") if isinstance(graph, dict) else None, expected_shoot=shoot)
     if not source:
         return item
@@ -166,7 +163,7 @@ def projectile_profile_of(item: dict[str, Any]) -> dict[str, Any]:
             identity_context["expected_full_name"] = full_name
         if graph.get("modules"):
             identity_context["expected_modules"] = graph["modules"]
-        found = runtime_projectile_lookup(shoot, **identity_context)
+        found = runtime_dump_service.RUNTIME_DUMP_SNAPSHOT.lookup("projectile", shoot, **identity_context)
         if found:
             out = _strip_texture_metrics_for_llm(found)
             out["fromRuntimeDump"] = True

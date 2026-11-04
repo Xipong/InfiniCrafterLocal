@@ -41,14 +41,6 @@ public sealed partial class GeneratorClient
 
     public string LastEndpointFailure => LocalHttpQuietFailure.LastMessage(EndpointGuardKey);
 
-    public bool LastRecipeFailureIsFatal { get; private set; }
-
-    public string LastRecipeFailureMessage { get; private set; } = "";
-
-    public string LastRecipeFailurePlayerMessage { get; private set; } = "";
-
-    public int LastRecipeFailureStatusCode { get; private set; }
-
     public string AssetBaseUrlForSharing(string preferred = "", CancellationToken cancellationToken = default)
     {
         string env = NormalizeAssetBaseUrl(Environment.GetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL") ?? "");
@@ -223,26 +215,38 @@ public sealed partial class GeneratorClient
         public CancellationToken CancellationToken => _lifetime.Token;
         public void Cancel() => _lifetime.Cancel();
 
-        public string PayloadJson { get; set; } = "{}";
+        private string payloadJson = "{}";
+        public string PayloadJson
+        {
+            get => Analysis is null && analysisFailure is null ? payloadJson : throw new InvalidOperationException("Parent source analysis has not completed on the generation worker.");
+            set => payloadJson = value;
+        }
+        internal ParentAnalysis? Analysis { get; set; }
+        private Exception? analysisFailure;
+        internal void CompleteAnalysis()
+        {
+            if (analysisFailure is not null) throw new InvalidOperationException("Parent source analysis failed.", analysisFailure);
+            if (Analysis is not { } analysis) return;
+            analysis.RequireWorker();
+            try { payloadJson = analysis.Resolve(System.Text.Json.Nodes.JsonNode.Parse(payloadJson), CancellationToken)!.ToJsonString(WireJsonOptions); }
+            catch (Exception error) { analysisFailure = error; throw; }
+            finally { Analysis = null; analysis.Dispose(); }
+        }
         public string ParentA { get; set; } = "Unknown";
         public string ParentB { get; set; } = "Unknown";
         public Item RefundA { get; set; } = new();
         public Item RefundB { get; set; } = new();
         internal ClientTooltipObservation? ClientTooltipA { get; set; }
         internal ClientTooltipObservation? ClientTooltipB { get; set; }
-        // Request-local failure state: concurrent multi-dev lanes must never read
-        // another lane's shared LastRecipeFailure snapshot.
+        // Failure state belongs to this request, including concurrent craft lanes.
         public bool FailureIsFatal { get; set; }
         public int FailureStatusCode { get; set; }
         public string FailureMessage { get; set; } = "";
         public string FailurePlayerMessage { get; set; } = "";
     }
 
-    public PreparedGenerationRequest Prepare(Item a, Item b, Player player, string llmProfileId = "", bool multiDevCraft = false)
-        => Prepare(a, b, player, llmProfileId, multiDevCraft, null, null);
-
-    internal PreparedGenerationRequest Prepare(Item a, Item b, Player player, string llmProfileId, bool multiDevCraft,
-        ClientTooltipObservation? clientTooltipA, ClientTooltipObservation? clientTooltipB)
+    internal PreparedGenerationRequest Prepare(Item a, Item b, Player player, string llmProfileId = "", bool multiDevCraft = false,
+        ClientTooltipObservation? clientTooltipA = null, ClientTooltipObservation? clientTooltipB = null)
     {
         var refundA = a.Clone();
         refundA.stack = 1;
@@ -276,19 +280,45 @@ public sealed partial class GeneratorClient
         };
     }
 
+    // Live craft keeps admission/refunds and all native hooks on the game thread.
+    // The existing Prepare entrypoint stays synchronous for offline observations.
+    internal PreparedGenerationRequest PrepareDeferred(Item a, Item b, Player player, string llmProfileId = "", bool multiDevCraft = false,
+        ClientTooltipObservation? clientTooltipA = null, ClientTooltipObservation? clientTooltipB = null)
+    {
+        var analysis = new ParentAnalysis();
+        try
+        {
+            using var scope = analysis.Enter();
+            var request = Prepare(a, b, player, llmProfileId, multiDevCraft, clientTooltipA, clientTooltipB);
+            request.Analysis = analysis;
+            return request;
+        }
+        catch { analysis.Dispose(); throw; }
+    }
+
     public GeneratedItemData? GeneratePreparedBlocking(PreparedGenerationRequest request)
     {
-        if (request.CancellationToken.IsCancellationRequested)
+        // Pending captures still need CompleteAnalysis's cancellation cleanup
+        // when their request was retired before this worker could start.
+        if (request.CancellationToken.IsCancellationRequested && request.Analysis is null)
             return null;
-        LastRecipeFailureIsFatal = false;
-        LastRecipeFailureMessage = "";
-        LastRecipeFailurePlayerMessage = "";
-        LastRecipeFailureStatusCode = 0;
         request.FailureIsFatal = false;
         request.FailureStatusCode = 0;
         request.FailureMessage = "";
         request.FailurePlayerMessage = "";
 
+        try { request.CompleteAnalysis(); }
+        catch (OperationCanceledException) { return null; }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            request.FailureIsFatal = true;
+            request.FailureMessage = "Parent source analysis failed: " + error.GetType().Name;
+            request.FailurePlayerMessage = "Parent analysis failed. Materials will be refunded.";
+            return null;
+        }
+
+        if (request.CancellationToken.IsCancellationRequested)
+            return null;
         if (LocalHttpQuietFailure.ShouldSkip(EndpointGuardKey))
             return null;
 
@@ -319,10 +349,6 @@ public sealed partial class GeneratorClient
             // ingredients should be refunded and the user can manually craft again.
             if (result.IsFatalRecipeFailure)
             {
-                LastRecipeFailureIsFatal = true;
-                LastRecipeFailureStatusCode = result.StatusCode;
-                LastRecipeFailureMessage = result.Message;
-                LastRecipeFailurePlayerMessage = result.PlayerMessage;
                 request.FailureIsFatal = true;
                 request.FailureStatusCode = result.StatusCode;
                 request.FailureMessage = result.Message;
@@ -540,8 +566,6 @@ public sealed partial class GeneratorClient
             return new GenerationAttemptResult { FailureKind = GenerationFailureKind.Transient, Message = ex.Message };
         }
     }
-
-    private static void Normalize(GeneratedItemData data, Item a, Item b) => Normalize(data, CraftParentName(a), CraftParentName(b));
 
     private static void Normalize(GeneratedItemData data, string parentA, string parentB)
     {

@@ -23,14 +23,8 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     public const int CraftRetryBackoffBaseTicks = 5 * 60;
     public const int CraftRetryBackoffMaxTicks = 20 * 60;
     public const int PostCraftAudioGuardTicks = 15 * 60;
-    // Multiplayer crafting is server-authoritative via PacketRequestServerCraft;
+    // Multiplayer crafting is server-authoritative via InfiniNetPacketIds.RequestServerCraft;
     // clients never commit authoritative GeneratedItemData.
-    public const byte PacketCraftCommitResult = InfiniNetPacketIds.CraftCommitResult;
-    public const byte PacketRequestServerCraft = InfiniNetPacketIds.RequestServerCraft;
-    public const byte PacketCancelServerCraft = InfiniNetPacketIds.CancelServerCraft;
-    public const byte PacketRequestStationEscrow = InfiniNetPacketIds.RequestStationEscrow;
-    public const byte PacketStationEscrowResult = InfiniNetPacketIds.StationEscrowResult;
-    public const byte PacketSyncGeneratedUtilityBuff = InfiniNetPacketIds.SyncGeneratedUtilityBuff;
     public const int RemoteServerCraftTimeoutTicks = CraftRecoveryTimeoutTicks;
     // Bounded client resend cadence for a single outstanding station escrow op.
     // Retries keep the same operationId so the server can replay without re-applying.

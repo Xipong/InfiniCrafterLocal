@@ -92,7 +92,8 @@ docs/                           user / development / reference / archive
 | Model-facing cards/prompt и Author calls | `pipelines/author/item_contract.py`, `pipelines/author/prompt.py`, `pipelines/author/request.py` |
 | Selected sprite size/axis/grip dependencies | `core/visual_contract_schema.py::grip_schema/front_hand_sprite_errors`; Visual projection — `pipelines/visual/stage.py`; strict optional-present DTO — `core/runtime_authoring/wire_validator.py::_validate_sprite_presentation` |
 | Whole craft/stage orchestration | `pipelines/combine_pipeline.py`; numeric advice `pipelines/combine_balance.py` |
-| Request-local HTTP admission/response | `services/combine_endpoint.py`, `web/server_handler.py`, `web/http_response_helpers.py` |
+| Generator entrypoint / readiness | `web/server.py::main`; `web/server_status.py::health_payload` / `multiplayer_connect_info` |
+| Request-local HTTP admission/response | `services/combine_endpoint.py`, `web/server_handler.py::Handler`, `web/http_response_helpers.py`; route functions: `web/server_utility_routes.py`, `web/vfx_debug_routes.py`; trace projection: `web/server_trace_snapshot.py` |
 | LLM retry/negotiation; HTTP; logical deadline/physical attempts; rejection; offline replay | `pipelines/transport/{client,http,diagnostics,rejections,replay}.py`; Codex auth/SSE: `services/codex_auth.py`, `services/codex_text_backend.py` |
 | Provider selection, item lease, profile health | `pipelines/transport/profiles.py`; scalar settings: `core/llm_config.py` |
 | FIFO quota/rate admission | `pipelines/transport/admission.py` |
@@ -109,7 +110,7 @@ docs/                           user / development / reference / archive
 | World recipe API/storage, failure/trace evidence | `storage/world_recipe_runtime.py`, `storage/world_storage.py`, `storage/failure_state.py`, `storage/trace_runtime.py`, `storage/trace_tools.py` |
 | Studio shell/browser/native state | `desktop/web_studio.py`, `desktop/webui/index.html`, `desktop/webui/studio.css`, `desktop/webui/studio.js`; [native split](MODULES_RU.md#studio) |
 | Canonical generation recommendations / selective consent | `core/generation_defaults.py`, `core/llm_config.py`, `core/vfx/config.py`; `desktop/settings_defaults.py` → `web_studio.py`/`webui/studio.js` |
-| Canonical settings/persistence/lifecycle | `desktop/settings_schema.py`, `desktop/settings_env.py`, `desktop/settings_controller.py`, `desktop/studio_operations.py` |
+| Canonical settings/persistence/lifecycle | `desktop/settings_schema.py`, `desktop/settings_env.py`, `desktop/settings_controller.py`, `desktop/settings_interactions.py`, `desktop/studio_operations.py` |
 | Offline fixtures/witnesses/library and consumer proof | `qa/runtime_program_fixtures.py`, `qa/capability_witnesses.py`, `qa/capability_library_audit.py`, `qa/primitive_loss_audit.py` |
 
 Fresh Author принимает только `authoring.v7`: блоки/секунды и world rates, flat `action`/`stackCost`/`contactDamage`, registry-fixed branches и unique item-body identity. Перевод единиц выполняется в registry/lowering; runtime API v5 и wire v3 сохраняют единицы движка. Старые authoring grammars не являются fresh admission. **Persisted wire** сохраняет `usePolicy` и отдельную provenance: retirement Author grammar не удаляет recipes. Runtime imports указывают на defining module (`...capability_registry`, `...compiler`, `...repair.scope` и т. д.). Package `runtime_authoring/__init__.py` пуст по зависимостям: import registry не импортирует compiler/Repair; Visual/VFX читают `wire_views.py` без Gameplay Author. Общий provider response-format helper находится в `core/llm_json_tools.py`, а не в чужой LLM-стадии.

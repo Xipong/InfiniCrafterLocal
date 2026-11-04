@@ -577,7 +577,8 @@ def test_campaign_malformed_ingredient_provenance_refuses(campaign_case, entry):
     assert not report["ok"]
 
 
-def test_no_image_fixture_hydrates_real_delivery_paths_without_backend(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("asset_mode", ["full", "off"])
+def test_no_image_fixture_hydrates_real_delivery_paths_without_backend(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, asset_mode: str) -> None:
     from infini_local.core.runtime_authoring.capability_registry import VISUAL_ROLE_BY_ENTITY_KIND
     monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path)
     fixture_path = write_no_image_fixture_png(tmp_path / "qa-fixture.png")
@@ -612,6 +613,12 @@ def test_no_image_fixture_hydrates_real_delivery_paths_without_backend(tmp_path:
     hydrated = hydrate_no_image_fixture_assets(data, fixture_path)
     from infini_local.qa.live_no_image_fixture import synthetic_no_image_execution_control
     assert not visual_delivery_report(hydrated, check_backend_config=False)["ok"]
+    from infini_local.pipelines.images import stage as images
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("no-image observer reached a production image executor")
+    monkeypatch.setattr(images, "maybe_generate_sprite", forbidden)
+    monkeypatch.setattr(images, "generate_visual_asset", forbidden)
+    monkeypatch.setattr(images, "VISUAL_ASSET_MODE", asset_mode)
     control = synthetic_no_image_execution_control(hydrated, fixture_path)
     report = visual_delivery_report(control, check_backend_config=False)
 

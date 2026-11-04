@@ -23,7 +23,7 @@ def observe(overrides=None, *, stages="author", repair="none", corrupt_budget=Fa
         "PYTHONPATH": os.pathsep.join((str(GENERATOR_ROOT), str(GENERATOR_ROOT / "tests"))),
         "INFINI_SKIP_CONFIG_FILE": "1", "INFINI_USE_LLM": "1",
         "INFINI_LLM_PROVIDER": "openrouter", "INFINI_LLM_API_MODE": "chat_completions",
-        "INFINI_LLM_RESPONSE_FORMAT": "json_object", "INFINI_LLM_FALLBACK_NETWORK_FAILS": "1",
+        "INFINI_LLM_RESPONSE_FORMAT": "json_object", "INFINI_LLM_NETWORK_ATTEMPTS": "1",
         "INFINI_OPENROUTER_MODEL": "offline/budget-observer",
         "INFINI_OPENROUTER_API_KEY": "synthetic-offline-key",
         "INFINI_OPENROUTER_BASE_URL": "https://offline.invalid/v1",
@@ -143,25 +143,16 @@ def test_defensive_answer_budget_fallback_uses_canonical_recommendation():
 
 
 @pytest.mark.parametrize("overrides,expected", [
-    ({"INFINI_LLM_REAUTHOR_TEMPERATURE": "0.31"}, 0.31),
-    ({"INFINI_LLM_REAUTHOR_TEMPERATURE": "9"}, 0.8),
-    ({"INFINI_LLM_REAUTHOR_TEMPERATURE": "-1"}, 0.0),
-    ({"INFINI_LLM_REAUTHOR_TEMPERATURE": "0"}, 0.0),
-    ({"INFINI_LLM_REAUTHOR_TEMPERATURE": " ", "INFINI_LLM_TEMPERATURE": "0.9"}, 0.12),
-    ({"INFINI_LLM_REAUTHOR_TEMPERATURE": "invalid"}, 0.12),
-    ({"INFINI_LLM_REPAIR_TEMPERATURE": "nan"}, 0.12),
-    ({"INFINI_LLM_REAUTHOR_TEMPERATURE": "0.7", "INFINI_LLM_REPAIR_TEMPERATURE": "0"}, 0.0),
+    ({"INFINI_LLM_REPAIR_TEMPERATURE": "0.31"}, 0.31),
     ({"INFINI_LLM_REPAIR_TEMPERATURE": "9"}, 0.8),
     ({"INFINI_LLM_REPAIR_TEMPERATURE": "-1"}, 0.0),
-    ({"INFINI_LLM_REAUTHOR_TEMPERATURE": "0.7", "INFINI_LLM_REPAIR_TEMPERATURE": "0.23"}, 0.23),
-    ({"INFINI_LLM_REAUTHOR_TEMPERATURE": "0.7", "INFINI_LLM_REPAIR_TEMPERATURE": " "}, 0.12),
+    ({"INFINI_LLM_REPAIR_TEMPERATURE": "0"}, 0.0),
+    ({"INFINI_LLM_REPAIR_TEMPERATURE": " ", "INFINI_LLM_TEMPERATURE": "0.9"}, 0.12),
+    ({"INFINI_LLM_REPAIR_TEMPERATURE": "invalid"}, 0.12),
+    ({"INFINI_LLM_REPAIR_TEMPERATURE": "nan"}, 0.12),
 ])
-def test_gameplay_repair_respects_bounded_gui_alias_and_canonical_precedence(monkeypatch, overrides, expected):
+def test_gameplay_repair_respects_bounded_canonical_setting(monkeypatch, overrides, expected):
     from test_craft_instruction_segments import stage_packets
-    # This scalar is read at request time. Exercise its real semantic request
-    # caller without reimporting/compiling all three stages for every value.
-    for key in ("INFINI_LLM_REPAIR_TEMPERATURE", "INFINI_LLM_REAUTHOR_TEMPERATURE"):
-        monkeypatch.delenv(key, raising=False)
     for key, value in overrides.items():
         monkeypatch.setenv(key, value)
     packet, = stage_packets(monkeypatch, "repair", labels=("temperature",))
@@ -203,7 +194,7 @@ def test_explicit_stage_overrides_win_in_both_director_and_repair():
     overrides = {
         "INFINI_LLM_MAX_TOKENS": "26000", "INFINI_LLM_TIMEOUT": "780",
         "INFINI_LLM_REASONING_MODE": "high", "INFINI_LLM_TEMPERATURE": "0.77",
-        "INFINI_LLM_REPAIR_TEMPERATURE": "0.21", "INFINI_LLM_REAUTHOR_TEMPERATURE": "0.6",
+        "INFINI_LLM_REPAIR_TEMPERATURE": "0.21",
         "INFINI_VISUAL_DIRECTOR_MAX_TOKENS": "11000", "INFINI_VISUAL_DIRECTOR_TEMPERATURE": "0.66",
         "INFINI_VISUAL_REPAIR_TEMPERATURE": "0.17",
         "INFINI_VFX_LLM_DIRECTOR_MAX_TOKENS": "13000", "INFINI_VFX_LLM_DIRECTOR_TIMEOUT": "430",

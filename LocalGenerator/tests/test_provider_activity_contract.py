@@ -29,7 +29,8 @@ from infini_local.services import combine_endpoint as endpoint
 from infini_local.storage import world_recipe_runtime as recipes
 from infini_local.storage import world_storage
 from infini_local.web import http_response_helpers as helpers
-from infini_local.web.server_handler import build_handler
+from infini_local.web import server_handler
+from infini_local.web.server_handler import Handler
 from provider_test_support import deliverable_recipe, endpoint_options, loopback_server, reset_llm_runtime, write_json_response
 
 PAYLOAD = {
@@ -56,8 +57,7 @@ def isolation(monkeypatch):
     monkeypatch.setattr(endpoint, "COMBINE_BUSY_WAIT_SECONDS", 0)
     reset_llm_runtime()
     generation_debug.clear_combine_failure("test_isolation")
-    monkeypatch.setattr(llm_config, "LLM_FALLBACK_NETWORK_FAILS", 1)
-    monkeypatch.setattr(llm_profiles, "_fallback_llm_context", lambda: None)
+    monkeypatch.setattr(llm_config, "LLM_NETWORK_ATTEMPTS", 1)
     monkeypatch.setattr(transport, "log_event", lambda *_a, **_k: None)
     monkeypatch.setattr(author, "USE_LLM", True)
     monkeypatch.setattr(pipeline, "USE_LLM", True)
@@ -103,26 +103,10 @@ def local_profile(**overrides):
 
 
 @pytest.fixture
-def real_route():
-    cls = build_handler(
-        app_version="test",
-        utility_routes=lambda: SimpleNamespace(handle_get=lambda h, p: False),
-        vfx_debug_routes=lambda: None,
-        combine_endpoint=endpoint,
-        combine_cache_lookup=pipeline.combine_cache_lookup,
-        sanitize_recipe_for_delivery=world_storage.sanitize_recipe_for_delivery,
-        combine=pipeline.combine,
-        trace_event=lambda *_a, **_k: None,
-        log_event=lambda *_a, **_k: None,
-        is_client_disconnect=helpers._is_client_disconnect,
-        world_scope_missing=recipes.WorldScopeMissing,
-        visual_delivery_blocked=VisualDeliveryBlocked,
-        planner_unavailable=PlannerUnavailable,
-        clear_combine_failure=generation_debug.clear_combine_failure,
-        combine_failure_http_response=helpers._combine_failure_http_response,
-        combine_failure_payload=helpers._combine_failure_payload,
-        ascii_reason=helpers._ascii_reason,
-    )
+def real_route(monkeypatch):
+    monkeypatch.setattr(server_handler, "trace_event", lambda *_a, **_k: None)
+    monkeypatch.setattr(server_handler, "log_event", lambda *_a, **_k: None)
+    cls = Handler
     with loopback_server(cls) as server:
         def post(payload):
             req = Request(
@@ -305,7 +289,7 @@ def test_endpoint_never_attaches_unjoined_global_failure(monkeypatch):
 
 def test_actual_active_stages_are_private_detached_and_removed_with_logging_off(monkeypatch, route_worker, real_route):
     from infini_local.storage import trace_runtime
-    from infini_local.web import server
+    from infini_local.web import server_status as server
 
     monkeypatch.setattr(trace_runtime, "TRACE_PROMPTS_ENABLED", False)
     monkeypatch.setattr(server, "llm_auth_snapshot", lambda: {"provider": "local", "model": "offline"})
@@ -333,7 +317,7 @@ def test_actual_active_stages_are_private_detached_and_removed_with_logging_off(
     monkeypatch.setattr(pipeline, "try_llm_plan", blocked)
     worker = route_worker(real_route, {**PAYLOAD, "worldName": "PRIVATE", "itemA": {**PAYLOAD["itemA"], "privateSummary": "PRIVATE"}}, resume)
     assert entered.wait(5)
-    activity = server._health_payload()["generationActivity"]
+    activity = server.health_payload()["generationActivity"]
     assert activity["active"] == 1 and activity["waiting"] == 0
     rows = activity.get("requests", [])
     assert len(rows) == 1, "parked real pipeline must expose the currently entered stage"

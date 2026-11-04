@@ -1,8 +1,13 @@
 from __future__ import annotations
 
-from infini_local.core.env_utils import env_bool, env_first, env_int, env_str
+import os
+
+from infini_local.core.config_validation import reject_retired_config
+from infini_local.core.env_utils import env_bool, env_int, env_str
 from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 
+
+reject_retired_config(os.environ)
 
 # LLM transport and generation policy configuration. This module owns env-derived
 # provider settings; pipelines consume them but do not re-export them.
@@ -13,29 +18,24 @@ if LANGUAGE not in {"ru", "en"}:
 PROMPT_STYLE = env_str("INFINI_PROMPT_STYLE", "Default")
 ALLOW_DETERMINISTIC_DEV_FALLBACK = env_bool("INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK", False)
 
-LLM_PROVIDER = env_str("INFINI_LLM_PROVIDER", "").lower()
-LMSTUDIO_URL = env_first(("INFINI_LMSTUDIO_URL", "OPENAI_BASE_URL"), "http://127.0.0.1:1234").rstrip("/")
-LMSTUDIO_MODEL = env_first(("INFINI_LMSTUDIO_MODEL", "OPENAI_MODEL"), "auto")
+LLM_PROVIDER = env_str("INFINI_LLM_PROVIDER", "local").lower()
+LMSTUDIO_URL = env_str("INFINI_LMSTUDIO_URL", "http://127.0.0.1:1234").rstrip("/")
+LMSTUDIO_MODEL = env_str("INFINI_LMSTUDIO_MODEL", "auto")
 
 OPENROUTER_BASE_URL = env_str("INFINI_OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
-OPENROUTER_API_KEY = env_first(("INFINI_OPENROUTER_API_KEY", "OPENROUTER_API_KEY"), "")
-OPENROUTER_MODEL = env_first(("INFINI_OPENROUTER_MODEL", "OPENROUTER_MODEL"), "auto")
+OPENROUTER_API_KEY = env_str("INFINI_OPENROUTER_API_KEY", "")
+OPENROUTER_MODEL = env_str("INFINI_OPENROUTER_MODEL", "auto")
 OPENROUTER_PROVIDER = env_str("INFINI_OPENROUTER_PROVIDER", "")
 OPENROUTER_HTTP_REFERER = env_str("INFINI_OPENROUTER_HTTP_REFERER", "https://github.com/InfiniCrafterLocal")
 OPENROUTER_APP_TITLE = env_str("INFINI_OPENROUTER_APP_TITLE", "InfiniCrafterLocal")
 
-OPENAI_COMPAT_BASE_URL = env_first(("INFINI_OPENAI_COMPAT_BASE_URL", "OPENAI_BASE_URL"), "").rstrip("/")
-OPENAI_COMPAT_API_KEY = env_first(("INFINI_OPENAI_COMPAT_API_KEY", "OPENAI_API_KEY"), "")
-OPENAI_COMPAT_MODEL = env_first(("INFINI_OPENAI_COMPAT_MODEL", "OPENAI_MODEL"), "auto")
+OPENAI_COMPAT_BASE_URL = env_str("INFINI_OPENAI_COMPAT_BASE_URL", "").rstrip("/")
+OPENAI_COMPAT_API_KEY = env_str("INFINI_OPENAI_COMPAT_API_KEY", "")
+OPENAI_COMPAT_MODEL = env_str("INFINI_OPENAI_COMPAT_MODEL", "auto")
 CODEX_LLM_MODEL = env_str("INFINI_CODEX_LLM_MODEL", "")
 CODEX_VISUAL_REASONING = env_str("INFINI_CODEX_VISUAL_REASONING", "inherit").strip().lower()
 
-LLM_FALLBACK_PROVIDER = env_str("INFINI_LLM_FALLBACK_PROVIDER", "").lower()
-LLM_FALLBACK_OPENROUTER_PROVIDER = env_str("INFINI_LLM_FALLBACK_OPENROUTER_PROVIDER", "")
-LLM_FALLBACK_MODEL = env_str("INFINI_LLM_FALLBACK_MODEL", "")
-LLM_FALLBACK_BASE_URL = env_str("INFINI_LLM_FALLBACK_BASE_URL", "").rstrip("/")
-LLM_FALLBACK_API_KEY = env_str("INFINI_LLM_FALLBACK_API_KEY", "")
-LLM_FALLBACK_NETWORK_FAILS = env_int("INFINI_LLM_FALLBACK_NETWORK_FAILS", 2, lo=1, hi=10)
+LLM_NETWORK_ATTEMPTS = env_int("INFINI_LLM_NETWORK_ATTEMPTS", 2, lo=1, hi=10)
 
 LLM_API_MODE = env_str("INFINI_LLM_API_MODE", "auto").strip().lower()
 LLM_POOL_FAILURE_COOLDOWN_SECONDS = env_int("INFINI_LLM_POOL_FAILURE_COOLDOWN_SECONDS", 45)

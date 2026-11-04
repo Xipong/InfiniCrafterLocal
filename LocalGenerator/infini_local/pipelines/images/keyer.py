@@ -635,17 +635,8 @@ def apply_background_removal(img: Any, *, preserve_alpha: bool = False) -> Any:
     if Image is None:
         return img
     img = img.convert("RGBA")
-    mode = (BG_REMOVE_MODE or "sprite_keyer").strip().lower().replace("-", "_")
     if not uses_key_background():
         return img
-    # v0.4.65: the runtime pipeline keeps a single supported background-removal
-    # protocol. Old config.env values are accepted only as compatibility aliases and
-    # intentionally routed here, so hidden legacy modes cannot silently come back.
-    if mode != "sprite_keyer":
-        try:
-            log_event("warn", "unsupported bg remove mode routed to sprite_keyer", {"requested": mode, "used": "sprite_keyer"})
-        except Exception:
-            pass
     return remove_background_sprite_keyer(img, preserve_alpha=preserve_alpha)
 
 def scrub_transparent_rgb(img: Any) -> Any:

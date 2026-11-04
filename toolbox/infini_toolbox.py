@@ -42,9 +42,3 @@ def read_config_env(path: Path) -> dict[str, str]:
     codec = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(codec)
     return codec.read_env_file(path)
-
-
-def load_config_env(project: Path) -> None:
-    """Compatibility API: explicitly load project settings; environment wins."""
-    for key, value in read_config_env(project / 'LocalGenerator/config.env').items():
-        os.environ.setdefault(key, value)

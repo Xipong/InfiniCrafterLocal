@@ -7,6 +7,9 @@ bootstrap constants. Pipeline and HTTP layers import these values instead of
 redeclaring bootstrap state locally.
 """
 
+import os
+from infini_local.core.config_validation import reject_retired_config
+
 from infini_local.core.app_paths import CONFIG_PATH, ROOT, STATE_ROOT
 from infini_local.core.env_utils import env_path, env_str, load_env_file
 
@@ -15,6 +18,7 @@ APP_VERSION = "0.5.6"
 DATA_DIR = ROOT / "data"
 
 load_env_file(CONFIG_PATH)
+reject_retired_config(os.environ)
 
 RECIPE_IDENTITY_VERSION = env_str("INFINI_RECIPE_IDENTITY_VERSION", "recipe_v4_25_no_item_family_routing")
 CACHE_DIR = env_path("INFINI_CACHE_DIR", STATE_ROOT / "cache")

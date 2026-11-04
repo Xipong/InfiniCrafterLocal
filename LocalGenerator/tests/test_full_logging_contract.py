@@ -123,7 +123,7 @@ def test_failure_artifact_redacts_without_truncating_partial_diagnostic(monkeypa
 
 def test_http_access_diagnostics_are_silent_off_and_redacted_on(monkeypatch, capsys):
     from test_provider_http_contract import boundary_handler
-    handler, _capture = boundary_handler()
+    handler, _capture = boundary_handler(monkeypatch)
     monkeypatch.setattr(trace_runtime, "TRACE_PROMPTS_ENABLED", False)
     handler.log_message('"GET /health HTTP/1.1" %s', 200)
     assert capsys.readouterr().out == ""
@@ -267,7 +267,7 @@ def test_unlimited_json_diagnostic_fallback_does_not_erase_non_json_string():
 def test_recording_save_reload_and_presets_respect_explicit_off(tmp_path, saved):
     config = tmp_path / "config.env"
     if saved is not None:
-        config.write_text("INFINI_TRACE_PROMPTS=" + saved + "\n")
+        config.write_text(('# infini-config-format: json-string-v1\n' + "INFINI_TRACE_PROMPTS=" + saved + "\n"))
     gui = SettingsController(config)
     assert gui.values["INFINI_TRACE_PROMPTS"] == (saved or "1")
     gui.update_values({"INFINI_TRACE_PROMPTS": "0"})
@@ -475,7 +475,7 @@ def test_health_response_survives_unusable_stdout(monkeypatch):
         def flush(self):
             pass
 
-    handler, _ = boundary_handler(path="/health")
+    handler, _ = boundary_handler(monkeypatch, path="/health")
     server = ThreadingHTTPServer(("127.0.0.1", 0), type(handler))
     worker = threading.Thread(target=server.serve_forever)
     worker.start()
@@ -512,12 +512,11 @@ def test_visible_sdcpp_console_also_persists_startup_failure(monkeypatch, tmp_pa
             kwargs["stdout"].flush()
         return Process()
     monkeypatch.setattr(service.subprocess, "Popen", spawn)
-    cleanup = lambda reason: service.cleanup_server_process(state, lambda *_: None, reason)
     result = service.ensure_server(
         state=state, root=tmp_path, cache_dir=tmp_path, server_url="http://127.0.0.1:1",
         server_autostart=True, startup_timeout=5, show_console=True, server_log_file="",
         server_is_alive=lambda: False, build_command=lambda: (["sd-server"], False),
-        stringify_cmd=lambda cmd: " ".join(cmd), cleanup_process=cleanup,
+        stringify_cmd=lambda cmd: " ".join(cmd),
         log_event=lambda *_: None, tail_text_file=lambda path, size: Path(path).read_text()[-size:],
     )
     assert result is False
@@ -622,7 +621,6 @@ def test_sdcpp_viewer_does_not_replace_or_break_owned_server(monkeypatch, tmp_pa
         server_autostart=True, startup_timeout=5, show_console=True, server_log_file="",
         server_is_alive=lambda: bool(calls) and mode not in ("startup_exit", "timeout"),
         build_command=lambda: (["sd-server"], False), stringify_cmd=lambda command: " ".join(command),
-        cleanup_process=lambda reason: service.cleanup_server_process(state, lambda *event: events.append(event), reason),
         log_event=lambda *event: events.append(event), tail_text_file=lambda path, size: Path(path).read_text()[-size:],
     )
     assert "captured model startup output" in (tmp_path / "sdcpp_server.log").read_text()

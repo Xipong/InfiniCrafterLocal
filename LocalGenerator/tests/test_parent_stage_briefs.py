@@ -14,11 +14,19 @@ def _native():
     return json.loads((Path(__file__).parent / "fixtures/native_excalibur_parent_capture.json").read_text())
 
 
-def _assert_only_item_regen_units_changed(output, original):
+def _assert_only_native_unit_views_changed(output, original):
     expected = copy.deepcopy(original)
     expected["item"]["lifeRegen"] = {"value": original["item"]["lifeRegen"] / 2, "units": "HP/s"}
     presented = copy.deepcopy(output)
     presented.pop('sourceStatReading')
+    motion = presented.pop('sourceMotionUnits')
+    assert [(row['sourcePath'], row['value']) for row in motion['values']] == [
+        ('raw.item.shootSpeed', original['item']['shootSpeed']),
+        ('raw.directProjectile.itemShootSpeed', original['directProjectile']['itemShootSpeed']),
+        ('raw.directProjectile.timeLeft', original['directProjectile']['timeLeft']),
+    ]
+    # Only the separate unit view is additive. Future native graph fields,
+    # unknown draw nodes and all original numeric/source flags stay literal.
     assert presented == expected
 
 
@@ -89,7 +97,7 @@ def test_unknown_draw_kept_and_parent_names_do_not_select_projection(stage, as_l
     before = copy.deepcopy(parents)
     result = expand_native_source_references(parent_context_for_stage(parents, stage=stage))
     output = result["parents"][0 if as_list else "A"]["packet"]
-    _assert_only_item_regen_units_changed(output["raw"], source["raw"])
+    _assert_only_native_unit_views_changed(output["raw"], source["raw"])
     renamed = copy.deepcopy(parents)
     renamed[0 if as_list else "A"]["packet"]["name"] = "Unrelated unrelated"
     other = expand_native_source_references(parent_context_for_stage(renamed, stage=stage))
@@ -133,7 +141,7 @@ def test_visual_vfx_keep_complete_drawing_but_briefs_never_claim_final_palette()
     for stage in ("visual", "vfx"):
         context = expand_native_source_references(parent_context_for_stage({"A": {"packet": source}}, stage=stage))
         packet = copy.deepcopy(context["parents"]["A"]["packet"])
-        _assert_only_item_regen_units_changed(packet.pop("raw"), source["raw"])
+        _assert_only_native_unit_views_changed(packet.pop("raw"), source["raw"])
         assert packet == {key: value for key, value in source.items() if key != "raw"}
         appearance = context["parentBriefs"]["A"]["appearance"]["directProjectile"]
         assert appearance["sourceRenderKinds"] == ["sprite", "nativeStarSparkle"]

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import json
 
 import pytest
 from tests.visual_geometry_fixtures import segment_geometry, collision_geometry
@@ -219,20 +220,29 @@ def test_real_no_image_request_carries_selected_grip_and_actual_components(monke
 
 
 @pytest.mark.parametrize("law,expected", [
-    ("angular_sine", ["law.angular_sine.amplitudeRadiansPerSecond", "source * 60 * updatesPerTick", "radians/second"]),
-    ("lateral_velocity_sine", ["law.lateral_velocity_sine.amplitudeBlocksPerSecond", "source * 60 * updatesPerTick / 16", "blocks/second"]),
+    ("angular_sine", ["law.angular_sine.amplitudeRadiansPerSecond", "radians/second"]),
+    ("lateral_velocity_sine", ["law.lateral_velocity_sine.amplitudeBlocksPerSecond", "blocks/second"]),
     (None, None), ("unknown", None),
 ])
-def test_source_units_preserve_explicit_sine_law_without_inferring_it(law, expected):
+@pytest.mark.parametrize("extra", [None, 0, 2])
+def test_source_units_preserve_explicit_sine_law_without_inferring_it(law, expected, extra):
     from infini_local.pipelines.author.prompt import source_wire_units_for_llm
     oscillator = {"amplitude": 0.125, **({"law": law} if law is not None else {})}
     source = {"raw": {"generatedParent": {"runtimeProgram": {"entities": [{"oscillation": oscillator}]}}}}
+    if extra is not None:
+        source["raw"]["generatedParent"]["runtimeProgram"]["entities"][0]["collision"] = {"extraUpdates": extra}
     before = copy.deepcopy(source)
     rows = [row for row in source_wire_units_for_llm([source])["scopes"] if row["fn"] == "oscillate_velocity"]
     if expected is not None:
         assert len(rows) == 1
         assert rows[0]["when"] == {"law": law}
         assert rows[0]["fields"] == {"amplitude": expected}
+        if extra is None:
+            assert not rows[0].get("readings"), "an absent clock must not be guessed"
+        else:
+            value = 0.125 * 60 * (extra + 1) / (16 if law == "lateral_velocity_sine" else 1)
+            assert rows[0]["readings"][0]["values"]["amplitude"] == {"value": value, "units": expected[1]}
+        assert "source *" not in json.dumps(rows)
     else:
         assert rows == []
     assert source == before

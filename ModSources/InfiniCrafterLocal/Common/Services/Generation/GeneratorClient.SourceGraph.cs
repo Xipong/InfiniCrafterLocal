@@ -19,10 +19,37 @@ public sealed partial class GeneratorClient
     // or turns source statements into generated-item behavior.
     internal static JsonObject CaptureParentSourceGraph(Item item, JsonObject? nativeFacts = null)
     {
+        var input = CaptureSourceGraphItem(item);
+        JsonObject? observations = nativeFacts?.DeepClone().AsObject();
         var graph = new ParentSourceGraph();
-        graph.Item(item);
-        if (nativeFacts is not null) graph.ObservedBuffs(nativeFacts);
-        return graph.Finish();
+        graph.ReadRoster();
+        JsonObject Analyze()
+        {
+            graph.Item(input);
+            if (observations is not null) graph.ObservedBuffs(observations);
+            return graph.Finish();
+        }
+        return currentParentAnalysis is { } analysis ? analysis.Defer(Analyze) : Analyze();
+    }
+
+    private sealed record SourceGraphItem(Type? ModItem, Type[] Globals, bool GlobalsUnavailable,
+        int Shoot, int Buff, Type? Tile, Type[] GlobalTiles, bool TilesUnavailable);
+
+    private static SourceGraphItem CaptureSourceGraphItem(Item item)
+    {
+        var globals = new List<Type>(); Type[] tiles = Array.Empty<Type>();
+        bool globalsUnavailable = false, tilesUnavailable = false;
+        try { foreach (var global in item.Globals) globals.Add(global.GetType()); }
+        catch { globalsUnavailable = true; }
+        Type? tile = null;
+        if (item.createTile >= TileID.Dirt)
+        {
+            tile = TileLoader.GetTile(item.createTile)?.GetType();
+            try { tiles = ModContent.GetContent<GlobalTile>().Select(global => global.GetType()).ToArray(); }
+            catch { tilesUnavailable = true; }
+        }
+        return new(item.ModItem?.GetType(), globals.ToArray(), globalsUnavailable, item.shoot, item.buffType,
+            tile, tiles, tilesUnavailable);
     }
 
     // Shared native identity-window recognizer. It selects source syntax only;
@@ -165,7 +192,7 @@ public sealed partial class GeneratorClient
             // Only complete method bodies are reusable. Native identity slices
             // and their CFG boundaries are specific to this graph/parent.
             bool sliced = nativeSlices.TryGetValue(method, out var slice);
-            ParentSourceGraphCache? cache = sliced ? null : activeParentSourceGraphCache;
+            ParentSourceGraphCache? cache = sliced ? null : activeParentSourceGraphCache ?? currentParentAnalysis?.SourceCache;
             if (cache is not null && cache.TryGet(method, out object? cached, out string? refusal))
             {
                 if (refusal is not null) readFailures[method] = refusal;
@@ -241,40 +268,33 @@ public sealed partial class GeneratorClient
         {
             try
             {
-                foreach (T prototype in ModContent.GetContent<T>()) consumers.Add((prototype.GetType(), baseType));
+                foreach (Type type in SourceSnapshotOnMain(() => ModContent.GetContent<T>().Select(p => p.GetType()).ToArray())) consumers.Add((type, baseType));
             }
             catch { Gap("registered_" + baseType.Name + "_roster_unavailable"); }
         }
-        private void ReadRoster()
+        internal void ReadRoster()
         {
             if (rosterRead) return;
             rosterRead = true;
             Roster<GlobalNPC>(typeof(GlobalNPC)); Roster<ModPlayer>(typeof(ModPlayer)); Roster<GlobalBuff>(typeof(GlobalBuff));
         }
 
-        internal void Item(Item item)
+        internal void Item(SourceGraphItem item)
         {
-            if (item.ModItem is not null) Hooks(item.ModItem.GetType(), typeof(ModItem), ItemEvents, "parent_ModItem", "event_signature");
-            try { foreach (var global in item.Globals) Hooks(global.GetType(), typeof(GlobalItem), ItemEvents, "attached_GlobalItem", "event_signature"); }
-            catch { Gap("attached_GlobalItem_roster_unavailable"); }
+            if (item.ModItem is not null) Hooks(item.ModItem, typeof(ModItem), ItemEvents, "parent_ModItem", "event_signature");
+            foreach (Type global in item.Globals) Hooks(global, typeof(GlobalItem), ItemEvents, "attached_GlobalItem", "event_signature");
+            if (item.GlobalsUnavailable) Gap("attached_GlobalItem_roster_unavailable");
             ReadRoster();
             foreach (var owner in consumers.Where(o => o.Base == typeof(ModPlayer)))
                 Hooks(owner.Type, owner.Base, PlayerEvents, "registered_ModPlayer_candidate", "event_signature");
-            if (item.shoot > ProjectileID.None) Projectile(item.shoot, null, null, "item.shoot_field_candidate");
-            if (item.buffType > InfiniTerrariaSentinels.NoBuffType) Buff(item.buffType, "player", null, null);
-            if (item.createTile >= TileID.Dirt)
-            {
-                ModTile? tile = TileLoader.GetTile(item.createTile);
-                if (tile is not null) Hooks(tile.GetType(), typeof(ModTile), new HashSet<string>(StringComparer.Ordinal)
-                    { "NearbyEffects", "RightClick", "HitWire", "PlaceInWorld", "CanPlace", "KillMultiTile", "FloorVisuals" }, "parent_placed_tile", "placed_tile_conditions_not_evaluated");
-                try
-                {
-                    foreach (var tileGlobal in ModContent.GetContent<GlobalTile>())
-                        Hooks(tileGlobal.GetType(), typeof(GlobalTile), new HashSet<string>(StringComparer.Ordinal)
-                            { "NearbyEffects", "PlaceInWorld", "HitWire", "CanPlace" }, "registered_GlobalTile_candidate", "placed_tile_conditions_not_evaluated");
-                }
-                catch { Gap("registered_GlobalTile_roster_unavailable"); }
-            }
+            if (item.Shoot > ProjectileID.None) Projectile(item.Shoot, null, null, "item.shoot_field_candidate");
+            if (item.Buff > InfiniTerrariaSentinels.NoBuffType) Buff(item.Buff, "player", null, null);
+            if (item.Tile is not null) Hooks(item.Tile, typeof(ModTile), new HashSet<string>(StringComparer.Ordinal)
+                { "NearbyEffects", "RightClick", "HitWire", "PlaceInWorld", "CanPlace", "KillMultiTile", "FloorVisuals" }, "parent_placed_tile", "placed_tile_conditions_not_evaluated");
+            foreach (Type global in item.GlobalTiles)
+                Hooks(global, typeof(GlobalTile), new HashSet<string>(StringComparer.Ordinal)
+                    { "NearbyEffects", "PlaceInWorld", "HitWire", "CanPlace" }, "registered_GlobalTile_candidate", "placed_tile_conditions_not_evaluated");
+            if (item.TilesUnavailable) Gap("registered_GlobalTile_roster_unavailable");
             if (nodes.Count == 0 && item.ModItem is null) Gap("no_parent_mod_override_observed; native_catalog_coverage_is_separate");
         }
 
@@ -294,28 +314,41 @@ public sealed partial class GeneratorClient
 
         private void Projectile(int id, int? from, int? at, string kind)
         {
-            if (id <= 0 || id >= ProjectileLoader.ProjectileCount) { Edge(from, null, kind, at, unresolved: "projectile_identity_not_registered"); return; }
-            // A defaults sample is already registered. Do not call SetDefaults to
-            // discover a child: arbitrary mod code may have gameplay side effects.
-            if (!ContentSamples.ProjectilesByType.TryGetValue(id, out var sample))
-            { Edge(from, null, kind, at, JsonValue.Create(id), "registered_projectile_sample_unavailable"); return; }
+            var snapshot = SourceSnapshotOnMain(() =>
+            {
+                bool registered = id > 0 && id < ProjectileLoader.ProjectileCount;
+                ContentSamples.ProjectilesByType.TryGetValue(id, out var sample);
+                var owners = new List<(Type Type, Type Base)>();
+                bool globalsUnavailable = false;
+                JsonNode? status = null;
+                if (registered && sample is not null)
+                {
+                    status = JsonSerializer.SerializeToNode(VerifiedSourceHitStatusReference(sample,
+                        HitStatusSourceCertificate.Value, typeof(Projectile).Module.ModuleVersionId.ToString()), WireJsonOptions);
+                    if (sample.ModProjectile is not null) owners.Add((sample.ModProjectile.GetType(), typeof(ModProjectile)));
+                    try { foreach (var global in sample.Globals) owners.Add((global.GetType(), typeof(GlobalProjectile))); }
+                    catch { globalsUnavailable = true; }
+                }
+                return (Registered: registered, Available: sample is not null, Owners: owners.ToArray(),
+                    Status: status, GlobalsUnavailable: globalsUnavailable,
+                    Vanilla: sample?.ModProjectile is null, Type: sample?.type ?? id, Style: sample?.aiStyle ?? 0);
+            });
+            if (!snapshot.Registered) { Edge(from, null, kind, at, unresolved: "projectile_identity_not_registered"); return; }
+            if (!snapshot.Available) { Edge(from, null, kind, at, JsonValue.Create(id), "registered_projectile_sample_unavailable"); return; }
             if (!projectiles.Add(id)) { Edge(from, null, kind, at, JsonValue.Create(id), "already_visited_projectile_identity"); return; }
-            object? nativeStatus = VerifiedSourceHitStatusReference(sample, HitStatusSourceCertificate.Value, typeof(Projectile).Module.ModuleVersionId.ToString());
-            if (nativeStatus is not null) ObservedBuffs(JsonSerializer.SerializeToNode(nativeStatus, WireJsonOptions));
-            var owners = new List<(Type Type, Type Base)>();
-            if (sample.ModProjectile is not null) owners.Add((sample.ModProjectile.GetType(), typeof(ModProjectile)));
-            try { foreach (var global in sample.Globals) owners.Add((global.GetType(), typeof(GlobalProjectile))); }
-            catch { Gap("child_attached_GlobalProjectile_roster_unavailable"); }
+            if (snapshot.Status is not null) ObservedBuffs(snapshot.Status);
+            if (snapshot.GlobalsUnavailable) Gap("child_attached_GlobalProjectile_roster_unavailable");
+            var owners = snapshot.Owners;
             foreach (var owner in owners.Distinct())
                 foreach (var method in Overrides(owner.Type, owner.Base).Where(m => ProjectileEvents.Contains(m.Name)))
                 {
                     int? node = Add(method, 0);
                     Edge(from, node, kind, at, new JsonObject { ["projectileId"] = id, ["event"] = method.Name }, node is null ? "graph_limit" : null);
                 }
-            if (sample.ModProjectile is null) NativeProjectile(sample, from, at);
+            if (snapshot.Vanilla) NativeProjectile(snapshot.Type, snapshot.Style, from, at);
         }
 
-        private void NativeProjectile(Projectile projectile, int? from, int? at)
+        private void NativeProjectile(int type, int style, int? from, int? at)
         {
             foreach (string name in new[] { "VanillaAI", "Kill" })
             {
@@ -333,10 +366,10 @@ public sealed partial class GeneratorClient
                     // missing predecessors and exits stay explicitly unresolved.
                     // No other branch arm is executed, selected or assumed true.
                     bool windowRefused = false;
-                    foreach (var window in ProjectileIdentityWindows(code, projectile.type, projectile.aiStyle, reason => { windowRefused = true; Gap(reason); }))
+                    foreach (var window in ProjectileIdentityWindows(code, type, style, reason => { windowRefused = true; Gap(reason); }))
                         foreach (var instruction in window.Code) selected[instruction.Offset] = instruction;
                     if (selected.Count == 0)
-                    { Edge(from, null, "native_projectile_source", at, JsonValue.Create(projectile.type), windowRefused ? "native_identity_window_refused_in_" + name : "no_supported_type_or_aiStyle_equality_window_in_" + name); continue; }
+                    { Edge(from, null, "native_projectile_source", at, JsonValue.Create(type), windowRefused ? "native_identity_window_refused_in_" + name : "no_supported_type_or_aiStyle_equality_window_in_" + name); continue; }
                     if (nativeSlices.TryGetValue(method, out var prior)) foreach (var instruction in prior) selected[instruction.Offset] = instruction;
                     if (selected.Count > 4096) { Gap("native_projectile_source_window_limit"); continue; }
                     bool changed = prior is null || prior.Count != selected.Count;
@@ -347,7 +380,7 @@ public sealed partial class GeneratorClient
                     int? node = Add(method, 0);
                     if (changed && existing) pending.Enqueue((method, existingNode, 0, null));
                     Edge(from, node, "certified_native_projectile_source_windows", at, new JsonObject
-                        { ["projectileId"] = projectile.type, ["aiStyle"] = projectile.aiStyle, ["entryAndOmittedFlow"] = "unresolved" }, node is null ? "graph_limit" : null);
+                        { ["projectileId"] = type, ["aiStyle"] = style, ["entryAndOmittedFlow"] = "unresolved" }, node is null ? "graph_limit" : null);
                 }
                 catch { Gap("native_projectile_source_outside_bound"); }
             }
@@ -355,13 +388,21 @@ public sealed partial class GeneratorClient
 
         private void Buff(int id, string receiver, int? from, int? at)
         {
-            if (id <= 0 || id >= BuffLoader.BuffCount) { Edge(from, null, "buff_request", at, unresolved: "buff_identity_not_registered"); return; }
+            var snapshot = SourceSnapshotOnMain(() =>
+            {
+                bool registered = id > 0 && id < BuffLoader.BuffCount;
+                Type? owner = registered ? BuffLoader.GetBuff(id)?.GetType() : null;
+                int[]? related = null; bool unavailable = false;
+                try { if (registered) related = BuffID.Sets.GrantImmunityWith[id]?.ToArray(); }
+                catch { unavailable = true; }
+                return (Registered: registered, Owner: owner, Related: related, Unavailable: unavailable);
+            });
+            if (!snapshot.Registered) { Edge(from, null, "buff_request", at, unresolved: "buff_identity_not_registered"); return; }
             Edge(from, null, "buff_request", at, new JsonObject { ["buffId"] = id, ["receiver"] = receiver,
                 ["admission"] = "AddBuff_request_only; immunity_and_refresh_may_change_outcome" });
             if (!buffs.Add((id, receiver))) return;
-            ModBuff? buff = BuffLoader.GetBuff(id);
-            if (buff is not null)
-                foreach (var method in Overrides(buff.GetType(), typeof(ModBuff)).Where(m => BuffEvents.Contains(m.Name)))
+            if (snapshot.Owner is not null)
+                foreach (var method in Overrides(snapshot.Owner, typeof(ModBuff)).Where(m => BuffEvents.Contains(m.Name)))
                 {
                     if (method.Name != "SetStaticDefaults" && !method.GetParameters().Any(p => p.ParameterType == (receiver == "npc" ? typeof(NPC) : typeof(Player)))) continue;
                     int? node = Add(method, 0);
@@ -388,13 +429,14 @@ public sealed partial class GeneratorClient
             // Read only this buff's registered relationship, never the registry.
             try
             {
-                var related = BuffID.Sets.GrantImmunityWith[id];
-                if (related is not null && related.Count > 0)
+                var related = snapshot.Related;
+                if (related is not null && related.Length > 0)
                     Edge(from, null, "loaded_immunity_relationship", at, new JsonObject { ["buffId"] = id,
                         ["grantImmunityWith"] = new JsonArray(related.Select(i => (JsonNode?)JsonValue.Create(i)).ToArray()),
                         ["scope"] = "current_registration; target_immunity_not_observed" });
             }
             catch { Gap("buff_immunity_relationship_unavailable"); }
+            if (snapshot.Unavailable) Gap("buff_immunity_relationship_unavailable");
         }
 
         private void NativeBuff(int id, string receiver, int? from)
@@ -403,7 +445,7 @@ public sealed partial class GeneratorClient
             // source syntax for previously unsupported branches/consumers.
             if (BuffEffectSourceCertificate.Value is null) { Gap("native_buff_binary_certificate_unavailable"); return; }
             Type target = receiver == "npc" ? typeof(NPC) : typeof(Player);
-            JsonObject known = VerifiedNativeBuffEffectReference(id, receiver, BuffEffectSourceCertificate.Value);
+            JsonObject known = SourceSnapshotOnMain(() => VerifiedNativeBuffEffectReference(id, receiver, BuffEffectSourceCertificate.Value));
             // Already delivered numeric fragments need not be copied into a
             // second catalog. Their exact native flags still seed loaded-mod
             // consumer discovery, including modifications of vanilla buffs.
@@ -576,13 +618,17 @@ public sealed partial class GeneratorClient
                     && generic.GetParameters().Length == 0 && generic.Name == (receiver == "projectile" ? "ProjectileType" : "BuffType"))
                 {
                     Type type = generic.GetGenericArguments()[0];
-                    if (receiver == "projectile")
+                    id = SourceSnapshotOnMain<int?>(() =>
                     {
-                        for (int candidate = ProjectileID.Count; candidate < ProjectileLoader.ProjectileCount; candidate++)
-                            if (ProjectileLoader.GetProjectile(candidate)?.GetType() == type) { id = candidate; break; }
-                    }
-                    else for (int candidate = BuffID.Count; candidate < BuffLoader.BuffCount; candidate++)
-                        if (BuffLoader.GetBuff(candidate)?.GetType() == type) { id = candidate; break; }
+                        if (receiver == "projectile")
+                        {
+                            for (int candidate = ProjectileID.Count; candidate < ProjectileLoader.ProjectileCount; candidate++)
+                                if (ProjectileLoader.GetProjectile(candidate)?.GetType() == type) return candidate;
+                        }
+                        else for (int candidate = BuffID.Count; candidate < BuffLoader.BuffCount; candidate++)
+                            if (BuffLoader.GetBuff(candidate)?.GetType() == type) return candidate;
+                        return null;
+                    });
                 }
                 if (id is null) { unknownAlternative = true; continue; }
                 resolved = true;
@@ -666,6 +712,7 @@ public sealed partial class GeneratorClient
             {
                 while (pending.Count > 0)
                 {
+                    currentParentAnalysis?.ThrowIfCancelled();
                     var next = pending.Dequeue();
                     try { Inspect(next.Node, next.Method, next.Depth, next.Focus); }
                     catch (Exception error) when (error is not OutOfMemoryException)

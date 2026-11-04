@@ -42,15 +42,9 @@ public sealed class GeneratedHydrationDebugSnapshot
 /// </summary>
 public sealed partial class GeneratedItemRegistryService : IDisposable
 {
-    public const byte PacketNotifyGeneratedItem = InfiniNetPacketIds.NotifyGeneratedItem;
-    public const byte PacketRequestGeneratedRegistry = InfiniNetPacketIds.RequestGeneratedRegistry;
-    public const byte PacketRequestGeneratedRegistryForceAssets = InfiniNetPacketIds.RequestGeneratedRegistryForceAssets;
-    public const byte PacketRequestGeneratedItemById = InfiniNetPacketIds.RequestGeneratedItemById;
-
     private const byte DefinitionTransportVersion = 1;
     private const byte DefinitionHashListVersion = 1;
     private const int MaxKnownDefinitionHashes = 512;
-    private const int MaxDefinitionJsonBytes = GeneratedItemData.MaxDefinitionJsonBytes;
     private const int MaxIncomingDefinitionTransfers = 128;
     private const int IncomingDefinitionStaleTicks = 30 * 60;
     private const int HydrationRequestRetryTicks = 90;
@@ -248,7 +242,7 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
         if (forceAssetRetry)
             InfiniCrafterLocalMod.AssetSync?.ResetRetryState();
         var packet = InfiniCrafterLocalMod.Instance.GetPacket();
-        packet.Write(forceAssetRetry ? PacketRequestGeneratedRegistryForceAssets : PacketRequestGeneratedRegistry);
+        packet.Write(forceAssetRetry ? InfiniNetPacketIds.RequestGeneratedRegistryForceAssets : InfiniNetPacketIds.RequestGeneratedRegistry);
         WriteKnownDefinitionHashes(packet);
         packet.Send();
     }
@@ -288,7 +282,7 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
         if (forceAssetRetry)
             InfiniCrafterLocalMod.AssetSync?.ResetRetryState(id);
         var packet = InfiniCrafterLocalMod.Instance.GetPacket();
-        packet.Write(PacketRequestGeneratedItemById);
+        packet.Write(InfiniNetPacketIds.RequestGeneratedItemById);
         packet.Write(id.Length <= 96 ? id : id[..96]);
         packet.Write(forceAssetRetry);
         packet.Send();
@@ -390,7 +384,7 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
             long start = entries.Position;
             string id = data.Id ?? "";
             entryWriter.Write(id.Length <= 96 ? id : id[..96]);
-            entryWriter.Write(ComputeDefinitionHash(data));
+            entryWriter.Write(DefinitionIdentity(data));
             if (entries.Length + headerBytes > maxHashListBytes)
             {
                 entries.SetLength(start);
@@ -428,9 +422,7 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
         }
     }
 
-    internal static string DefinitionIdentity(GeneratedItemData data) => ComputeDefinitionHash(data);
-
-    private static string ComputeDefinitionHash(GeneratedItemData data)
+    internal static string DefinitionIdentity(GeneratedItemData data)
     {
         string networkJson = data.ToNetworkJson();
         GeneratedItemData? clone = GeneratedItemData.FromJson(networkJson);
@@ -456,7 +448,7 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
 
     private static byte[]? DecompressDefinition(byte[] compressed, int expectedLength)
     {
-        if (expectedLength <= 0 || expectedLength > MaxDefinitionJsonBytes)
+        if (expectedLength <= 0 || expectedLength > GeneratedItemData.MaxDefinitionJsonBytes)
             return null;
         try
         {
@@ -470,7 +462,7 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
                 int read = deflate.Read(buffer, 0, buffer.Length);
                 if (read <= 0) break;
                 total += read;
-                if (total > expectedLength || total > MaxDefinitionJsonBytes) return null;
+                if (total > expectedLength || total > GeneratedItemData.MaxDefinitionJsonBytes) return null;
                 output.Write(buffer, 0, read);
             }
             return total == expectedLength ? output.ToArray() : null;
@@ -484,7 +476,7 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
             return;
         GeneratedItemData networkData = PrepareForNetworkSync(data, forceHostAssetMetadata: true);
         byte[] raw = Encoding.UTF8.GetBytes(networkData.ToNetworkJson());
-        if (raw.Length <= 0 || raw.Length > MaxDefinitionJsonBytes)
+        if (raw.Length <= 0 || raw.Length > GeneratedItemData.MaxDefinitionJsonBytes)
             return;
         byte[] compressed = CompressDefinition(raw);
         string transportHash = Convert.ToHexString(SHA256.HashData(raw)).ToLowerInvariant();
@@ -506,7 +498,7 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
                 highPriority,
                 packet =>
                 {
-                    packet.Write(PacketNotifyGeneratedItem);
+                    packet.Write(InfiniNetPacketIds.NotifyGeneratedItem);
                     packet.Write(DefinitionTransportVersion);
                     packet.Write(networkData.Id.Length <= 96 ? networkData.Id : networkData.Id[..96]);
                     packet.Write(transportHash);
@@ -555,8 +547,8 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
             if (string.IsNullOrWhiteSpace(itemId) || hash.Length != 64 || !hash.All(Uri.IsHexDigit)) return;
             uncompressedLength = reader.ReadInt32();
             compressedLength = reader.ReadInt32();
-            if (uncompressedLength <= 0 || uncompressedLength > MaxDefinitionJsonBytes
-                || compressedLength <= 0 || compressedLength > MaxDefinitionJsonBytes) return;
+            if (uncompressedLength <= 0 || uncompressedLength > GeneratedItemData.MaxDefinitionJsonBytes
+                || compressedLength <= 0 || compressedLength > GeneratedItemData.MaxDefinitionJsonBytes) return;
             chunkIndex = reader.ReadUInt16();
             chunkCount = reader.ReadUInt16();
             if (chunkCount <= 0 || chunkCount > 64 || chunkIndex >= chunkCount) return;
@@ -673,7 +665,7 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
 
     public void HandlePacket(byte packetType, BinaryReader reader, int whoAmI)
     {
-        if (packetType == PacketNotifyGeneratedItem)
+        if (packetType == InfiniNetPacketIds.NotifyGeneratedItem)
         {
             // Definition chunks are server -> client only. Clients never author registry data.
             if (Main.netMode == NetmodeID.Server)
@@ -682,7 +674,7 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
             return;
         }
 
-        if (packetType == PacketRequestGeneratedRegistry || packetType == PacketRequestGeneratedRegistryForceAssets)
+        if (packetType == InfiniNetPacketIds.RequestGeneratedRegistry || packetType == InfiniNetPacketIds.RequestGeneratedRegistryForceAssets)
         {
             if (Main.netMode != NetmodeID.Server)
                 return;
@@ -690,18 +682,18 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
             Dictionary<string, string>? known = ReadKnownDefinitionHashes(reader);
             if (known is null)
                 return;
-            bool force = packetType == PacketRequestGeneratedRegistryForceAssets;
+            bool force = packetType == InfiniNetPacketIds.RequestGeneratedRegistryForceAssets;
             foreach (GeneratedItemData data in Snapshot())
             {
                 if (!force && known.TryGetValue(data.Id, out string? clientHash)
-                    && string.Equals(clientHash, ComputeDefinitionHash(data), StringComparison.Ordinal))
+                    && string.Equals(clientHash, DefinitionIdentity(data), StringComparison.Ordinal))
                     continue;
                 EnqueueDefinitionForClient(data, whoAmI, highPriority: false);
             }
             return;
         }
 
-        if (packetType == PacketRequestGeneratedItemById)
+        if (packetType == InfiniNetPacketIds.RequestGeneratedItemById)
         {
             if (Main.netMode != NetmodeID.Server)
                 return;

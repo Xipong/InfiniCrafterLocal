@@ -11,7 +11,7 @@ from infini_local.core.env_file import FORMAT_HEADER, encode_value, read_env_fil
 
 
 # AGENT MAP: config.env parser/writer for the browser Studio.
-# Keep file-format compatibility here; settings_controller.py calls these helpers.
+# File-format encoding belongs to core/env_file.py; this owner handles persistence.
 
 CUSTOM_PRESET = "Custom"
 USER_PRESET_PREFIX = "Мой: "
@@ -110,11 +110,6 @@ def parse_env(path: Path) -> dict[str, str]:
     return {**DEFAULTS, **read_env_file(path)}
 
 
-def quote_env_value(value: str) -> str:
-    """Encode one value for files carrying FORMAT_HEADER."""
-    return encode_value(value)
-
-
 def write_env(path: Path, data: dict[str, str]) -> None:
     for key, value in data.items():
         if not isinstance(key, str) or not key or key.strip() != key or key.startswith('#') or any(character in key for character in '=\r\n\x00'):
@@ -136,12 +131,12 @@ def write_env(path: Path, data: dict[str, str]) -> None:
     for key in FIELD_ORDER:
         if key in sections:
             lines += ["", sections[key]]
-        lines.append(f"{key}={quote_env_value(data.get(key, DEFAULTS.get(key, '')))}")
+        lines.append(f"{key}={encode_value(data.get(key, DEFAULTS.get(key, '')))}")
     unknown = {k: v for k, v in data.items() if k not in FIELD_ORDER}
     if unknown:
         lines += ["", "# ===== UNKNOWN / MANUAL KEYS PRESERVED ====="]
         for key in sorted(unknown):
-            lines.append(f"{key}={quote_env_value(unknown[key])}")
+            lines.append(f"{key}={encode_value(unknown[key])}")
     content = "\n".join(lines) + "\n"
     # Preserve an existing config symlink and atomically replace its real target,
     # matching the old writer's destination without truncating it on failure.
@@ -169,6 +164,5 @@ __all__ = [
     "load_user_presets",
     "save_user_preset",
     "parse_env",
-    "quote_env_value",
     "write_env",
 ]

@@ -6,7 +6,7 @@ import math
 from typing import Any, Mapping
 
 from infini_local.core import llm_config
-from infini_local.core.env_utils import env_first_allow_empty, env_float, env_int
+from infini_local.core.env_utils import env_float, env_int, env_str
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 from infini_local.core.item_identity_tools import name_of, stable_hash
@@ -101,12 +101,9 @@ def _prepare_parsed_author_item(
 
 
 def _gameplay_repair_temperature() -> float:
-    """Canonical key wins by presence; the GUI spelling is a legacy alias.
-
-    Blank/invalid values use the scoped Repair default, never planner temperature.
-    """
+    """Blank/invalid values use the scoped Repair default, never planner temperature."""
     default = 0.12
-    raw = env_first_allow_empty(("INFINI_LLM_REPAIR_TEMPERATURE", "INFINI_LLM_REAUTHOR_TEMPERATURE"))
+    raw = env_str("INFINI_LLM_REPAIR_TEMPERATURE")
     try:
         value = float(raw)
     except (TypeError, ValueError):
@@ -444,7 +441,7 @@ def build_gameplay_repair_dossier(
             "For an exclusiveInputSelections group, either resolve the conflict through permitted retarget/delete edits or emit one keepBindingId selection; a resolved conflict needs no redundant selection.",
             "For each repairScope.eventAlternatives row, choose one complete alternative: emit its exact event and every listed required call/binding together, with no support from unselected alternatives. The engine does not insert event producers.",
             "Close every llmRepairable repairRequirement. For requiredOneOfCapabilities, either an authorized structural delete/retarget closes the blocker or callsUpsert supplies one complete listed capability on an affected target. Notes do not change the program. Check references, kinds, inputs, cycles and budgets after the permitted edits.",
-            "realizationReplacement is optional advisory context, never an acceptance requirement or observed test. acceptedItemContext.runtimeProgram is the read-only pre-repair source, including invalid fields. Describe only the program after permitted edits; prose and self-evaluation are not repair targets.",
+            "realizationReplacement is optional advisory context, never an acceptance requirement or observed test. Omit it or use null to leave the report unchanged; an object replaces it, including {} to clear it. acceptedItemContext.runtimeProgram is the read-only pre-repair source, including invalid fields. Describe only the program after permitted edits; prose and self-evaluation are not repair targets.",
         ],
         "runtimeVersions": {
             "authorSchema": RUNTIME_PROGRAM_SCHEMA,

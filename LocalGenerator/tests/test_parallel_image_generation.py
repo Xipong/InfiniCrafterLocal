@@ -58,11 +58,12 @@ def test_body_and_projectiles_overlap_only_within_global_bound(offline_backend, 
 
 def test_repeated_roles_keep_own_prompt_despite_stale_snapshot(monkeypatch):
     monkeypatch.setattr(generation, "IMAGE_GENERATION_GATE", ImageRequestGate(2))
-    def fake(local, prompt):
+    def fake(local, role, prompt):
         local.setdefault("debug", {})["runtime:projectileFinalPrompt"] = prompt
         return prompt
-    jobs = [("entity:a", lambda d, *a: fake(d, "A"), ("runtime:projectile",), {}),
-            ("entity:b", lambda d, *a: fake(d, "B"), ("runtime:projectile",), {})]
+    jobs = [("entity:a", ("runtime:projectile", "A"), {}),
+            ("entity:b", ("runtime:projectile", "B"), {})]
+    monkeypatch.setattr(generation, "generate_visual_asset", fake)
     monkeypatch.setattr(generation, "_independent_image_jobs", lambda *args: iter(jobs))
     data = {"debug": {"runtime:projectileFinalPrompt": "B", "unrelated": "keep"}}
     completed = generation._generate_independent_images(data, [])
@@ -140,7 +141,10 @@ def test_unexpected_worker_failure_joins_inflight_and_leaves_dto_untouched(monke
     def fail(local, role):
         assert started.wait(2)
         raise ValueError("offline unexpected error")
-    jobs = [("slow", slow, ("slow",), {}), ("fail", fail, ("fail",), {})]
+    def execute(local, role):
+        return slow(local, role) if role == "slow" else fail(local, role)
+    jobs = [("slow", ("slow",), {}), ("fail", ("fail",), {})]
+    monkeypatch.setattr(generation, "generate_visual_asset", execute)
     monkeypatch.setattr(generation, "_independent_image_jobs", lambda *args: iter(jobs))
     data = {"debug": {"unrelated": "original"}}
     with pytest.raises(ValueError, match="offline unexpected error"):
@@ -224,3 +228,75 @@ def test_combine_overlaps_visual_calls_with_vfx_director(pipeline_harness, offli
     expected = Counter([item_id, entity_id, *vfx_attempts])
     assert Counter(calls) == expected, "Visual jobs must not be resubmitted when the VFX batch arrives"
     assert Counter(call["id"] for call in offline_backend[0]) == expected
+
+
+from tests.test_image_attempt_contracts import offline  # noqa: E402,F401
+
+
+@pytest.mark.parametrize("reverse_entities", [False, True])
+def test_serial_and_parallel_deliver_the_same_complete_requests_and_reused_icon(offline, monkeypatch, reverse_entities):
+    import hashlib
+    import json
+    from pathlib import Path
+    from tests.test_equipment_image_prompt_facts import _accepted_equipment
+    from infini_local.core.images import config
+
+    monkeypatch.setattr(config, "ZIMAGE_POSITIVE_ONLY", False)
+    data = _existing_texture_data("impact")
+    orb = next(row for row in data["runtimeProgram"]["entities"] if row["id"] == "orb")
+    orb["visual"].update(assetMode="baked_sprite", preferredCanvasSize=32,
+                         prompt="distinct amber projectile", renderSizePx=24, forwardAngleDegrees=0)
+    reused = copy.deepcopy(orb)
+    reused["id"] = "reused"
+    reused["visual"]["assetMode"] = "reuse_item_icon"
+    data["runtimeProgram"]["entities"].append(reused)
+    if reverse_entities:
+        data["runtimeProgram"]["entities"].reverse()
+    ingredients = _data([_request("cutout"), _request("strip", layout="strip")])["vfxManifest"]
+    data["vfxManifest"]["assets"] = ingredients["assets"]
+    data["vfxManifest"]["slots"].extend(ingredients["slots"])
+    equipment = _accepted_equipment()
+    for field in ("armor", "accessory", "visualKit"):
+        data[field] = equipment[field]
+    data["visual"]["equipOverlayPrompt"] = equipment["visual"]["equipOverlayPrompt"]
+    source = copy.deepcopy(data)
+    requests = offline[1]
+    deliveries = []
+    for capacity in (1, 4):
+        requests.clear()
+        monkeypatch.setattr(generation, "IMAGE_GENERATION_GATE", ImageRequestGate(capacity))
+        out = generation.maybe_generate_visual_assets(copy.deepcopy(data))
+        payloads = Counter(json.dumps(row["payload"], sort_keys=True) for row in requests)
+        assert sum(payloads.values()) == 6  # Item, body, impact, overlay, cutout and strip. No reuse job.
+        item = out["visual"]
+        assert item["spriteStatus"] == "generated" and Path(item["spritePath"]).is_file()
+        for entity in out["runtimeProgram"]["entities"]:
+            if entity["kind"] == "item_body" or entity["id"] == "reused":
+                assert entity["visual"]["spritePath"] == item["spritePath"]
+                assert entity["visual"]["spriteUrl"] == item["spriteUrl"]
+                assert entity["visual"]["spriteStatus"] == item["spriteStatus"]
+        plan = json.loads(out["debug"]["visualAssetPlan"])
+        assets = Counter((row["role"], row["path"], hashlib.sha256(Path(row["path"]).read_bytes()).hexdigest())
+                         for row in plan if row.get("path"))
+        # Each invocation owns a fresh private diagnostics directory. Compare its
+        # bytes, while retaining literal published paths/URLs and every DTO field.
+        visual = dict(out["visual"])
+        raw = Path(visual.pop("spriteRawPath")).read_bytes()
+        deliveries.append((payloads, assets, visual, hashlib.sha256(raw).hexdigest(),
+                           out["runtimeProgram"], out["vfxManifest"]))
+    assert deliveries[0] == deliveries[1]
+    assert data == source
+
+
+@pytest.mark.parametrize("capacity", [1, 4])
+@pytest.mark.parametrize("kit", [["untrusted"], {"item": ["untrusted"]}])
+def test_image_jobs_preserve_empty_optional_exclusions_for_non_object_kit(offline_backend, monkeypatch, capacity, kit):
+    data = _existing_texture_data("entity")
+    data["visualKit"] = kit
+    monkeypatch.setattr(generation, "IMAGE_GENERATION_GATE", ImageRequestGate(capacity))
+    out = generation.maybe_generate_visual_assets(data)
+    assert len(offline_backend[0]) == 2
+    assert all(call["negative"] == "" for call in offline_backend[0])
+    assert out["visual"]["spriteStatus"] == "generated"
+    orb = next(row for row in out["runtimeProgram"]["entities"] if row["id"] == "orb")
+    assert orb["visual"]["spriteStatus"] == "generated"

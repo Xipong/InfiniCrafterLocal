@@ -35,8 +35,8 @@ python tools/item-test-workbench/workbench.py loader-run \
 
 Each root must contain `build.txt` and the original content files. The loader
 orders supplied mods by their declared dependency names; CLI order need not
-match load order. The previous `--probe-dll PATH --probe-mod-root PATH` pair
-remains supported. Declared dependencies, including weak references, must be loaded;
+match load order. Use repeatable `--mod DLL SOURCE_ROOT` for all additional mods.
+Declared dependencies, including weak references, must be loaded;
 unavailable ones are refused because this host does not emulate tML's separate
 mod assembly contexts and weak-dependency type filtering.
 Alternatively use repeatable `--tmod /path/to/mod.tmod` for original archives,

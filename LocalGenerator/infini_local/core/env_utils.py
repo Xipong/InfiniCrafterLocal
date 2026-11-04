@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import Iterable
 
 from infini_local.core.env_file import read_env_file
 
@@ -12,7 +11,7 @@ _FALSE_VALUES = {"0", "false", "no", "off", "n", "f"}
 
 
 def load_env_file(path: Path) -> None:
-    """Load legacy or versioned config.env strings through the canonical codec.
+    """Load versioned config.env strings through the canonical codec.
 
     Existing process environment variables win over file values. This helper is
     deliberately tiny because the local generator must keep working on Windows
@@ -70,26 +69,6 @@ def env_float(name: str, default: float, *, lo: float | None = None, hi: float |
     if hi is not None and value > hi:
         value = hi
     return value
-
-
-def env_first(names: Iterable[str], default: str = "", *, strip: bool = True) -> str:
-    for name in names:
-        if name in os.environ and str(os.environ.get(name, "")).strip():
-            return env_str(name, default, strip=strip)
-    return env_str("__INFINI_ENV_MISSING__", default, strip=strip)
-
-
-def env_first_allow_empty(names: Iterable[str], default: str = "", *, strip: bool = True) -> str:
-    """Return the first present env value, preserving intentional empty strings.
-
-    `env_first()` skips empty values because most config fallbacks want that.
-    A few bootstrap surfaces need to distinguish an explicitly empty env value
-    from a missing key, for example public URL overrides.
-    """
-    for name in names:
-        if name in os.environ:
-            return env_str(name, default, strip=strip)
-    return env_str("__INFINI_ENV_MISSING__", default, strip=strip)
 
 
 def env_credential_values() -> tuple[str, ...]:

@@ -136,9 +136,9 @@ app.on_close()
         self.data.mkdir(parents=True)
         override = self.root / "explicit item dump.jsonl"
         (self.data / "config.env").write_text(
-            "INFINI_ITEMS_RUNTIME_DUMP=" + str(override) + "\n"
+            ('# infini-config-format: json-string-v1\n' + "INFINI_ITEMS_RUNTIME_DUMP=" + str(override) + "\n"
             "INFINI_PROMPT_STYLE=existing profile\n"
-            "INFINI_DATA_DIR=must-not-redirect-selected-state\n", encoding="utf-8")
+            "INFINI_DATA_DIR=must-not-redirect-selected-state\n"), encoding="utf-8")
         result = self.run_application()
         self.assertEqual(result["state"], str(self.data))
         self.assertEqual(result["itemsDump"], str(override))

@@ -52,7 +52,8 @@ def test_repair_advisory_never_opens_frozen_gameplay(advisory):
     assert audit["ok"] and audit["ignoredChanges"]
     result = apply_repair_patch(current, filtered)
     assert result["runtimeProgram"] == baseline["runtimeProgram"]
-    assert result["realization"] == advisory
+    expected_report = baseline["realization"] if advisory is None else advisory
+    assert result["realization"] == expected_report
     assert validate_runtime_program(result)["ok"]
 
 
