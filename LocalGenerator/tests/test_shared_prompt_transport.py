@@ -86,7 +86,7 @@ def test_vfx_packet_guides_actual_child_events_and_supported_timing(monkeypatch,
     packet, = stage_packets(monkeypatch, stage, labels=("child-cue",))
     wire = "\n".join(message["content"] for message in packet["messages"])
     assert "exact child's available spawn/periodic/hit pairs" in wire
-    assert "only with a renderer that consumes timing" in wire
+    assert "only with a renderer that consumes it" in wire
     assert "on_hit cue starts from that hit occurrence" in wire
 
 
@@ -96,5 +96,16 @@ def test_author_and_repair_deliver_composition_context(monkeypatch):
     author_text = "\n".join(message["content"] for message in author["messages"])
     repair_text = "\n".join(message["content"] for message in repair["messages"])
     assert "held body, an independently moving object or a detached effect" in author_text
-    assert "Independent poses and deliberately displaced bodies remain valid" in repair_text
+    assert "Independent poses remain valid" in repair_text
+    assert "Deliberately displaced bodies remain valid" in repair_text
+    assert "does not cancel physical axis/normal offsets or reachCurve" in repair_text
+    assert "beam_geometry uses the same Aim world unit axis" in repair_text
     assert "weapon family, archetype, semantic root, or code-authored default" in repair_text
+
+
+def test_visual_packet_keeps_exact_entity_roster_and_json_guidance(monkeypatch):
+    packet, = stage_packets(monkeypatch, "visual", format_mode="off", labels=("visual",))
+    wire = "\n".join(message["content"] for message in packet["messages"])
+    assert "For each exact required entityId, author one row and choose one finite assetMode" in wire
+    assert "no trailing commas or JavaScript expressions" in wire
+    assert "only entityId/assetMode/visualProjectRef/scale" in wire

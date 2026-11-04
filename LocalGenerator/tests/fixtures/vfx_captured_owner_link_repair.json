@@ -1,0 +1,458 @@
+{
+  "data": {
+    "name": "Thorium Electro-Shard",
+    "category": "hybrid",
+    "concept": "A refined crystalline amalgam of Thorium ore and responsive electrocells that discharges reactive bursts of chain lightning when swung or when the bearer takes heavy damage.",
+    "realization": {
+      "description": "Swinging the shard fires crackling electrical projectiles toward the cursor. When worn as an accessory, taking damage triggers a radial discharge of lightning bolts that strike nearby enemies automatically.",
+      "playerExperience": "Effective blend of active swinging and defensive lightning discharge.",
+      "selfEvaluation": "All schema errors resolved with correct parameters and movement component."
+    },
+    "runtimeProgram": {
+      "apiVersion": "infini.runtime-program.v5",
+      "schema": "infini.runtime-program.wire.v3",
+      "itemEntityId": "item_body",
+      "primaryEntityId": "item_body",
+      "primaryOwner": "item_body",
+      "limits": {
+        "maxEntityCount": 12,
+        "maxChildDepth": 3,
+        "maxEventSpawnsPerActivation": 32
+      },
+      "entities": [
+        {
+          "id": "item_body",
+          "kind": "item_body",
+          "visualRole": "inventory_item",
+          "events": [
+            {
+              "id": "c_spawn_hurt",
+              "action": "spawn_entity_on_event",
+              "actionCode": 1,
+              "event": "on_hurt",
+              "reactionCooldownTicks": 60,
+              "entityId": "lightning_bolt",
+              "count": 3,
+              "spreadRadians": 0,
+              "damageBasis": "authored_child",
+              "knockbackBasis": "authored_child",
+              "damageMultiplier": 1.5,
+              "delayTicks": 0
+            }
+          ],
+          "visual": {
+            "role": "inventory_item",
+            "assetMode": "baked_sprite",
+            "prompt": "A sharp crystalline shard infused with glowing blue-green thorium ore and crackling yellow electrical circuits, crisp pixel art, solid rgb(255,0,255) key background",
+            "silhouette": "jagged crystalline shard",
+            "visualIdentity": "thorium crystal weapon with lightning effects",
+            "scale": 1.0,
+            "spritePath": "",
+            "spriteUrl": "",
+            "spriteStatus": "pending",
+            "spriteTechnicalScore": 0.0
+          }
+        },
+        {
+          "id": "lightning_bolt",
+          "kind": "free_projectile",
+          "visualRole": "projectile",
+          "events": [],
+          "visual": {
+            "role": "projectile",
+            "renderSizePx": 16,
+            "preferredCanvasSize": 32,
+            "forwardAngleDegrees": 0,
+            "assetMode": "baked_sprite",
+            "prompt": "A bright crackling bolt of blue and yellow chain lightning, glowing energy projectile, solid rgb(255,0,255) key background",
+            "silhouette": "zig-zag lightning bolt",
+            "visualIdentity": "magical electrical discharge",
+            "scale": 1.0,
+            "spritePath": "",
+            "spriteUrl": "",
+            "spriteStatus": "pending",
+            "spriteTechnicalScore": 0.0
+          },
+          "spawn": {
+            "velocityDistribution": {
+              "kind": "radial",
+              "minSpeedPxPerUpdate": 26.666666666666668,
+              "maxSpeedPxPerUpdate": 80.0
+            },
+            "speedPxPerTick": 0,
+            "count": 1,
+            "spreadRadians": 0.0,
+            "offsetPx": 0,
+            "aim": "cursor",
+            "overTarget": {
+              "heightTiles": 0,
+              "delayTicks": 0
+            },
+            "placement": "owner_center",
+            "enabled": true
+          },
+          "damage": {
+            "damageClass": "generic",
+            "damage": 30,
+            "knockback": 1.0,
+            "ownerHitCheck": false,
+            "enabled": true
+          },
+          "lifetimeTicks": 30,
+          "hitbox": {
+            "widthPx": 16,
+            "heightPx": 16,
+            "drawScale": 1.0,
+            "hitboxScale": 1.0
+          },
+          "collision": {
+            "tileCollide": true,
+            "ignoreWater": false,
+            "bounceCount": 0,
+            "bounceSpeedRetention": 1.0,
+            "pierce": 3,
+            "extraUpdates": 0,
+            "npcImmunityMode": "local",
+            "localNpcHitCooldownTicks": -1
+          },
+          "movement": {
+            "name": "move_straight",
+            "code": 0,
+            "params": {}
+          }
+        }
+      ],
+      "bindings": [
+        {
+          "id": "b_equip",
+          "input": "equipped",
+          "usePolicy": {
+            "action": {
+              "kind": "equip_passive",
+              "targetId": "item_body"
+            },
+            "stackCost": 0,
+            "contactDamage": false
+          },
+          "role": "primary"
+        },
+        {
+          "id": "b_primary",
+          "input": "primary_use",
+          "usePolicy": {
+            "action": {
+              "kind": "spawn_entity",
+              "targetId": "lightning_bolt"
+            },
+            "stackCost": 0,
+            "contactDamage": false
+          },
+          "role": "secondary"
+        }
+      ],
+      "itemUse": {
+        "configured": true,
+        "useStyle": "swing",
+        "hideUseGraphic": false,
+        "disableMeleeHitbox": false,
+        "channel": false,
+        "holdoutOffsetX": 0,
+        "holdoutOffsetY": 0
+      }
+    },
+    "id": "g_6a9e6f51a4a47f90",
+    "recipeKey": "r_75088d7965a13b41f37f0f19",
+    "schemaVersion": 5,
+    "parentA": "Ториевая руда",
+    "parentB": "Электроклетки",
+    "sourceMode": "generated",
+    "gameplay": {
+      "kind": "hybrid",
+      "damageClass": "generic",
+      "damage": 25,
+      "knockback": 2.0,
+      "useTime": 20,
+      "useAnimation": 30,
+      "manaCost": 0,
+      "manaCostInput": "both",
+      "rarity": 1,
+      "value": 2000,
+      "maxStack": 99,
+      "craftYield": 1,
+      "width": 24,
+      "height": 24,
+      "itemScale": 1.0,
+      "useStyleName": "swing",
+      "autoReuse": true,
+      "useTurn": true,
+      "holdoutOffsetX": 0,
+      "holdoutOffsetY": 0
+    },
+    "accessory": {
+      "enabled": true,
+      "lifeRegenCondition": "always",
+      "treasureSenseCondition": "always",
+      "defense": 2
+    },
+    "armor": {
+      "enabled": false
+    },
+    "runtimeApiVersion": "infini.runtime-program.v5",
+    "visual": {
+      "preferredCanvasSize": 32,
+      "inventoryScale": 1.0,
+      "worldScale": 1.0,
+      "drawOffsetX": 0,
+      "drawOffsetY": 0,
+      "palette": [
+        "#2ee8d0",
+        "#0e2a36",
+        "#f4f03c",
+        "#ffffff",
+        "#ff00ff"
+      ],
+      "spriteStatus": "",
+      "spritePath": "",
+      "spriteUrl": "",
+      "spriteTechnicalScore": 0.0,
+      "imagePrompt": "A sharp crystalline shard infused with glowing blue-green thorium ore and crackling yellow electrical circuits, crisp pixel art, solid rgb(255,0,255) key background",
+      "negativePrompt": "blurry, dark background, photorealistic",
+      "silhouette": "jagged crystalline shard",
+      "visualIdentity": "thorium crystal weapon with lightning effects",
+      "renderSizePx": 24,
+      "forwardAngleDegrees": 45,
+      "accessoryMount": "chest",
+      "equipOverlayPrompt": "An embedded crystal electro-shard badge worn on the chest, glowing with electrical arcs, solid rgb(255,0,255) key background",
+      "equipOverlayPath": "",
+      "equipOverlayUrl": "",
+      "equipOverlayStatus": "pending",
+      "equipOverlayTechnicalScore": 0.0
+    },
+    "visualKit": {
+      "schema": "infini.visual-kit.runtime-entities.v3",
+      "item": {
+        "prompt": "A sharp crystalline shard infused with glowing blue-green thorium ore and crackling yellow electrical circuits, crisp pixel art, solid rgb(255,0,255) key background",
+        "negativePrompt": "blurry, dark background, photorealistic",
+        "silhouette": "jagged crystalline shard",
+        "visualIdentity": "thorium crystal weapon with lightning effects",
+        "palette": [
+          "#2ee8d0",
+          "#0e2a36",
+          "#f4f03c",
+          "#ffffff",
+          "#ff00ff"
+        ],
+        "preferredCanvasSize": 32,
+        "renderSizePx": 24,
+        "forwardAngleDegrees": 45,
+        "inventoryScale": 1.0,
+        "worldScale": 1.0
+      },
+      "entities": [
+        {
+          "entityId": "item_body",
+          "assetMode": "baked_sprite",
+          "visualProjectRef": "item",
+          "scale": 1.0
+        },
+        {
+          "entityId": "lightning_bolt",
+          "assetMode": "baked_sprite",
+          "visualProjectRef": "entity",
+          "scale": 1.0,
+          "prompt": "A bright crackling bolt of blue and yellow chain lightning, glowing energy projectile, solid rgb(255,0,255) key background",
+          "silhouette": "zig-zag lightning bolt",
+          "visualIdentity": "magical electrical discharge",
+          "preferredCanvasSize": 32,
+          "renderSizePx": 16,
+          "forwardAngleDegrees": 0
+        }
+      ],
+      "equipOverlay": {
+        "prompt": "An embedded crystal electro-shard badge worn on the chest, glowing with electrical arcs, solid rgb(255,0,255) key background",
+        "silhouette": "glowing crystal amulet",
+        "visualIdentity": "thorium electrocell accessory",
+        "preferredCanvasSize": 32,
+        "accessoryMount": "chest"
+      },
+      "animationPlan": "Swinging the shard triggers electrical projectile spawns with crackling particle animations."
+    }
+  },
+  "raw": {
+    "schema": "infini.vfx-director.runtime-events.v4",
+    "slots": [
+      {
+        "id": "s_use_sound",
+        "entityId": "item_body",
+        "event": "on_use",
+        "rendererKind": "soundCue",
+        "anchor": "self",
+        "soundId": "Item33",
+        "sound": {
+          "volume": 0.8,
+          "pitch": 0.2,
+          "pitchVariance": 0.1
+        }
+      },
+      {
+        "id": "s_hurt_sound",
+        "entityId": "item_body",
+        "event": "on_hurt",
+        "rendererKind": "soundCue",
+        "anchor": "owner",
+        "soundId": "Item93",
+        "sound": {
+          "volume": 0.9,
+          "pitch": -0.1,
+          "pitchVariance": 0.2
+        }
+      },
+      {
+        "id": "s_bolt_spawn",
+        "entityId": "lightning_bolt",
+        "event": "on_spawn",
+        "rendererKind": "nativeLight",
+        "anchor": "self",
+        "startTick": 0,
+        "repeatEvery": 0,
+        "color": {
+          "r": 46,
+          "g": 232,
+          "b": 208
+        },
+        "light": {
+          "intensity": 0.8
+        }
+      },
+      {
+        "id": "s_bolt_trail",
+        "entityId": "lightning_bolt",
+        "event": "on_spawn",
+        "rendererKind": "texturedPath",
+        "anchor": "self",
+        "alpha": 1.0,
+        "blend": "additive",
+        "layer": "BeforeProjectiles",
+        "startTick": 0,
+        "path": {
+          "texture": {
+            "source": "library",
+            "assetId": "bloomLine",
+            "uv": {
+              "quarterTurns": 0,
+              "mirrorU": false,
+              "mirrorV": false
+            }
+          },
+          "source": "beam",
+          "historyTicks": 0,
+          "minDistancePx": 0,
+          "maxSegmentLengthPx": 100,
+          "widthPx": 8,
+          "widthProfile": {
+            "start": 1.0,
+            "middle": 1.0,
+            "end": 0.0,
+            "curve": "linear"
+          },
+          "opacityProfile": {
+            "start": 1.0,
+            "middle": 1.0,
+            "end": 0.0,
+            "curve": "linear"
+          },
+          "colorProfile": {
+            "start": {
+              "r": 46,
+              "g": 232,
+              "b": 208
+            },
+            "middle": {
+              "r": 244,
+              "g": 240,
+              "b": 60
+            },
+            "end": {
+              "r": 255,
+              "g": 255,
+              "b": 255
+            },
+            "curve": "linear"
+          },
+          "profileDomain": "length",
+          "uvMode": "stretch",
+          "repeatLengthPx": 1,
+          "scrollPxPerTick": 0
+        }
+      }
+    ]
+  },
+  "patch": {
+    "schema": "infini.vfx-repair-patch.runtime-events.v2",
+    "slotsUpsert": [
+      {
+        "id": "s_bolt_trail",
+        "entityId": "lightning_bolt",
+        "event": "on_spawn",
+        "rendererKind": "texturedPath",
+        "anchor": "self",
+        "blend": "additive",
+        "layer": "BeforeProjectiles",
+        "alpha": 1.0,
+        "startTick": 0,
+        "path": {
+          "texture": {
+            "source": "library",
+            "assetId": "bloomLine",
+            "uv": {
+              "quarterTurns": 0,
+              "mirrorU": false,
+              "mirrorV": false
+            }
+          },
+          "source": "ownerLink",
+          "ownerAnchor": "mountedCenter",
+          "historyTicks": 0,
+          "minDistancePx": 0,
+          "maxSegmentLengthPx": 100,
+          "widthPx": 8,
+          "widthProfile": {
+            "start": 1.0,
+            "middle": 1.0,
+            "end": 0.0,
+            "curve": "linear"
+          },
+          "opacityProfile": {
+            "start": 1.0,
+            "middle": 1.0,
+            "end": 0.0,
+            "curve": "linear"
+          },
+          "colorProfile": {
+            "start": {
+              "r": 46,
+              "g": 232,
+              "b": 208
+            },
+            "middle": {
+              "r": 244,
+              "g": 240,
+              "b": 60
+            },
+            "end": {
+              "r": 255,
+              "g": 255,
+              "b": 255
+            },
+            "curve": "linear"
+          },
+          "profileDomain": "length",
+          "uvMode": "stretch",
+          "repeatLengthPx": 1,
+          "scrollPxPerTick": 0
+        }
+      }
+    ],
+    "note": "Repair invalid texturedPath source by updating source to ownerLink and supplying the required ownerAnchor."
+  }
+}

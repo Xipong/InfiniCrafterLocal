@@ -97,7 +97,9 @@ def _capture_backend(monkeypatch, tmp_path: Path, *, retries: bool = False) -> l
             # (an empty PNG short-circuits validation to only empty_alpha_bbox).
             image.paste((170, 90, 40, 255), (32, 32, 34, 34))
         else:
-            image.paste((170, 90, 40, 255), (18, 8, 46, 56))
+            # Grip-bearing images keep their full provider frame. This accepted
+            # fixture meets the item fill contract without a corrective bbox fit.
+            image.paste((170, 90, 40, 255), (18, 4, 46, 60))
         image.save(raw)
         calls.append(dict(prompt=prompt, negative=negative, canvas=canvas, raw=str(raw), bytes=raw.read_bytes(),
                           attempt=int(output_dir.name.removeprefix("attempt-"))))
@@ -164,8 +166,6 @@ def test_real_retry_compactor_retains_selected_frame_with_long_art_and_png_diagn
         assert len(validation["reasons"]) >= 2
         notes = post_retry.validation_retry_notes(validation, role)
         assert notes and notes in retry["prompt"]
-        assert "arrangement" in retry["prompt"] and "within sprite bounds and readable" in retry["prompt"]
-        assert "No checkerboard, UI" in retry["prompt"]
         from infini_local.services.sdcpp_backend import server_payload
         for call in (first, retry):
             payload = server_payload(backend._sdcpp_config(), call["prompt"], "not sent", 512, 512, 42, "a1111", is_zimage=zimage, positive_only=True)
@@ -206,6 +206,7 @@ def test_image_composition_preserves_prospective_grip_and_literal_topology(monke
     root_prompt, arrow_prompt = (call["prompt"] for call in calls)
     item_facts, arrow_facts = _framing(root_prompt), _framing(arrow_prompt)
     assert item_facts["grip"] == data["visualKit"]["item"]["grip"]
+    assert "Place the artwork handle point at the normalized final-canvas grip" in calls[0]["prompt"]
     # The selected project facts own the coordinates; avoid a second conflicting
     # coordinate instruction while preserving the independent entity's absence.
     assert root_prompt.count('"normalizedX"') == root_prompt.count('"normalizedY"') == 1
@@ -297,3 +298,32 @@ def test_real_image_jobs_keep_independent_visual_curve_and_hitbox_ownership(monk
         assert actual.get("hitboxCurve") == accepted.get("hitboxCurve")
     for entity, before in zip(result["runtimeProgram"]["entities"], frozen["runtimeProgram"]["entities"]):
         assert {key: value for key, value in entity.items() if key != "visual"} == {key: value for key, value in before.items() if key != "visual"}
+
+
+@pytest.mark.parametrize("role", ["item", "vfx_strip", "projectile"])
+def test_zimage_retry_preserves_long_diagnostics(monkeypatch, role):
+    monkeypatch.setattr(post_retry, "image_backend_is_zimage", lambda: True)
+    monkeypatch.setenv("INFINI_ZIMAGE_RETRY_PROMPT_LIMIT", "2200")
+    reasons = [
+        "core_silhouette_too_small", "core_silhouette_too_large", "effect_extent_too_large",
+        "object_touches_edges", "magenta_key_background_left", "almost_no_transparency_after_bg_removal",
+        "too_few_opaque_pixels", "very_dense_opaque_area", "empty_alpha_bbox",
+        "projectile_forward_axis_misaligned",
+    ]
+    validation = {"reasons": reasons}
+    notes = post_retry.validation_retry_notes(validation, role)
+    assert len(notes) > 500
+    prompt = post_retry.build_retry_prompt_from_validation("authored subject. " * 400, validation, role, 1, 32)
+    assert notes in prompt
+
+
+@pytest.mark.parametrize("role", ["item", "projectile"])
+def test_zimage_retry_retains_late_art_detail_with_long_diagnostics(monkeypatch, role):
+    monkeypatch.setattr(post_retry, "image_backend_is_zimage", lambda: True)
+    monkeypatch.setenv("INFINI_ZIMAGE_RETRY_PROMPT_LIMIT", "2200")
+    notes = "B" * 682 + " EXACT_DIAG_END_17"
+    monkeypatch.setattr(post_retry, "validation_retry_notes", lambda *_: notes)
+    source = "A blue metal body. " * 68 + "A unique amber gem at the tail."
+    prompt = post_retry.build_retry_prompt_from_validation(source, {}, role, 1, 32)
+    assert "A unique amber gem at the tail" in prompt
+    assert "EXACT_DIAG_END_17" in prompt

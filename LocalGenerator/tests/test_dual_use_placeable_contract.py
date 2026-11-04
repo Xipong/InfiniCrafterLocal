@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import copy
+import json
+from pathlib import Path
+
+import pytest
 from typing import Any
 
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
@@ -317,3 +321,46 @@ def test_repair_placement_reference_changes_only_the_rejected_source_leaf() -> N
     repaired = apply_repair_patch(current, filtered)
     assert validate_runtime_program(repaired)["ok"]
     assert _changed_paths(current, repaired) == {"$.runtimeProgram.bindings[1].action.placementCallId"}
+
+
+@pytest.mark.parametrize("reverse_bindings", [False, True])
+def test_captured_fishing_input_repair_preserves_frozen_action(reverse_bindings: bool) -> None:
+    replay = json.loads((Path(__file__).with_name("fixtures") / "dual_use_fishing_repair.json").read_text(encoding="utf-8"))
+    authored, patch = replay["author"], replay["repairPatch"]
+    if reverse_bindings:
+        authored["runtimeProgram"]["bindings"].reverse()
+        patch["bindingsUpsert"].reverse()
+    report = validate_runtime_program(authored)
+    assert "dual_use_placeable_input_contract" in _codes(report)
+    scope = build_runtime_repair_scope(authored, report["errors"])
+    assert scope["fieldPermissions"]["bindings"] == [
+        {"id": "bind_alternate", "paths": ["input"]},
+        {"id": "bind_primary", "paths": ["input"]},
+    ]
+    filtered, audit = filter_repair_patch_scope(authored, patch, scope)
+    assert audit["ok"], audit
+    repaired = apply_repair_patch(authored, filtered)
+    assert validate_runtime_program(repaired)["ok"]
+    assert _changed_paths(authored, repaired) == {
+        "$.runtimeProgram.bindings[0].input", "$.runtimeProgram.bindings[1].input",
+        "$.runtimeProgram.calls[0].params.damage",
+    }
+    wire = compile_runtime_program(repaired)
+    assert validate_runtime_wire(wire)["ok"]
+    fishing = next(row for row in wire["runtimeProgram"]["bindings"] if row["id"] == "bind_alternate")
+    assert fishing["input"] == "primary_use"
+    assert fishing["usePolicy"]["action"]["fishing"] == {"power": 15, "castSpeedPxPerTick": 11.0 * 16 / 60}
+
+    # Input-only repair is not authority to change the accepted fishing design.
+    hostile = copy.deepcopy(patch)
+    next(row for row in hostile["bindingsUpsert"] if row["id"] == "bind_alternate")["action"]["fishing"] = {"power": 99, "castSpeed": 50}
+    retained, hostile_audit = filter_repair_patch_scope(authored, hostile, scope)
+    assert hostile_audit["ok"], hostile_audit
+    assert hostile_audit["ignoredChanges"]
+    assert apply_repair_patch(authored, retained) == repaired
+
+    # Merely retaining the incorrect input lanes still fails the real validator.
+    unchanged = copy.deepcopy(patch)
+    unchanged["bindingsUpsert"] = copy.deepcopy(authored["runtimeProgram"]["bindings"])
+    _, incomplete_audit = filter_repair_patch_scope(authored, unchanged, scope)
+    assert not incomplete_audit["ok"]

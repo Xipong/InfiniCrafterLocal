@@ -61,15 +61,20 @@ _PLACED_VFX_RULE = "Optional placementBindingId selects only an exact runtimeSur
 
 
 _READABILITY_RULE = (
-    "Make intended visible attacks and secondary effects readable at gameplay zoom. Choose count, world-pixel "
-    "dimensions, contrast, opacity and lifetime together using renderer controls and accepted body size/motion. "
-    "Keep visual coverage consistent with actual gameplay coverage; sound alone does not communicate visible area. "
+    "Compose presentation readable at gameplay zoom for intended visible attacks and secondary effects; "
+    "sound-only is not a visible gameplay cue. Consider the accepted delayed area action's event anchor, "
+    "radiusPx and delayTicks, and actual child bodies' size, contrast, lifetime and movement separately. "
+    "A few tiny fading particles or dark small PNGs can be technically valid yet unreadable. "
+    "Choose count, world-pixel dimensions, opacity and lifetime together using actual renderer controls, "
+    "not prose metadata. "
     "For delayed cues shape/spriteElement/libraryParticle/nativeDust/nativeLight use event-relative startTick. "
     "An on_hit cue starts from that hit occurrence, not automatically from a gameplay action's delayed execution; "
-    "Match the accepted delay only with a renderer that consumes timing, and use the actual event anchor and renderer controls for radiusPx. "
-    "For a physical child, prefer accents on that exact child's available spawn/periodic/hit pairs rather than decorative debris that could be mistaken for damaging bodies. "
-    "Deliberate absence/zero remains valid; there is no automatic VFX insertion or minimum brightness. "
-    "In Repair this goal applies only within diagnosed permissions."
+    "match the accepted delay explicitly only with a renderer that consumes it. "
+    "For a physical child's visibility, prefer accents on that exact child's available spawn/periodic/hit pairs "
+    "rather than decorative debris that could be mistaken for additional damaging bodies. "
+    "Keep accents consistent with actual coverage: do not invent damage, extra gameplay projectiles or a larger damaging area. "
+    "There is no automatic VFX insertion or minimum brightness: deliberate absence/zero remains valid; "
+    "in Repair this guidance applies only inside diagnosed permissions and never opens frozen slots or mechanics."
 )
 
 
@@ -118,6 +123,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             "Do not add gameplay, entities, events, hitboxes, damage, movement, child spawning, or status effects.",
             _ACCEPTED_GAMEPLAY_CONTEXT_RULE,
             _READABILITY_RULE,
+            "acceptedRuntimeProgramReadOnly contains the actual accepted mechanics, not another design request. Read its exact movement, controller, lifetime, collision, bindings and event parameters when composing presentation; runtimePairs still owns event availability. Do not invent missing geometry from names or the prose summary. Visual attachment and particle motion never change the source entity's gameplay.",
             "shape composes explicit bounded line/arc/wave/orbit/sector instances. Duration is lifetime and repeatEvery is emission cadence, never geometric animation period. Only authored color/opacity/radius endpoints and angular speeds animate them; no extra fade or Dust accompaniment. Each segment/mote consumes one shared draw call. nativeDust and nativeLight are independent slots with explicit emission controls.",
             "Use only enum values and numeric ranges from runtimeVocabulary; each selected rendererKind also requires the exact companion fields in runtimeVocabulary.rendererRequirements (encoded in the slot schema).",
             "spriteElement and texturedPath use only their explicit nested texture and runtimeVocabulary.textureDependencyTuples; omit common scale/density/spread/particleSystemId/textureRole. Respect their own timing, opacity profiles and read-only geometry sources in runtimeVocabulary.rendererSemantics, runtimeSurface.texturedPathSources and outputSchema. Beam/whip/ownerLink current geometry owns placement and requires neutral anchor=self, historyTicks=0, minDistancePx=0 and profileDomain=length; anchorHistory keeps its authored anchor. ownerLink is an explicit optional cosmetic connector to projectile.Center, not automatic from movement, item names or categories. Require path.ownerAnchor=mountedCenter or frontHand only on ownerLink; omit it on all other sources. mountedCenter reads native owner.MountedCenter, not a hand. frontHand requires a currently enabled compositeFrontArm; when unavailable the connector is refused/retired, never guessed from body frames or changed to center.",
@@ -184,6 +190,7 @@ def build_vfx_repair_packet(
             _PLACED_VFX_RULE,
             _ACCEPTED_GAMEPLAY_CONTEXT_RULE,
             _READABILITY_RULE,
+            "acceptedRuntimeProgramReadOnly contains the actual accepted mechanics, not another design request. Read its exact movement, controller, lifetime, collision, bindings and event parameters when composing presentation; runtimePairs still owns event availability. Do not invent missing geometry from names or the prose summary. Visual attachment and particle motion never change the source entity's gameplay.",
         ],
     }
     # Parent ancestry informs new artwork, not corrections to an accepted

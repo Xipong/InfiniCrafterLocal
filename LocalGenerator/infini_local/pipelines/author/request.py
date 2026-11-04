@@ -189,9 +189,11 @@ def _repair_malformed_author_json(
         "schema": "infini.gameplay-author-format-repair.v1",
         "task": "Repair JSON syntax only and return the same complete Gameplay Author object.",
         "rules": [
-            "malformedRawText is the sole design source. Preserve every recoverable value, key, array row and optional field; repair JSON syntax/container damage only.",
-            "Keep the authored ids, capabilities, parameters and binding transactions. allowedCallParamsReadOnly lists the declared params for each fn; it does not authorize adding or replacing choices.",
-            "Return the complete Author object as JSON, not the key index or a redesigned item.",
+            "Preserve every recoverable authored value, id, capability, parameter, binding transaction, concept, and realization from malformedRawText.",
+            "Do not redesign, add, drop, replace, normalize, or reinterpret gameplay. This call repairs only JSON syntax/container damage.",
+            "Call params must use allowedCallParamsReadOnly for their exact fn; do not invent undeclared params even if they sound plausible.",
+            "malformedRawText is the sole design source; never introduce a choice absent from it. Keep every source key and array row, including optional advisory text.",
+            "Return exactly one strict full Author JSON object with no markdown or prose, not the key index.",
         ],
         "allowedCallParamsReadOnly": {
             name: sorted(CAPABILITY_REGISTRY[name].params) for name in functions
@@ -207,7 +209,8 @@ def _repair_malformed_author_json(
     user_content = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
     system = (
         "You are the conditional Gameplay Format Repair for InfiniCrafterLocal. "
-        "Repair only JSON syntax/container damage in malformedRawText under the supplied preservation rules. Return the full Author JSON object."
+        "Repair only JSON syntax/container damage in malformedRawText under the supplied preservation rules. "
+        "Do not reauthor or complete missing gameplay or invent undeclared params. Return the full Author JSON object."
     )
     messages = [
         stage_chat_message("system", "author_repair_contract", system + llm_reasoning_system_suffix(model_name)),
@@ -428,10 +431,10 @@ def build_gameplay_repair_dossier(
         "task": "Repair only the deterministic mutable scope of this low-level runtime program.",
         "rules": [
             "Return only a JSON patch matching requiredJsonShape, not the item or dossier. note is required; omit unchanged root fields. Omission means no change.",
-            "Each upsert is a complete schema-valid node. Copy existing nodes from readOnlySourceFragments.brokenFragments, preserving required values, accepted optional values and absences outside exact fieldPermissions. Extra frozen rewrites are ignored.",
+            "Each upsert is a complete schema-valid node. Copy existing nodes from readOnlySourceFragments.brokenFragments, preserving required values, accepted optional values and absences outside exact fieldPermissions. Do not add or remove target/params merely to match an example. Extra frozen rewrites are ignored.",
             RUNTIME_ROW_SHAPE_RULE,
             STACK_COST_RULE,
-            "Independent poses and deliberately displaced bodies remain valid. Compose with low-level capabilities; do not introduce a weapon family, archetype, semantic root, or code-authored default.",
+            "Compose with low-level capabilities; do not introduce a weapon family, archetype, semantic root, or code-authored default.",
             "New nodes are allowed only by the exact blocker/dependency create policy and must satisfy the full capability requirements. Keep existing ids; use new ids only for permitted missing nodes. Defaults describe Author omission, not Repair edits.",
             "Existing target/entity references come from immutableProgramIndex.entities[*].id. Where create.calls.allowedTargetKinds permits a new target, emit it exactly once in entitiesUpsert with an allowed kind and use that same id consistently.",
             "Remove exact deletable.callPropertyKeys through callPropertyKeysDelete {callId,key}. For exact deletable.callParamKeys, use callParamKeysDelete or omit the invalid key from its complete callsUpsert row.",
@@ -439,7 +442,7 @@ def build_gameplay_repair_dossier(
             "requiredBindingUpdates with mustApplyAll are coupled: emit every listed existing binding exactly once. mustCreateExactlyOne requires one allowed transaction with a new id. mustChooseExactlyOne without mustCreateExactlyOne requires one transaction: an existing id must be in that row's allowedExistingBindingIds and bindingAlternatives; a new id requires create.bindings permission.",
             f"When repairTransactions.{PRIMARY_ENTITY_SELECTION_FIELD}.allowed is true, choose exactly one listed candidate through {PRIMARY_ENTITY_SELECTION_FIELD}; the compiler derives technical wire roles from that identity.",
             "For an exclusiveInputSelections group, either resolve the conflict through permitted retarget/delete edits or emit one keepBindingId selection; a resolved conflict needs no redundant selection.",
-            "For each repairScope.eventAlternatives row, choose one complete alternative: emit its event and every listed required call/binding together, with no support from unselected alternatives. The engine does not insert event producers.",
+            "For each repairScope.eventAlternatives row, choose one complete alternative: emit its exact event and every listed required call/binding together, with no support from unselected alternatives. The engine does not insert event producers.",
             "Close every llmRepairable repairRequirement. For requiredOneOfCapabilities, either an authorized structural delete/retarget closes the blocker or callsUpsert supplies one complete listed capability on an affected target. Notes do not change the program. Check references, kinds, inputs, cycles and budgets after the permitted edits.",
             "realizationReplacement is optional advisory context, never an acceptance requirement or observed test. acceptedItemContext.runtimeProgram is the read-only pre-repair source, including invalid fields. Describe only the program after permitted edits; prose and self-evaluation are not repair targets.",
         ],

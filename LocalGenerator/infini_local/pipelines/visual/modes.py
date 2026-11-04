@@ -7,9 +7,9 @@ from typing import Mapping
 
 
 VISUAL_ASSET_MODE_DESCRIPTIONS: Mapping[str, str] = MappingProxyType({
-    "baked_sprite": "Generate and deliver a real PNG, never a placeholder. Required for kind=item_body regardless of entityId: use visualProjectRef=item and inherit the root item design. A distinct baked entity uses visualProjectRef=entity and owns its prompt, silhouette, visualIdentity, renderSizePx, preferredCanvasSize and forwardAngleDegrees.",
+    "baked_sprite": "Generate and deliver a real PNG, never a placeholder. Required for kind=item_body regardless of entityId: use visualProjectRef=item and only entityId/assetMode/visualProjectRef/scale; inherit the root item design without prompt/silhouette/visualIdentity. A distinct baked entity uses visualProjectRef=entity and owns its prompt, silhouette, visualIdentity, renderSizePx, preferredCanvasSize and forwardAngleDegrees.",
     "no_asset": "Deliver no PNG and draw no entity body; independent runtime VFX may still draw.",
-    "reuse_item_icon": "Only a non-item_body entity representing the same physical object as item_body may use this mode. Set visualProjectRef=item; deliver no separate PNG and resolve to the item_body generated PNG with identical pixels, root base renderSizePx, canvas and forwardAngleDegrees. No own prompt/size/canvas/axis; entity scale remains independent.",
+    "reuse_item_icon": "Only a non-item_body entity representing the same physical object as item_body may use this mode. Set visualProjectRef=item and never create a second visual project; deliver no separate PNG and resolve to the item_body generated PNG with identical pixels, root base renderSizePx, canvas and forwardAngleDegrees. Only entityId/assetMode/visualProjectRef/scale; no own prompt/size/canvas/axis. Entity scale remains independent.",
     "runtime_geometry": "Deliver no PNG; author explicit geometry: a centered body_segment with chosen length and axis, or collision_path following an existing beam/lash centerline. Width, RGB color and opacity are independent presentation choices, not inherited from hitbox/light. This is a plain untextured solid strip, not a textured skin; independent VFX overlays do not replace or hide this base.",
 })
 VISUAL_ASSET_MODES = tuple(VISUAL_ASSET_MODE_DESCRIPTIONS)

@@ -135,7 +135,9 @@ def _request_visual_kit(
             "Realize the authored concept as a coherent appearance compatible with the accepted mechanics. "
             "Make the relationship between the inventory object, its in-use bodies and its effects readable: physical continuity or deliberate transformation and detachment should be clear to the player. "
             "Collision geometry describes hit placement, not the complete object silhouette; absence of guaranteed hand contact is not itself a reason to design a floating weapon. "
-            "Use assetModeCatalog for PNG delivery and runtime drawing, and responseSchema for the output contract. Return JSON only."
+            "For each exact required entityId, author one row and choose one finite assetMode. "
+            "Use assetModeCatalog for PNG delivery and runtime drawing, and responseSchema for the output contract. "
+            "Return a strict JSON object with double-quoted JSON object keys and string values; no trailing commas or JavaScript expressions."
         )
         payload = {
             "task": "Author one visualKit for the accepted runtime program.",
