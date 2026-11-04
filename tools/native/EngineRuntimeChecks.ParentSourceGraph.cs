@@ -135,7 +135,8 @@ internal static partial class EngineRuntimeChecks
             // A source-roster fixture, not a mocked analyzer or gameplay executor.
             var roster = (IList)graphType.GetField("consumers", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(graph)!;
             roster.Add((typeof(GraphConsumer), typeof(GlobalNPC)));
-            graphType.GetMethod("Item", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(graph, new object[] { item });
+            object sourceInput = typeof(GeneratorClient).GetMethod("CaptureSourceGraphItem", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, new object[] { item })!;
+            graphType.GetMethod("Item", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(graph, new[] { sourceInput });
             var result = (JsonObject)graphType.GetMethod("Finish", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(graph, null)!;
             string? firstExport = Environment.GetEnvironmentVariable("INFINI_PARENT_GRAPH_PACKET");
             if (!string.IsNullOrEmpty(firstExport)) File.WriteAllText(firstExport, new JsonObject { ["name"] = "source fixture", ["parentSourceGraph"] = result.DeepClone() }.ToJsonString());

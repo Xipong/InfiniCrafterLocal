@@ -124,6 +124,7 @@ internal static partial class EngineRuntimeChecks
                     Equal(1, started, "admitted craft starts exactly once");
                     var prepared = (GeneratorClient.PreparedGenerationRequest)typeof(InfiniCraftPlayer)
                         .GetField("_request", PersistenceInstance)!.GetValue(owner)!;
+                    PumpParentAnalysis(System.Threading.Tasks.Task.Run(prepared.CompleteAnalysis));
                     string frozen = prepared.PayloadJson;
                     using (var document = JsonDocument.Parse(frozen)) {
                         var a = document.RootElement.GetProperty("itemA"); var b = document.RootElement.GetProperty("itemB");

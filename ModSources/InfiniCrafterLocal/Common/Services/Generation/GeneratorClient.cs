@@ -223,7 +223,23 @@ public sealed partial class GeneratorClient
         public CancellationToken CancellationToken => _lifetime.Token;
         public void Cancel() => _lifetime.Cancel();
 
-        public string PayloadJson { get; set; } = "{}";
+        private string payloadJson = "{}";
+        public string PayloadJson
+        {
+            get => Analysis is null && analysisFailure is null ? payloadJson : throw new InvalidOperationException("Parent source analysis has not completed on the generation worker.");
+            set => payloadJson = value;
+        }
+        internal ParentAnalysis? Analysis { get; set; }
+        private Exception? analysisFailure;
+        internal void CompleteAnalysis()
+        {
+            if (analysisFailure is not null) throw new InvalidOperationException("Parent source analysis failed.", analysisFailure);
+            if (Analysis is not { } analysis) return;
+            analysis.RequireWorker();
+            try { payloadJson = analysis.Resolve(System.Text.Json.Nodes.JsonNode.Parse(payloadJson), CancellationToken)!.ToJsonString(WireJsonOptions); }
+            catch (Exception error) { analysisFailure = error; throw; }
+            finally { Analysis = null; analysis.Dispose(); }
+        }
         public string ParentA { get; set; } = "Unknown";
         public string ParentB { get; set; } = "Unknown";
         public Item RefundA { get; set; } = new();
@@ -276,6 +292,22 @@ public sealed partial class GeneratorClient
         };
     }
 
+    // Live craft keeps admission/refunds and all native hooks on the game thread.
+    // The existing Prepare entrypoint stays synchronous for offline observations.
+    internal PreparedGenerationRequest PrepareDeferred(Item a, Item b, Player player, string llmProfileId = "", bool multiDevCraft = false,
+        ClientTooltipObservation? clientTooltipA = null, ClientTooltipObservation? clientTooltipB = null)
+    {
+        var analysis = new ParentAnalysis();
+        try
+        {
+            using var scope = analysis.Enter();
+            var request = Prepare(a, b, player, llmProfileId, multiDevCraft, clientTooltipA, clientTooltipB);
+            request.Analysis = analysis;
+            return request;
+        }
+        catch { analysis.Dispose(); throw; }
+    }
+
     public GeneratedItemData? GeneratePreparedBlocking(PreparedGenerationRequest request)
     {
         if (request.CancellationToken.IsCancellationRequested)
@@ -288,6 +320,16 @@ public sealed partial class GeneratorClient
         request.FailureStatusCode = 0;
         request.FailureMessage = "";
         request.FailurePlayerMessage = "";
+
+        try { request.CompleteAnalysis(); }
+        catch (OperationCanceledException) { return null; }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            LastRecipeFailureIsFatal = request.FailureIsFatal = true;
+            LastRecipeFailureMessage = request.FailureMessage = "Parent source analysis failed: " + error.GetType().Name;
+            LastRecipeFailurePlayerMessage = request.FailurePlayerMessage = "Parent analysis failed. Materials will be refunded.";
+            return null;
+        }
 
         if (LocalHttpQuietFailure.ShouldSkip(EndpointGuardKey))
             return null;
