@@ -54,6 +54,72 @@ internal static partial class EngineRuntimeChecks
         using var sliceOnly = new GeneratorClient.ParentSourceGraphCache();
         using (sliceOnly.Enter()) _ = Project(sliced, slicedRoots, 64);
         Equal(false, sliceOnly.TryGetProjection(method, key, out _), "native slices cannot enter complete-method memo");
+        ParentSourceGraphProjectionSlicesStayIsolated();
+    }
+
+
+    private static void SourceProjectionIsolationFixture(bool guard, Player player)
+    {
+        if (guard) player.statDefense += 1;
+        else player.statDefense += 2;
+    }
+
+    private static void ParentSourceGraphProjectionSlicesStayIsolated()
+    {
+        Type type = typeof(GeneratorClient).GetNestedType("ParentSourceMethod", BindingFlags.NonPublic)!;
+        const BindingFlags fields = BindingFlags.Instance | BindingFlags.NonPublic;
+        MethodInfo method = typeof(EngineRuntimeChecks).GetMethod(nameof(SourceProjectionIsolationFixture), BindingFlags.Static | BindingFlags.NonPublic)!;
+        object Create(object? slice = null, object? next = null, object? selected = null) =>
+            Activator.CreateInstance(type, fields, null, new object?[] { method, slice, next, selected }, null)!;
+        object complete = Create();
+        var code = (IList)type.GetField("Code", fields)!.GetValue(complete)!;
+        int Offset(object instruction) => (int)instruction.GetType().GetProperty("Offset")!.GetValue(instruction)!;
+        string Op(object instruction) => (string)instruction.GetType().GetProperty("Op")!.GetValue(instruction)!;
+        var next = code.Cast<object>().Zip(code.Cast<object>().Skip(1), (a, b) => (At: Offset(a), Next: Offset(b)))
+            .ToDictionary(pair => pair.At, pair => pair.Next);
+        var slice = (IList)Activator.CreateInstance(code.GetType())!;
+        foreach (object instruction in code) if (Op(instruction) == "ret") slice.Add(instruction);
+        Equal(true, slice.Count > 0 && slice.Count < code.Count, "identity test slice genuinely omits instructions");
+        var blocks = (IDictionary)type.GetField("Blocks", fields)!.GetValue(complete)!;
+        object branch = blocks.Values.Cast<object>().First(block =>
+            ((IList)block.GetType().GetField("Next", fields)!.GetValue(block)!).Count == 2);
+        int branchAt = (int)branch.GetType().GetField("Start", fields)!.GetValue(branch)!;
+        int successor = (int)((IList)branch.GetType().GetField("Next", fields)!.GetValue(branch)!)[0]!;
+        var selected = new Dictionary<int, int> { [branchAt] = successor };
+        MethodInfo project = type.GetMethod("ProjectForGraph", fields)!;
+        var completeValues = (IDictionary)type.GetField("Values", fields)!.GetValue(complete)!;
+        string Id(object value) => (string)value.GetType().GetField("Id", fields)!.GetValue(value)!;
+        GeneratorClient.SourceGraphProjection Project(object body, IList roots) =>
+            (GeneratorClient.SourceGraphProjection)project.Invoke(body, new object[] { roots, 64 })!;
+        string Materialize(GeneratorClient.SourceGraphProjection projection)
+        {
+            var ids = new Dictionary<MemberInfo, int>();
+            int Register(MemberInfo member)
+            { if (!ids.TryGetValue(member, out int id)) ids.Add(member, id = ids.Count); return id; }
+            return projection.Materialize(projection.Bind(Register).Members).ToJsonString();
+        }
+        foreach (var variant in new[] { (Name: "identity slice with sourceNext", Body: Create(slice, next)),
+            (Name: "sourceNext only", Body: Create(next: next)),
+            (Name: "selectedSuccessors only", Body: Create(selected: selected)) })
+        {
+            var roots = (IList)type.GetField("Statements", fields)!.GetValue(variant.Body)!;
+            var completeRoots = (IList)Activator.CreateInstance(roots.GetType())!;
+            foreach (object root in roots) completeRoots.Add(completeValues[Id(root)]!);
+            string key = "64:" + string.Join(",", roots.Cast<object>().Select(Id));
+            string expected = Materialize(Project(variant.Body, roots));
+            string expectedComplete = Materialize(Project(complete, completeRoots));
+            using var cache = new GeneratorClient.ParentSourceGraphCache();
+            using (cache.Enter())
+            {
+                Equal(expectedComplete, Materialize(Project(complete, completeRoots)), variant.Name + " complete miss");
+                Equal(true, cache.TryGetGraphProjection(method, key, out _), variant.Name + " colliding complete key is warm");
+                Equal(expected, Materialize(Project(variant.Body, roots)), variant.Name + " ignores complete graph cache hit");
+                Equal(expectedComplete, Materialize(Project(complete, completeRoots)), variant.Name + " leaves complete template intact");
+            }
+            using var sliceOnly = new GeneratorClient.ParentSourceGraphCache();
+            using (sliceOnly.Enter()) Equal(expected, Materialize(Project(variant.Body, roots)), variant.Name + " uncached result stays exact");
+            Equal(false, sliceOnly.TryGetGraphProjection(method, key, out _), variant.Name + " cannot populate graph memo");
+        }
     }
 
     private static void ParentSourceProjectionTemplateUsesExactGraphIndices()
@@ -162,6 +228,27 @@ internal static partial class EngineRuntimeChecks
             return projection.Materialize(projection.Bind(Register).Members).ToJsonString();
         }
         string expectedJson = Materialize(expected);
+        // Warm hits must honor cancellation that happens during root enumeration,
+        // after the entry check but before lookup. Both calls deterministically
+        // fail without a post-enumeration cancellation check; no timing is involved.
+        foreach (string projectionName in new[] { "Project", "ProjectForGraph" })
+        {
+            using var cancellation = new CancellationTokenSource();
+            using var analysis = new GeneratorClient.ParentAnalysis(cancellation.Token);
+            using var warmCache = new GeneratorClient.ParentSourceGraphCache();
+            using var context = analysis.Enter();
+            using var cacheScope = warmCache.Enter();
+            MethodInfo warmProject = sourceType.GetMethod(projectionName, BindingFlags.Instance | BindingFlags.NonPublic)!;
+            _ = warmProject.Invoke(source, new object[] { roots, 64 });
+            Equal(true, projectionName == "Project"
+                ? warmCache.TryGetProjection(sourceMethod, sourceKey, out _)
+                : warmCache.TryGetGraphProjection(sourceMethod, sourceKey, out _), projectionName + " cancellation test starts with warm key");
+            object cancellingRoots = gatedRoots.Invoke(null, new object[] { roots, (Action)cancellation.Cancel })!;
+            bool cancelled = false;
+            try { warmProject.Invoke(source, new object[] { cancellingRoots, 64 }); }
+            catch (TargetInvocationException error) when (error.InnerException is OperationCanceledException) { cancelled = true; }
+            Equal(true, cancelled, projectionName + " warm hit propagates cancellation during root enumeration");
+        }
         foreach (bool invalidate in new[] { false, true })
         {
             GeneratorClient.ParentAnalysis.Invalidate();

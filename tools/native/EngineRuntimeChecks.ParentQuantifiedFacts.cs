@@ -95,9 +95,7 @@ internal static partial class EngineRuntimeChecks
             owner.inventory[54] = new Item(ammoType, 99);
             Equal(null, effective.Invoke(null, new object?[] { noShoot, owner }), "inventory cannot manufacture missing weapon shoot identity");
             var observations = JsonSerializer.SerializeToElement(ammo.Invoke(null, new object?[] { noShoot, owner }));
-            AssertWeaponAmmoHasNoCandidates(observations);
-            Equal(noShoot.useAmmo, observations.GetProperty("ammoId").GetInt32(), "category remains known without choosing inventory ammo");
-            Equal(JsonValueKind.Null, observations.GetProperty("weaponShootFieldProjectileRaw").ValueKind, "missing own shoot is not filled from ammo");
+            Equal(ammoType, observations.GetProperty("playerInventoryAmmoRaw")[0].GetProperty("type").GetInt32(), "actual inventory remains a separately scoped observation");
         }
         var gun = new Item(ItemID.FlareGun);
         var own = JsonSerializer.SerializeToElement(effective.Invoke(null, new object?[] { gun, owner }));

@@ -394,6 +394,7 @@ public sealed partial class GeneratorClient
         {
             currentParentAnalysis?.ThrowIfCancelled();
             var rootRows = roots.Distinct().ToArray();
+            currentParentAnalysis?.ThrowIfCancelled();
             ParentSourceGraphCache? cache = completeSource ? activeParentSourceGraphCache ?? currentParentAnalysis?.SourceCache : null;
             string key = controlLimit.ToString(CultureInfo.InvariantCulture) + ":" + string.Join(",", rootRows.Select(value => value.Id));
             if (cache is not null && cache.TryGetProjection(Method, key, out string? retained))
@@ -408,6 +409,7 @@ public sealed partial class GeneratorClient
         {
             currentParentAnalysis?.ThrowIfCancelled();
             var rootRows = roots.Distinct().ToArray();
+            currentParentAnalysis?.ThrowIfCancelled();
             ParentSourceGraphCache? cache = completeSource ? activeParentSourceGraphCache ?? currentParentAnalysis?.SourceCache : null;
             string key = controlLimit.ToString(CultureInfo.InvariantCulture) + ":" + string.Join(",", rootRows.Select(value => value.Id));
             if (cache is not null && cache.TryGetGraphProjection(Method, key, out var retained)) return retained!;

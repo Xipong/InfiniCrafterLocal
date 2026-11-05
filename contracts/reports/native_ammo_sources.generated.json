@@ -101,7 +101,6 @@
               "sourceGuardIlOffset": 338
             }
           ],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [],
           "spawnOriginSetups": [],
           "unrecognizedProjectileWriteOffsets": []
@@ -115,7 +114,6 @@
               "sourceGuardIlOffset": 363
             }
           ],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [],
           "spawnOriginSetups": [],
           "unrecognizedProjectileWriteOffsets": []
@@ -130,7 +128,6 @@
               "sourceGuardIlOffset": 428
             }
           ],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [],
           "spawnOriginSetups": [],
           "unrecognizedProjectileWriteOffsets": []
@@ -144,7 +141,6 @@
               "sourceGuardIlOffset": 408
             }
           ],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [],
           "spawnOriginSetups": [],
           "unrecognizedProjectileWriteOffsets": []
@@ -159,7 +155,6 @@
               "sourceGuardIlOffset": 383
             }
           ],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [],
           "spawnOriginSetups": [],
           "unrecognizedProjectileWriteOffsets": []
@@ -341,7 +336,6 @@
         {
           "itemId": 46,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 22742,
@@ -361,7 +355,6 @@
         {
           "itemId": 65,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 26552,
@@ -384,11 +377,9 @@
             {
               "outputProjectileId": 2,
               "sourceStoreIlOffset": 536,
-              "whenInputProjectileId": 1,
               "sourceGuardIlOffset": 533
             }
           ],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [],
           "spawnOriginSetups": [],
           "unrecognizedProjectileWriteOffsets": []
@@ -396,7 +387,6 @@
         {
           "itemId": 190,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 24632,
@@ -414,60 +404,8 @@
           "unrecognizedProjectileWriteOffsets": []
         },
         {
-          "itemId": 273,
-          "rules": [],
-          "unresolvedLiteralWrites": [],
-          "spawnSites": [
-            {
-              "sourceSpawnIlOffset": 22870,
-              "sourceGuardIlOffset": 22794,
-              "projectileBasis": "current_shot_projectile",
-              "nativeItemSpecificDelivery": true,
-              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
-              "trajectoryReference": {
-                "status": "native_branch_aim_and_spread_not_fully_modeled",
-                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
-              }
-            },
-            {
-              "sourceSpawnIlOffset": 22930,
-              "sourceGuardIlOffset": 22794,
-              "projectileBasis": "current_shot_projectile",
-              "nativeItemSpecificDelivery": true,
-              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
-              "trajectoryReference": {
-                "status": "native_branch_aim_and_spread_not_fully_modeled",
-                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
-              }
-            }
-          ],
-          "spawnOriginSetups": [],
-          "unrecognizedProjectileWriteOffsets": []
-        },
-        {
-          "itemId": 368,
-          "rules": [],
-          "unresolvedLiteralWrites": [],
-          "spawnSites": [
-            {
-              "sourceSpawnIlOffset": 23055,
-              "sourceGuardIlOffset": 22982,
-              "projectileBasis": "current_shot_projectile",
-              "nativeItemSpecificDelivery": true,
-              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
-              "trajectoryReference": {
-                "status": "native_branch_aim_and_spread_not_fully_modeled",
-                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
-              }
-            }
-          ],
-          "spawnOriginSetups": [],
-          "unrecognizedProjectileWriteOffsets": []
-        },
-        {
           "itemId": 434,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 16394,
@@ -487,7 +425,6 @@
         {
           "itemId": 518,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 9457,
@@ -507,7 +444,6 @@
         {
           "itemId": 534,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 11150,
@@ -525,73 +461,8 @@
           "unrecognizedProjectileWriteOffsets": []
         },
         {
-          "itemId": 674,
-          "rules": [],
-          "unresolvedLiteralWrites": [],
-          "spawnSites": [
-            {
-              "sourceSpawnIlOffset": 23496,
-              "sourceGuardIlOffset": 23420,
-              "projectileBasis": "current_shot_projectile",
-              "nativeItemSpecificDelivery": true,
-              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
-              "trajectoryReference": {
-                "status": "native_branch_aim_and_spread_not_fully_modeled",
-                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
-              }
-            },
-            {
-              "sourceSpawnIlOffset": 23563,
-              "sourceGuardIlOffset": 23420,
-              "projectileBasis": "fixed_projectile",
-              "nativeItemSpecificDelivery": true,
-              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
-              "trajectoryReference": {
-                "status": "native_branch_aim_and_spread_not_fully_modeled",
-                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
-              },
-              "projectileId": 982
-            }
-          ],
-          "spawnOriginSetups": [],
-          "unrecognizedProjectileWriteOffsets": []
-        },
-        {
-          "itemId": 675,
-          "rules": [],
-          "unresolvedLiteralWrites": [],
-          "spawnSites": [
-            {
-              "sourceSpawnIlOffset": 23312,
-              "sourceGuardIlOffset": 23232,
-              "projectileBasis": "fixed_projectile",
-              "nativeItemSpecificDelivery": true,
-              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
-              "trajectoryReference": {
-                "status": "native_branch_aim_and_spread_not_fully_modeled",
-                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
-              },
-              "projectileId": 972
-            },
-            {
-              "sourceSpawnIlOffset": 23368,
-              "sourceGuardIlOffset": 23232,
-              "projectileBasis": "current_shot_projectile",
-              "nativeItemSpecificDelivery": true,
-              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
-              "trajectoryReference": {
-                "status": "native_branch_aim_and_spread_not_fully_modeled",
-                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
-              }
-            }
-          ],
-          "spawnOriginSetups": [],
-          "unrecognizedProjectileWriteOffsets": []
-        },
-        {
           "itemId": 679,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 15477,
@@ -617,7 +488,6 @@
               "sourceGuardIlOffset": 548
             }
           ],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [],
           "spawnOriginSetups": [],
           "unrecognizedProjectileWriteOffsets": []
@@ -631,47 +501,13 @@
               "sourceGuardIlOffset": 564
             }
           ],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [],
-          "spawnOriginSetups": [],
-          "unrecognizedProjectileWriteOffsets": []
-        },
-        {
-          "itemId": 757,
-          "rules": [],
-          "unresolvedLiteralWrites": [],
-          "spawnSites": [
-            {
-              "sourceSpawnIlOffset": 23695,
-              "sourceGuardIlOffset": 23615,
-              "projectileBasis": "fixed_projectile",
-              "nativeItemSpecificDelivery": true,
-              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
-              "trajectoryReference": {
-                "status": "native_branch_aim_and_spread_not_fully_modeled",
-                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
-              },
-              "projectileId": 984
-            },
-            {
-              "sourceSpawnIlOffset": 23759,
-              "sourceGuardIlOffset": 23615,
-              "projectileBasis": "current_shot_projectile",
-              "nativeItemSpecificDelivery": true,
-              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
-              "trajectoryReference": {
-                "status": "native_branch_aim_and_spread_not_fully_modeled",
-                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
-              }
-            }
-          ],
           "spawnOriginSetups": [],
           "unrecognizedProjectileWriteOffsets": []
         },
         {
           "itemId": 964,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 13599,
@@ -691,7 +527,6 @@
         {
           "itemId": 1121,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 15011,
@@ -711,7 +546,6 @@
         {
           "itemId": 1155,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 15184,
@@ -731,7 +565,6 @@
         {
           "itemId": 1156,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 15614,
@@ -751,7 +584,6 @@
         {
           "itemId": 1157,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [],
           "spawnOriginSetups": [],
           "unrecognizedProjectileWriteOffsets": [
@@ -761,7 +593,6 @@
         {
           "itemId": 1229,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 14753,
@@ -794,7 +625,6 @@
               "sourceGuardIlOffset": 226
             }
           ],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [],
           "spawnOriginSetups": [],
           "unrecognizedProjectileWriteOffsets": []
@@ -809,7 +639,6 @@
               "sourceGuardIlOffset": 250
             }
           ],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [],
           "spawnOriginSetups": [],
           "unrecognizedProjectileWriteOffsets": []
@@ -817,7 +646,6 @@
         {
           "itemId": 1258,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 13456,
@@ -844,7 +672,6 @@
               "sourceGuardIlOffset": 274
             }
           ],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 9578,
@@ -864,7 +691,6 @@
         {
           "itemId": 1308,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 13253,
@@ -890,7 +716,6 @@
         {
           "itemId": 1319,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 4973,
@@ -910,7 +735,6 @@
         {
           "itemId": 1553,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 9336,
@@ -930,7 +754,6 @@
         {
           "itemId": 1569,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 13876,
@@ -956,7 +779,6 @@
         {
           "itemId": 1801,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 15339,
@@ -974,29 +796,8 @@
           "unrecognizedProjectileWriteOffsets": []
         },
         {
-          "itemId": 1826,
-          "rules": [],
-          "unresolvedLiteralWrites": [],
-          "spawnSites": [
-            {
-              "sourceSpawnIlOffset": 23180,
-              "sourceGuardIlOffset": 23107,
-              "projectileBasis": "current_shot_projectile",
-              "nativeItemSpecificDelivery": true,
-              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
-              "trajectoryReference": {
-                "status": "native_branch_aim_and_spread_not_fully_modeled",
-                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
-              }
-            }
-          ],
-          "spawnOriginSetups": [],
-          "unrecognizedProjectileWriteOffsets": []
-        },
-        {
           "itemId": 1910,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 26688,
@@ -1016,7 +817,6 @@
         {
           "itemId": 1929,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 9223,
@@ -1036,7 +836,6 @@
         {
           "itemId": 1930,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 6957,
@@ -1056,7 +855,6 @@
         {
           "itemId": 1931,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 7457,
@@ -1088,7 +886,6 @@
         {
           "itemId": 2188,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 13031,
@@ -1120,7 +917,6 @@
               "sourceGuardIlOffset": 618
             }
           ],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [],
           "spawnOriginSetups": [],
           "unrecognizedProjectileWriteOffsets": []
@@ -1128,7 +924,6 @@
         {
           "itemId": 2270,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 6572,
@@ -1148,7 +943,6 @@
         {
           "itemId": 2623,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 15888,
@@ -1168,7 +962,6 @@
         {
           "itemId": 2624,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 9080,
@@ -1194,7 +987,6 @@
         {
           "itemId": 2750,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 7992,
@@ -1232,7 +1024,6 @@
               "sourceGuardIlOffset": 580
             }
           ],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [],
           "spawnOriginSetups": [],
           "unrecognizedProjectileWriteOffsets": []
@@ -1240,7 +1031,6 @@
         {
           "itemId": 2797,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 6330,
@@ -1261,7 +1051,6 @@
         {
           "itemId": 3006,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 18657,
@@ -1281,7 +1070,6 @@
         {
           "itemId": 3014,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 19362,
@@ -1301,7 +1089,6 @@
         {
           "itemId": 3019,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 6039,
@@ -1321,7 +1108,6 @@
         {
           "itemId": 3029,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 4157,
@@ -1353,7 +1139,6 @@
         {
           "itemId": 3053,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 5630,
@@ -1373,7 +1158,6 @@
         {
           "itemId": 3065,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 8853,
@@ -1393,7 +1177,6 @@
         {
           "itemId": 3107,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 5086,
@@ -1413,7 +1196,6 @@
         {
           "itemId": 3210,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 16157,
@@ -1433,7 +1215,6 @@
         {
           "itemId": 3350,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 25658,
@@ -1453,7 +1234,6 @@
         {
           "itemId": 3384,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 19440,
@@ -1473,7 +1253,6 @@
         {
           "itemId": 3473,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 19563,
@@ -1493,7 +1272,6 @@
         {
           "itemId": 3475,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 24742,
@@ -1514,7 +1292,6 @@
         {
           "itemId": 3531,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 17377,
@@ -1589,7 +1366,6 @@
         {
           "itemId": 3540,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 24883,
@@ -1610,7 +1386,6 @@
         {
           "itemId": 3542,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 21125,
@@ -1638,7 +1413,6 @@
               "sourceGuardIlOffset": 599
             }
           ],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 25376,
@@ -1658,7 +1432,6 @@
         {
           "itemId": 3570,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 8426,
@@ -1690,7 +1463,6 @@
         {
           "itemId": 3779,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 21401,
@@ -1710,7 +1482,6 @@
         {
           "itemId": 3787,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 21843,
@@ -1730,7 +1501,6 @@
         {
           "itemId": 3788,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 22263,
@@ -1751,7 +1521,6 @@
         {
           "itemId": 3836,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 20047,
@@ -1771,7 +1540,6 @@
         {
           "itemId": 3852,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 25763,
@@ -1803,7 +1571,6 @@
         {
           "itemId": 3854,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 25110,
@@ -1824,7 +1591,6 @@
         {
           "itemId": 3858,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 20212,
@@ -1856,7 +1622,6 @@
         {
           "itemId": 3859,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [],
           "spawnOriginSetups": [],
           "unrecognizedProjectileWriteOffsets": [
@@ -1866,7 +1631,6 @@
         {
           "itemId": 3930,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 24818,
@@ -1887,7 +1651,6 @@
         {
           "itemId": 4262,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 10150,
@@ -1907,7 +1670,6 @@
         {
           "itemId": 4270,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 11700,
@@ -1927,7 +1689,6 @@
         {
           "itemId": 4381,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 4707,
@@ -1953,7 +1714,6 @@
         {
           "itemId": 4682,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 15751,
@@ -1973,7 +1733,6 @@
         {
           "itemId": 4703,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 11233,
@@ -2004,7 +1763,6 @@
         {
           "itemId": 4715,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 12076,
@@ -2024,7 +1782,6 @@
         {
           "itemId": 4722,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 12627,
@@ -2044,7 +1801,6 @@
         {
           "itemId": 4923,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 26627,
@@ -2064,7 +1820,6 @@
         {
           "itemId": 4953,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 10958,
@@ -2097,7 +1852,6 @@
         {
           "itemId": 4956,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 19956,
@@ -2117,7 +1871,6 @@
         {
           "itemId": 5065,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 8509,
@@ -2143,7 +1896,6 @@
               "sourceGuardIlOffset": 637
             }
           ],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 6711,
@@ -2163,7 +1915,6 @@
         {
           "itemId": 5134,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 26749,
@@ -2183,7 +1934,6 @@
         {
           "itemId": 5451,
           "rules": [],
-          "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
               "sourceSpawnIlOffset": 25045,

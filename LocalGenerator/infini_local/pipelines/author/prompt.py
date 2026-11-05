@@ -39,7 +39,7 @@ from infini_local.pipelines.context.stats import parent_stat_context
 from infini_local.pipelines.pipeline_runtime_constants import LLM_ITEM_RAW_KEYS
 
 # Engineering character guard, not a model token limit: complete compact JSON
-# dossiers include parent-local source effects and weapon conversion evidence.
+# dossiers include parent-local source effects and source-derived ammo variants.
 # Preserve literal tooltips, accepted graphs and capabilities; never clip to fit.
 PLANNER_PROMPT_LIMIT_CHARS = 300_000
 PLANNER_PROMPT_MIN_HEADROOM_CHARS = 1_000
@@ -66,11 +66,11 @@ def concise_terraria_tick_guide_for_llm() -> dict[str, str]:
 def source_interpretation_for_llm() -> dict[str, str]:
     """Interpret observations without turning source metadata into mechanics."""
     return {
-        "progression": "Acquisition/progression facts establish tier, not rarity or value alone.",
+        "progression": "Inventory entries are current observations; fallback examples are illustrative. Acquisition/progression facts establish tier, not rarity or value alone.",
         "ammunition": (
             "weapon_item.shoot_field is a native field, not an observed fired shot, even under effectiveProjectile. "
-            "Weapon ammo context names the consumed category and source conversion rules, not selected ammunition. "
-            "Choose whether the child transforms its projectile. An actual ammo ingredient contributes its own facts; its useTime does not set a launcher's cadence."
+            "Ammo damage contributes to a compatible launcher, including when its projectile is replaced; "
+            "ammo useTime does not set the launcher's cadence. Weapon-ammo configurations describe separate cases."
         ),
         "inventoryPassives": "dropSeedsIfInInventory is the native inventory passive implemented by collect_seeds.",
     }
