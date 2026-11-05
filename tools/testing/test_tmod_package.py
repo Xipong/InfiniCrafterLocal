@@ -162,6 +162,46 @@ class FullVerificationTests(unittest.TestCase):
         self.assertEqual(report['sha256'], hashlib.sha256(self.package.read_bytes()).hexdigest())
         self.assertEqual(report['files'], sorted(self.files))
 
+    def add_managed_dependency(self):
+        with (self.source / 'build.txt').open('a', encoding='utf-8') as manifest:
+            manifest.write('dllReferences = Fixture.Dependency\n')
+        library = self.source / 'lib' / 'Fixture.Dependency.dll'
+        library.parent.mkdir()
+        library.write_bytes(b'MZmanaged-dependency-fixture')
+        notice = library.with_suffix('.LICENSE.txt')
+        notice.write_text('Dependency MIT notice fixture', encoding='utf-8')
+        self.files['lib/' + library.name] = library.read_bytes()
+        self.files['lib/' + notice.name] = notice.read_bytes()
+        # Info carries the same declared loader dependency as build.txt.
+        self.files['Info'] = self.files['Info'][:-1] + string('dllReferences') + string('Fixture.Dependency') + b'\0\0'
+
+    def test_managed_dependency_and_license_are_exact(self):
+        self.add_managed_dependency()
+        self.assertEqual(self.check()['dllReferences'], ['Fixture.Dependency'])
+
+    def test_missing_or_changed_managed_dependency_rejected(self):
+        self.add_managed_dependency()
+        for content in (None, b'MZwrong-managed-library'):
+            with self.subTest(content=content):
+                if content is None:
+                    self.files.pop('lib/Fixture.Dependency.dll')
+                else:
+                    self.files['lib/Fixture.Dependency.dll'] = content
+                with self.assertRaisesRegex(ValueError, 'managed dependency missing or changed'):
+                    self.check()
+
+    def test_managed_dependency_loader_declaration_required(self):
+        self.add_managed_dependency()
+        self.files['Info'] = string('version') + string('0.5.1') + string('modReferences') + string('ParticleLibrary@3.2.1.0') + string('Luminance') + b'\0\0'
+        with self.assertRaisesRegex(ValueError, 'manifest version/dependencies mismatch'):
+            self.check()
+
+    def test_managed_dependency_notice_required(self):
+        self.add_managed_dependency()
+        self.files.pop('lib/Fixture.Dependency.LICENSE.txt')
+        with self.assertRaisesRegex(ValueError, 'notice missing or changed'):
+            self.check()
+
     def test_wrong_package_version_rejected(self):
         with self.assertRaisesRegex(ValueError, 'version differs'):
             self.check(version='0.5.2')

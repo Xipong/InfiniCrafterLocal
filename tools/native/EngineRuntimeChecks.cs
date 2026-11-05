@@ -24,6 +24,8 @@ internal static partial class EngineRuntimeChecks
             // Main's static world/player path fields require Program.SavePath.
             // Supply an isolated directory, never the player's actual saves.
             Terraria.Program.SavePath = sandbox;
+            typeof(Terraria.Program).GetProperty("SavePathShared", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!
+                .SetValue(null, sandbox);
             Terraria.Main.dedServ = true;
             if (args.Length == 2 && args[0] == "--capture-parent-context")
             {
@@ -59,6 +61,7 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("bundled decompiler exact binary and official resource packaging", BundledDecompilerUsesOfficialResourcePackaging),
             ("lineage hash proof graph cycles and world expiry", LineageHashProofGraphRetainsCycleBoundaries),
             ("lineage hash proof mutable captions remain unordered", LineageHashProofMutableCaptionsStayUnordered),
             ("lineage hash proof complete bounded audit receipts", LineageHashProofReceiptsBoundEveryMutation),
