@@ -17,6 +17,10 @@ Owners: [world_recipe_runtime.py](../../../LocalGenerator/infini_local/storage/w
 
 Fresh commit разрешён только после трёх accepted stages, image delivery, final runtime/VFX/stage gates, sanitize и повторного cached-payload check ([pipeline](../../development/pipeline/THREE_STAGE_LLM_PIPELINE_RU.md#flow)). Recipe authority не равна station escrow/placed-item return ledger: их [world ownership](../../development/architecture/ARCHITECTURE_RU.md#profiles-world) отдельна.
 
+Чтение разделяет отсутствие recipe JSON, невалидное определение и недоступность PNG. Невалидные identity/runtime/VFX по-прежнему уходят в quarantine; валидное определение с отсутствующим или непригодным asset остаётся побайтно в `recipes/`. Storage поднимает `RecipeAssetsUnavailable`, `/combine` возвращает HTTP 409 `accepted_recipe_assets_unavailable` с прежними `recipeKey`/`itemId`, `retryable=false`, `cacheRecoveryAllowed=false`. Это не cache miss: ни endpoint, ни повторная проверка внутри singleflight не открывают Author/Visual/VFX или новую image-генерацию. Новый рецепт без обязательных PNG всё ещё нельзя записать или выдать.
+
+Возврат исходных файлов под прежними именами позволяет следующему lookup снова пройти штатный delivery gate без изменения ID, gameplay и ancestry. Существующий filename resolver также допускает готовый файл из второго serving root. Автоматического поиска резервной копии, восстановления по digest или image-only regeneration здесь нет: diagnostic manifest/private image outputs не являются recovery index, а delivery DTO удаляет `visualKit` и не содержит полного воспроизводимого задания для всех старых изображений. Если исходной копии нет, результат остаётся явно blocked; сохранённое определение не переавторивается.
+
 <a id="health"></a>
 ## Что health доказывает
 

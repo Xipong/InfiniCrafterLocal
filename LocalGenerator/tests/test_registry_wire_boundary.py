@@ -338,7 +338,7 @@ def test_rejected_wire_is_quarantined_by_real_cache_lookup(tmp_path, monkeypatch
     reason = world_storage.read_json_file(reasons[0])
     assert isinstance(reason, dict)
     assert reason["reason"] == "low_level_runtime_contract_invalid"
-    assert reason["details"]["errors"] == [{"path": "$", "message": "payload is not deliverable"}]
+    assert reason["details"]["errors"] == report["errors"]
     assert (reasons[0].parent / reason["payloadFile"]).read_bytes() == original
 
 

@@ -128,8 +128,10 @@ def test_item_body_entity_texture_requires_its_actual_projected_png(offline_back
     saved = json.loads(target.read_text(encoding="utf-8"))
     next(row for row in saved["runtimeProgram"]["entities"] if row["kind"] == "item_body")["visual"]["spritePath"] = ""
     target.write_text(json.dumps(saved), encoding="utf-8")  # Explicit corrupt persisted fixture, not a repair.
-    assert world_storage.read_world_recipe_cache(tmp_path / "body", "dependencies", "v5", "probe", "offline-world") is None
-    assert not target.exists() and list((target.parent.parent / "invalid").glob("*.json"))
+    stored = target.read_bytes()
+    with pytest.raises(world_storage.RecipeAssetsUnavailable):
+        world_storage.read_world_recipe_cache(tmp_path / "body", "dependencies", "v5", "probe", "offline-world")
+    assert target.read_bytes() == stored and not (target.parent.parent / "invalid").exists()
 
 @pytest.mark.parametrize("selector", [None, ["entity"], "Entity"])
 def test_persisted_png_selector_rejects_untyped_or_normalized_tokens(selector):
@@ -259,13 +261,21 @@ def test_storage_cache_roundtrip_preserves_assets_refs_pixels_and_runtime(offlin
     assert cached["runtimeProgram"] == before["runtimeProgram"]
     path = world_storage.world_recipe_file(tmp_path / "world", "world", "recipe")
     stored = path.read_bytes()
-    Path(data["vfxManifest"]["assets"][0]["spritePath"]).unlink()
+    lost = Path(data["vfxManifest"]["assets"][0]["spritePath"])
+    pixels = lost.read_bytes()
+    neighbors = {Path(value): Path(value).read_bytes() for value in asset_sync_service.runtime_asset_paths(data) if value and Path(value) != lost}
+    lost.unlink()
     assert world_storage.is_deliverable_recipe_payload(data) is False
-    assert world_storage.read_world_recipe_cache(tmp_path / "world", "test", "v5", "recipe", "world") is None
-    invalid = path.parent.parent / "invalid"
-    originals = [p for p in invalid.glob("*.json") if not p.name.endswith(".reason.json")]
-    assert len(originals) == 1
-    assert originals[0].read_bytes() == stored
+    with pytest.raises(world_storage.RecipeAssetsUnavailable):
+        world_storage.read_world_recipe_cache(tmp_path / "world", "test", "v5", "recipe", "world")
+    assert path.read_bytes() == stored
+    assert not (path.parent.parent / "invalid").exists()
+    assert all(neighbor.read_bytes() == raw for neighbor, raw in neighbors.items())
+    lost.write_bytes(pixels)
+    recovered = world_storage.read_world_recipe_cache(tmp_path / "world", "test", "v5", "recipe", "world")
+    assert recovered is not None and recovered["runtimeProgram"] == before["runtimeProgram"]
+    assert recovered["vfxManifest"] == before["vfxManifest"]
+    assert path.read_bytes() == stored and all(neighbor.read_bytes() == raw for neighbor, raw in neighbors.items())
 
 def test_storage_requires_ready_nested_existing_texture_even_without_new_requests():
     from infini_local.core.vfx.validation import validate_vfx_manifest_wire

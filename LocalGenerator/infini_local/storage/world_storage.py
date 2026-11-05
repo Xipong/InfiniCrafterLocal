@@ -405,7 +405,19 @@ def quarantine_world_recipe_cache(
         )
         return str(destination)
 
-def _cache_assets_ready(data: dict[str, Any]) -> bool:
+
+class RecipeAssetsUnavailable(RuntimeError):
+    """Accepted definition exists; asset readiness must never become a cache miss."""
+
+    def __init__(self, data: dict[str, Any], report: dict[str, Any]) -> None:
+        self.recipe_key = str(data["recipeKey"])
+        self.item_id = str(data["id"])
+        self.world_id = str(data["recipeMeta"]["worldId"])
+        self.report = report
+        super().__init__(f"Accepted recipe {self.recipe_key} has unavailable assets; definition retained")
+
+
+def _cache_assets_report(data: dict[str, Any]) -> dict[str, Any]:
     """Use the delivery owner for the exact canonical transfer roster.
 
     Present paths are not optional downloads. Every actual PNG consumer
@@ -414,7 +426,7 @@ def _cache_assets_ready(data: dict[str, Any]) -> bool:
     """
     from infini_local.pipelines.visual.delivery import visual_delivery_report
 
-    return bool(visual_delivery_report(data, check_backend_config=False)["ok"])
+    return visual_delivery_report(data, check_backend_config=False)
 
 
 def read_world_recipe_cache(
@@ -427,7 +439,11 @@ def read_world_recipe_cache(
     *,
     validate_payload: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
-    """Read, assess and quarantine one version under the canonical path lock."""
+    """Admit a definition, then assess assets without revoking accepted design.
+
+    Invalid definitions retain the strict quarantine policy. Missing/unusable PNGs
+    raise a distinct outcome, leaving the authoritative bytes and identity intact.
+    """
     recipe_path = world_recipe_file(world_recipes_dir, world_id, recipe_key_value)
     with _storage_lock(recipe_path):
         try:
@@ -482,9 +498,10 @@ def read_world_recipe_cache(
             return None
         # The storage owner always admits the full canonical runtime/VFX/assets
         # contract. A caller can add stricter checks, never replace this baseline.
-        runtime_ready = is_deliverable_recipe_payload(data, check_assets=False)
-        vfx_report = validate_vfx_manifest_wire(data)
-        assets_ready = runtime_ready and _cache_assets_ready(data)
+        definition = recipe_definition_report(data)
+        runtime_ready = definition["ok"]
+        assets = _cache_assets_report(data) if runtime_ready else None
+        assets_ready = bool(assets and assets["ok"])
         debug = data.setdefault("debug", {})
         debug.update({"cacheHit": "world_file", "cacheScope": "world"})
         debug.setdefault("recipeIdentityVersion", recipe_identity_version)
@@ -495,10 +512,12 @@ def read_world_recipe_cache(
         })
         delivered = sanitize_recipe_for_delivery(data)
         report = {
-            "ok": runtime_ready and assets_ready,
-            "errors": [] if runtime_ready else [{"path": "$", "message": "payload is not deliverable"}],
+            "ok": runtime_ready,
+            "errors": definition["errors"],
         }
-        if report["ok"] and validate_payload is not None:
+        # A caller cannot waive canonical admission or turn asset-only loss into
+        # quarantine of accepted JSON. Extra checks run only on ready records.
+        if report["ok"] and assets_ready and validate_payload is not None:
             caller_report = validate_payload(delivered)
             report["ok"] = report["ok"] and caller_report["ok"]
             report["errors"] = caller_report.get("errors", [])
@@ -511,7 +530,7 @@ def read_world_recipe_cache(
                 path = quarantine_world_recipe_cache(
                     world_recipes_dir, world_id=world_id, recipe_key_value=recipe_key_value,
                     reason=context["reason"], details={
-                        "runtimeReady": runtime_ready, "vfx": vfx_report, "assetsReady": assets_ready,
+                        "runtimeReady": runtime_ready, "vfx": definition.get("vfx"), "assetsReady": assets_ready,
                         "errors": report.get("errors", [])[:24],
                     },
                 )
@@ -520,27 +539,37 @@ def read_world_recipe_cache(
             except (OSError, ValueError, TypeError) as exc:
                 trace_event("warn", "COMBINE:cache", "could not quarantine invalid recipe", {**context, "error": repr(exc)})
             return None
+        if not assets_ready:
+            assert assets is not None
+            raise RecipeAssetsUnavailable(data, assets)
         return delivered
 
 
 def is_deliverable_recipe_payload(data: Any, *, check_assets: bool = True) -> bool:
-    if not isinstance(data, dict) or not str(data.get("name") or "").strip():
+    if not recipe_definition_report(data)["ok"]:
         return False
+    return not check_assets or bool(_cache_assets_report(data)["ok"])
+
+
+def recipe_definition_report(data: Any) -> dict[str, Any]:
+    """Readmission of persisted wire, independent of current PNG availability."""
+    invalid = {"ok": False, "errors": [{"path": "$", "message": "payload is not deliverable"}]}
+    if not isinstance(data, dict) or not str(data.get("name") or "").strip():
+        return invalid
     schema_version = data.get("schemaVersion")
     if type(schema_version) is not int or schema_version != 5:
-        return False
+        return invalid
     if str(data.get("runtimeApiVersion") or "") != RUNTIME_PROGRAM_API_VERSION:
-        return False
+        return invalid
     if str(data.get("id") or "").strip().lower() in {"", "placeholder"}:
-        return False
+        return invalid
     source_mode = str(data.get("sourceMode") or "").strip().lower()
     if source_mode in {"fallback", "failed", "placeholder"} or source_mode.startswith("fallback_"):
-        return False
+        return invalid
     runtime = data.get("runtimeProgram")
     if not isinstance(runtime, dict) or runtime.get("schema") != RUNTIME_WIRE_SCHEMA:
-        return False
-    if not validate_runtime_wire(data).get("ok"):
-        return False
-    if not validate_vfx_manifest_wire(data)["ok"]:
-        return False
-    return not check_assets or _cache_assets_ready(data)
+        return invalid
+    wire = validate_runtime_wire(data)
+    vfx = validate_vfx_manifest_wire(data)
+    errors = list(wire.get("errors") or []) + list(vfx.get("errors") or [])
+    return {"ok": wire["ok"] and vfx["ok"], "errors": errors, "runtime": wire, "vfx": vfx}

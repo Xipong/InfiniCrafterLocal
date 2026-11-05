@@ -123,10 +123,10 @@ def test_real_author_and_visual_requests_carry_capability_readonly(wire_transpor
 
 def test_explicit_placed_png_is_required_even_with_legacy_optional_policy(monkeypatch):
     from infini_local.pipelines.visual import delivery as gate
-    from infini_local.storage.world_storage import _cache_assets_ready
+    from infini_local.storage.world_storage import is_deliverable_recipe_payload
     wire = compile_runtime_program(placed())
     monkeypatch.setattr(gate, "VISUAL_REQUIRE_ITEM_SPRITE", False)
-    assert not _cache_assets_ready(wire)
+    assert not is_deliverable_recipe_payload(wire)
     report = gate.visual_delivery_report(wire, check_backend_config=False)
     assert "required_placed_body_sprite_missing" in {p["code"] for p in report["problems"]}
     assert report["requiredItemSprite"] is True

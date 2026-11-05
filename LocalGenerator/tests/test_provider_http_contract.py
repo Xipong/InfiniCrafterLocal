@@ -657,13 +657,13 @@ def test_cache_only_stale_validation_never_quarantines_fresh_writer(tmp_path, mo
     fresh["id"] = "fresh_valid_recipe"
     entered, resume, probed, written = (threading.Event() for _ in range(4))
     failures, schedule = [], {}
-    original_admission = world_storage.is_deliverable_recipe_payload
+    original_admission = world_storage.recipe_definition_report
 
-    def paused_admission(data, *, check_assets=True):
+    def paused_admission(data):
         if threading.current_thread().name == "stale-reader":
             entered.set()
             assert resume.wait(5), "reader barrier not released"
-        return original_admission(data, check_assets=check_assets)
+        return original_admission(data)
 
     def reader():
         try:
@@ -687,7 +687,7 @@ def test_cache_only_stale_validation_never_quarantines_fresh_writer(tmp_path, mo
             if immediate:
                 lock.release()
 
-    monkeypatch.setattr(world_storage, "is_deliverable_recipe_payload", paused_admission)
+    monkeypatch.setattr(world_storage, "recipe_definition_report", paused_admission)
     rt = threading.Thread(target=reader, name="stale-reader")
     wt = threading.Thread(target=writer, name="fresh-writer")
     rt.start()
