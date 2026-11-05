@@ -1,0 +1,23 @@
+METHOD Int32 NewProjectile(Terraria.DataStructures.IEntitySource, Microsoft.Xna.Framework.Vector2, Microsoft.Xna.Framework.Vector2, Int32, Int32, Single, Int32, Single, Single, Single) owner=Terraria.Projectile bytes=44
+METHOD Int32 NewProjectile(Terraria.DataStructures.IEntitySource, Single, Single, Single, Single, Int32, Int32, Single, Int32, Single, Single, Single) owner=Terraria.Projectile bytes=1860
+973 callvirt Terraria.Projectile.Void Kill()
+1808 call Terraria.ModLoader.ProjectileLoader.Void OnSpawn(Terraria.Projectile, Terraria.DataStructures.IEntitySource)
+METHOD Void Kill() owner=Terraria.Projectile bytes=161228
+110 call Terraria.ModLoader.ProjectileLoader.Boolean PreKill(Terraria.Projectile, Int32)
+191 call Terraria.Projectile.Void SpawnWebs()
+5678 call Terraria.GameContent.Drawing.ParticleOrchestrator.Void RequestParticleSpawn(Boolean, Terraria.GameContent.Drawing.ParticleOrchestraType, Terraria.GameContent.Drawing.ParticleOrchestraSettings, System.Nullable`1[System.Int32])
+11819 call Terraria.GameContent.Drawing.ParticleOrchestrator.Void RequestParticleSpawn(Boolean, Terraria.GameContent.Drawing.ParticleOrchestraType, Terraria.GameContent.Drawing.ParticleOrchestraSettings, System.Nullable`1[System.Int32])
+21502 callvirt Terraria.Projectile.Void Kill()
+21664 callvirt Terraria.Projectile.Void Kill()
+29232 callvirt Terraria.Projectile.Void Kill()
+88955 call Terraria.NPC.Int32 GetAvailableAmountOfNPCsToSpawnUpToSlot(Int32, Int32)
+96164 call Terraria.WorldGen.Void KillTile(Int32, Int32, Boolean, Boolean, Boolean)
+107762 call Terraria.GameContent.Drawing.ParticleOrchestrator.Void RequestParticleSpawn(Boolean, Terraria.GameContent.Drawing.ParticleOrchestraType, Terraria.GameContent.Drawing.ParticleOrchestraSettings, System.Nullable`1[System.Int32])
+108010 call Terraria.GameContent.Drawing.ParticleOrchestrator.Void RequestParticleSpawn(Boolean, Terraria.GameContent.Drawing.ParticleOrchestraType, Terraria.GameContent.Drawing.ParticleOrchestraSettings, System.Nullable`1[System.Int32])
+129117 call Terraria.Projectile.Void Kill_DirtAndFluidProjectiles_RunDelegateMethodPushUpForHalfBricks(Microsoft.Xna.Framework.Point, Single, TileActionAttempt)
+130086 call Terraria.Projectile.Void Kill_DirtAndFluidProjectiles_RunDelegateMethodPushUpForHalfBricks(Microsoft.Xna.Framework.Point, Single, TileActionAttempt)
+130980 call Terraria.Projectile.Void Kill_DirtAndFluidProjectiles_RunDelegateMethodPushUpForHalfBricks(Microsoft.Xna.Framework.Point, Single, TileActionAttempt)
+131877 call Terraria.Projectile.Void Kill_DirtAndFluidProjectiles_RunDelegateMethodPushUpForHalfBricks(Microsoft.Xna.Framework.Point, Single, TileActionAttempt)
+132771 call Terraria.Projectile.Void Kill_DirtAndFluidProjectiles_RunDelegateMethodPushUpForHalfBricks(Microsoft.Xna.Framework.Point, Single, TileActionAttempt)
+158287 call Terraria.WorldGen.Void KillTile(Int32, Int32, Boolean, Boolean, Boolean)
+161215 call Terraria.ModLoader.ProjectileLoader.Void OnKill(Terraria.Projectile, Int32)

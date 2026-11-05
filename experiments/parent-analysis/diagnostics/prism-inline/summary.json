@@ -1,0 +1,662 @@
+{
+  "checks": 575,
+  "sourceOnly": true,
+  "productionChanged": false,
+  "gitOperations": false,
+  "LLMCalls": false,
+  "budgetBypassOnlyInHarness": true,
+  "sourceManifest": {
+    "ifc-prism-slice-audit-20261105/MeasureSlice.cs": "9ff87231307346db34bbfa5a97eda63492a5113f68073e57f262c277125cef8c",
+    "ifc-prism-slice-audit-20261105/validate.py": "c4f901f7ee6052eb98ec149e1bcf6560af8a32290f7bf9061f7122a63dc3c501",
+    "ifc-magic-audit-20261105/helper-final-native/EngineRuntimeChecks.dll": "22e898a0563ce7c24acfbbb26ba793f42b82ce85499d9f811da463b0810bc1b9",
+    "ifc-magic-audit-20261105/helper-final-native/tModLoader.dll": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5",
+    "last-prism-source-20261105/Projectile.cs": "e046082b80002acbc92cc1f55cac52fedba66915ec5c28dffbd8aa90343bfb90"
+  },
+  "rows": [
+    {
+      "type": 632,
+      "baselineObservations": 36,
+      "genericEffectObservations": 42,
+      "baselineChars": 44101,
+      "effectCharsBeforeWarningPreservation": 52113,
+      "localSolver": [
+        {
+          "label": "raw",
+          "variant": "dense",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 163,
+          "passes": 3,
+          "assertions": 326,
+          "storedCells": 578324
+        },
+        {
+          "label": "raw",
+          "variant": "sparse",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 163,
+          "passes": 3,
+          "assertions": 326,
+          "storedCells": 31622
+        },
+        {
+          "label": "selected",
+          "variant": "dense",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 145,
+          "passes": 3,
+          "assertions": 290,
+          "storedCells": 514460
+        },
+        {
+          "label": "selected",
+          "variant": "sparse",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 145,
+          "passes": 3,
+          "assertions": 290,
+          "storedCells": 28130
+        }
+      ],
+      "measurements": [
+        {
+          "label": "decode",
+          "ms": 122.0497,
+          "alloc": 9251304,
+          "error": null
+        },
+        {
+          "label": "body",
+          "ms": 1395.0642,
+          "alloc": 473621360,
+          "error": null
+        },
+        {
+          "label": "identity",
+          "ms": 14.6073,
+          "alloc": 574008,
+          "error": null
+        },
+        {
+          "label": "selectedBody",
+          "ms": 1161.6587,
+          "alloc": 417316296,
+          "error": null
+        },
+        {
+          "label": "raw_locals_dense",
+          "ms": 1498.4652,
+          "alloc": 444386760,
+          "error": null
+        },
+        {
+          "label": "raw_locals_sparse",
+          "ms": 133.2043,
+          "alloc": 28763720,
+          "error": null
+        },
+        {
+          "label": "selected_locals_dense",
+          "ms": 2142.5417,
+          "alloc": 391128376,
+          "error": null
+        },
+        {
+          "label": "selected_locals_sparse",
+          "ms": 67.5587,
+          "alloc": 25312472,
+          "error": null
+        },
+        {
+          "label": "selected_effects",
+          "ms": 47.7182,
+          "alloc": 2898912,
+          "error": null
+        },
+        {
+          "label": "raw_dispatch",
+          "ms": 11.033,
+          "alloc": 3676880,
+          "error": null
+        },
+        {
+          "label": "raw_motion",
+          "ms": 9.2708,
+          "alloc": 2489152,
+          "error": null
+        },
+        {
+          "label": "selected_dispatch",
+          "ms": 4.4117,
+          "alloc": 1686896,
+          "error": null
+        },
+        {
+          "label": "selected_motion",
+          "ms": 3.8055,
+          "alloc": 1501280,
+          "error": null
+        }
+      ]
+    },
+    {
+      "type": 455,
+      "baselineObservations": 17,
+      "genericEffectObservations": 18,
+      "baselineChars": 18657,
+      "effectCharsBeforeWarningPreservation": 20677,
+      "localSolver": [
+        {
+          "label": "raw",
+          "variant": "dense",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 163,
+          "passes": 3,
+          "assertions": 326,
+          "storedCells": 578324
+        },
+        {
+          "label": "raw",
+          "variant": "sparse",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 163,
+          "passes": 3,
+          "assertions": 326,
+          "storedCells": 31622
+        },
+        {
+          "label": "selected",
+          "variant": "dense",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 64,
+          "passes": 3,
+          "assertions": 128,
+          "storedCells": 227072
+        },
+        {
+          "label": "selected",
+          "variant": "sparse",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 64,
+          "passes": 3,
+          "assertions": 128,
+          "storedCells": 12416
+        }
+      ],
+      "measurements": [
+        {
+          "label": "decode",
+          "ms": 135.111,
+          "alloc": 9245112,
+          "error": null
+        },
+        {
+          "label": "body",
+          "ms": 1459.7445,
+          "alloc": 473719704,
+          "error": null
+        },
+        {
+          "label": "identity",
+          "ms": 19.8709,
+          "alloc": 582208,
+          "error": null
+        },
+        {
+          "label": "selectedBody",
+          "ms": 543.1533,
+          "alloc": 188607768,
+          "error": null
+        },
+        {
+          "label": "raw_locals_dense",
+          "ms": 1557.1007,
+          "alloc": 444390424,
+          "error": null
+        },
+        {
+          "label": "raw_locals_sparse",
+          "ms": 75.9772,
+          "alloc": 28763904,
+          "error": null
+        },
+        {
+          "label": "selected_locals_dense",
+          "ms": 480.2731,
+          "alloc": 176306096,
+          "error": null
+        },
+        {
+          "label": "selected_locals_sparse",
+          "ms": 26.3062,
+          "alloc": 11244416,
+          "error": null
+        },
+        {
+          "label": "selected_effects",
+          "ms": 40.8103,
+          "alloc": 1022648,
+          "error": null
+        },
+        {
+          "label": "raw_dispatch",
+          "ms": 13.1253,
+          "alloc": 3677584,
+          "error": null
+        },
+        {
+          "label": "raw_motion",
+          "ms": 9.1743,
+          "alloc": 2488712,
+          "error": null
+        },
+        {
+          "label": "selected_dispatch",
+          "ms": 2.0134,
+          "alloc": 733448,
+          "error": null
+        },
+        {
+          "label": "selected_motion",
+          "ms": 5.4119,
+          "alloc": 681136,
+          "error": null
+        }
+      ]
+    },
+    {
+      "type": 461,
+      "baselineObservations": 15,
+      "genericEffectObservations": 16,
+      "baselineChars": 10441,
+      "effectCharsBeforeWarningPreservation": 12336,
+      "localSolver": [
+        {
+          "label": "raw",
+          "variant": "dense",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 163,
+          "passes": 3,
+          "assertions": 326,
+          "storedCells": 578324
+        },
+        {
+          "label": "raw",
+          "variant": "sparse",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 163,
+          "passes": 3,
+          "assertions": 326,
+          "storedCells": 31622
+        },
+        {
+          "label": "selected",
+          "variant": "dense",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 53,
+          "passes": 3,
+          "assertions": 106,
+          "storedCells": 188044
+        },
+        {
+          "label": "selected",
+          "variant": "sparse",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 53,
+          "passes": 3,
+          "assertions": 106,
+          "storedCells": 10282
+        }
+      ],
+      "measurements": [
+        {
+          "label": "decode",
+          "ms": 96.214,
+          "alloc": 9245112,
+          "error": null
+        },
+        {
+          "label": "body",
+          "ms": 1403.3718,
+          "alloc": 473626584,
+          "error": null
+        },
+        {
+          "label": "identity",
+          "ms": 13.8862,
+          "alloc": 574824,
+          "error": null
+        },
+        {
+          "label": "selectedBody",
+          "ms": 403.8146,
+          "alloc": 155114704,
+          "error": null
+        },
+        {
+          "label": "raw_locals_dense",
+          "ms": 1261.3825,
+          "alloc": 444386784,
+          "error": null
+        },
+        {
+          "label": "raw_locals_sparse",
+          "ms": 75.5646,
+          "alloc": 28763904,
+          "error": null
+        },
+        {
+          "label": "selected_locals_dense",
+          "ms": 521.0746,
+          "alloc": 144646936,
+          "error": null
+        },
+        {
+          "label": "selected_locals_sparse",
+          "ms": 21.5769,
+          "alloc": 9230560,
+          "error": null
+        },
+        {
+          "label": "selected_effects",
+          "ms": 29.4736,
+          "alloc": 760680,
+          "error": null
+        },
+        {
+          "label": "raw_dispatch",
+          "ms": 14.5482,
+          "alloc": 3677872,
+          "error": null
+        },
+        {
+          "label": "raw_motion",
+          "ms": 5.5622,
+          "alloc": 2488712,
+          "error": null
+        },
+        {
+          "label": "selected_dispatch",
+          "ms": 1.5926,
+          "alloc": 523544,
+          "error": null
+        },
+        {
+          "label": "selected_motion",
+          "ms": 0.9106,
+          "alloc": 487024,
+          "error": null
+        }
+      ]
+    },
+    {
+      "type": 537,
+      "baselineObservations": 14,
+      "genericEffectObservations": 15,
+      "baselineChars": 10201,
+      "effectCharsBeforeWarningPreservation": 12029,
+      "localSolver": [
+        {
+          "label": "raw",
+          "variant": "dense",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 163,
+          "passes": 3,
+          "assertions": 326,
+          "storedCells": 578324
+        },
+        {
+          "label": "raw",
+          "variant": "sparse",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 163,
+          "passes": 3,
+          "assertions": 326,
+          "storedCells": 31622
+        },
+        {
+          "label": "selected",
+          "variant": "dense",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 57,
+          "passes": 3,
+          "assertions": 114,
+          "storedCells": 202236
+        },
+        {
+          "label": "selected",
+          "variant": "sparse",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 57,
+          "passes": 3,
+          "assertions": 114,
+          "storedCells": 11058
+        }
+      ],
+      "measurements": [
+        {
+          "label": "decode",
+          "ms": 99.3145,
+          "alloc": 9251304,
+          "error": null
+        },
+        {
+          "label": "body",
+          "ms": 1430.0115,
+          "alloc": 473622056,
+          "error": null
+        },
+        {
+          "label": "identity",
+          "ms": 18.6745,
+          "alloc": 580288,
+          "error": null
+        },
+        {
+          "label": "selectedBody",
+          "ms": 467.3981,
+          "alloc": 167033728,
+          "error": null
+        },
+        {
+          "label": "raw_locals_dense",
+          "ms": 1307.2744,
+          "alloc": 444387016,
+          "error": null
+        },
+        {
+          "label": "raw_locals_sparse",
+          "ms": 79.0282,
+          "alloc": 28763904,
+          "error": null
+        },
+        {
+          "label": "selected_locals_dense",
+          "ms": 382.2176,
+          "alloc": 155903456,
+          "error": null
+        },
+        {
+          "label": "selected_locals_sparse",
+          "ms": 23.0619,
+          "alloc": 9948616,
+          "error": null
+        },
+        {
+          "label": "selected_effects",
+          "ms": 30.1364,
+          "alloc": 783112,
+          "error": null
+        },
+        {
+          "label": "raw_dispatch",
+          "ms": 14.3321,
+          "alloc": 3677352,
+          "error": null
+        },
+        {
+          "label": "raw_motion",
+          "ms": 10.1097,
+          "alloc": 2488992,
+          "error": null
+        },
+        {
+          "label": "selected_dispatch",
+          "ms": 1.4392,
+          "alloc": 534600,
+          "error": null
+        },
+        {
+          "label": "selected_motion",
+          "ms": 1.1745,
+          "alloc": 497088,
+          "error": null
+        }
+      ]
+    },
+    {
+      "type": 642,
+      "baselineObservations": 16,
+      "genericEffectObservations": 17,
+      "baselineChars": 10751,
+      "effectCharsBeforeWarningPreservation": 12646,
+      "localSolver": [
+        {
+          "label": "raw",
+          "variant": "dense",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 163,
+          "passes": 3,
+          "assertions": 326,
+          "storedCells": 578324
+        },
+        {
+          "label": "raw",
+          "variant": "sparse",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 163,
+          "passes": 3,
+          "assertions": 326,
+          "storedCells": 31622
+        },
+        {
+          "label": "selected",
+          "variant": "dense",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 54,
+          "passes": 3,
+          "assertions": 108,
+          "storedCells": 191592
+        },
+        {
+          "label": "selected",
+          "variant": "sparse",
+          "allLocals": 1774,
+          "usedLocals": 97,
+          "blocks": 54,
+          "passes": 3,
+          "assertions": 108,
+          "storedCells": 10476
+        }
+      ],
+      "measurements": [
+        {
+          "label": "decode",
+          "ms": 106.9729,
+          "alloc": 9251304,
+          "error": null
+        },
+        {
+          "label": "body",
+          "ms": 1431.8798,
+          "alloc": 473627064,
+          "error": null
+        },
+        {
+          "label": "identity",
+          "ms": 16.2498,
+          "alloc": 575184,
+          "error": null
+        },
+        {
+          "label": "selectedBody",
+          "ms": 406.6098,
+          "alloc": 158038264,
+          "error": null
+        },
+        {
+          "label": "raw_locals_dense",
+          "ms": 1274.7302,
+          "alloc": 444387176,
+          "error": null
+        },
+        {
+          "label": "raw_locals_sparse",
+          "ms": 75.1493,
+          "alloc": 28763904,
+          "error": null
+        },
+        {
+          "label": "selected_locals_dense",
+          "ms": 527.6712,
+          "alloc": 147405144,
+          "error": null
+        },
+        {
+          "label": "selected_locals_sparse",
+          "ms": 20.6617,
+          "alloc": 9407888,
+          "error": null
+        },
+        {
+          "label": "selected_effects",
+          "ms": 31.6209,
+          "alloc": 775408,
+          "error": null
+        },
+        {
+          "label": "raw_dispatch",
+          "ms": 19.6689,
+          "alloc": 3677168,
+          "error": null
+        },
+        {
+          "label": "raw_motion",
+          "ms": 5.9056,
+          "alloc": 2489128,
+          "error": null
+        },
+        {
+          "label": "selected_dispatch",
+          "ms": 1.1108,
+          "alloc": 533832,
+          "error": null
+        },
+        {
+          "label": "selected_motion",
+          "ms": 0.8302,
+          "alloc": 498040,
+          "error": null
+        }
+      ]
+    }
+  ]
+}

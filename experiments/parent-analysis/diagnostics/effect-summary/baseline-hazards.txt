@@ -1,0 +1,73 @@
+RECEIPT {
+  "source": "certified_receiver_identity_cfg",
+  "version": 1,
+  "identityPredicates": {
+    "Projectile.type": 633,
+    "Projectile.aiStyle": 75
+  },
+  "scope": "Source-only identity specialization; unknown runtime conditions retain all paths. Direct target identity writes/address escapes and uncertified target-passing calls before a read prevent selection. Native detours/global aliases remain outside capture coverage.",
+  "selectedEdges": [
+    {
+      "at": 54,
+      "block": 0,
+      "op": "bne.un",
+      "successor": 1208
+    },
+    {
+      "at": 1219,
+      "block": 1208,
+      "op": "bne.un",
+      "successor": 2531
+    },
+    {
+      "at": 2542,
+      "block": 2531,
+      "op": "bne.un",
+      "successor": 4648
+    },
+    {
+      "at": 4659,
+      "block": 4648,
+      "op": "bne.un",
+      "successor": 4664
+    }
+  ]
+}
+HAZARD 5504:call(Terraria.DataStructures.IEntitySource GetProjectileSource_FromThis())[5503:ldarg(0)[]]
+HAZARD 5598:call(Void Kill())[5597:ldarg(0)[]]
+HAZARD 5961:call(Void Kill())[5960:ldarg(0)[]]
+HAZARD 6515:call(Void Kill())[6514:ldarg(0)[]]
+HAZARD 7101:call(Void Kill())[7100:ldarg(0)[]]
+HAZARD 7618:call(Terraria.DataStructures.IEntitySource GetProjectileSource_FromThis())[7617:ldarg(0)[]]
+HAZARD 7711:call(Void Kill())[7710:ldarg(0)[]]
+HAZARD 8125:call(Void Kill())[8124:ldarg(0)[]]
+HAZARD 9390:call(Void Kill())[9389:ldarg(0)[]]
+HAZARD 10697:call(Void Kill())[10696:ldarg(0)[]]
+HAZARD 12578:call(Void Kill())[12577:ldarg(0)[]]
+HAZARD 13558:call(Void Kill())[13557:ldarg(0)[]]
+READ 44 type stable=True
+READ 1209 type stable=True
+READ 2532 type stable=True
+READ 4649 type stable=True
+READ 5604 type stable=False
+READ 5666 type stable=False
+READ 5810 type stable=False
+READ 6158 type stable=False
+READ 6220 type stable=False
+READ 6364 type stable=False
+READ 6718 type stable=False
+READ 6957 type stable=False
+READ 7224 type stable=False
+READ 7717 type stable=False
+READ 8131 type stable=False
+READ 8406 type stable=False
+READ 9396 type stable=False
+READ 9643 type stable=False
+READ 11578 type stable=False
+READ 12584 type stable=False
+READ 13734 type stable=False
+READ 13747 type stable=False
+READ 14001 type stable=False
+READ 14041 type stable=False
+READ 14081 type stable=False
+READ 14462 type stable=False

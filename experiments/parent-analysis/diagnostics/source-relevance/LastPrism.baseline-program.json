@@ -1,0 +1,5762 @@
+{
+  "method": "T.Projectile.AI_075",
+  "observations": [
+    {
+      "kind": "clock_or_ai_write",
+      "block": 4715,
+      "requiredPredicates": [],
+      "expression": "stind.r4(ldelema((this).Projectile.ai,0;\"System.Single\"),(ldind.r4(ldelema((this).Projectile.ai,0;\"System.Single\"))+1))",
+      "step": 7
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 4715,
+      "requiredPredicates": [],
+      "expression": "stind.r4(ldelema((this).Projectile.ai,1;\"System.Single\"),(ldind.r4(ldelema((this).Projectile.ai,1;\"System.Single\"))+1))",
+      "step": 8
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 4873,
+      "requiredPredicates": [
+        "b4868"
+      ],
+      "expression": "stelem.r4((this).Projectile.ai,1,0)",
+      "step": 16
+    },
+    {
+      "kind": "state_write",
+      "block": 5159,
+      "requiredPredicates": [
+        "b4868",
+        "b4900"
+      ],
+      "expression": "set((this).Entity.velocity,l88@5110)",
+      "step": 30
+    },
+    {
+      "kind": "motion_call",
+      "block": 5503,
+      "requiredPredicates": [
+        "b5320",
+        "b5336",
+        "b5384",
+        "b5395",
+        "b5406",
+        "b5424",
+        "b5586"
+      ],
+      "call": "Projectile.NewProjectile",
+      "arguments": {
+        "spawnSource": "Projectile.GetProjectileSource_FromThis[this]",
+        "X": "(l91@5435).Vector2.X",
+        "Y": "(l91@5435).Vector2.Y",
+        "SpeedX": "(alternatives(source_block(5429,requires=[\"b5320\",\"b5336\",\"b5384\",\"b5395\",\"b5406\",\"b5424\"],value=l92@5448),source_block(5478,requires=[\"b5320\",\"b5336\",\"b5384\",\"b5395\",\"b5406\",\"b5424\",\"b5462\",\"b5476\"],value=l92@5488))).Vector2.X",
+        "SpeedY": "(alternatives(source_block(5429,requires=[\"b5320\",\"b5336\",\"b5384\",\"b5395\",\"b5406\",\"b5424\"],value=l92@5448),source_block(5478,requires=[\"b5320\",\"b5336\",\"b5384\",\"b5395\",\"b5406\",\"b5424\",\"b5462\",\"b5476\"],value=l92@5488))).Vector2.Y",
+        "Type": "632",
+        "Damage": "l93@5496",
+        "KnockBack": "(this).Projectile.knockBack",
+        "Owner": "(this).Projectile.owner",
+        "ai0": "conv.r4(alternatives(source_block(5490,requires=[\"b5320\",\"b5336\",\"b5384\",\"b5395\",\"b5406\",\"b5424\"],value=l94@5499),source_block(5503,requires=[\"b5320\",\"b5336\",\"b5384\",\"b5395\",\"b5406\",\"b5424\",\"b5586\"],value=l94@5581)))",
+        "ai1": "conv.r4((this).Entity.whoAmI)",
+        "ai2": "0"
+      },
+      "step": 46
+    },
+    {
+      "kind": "lifetime_end",
+      "block": 5597,
+      "requiredPredicates": [
+        "b5320",
+        "b5336",
+        "b5384",
+        "b5395",
+        "b5406"
+      ],
+      "call": "Projectile.Kill",
+      "receiver": "this",
+      "arguments": {},
+      "step": 49
+    },
+    {
+      "kind": "state_write",
+      "block": 5950,
+      "requiredPredicates": [
+        "b5614",
+        "b5746",
+        "b5757",
+        "b5768",
+        "b5779"
+      ],
+      "expression": "set((this).Entity.velocity,addressed_l97)",
+      "step": 63
+    },
+    {
+      "kind": "lifetime_end",
+      "block": 5960,
+      "requiredPredicates": [
+        "b5614",
+        "b5746",
+        "b5757",
+        "b5768",
+        "b5779"
+      ],
+      "call": "Projectile.Kill",
+      "receiver": "this",
+      "arguments": {},
+      "step": 64
+    },
+    {
+      "kind": "state_write",
+      "block": 6504,
+      "requiredPredicates": [
+        "b6168",
+        "b6300",
+        "b6311",
+        "b6322",
+        "b6333"
+      ],
+      "expression": "set((this).Entity.velocity,addressed_l101)",
+      "step": 78
+    },
+    {
+      "kind": "lifetime_end",
+      "block": 6514,
+      "requiredPredicates": [
+        "b6168",
+        "b6300",
+        "b6311",
+        "b6322",
+        "b6333"
+      ],
+      "call": "Projectile.Kill",
+      "receiver": "this",
+      "arguments": {},
+      "step": 79
+    },
+    {
+      "kind": "live_scale",
+      "block": 6733,
+      "requiredPredicates": [
+        "b6728"
+      ],
+      "expression": "set((this).Projectile.scale,f32_at((this).Projectile.ai,1))",
+      "step": 81
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 6733,
+      "requiredPredicates": [
+        "b6728"
+      ],
+      "expression": "stind.r4(ldelema((this).Projectile.ai,0;\"System.Single\"),(ldind.r4(ldelema((this).Projectile.ai,0;\"System.Single\"))+1))",
+      "step": 82
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 6789,
+      "requiredPredicates": [
+        "b6728",
+        "b6787"
+      ],
+      "expression": "stelem.r4((this).Projectile.ai,0,0)",
+      "step": 84
+    },
+    {
+      "kind": "state_write",
+      "block": 7090,
+      "requiredPredicates": [
+        "b6728",
+        "b6893",
+        "b6904",
+        "b6915",
+        "b6926"
+      ],
+      "expression": "set((this).Entity.velocity,addressed_l104)",
+      "step": 97
+    },
+    {
+      "kind": "lifetime_end",
+      "block": 7100,
+      "requiredPredicates": [
+        "b6728",
+        "b6893",
+        "b6904",
+        "b6915",
+        "b6926"
+      ],
+      "call": "Projectile.Kill",
+      "receiver": "this",
+      "arguments": {},
+      "step": 98
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 7239,
+      "requiredPredicates": [
+        "b7234"
+      ],
+      "expression": "stind.r4(ldelema((this).Projectile.ai,0;\"System.Single\"),(ldind.r4(ldelema((this).Projectile.ai,0;\"System.Single\"))+1))",
+      "step": 100
+    },
+    {
+      "kind": "state_write",
+      "block": 7527,
+      "requiredPredicates": [
+        "b7234",
+        "b7280",
+        "b7298"
+      ],
+      "expression": "set((this).Entity.velocity,l108@7478)",
+      "step": 113
+    },
+    {
+      "kind": "motion_call",
+      "block": 7617,
+      "requiredPredicates": [
+        "b7234",
+        "b7280",
+        "b7298"
+      ],
+      "call": "Projectile.NewProjectile",
+      "arguments": {
+        "spawnSource": "Projectile.GetProjectileSource_FromThis[this]",
+        "X": "(l106@7555).Vector2.X",
+        "Y": "(l106@7555).Vector2.Y",
+        "SpeedX": "(alternatives(source_block(7527,requires=[\"b7234\",\"b7280\",\"b7298\"],value=l111@7575),source_block(7605,requires=[\"b7234\",\"b7280\",\"b7298\",\"b7589\",\"b7603\"],value=l111@7615))).Vector2.X",
+        "SpeedY": "(alternatives(source_block(7527,requires=[\"b7234\",\"b7280\",\"b7298\"],value=l111@7575),source_block(7605,requires=[\"b7234\",\"b7280\",\"b7298\",\"b7589\",\"b7603\"],value=l111@7615))).Vector2.Y",
+        "Type": "l109@7540",
+        "Damage": "(this).Projectile.damage",
+        "KnockBack": "(this).Projectile.knockBack",
+        "Owner": "(this).Projectile.owner",
+        "ai0": "f32_at((this).Projectile.ai,1)",
+        "ai1": "0",
+        "ai2": "0"
+      },
+      "step": 121
+    },
+    {
+      "kind": "lifetime_end",
+      "block": 7710,
+      "requiredPredicates": [
+        "b7234",
+        "b7708"
+      ],
+      "call": "Projectile.Kill",
+      "receiver": "this",
+      "arguments": {},
+      "step": 123
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 7793,
+      "requiredPredicates": [
+        "b7727",
+        "b7791"
+      ],
+      "expression": "stind.r4(ldelema((this).Projectile.localAI,1;\"System.Single\"),(ldind.r4(ldelema((this).Projectile.localAI,1;\"System.Single\"))-1))",
+      "step": 126
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 7860,
+      "requiredPredicates": [
+        "b7727",
+        "b7858"
+      ],
+      "expression": "stelem.r4((this).Projectile.localAI,0,Utils.ToRotation[(this).Entity.velocity])",
+      "step": 128
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 8029,
+      "requiredPredicates": [
+        "b7727"
+      ],
+      "expression": "stind.r4(ldelema((this).Projectile.ai,0;\"System.Single\"),(ldind.r4(ldelema((this).Projectile.ai,0;\"System.Single\"))+1))",
+      "step": 136
+    },
+    {
+      "kind": "state_write",
+      "block": 8093,
+      "requiredPredicates": [
+        "b7727",
+        "b8091"
+      ],
+      "expression": "set((this).Entity.velocity,Vector2.add[(this).Entity.velocity,Vector2.op_Multiply#100665441[48,addressed_l113]])",
+      "step": 138
+    },
+    {
+      "kind": "lifetime_end",
+      "block": 8124,
+      "requiredPredicates": [
+        "b7727",
+        "b8091"
+      ],
+      "call": "Projectile.Kill",
+      "receiver": "this",
+      "arguments": {},
+      "step": 139
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 8167,
+      "requiredPredicates": [
+        "b8141"
+      ],
+      "expression": "stind.r4(ldelema((this).Projectile.ai,0;\"System.Single\"),(ldind.r4(ldelema((this).Projectile.ai,0;\"System.Single\"))+1))",
+      "step": 141
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 8254,
+      "requiredPredicates": [
+        "b8141"
+      ],
+      "expression": "stind.r4(ldelema((this).Projectile.ai,1;\"System.Single\"),(ldind.r4(ldelema((this).Projectile.ai,1;\"System.Single\"))-1))",
+      "step": 151
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 8302,
+      "requiredPredicates": [
+        "b8141",
+        "b8300"
+      ],
+      "expression": "stelem.r4((this).Projectile.ai,1,conv.r4((l115@8255-(l116@8258*alternatives(source_block(8167,requires=[\"b8141\"],value=l114@8189),source_block(8206,requires=[\"b8141\",\"b8204\"],value=l114@8210),source_block(8227,requires=[\"b8141\",\"b8225\"],value=l114@8231),source_block(8248,requires=[\"b8141\",\"b8246\"],value=l114@8252))))))",
+      "step": 155
+    },
+    {
+      "kind": "state_write",
+      "block": 8961,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612"
+      ],
+      "expression": "set((this).Entity.velocity,l129@8912)",
+      "step": 185
+    },
+    {
+      "kind": "motion_call",
+      "block": 9086,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612",
+        "b9158"
+      ],
+      "call": "Projectile.NewProjectile",
+      "arguments": {
+        "spawnSource": "l125@8663",
+        "X": "(l127@8716).Vector2.X",
+        "Y": "(l127@8716).Vector2.Y",
+        "SpeedX": "(alternatives(source_block(8977,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8612\",\"b9158\"],value=l131@9044),source_block(9074,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8612\",\"b9058\",\"b9072\",\"b9158\"],value=l131@9084))).Vector2.X",
+        "SpeedY": "(alternatives(source_block(8977,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8612\",\"b9158\"],value=l131@9044),source_block(9074,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8612\",\"b9058\",\"b9072\",\"b9158\"],value=l131@9084))).Vector2.Y",
+        "Type": "addressed_l120",
+        "Damage": "addressed_l122",
+        "KnockBack": "addressed_l123",
+        "Owner": "(this).Projectile.owner",
+        "ai0": "0",
+        "ai1": "0",
+        "ai2": "0"
+      },
+      "step": 193
+    },
+    {
+      "kind": "motion_call",
+      "block": 9301,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612",
+        "b9165",
+        "b9382"
+      ],
+      "call": "Projectile.NewProjectile",
+      "arguments": {
+        "spawnSource": "l125@8663",
+        "X": "(l127@8716).Vector2.X",
+        "Y": "(l127@8716).Vector2.Y",
+        "SpeedX": "(alternatives(source_block(9192,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8612\",\"b9165\",\"b9382\"],value=l133@9259),source_block(9289,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8612\",\"b9165\",\"b9273\",\"b9287\",\"b9382\"],value=l133@9299))).Vector2.X",
+        "SpeedY": "(alternatives(source_block(9192,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8612\",\"b9165\",\"b9382\"],value=l133@9259),source_block(9289,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8612\",\"b9165\",\"b9273\",\"b9287\",\"b9382\"],value=l133@9299))).Vector2.Y",
+        "Type": "addressed_l120",
+        "Damage": "(addressed_l122+20)",
+        "KnockBack": "(addressed_l123*1.25)",
+        "Owner": "(this).Projectile.owner",
+        "ai0": "0",
+        "ai1": "0",
+        "ai2": "0"
+      },
+      "step": 206
+    },
+    {
+      "kind": "lifetime_end",
+      "block": 9389,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612"
+      ],
+      "call": "Projectile.Kill",
+      "receiver": "this",
+      "arguments": {},
+      "step": 209
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 9432,
+      "requiredPredicates": [
+        "b9406"
+      ],
+      "expression": "stind.r4(ldelema((this).Projectile.ai,0;\"System.Single\"),(ldind.r4(ldelema((this).Projectile.ai,0;\"System.Single\"))+1))",
+      "step": 211
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 9432,
+      "requiredPredicates": [
+        "b9406"
+      ],
+      "expression": "stind.r4(ldelema((this).Projectile.ai,1;\"System.Single\"),(ldind.r4(ldelema((this).Projectile.ai,1;\"System.Single\"))-1))",
+      "step": 215
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 9504,
+      "requiredPredicates": [
+        "b9406",
+        "b9502"
+      ],
+      "expression": "stelem.r4((this).Projectile.ai,1,conv.r4((l135@9457-(l136@9460*l134@9454))))",
+      "step": 219
+    },
+    {
+      "kind": "state_write",
+      "block": 10245,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886"
+      ],
+      "expression": "set((this).Entity.velocity,l155@10196)",
+      "step": 251
+    },
+    {
+      "kind": "motion_call",
+      "block": 10370,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886",
+        "b10689"
+      ],
+      "call": "Projectile.NewProjectile",
+      "arguments": {
+        "spawnSource": "l151@9960",
+        "X": "(l153@9990).Vector2.X",
+        "Y": "(l153@9990).Vector2.Y",
+        "SpeedX": "(alternatives(source_block(10261,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10689\"],value=l157@10328),source_block(10358,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10342\",\"b10356\",\"b10689\"],value=l157@10368))).Vector2.X",
+        "SpeedY": "(alternatives(source_block(10261,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10689\"],value=l157@10328),source_block(10358,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10342\",\"b10356\",\"b10689\"],value=l157@10368))).Vector2.Y",
+        "Type": "addressed_l146",
+        "Damage": "addressed_l148",
+        "KnockBack": "addressed_l149",
+        "Owner": "(this).Projectile.owner",
+        "ai0": "conv.r4(alternatives(source_block(9432,requires=[\"b9406\"],value=l138@9487),source_block(9550,requires=[\"b9406\",\"b9502\"],value=l138@9552)))",
+        "ai1": "0",
+        "ai2": "0"
+      },
+      "step": 259
+    },
+    {
+      "kind": "motion_call",
+      "block": 10531,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886",
+        "b10434",
+        "b10609",
+        "b10689"
+      ],
+      "call": "Projectile.NewProjectile",
+      "arguments": {
+        "spawnSource": "l151@9960",
+        "X": "(l153@9990).Vector2.X",
+        "Y": "(l153@9990).Vector2.Y",
+        "SpeedX": "(alternatives(source_block(10451,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10434\",\"b10609\",\"b10689\"],value=l159@10489),source_block(10519,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10434\",\"b10503\",\"b10517\",\"b10609\",\"b10689\"],value=l159@10529))).Vector2.X",
+        "SpeedY": "(alternatives(source_block(10451,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10434\",\"b10609\",\"b10689\"],value=l159@10489),source_block(10519,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10434\",\"b10503\",\"b10517\",\"b10609\",\"b10689\"],value=l159@10529))).Vector2.Y",
+        "Type": "addressed_l146",
+        "Damage": "addressed_l148",
+        "KnockBack": "addressed_l149",
+        "Owner": "(this).Projectile.owner",
+        "ai0": "conv.r4(alternatives(source_block(9432,requires=[\"b9406\"],value=l138@9487),source_block(9550,requires=[\"b9406\",\"b9502\"],value=l138@9552)))",
+        "ai1": "0",
+        "ai2": "0"
+      },
+      "step": 267
+    },
+    {
+      "kind": "motion_call",
+      "block": 10619,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886",
+        "b10617",
+        "b10689"
+      ],
+      "call": "Projectile.NewProjectile",
+      "arguments": {
+        "spawnSource": "l151@9960",
+        "X": "(l153@9990).Vector2.X",
+        "Y": "(l153@9990).Vector2.Y",
+        "SpeedX": "(alternatives(source_block(10261,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10689\"],value=l157@10328),source_block(10358,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10342\",\"b10356\",\"b10689\"],value=l157@10368))).Vector2.X",
+        "SpeedY": "(alternatives(source_block(10261,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10689\"],value=l157@10328),source_block(10358,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10342\",\"b10356\",\"b10689\"],value=l157@10368))).Vector2.Y",
+        "Type": "addressed_l146",
+        "Damage": "addressed_l148",
+        "KnockBack": "addressed_l149",
+        "Owner": "(this).Projectile.owner",
+        "ai0": "conv.r4(alternatives(source_block(9432,requires=[\"b9406\"],value=l138@9487),source_block(9550,requires=[\"b9406\",\"b9502\"],value=l138@9552)))",
+        "ai1": "1",
+        "ai2": "0"
+      },
+      "step": 271
+    },
+    {
+      "kind": "lifetime_end",
+      "block": 10696,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886"
+      ],
+      "call": "Projectile.Kill",
+      "receiver": "this",
+      "arguments": {},
+      "step": 274
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 11614,
+      "requiredPredicates": [
+        "b11588"
+      ],
+      "expression": "stind.r4(ldelema((this).Projectile.ai,0;\"System.Single\"),(ldind.r4(ldelema((this).Projectile.ai,0;\"System.Single\"))+1))",
+      "step": 278
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 11701,
+      "requiredPredicates": [
+        "b11588"
+      ],
+      "expression": "stind.r4(ldelema((this).Projectile.ai,1;\"System.Single\"),(ldind.r4(ldelema((this).Projectile.ai,1;\"System.Single\"))-1))",
+      "step": 288
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 11747,
+      "requiredPredicates": [
+        "b11588",
+        "b11745"
+      ],
+      "expression": "stelem.r4((this).Projectile.ai,1,conv.r4((l162@11703-(l163@11706*alternatives(source_block(11614,requires=[\"b11588\"],value=l161@11636),source_block(11653,requires=[\"b11588\",\"b11651\"],value=l161@11657),source_block(11674,requires=[\"b11588\",\"b11672\"],value=l161@11678),source_block(11695,requires=[\"b11588\",\"b11693\"],value=l161@11699))))))",
+      "step": 291
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 11853,
+      "requiredPredicates": [
+        "b11588",
+        "b11851"
+      ],
+      "expression": "stind.r4(ldelema((this).Projectile.localAI,0;\"System.Single\"),(ldind.r4(ldelema((this).Projectile.localAI,0;\"System.Single\"))-1))",
+      "step": 298
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 11943,
+      "requiredPredicates": [
+        "b11588",
+        "b11889"
+      ],
+      "expression": "stelem.r4((this).Projectile.localAI,0,12)",
+      "step": 300
+    },
+    {
+      "kind": "state_write",
+      "block": 12341,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981",
+        "b12041"
+      ],
+      "expression": "set((this).Entity.velocity,Vector2.mul[l175@12292,0.55])",
+      "step": 321
+    },
+    {
+      "kind": "motion_call",
+      "block": 12454,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981",
+        "b12041",
+        "b12570"
+      ],
+      "call": "Projectile.NewProjectile",
+      "arguments": {
+        "spawnSource": "l171@12092",
+        "X": "(l178@12481).Vector2.X",
+        "Y": "(l178@12481).Vector2.Y",
+        "SpeedX": "(alternatives(source_block(12367,requires=[\"b11588\",\"b11965\",\"b11981\",\"b12041\",\"b12570\"],value=l177@12412),source_block(12442,requires=[\"b11588\",\"b11965\",\"b11981\",\"b12041\",\"b12426\",\"b12440\",\"b12570\"],value=l177@12452))).Vector2.X",
+        "SpeedY": "(alternatives(source_block(12367,requires=[\"b11588\",\"b11965\",\"b11981\",\"b12041\",\"b12570\"],value=l177@12412),source_block(12442,requires=[\"b11588\",\"b11965\",\"b11981\",\"b12041\",\"b12426\",\"b12440\",\"b12570\"],value=l177@12452))).Vector2.Y",
+        "Type": "addressed_l166",
+        "Damage": "addressed_l168",
+        "KnockBack": "addressed_l169",
+        "Owner": "(this).Projectile.owner",
+        "ai0": "0",
+        "ai1": "0",
+        "ai2": "0"
+      },
+      "step": 328
+    },
+    {
+      "kind": "lifetime_end",
+      "block": 12577,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981",
+        "b12041"
+      ],
+      "call": "Projectile.Kill",
+      "receiver": "this",
+      "arguments": {},
+      "step": 331
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 12620,
+      "requiredPredicates": [
+        "b12594"
+      ],
+      "expression": "stind.r4(ldelema((this).Projectile.ai,0;\"System.Single\"),(ldind.r4(ldelema((this).Projectile.ai,0;\"System.Single\"))+1))",
+      "step": 333
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 12620,
+      "requiredPredicates": [
+        "b12594"
+      ],
+      "expression": "stind.r4(ldelema((this).Projectile.ai,1;\"System.Single\"),(ldind.r4(ldelema((this).Projectile.ai,1;\"System.Single\"))-1))",
+      "step": 335
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 12688,
+      "requiredPredicates": [
+        "b12594",
+        "b12686"
+      ],
+      "expression": "stelem.r4((this).Projectile.ai,1,conv.r4(l180@12647))",
+      "step": 338
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 12769,
+      "requiredPredicates": [
+        "b12594",
+        "b12767"
+      ],
+      "expression": "stind.r4(ldelema((this).Projectile.localAI,0;\"System.Single\"),(ldind.r4(ldelema((this).Projectile.localAI,0;\"System.Single\"))-1))",
+      "step": 345
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 12853,
+      "requiredPredicates": [
+        "b12594",
+        "b12805"
+      ],
+      "expression": "stelem.r4((this).Projectile.localAI,0,12)",
+      "step": 347
+    },
+    {
+      "kind": "clock_or_ai_write",
+      "block": 13061,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954",
+        "b13059"
+      ],
+      "expression": "stind.r4(ldelema((this).Projectile.ai,1;\"System.Single\"),(ldind.r4(ldelema((this).Projectile.ai,1;\"System.Single\"))*1.5))",
+      "step": 367
+    },
+    {
+      "kind": "state_write",
+      "block": 13343,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954"
+      ],
+      "expression": "set((this).Entity.velocity,Vector2.mul[l194@13294,0.55])",
+      "step": 380
+    },
+    {
+      "kind": "motion_call",
+      "block": 13458,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954",
+        "b13550"
+      ],
+      "call": "Projectile.NewProjectile",
+      "arguments": {
+        "spawnSource": "l190@13005",
+        "X": "(l197@13460).Vector2.X",
+        "Y": "(l197@13460).Vector2.Y",
+        "SpeedX": "(alternatives(source_block(13369,requires=[\"b12594\",\"b12868\",\"b12884\",\"b12954\",\"b13550\"],value=l196@13416),source_block(13446,requires=[\"b12594\",\"b12868\",\"b12884\",\"b12954\",\"b13430\",\"b13444\",\"b13550\"],value=l196@13456))).Vector2.X",
+        "SpeedY": "(alternatives(source_block(13369,requires=[\"b12594\",\"b12868\",\"b12884\",\"b12954\",\"b13550\"],value=l196@13416),source_block(13446,requires=[\"b12594\",\"b12868\",\"b12884\",\"b12954\",\"b13430\",\"b13444\",\"b13550\"],value=l196@13456))).Vector2.Y",
+        "Type": "addressed_l183",
+        "Damage": "addressed_l185",
+        "KnockBack": "addressed_l186",
+        "Owner": "(this).Projectile.owner",
+        "ai0": "0",
+        "ai1": "0",
+        "ai2": "0"
+      },
+      "step": 388
+    },
+    {
+      "kind": "lifetime_end",
+      "block": 13557,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954"
+      ],
+      "call": "Projectile.Kill",
+      "receiver": "this",
+      "arguments": {},
+      "step": 391
+    },
+    {
+      "kind": "state_write",
+      "block": 13563,
+      "requiredPredicates": [],
+      "expression": "set((this).Entity.position,Vector2.sub[Player.RotatedRelativePoint[l0@12,Player.get_MountedCenter[l0@12],0,0],Vector2.div[Entity.get_Size[this],2]])",
+      "step": 392
+    },
+    {
+      "kind": "rotation",
+      "block": 13563,
+      "requiredPredicates": [],
+      "expression": "stfld(Projectile.rotation,this,add(Utils.ToRotation[ldfld(Entity.velocity,this)],unresolved_local_definition_bound(;1)))",
+      "step": 393
+    },
+    {
+      "kind": "state_write",
+      "block": 13563,
+      "requiredPredicates": [],
+      "expression": "set((this).Projectile.spriteDirection,(this).Entity.direction)",
+      "step": 394
+    },
+    {
+      "kind": "state_write",
+      "block": 13563,
+      "requiredPredicates": [],
+      "expression": "set((this).Projectile.timeLeft,2)",
+      "step": 395
+    },
+    {
+      "kind": "center_assignment",
+      "block": 13874,
+      "requiredPredicates": [
+        "b13744",
+        "b13757"
+      ],
+      "call": "Entity.set_Center",
+      "receiver": "this",
+      "arguments": {
+        "value": "Vector2.sub[Player.RotatedRelativePoint[l0@12,Vector2.add[Vector2.sub[Player.get_MountedCenter[l0@12],Vector2.div[Vector2..ctor[20,42],2]],addressed_l199],0,0],(this).Entity.velocity]"
+      },
+      "step": 404
+    },
+    {
+      "kind": "state_write",
+      "block": 14013,
+      "requiredPredicates": [
+        "b14011"
+      ],
+      "expression": "stind.r4(ldflda(Vector2.Y,ldflda(Entity.position,this)),(ldind.r4(ldflda(Vector2.Y,ldflda(Entity.position,this)))+((l0@12).Player.gravDir*2)))",
+      "step": 406
+    },
+    {
+      "kind": "state_write",
+      "block": 14053,
+      "requiredPredicates": [
+        "b14051"
+      ],
+      "expression": "stind.r4(ldflda(Vector2.Y,ldflda(Entity.position,this)),(ldind.r4(ldflda(Vector2.Y,ldflda(Entity.position,this)))+((l0@12).Player.gravDir*2)))",
+      "step": 408
+    }
+  ],
+  "dependencies": {
+    "l88@5110": {
+      "expression": "Vector2.mul[l88@5099,l85@4930]",
+      "block": 5071,
+      "requiredPredicates": [
+        "b4868",
+        "b4900"
+      ],
+      "step": 29
+    },
+    "l88@5099": {
+      "expression": "Vector2.Normalize[Vector2.Lerp[alternatives(source_block(5022,requires=[\"b4868\",\"b4900\"],value=l88@5029),source_block(5059,requires=[\"b4868\",\"b4900\",\"b5043\",\"b5057\"],value=l88@5069)),Vector2.Normalize[(this).Entity.velocity],0.92]]",
+      "block": 5071,
+      "requiredPredicates": [
+        "b4868",
+        "b4900"
+      ],
+      "step": 28
+    },
+    "l88@5029": {
+      "expression": "Vector2.Normalize[addressed_l87]",
+      "block": 5022,
+      "requiredPredicates": [
+        "b4868",
+        "b4900"
+      ],
+      "step": 24
+    },
+    "addressed_l87": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 4905,
+          "expression": "l87@4969",
+          "requiredPredicates": [
+            "b4868",
+            "b4900"
+          ],
+          "step": 21
+        },
+        {
+          "block": 4984,
+          "expression": "set((addressed_l87).Vector2.Y,((conv.r4((@Main.screenHeight-@Main.mouseY))+(ldsflda(Main.screenPosition)).Vector2.Y)-(l86@4933).Vector2.Y))",
+          "requiredPredicates": [
+            "b4868",
+            "b4900",
+            "b4982"
+          ],
+          "step": 23
+        }
+      ]
+    },
+    "l87@4969": {
+      "expression": "Vector2.sub[Vector2.add[@Main.screenPosition,Vector2..ctor[conv.r4(@Main.mouseX),conv.r4(@Main.mouseY)]],l86@4933]",
+      "block": 4905,
+      "requiredPredicates": [
+        "b4868",
+        "b4900"
+      ],
+      "step": 21
+    },
+    "l86@4933": {
+      "expression": "l2@33",
+      "block": 4905,
+      "requiredPredicates": [
+        "b4868",
+        "b4900"
+      ],
+      "step": 20
+    },
+    "l2@33": {
+      "expression": "Player.RotatedRelativePoint[l0@12,Player.get_MountedCenter[l0@12],0,1]",
+      "block": 0,
+      "requiredPredicates": [],
+      "step": 1
+    },
+    "l0@12": {
+      "expression": "ref_at(@Main.player,(this).Projectile.owner)",
+      "block": 0,
+      "requiredPredicates": [],
+      "step": 0
+    },
+    "l88@5069": {
+      "expression": "Vector2.op_UnaryNegation[Vector2.get_UnitY[]]",
+      "block": 5059,
+      "requiredPredicates": [
+        "b4868",
+        "b4900",
+        "b5043",
+        "b5057"
+      ],
+      "step": 27
+    },
+    "l85@4930": {
+      "expression": "((ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem)).Item.shootSpeed*(this).Projectile.scale)",
+      "block": 4905,
+      "requiredPredicates": [
+        "b4868",
+        "b4900"
+      ],
+      "step": 19
+    },
+    "l82@4832": {
+      "expression": "0",
+      "block": 4827,
+      "requiredPredicates": [],
+      "step": 12
+    },
+    "l82@4853": {
+      "expression": "1",
+      "block": 4852,
+      "requiredPredicates": [
+        "b4850"
+      ],
+      "step": 14
+    },
+    "l79@4669": {
+      "expression": "30",
+      "block": 4664,
+      "requiredPredicates": [],
+      "step": 2
+    },
+    "l79@4691": {
+      "expression": "15",
+      "block": 4686,
+      "requiredPredicates": [
+        "b4684"
+      ],
+      "step": 4
+    },
+    "l79@4713": {
+      "expression": "5",
+      "block": 4708,
+      "requiredPredicates": [
+        "b4706"
+      ],
+      "step": 6
+    },
+    "l82@4887": {
+      "expression": "1",
+      "block": 4873,
+      "requiredPredicates": [
+        "b4868"
+      ],
+      "step": 17
+    },
+    "l90@5373": {
+      "expression": "alternatives(source_block(5348,requires=[\"b5320\",\"b5336\",\"b5346\"],value=Player.CheckMana[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),-1,1,0]),source_block(5372,requires=[\"b5320\",\"b5336\",\"b5346\"],value=1))",
+      "block": 5373,
+      "requiredPredicates": [
+        "b5320",
+        "b5336"
+      ],
+      "step": 34
+    },
+    "l80@4804": {
+      "expression": "0",
+      "block": 4715,
+      "requiredPredicates": [],
+      "step": 9
+    },
+    "l80@4825": {
+      "expression": "1",
+      "block": 4824,
+      "requiredPredicates": [
+        "b4822"
+      ],
+      "step": 11
+    },
+    "addressed_l97": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 5844,
+          "expression": "l97@5855",
+          "requiredPredicates": [
+            "b5614",
+            "b5746",
+            "b5757",
+            "b5768",
+            "b5779"
+          ],
+          "step": 58
+        },
+        {
+          "block": 5844,
+          "expression": "Vector2.Normalize#100665379[addressed_l97]",
+          "requiredPredicates": [
+            "b5614",
+            "b5746",
+            "b5757",
+            "b5768",
+            "b5779"
+          ],
+          "step": 59
+        },
+        {
+          "block": 5873,
+          "expression": "l97@5890",
+          "requiredPredicates": [
+            "b5614",
+            "b5746",
+            "b5757",
+            "b5768",
+            "b5779",
+            "b5871"
+          ],
+          "step": 61
+        },
+        {
+          "block": 5892,
+          "expression": "l97@5901",
+          "requiredPredicates": [
+            "b5614",
+            "b5746",
+            "b5757",
+            "b5768",
+            "b5779"
+          ],
+          "step": 62
+        }
+      ]
+    },
+    "l97@5855": {
+      "expression": "Vector2.sub[Main.get_MouseWorld[],l2@33]",
+      "block": 5844,
+      "requiredPredicates": [
+        "b5614",
+        "b5746",
+        "b5757",
+        "b5768",
+        "b5779"
+      ],
+      "step": 58
+    },
+    "l97@5890": {
+      "expression": "Vector2.mul[Vector2.get_UnitX[],conv.r4((l0@12).Entity.direction)]",
+      "block": 5873,
+      "requiredPredicates": [
+        "b5614",
+        "b5746",
+        "b5757",
+        "b5768",
+        "b5779",
+        "b5871"
+      ],
+      "step": 61
+    },
+    "l97@5901": {
+      "expression": "Vector2.mul[addressed_l97,alternatives(source_block(5784,requires=[\"b5614\",\"b5746\",\"b5757\",\"b5768\",\"b5779\"],value=l96@5789),source_block(5817,requires=[\"b5614\",\"b5746\",\"b5757\",\"b5768\",\"b5779\",\"b5815\"],value=l96@5842))]",
+      "block": 5892,
+      "requiredPredicates": [
+        "b5614",
+        "b5746",
+        "b5757",
+        "b5768",
+        "b5779"
+      ],
+      "step": 62
+    },
+    "l96@5789": {
+      "expression": "1",
+      "block": 5784,
+      "requiredPredicates": [
+        "b5614",
+        "b5746",
+        "b5757",
+        "b5768",
+        "b5779"
+      ],
+      "step": 55
+    },
+    "l96@5842": {
+      "expression": "((ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem)).Item.shootSpeed*(this).Projectile.scale)",
+      "block": 5817,
+      "requiredPredicates": [
+        "b5614",
+        "b5746",
+        "b5757",
+        "b5768",
+        "b5779",
+        "b5815"
+      ],
+      "step": 57
+    },
+    "addressed_l101": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 6398,
+          "expression": "l101@6409",
+          "requiredPredicates": [
+            "b6168",
+            "b6300",
+            "b6311",
+            "b6322",
+            "b6333"
+          ],
+          "step": 73
+        },
+        {
+          "block": 6398,
+          "expression": "Vector2.Normalize#100665379[addressed_l101]",
+          "requiredPredicates": [
+            "b6168",
+            "b6300",
+            "b6311",
+            "b6322",
+            "b6333"
+          ],
+          "step": 74
+        },
+        {
+          "block": 6427,
+          "expression": "l101@6444",
+          "requiredPredicates": [
+            "b6168",
+            "b6300",
+            "b6311",
+            "b6322",
+            "b6333",
+            "b6425"
+          ],
+          "step": 76
+        },
+        {
+          "block": 6446,
+          "expression": "l101@6455",
+          "requiredPredicates": [
+            "b6168",
+            "b6300",
+            "b6311",
+            "b6322",
+            "b6333"
+          ],
+          "step": 77
+        }
+      ]
+    },
+    "l101@6409": {
+      "expression": "Vector2.sub[Main.get_MouseWorld[],l2@33]",
+      "block": 6398,
+      "requiredPredicates": [
+        "b6168",
+        "b6300",
+        "b6311",
+        "b6322",
+        "b6333"
+      ],
+      "step": 73
+    },
+    "l101@6444": {
+      "expression": "Vector2.mul[Vector2.get_UnitX[],conv.r4((l0@12).Entity.direction)]",
+      "block": 6427,
+      "requiredPredicates": [
+        "b6168",
+        "b6300",
+        "b6311",
+        "b6322",
+        "b6333",
+        "b6425"
+      ],
+      "step": 76
+    },
+    "l101@6455": {
+      "expression": "Vector2.mul[addressed_l101,alternatives(source_block(6338,requires=[\"b6168\",\"b6300\",\"b6311\",\"b6322\",\"b6333\"],value=l100@6343),source_block(6371,requires=[\"b6168\",\"b6300\",\"b6311\",\"b6322\",\"b6333\",\"b6369\"],value=l100@6396))]",
+      "block": 6446,
+      "requiredPredicates": [
+        "b6168",
+        "b6300",
+        "b6311",
+        "b6322",
+        "b6333"
+      ],
+      "step": 77
+    },
+    "l100@6343": {
+      "expression": "1",
+      "block": 6338,
+      "requiredPredicates": [
+        "b6168",
+        "b6300",
+        "b6311",
+        "b6322",
+        "b6333"
+      ],
+      "step": 70
+    },
+    "l100@6396": {
+      "expression": "((ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem)).Item.shootSpeed*(this).Projectile.scale)",
+      "block": 6371,
+      "requiredPredicates": [
+        "b6168",
+        "b6300",
+        "b6311",
+        "b6322",
+        "b6333",
+        "b6369"
+      ],
+      "step": 72
+    },
+    "addressed_l104": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 6984,
+          "expression": "l104@6995",
+          "requiredPredicates": [
+            "b6728",
+            "b6893",
+            "b6904",
+            "b6915",
+            "b6926"
+          ],
+          "step": 92
+        },
+        {
+          "block": 6984,
+          "expression": "Vector2.Normalize#100665379[addressed_l104]",
+          "requiredPredicates": [
+            "b6728",
+            "b6893",
+            "b6904",
+            "b6915",
+            "b6926"
+          ],
+          "step": 93
+        },
+        {
+          "block": 7013,
+          "expression": "l104@7030",
+          "requiredPredicates": [
+            "b6728",
+            "b6893",
+            "b6904",
+            "b6915",
+            "b6926",
+            "b7011"
+          ],
+          "step": 95
+        },
+        {
+          "block": 7032,
+          "expression": "l104@7041",
+          "requiredPredicates": [
+            "b6728",
+            "b6893",
+            "b6904",
+            "b6915",
+            "b6926"
+          ],
+          "step": 96
+        }
+      ]
+    },
+    "l104@6995": {
+      "expression": "Vector2.sub[Main.get_MouseWorld[],l2@33]",
+      "block": 6984,
+      "requiredPredicates": [
+        "b6728",
+        "b6893",
+        "b6904",
+        "b6915",
+        "b6926"
+      ],
+      "step": 92
+    },
+    "l104@7030": {
+      "expression": "Vector2.mul[Vector2.get_UnitX[],conv.r4((l0@12).Entity.direction)]",
+      "block": 7013,
+      "requiredPredicates": [
+        "b6728",
+        "b6893",
+        "b6904",
+        "b6915",
+        "b6926",
+        "b7011"
+      ],
+      "step": 95
+    },
+    "l104@7041": {
+      "expression": "Vector2.mul[addressed_l104,alternatives(source_block(6931,requires=[\"b6728\",\"b6893\",\"b6904\",\"b6915\",\"b6926\"],value=l103@6936),source_block(6964,requires=[\"b6728\",\"b6893\",\"b6904\",\"b6915\",\"b6926\",\"b6962\"],value=l103@6982))]",
+      "block": 7032,
+      "requiredPredicates": [
+        "b6728",
+        "b6893",
+        "b6904",
+        "b6915",
+        "b6926"
+      ],
+      "step": 96
+    },
+    "l103@6936": {
+      "expression": "1",
+      "block": 6931,
+      "requiredPredicates": [
+        "b6728",
+        "b6893",
+        "b6904",
+        "b6915",
+        "b6926"
+      ],
+      "step": 89
+    },
+    "l103@6982": {
+      "expression": "(ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem)).Item.shootSpeed",
+      "block": 6964,
+      "requiredPredicates": [
+        "b6728",
+        "b6893",
+        "b6904",
+        "b6915",
+        "b6926",
+        "b6962"
+      ],
+      "step": 91
+    },
+    "l108@7478": {
+      "expression": "Vector2.mul[alternatives(source_block(7420,requires=[\"b7234\",\"b7280\",\"b7298\"],value=l108@7427),source_block(7457,requires=[\"b7234\",\"b7280\",\"b7298\",\"b7441\",\"b7455\"],value=l108@7467)),l105@7328]",
+      "block": 7469,
+      "requiredPredicates": [
+        "b7234",
+        "b7280",
+        "b7298"
+      ],
+      "step": 112
+    },
+    "l108@7427": {
+      "expression": "Vector2.Normalize[addressed_l107]",
+      "block": 7420,
+      "requiredPredicates": [
+        "b7234",
+        "b7280",
+        "b7298"
+      ],
+      "step": 108
+    },
+    "addressed_l107": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 7303,
+          "expression": "l107@7367",
+          "requiredPredicates": [
+            "b7234",
+            "b7280",
+            "b7298"
+          ],
+          "step": 105
+        },
+        {
+          "block": 7382,
+          "expression": "set((addressed_l107).Vector2.Y,((conv.r4((@Main.screenHeight-@Main.mouseY))+(ldsflda(Main.screenPosition)).Vector2.Y)-(l106@7331).Vector2.Y))",
+          "requiredPredicates": [
+            "b7234",
+            "b7280",
+            "b7298",
+            "b7380"
+          ],
+          "step": 107
+        }
+      ]
+    },
+    "l107@7367": {
+      "expression": "Vector2.sub[Vector2.add[@Main.screenPosition,Vector2..ctor[conv.r4(@Main.mouseX),conv.r4(@Main.mouseY)]],l106@7331]",
+      "block": 7303,
+      "requiredPredicates": [
+        "b7234",
+        "b7280",
+        "b7298"
+      ],
+      "step": 105
+    },
+    "l106@7331": {
+      "expression": "l2@33",
+      "block": 7303,
+      "requiredPredicates": [
+        "b7234",
+        "b7280",
+        "b7298"
+      ],
+      "step": 104
+    },
+    "l108@7467": {
+      "expression": "Vector2.op_UnaryNegation[Vector2.get_UnitY[]]",
+      "block": 7457,
+      "requiredPredicates": [
+        "b7234",
+        "b7280",
+        "b7298",
+        "b7441",
+        "b7455"
+      ],
+      "step": 111
+    },
+    "l105@7328": {
+      "expression": "((ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem)).Item.shootSpeed*(this).Projectile.scale)",
+      "block": 7303,
+      "requiredPredicates": [
+        "b7234",
+        "b7280",
+        "b7298"
+      ],
+      "step": 103
+    },
+    "addressed_l113": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 7936,
+          "expression": "l113@7970",
+          "requiredPredicates": [
+            "b7727"
+          ],
+          "step": 133
+        },
+        {
+          "block": 8029,
+          "expression": "l113@8055",
+          "requiredPredicates": [
+            "b7727"
+          ],
+          "step": 135
+        }
+      ]
+    },
+    "l113@7970": {
+      "expression": "Utils.ToRotationVector2[(alternatives(source_block(7908,requires=[\"b7727\"],value=l112@7909),source_block(7926,requires=[\"b7727\",\"b7924\"],value=l112@7934))*(((f32_at((this).Projectile.ai,0)/30)*6.2831855)-1.5707964))]",
+      "block": 7936,
+      "requiredPredicates": [
+        "b7727"
+      ],
+      "step": 133
+    },
+    "l112@7909": {
+      "expression": "conv.r4(alternatives(source_block(7904,requires=[\"b7727\",\"b7902\"],value=-1),source_block(7907,requires=[\"b7727\",\"b7902\"],value=1)))",
+      "block": 7908,
+      "requiredPredicates": [
+        "b7727"
+      ],
+      "step": 130
+    },
+    "l112@7934": {
+      "expression": "(l112@7909*-1)",
+      "block": 7926,
+      "requiredPredicates": [
+        "b7727",
+        "b7924"
+      ],
+      "step": 132
+    },
+    "l113@8055": {
+      "expression": "Utils.RotatedBy[addressed_l113,conv.r8(f32_at((this).Projectile.localAI,0)),addressed_l11]",
+      "block": 8029,
+      "requiredPredicates": [
+        "b7727"
+      ],
+      "step": 135
+    },
+    "addressed_l11": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 8029,
+          "expression": "initobj(addressed_l11;\"Microsoft.Xna.Framework.Vector2\")",
+          "requiredPredicates": [
+            "b7727"
+          ],
+          "step": 134
+        },
+        {
+          "block": 8854,
+          "expression": "initobj(addressed_l11;\"Microsoft.Xna.Framework.Vector2\")",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500",
+            "b8612"
+          ],
+          "step": 183
+        },
+        {
+          "block": 8977,
+          "expression": "initobj(addressed_l11;\"Microsoft.Xna.Framework.Vector2\")",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500",
+            "b8612",
+            "b9158"
+          ],
+          "step": 188
+        },
+        {
+          "block": 9192,
+          "expression": "initobj(addressed_l11;\"Microsoft.Xna.Framework.Vector2\")",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500",
+            "b8612",
+            "b9165",
+            "b9382"
+          ],
+          "step": 201
+        },
+        {
+          "block": 10128,
+          "expression": "initobj(addressed_l11;\"Microsoft.Xna.Framework.Vector2\")",
+          "requiredPredicates": [
+            "b9406",
+            "b9740",
+            "b9756",
+            "b9886"
+          ],
+          "step": 249
+        },
+        {
+          "block": 10261,
+          "expression": "initobj(addressed_l11;\"Microsoft.Xna.Framework.Vector2\")",
+          "requiredPredicates": [
+            "b9406",
+            "b9740",
+            "b9756",
+            "b9886",
+            "b10689"
+          ],
+          "step": 254
+        },
+        {
+          "block": 10451,
+          "expression": "initobj(addressed_l11;\"Microsoft.Xna.Framework.Vector2\")",
+          "requiredPredicates": [
+            "b9406",
+            "b9740",
+            "b9756",
+            "b9886",
+            "b10434",
+            "b10609",
+            "b10689"
+          ],
+          "step": 262
+        },
+        {
+          "block": 10702,
+          "expression": "initobj(addressed_l11;\"Microsoft.Xna.Framework.Vector2\")",
+          "requiredPredicates": [
+            "b9406"
+          ],
+          "step": 275
+        },
+        {
+          "block": 10702,
+          "expression": "initobj(addressed_l11;\"Microsoft.Xna.Framework.Vector2\")",
+          "requiredPredicates": [
+            "b9406"
+          ],
+          "step": 276
+        }
+      ]
+    },
+    "l117@8282": {
+      "expression": "0",
+      "block": 8254,
+      "requiredPredicates": [
+        "b8141"
+      ],
+      "step": 152
+    },
+    "l117@8320": {
+      "expression": "1",
+      "block": 8302,
+      "requiredPredicates": [
+        "b8141",
+        "b8300"
+      ],
+      "step": 156
+    },
+    "addressed_l119": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 8555,
+          "expression": "l119@8555",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500"
+          ],
+          "step": 164
+        },
+        {
+          "block": 8617,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l120,addressed_l121,addressed_l119,addressed_l122,addressed_l123,addressed_l124,0]",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500",
+            "b8612"
+          ],
+          "step": 170
+        }
+      ]
+    },
+    "l119@8555": {
+      "expression": "alternatives(source_block(8543,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8511\",\"b8533\",\"b8541\"],value=ceq(Player.get_CCed[l0@12],0)),source_block(8554,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8511\",\"b8533\",\"b8541\"],value=0))",
+      "block": 8555,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500"
+      ],
+      "step": 164
+    },
+    "addressed_l120": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 8555,
+          "expression": "l120@8559",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500"
+          ],
+          "step": 165
+        },
+        {
+          "block": 8617,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l120,addressed_l121,addressed_l119,addressed_l122,addressed_l123,addressed_l124,0]",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500",
+            "b8612"
+          ],
+          "step": 170
+        },
+        {
+          "block": 9170,
+          "expression": "l120@9175",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500",
+            "b8612",
+            "b9165"
+          ],
+          "step": 197
+        }
+      ]
+    },
+    "l120@8559": {
+      "expression": "14",
+      "block": 8555,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500"
+      ],
+      "step": 165
+    },
+    "addressed_l121": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 8555,
+          "expression": "l121@8566",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500"
+          ],
+          "step": 166
+        },
+        {
+          "block": 8617,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l120,addressed_l121,addressed_l119,addressed_l122,addressed_l123,addressed_l124,0]",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500",
+            "b8612"
+          ],
+          "step": 170
+        },
+        {
+          "block": 9170,
+          "expression": "l121@9182",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500",
+            "b8612",
+            "b9165"
+          ],
+          "step": 198
+        }
+      ]
+    },
+    "l121@8566": {
+      "expression": "14",
+      "block": 8555,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500"
+      ],
+      "step": 166
+    },
+    "addressed_l122": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 8555,
+          "expression": "l122@8588",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500"
+          ],
+          "step": 167
+        },
+        {
+          "block": 8617,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l120,addressed_l121,addressed_l119,addressed_l122,addressed_l123,addressed_l124,0]",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500",
+            "b8612"
+          ],
+          "step": 170
+        }
+      ]
+    },
+    "l122@8588": {
+      "expression": "Player.GetWeaponDamage[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),0]",
+      "block": 8555,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500"
+      ],
+      "step": 167
+    },
+    "addressed_l123": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 8555,
+          "expression": "l123@8608",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500"
+          ],
+          "step": 168
+        },
+        {
+          "block": 8617,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l120,addressed_l121,addressed_l119,addressed_l122,addressed_l123,addressed_l124,0]",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500",
+            "b8612"
+          ],
+          "step": 170
+        },
+        {
+          "block": 8617,
+          "expression": "l123@8686",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500",
+            "b8612"
+          ],
+          "step": 172
+        }
+      ]
+    },
+    "l123@8608": {
+      "expression": "(ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem)).Item.knockBack",
+      "block": 8555,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500"
+      ],
+      "step": 168
+    },
+    "addressed_l124": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 8617,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l120,addressed_l121,addressed_l119,addressed_l122,addressed_l123,addressed_l124,0]",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500",
+            "b8612"
+          ],
+          "step": 170
+        }
+      ]
+    },
+    "l123@8686": {
+      "expression": "Player.GetWeaponKnockback[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l123]",
+      "block": 8617,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612"
+      ],
+      "step": 172
+    },
+    "l121@9182": {
+      "expression": "8",
+      "block": 9170,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612",
+        "b9165"
+      ],
+      "step": 198
+    },
+    "l118@8285": {
+      "expression": "-1",
+      "block": 8254,
+      "requiredPredicates": [
+        "b8141"
+      ],
+      "step": 153
+    },
+    "l118@8345": {
+      "expression": "0",
+      "block": 8344,
+      "requiredPredicates": [
+        "b8141",
+        "b8300",
+        "b8342"
+      ],
+      "step": 158
+    },
+    "l115@8255": {
+      "expression": "5",
+      "block": 8254,
+      "requiredPredicates": [
+        "b8141"
+      ],
+      "step": 149
+    },
+    "l116@8258": {
+      "expression": "0",
+      "block": 8254,
+      "requiredPredicates": [
+        "b8141"
+      ],
+      "step": 150
+    },
+    "l114@8189": {
+      "expression": "0",
+      "block": 8167,
+      "requiredPredicates": [
+        "b8141"
+      ],
+      "step": 142
+    },
+    "l114@8210": {
+      "expression": "(l114@8189+1)",
+      "block": 8206,
+      "requiredPredicates": [
+        "b8141",
+        "b8204"
+      ],
+      "step": 144
+    },
+    "l114@8231": {
+      "expression": "(alternatives(source_block(8167,requires=[\"b8141\"],value=l114@8189),source_block(8206,requires=[\"b8141\",\"b8204\"],value=l114@8210))+1)",
+      "block": 8227,
+      "requiredPredicates": [
+        "b8141",
+        "b8225"
+      ],
+      "step": 146
+    },
+    "l114@8252": {
+      "expression": "(alternatives(source_block(8167,requires=[\"b8141\"],value=l114@8189),source_block(8206,requires=[\"b8141\",\"b8204\"],value=l114@8210),source_block(8227,requires=[\"b8141\",\"b8225\"],value=l114@8231))+1)",
+      "block": 8248,
+      "requiredPredicates": [
+        "b8141",
+        "b8246"
+      ],
+      "step": 148
+    },
+    "l120@9175": {
+      "expression": "616",
+      "block": 9170,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612",
+        "b9165"
+      ],
+      "step": 197
+    },
+    "l130@8970": {
+      "expression": "0",
+      "block": 8961,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612"
+      ],
+      "step": 186
+    },
+    "l130@9153": {
+      "expression": "(alternatives(source_block(8961,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8612\"],value=l130@8970),source_block(9086,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8612\",\"b9158\"],value=l130@9153))+1)",
+      "block": 9086,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612",
+        "b9158"
+      ],
+      "step": 194
+    },
+    "l132@9185": {
+      "expression": "0",
+      "block": 9170,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612",
+        "b9165"
+      ],
+      "step": 199
+    },
+    "l132@9377": {
+      "expression": "(alternatives(source_block(9170,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8612\",\"b9165\"],value=l132@9185),source_block(9301,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8612\",\"b9165\",\"b9382\"],value=l132@9377))+1)",
+      "block": 9301,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612",
+        "b9165",
+        "b9382"
+      ],
+      "step": 207
+    },
+    "l137@9484": {
+      "expression": "0",
+      "block": 9432,
+      "requiredPredicates": [
+        "b9406"
+      ],
+      "step": 216
+    },
+    "l137@9522": {
+      "expression": "1",
+      "block": 9504,
+      "requiredPredicates": [
+        "b9406",
+        "b9502"
+      ],
+      "step": 220
+    },
+    "addressed_l145": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 9811,
+          "expression": "l145@9811",
+          "requiredPredicates": [
+            "b9406",
+            "b9740",
+            "b9756"
+          ],
+          "step": 228
+        },
+        {
+          "block": 9891,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l146,addressed_l147,addressed_l145,addressed_l148,addressed_l149,addressed_l150,0]",
+          "requiredPredicates": [
+            "b9406",
+            "b9740",
+            "b9756",
+            "b9886"
+          ],
+          "step": 236
+        }
+      ]
+    },
+    "l145@9811": {
+      "expression": "alternatives(source_block(9799,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9767\",\"b9789\",\"b9797\"],value=ceq(Player.get_CCed[l0@12],0)),source_block(9810,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9767\",\"b9789\",\"b9797\"],value=0))",
+      "block": 9811,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756"
+      ],
+      "step": 228
+    },
+    "addressed_l146": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 9811,
+          "expression": "l146@9818",
+          "requiredPredicates": [
+            "b9406",
+            "b9740",
+            "b9756"
+          ],
+          "step": 229
+        },
+        {
+          "block": 9891,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l146,addressed_l147,addressed_l145,addressed_l148,addressed_l149,addressed_l150,0]",
+          "requiredPredicates": [
+            "b9406",
+            "b9740",
+            "b9756",
+            "b9886"
+          ],
+          "step": 236
+        }
+      ]
+    },
+    "l146@9818": {
+      "expression": "134",
+      "block": 9811,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756"
+      ],
+      "step": 229
+    },
+    "addressed_l147": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 9811,
+          "expression": "l147@9825",
+          "requiredPredicates": [
+            "b9406",
+            "b9740",
+            "b9756"
+          ],
+          "step": 230
+        },
+        {
+          "block": 9874,
+          "expression": "l147@9882",
+          "requiredPredicates": [
+            "b9406",
+            "b9740",
+            "b9756",
+            "b9872"
+          ],
+          "step": 234
+        },
+        {
+          "block": 9891,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l146,addressed_l147,addressed_l145,addressed_l148,addressed_l149,addressed_l150,0]",
+          "requiredPredicates": [
+            "b9406",
+            "b9740",
+            "b9756",
+            "b9886"
+          ],
+          "step": 236
+        }
+      ]
+    },
+    "l147@9825": {
+      "expression": "8",
+      "block": 9811,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756"
+      ],
+      "step": 230
+    },
+    "l147@9882": {
+      "expression": "(addressed_l147+1)",
+      "block": 9874,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9872"
+      ],
+      "step": 234
+    },
+    "l138@9487": {
+      "expression": "-1",
+      "block": 9432,
+      "requiredPredicates": [
+        "b9406"
+      ],
+      "step": 217
+    },
+    "l138@9552": {
+      "expression": "rem(alternatives(source_block(9504,requires=[\"b9406\",\"b9502\"],value=(conv.i4(f32_at((this).Projectile.ai,0))/(l135@9457-(l136@9460*l134@9454)))),source_block(9547,requires=[\"b9406\",\"b9502\",\"b9545\"],value=(conv.i4(f32_at((this).Projectile.ai,0))/(l135@9457-(l136@9460*l134@9454))))),7)",
+      "block": 9550,
+      "requiredPredicates": [
+        "b9406",
+        "b9502"
+      ],
+      "step": 222
+    },
+    "l135@9457": {
+      "expression": "8",
+      "block": 9432,
+      "requiredPredicates": [
+        "b9406"
+      ],
+      "step": 213
+    },
+    "l136@9460": {
+      "expression": "0",
+      "block": 9432,
+      "requiredPredicates": [
+        "b9406"
+      ],
+      "step": 214
+    },
+    "l134@9454": {
+      "expression": "0",
+      "block": 9432,
+      "requiredPredicates": [
+        "b9406"
+      ],
+      "step": 212
+    },
+    "addressed_l148": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 9811,
+          "expression": "l148@9847",
+          "requiredPredicates": [
+            "b9406",
+            "b9740",
+            "b9756"
+          ],
+          "step": 231
+        },
+        {
+          "block": 9891,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l146,addressed_l147,addressed_l145,addressed_l148,addressed_l149,addressed_l150,0]",
+          "requiredPredicates": [
+            "b9406",
+            "b9740",
+            "b9756",
+            "b9886"
+          ],
+          "step": 236
+        }
+      ]
+    },
+    "l148@9847": {
+      "expression": "Player.GetWeaponDamage[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),0]",
+      "block": 9811,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756"
+      ],
+      "step": 231
+    },
+    "addressed_l149": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 9811,
+          "expression": "l149@9867",
+          "requiredPredicates": [
+            "b9406",
+            "b9740",
+            "b9756"
+          ],
+          "step": 232
+        },
+        {
+          "block": 9891,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l146,addressed_l147,addressed_l145,addressed_l148,addressed_l149,addressed_l150,0]",
+          "requiredPredicates": [
+            "b9406",
+            "b9740",
+            "b9756",
+            "b9886"
+          ],
+          "step": 236
+        },
+        {
+          "block": 9891,
+          "expression": "l149@9944",
+          "requiredPredicates": [
+            "b9406",
+            "b9740",
+            "b9756",
+            "b9886"
+          ],
+          "step": 237
+        }
+      ]
+    },
+    "l149@9867": {
+      "expression": "(ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem)).Item.knockBack",
+      "block": 9811,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756"
+      ],
+      "step": 232
+    },
+    "addressed_l150": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 9891,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l146,addressed_l147,addressed_l145,addressed_l148,addressed_l149,addressed_l150,0]",
+          "requiredPredicates": [
+            "b9406",
+            "b9740",
+            "b9756",
+            "b9886"
+          ],
+          "step": 236
+        }
+      ]
+    },
+    "l149@9944": {
+      "expression": "Player.GetWeaponKnockback[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l149]",
+      "block": 9891,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886"
+      ],
+      "step": 237
+    },
+    "l156@10254": {
+      "expression": "0",
+      "block": 10245,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886"
+      ],
+      "step": 252
+    },
+    "l156@10684": {
+      "expression": "(alternatives(source_block(10245,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\"],value=l156@10254),source_block(10680,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10689\"],value=l156@10684))+1)",
+      "block": 10680,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886",
+        "b10689"
+      ],
+      "step": 272
+    },
+    "l158@10444": {
+      "expression": "-1",
+      "block": 10439,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886",
+        "b10434",
+        "b10689"
+      ],
+      "step": 261
+    },
+    "l158@10600": {
+      "expression": "(alternatives(source_block(10439,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10434\",\"b10689\"],value=l158@10444),source_block(10531,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10434\",\"b10609\",\"b10689\"],value=l158@10600))+2)",
+      "block": 10531,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886",
+        "b10434",
+        "b10609",
+        "b10689"
+      ],
+      "step": 268
+    },
+    "l129@8912": {
+      "expression": "Utils.RotatedBy[l129@8863,((UnifiedRandom.NextDouble[Main.get_rand[]]*0.13089969754219055)-0.06544984877109528),addressed_l11]",
+      "block": 8854,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612"
+      ],
+      "step": 184
+    },
+    "l129@8863": {
+      "expression": "Vector2.mul[alternatives(source_block(8805,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8612\"],value=l129@8812),source_block(8842,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8612\",\"b8826\",\"b8840\"],value=l129@8852)),l126@8713]",
+      "block": 8854,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612"
+      ],
+      "step": 182
+    },
+    "l129@8812": {
+      "expression": "Vector2.Normalize[addressed_l128]",
+      "block": 8805,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612"
+      ],
+      "step": 178
+    },
+    "addressed_l128": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 8617,
+          "expression": "l128@8752",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500",
+            "b8612"
+          ],
+          "step": 175
+        },
+        {
+          "block": 8767,
+          "expression": "set((addressed_l128).Vector2.Y,((conv.r4((@Main.screenHeight-@Main.mouseY))+(ldsflda(Main.screenPosition)).Vector2.Y)-(l127@8716).Vector2.Y))",
+          "requiredPredicates": [
+            "b8141",
+            "b8484",
+            "b8500",
+            "b8612",
+            "b8765"
+          ],
+          "step": 177
+        }
+      ]
+    },
+    "l128@8752": {
+      "expression": "Vector2.sub[Vector2.add[@Main.screenPosition,Vector2..ctor[conv.r4(@Main.mouseX),conv.r4(@Main.mouseY)]],l127@8716]",
+      "block": 8617,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612"
+      ],
+      "step": 175
+    },
+    "l127@8716": {
+      "expression": "l2@33",
+      "block": 8617,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612"
+      ],
+      "step": 174
+    },
+    "l129@8852": {
+      "expression": "Vector2.op_UnaryNegation[Vector2.get_UnitY[]]",
+      "block": 8842,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612",
+        "b8826",
+        "b8840"
+      ],
+      "step": 181
+    },
+    "l126@8713": {
+      "expression": "((ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem)).Item.shootSpeed*(this).Projectile.scale)",
+      "block": 8617,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612"
+      ],
+      "step": 173
+    },
+    "l155@10196": {
+      "expression": "Utils.RotatedBy[l155@10137,(((UnifiedRandom.NextDouble[Main.get_rand[]]*0.13089969754219055)-0.06544984877109528)*0.5),addressed_l11]",
+      "block": 10128,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886"
+      ],
+      "step": 250
+    },
+    "l155@10137": {
+      "expression": "Vector2.mul[alternatives(source_block(10079,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\"],value=l155@10086),source_block(10116,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10100\",\"b10114\"],value=l155@10126)),l152@9987]",
+      "block": 10128,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886"
+      ],
+      "step": 248
+    },
+    "l155@10086": {
+      "expression": "Vector2.Normalize[addressed_l154]",
+      "block": 10079,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886"
+      ],
+      "step": 244
+    },
+    "addressed_l154": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 9891,
+          "expression": "l154@10026",
+          "requiredPredicates": [
+            "b9406",
+            "b9740",
+            "b9756",
+            "b9886"
+          ],
+          "step": 241
+        },
+        {
+          "block": 10041,
+          "expression": "set((addressed_l154).Vector2.Y,((conv.r4((@Main.screenHeight-@Main.mouseY))+(ldsflda(Main.screenPosition)).Vector2.Y)-(l153@9990).Vector2.Y))",
+          "requiredPredicates": [
+            "b9406",
+            "b9740",
+            "b9756",
+            "b9886",
+            "b10039"
+          ],
+          "step": 243
+        }
+      ]
+    },
+    "l154@10026": {
+      "expression": "Vector2.sub[Vector2.add[@Main.screenPosition,Vector2..ctor[conv.r4(@Main.mouseX),conv.r4(@Main.mouseY)]],l153@9990]",
+      "block": 9891,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886"
+      ],
+      "step": 241
+    },
+    "l153@9990": {
+      "expression": "l2@33",
+      "block": 9891,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886"
+      ],
+      "step": 240
+    },
+    "l155@10126": {
+      "expression": "Vector2.op_UnaryNegation[Vector2.get_UnitY[]]",
+      "block": 10116,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886",
+        "b10100",
+        "b10114"
+      ],
+      "step": 247
+    },
+    "l152@9987": {
+      "expression": "((ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem)).Item.shootSpeed*(this).Projectile.scale)",
+      "block": 9891,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886"
+      ],
+      "step": 239
+    },
+    "l162@11703": {
+      "expression": "24",
+      "block": 11701,
+      "requiredPredicates": [
+        "b11588"
+      ],
+      "step": 286
+    },
+    "l163@11706": {
+      "expression": "2",
+      "block": 11701,
+      "requiredPredicates": [
+        "b11588"
+      ],
+      "step": 287
+    },
+    "l161@11636": {
+      "expression": "0",
+      "block": 11614,
+      "requiredPredicates": [
+        "b11588"
+      ],
+      "step": 279
+    },
+    "l161@11657": {
+      "expression": "(l161@11636+1)",
+      "block": 11653,
+      "requiredPredicates": [
+        "b11588",
+        "b11651"
+      ],
+      "step": 281
+    },
+    "l161@11678": {
+      "expression": "(alternatives(source_block(11614,requires=[\"b11588\"],value=l161@11636),source_block(11653,requires=[\"b11588\",\"b11651\"],value=l161@11657))+1)",
+      "block": 11674,
+      "requiredPredicates": [
+        "b11588",
+        "b11672"
+      ],
+      "step": 283
+    },
+    "l161@11699": {
+      "expression": "(alternatives(source_block(11614,requires=[\"b11588\"],value=l161@11636),source_block(11653,requires=[\"b11588\",\"b11651\"],value=l161@11657),source_block(11674,requires=[\"b11588\",\"b11672\"],value=l161@11678))+1)",
+      "block": 11695,
+      "requiredPredicates": [
+        "b11588",
+        "b11693"
+      ],
+      "step": 285
+    },
+    "addressed_l165": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 11836,
+          "expression": "l165@11836",
+          "requiredPredicates": [
+            "b11588"
+          ],
+          "step": 296
+        },
+        {
+          "block": 12046,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l166,addressed_l167,addressed_l165,addressed_l168,addressed_l169,addressed_l170,0]",
+          "requiredPredicates": [
+            "b11588",
+            "b11965",
+            "b11981",
+            "b12041"
+          ],
+          "step": 308
+        }
+      ]
+    },
+    "l165@11836": {
+      "expression": "alternatives(source_block(11824,requires=[\"b11588\",\"b11792\",\"b11814\",\"b11822\"],value=ceq(Player.get_CCed[l0@12],0)),source_block(11835,requires=[\"b11588\",\"b11792\",\"b11814\",\"b11822\"],value=0))",
+      "block": 11836,
+      "requiredPredicates": [
+        "b11588"
+      ],
+      "step": 296
+    },
+    "addressed_l166": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 11986,
+          "expression": "l166@11988",
+          "requiredPredicates": [
+            "b11588",
+            "b11965",
+            "b11981"
+          ],
+          "step": 303
+        },
+        {
+          "block": 12046,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l166,addressed_l167,addressed_l165,addressed_l168,addressed_l169,addressed_l170,0]",
+          "requiredPredicates": [
+            "b11588",
+            "b11965",
+            "b11981",
+            "b12041"
+          ],
+          "step": 308
+        }
+      ]
+    },
+    "l166@11988": {
+      "expression": "14",
+      "block": 11986,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981"
+      ],
+      "step": 303
+    },
+    "l164@11730": {
+      "expression": "0",
+      "block": 11701,
+      "requiredPredicates": [
+        "b11588"
+      ],
+      "step": 289
+    },
+    "l164@11765": {
+      "expression": "1",
+      "block": 11747,
+      "requiredPredicates": [
+        "b11588",
+        "b11745"
+      ],
+      "step": 292
+    },
+    "addressed_l167": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 11986,
+          "expression": "l167@11995",
+          "requiredPredicates": [
+            "b11588",
+            "b11965",
+            "b11981"
+          ],
+          "step": 304
+        },
+        {
+          "block": 12046,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l166,addressed_l167,addressed_l165,addressed_l168,addressed_l169,addressed_l170,0]",
+          "requiredPredicates": [
+            "b11588",
+            "b11965",
+            "b11981",
+            "b12041"
+          ],
+          "step": 308
+        }
+      ]
+    },
+    "l167@11995": {
+      "expression": "14",
+      "block": 11986,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981"
+      ],
+      "step": 304
+    },
+    "addressed_l168": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 11986,
+          "expression": "l168@12017",
+          "requiredPredicates": [
+            "b11588",
+            "b11965",
+            "b11981"
+          ],
+          "step": 305
+        },
+        {
+          "block": 12046,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l166,addressed_l167,addressed_l165,addressed_l168,addressed_l169,addressed_l170,0]",
+          "requiredPredicates": [
+            "b11588",
+            "b11965",
+            "b11981",
+            "b12041"
+          ],
+          "step": 308
+        }
+      ]
+    },
+    "l168@12017": {
+      "expression": "Player.GetWeaponDamage[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),0]",
+      "block": 11986,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981"
+      ],
+      "step": 305
+    },
+    "addressed_l169": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 11986,
+          "expression": "l169@12037",
+          "requiredPredicates": [
+            "b11588",
+            "b11965",
+            "b11981"
+          ],
+          "step": 306
+        },
+        {
+          "block": 12046,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l166,addressed_l167,addressed_l165,addressed_l168,addressed_l169,addressed_l170,0]",
+          "requiredPredicates": [
+            "b11588",
+            "b11965",
+            "b11981",
+            "b12041"
+          ],
+          "step": 308
+        },
+        {
+          "block": 12046,
+          "expression": "l169@12115",
+          "requiredPredicates": [
+            "b11588",
+            "b11965",
+            "b11981",
+            "b12041"
+          ],
+          "step": 310
+        }
+      ]
+    },
+    "l169@12037": {
+      "expression": "(ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem)).Item.knockBack",
+      "block": 11986,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981"
+      ],
+      "step": 306
+    },
+    "addressed_l170": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 12046,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l166,addressed_l167,addressed_l165,addressed_l168,addressed_l169,addressed_l170,0]",
+          "requiredPredicates": [
+            "b11588",
+            "b11965",
+            "b11981",
+            "b12041"
+          ],
+          "step": 308
+        }
+      ]
+    },
+    "l169@12115": {
+      "expression": "Player.GetWeaponKnockback[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l169]",
+      "block": 12046,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981",
+        "b12041"
+      ],
+      "step": 310
+    },
+    "l175@12292": {
+      "expression": "Vector2.mul[alternatives(source_block(12234,requires=[\"b11588\",\"b11965\",\"b11981\",\"b12041\"],value=l175@12241),source_block(12271,requires=[\"b11588\",\"b11965\",\"b11981\",\"b12041\",\"b12255\",\"b12269\"],value=l175@12281)),l172@12142]",
+      "block": 12283,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981",
+        "b12041"
+      ],
+      "step": 320
+    },
+    "l175@12241": {
+      "expression": "Vector2.Normalize[addressed_l174]",
+      "block": 12234,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981",
+        "b12041"
+      ],
+      "step": 316
+    },
+    "addressed_l174": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 12046,
+          "expression": "l174@12181",
+          "requiredPredicates": [
+            "b11588",
+            "b11965",
+            "b11981",
+            "b12041"
+          ],
+          "step": 313
+        },
+        {
+          "block": 12196,
+          "expression": "set((addressed_l174).Vector2.Y,((conv.r4((@Main.screenHeight-@Main.mouseY))+(ldsflda(Main.screenPosition)).Vector2.Y)-(l173@12145).Vector2.Y))",
+          "requiredPredicates": [
+            "b11588",
+            "b11965",
+            "b11981",
+            "b12041",
+            "b12194"
+          ],
+          "step": 315
+        }
+      ]
+    },
+    "l174@12181": {
+      "expression": "Vector2.sub[Vector2.add[@Main.screenPosition,Vector2..ctor[conv.r4(@Main.mouseX),conv.r4(@Main.mouseY)]],l173@12145]",
+      "block": 12046,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981",
+        "b12041"
+      ],
+      "step": 313
+    },
+    "l173@12145": {
+      "expression": "l2@33",
+      "block": 12046,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981",
+        "b12041"
+      ],
+      "step": 312
+    },
+    "l175@12281": {
+      "expression": "Vector2.op_UnaryNegation[Vector2.get_UnitY[]]",
+      "block": 12271,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981",
+        "b12041",
+        "b12255",
+        "b12269"
+      ],
+      "step": 319
+    },
+    "l172@12142": {
+      "expression": "((ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem)).Item.shootSpeed*(this).Projectile.scale)",
+      "block": 12046,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981",
+        "b12041"
+      ],
+      "step": 311
+    },
+    "l180@12647": {
+      "expression": "(l0@12).Player.itemAnimationMax",
+      "block": 12620,
+      "requiredPredicates": [
+        "b12594"
+      ],
+      "step": 334
+    },
+    "addressed_l182": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 12752,
+          "expression": "l182@12752",
+          "requiredPredicates": [
+            "b12594"
+          ],
+          "step": 343
+        },
+        {
+          "block": 12959,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l183,addressed_l184,addressed_l182,addressed_l185,addressed_l186,addressed_l189,0]",
+          "requiredPredicates": [
+            "b12594",
+            "b12868",
+            "b12884",
+            "b12954"
+          ],
+          "step": 357
+        }
+      ]
+    },
+    "l182@12752": {
+      "expression": "alternatives(source_block(12740,requires=[\"b12594\",\"b12708\",\"b12730\",\"b12738\"],value=ceq(Player.get_CCed[l0@12],0)),source_block(12751,requires=[\"b12594\",\"b12708\",\"b12730\",\"b12738\"],value=0))",
+      "block": 12752,
+      "requiredPredicates": [
+        "b12594"
+      ],
+      "step": 343
+    },
+    "addressed_l183": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 12889,
+          "expression": "l183@12891",
+          "requiredPredicates": [
+            "b12594",
+            "b12868",
+            "b12884"
+          ],
+          "step": 350
+        },
+        {
+          "block": 12959,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l183,addressed_l184,addressed_l182,addressed_l185,addressed_l186,addressed_l189,0]",
+          "requiredPredicates": [
+            "b12594",
+            "b12868",
+            "b12884",
+            "b12954"
+          ],
+          "step": 357
+        },
+        {
+          "block": 13035,
+          "expression": "l183@13036",
+          "requiredPredicates": [
+            "b12594",
+            "b12868",
+            "b12884",
+            "b12954",
+            "b13033"
+          ],
+          "step": 361
+        },
+        {
+          "block": 13061,
+          "expression": "l183@13110",
+          "requiredPredicates": [
+            "b12594",
+            "b12868",
+            "b12884",
+            "b12954",
+            "b13059"
+          ],
+          "step": 368
+        }
+      ]
+    },
+    "l183@12891": {
+      "expression": "14",
+      "block": 12889,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884"
+      ],
+      "step": 350
+    },
+    "l181@12671": {
+      "expression": "0",
+      "block": 12620,
+      "requiredPredicates": [
+        "b12594"
+      ],
+      "step": 336
+    },
+    "l181@12700": {
+      "expression": "1",
+      "block": 12688,
+      "requiredPredicates": [
+        "b12594",
+        "b12686"
+      ],
+      "step": 339
+    },
+    "addressed_l184": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 12889,
+          "expression": "l184@12898",
+          "requiredPredicates": [
+            "b12594",
+            "b12868",
+            "b12884"
+          ],
+          "step": 351
+        },
+        {
+          "block": 12959,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l183,addressed_l184,addressed_l182,addressed_l185,addressed_l186,addressed_l189,0]",
+          "requiredPredicates": [
+            "b12594",
+            "b12868",
+            "b12884",
+            "b12954"
+          ],
+          "step": 357
+        },
+        {
+          "block": 13061,
+          "expression": "l184@13117",
+          "requiredPredicates": [
+            "b12594",
+            "b12868",
+            "b12884",
+            "b12954",
+            "b13059"
+          ],
+          "step": 369
+        }
+      ]
+    },
+    "l184@12898": {
+      "expression": "12",
+      "block": 12889,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884"
+      ],
+      "step": 351
+    },
+    "addressed_l185": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 12889,
+          "expression": "l185@12920",
+          "requiredPredicates": [
+            "b12594",
+            "b12868",
+            "b12884"
+          ],
+          "step": 352
+        },
+        {
+          "block": 12959,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l183,addressed_l184,addressed_l182,addressed_l185,addressed_l186,addressed_l189,0]",
+          "requiredPredicates": [
+            "b12594",
+            "b12868",
+            "b12884",
+            "b12954"
+          ],
+          "step": 357
+        },
+        {
+          "block": 13061,
+          "expression": "l185@13075",
+          "requiredPredicates": [
+            "b12594",
+            "b12868",
+            "b12884",
+            "b12954",
+            "b13059"
+          ],
+          "step": 365
+        }
+      ]
+    },
+    "l185@12920": {
+      "expression": "Player.GetWeaponDamage[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),0]",
+      "block": 12889,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884"
+      ],
+      "step": 352
+    },
+    "addressed_l186": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 12889,
+          "expression": "l186@12940",
+          "requiredPredicates": [
+            "b12594",
+            "b12868",
+            "b12884"
+          ],
+          "step": 353
+        },
+        {
+          "block": 12959,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l183,addressed_l184,addressed_l182,addressed_l185,addressed_l186,addressed_l189,0]",
+          "requiredPredicates": [
+            "b12594",
+            "b12868",
+            "b12884",
+            "b12954"
+          ],
+          "step": 357
+        },
+        {
+          "block": 12959,
+          "expression": "l186@13028",
+          "requiredPredicates": [
+            "b12594",
+            "b12868",
+            "b12884",
+            "b12954"
+          ],
+          "step": 359
+        }
+      ]
+    },
+    "l186@12940": {
+      "expression": "(ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem)).Item.knockBack",
+      "block": 12889,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884"
+      ],
+      "step": 353
+    },
+    "addressed_l189": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 12959,
+          "expression": "Player.PickAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l183,addressed_l184,addressed_l182,addressed_l185,addressed_l186,addressed_l189,0]",
+          "requiredPredicates": [
+            "b12594",
+            "b12868",
+            "b12884",
+            "b12954"
+          ],
+          "step": 357
+        }
+      ]
+    },
+    "l186@13028": {
+      "expression": "Player.GetWeaponKnockback[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),addressed_l186]",
+      "block": 12959,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954"
+      ],
+      "step": 359
+    },
+    "l185@13075": {
+      "expression": "(addressed_l185*2)",
+      "block": 13061,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954",
+        "b13059"
+      ],
+      "step": 365
+    },
+    "l89@13047": {
+      "expression": "((l0@12).Player.phantomPhoneixCounter+1)",
+      "block": 13038,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954"
+      ],
+      "step": 362
+    },
+    "l184@13117": {
+      "expression": "16",
+      "block": 13061,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954",
+        "b13059"
+      ],
+      "step": 369
+    },
+    "l183@13036": {
+      "expression": "2",
+      "block": 13035,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954",
+        "b13033"
+      ],
+      "step": 361
+    },
+    "l183@13110": {
+      "expression": "706",
+      "block": 13061,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954",
+        "b13059"
+      ],
+      "step": 368
+    },
+    "l194@13294": {
+      "expression": "Vector2.mul[alternatives(source_block(13236,requires=[\"b12594\",\"b12868\",\"b12884\",\"b12954\"],value=l194@13243),source_block(13273,requires=[\"b12594\",\"b12868\",\"b12884\",\"b12954\",\"b13257\",\"b13271\"],value=l194@13283)),l191@13144]",
+      "block": 13285,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954"
+      ],
+      "step": 379
+    },
+    "l194@13243": {
+      "expression": "Vector2.Normalize[addressed_l193]",
+      "block": 13236,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954"
+      ],
+      "step": 375
+    },
+    "addressed_l193": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 13119,
+          "expression": "l193@13183",
+          "requiredPredicates": [
+            "b12594",
+            "b12868",
+            "b12884",
+            "b12954"
+          ],
+          "step": 372
+        },
+        {
+          "block": 13198,
+          "expression": "set((addressed_l193).Vector2.Y,((conv.r4((@Main.screenHeight-@Main.mouseY))+(ldsflda(Main.screenPosition)).Vector2.Y)-(l192@13147).Vector2.Y))",
+          "requiredPredicates": [
+            "b12594",
+            "b12868",
+            "b12884",
+            "b12954",
+            "b13196"
+          ],
+          "step": 374
+        }
+      ]
+    },
+    "l193@13183": {
+      "expression": "Vector2.sub[Vector2.add[@Main.screenPosition,Vector2..ctor[conv.r4(@Main.mouseX),conv.r4(@Main.mouseY)]],l192@13147]",
+      "block": 13119,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954"
+      ],
+      "step": 372
+    },
+    "l192@13147": {
+      "expression": "l2@33",
+      "block": 13119,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954"
+      ],
+      "step": 371
+    },
+    "l194@13283": {
+      "expression": "Vector2.op_UnaryNegation[Vector2.get_UnitY[]]",
+      "block": 13273,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954",
+        "b13257",
+        "b13271"
+      ],
+      "step": 378
+    },
+    "l191@13144": {
+      "expression": "((ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem)).Item.shootSpeed*(this).Projectile.scale)",
+      "block": 13119,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954"
+      ],
+      "step": 370
+    },
+    "addressed_l199": {
+      "scope": "address_exposed_local; ordered_source_uses_and_stores; alias_effects_and_reaching_value_unresolved",
+      "orderedSourceUses": [
+        {
+          "block": 13762,
+          "expression": "l199@13796",
+          "requiredPredicates": [
+            "b13744",
+            "b13757"
+          ],
+          "step": 398
+        },
+        {
+          "block": 13807,
+          "expression": "set((addressed_l199).Vector2.X,(conv.r4((ldflda(Player.bodyFrame,l0@12)).Rectangle.Width)-(addressed_l199).Vector2.X))",
+          "requiredPredicates": [
+            "b13744",
+            "b13757",
+            "b13805"
+          ],
+          "step": 400
+        },
+        {
+          "block": 13847,
+          "expression": "set((addressed_l199).Vector2.Y,(conv.r4((ldflda(Player.bodyFrame,l0@12)).Rectangle.Height)-(addressed_l199).Vector2.Y))",
+          "requiredPredicates": [
+            "b13744",
+            "b13757",
+            "b13845"
+          ],
+          "step": 402
+        },
+        {
+          "block": 13874,
+          "expression": "l199@13930",
+          "requiredPredicates": [
+            "b13744",
+            "b13757"
+          ],
+          "step": 403
+        }
+      ]
+    },
+    "l199@13796": {
+      "expression": "Vector2.mul[ldelem(@Main.OffsetsPlayerOnhand,((ldflda(Player.bodyFrame,l0@12)).Rectangle.Y/56);\"Microsoft.Xna.Framework.Vector2\"),2]",
+      "block": 13762,
+      "requiredPredicates": [
+        "b13744",
+        "b13757"
+      ],
+      "step": 398
+    },
+    "l199@13930": {
+      "expression": "Vector2.sub[addressed_l199,Vector2.div[Vector2..ctor[conv.r4(((ldflda(Player.bodyFrame,l0@12)).Rectangle.Width-(l0@12).Entity.width)),conv.r4(((ldflda(Player.bodyFrame,l0@12)).Rectangle.Height-42))],2]]",
+      "block": 13874,
+      "requiredPredicates": [
+        "b13744",
+        "b13757"
+      ],
+      "step": 403
+    },
+    "l94@5499": {
+      "expression": "0",
+      "block": 5490,
+      "requiredPredicates": [
+        "b5320",
+        "b5336",
+        "b5384",
+        "b5395",
+        "b5406",
+        "b5424"
+      ],
+      "step": 45
+    },
+    "l94@5581": {
+      "expression": "(alternatives(source_block(5490,requires=[\"b5320\",\"b5336\",\"b5384\",\"b5395\",\"b5406\",\"b5424\"],value=l94@5499),source_block(5503,requires=[\"b5320\",\"b5336\",\"b5384\",\"b5395\",\"b5406\",\"b5424\",\"b5586\"],value=l94@5581))+1)",
+      "block": 5503,
+      "requiredPredicates": [
+        "b5320",
+        "b5336",
+        "b5384",
+        "b5395",
+        "b5406",
+        "b5424",
+        "b5586"
+      ],
+      "step": 47
+    },
+    "l91@5435": {
+      "expression": "Entity.get_Center[this]",
+      "block": 5429,
+      "requiredPredicates": [
+        "b5320",
+        "b5336",
+        "b5384",
+        "b5395",
+        "b5406",
+        "b5424"
+      ],
+      "step": 39
+    },
+    "l92@5448": {
+      "expression": "Vector2.Normalize[(this).Entity.velocity]",
+      "block": 5429,
+      "requiredPredicates": [
+        "b5320",
+        "b5336",
+        "b5384",
+        "b5395",
+        "b5406",
+        "b5424"
+      ],
+      "step": 40
+    },
+    "l92@5488": {
+      "expression": "Vector2.op_UnaryNegation[Vector2.get_UnitY[]]",
+      "block": 5478,
+      "requiredPredicates": [
+        "b5320",
+        "b5336",
+        "b5384",
+        "b5395",
+        "b5406",
+        "b5424",
+        "b5462",
+        "b5476"
+      ],
+      "step": 43
+    },
+    "l93@5496": {
+      "expression": "(this).Projectile.damage",
+      "block": 5490,
+      "requiredPredicates": [
+        "b5320",
+        "b5336",
+        "b5384",
+        "b5395",
+        "b5406",
+        "b5424"
+      ],
+      "step": 44
+    },
+    "l106@7555": {
+      "expression": "Entity.get_Center[this]",
+      "block": 7527,
+      "requiredPredicates": [
+        "b7234",
+        "b7280",
+        "b7298"
+      ],
+      "step": 116
+    },
+    "l111@7575": {
+      "expression": "Vector2.mul[Vector2.Normalize[(this).Entity.velocity],l110@7547]",
+      "block": 7527,
+      "requiredPredicates": [
+        "b7234",
+        "b7280",
+        "b7298"
+      ],
+      "step": 117
+    },
+    "l110@7547": {
+      "expression": "3",
+      "block": 7527,
+      "requiredPredicates": [
+        "b7234",
+        "b7280",
+        "b7298"
+      ],
+      "step": 115
+    },
+    "l111@7615": {
+      "expression": "Vector2.op_UnaryNegation[Vector2.get_UnitY[]]",
+      "block": 7605,
+      "requiredPredicates": [
+        "b7234",
+        "b7280",
+        "b7298",
+        "b7589",
+        "b7603"
+      ],
+      "step": 120
+    },
+    "l109@7540": {
+      "expression": "601",
+      "block": 7527,
+      "requiredPredicates": [
+        "b7234",
+        "b7280",
+        "b7298"
+      ],
+      "step": 114
+    },
+    "l125@8663": {
+      "expression": "Player.GetProjectileSource_Item_WithPotentialAmmo[l0@12,Player.get_HeldItem[l0@12],addressed_l124]",
+      "block": 8617,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612"
+      ],
+      "step": 171
+    },
+    "l131@9044": {
+      "expression": "Utils.RotatedBy[l131@8995,((UnifiedRandom.NextDouble[Main.get_rand[]]*0.19634954631328583)-0.09817477315664291),addressed_l11]",
+      "block": 8977,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612",
+        "b9158"
+      ],
+      "step": 189
+    },
+    "l131@8995": {
+      "expression": "Vector2.mul[Vector2.Normalize[(this).Entity.velocity],addressed_l121]",
+      "block": 8977,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612",
+        "b9158"
+      ],
+      "step": 187
+    },
+    "l131@9084": {
+      "expression": "Vector2.op_UnaryNegation[Vector2.get_UnitY[]]",
+      "block": 9074,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612",
+        "b9058",
+        "b9072",
+        "b9158"
+      ],
+      "step": 192
+    },
+    "l133@9259": {
+      "expression": "Utils.RotatedBy[l133@9210,((UnifiedRandom.NextDouble[Main.get_rand[]]*0.39269909262657166)-0.19634954631328583),addressed_l11]",
+      "block": 9192,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612",
+        "b9165",
+        "b9382"
+      ],
+      "step": 202
+    },
+    "l133@9210": {
+      "expression": "Vector2.mul[Vector2.Normalize[(this).Entity.velocity],addressed_l121]",
+      "block": 9192,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612",
+        "b9165",
+        "b9382"
+      ],
+      "step": 200
+    },
+    "l133@9299": {
+      "expression": "Vector2.op_UnaryNegation[Vector2.get_UnitY[]]",
+      "block": 9289,
+      "requiredPredicates": [
+        "b8141",
+        "b8484",
+        "b8500",
+        "b8612",
+        "b9165",
+        "b9273",
+        "b9287",
+        "b9382"
+      ],
+      "step": 205
+    },
+    "l151@9960": {
+      "expression": "Player.GetProjectileSource_Item_WithPotentialAmmo[l0@12,Player.get_HeldItem[l0@12],addressed_l150]",
+      "block": 9891,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886"
+      ],
+      "step": 238
+    },
+    "l157@10328": {
+      "expression": "Utils.RotatedBy[l157@10279,((UnifiedRandom.NextDouble[Main.get_rand[]]*0.19634954631328583)-0.09817477315664291),addressed_l11]",
+      "block": 10261,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886",
+        "b10689"
+      ],
+      "step": 255
+    },
+    "l157@10279": {
+      "expression": "Vector2.mul[Vector2.Normalize[(this).Entity.velocity],addressed_l147]",
+      "block": 10261,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886",
+        "b10689"
+      ],
+      "step": 253
+    },
+    "l157@10368": {
+      "expression": "Vector2.op_UnaryNegation[Vector2.get_UnitY[]]",
+      "block": 10358,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886",
+        "b10342",
+        "b10356",
+        "b10689"
+      ],
+      "step": 258
+    },
+    "l159@10489": {
+      "expression": "Utils.RotatedBy[alternatives(source_block(10261,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10689\"],value=l157@10328),source_block(10358,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10342\",\"b10356\",\"b10689\"],value=l157@10368)),conv.r8((((6.2831855*alternatives(source_block(10439,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10434\",\"b10689\"],value=l158@10444),source_block(10531,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10434\",\"b10609\",\"b10689\"],value=l158@10600)))*1)/80)),addressed_l11]",
+      "block": 10451,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886",
+        "b10434",
+        "b10609",
+        "b10689"
+      ],
+      "step": 263
+    },
+    "l159@10529": {
+      "expression": "Vector2.op_UnaryNegation[Vector2.get_UnitY[]]",
+      "block": 10519,
+      "requiredPredicates": [
+        "b9406",
+        "b9740",
+        "b9756",
+        "b9886",
+        "b10434",
+        "b10503",
+        "b10517",
+        "b10609",
+        "b10689"
+      ],
+      "step": 266
+    },
+    "l176@12360": {
+      "expression": "0",
+      "block": 12341,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981",
+        "b12041"
+      ],
+      "step": 322
+    },
+    "l176@12565": {
+      "expression": "(alternatives(source_block(12341,requires=[\"b11588\",\"b11965\",\"b11981\",\"b12041\"],value=l176@12360),source_block(12454,requires=[\"b11588\",\"b11965\",\"b11981\",\"b12041\",\"b12570\"],value=l176@12565))+1)",
+      "block": 12454,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981",
+        "b12041",
+        "b12570"
+      ],
+      "step": 329
+    },
+    "l171@12092": {
+      "expression": "Player.GetProjectileSource_Item_WithPotentialAmmo[l0@12,Player.get_HeldItem[l0@12],addressed_l170]",
+      "block": 12046,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981",
+        "b12041"
+      ],
+      "step": 309
+    },
+    "l178@12481": {
+      "expression": "Vector2.add[l173@12145,Utils.RandomVector2[Main.get_rand[],-15,15]]",
+      "block": 12454,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981",
+        "b12041",
+        "b12570"
+      ],
+      "step": 327
+    },
+    "l177@12412": {
+      "expression": "Vector2.mul[Vector2.mul[Vector2.Normalize[(this).Entity.velocity],addressed_l167],(0.6+(Utils.NextFloat[Main.get_rand[]]*0.8))]",
+      "block": 12367,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981",
+        "b12041",
+        "b12570"
+      ],
+      "step": 323
+    },
+    "l177@12452": {
+      "expression": "Vector2.op_UnaryNegation[Vector2.get_UnitY[]]",
+      "block": 12442,
+      "requiredPredicates": [
+        "b11588",
+        "b11965",
+        "b11981",
+        "b12041",
+        "b12426",
+        "b12440",
+        "b12570"
+      ],
+      "step": 326
+    },
+    "l195@13362": {
+      "expression": "0",
+      "block": 13343,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954"
+      ],
+      "step": 381
+    },
+    "l195@13544": {
+      "expression": "(alternatives(source_block(13343,requires=[\"b12594\",\"b12868\",\"b12884\",\"b12954\"],value=l195@13362),source_block(13458,requires=[\"b12594\",\"b12868\",\"b12884\",\"b12954\",\"b13550\"],value=l195@13544))+1)",
+      "block": 13458,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954",
+        "b13550"
+      ],
+      "step": 389
+    },
+    "l187@12943": {
+      "expression": "2",
+      "block": 12889,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884"
+      ],
+      "step": 354
+    },
+    "l187@13069": {
+      "expression": "1",
+      "block": 13061,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954",
+        "b13059"
+      ],
+      "step": 364
+    },
+    "l190@13005": {
+      "expression": "Player.GetProjectileSource_Item_WithPotentialAmmo[l0@12,Player.get_HeldItem[l0@12],addressed_l189]",
+      "block": 12959,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954"
+      ],
+      "step": 358
+    },
+    "l197@13460": {
+      "expression": "l192@13147",
+      "block": 13458,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954",
+        "b13550"
+      ],
+      "step": 387
+    },
+    "l196@13416": {
+      "expression": "Vector2.add[l196@13387,Utils.NextVector2Square[Main.get_rand[],(0-alternatives(source_block(12889,requires=[\"b12594\",\"b12868\",\"b12884\"],value=l188@12950),source_block(13061,requires=[\"b12594\",\"b12868\",\"b12884\",\"b12954\",\"b13059\"],value=l188@13082))),alternatives(source_block(12889,requires=[\"b12594\",\"b12868\",\"b12884\"],value=l188@12950),source_block(13061,requires=[\"b12594\",\"b12868\",\"b12884\",\"b12954\",\"b13059\"],value=l188@13082))]]",
+      "block": 13369,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954",
+        "b13550"
+      ],
+      "step": 383
+    },
+    "l196@13387": {
+      "expression": "Vector2.mul[Vector2.Normalize[(this).Entity.velocity],addressed_l184]",
+      "block": 13369,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954",
+        "b13550"
+      ],
+      "step": 382
+    },
+    "l188@12950": {
+      "expression": "1.5",
+      "block": 12889,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884"
+      ],
+      "step": 355
+    },
+    "l188@13082": {
+      "expression": "0",
+      "block": 13061,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954",
+        "b13059"
+      ],
+      "step": 366
+    },
+    "l196@13456": {
+      "expression": "Vector2.op_UnaryNegation[Vector2.get_UnitY[]]",
+      "block": 13446,
+      "requiredPredicates": [
+        "b12594",
+        "b12868",
+        "b12884",
+        "b12954",
+        "b13430",
+        "b13444",
+        "b13550"
+      ],
+      "step": 386
+    }
+  },
+  "predicates": [
+    {
+      "id": "b4684",
+      "op": "ble.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.ai,0)",
+        "90"
+      ],
+      "successors": [
+        4693,
+        4686
+      ],
+      "step": 3
+    },
+    {
+      "id": "b4706",
+      "op": "ble.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.ai,0)",
+        "120"
+      ],
+      "successors": [
+        4715,
+        4708
+      ],
+      "step": 5
+    },
+    {
+      "id": "b4822",
+      "op": "bne.un.s",
+      "inputs": [
+        "rem(f32_at((this).Projectile.ai,0),alternatives(l79@4669,source_block(4686,requires=[\"b4684\"],value=l79@4691),source_block(4708,requires=[\"b4706\"],value=l79@4713)))",
+        "0"
+      ],
+      "successors": [
+        4827,
+        4824
+      ],
+      "step": 10
+    },
+    {
+      "id": "b4850",
+      "op": "bne.un.s",
+      "inputs": [
+        "rem(f32_at((this).Projectile.ai,0),alternatives(l79@4669,source_block(4686,requires=[\"b4684\"],value=l79@4691),source_block(4708,requires=[\"b4706\"],value=l79@4713)))",
+        "0"
+      ],
+      "successors": [
+        4855,
+        4852
+      ],
+      "step": 13
+    },
+    {
+      "id": "b4868",
+      "op": "blt.un",
+      "inputs": [
+        "f32_at((this).Projectile.ai,1)",
+        "1"
+      ],
+      "successors": [
+        5167,
+        4873
+      ],
+      "step": 15
+    },
+    {
+      "id": "b4900",
+      "op": "bne.un",
+      "inputs": [
+        "@Main.myPlayer",
+        "(this).Projectile.owner"
+      ],
+      "successors": [
+        5167,
+        4905
+      ],
+      "step": 18
+    },
+    {
+      "id": "b4982",
+      "op": "bne.un.s",
+      "inputs": [
+        "(l0@12).Player.gravDir",
+        "-1"
+      ],
+      "successors": [
+        5022,
+        4984
+      ],
+      "step": 22
+    },
+    {
+      "id": "b5043",
+      "op": "brtrue.s",
+      "inputs": [
+        "Single.IsNaN[(l88@5029).Vector2.X]"
+      ],
+      "successors": [
+        5059,
+        5045
+      ],
+      "step": 25
+    },
+    {
+      "id": "b5057",
+      "op": "brfalse.s",
+      "inputs": [
+        "Single.IsNaN[(l88@5029).Vector2.Y]"
+      ],
+      "successors": [
+        5071,
+        5059
+      ],
+      "step": 26
+    },
+    {
+      "id": "b5320",
+      "op": "brfalse",
+      "inputs": [
+        "alternatives(l82@4832,source_block(4852,requires=[\"b4850\"],value=l82@4853),source_block(4873,requires=[\"b4868\"],value=l82@4887))"
+      ],
+      "successors": [
+        5603,
+        5325
+      ],
+      "step": 31
+    },
+    {
+      "id": "b5336",
+      "op": "bne.un",
+      "inputs": [
+        "@Main.myPlayer",
+        "(this).Projectile.owner"
+      ],
+      "successors": [
+        5603,
+        5341
+      ],
+      "step": 32
+    },
+    {
+      "id": "b5346",
+      "op": "brfalse.s",
+      "inputs": [
+        "alternatives(l80@4804,source_block(4824,requires=[\"b4822\"],value=l80@4825))"
+      ],
+      "successors": [
+        5372,
+        5348
+      ],
+      "step": 33
+    },
+    {
+      "id": "b5384",
+      "op": "brfalse",
+      "inputs": [
+        "and((l0@12).Player.channel,l90@5373)"
+      ],
+      "successors": [
+        5597,
+        5389
+      ],
+      "step": 35
+    },
+    {
+      "id": "b5395",
+      "op": "brtrue",
+      "inputs": [
+        "(l0@12).Player.noItems"
+      ],
+      "successors": [
+        5597,
+        5400
+      ],
+      "step": 36
+    },
+    {
+      "id": "b5406",
+      "op": "brtrue",
+      "inputs": [
+        "Player.get_CCed[l0@12]"
+      ],
+      "successors": [
+        5597,
+        5411
+      ],
+      "step": 37
+    },
+    {
+      "id": "b5424",
+      "op": "bne.un",
+      "inputs": [
+        "f32_at((this).Projectile.ai,0)",
+        "1"
+      ],
+      "successors": [
+        5603,
+        5429
+      ],
+      "step": 38
+    },
+    {
+      "id": "b5462",
+      "op": "brtrue.s",
+      "inputs": [
+        "Single.IsNaN[(l92@5448).Vector2.X]"
+      ],
+      "successors": [
+        5478,
+        5464
+      ],
+      "step": 41
+    },
+    {
+      "id": "b5476",
+      "op": "brfalse.s",
+      "inputs": [
+        "Single.IsNaN[(l92@5448).Vector2.Y]"
+      ],
+      "successors": [
+        5490,
+        5478
+      ],
+      "step": 42
+    },
+    {
+      "id": "b5586",
+      "op": "blt.s",
+      "inputs": [
+        "alternatives(source_block(5490,requires=[\"b5320\",\"b5336\",\"b5384\",\"b5395\",\"b5406\",\"b5424\"],value=l94@5499),source_block(5503,requires=[\"b5320\",\"b5336\",\"b5384\",\"b5395\",\"b5406\",\"b5424\",\"b5586\"],value=l94@5581))",
+        "6"
+      ],
+      "successors": [
+        5503,
+        5588
+      ],
+      "step": 48
+    },
+    {
+      "id": "b5614",
+      "op": "bne.un",
+      "inputs": [
+        "(this).Projectile.type",
+        "595"
+      ],
+      "successors": [
+        6157,
+        5619
+      ],
+      "step": 50
+    },
+    {
+      "id": "b5746",
+      "op": "bne.un",
+      "inputs": [
+        "@Main.myPlayer",
+        "(this).Projectile.owner"
+      ],
+      "successors": [
+        5966,
+        5751
+      ],
+      "step": 51
+    },
+    {
+      "id": "b5757",
+      "op": "brfalse",
+      "inputs": [
+        "(l0@12).Player.channel"
+      ],
+      "successors": [
+        5960,
+        5762
+      ],
+      "step": 52
+    },
+    {
+      "id": "b5768",
+      "op": "brtrue",
+      "inputs": [
+        "(l0@12).Player.noItems"
+      ],
+      "successors": [
+        5960,
+        5773
+      ],
+      "step": 53
+    },
+    {
+      "id": "b5779",
+      "op": "brtrue",
+      "inputs": [
+        "Player.get_CCed[l0@12]"
+      ],
+      "successors": [
+        5960,
+        5784
+      ],
+      "step": 54
+    },
+    {
+      "id": "b5815",
+      "op": "bne.un.s",
+      "inputs": [
+        "(ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem)).Item.shoot",
+        "(this).Projectile.type"
+      ],
+      "successors": [
+        5844,
+        5817
+      ],
+      "step": 56
+    },
+    {
+      "id": "b5871",
+      "op": "brfalse.s",
+      "inputs": [
+        "Utils.HasNaNs[addressed_l97]"
+      ],
+      "successors": [
+        5892,
+        5873
+      ],
+      "step": 60
+    },
+    {
+      "id": "b6168",
+      "op": "bne.un",
+      "inputs": [
+        "(this).Projectile.type",
+        "735"
+      ],
+      "successors": [
+        6717,
+        6173
+      ],
+      "step": 65
+    },
+    {
+      "id": "b6300",
+      "op": "bne.un",
+      "inputs": [
+        "@Main.myPlayer",
+        "(this).Projectile.owner"
+      ],
+      "successors": [
+        6520,
+        6305
+      ],
+      "step": 66
+    },
+    {
+      "id": "b6311",
+      "op": "brfalse",
+      "inputs": [
+        "(l0@12).Player.channel"
+      ],
+      "successors": [
+        6514,
+        6316
+      ],
+      "step": 67
+    },
+    {
+      "id": "b6322",
+      "op": "brtrue",
+      "inputs": [
+        "(l0@12).Player.noItems"
+      ],
+      "successors": [
+        6514,
+        6327
+      ],
+      "step": 68
+    },
+    {
+      "id": "b6333",
+      "op": "brtrue",
+      "inputs": [
+        "Player.get_CCed[l0@12]"
+      ],
+      "successors": [
+        6514,
+        6338
+      ],
+      "step": 69
+    },
+    {
+      "id": "b6369",
+      "op": "bne.un.s",
+      "inputs": [
+        "(ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem)).Item.shoot",
+        "(this).Projectile.type"
+      ],
+      "successors": [
+        6398,
+        6371
+      ],
+      "step": 71
+    },
+    {
+      "id": "b6425",
+      "op": "brfalse.s",
+      "inputs": [
+        "Utils.HasNaNs[addressed_l101]"
+      ],
+      "successors": [
+        6446,
+        6427
+      ],
+      "step": 75
+    },
+    {
+      "id": "b6728",
+      "op": "bne.un",
+      "inputs": [
+        "(this).Projectile.type",
+        "927"
+      ],
+      "successors": [
+        7223,
+        6733
+      ],
+      "step": 80
+    },
+    {
+      "id": "b6787",
+      "op": "blt.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.ai,0)",
+        "8"
+      ],
+      "successors": [
+        6802,
+        6789
+      ],
+      "step": 83
+    },
+    {
+      "id": "b6893",
+      "op": "bne.un",
+      "inputs": [
+        "@Main.myPlayer",
+        "(this).Projectile.owner"
+      ],
+      "successors": [
+        7106,
+        6898
+      ],
+      "step": 85
+    },
+    {
+      "id": "b6904",
+      "op": "brfalse",
+      "inputs": [
+        "(l0@12).Player.channel"
+      ],
+      "successors": [
+        7100,
+        6909
+      ],
+      "step": 86
+    },
+    {
+      "id": "b6915",
+      "op": "brtrue",
+      "inputs": [
+        "(l0@12).Player.noItems"
+      ],
+      "successors": [
+        7100,
+        6920
+      ],
+      "step": 87
+    },
+    {
+      "id": "b6926",
+      "op": "brtrue",
+      "inputs": [
+        "Player.get_CCed[l0@12]"
+      ],
+      "successors": [
+        7100,
+        6931
+      ],
+      "step": 88
+    },
+    {
+      "id": "b6962",
+      "op": "bne.un.s",
+      "inputs": [
+        "(ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem)).Item.shoot",
+        "(this).Projectile.type"
+      ],
+      "successors": [
+        6984,
+        6964
+      ],
+      "step": 90
+    },
+    {
+      "id": "b7011",
+      "op": "brfalse.s",
+      "inputs": [
+        "Utils.HasNaNs[addressed_l104]"
+      ],
+      "successors": [
+        7032,
+        7013
+      ],
+      "step": 94
+    },
+    {
+      "id": "b7234",
+      "op": "bne.un",
+      "inputs": [
+        "(this).Projectile.type",
+        "600"
+      ],
+      "successors": [
+        7716,
+        7239
+      ],
+      "step": 99
+    },
+    {
+      "id": "b7280",
+      "op": "bne.un",
+      "inputs": [
+        "@Main.myPlayer",
+        "(this).Projectile.owner"
+      ],
+      "successors": [
+        7695,
+        7285
+      ],
+      "step": 101
+    },
+    {
+      "id": "b7298",
+      "op": "bne.un",
+      "inputs": [
+        "f32_at((this).Projectile.ai,0)",
+        "1"
+      ],
+      "successors": [
+        7695,
+        7303
+      ],
+      "step": 102
+    },
+    {
+      "id": "b7380",
+      "op": "bne.un.s",
+      "inputs": [
+        "(l0@12).Player.gravDir",
+        "-1"
+      ],
+      "successors": [
+        7420,
+        7382
+      ],
+      "step": 106
+    },
+    {
+      "id": "b7441",
+      "op": "brtrue.s",
+      "inputs": [
+        "Single.IsNaN[(l108@7427).Vector2.X]"
+      ],
+      "successors": [
+        7457,
+        7443
+      ],
+      "step": 109
+    },
+    {
+      "id": "b7455",
+      "op": "brfalse.s",
+      "inputs": [
+        "Single.IsNaN[(l108@7427).Vector2.Y]"
+      ],
+      "successors": [
+        7469,
+        7457
+      ],
+      "step": 110
+    },
+    {
+      "id": "b7589",
+      "op": "brtrue.s",
+      "inputs": [
+        "Single.IsNaN[(l111@7575).Vector2.X]"
+      ],
+      "successors": [
+        7605,
+        7591
+      ],
+      "step": 118
+    },
+    {
+      "id": "b7603",
+      "op": "brfalse.s",
+      "inputs": [
+        "Single.IsNaN[(l111@7575).Vector2.Y]"
+      ],
+      "successors": [
+        7617,
+        7605
+      ],
+      "step": 119
+    },
+    {
+      "id": "b7708",
+      "op": "blt.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.ai,0)",
+        "30"
+      ],
+      "successors": [
+        7716,
+        7710
+      ],
+      "step": 122
+    },
+    {
+      "id": "b7727",
+      "op": "bne.un",
+      "inputs": [
+        "(this).Projectile.type",
+        "611"
+      ],
+      "successors": [
+        8130,
+        7732
+      ],
+      "step": 124
+    },
+    {
+      "id": "b7791",
+      "op": "ble.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.localAI,1)",
+        "0"
+      ],
+      "successors": [
+        7814,
+        7793
+      ],
+      "step": 125
+    },
+    {
+      "id": "b7858",
+      "op": "bne.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.localAI,0)",
+        "0"
+      ],
+      "successors": [
+        7879,
+        7860
+      ],
+      "step": 127
+    },
+    {
+      "id": "b7902",
+      "op": "bge.s",
+      "inputs": [
+        "(Utils.ToRotationVector2[f32_at((this).Projectile.localAI,0)]).Vector2.X",
+        "0"
+      ],
+      "successors": [
+        7907,
+        7904
+      ],
+      "step": 129
+    },
+    {
+      "id": "b7924",
+      "op": "bgt.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.ai,1)",
+        "0"
+      ],
+      "successors": [
+        7936,
+        7926
+      ],
+      "step": 131
+    },
+    {
+      "id": "b8091",
+      "op": "bge.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.ai,0)",
+        "30"
+      ],
+      "successors": [
+        8124,
+        8093
+      ],
+      "step": 137
+    },
+    {
+      "id": "b8141",
+      "op": "bne.un",
+      "inputs": [
+        "(this).Projectile.type",
+        "615"
+      ],
+      "successors": [
+        9395,
+        8146
+      ],
+      "step": 140
+    },
+    {
+      "id": "b8204",
+      "op": "blt.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.ai,0)",
+        "40"
+      ],
+      "successors": [
+        8212,
+        8206
+      ],
+      "step": 143
+    },
+    {
+      "id": "b8225",
+      "op": "blt.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.ai,0)",
+        "80"
+      ],
+      "successors": [
+        8233,
+        8227
+      ],
+      "step": 145
+    },
+    {
+      "id": "b8246",
+      "op": "blt.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.ai,0)",
+        "120"
+      ],
+      "successors": [
+        8254,
+        8248
+      ],
+      "step": 147
+    },
+    {
+      "id": "b8300",
+      "op": "bgt.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.ai,1)",
+        "0"
+      ],
+      "successors": [
+        8347,
+        8302
+      ],
+      "step": 154
+    },
+    {
+      "id": "b8342",
+      "op": "brtrue.s",
+      "inputs": [
+        "rem((conv.i4(f32_at((this).Projectile.ai,0))/(l115@8255-(l116@8258*alternatives(source_block(8167,requires=[\"b8141\"],value=l114@8189),source_block(8206,requires=[\"b8141\",\"b8204\"],value=l114@8210),source_block(8227,requires=[\"b8141\",\"b8225\"],value=l114@8231),source_block(8248,requires=[\"b8141\",\"b8246\"],value=l114@8252))))),7)"
+      ],
+      "successors": [
+        8347,
+        8344
+      ],
+      "step": 157
+    },
+    {
+      "id": "b8484",
+      "op": "brfalse",
+      "inputs": [
+        "alternatives(source_block(8254,requires=[\"b8141\"],value=l117@8282),source_block(8302,requires=[\"b8141\",\"b8300\"],value=l117@8320))"
+      ],
+      "successors": [
+        9395,
+        8489
+      ],
+      "step": 159
+    },
+    {
+      "id": "b8500",
+      "op": "bne.un",
+      "inputs": [
+        "@Main.myPlayer",
+        "(this).Projectile.owner"
+      ],
+      "successors": [
+        9395,
+        8505
+      ],
+      "step": 160
+    },
+    {
+      "id": "b8511",
+      "op": "brfalse.s",
+      "inputs": [
+        "(l0@12).Player.channel"
+      ],
+      "successors": [
+        8554,
+        8513
+      ],
+      "step": 161
+    },
+    {
+      "id": "b8533",
+      "op": "brfalse.s",
+      "inputs": [
+        "Player.HasAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),1]"
+      ],
+      "successors": [
+        8554,
+        8535
+      ],
+      "step": 162
+    },
+    {
+      "id": "b8541",
+      "op": "brtrue.s",
+      "inputs": [
+        "(l0@12).Player.noItems"
+      ],
+      "successors": [
+        8554,
+        8543
+      ],
+      "step": 163
+    },
+    {
+      "id": "b8612",
+      "op": "brfalse",
+      "inputs": [
+        "addressed_l119"
+      ],
+      "successors": [
+        9389,
+        8617
+      ],
+      "step": 169
+    },
+    {
+      "id": "b8765",
+      "op": "bne.un.s",
+      "inputs": [
+        "(l0@12).Player.gravDir",
+        "-1"
+      ],
+      "successors": [
+        8805,
+        8767
+      ],
+      "step": 176
+    },
+    {
+      "id": "b8826",
+      "op": "brtrue.s",
+      "inputs": [
+        "Single.IsNaN[(l129@8812).Vector2.X]"
+      ],
+      "successors": [
+        8842,
+        8828
+      ],
+      "step": 179
+    },
+    {
+      "id": "b8840",
+      "op": "brfalse.s",
+      "inputs": [
+        "Single.IsNaN[(l129@8812).Vector2.Y]"
+      ],
+      "successors": [
+        8854,
+        8842
+      ],
+      "step": 180
+    },
+    {
+      "id": "b9058",
+      "op": "brtrue.s",
+      "inputs": [
+        "Single.IsNaN[(l131@9044).Vector2.X]"
+      ],
+      "successors": [
+        9074,
+        9060
+      ],
+      "step": 190
+    },
+    {
+      "id": "b9072",
+      "op": "brfalse.s",
+      "inputs": [
+        "Single.IsNaN[(l131@9044).Vector2.Y]"
+      ],
+      "successors": [
+        9086,
+        9074
+      ],
+      "step": 191
+    },
+    {
+      "id": "b9158",
+      "op": "blt",
+      "inputs": [
+        "alternatives(source_block(8961,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8612\"],value=l130@8970),source_block(9086,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8612\",\"b9158\"],value=l130@9153))",
+        "1"
+      ],
+      "successors": [
+        8977,
+        9163
+      ],
+      "step": 195
+    },
+    {
+      "id": "b9165",
+      "op": "brtrue",
+      "inputs": [
+        "alternatives(source_block(8254,requires=[\"b8141\"],value=l118@8285),source_block(8344,requires=[\"b8141\",\"b8300\",\"b8342\"],value=l118@8345))"
+      ],
+      "successors": [
+        9395,
+        9170
+      ],
+      "step": 196
+    },
+    {
+      "id": "b9273",
+      "op": "brtrue.s",
+      "inputs": [
+        "Single.IsNaN[(l133@9259).Vector2.X]"
+      ],
+      "successors": [
+        9289,
+        9275
+      ],
+      "step": 203
+    },
+    {
+      "id": "b9287",
+      "op": "brfalse.s",
+      "inputs": [
+        "Single.IsNaN[(l133@9259).Vector2.Y]"
+      ],
+      "successors": [
+        9301,
+        9289
+      ],
+      "step": 204
+    },
+    {
+      "id": "b9382",
+      "op": "blt",
+      "inputs": [
+        "alternatives(source_block(9170,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8612\",\"b9165\"],value=l132@9185),source_block(9301,requires=[\"b8141\",\"b8484\",\"b8500\",\"b8612\",\"b9165\",\"b9382\"],value=l132@9377))",
+        "1"
+      ],
+      "successors": [
+        9192,
+        9387
+      ],
+      "step": 208
+    },
+    {
+      "id": "b9406",
+      "op": "bne.un",
+      "inputs": [
+        "(this).Projectile.type",
+        "714"
+      ],
+      "successors": [
+        11577,
+        9411
+      ],
+      "step": 210
+    },
+    {
+      "id": "b9502",
+      "op": "bgt.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.ai,1)",
+        "0"
+      ],
+      "successors": [
+        9554,
+        9504
+      ],
+      "step": 218
+    },
+    {
+      "id": "b9545",
+      "op": "brtrue.s",
+      "inputs": [
+        "rem((conv.i4(f32_at((this).Projectile.ai,0))/(l135@9457-(l136@9460*l134@9454))),7)"
+      ],
+      "successors": [
+        9550,
+        9547
+      ],
+      "step": 221
+    },
+    {
+      "id": "b9740",
+      "op": "brfalse",
+      "inputs": [
+        "alternatives(source_block(9432,requires=[\"b9406\"],value=l137@9484),source_block(9504,requires=[\"b9406\",\"b9502\"],value=l137@9522))"
+      ],
+      "successors": [
+        10702,
+        9745
+      ],
+      "step": 223
+    },
+    {
+      "id": "b9756",
+      "op": "bne.un",
+      "inputs": [
+        "@Main.myPlayer",
+        "(this).Projectile.owner"
+      ],
+      "successors": [
+        10702,
+        9761
+      ],
+      "step": 224
+    },
+    {
+      "id": "b9767",
+      "op": "brfalse.s",
+      "inputs": [
+        "(l0@12).Player.channel"
+      ],
+      "successors": [
+        9810,
+        9769
+      ],
+      "step": 225
+    },
+    {
+      "id": "b9789",
+      "op": "brfalse.s",
+      "inputs": [
+        "Player.HasAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),1]"
+      ],
+      "successors": [
+        9810,
+        9791
+      ],
+      "step": 226
+    },
+    {
+      "id": "b9797",
+      "op": "brtrue.s",
+      "inputs": [
+        "(l0@12).Player.noItems"
+      ],
+      "successors": [
+        9810,
+        9799
+      ],
+      "step": 227
+    },
+    {
+      "id": "b9872",
+      "op": "bne.un.s",
+      "inputs": [
+        "alternatives(source_block(9432,requires=[\"b9406\"],value=l138@9487),source_block(9550,requires=[\"b9406\",\"b9502\"],value=l138@9552))",
+        "3"
+      ],
+      "successors": [
+        9884,
+        9874
+      ],
+      "step": 233
+    },
+    {
+      "id": "b9886",
+      "op": "brfalse",
+      "inputs": [
+        "addressed_l145"
+      ],
+      "successors": [
+        10696,
+        9891
+      ],
+      "step": 235
+    },
+    {
+      "id": "b10039",
+      "op": "bne.un.s",
+      "inputs": [
+        "(l0@12).Player.gravDir",
+        "-1"
+      ],
+      "successors": [
+        10079,
+        10041
+      ],
+      "step": 242
+    },
+    {
+      "id": "b10100",
+      "op": "brtrue.s",
+      "inputs": [
+        "Single.IsNaN[(l155@10086).Vector2.X]"
+      ],
+      "successors": [
+        10116,
+        10102
+      ],
+      "step": 245
+    },
+    {
+      "id": "b10114",
+      "op": "brfalse.s",
+      "inputs": [
+        "Single.IsNaN[(l155@10086).Vector2.Y]"
+      ],
+      "successors": [
+        10128,
+        10116
+      ],
+      "step": 246
+    },
+    {
+      "id": "b10342",
+      "op": "brtrue.s",
+      "inputs": [
+        "Single.IsNaN[(l157@10328).Vector2.X]"
+      ],
+      "successors": [
+        10358,
+        10344
+      ],
+      "step": 256
+    },
+    {
+      "id": "b10356",
+      "op": "brfalse.s",
+      "inputs": [
+        "Single.IsNaN[(l157@10328).Vector2.Y]"
+      ],
+      "successors": [
+        10370,
+        10358
+      ],
+      "step": 257
+    },
+    {
+      "id": "b10434",
+      "op": "bne.un",
+      "inputs": [
+        "alternatives(source_block(9432,requires=[\"b9406\"],value=l138@9487),source_block(9550,requires=[\"b9406\",\"b9502\"],value=l138@9552))",
+        "5"
+      ],
+      "successors": [
+        10614,
+        10439
+      ],
+      "step": 260
+    },
+    {
+      "id": "b10503",
+      "op": "brtrue.s",
+      "inputs": [
+        "Single.IsNaN[(alternatives(source_block(10261,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10689\"],value=l157@10328),source_block(10358,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10342\",\"b10356\",\"b10689\"],value=l157@10368))).Vector2.X]"
+      ],
+      "successors": [
+        10519,
+        10505
+      ],
+      "step": 264
+    },
+    {
+      "id": "b10517",
+      "op": "brfalse.s",
+      "inputs": [
+        "Single.IsNaN[(alternatives(source_block(10261,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10689\"],value=l157@10328),source_block(10358,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10342\",\"b10356\",\"b10689\"],value=l157@10368))).Vector2.Y]"
+      ],
+      "successors": [
+        10531,
+        10519
+      ],
+      "step": 265
+    },
+    {
+      "id": "b10609",
+      "op": "ble",
+      "inputs": [
+        "alternatives(source_block(10439,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10434\",\"b10689\"],value=l158@10444),source_block(10531,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10434\",\"b10609\",\"b10689\"],value=l158@10600))",
+        "1"
+      ],
+      "successors": [
+        10451,
+        10614
+      ],
+      "step": 269
+    },
+    {
+      "id": "b10617",
+      "op": "bne.un.s",
+      "inputs": [
+        "alternatives(source_block(9432,requires=[\"b9406\"],value=l138@9487),source_block(9550,requires=[\"b9406\",\"b9502\"],value=l138@9552))",
+        "4"
+      ],
+      "successors": [
+        10680,
+        10619
+      ],
+      "step": 270
+    },
+    {
+      "id": "b10689",
+      "op": "blt",
+      "inputs": [
+        "alternatives(source_block(10245,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\"],value=l156@10254),source_block(10680,requires=[\"b9406\",\"b9740\",\"b9756\",\"b9886\",\"b10689\"],value=l156@10684))",
+        "1"
+      ],
+      "successors": [
+        10261,
+        10694
+      ],
+      "step": 273
+    },
+    {
+      "id": "b11588",
+      "op": "bne.un",
+      "inputs": [
+        "(this).Projectile.type",
+        "630"
+      ],
+      "successors": [
+        12583,
+        11593
+      ],
+      "step": 277
+    },
+    {
+      "id": "b11651",
+      "op": "blt.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.ai,0)",
+        "40"
+      ],
+      "successors": [
+        11659,
+        11653
+      ],
+      "step": 280
+    },
+    {
+      "id": "b11672",
+      "op": "blt.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.ai,0)",
+        "80"
+      ],
+      "successors": [
+        11680,
+        11674
+      ],
+      "step": 282
+    },
+    {
+      "id": "b11693",
+      "op": "blt.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.ai,0)",
+        "120"
+      ],
+      "successors": [
+        11701,
+        11695
+      ],
+      "step": 284
+    },
+    {
+      "id": "b11745",
+      "op": "bgt.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.ai,1)",
+        "0"
+      ],
+      "successors": [
+        11786,
+        11747
+      ],
+      "step": 290
+    },
+    {
+      "id": "b11792",
+      "op": "brfalse.s",
+      "inputs": [
+        "(l0@12).Player.channel"
+      ],
+      "successors": [
+        11835,
+        11794
+      ],
+      "step": 293
+    },
+    {
+      "id": "b11814",
+      "op": "brfalse.s",
+      "inputs": [
+        "Player.HasAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),1]"
+      ],
+      "successors": [
+        11835,
+        11816
+      ],
+      "step": 294
+    },
+    {
+      "id": "b11822",
+      "op": "brtrue.s",
+      "inputs": [
+        "(l0@12).Player.noItems"
+      ],
+      "successors": [
+        11835,
+        11824
+      ],
+      "step": 295
+    },
+    {
+      "id": "b11851",
+      "op": "ble.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.localAI,0)",
+        "0"
+      ],
+      "successors": [
+        11874,
+        11853
+      ],
+      "step": 297
+    },
+    {
+      "id": "b11889",
+      "op": "brfalse.s",
+      "inputs": [
+        "and(ceq(cgt((this).Projectile.soundDelay,0),0),addressed_l165)"
+      ],
+      "successors": [
+        11956,
+        11891
+      ],
+      "step": 299
+    },
+    {
+      "id": "b11965",
+      "op": "brfalse",
+      "inputs": [
+        "alternatives(source_block(11701,requires=[\"b11588\"],value=l164@11730),source_block(11747,requires=[\"b11588\",\"b11745\"],value=l164@11765))"
+      ],
+      "successors": [
+        12583,
+        11970
+      ],
+      "step": 301
+    },
+    {
+      "id": "b11981",
+      "op": "bne.un",
+      "inputs": [
+        "@Main.myPlayer",
+        "(this).Projectile.owner"
+      ],
+      "successors": [
+        12583,
+        11986
+      ],
+      "step": 302
+    },
+    {
+      "id": "b12041",
+      "op": "brfalse",
+      "inputs": [
+        "addressed_l165"
+      ],
+      "successors": [
+        12577,
+        12046
+      ],
+      "step": 307
+    },
+    {
+      "id": "b12194",
+      "op": "bne.un.s",
+      "inputs": [
+        "(l0@12).Player.gravDir",
+        "-1"
+      ],
+      "successors": [
+        12234,
+        12196
+      ],
+      "step": 314
+    },
+    {
+      "id": "b12255",
+      "op": "brtrue.s",
+      "inputs": [
+        "Single.IsNaN[(l175@12241).Vector2.X]"
+      ],
+      "successors": [
+        12271,
+        12257
+      ],
+      "step": 317
+    },
+    {
+      "id": "b12269",
+      "op": "brfalse.s",
+      "inputs": [
+        "Single.IsNaN[(l175@12241).Vector2.Y]"
+      ],
+      "successors": [
+        12283,
+        12271
+      ],
+      "step": 318
+    },
+    {
+      "id": "b12426",
+      "op": "brtrue.s",
+      "inputs": [
+        "Single.IsNaN[(l177@12412).Vector2.X]"
+      ],
+      "successors": [
+        12442,
+        12428
+      ],
+      "step": 324
+    },
+    {
+      "id": "b12440",
+      "op": "brfalse.s",
+      "inputs": [
+        "Single.IsNaN[(l177@12412).Vector2.Y]"
+      ],
+      "successors": [
+        12454,
+        12442
+      ],
+      "step": 325
+    },
+    {
+      "id": "b12570",
+      "op": "blt",
+      "inputs": [
+        "alternatives(source_block(12341,requires=[\"b11588\",\"b11965\",\"b11981\",\"b12041\"],value=l176@12360),source_block(12454,requires=[\"b11588\",\"b11965\",\"b11981\",\"b12041\",\"b12570\"],value=l176@12565))",
+        "4"
+      ],
+      "successors": [
+        12367,
+        12575
+      ],
+      "step": 330
+    },
+    {
+      "id": "b12594",
+      "op": "bne.un",
+      "inputs": [
+        "(this).Projectile.type",
+        "705"
+      ],
+      "successors": [
+        13563,
+        12599
+      ],
+      "step": 332
+    },
+    {
+      "id": "b12686",
+      "op": "bgt.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.ai,1)",
+        "0"
+      ],
+      "successors": [
+        12702,
+        12688
+      ],
+      "step": 337
+    },
+    {
+      "id": "b12708",
+      "op": "brfalse.s",
+      "inputs": [
+        "(l0@12).Player.channel"
+      ],
+      "successors": [
+        12751,
+        12710
+      ],
+      "step": 340
+    },
+    {
+      "id": "b12730",
+      "op": "brfalse.s",
+      "inputs": [
+        "Player.HasAmmo[l0@12,ref_at((l0@12).Player.inventory,(l0@12).Player.selectedItem),1]"
+      ],
+      "successors": [
+        12751,
+        12732
+      ],
+      "step": 341
+    },
+    {
+      "id": "b12738",
+      "op": "brtrue.s",
+      "inputs": [
+        "(l0@12).Player.noItems"
+      ],
+      "successors": [
+        12751,
+        12740
+      ],
+      "step": 342
+    },
+    {
+      "id": "b12767",
+      "op": "ble.un.s",
+      "inputs": [
+        "f32_at((this).Projectile.localAI,0)",
+        "0"
+      ],
+      "successors": [
+        12790,
+        12769
+      ],
+      "step": 344
+    },
+    {
+      "id": "b12805",
+      "op": "brfalse.s",
+      "inputs": [
+        "and(ceq(cgt((this).Projectile.soundDelay,0),0),addressed_l182)"
+      ],
+      "successors": [
+        12866,
+        12807
+      ],
+      "step": 346
+    },
+    {
+      "id": "b12868",
+      "op": "brfalse",
+      "inputs": [
+        "alternatives(source_block(12620,requires=[\"b12594\"],value=l181@12671),source_block(12688,requires=[\"b12594\",\"b12686\"],value=l181@12700))"
+      ],
+      "successors": [
+        13563,
+        12873
+      ],
+      "step": 348
+    },
+    {
+      "id": "b12884",
+      "op": "bne.un",
+      "inputs": [
+        "@Main.myPlayer",
+        "(this).Projectile.owner"
+      ],
+      "successors": [
+        13563,
+        12889
+      ],
+      "step": 349
+    },
+    {
+      "id": "b12954",
+      "op": "brfalse",
+      "inputs": [
+        "addressed_l182"
+      ],
+      "successors": [
+        13557,
+        12959
+      ],
+      "step": 356
+    },
+    {
+      "id": "b13033",
+      "op": "bne.un.s",
+      "inputs": [
+        "addressed_l183",
+        "1"
+      ],
+      "successors": [
+        13038,
+        13035
+      ],
+      "step": 360
+    },
+    {
+      "id": "b13059",
+      "op": "blt.s",
+      "inputs": [
+        "l89@13047",
+        "3"
+      ],
+      "successors": [
+        13119,
+        13061
+      ],
+      "step": 363
+    },
+    {
+      "id": "b13196",
+      "op": "bne.un.s",
+      "inputs": [
+        "(l0@12).Player.gravDir",
+        "-1"
+      ],
+      "successors": [
+        13236,
+        13198
+      ],
+      "step": 373
+    },
+    {
+      "id": "b13257",
+      "op": "brtrue.s",
+      "inputs": [
+        "Single.IsNaN[(l194@13243).Vector2.X]"
+      ],
+      "successors": [
+        13273,
+        13259
+      ],
+      "step": 376
+    },
+    {
+      "id": "b13271",
+      "op": "brfalse.s",
+      "inputs": [
+        "Single.IsNaN[(l194@13243).Vector2.Y]"
+      ],
+      "successors": [
+        13285,
+        13273
+      ],
+      "step": 377
+    },
+    {
+      "id": "b13430",
+      "op": "brtrue.s",
+      "inputs": [
+        "Single.IsNaN[(l196@13416).Vector2.X]"
+      ],
+      "successors": [
+        13446,
+        13432
+      ],
+      "step": 384
+    },
+    {
+      "id": "b13444",
+      "op": "brfalse.s",
+      "inputs": [
+        "Single.IsNaN[(l196@13416).Vector2.Y]"
+      ],
+      "successors": [
+        13458,
+        13446
+      ],
+      "step": 385
+    },
+    {
+      "id": "b13550",
+      "op": "blt",
+      "inputs": [
+        "alternatives(source_block(13343,requires=[\"b12594\",\"b12868\",\"b12884\",\"b12954\"],value=l195@13362),source_block(13458,requires=[\"b12594\",\"b12868\",\"b12884\",\"b12954\",\"b13550\"],value=l195@13544))",
+        "alternatives(source_block(12889,requires=[\"b12594\",\"b12868\",\"b12884\"],value=l187@12943),source_block(13061,requires=[\"b12594\",\"b12868\",\"b12884\",\"b12954\",\"b13059\"],value=l187@13069))"
+      ],
+      "successors": [
+        13369,
+        13555
+      ],
+      "step": 390
+    },
+    {
+      "id": "b13744",
+      "op": "beq.s",
+      "inputs": [
+        "(this).Projectile.type",
+        "460"
+      ],
+      "successors": [
+        13762,
+        13746
+      ],
+      "step": 396
+    },
+    {
+      "id": "b13757",
+      "op": "bne.un",
+      "inputs": [
+        "(this).Projectile.type",
+        "611"
+      ],
+      "successors": [
+        14000,
+        13762
+      ],
+      "step": 397
+    },
+    {
+      "id": "b13805",
+      "op": "beq.s",
+      "inputs": [
+        "(l0@12).Entity.direction",
+        "1"
+      ],
+      "successors": [
+        13834,
+        13807
+      ],
+      "step": 399
+    },
+    {
+      "id": "b13845",
+      "op": "beq.s",
+      "inputs": [
+        "(l0@12).Player.gravDir",
+        "1"
+      ],
+      "successors": [
+        13874,
+        13847
+      ],
+      "step": 401
+    },
+    {
+      "id": "b14011",
+      "op": "bne.un.s",
+      "inputs": [
+        "(this).Projectile.type",
+        "615"
+      ],
+      "successors": [
+        14040,
+        14013
+      ],
+      "step": 405
+    },
+    {
+      "id": "b14051",
+      "op": "bne.un.s",
+      "inputs": [
+        "(this).Projectile.type",
+        "714"
+      ],
+      "successors": [
+        14080,
+        14053
+      ],
+      "step": 407
+    }
+  ],
+  "symbols": {
+    "Vector2..ctor": "Xna.Vector2..ctor(float,float)",
+    "Vector2.op_Addition": "Xna.Vector2.op_Addition(Xna.Vector2,Xna.Vector2)",
+    "Player.get_MountedCenter": "T.Player.get_MountedCenter()",
+    "Player.RotatedRelativePoint": "T.Player.RotatedRelativePoint(Xna.Vector2,bool,bool)",
+    "Vector2.op_Subtraction": "Xna.Vector2.op_Subtraction(Xna.Vector2,Xna.Vector2)",
+    "Vector2.Normalize": "Xna.Vector2.Normalize(Xna.Vector2)",
+    "Vector2.get_UnitY": "Xna.Vector2.get_UnitY()",
+    "Vector2.op_UnaryNegation": "Xna.Vector2.op_UnaryNegation(Xna.Vector2)",
+    "Single.IsNaN": "float.IsNaN(float)",
+    "Vector2.Lerp": "Xna.Vector2.Lerp(Xna.Vector2,Xna.Vector2,float)",
+    "Vector2.op_Multiply": "Xna.Vector2.op_Multiply(Xna.Vector2,float)",
+    "Player.CheckMana": "T.Player.CheckMana(T.Item,int,bool,bool)",
+    "Player.get_CCed": "T.Player.get_CCed()",
+    "Projectile.Kill": "T.Projectile.Kill()",
+    "Main.get_MouseWorld": "T.Main.get_MouseWorld()",
+    "Vector2.Normalize#100665379": "Xna.Vector2.Normalize()",
+    "Vector2.get_UnitX": "Xna.Vector2.get_UnitX()",
+    "Utils.HasNaNs": "T.Utils.HasNaNs(Xna.Vector2)",
+    "Utils.ToRotation": "T.Utils.ToRotation(Xna.Vector2)",
+    "Utils.ToRotationVector2": "T.Utils.ToRotationVector2(float)",
+    "Player.HasAmmo": "T.Player.HasAmmo(T.Item,bool)",
+    "Player.GetWeaponDamage": "T.Player.GetWeaponDamage(T.Item,bool)",
+    "Player.PickAmmo": "T.Player.PickAmmo(T.Item,int&,float&,bool&,int&,float&,int&,bool)",
+    "Player.GetWeaponKnockback": "T.Player.GetWeaponKnockback(T.Item,float)",
+    "Utils.RotatedBy": "T.Utils.RotatedBy(Xna.Vector2,double,Xna.Vector2)",
+    "Vector2.op_Multiply#100665441": "Xna.Vector2.op_Multiply(float,Xna.Vector2)",
+    "Main.get_rand": "T.Main.get_rand()",
+    "UnifiedRandom.NextDouble": "T.Utilities.UnifiedRandom.NextDouble()",
+    "Entity.get_Size": "T.Entity.get_Size()",
+    "Vector2.op_Division": "Xna.Vector2.op_Division(Xna.Vector2,float)",
+    "Entity.set_Center": "T.Entity.set_Center(Xna.Vector2)",
+    "Projectile.NewProjectile": "T.Projectile.NewProjectile(T.DataStructures.IEntitySource,float,float,float,float,int,int,float,int,float,float,float)",
+    "Projectile.GetProjectileSource_FromThis": "T.Projectile.GetProjectileSource_FromThis()",
+    "Entity.get_Center": "T.Entity.get_Center()",
+    "Player.get_HeldItem": "T.Player.get_HeldItem()",
+    "Player.GetProjectileSource_Item_WithPotentialAmmo": "T.Player.GetProjectileSource_Item_WithPotentialAmmo(T.Item,int)",
+    "Utils.RandomVector2": "T.Utils.RandomVector2(T.Utilities.UnifiedRandom,float,float)",
+    "Utils.NextFloat": "T.Utils.NextFloat(T.Utilities.UnifiedRandom)",
+    "Utils.NextVector2Square": "T.Utils.NextVector2Square(T.Utilities.UnifiedRandom,float,float)"
+  },
+  "unresolved": [
+    "source_slice_entry_and_external_CFG_targets_unresolved",
+    "local_1_has_14_reaching_definitions"
+  ],
+  "identitySelection": {
+    "forCapturedIdentity": true,
+    "scope": "Source-only identity specialization; unknown runtime conditions retain all paths. Direct target identity writes/address escapes and uncertified target-passing calls before a read prevent selection. Native detours/global aliases remain outside capture coverage.",
+    "fullMethodCapture": {
+      "coverage": "unknown",
+      "unresolved": "connected_source_dependency_count_bound:193>192"
+    }
+  }
+}

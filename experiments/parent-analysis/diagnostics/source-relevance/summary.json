@@ -1,0 +1,632 @@
+{
+  "corpusPrograms": 41,
+  "corpusParents": 13,
+  "corpusOrphanDependencies": 0,
+  "corpusOrphanPredicates": 0,
+  "corpus": [
+    {
+      "parent": "CrystalStorm",
+      "path": "/raw/directProjectile/attackReference/motionDispatch",
+      "dependencyCount": 1,
+      "predicateCount": 2,
+      "observations": 7,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "CrystalStorm",
+      "path": "/raw/directProjectile/attackReference/positionIntegration",
+      "dependencyCount": 5,
+      "predicateCount": 11,
+      "observations": 6,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "LastPrism",
+      "path": "/raw/directProjectile/attackReference/motionDispatch",
+      "dependencyCount": 0,
+      "predicateCount": 0,
+      "observations": 2,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "LastPrism",
+      "path": "/raw/directProjectile/attackReference/motion/programs/0",
+      "dependencyCount": 216,
+      "predicateCount": 142,
+      "observations": 63,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "LastPrism",
+      "path": "/raw/directProjectile/attackReference/positionIntegration",
+      "dependencyCount": 5,
+      "predicateCount": 11,
+      "observations": 6,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "LastPrism",
+      "path": "/raw/directProjectile/referencedProjectiles/references/0/profile/attackReference/motionDispatch",
+      "dependencyCount": 0,
+      "predicateCount": 0,
+      "observations": 0,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "LastPrism",
+      "path": "/raw/directProjectile/referencedProjectiles/references/0/profile/attackReference/collision",
+      "dependencyCount": 2,
+      "predicateCount": 2,
+      "observations": 3,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "LastPrism",
+      "path": "/raw/directProjectile/referencedProjectiles/references/0/profile/attackReference/positionIntegration",
+      "dependencyCount": 0,
+      "predicateCount": 0,
+      "observations": 0,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "LastPrism",
+      "path": "/raw/directProjectile/referencedProjectiles/references/1/profile/attackReference/motionDispatch",
+      "dependencyCount": 0,
+      "predicateCount": 0,
+      "observations": 2,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "LastPrism",
+      "path": "/raw/directProjectile/referencedProjectiles/references/1/profile/attackReference/motion/programs/0",
+      "dependencyCount": 0,
+      "predicateCount": 8,
+      "observations": 9,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "LastPrism",
+      "path": "/raw/directProjectile/referencedProjectiles/references/1/profile/attackReference/positionIntegration",
+      "dependencyCount": 5,
+      "predicateCount": 11,
+      "observations": 6,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "MagicMissile",
+      "path": "/raw/directProjectile/attackReference/motionDispatch",
+      "dependencyCount": 0,
+      "predicateCount": 0,
+      "observations": 2,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "MagicMissile",
+      "path": "/raw/directProjectile/attackReference/motion/programs/0",
+      "dependencyCount": 23,
+      "predicateCount": 31,
+      "observations": 19,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "MagicMissile",
+      "path": "/raw/directProjectile/attackReference/positionIntegration",
+      "dependencyCount": 5,
+      "predicateCount": 11,
+      "observations": 6,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "MeteorStaff",
+      "path": "/raw/directProjectile/attackReference/motionDispatch",
+      "dependencyCount": 0,
+      "predicateCount": 0,
+      "observations": 2,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "MeteorStaff",
+      "path": "/raw/directProjectile/attackReference/motion/programs/0",
+      "dependencyCount": 0,
+      "predicateCount": 5,
+      "observations": 6,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "MeteorStaff",
+      "path": "/raw/directProjectile/attackReference/positionIntegration",
+      "dependencyCount": 5,
+      "predicateCount": 11,
+      "observations": 6,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "NebulaArcanum",
+      "path": "/raw/directProjectile/attackReference/motionDispatch",
+      "dependencyCount": 30,
+      "predicateCount": 22,
+      "observations": 15,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "NebulaArcanum",
+      "path": "/raw/directProjectile/attackReference/positionIntegration",
+      "dependencyCount": 5,
+      "predicateCount": 11,
+      "observations": 6,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "NebulaArcanum",
+      "path": "/raw/directProjectile/referencedProjectiles/references/0/profile/attackReference/motionDispatch",
+      "dependencyCount": 6,
+      "predicateCount": 13,
+      "observations": 15,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "NebulaArcanum",
+      "path": "/raw/directProjectile/referencedProjectiles/references/0/profile/attackReference/positionIntegration",
+      "dependencyCount": 5,
+      "predicateCount": 11,
+      "observations": 6,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "RainbowRod",
+      "path": "/raw/directProjectile/attackReference/motionDispatch",
+      "dependencyCount": 0,
+      "predicateCount": 0,
+      "observations": 2,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "RainbowRod",
+      "path": "/raw/directProjectile/attackReference/motion/programs/0",
+      "dependencyCount": 23,
+      "predicateCount": 31,
+      "observations": 19,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "RainbowRod",
+      "path": "/raw/directProjectile/attackReference/positionIntegration",
+      "dependencyCount": 5,
+      "predicateCount": 11,
+      "observations": 6,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "RazorbladeTyphoon",
+      "path": "/raw/directProjectile/attackReference/motionDispatch",
+      "dependencyCount": 33,
+      "predicateCount": 23,
+      "observations": 9,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "RazorbladeTyphoon",
+      "path": "/raw/directProjectile/attackReference/positionIntegration",
+      "dependencyCount": 5,
+      "predicateCount": 11,
+      "observations": 6,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "Razorpine",
+      "path": "/raw/directProjectile/attackReference/motionDispatch",
+      "dependencyCount": 0,
+      "predicateCount": 0,
+      "observations": 2,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "Razorpine",
+      "path": "/raw/directProjectile/attackReference/motion/programs/0",
+      "dependencyCount": 0,
+      "predicateCount": 6,
+      "observations": 6,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "Razorpine",
+      "path": "/raw/directProjectile/attackReference/positionIntegration",
+      "dependencyCount": 5,
+      "predicateCount": 11,
+      "observations": 6,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "SkyFracture",
+      "path": "/raw/directProjectile/attackReference/motionDispatch",
+      "dependencyCount": 0,
+      "predicateCount": 0,
+      "observations": 2,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "SkyFracture",
+      "path": "/raw/directProjectile/attackReference/motion/programs/0",
+      "dependencyCount": 0,
+      "predicateCount": 8,
+      "observations": 8,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "SkyFracture",
+      "path": "/raw/directProjectile/attackReference/positionIntegration",
+      "dependencyCount": 5,
+      "predicateCount": 11,
+      "observations": 6,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "StaffofEarth",
+      "path": "/raw/directProjectile/attackReference/motionDispatch",
+      "dependencyCount": 6,
+      "predicateCount": 7,
+      "observations": 10,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "StaffofEarth",
+      "path": "/raw/directProjectile/attackReference/positionIntegration",
+      "dependencyCount": 5,
+      "predicateCount": 11,
+      "observations": 6,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "StardustDragonStaff",
+      "path": "/raw/directProjectile/attackReference/motionDispatch",
+      "dependencyCount": 0,
+      "predicateCount": 0,
+      "observations": 2,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "StardustDragonStaff",
+      "path": "/raw/directProjectile/attackReference/motion/programs/0",
+      "dependencyCount": 54,
+      "predicateCount": 53,
+      "observations": 30,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "StardustDragonStaff",
+      "path": "/raw/directProjectile/attackReference/positionIntegration",
+      "dependencyCount": 5,
+      "predicateCount": 11,
+      "observations": 6,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "WandofSparking",
+      "path": "/raw/directProjectile/attackReference/motionDispatch",
+      "dependencyCount": 5,
+      "predicateCount": 4,
+      "observations": 4,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "WandofSparking",
+      "path": "/raw/directProjectile/attackReference/positionIntegration",
+      "dependencyCount": 5,
+      "predicateCount": 11,
+      "observations": 6,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "WaterBolt",
+      "path": "/raw/directProjectile/attackReference/motionDispatch",
+      "dependencyCount": 1,
+      "predicateCount": 2,
+      "observations": 4,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    {
+      "parent": "WaterBolt",
+      "path": "/raw/directProjectile/attackReference/positionIntegration",
+      "dependencyCount": 5,
+      "predicateCount": 11,
+      "observations": 6,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    }
+  ],
+  "lastPrism": {
+    "rawProgramChars": 103535,
+    "facingUnpackedChars": 96885,
+    "closure": {
+      "dependencyCount": 216,
+      "predicateCount": 142,
+      "observations": 63,
+      "orphanDependencies": [],
+      "orphanPredicates": [],
+      "coverageCriterion": "Every observation is a root; traverse expression/arguments/receiver, every orderedSourceUses member, all requiredPredicates, predicate inputs, embedded alternatives/source_block guard references; IDs match exact token boundaries."
+    },
+    "totalBlocks": 538,
+    "certifiedSelectedEdges": 4,
+    "reachableBlocks": 355,
+    "reachableHazards": [
+      {
+        "id": "5504",
+        "op": "call",
+        "operand": "Terraria.DataStructures.IEntitySource GetProjectileSource_FromThis()",
+        "operandOwner": "Terraria.Projectile",
+        "inputs": [
+          "5503"
+        ],
+        "at": 5504,
+        "block": 5503
+      },
+      {
+        "id": "5598",
+        "op": "call",
+        "operand": "Void Kill()",
+        "operandOwner": "Terraria.Projectile",
+        "inputs": [
+          "5597"
+        ],
+        "at": 5598,
+        "block": 5597
+      },
+      {
+        "id": "5961",
+        "op": "call",
+        "operand": "Void Kill()",
+        "operandOwner": "Terraria.Projectile",
+        "inputs": [
+          "5960"
+        ],
+        "at": 5961,
+        "block": 5960
+      },
+      {
+        "id": "6515",
+        "op": "call",
+        "operand": "Void Kill()",
+        "operandOwner": "Terraria.Projectile",
+        "inputs": [
+          "6514"
+        ],
+        "at": 6515,
+        "block": 6514
+      },
+      {
+        "id": "7101",
+        "op": "call",
+        "operand": "Void Kill()",
+        "operandOwner": "Terraria.Projectile",
+        "inputs": [
+          "7100"
+        ],
+        "at": 7101,
+        "block": 7100
+      },
+      {
+        "id": "7618",
+        "op": "call",
+        "operand": "Terraria.DataStructures.IEntitySource GetProjectileSource_FromThis()",
+        "operandOwner": "Terraria.Projectile",
+        "inputs": [
+          "7617"
+        ],
+        "at": 7618,
+        "block": 7617
+      },
+      {
+        "id": "7711",
+        "op": "call",
+        "operand": "Void Kill()",
+        "operandOwner": "Terraria.Projectile",
+        "inputs": [
+          "7710"
+        ],
+        "at": 7711,
+        "block": 7710
+      },
+      {
+        "id": "8125",
+        "op": "call",
+        "operand": "Void Kill()",
+        "operandOwner": "Terraria.Projectile",
+        "inputs": [
+          "8124"
+        ],
+        "at": 8125,
+        "block": 8124
+      },
+      {
+        "id": "9390",
+        "op": "call",
+        "operand": "Void Kill()",
+        "operandOwner": "Terraria.Projectile",
+        "inputs": [
+          "9389"
+        ],
+        "at": 9390,
+        "block": 9389
+      },
+      {
+        "id": "10697",
+        "op": "call",
+        "operand": "Void Kill()",
+        "operandOwner": "Terraria.Projectile",
+        "inputs": [
+          "10696"
+        ],
+        "at": 10697,
+        "block": 10696
+      },
+      {
+        "id": "12578",
+        "op": "call",
+        "operand": "Void Kill()",
+        "operandOwner": "Terraria.Projectile",
+        "inputs": [
+          "12577"
+        ],
+        "at": 12578,
+        "block": 12577
+      },
+      {
+        "id": "13558",
+        "op": "call",
+        "operand": "Void Kill()",
+        "operandOwner": "Terraria.Projectile",
+        "inputs": [
+          "13557"
+        ],
+        "at": 13558,
+        "block": 13557
+      }
+    ],
+    "currentUnreachableEvidenceRows": [],
+    "firstLateIdentityRead": {
+      "id": "5604",
+      "op": "ldfld",
+      "operand": "Int32 type",
+      "operandOwner": "Terraria.Projectile",
+      "inputs": [
+        "5603"
+      ],
+      "at": 5604,
+      "block": 5603
+    },
+    "hazardsReachingFirstLateRead": [
+      {
+        "id": "5504",
+        "op": "call",
+        "operand": "Terraria.DataStructures.IEntitySource GetProjectileSource_FromThis()",
+        "operandOwner": "Terraria.Projectile",
+        "inputs": [
+          "5503"
+        ],
+        "at": 5504,
+        "block": 5503
+      },
+      {
+        "id": "5598",
+        "op": "call",
+        "operand": "Void Kill()",
+        "operandOwner": "Terraria.Projectile",
+        "inputs": [
+          "5597"
+        ],
+        "at": 5598,
+        "block": 5597
+      }
+    ],
+    "INVALID_fixedIdentityCounterfactual": {
+      "warning": "NOT an accepted optimization. Ignores all identity hazards and mutable callback effects. Cannot preserve strict baseline facts or unknowns. These are only conditional counts, not savings.",
+      "reachableBlocks": 65,
+      "observationCount": 10,
+      "removedObservationCount": 53,
+      "chosenEdges": 19,
+      "remainingObservationKinds": {
+        "clock_or_ai_write": 3,
+        "state_write": 4,
+        "motion_call": 1,
+        "lifetime_end": 1,
+        "rotation": 1
+      }
+    }
+  },
+  "limits": [
+    "All baseline observations treated as relevant; no weapon-name/ID routing or model choices.",
+    "This proves reference closure and source-CFG reachability, not native gameplay equivalence, hook purity, or original extraction completeness.",
+    "Counterfactual is intentionally unaccepted and is not used to rewrite any production or model-facing packet."
+  ],
+  "sourceHashes": {
+    "/workspace/scratch/a1b4e2e032eb/ifc-magic-audit-20261105/capture-helper-final/LastPrism.packet.json": "10013c6fe9eff33978e6feed1094a0e63df8039f12dcf248bac3e552940caed3",
+    "/workspace/scratch/a1b4e2e032eb/ifc-source-relevance-study-20261105/LastPrism.full-cfg.json": "874d3cdce53aaf7c40c238dbca3546aeb84506a34a7938af0cf650afcc94de0a",
+    "/workspace/scratch/a1b4e2e032eb/ifc-magic-audit-20261105/helper-final-native/tModLoader.dll": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5",
+    "/workspace/scratch/a1b4e2e032eb/ifc-magic-audit-20261105/helper-final-native/EngineRuntimeChecks.dll": "22e898a0563ce7c24acfbbb26ba793f42b82ce85499d9f811da463b0810bc1b9"
+  },
+  "network": "NotRun",
+  "model": "NotRun",
+  "git": "NotRun",
+  "productionChanges": "None"
+}

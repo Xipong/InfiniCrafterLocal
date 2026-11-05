@@ -1,0 +1,152 @@
+[
+  {
+    "path": "diagnostics/effect-summary/ClosedEffectSummary.cs",
+    "sha256": "d3a9dfc5490b2d9acce4d3640658cb95f0946107133269049eeefcbcd46c40fd",
+    "bytes": 6744,
+    "source": "ifc-effect-summary-experiment-20261105/ClosedEffectSummary.cs",
+    "sourceSha256": "d3a9dfc5490b2d9acce4d3640658cb95f0946107133269049eeefcbcd46c40fd"
+  },
+  {
+    "path": "diagnostics/effect-summary/EffectSummaryTests.cs",
+    "sha256": "85884c0172be443dc14f61990e8b87a0ef80ce6fcd2e69de1bada76e92eebac6",
+    "bytes": 5086,
+    "source": "ifc-effect-summary-experiment-20261105/EffectSummaryTests.cs",
+    "sourceSha256": "85884c0172be443dc14f61990e8b87a0ef80ce6fcd2e69de1bada76e92eebac6"
+  },
+  {
+    "path": "diagnostics/effect-summary/CallbackBoundary.cs",
+    "sha256": "3c881a05207406ca63c69e093cdfea2e6ce1412feb00846e8750e97b49747b7b",
+    "bytes": 1425,
+    "source": "ifc-effect-summary-experiment-20261105/CallbackBoundary.cs",
+    "sourceSha256": "3c881a05207406ca63c69e093cdfea2e6ce1412feb00846e8750e97b49747b7b"
+  },
+  {
+    "path": "diagnostics/effect-summary/InspectEffects.cs",
+    "sha256": "eec756f81870ef76666398148b7943f439adf4897ef5b78a43e3068b1512e3cf",
+    "bytes": 1880,
+    "source": "ifc-effect-summary-experiment-20261105/InspectEffects.cs",
+    "sourceSha256": "eec756f81870ef76666398148b7943f439adf4897ef5b78a43e3068b1512e3cf"
+  },
+  {
+    "path": "diagnostics/effect-summary/ProfileLastPrism.cs",
+    "sha256": "7a5d733211d965a45e66fbc024b9589cc926a366b5385fdbc01965c183df29f4",
+    "bytes": 2630,
+    "source": "ifc-effect-summary-experiment-20261105/ProfileLastPrism.cs",
+    "sourceSha256": "7a5d733211d965a45e66fbc024b9589cc926a366b5385fdbc01965c183df29f4"
+  },
+  {
+    "path": "diagnostics/effect-summary/REPORT.md",
+    "sha256": "1874f34da151758b0947b94a475df760feb00e12c791fa602f2a82af73073cb2",
+    "bytes": 10887,
+    "source": "ifc-effect-summary-experiment-20261105/REPORT.md",
+    "sourceSha256": "1874f34da151758b0947b94a475df760feb00e12c791fa602f2a82af73073cb2"
+  },
+  {
+    "path": "diagnostics/effect-summary/summary-tests.json",
+    "sha256": "b089f6a1c0b663cb7f6301c55cf76779819bbd68a1fe550852ca54e9c532a067",
+    "bytes": 12590,
+    "source": "ifc-effect-summary-experiment-20261105/summary-tests.json",
+    "sourceSha256": "b089f6a1c0b663cb7f6301c55cf76779819bbd68a1fe550852ca54e9c532a067"
+  },
+  {
+    "path": "diagnostics/effect-summary/packet-comparison.json",
+    "sha256": "70868f65dc0758ed13ece8204af733c2626cc4e96c0dd0b04b9e50ac18eca26f",
+    "bytes": 931,
+    "source": "ifc-effect-summary-experiment-20261105/packet-comparison.json",
+    "sourceSha256": "70868f65dc0758ed13ece8204af733c2626cc4e96c0dd0b04b9e50ac18eca26f"
+  },
+  {
+    "path": "diagnostics/effect-summary/latency-comparison.json",
+    "sha256": "14db48392fa183b9120b1c8aed1bd954ba865177c56aa346e64ff3e45fd62a10",
+    "bytes": 2529,
+    "source": "ifc-effect-summary-experiment-20261105/latency-comparison.json",
+    "sourceSha256": "14db48392fa183b9120b1c8aed1bd954ba865177c56aa346e64ff3e45fd62a10"
+  },
+  {
+    "path": "diagnostics/effect-summary/baseline-hazards.txt",
+    "sha256": "347692d01521825675f42adb0e344ea992d2c6b03e31847b8ba4544c620bd475",
+    "bytes": 2263,
+    "source": "ifc-effect-summary-experiment-20261105/baseline-hazards.txt",
+    "sourceSha256": "347692d01521825675f42adb0e344ea992d2c6b03e31847b8ba4544c620bd475"
+  },
+  {
+    "path": "diagnostics/effect-summary/callback-boundaries.txt",
+    "sha256": "0a59ebbece9ba31b9a54020a0f18d5ccbd1b428bca8af74843eb2627ecb9aa82",
+    "bytes": 3001,
+    "source": "ifc-effect-summary-experiment-20261105/callback-boundaries.txt",
+    "sourceSha256": "0a59ebbece9ba31b9a54020a0f18d5ccbd1b428bca8af74843eb2627ecb9aa82"
+  },
+  {
+    "path": "diagnostics/effect-summary/integration-after-helper.patch",
+    "sha256": "aa5221219a95620fc5aa9fc370b9ebccb4b1e58bbac18b35059fc01dd743b7b2",
+    "bytes": 8941
+  },
+  {
+    "path": "diagnostics/effect-summary/integration-after-helper.manifest.json",
+    "sha256": "66f7f24aad90391ced198c937a6bc86ce75c40172e7ba456d8769428547ed59e",
+    "bytes": 683
+  },
+  {
+    "path": "diagnostics/prism-inline/MeasureSlice.cs",
+    "sha256": "9ff87231307346db34bbfa5a97eda63492a5113f68073e57f262c277125cef8c",
+    "bytes": 10279,
+    "source": "ifc-prism-slice-audit-20261105/MeasureSlice.cs",
+    "sourceSha256": "9ff87231307346db34bbfa5a97eda63492a5113f68073e57f262c277125cef8c"
+  },
+  {
+    "path": "diagnostics/prism-inline/validate.py",
+    "sha256": "c4f901f7ee6052eb98ec149e1bcf6560af8a32290f7bf9061f7122a63dc3c501",
+    "bytes": 4129,
+    "source": "ifc-prism-slice-audit-20261105/validate.py",
+    "sourceSha256": "c4f901f7ee6052eb98ec149e1bcf6560af8a32290f7bf9061f7122a63dc3c501"
+  },
+  {
+    "path": "diagnostics/prism-inline/REPORT.ru.md",
+    "sha256": "42568476b896c22c6bbf3c5a742e82b2416be9f02972de31f6b6354528ad03d0",
+    "bytes": 12250,
+    "source": "ifc-prism-slice-audit-20261105/REPORT.ru.md",
+    "sourceSha256": "42568476b896c22c6bbf3c5a742e82b2416be9f02972de31f6b6354528ad03d0"
+  },
+  {
+    "path": "diagnostics/prism-inline/summary.json",
+    "sha256": "0ab66d963ac9f7026d10578a29b1b8e1b19347388f88bb2b298f36dac98f49e4",
+    "bytes": 15780,
+    "source": "ifc-prism-slice-audit-20261105/summary.json",
+    "sourceSha256": "0ab66d963ac9f7026d10578a29b1b8e1b19347388f88bb2b298f36dac98f49e4"
+  },
+  {
+    "path": "diagnostics/source-relevance/InspectSource.cs",
+    "sha256": "c64a16b7cd4edb30d4b3d8de2cbe69d243bd97e7b7cc353f8cb4ec54de0b260d",
+    "bytes": 4097,
+    "source": "ifc-source-relevance-study-20261105/InspectSource.cs",
+    "sourceSha256": "c64a16b7cd4edb30d4b3d8de2cbe69d243bd97e7b7cc353f8cb4ec54de0b260d"
+  },
+  {
+    "path": "diagnostics/source-relevance/analyze.py",
+    "sha256": "908bf7eac07014abce0b7ced38d2f5e52313f820a99f7559d659877e38634b70",
+    "bytes": 8143,
+    "source": "ifc-source-relevance-study-20261105/analyze.py",
+    "sourceSha256": "908bf7eac07014abce0b7ced38d2f5e52313f820a99f7559d659877e38634b70"
+  },
+  {
+    "path": "diagnostics/source-relevance/README.md",
+    "sha256": "4374412db1c5bef48bf9b69ec86c7a2e7eecbc6733f5713e4eb0d8276c5e33a7",
+    "bytes": 7700,
+    "source": "ifc-source-relevance-study-20261105/README.md",
+    "sourceSha256": "4374412db1c5bef48bf9b69ec86c7a2e7eecbc6733f5713e4eb0d8276c5e33a7"
+  },
+  {
+    "path": "diagnostics/source-relevance/summary.json",
+    "sha256": "8de3378cb9a7a98ccfb2c66e239eb3815089a182e88d8a0ccf82c5cc1ac7480b",
+    "bytes": 27881,
+    "source": "ifc-source-relevance-study-20261105/summary.json",
+    "sourceSha256": "8de3378cb9a7a98ccfb2c66e239eb3815089a182e88d8a0ccf82c5cc1ac7480b"
+  },
+  {
+    "path": "diagnostics/source-relevance/LastPrism.baseline-program.json",
+    "sha256": "2b1af16583b9014e65741576d26aeab0d9818e358362af285205d726f1a3a154",
+    "bytes": 145252,
+    "source": "ifc-source-relevance-study-20261105/LastPrism.baseline-program.json",
+    "sourceSha256": "2b1af16583b9014e65741576d26aeab0d9818e358362af285205d726f1a3a154"
+  }
+]

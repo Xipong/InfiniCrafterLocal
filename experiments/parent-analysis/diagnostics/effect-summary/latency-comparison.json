@@ -1,0 +1,79 @@
+{
+  "cold": {
+    "baseline": {
+      "name": "LastPrism",
+      "itemType": 3541,
+      "iteration": 0,
+      "measurement": "first_encounter_in_fixed_roster",
+      "wallSeconds": 9.1524327,
+      "cpuSeconds": 11.53,
+      "allocatedBytes": 2618305968,
+      "utf8Bytes": 933294,
+      "sha256": "10013c6fe9eff33978e6feed1094a0e63df8039f12dcf248bac3e552940caed3"
+    },
+    "summary": {
+      "name": "LastPrism",
+      "itemType": 3541,
+      "iteration": 0,
+      "measurement": "first_encounter_in_fixed_roster",
+      "wallSeconds": 9.2387772,
+      "cpuSeconds": 11.56,
+      "allocatedBytes": 2619325912,
+      "utf8Bytes": 933294,
+      "sha256": "10013c6fe9eff33978e6feed1094a0e63df8039f12dcf248bac3e552940caed3"
+    },
+    "deltaWallSeconds": 0.08634449999999916,
+    "deltaAllocatedBytes": 1019944
+  },
+  "warm": {
+    "baseline": [
+      {
+        "name": "LastPrism",
+        "itemType": 3541,
+        "iteration": 1,
+        "measurement": "same_item_repeated_capture",
+        "wallSeconds": 1.3417359,
+        "cpuSeconds": 2.03,
+        "allocatedBytes": 397469336,
+        "utf8Bytes": 933294,
+        "sha256": "10013c6fe9eff33978e6feed1094a0e63df8039f12dcf248bac3e552940caed3"
+      },
+      {
+        "name": "LastPrism",
+        "itemType": 3541,
+        "iteration": 2,
+        "measurement": "same_item_repeated_capture",
+        "wallSeconds": 1.1518683,
+        "cpuSeconds": 1.46,
+        "allocatedBytes": 397464256,
+        "utf8Bytes": 933294,
+        "sha256": "10013c6fe9eff33978e6feed1094a0e63df8039f12dcf248bac3e552940caed3"
+      }
+    ],
+    "summary": [
+      {
+        "name": "LastPrism",
+        "itemType": 3541,
+        "iteration": 1,
+        "measurement": "same_item_repeated_capture",
+        "wallSeconds": 4.8564481,
+        "cpuSeconds": 6.62,
+        "allocatedBytes": 397465848,
+        "utf8Bytes": 933294,
+        "sha256": "10013c6fe9eff33978e6feed1094a0e63df8039f12dcf248bac3e552940caed3"
+      },
+      {
+        "name": "LastPrism",
+        "itemType": 3541,
+        "iteration": 2,
+        "measurement": "same_item_repeated_capture",
+        "wallSeconds": 2.4990778,
+        "cpuSeconds": 3.19,
+        "allocatedBytes": 397471376,
+        "utf8Bytes": 933294,
+        "sha256": "10013c6fe9eff33978e6feed1094a0e63df8039f12dcf248bac3e552940caed3"
+      }
+    ]
+  },
+  "limitation": "One sequential process per variant, first cold capture and two warm repeats. Environment timing was noisy. These are observations, not a statistically established regression/speedup."
+}

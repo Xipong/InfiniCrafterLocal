@@ -1,0 +1,16 @@
+{
+  "baseWorkspace": "ifc-helper-spawn-fix-20261105",
+  "resultWorkspace": "ifc-effect-summary-experiment-20261105/repo",
+  "files": [
+    {
+      "path": "ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.AttackIdentitySelection.cs",
+      "baseSha256": "70cc88f90c8e09553a9b1a31ee2e6a8e81be5f22d1f26267f071ab65025eb89f",
+      "resultSha256": "2a2a9f0d1b053efffddfe0821be079515c251a38c4c9b3fd70743c4f51000b82"
+    },
+    {
+      "path": "ModSources/InfiniCrafterLocal/Common/Services/Generation/Experiment.ClosedEffectSummary.cs",
+      "baseSha256": null,
+      "resultSha256": "d3a9dfc5490b2d9acce4d3640658cb95f0946107133269049eeefcbcd46c40fd"
+    }
+  ]
+}

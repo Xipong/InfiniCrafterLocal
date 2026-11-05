@@ -1,0 +1,471 @@
+{
+  "passed": 39,
+  "rows": [
+    {
+      "label": "Read",
+      "expected": true,
+      "result": {
+        "Proven": true,
+        "Reason": "closed_source_preserves_identity_and_no_reference_escape",
+        "Methods": [
+          "44af2fdb-bb9c-4a1c-9665-6e7a2cc2c851:100663328:Int32 Read(Terraria.Projectile)"
+        ],
+        "Instructions": 3
+      },
+      "elapsedMs": 77.3204
+    },
+    {
+      "label": "Motion",
+      "expected": true,
+      "result": {
+        "Proven": true,
+        "Reason": "closed_source_preserves_identity_and_no_reference_escape",
+        "Methods": [
+          "44af2fdb-bb9c-4a1c-9665-6e7a2cc2c851:100663329:Void Motion(Terraria.Projectile)"
+        ],
+        "Instructions": 4
+      },
+      "elapsedMs": 0.5746
+    },
+    {
+      "label": "Nested",
+      "expected": true,
+      "result": {
+        "Proven": true,
+        "Reason": "closed_source_preserves_identity_and_no_reference_escape",
+        "Methods": [
+          "44af2fdb-bb9c-4a1c-9665-6e7a2cc2c851:100663329:Void Motion(Terraria.Projectile)",
+          "44af2fdb-bb9c-4a1c-9665-6e7a2cc2c851:100663330:Void Nested(Terraria.Projectile)"
+        ],
+        "Instructions": 7
+      },
+      "elapsedMs": 0.1277
+    },
+    {
+      "label": "LocalAlias",
+      "expected": true,
+      "result": {
+        "Proven": true,
+        "Reason": "closed_source_preserves_identity_and_no_reference_escape",
+        "Methods": [
+          "44af2fdb-bb9c-4a1c-9665-6e7a2cc2c851:100663331:Void LocalAlias(Terraria.Projectile)"
+        ],
+        "Instructions": 4
+      },
+      "elapsedMs": 0.0205
+    },
+    {
+      "label": "JoinAlias",
+      "expected": true,
+      "result": {
+        "Proven": true,
+        "Reason": "closed_source_preserves_identity_and_no_reference_escape",
+        "Methods": [
+          "44af2fdb-bb9c-4a1c-9665-6e7a2cc2c851:100663332:Void JoinAlias(Terraria.Projectile, Boolean)"
+        ],
+        "Instructions": 8
+      },
+      "elapsedMs": 0.0379
+    },
+    {
+      "label": "CtorReads",
+      "expected": true,
+      "result": {
+        "Proven": true,
+        "Reason": "closed_source_preserves_identity_and_no_reference_escape",
+        "Methods": [
+          "5acdd3cf-4427-4856-8a41-a2d50a5de649:100664747:Void .ctor()",
+          "44af2fdb-bb9c-4a1c-9665-6e7a2cc2c851:100663396:Void .ctor(Terraria.Entity)",
+          "44af2fdb-bb9c-4a1c-9665-6e7a2cc2c851:100663343:Int32 CtorReads(Terraria.Projectile)"
+        ],
+        "Instructions": 12
+      },
+      "elapsedMs": 0.3351
+    },
+    {
+      "label": "ViaClosed",
+      "expected": true,
+      "result": {
+        "Proven": true,
+        "Reason": "closed_source_preserves_identity_and_no_reference_escape",
+        "Methods": [
+          "44af2fdb-bb9c-4a1c-9665-6e7a2cc2c851:100663393:Void Touch(Terraria.Projectile)",
+          "44af2fdb-bb9c-4a1c-9665-6e7a2cc2c851:100663345:Void ViaClosed(Terraria.Projectile, Closed)"
+        ],
+        "Instructions": 8
+      },
+      "elapsedMs": 0.0616
+    },
+    {
+      "label": "Identity",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "identity_write_or_address:EffectSummaryTests.Identity",
+        "Methods": [],
+        "Instructions": 3
+      },
+      "elapsedMs": 0.6719
+    },
+    {
+      "label": "Style",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "identity_write_or_address:EffectSummaryTests.Style",
+        "Methods": [],
+        "Instructions": 3
+      },
+      "elapsedMs": 0.0616
+    },
+    {
+      "label": "AliasIdentity",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "identity_write_or_address:EffectSummaryTests.AliasIdentity",
+        "Methods": [],
+        "Instructions": 4
+      },
+      "elapsedMs": 0.0318
+    },
+    {
+      "label": "JoinIdentity",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "identity_write_or_address:EffectSummaryTests.JoinIdentity",
+        "Methods": [],
+        "Instructions": 7
+      },
+      "elapsedMs": 0.0211
+    },
+    {
+      "label": "OtherIdentity",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "identity_write_or_address:EffectSummaryTests.OtherIdentity",
+        "Methods": [],
+        "Instructions": 3
+      },
+      "elapsedMs": 0.1104
+    },
+    {
+      "label": "Escape",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "reference_field_escape:EffectSummaryTests.Escape",
+        "Methods": [],
+        "Instructions": 2
+      },
+      "elapsedMs": 0.0224
+    },
+    {
+      "label": "EscapeAlias",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "reference_field_escape:EffectSummaryTests.EscapeAlias",
+        "Methods": [],
+        "Instructions": 2
+      },
+      "elapsedMs": 0.0197
+    },
+    {
+      "label": "ReturnAlias",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "reference_or_byref_result:EffectSummaryTests.ReturnAlias",
+        "Methods": [],
+        "Instructions": 0
+      },
+      "elapsedMs": 0.0112
+    },
+    {
+      "label": "ReturnWrapper",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "reference_or_byref_result:EffectSummaryTests.ReturnWrapper",
+        "Methods": [],
+        "Instructions": 0
+      },
+      "elapsedMs": 0.0107
+    },
+    {
+      "label": "CtorEscape",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "reference_field_escape:EffectSummaryTests\u002BWrap..ctor",
+        "Methods": [
+          "5acdd3cf-4427-4856-8a41-a2d50a5de649:100664747:Void .ctor()"
+        ],
+        "Instructions": 8
+      },
+      "elapsedMs": 0.2602
+    },
+    {
+      "label": "ViaOpen",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "open_virtual_dispatch:EffectSummaryTests.ViaOpen",
+        "Methods": [],
+        "Instructions": 3
+      },
+      "elapsedMs": 0.0387
+    },
+    {
+      "label": "Recursive",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "recursive_call_cycle:EffectSummaryTests.Recursive",
+        "Methods": [],
+        "Instructions": 6
+      },
+      "elapsedMs": 0.0237
+    },
+    {
+      "label": "TryFinally",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "exception_regions:EffectSummaryTests.TryFinally",
+        "Methods": [],
+        "Instructions": 0
+      },
+      "elapsedMs": 0.0194
+    },
+    {
+      "label": "TryCatch",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "exception_regions:EffectSummaryTests.TryCatch",
+        "Methods": [],
+        "Instructions": 0
+      },
+      "elapsedMs": 0.0165
+    },
+    {
+      "label": "RefTarget",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "open_generic_abstract_or_byref:EffectSummaryTests.RefTarget",
+        "Methods": [],
+        "Instructions": 0
+      },
+      "elapsedMs": 0.0145
+    },
+    {
+      "label": "RefLocal",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "unsupported_opcode_ldloca:EffectSummaryTests.RefLocal",
+        "Methods": [],
+        "Instructions": 3
+      },
+      "elapsedMs": 0.1665
+    },
+    {
+      "label": "IdentityAddress",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "identity_write_or_address:EffectSummaryTests.IdentityAddress",
+        "Methods": [],
+        "Instructions": 2
+      },
+      "elapsedMs": 0.039
+    },
+    {
+      "label": "Indirect",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "open_generic_abstract_or_byref:EffectSummaryTests.Indirect",
+        "Methods": [],
+        "Instructions": 0
+      },
+      "elapsedMs": 0.0125
+    },
+    {
+      "label": "ArrayEscape",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "unsupported_opcode_stelem.ref:EffectSummaryTests.ArrayEscape",
+        "Methods": [],
+        "Instructions": 4
+      },
+      "elapsedMs": 0.0263
+    },
+    {
+      "label": "ThrowAlias",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "open_virtual_dispatch:EffectSummaryTests.ThrowAlias",
+        "Methods": [],
+        "Instructions": 2
+      },
+      "elapsedMs": 0.0865
+    },
+    {
+      "label": "ViaCctor",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "identity_write_or_address:EffectSummaryTests\u002BCctorMutates..cctor",
+        "Methods": [],
+        "Instructions": 5
+      },
+      "elapsedMs": 0.1726
+    },
+    {
+      "label": "open virtual root dispatch",
+      "expected": true,
+      "result": {
+        "Proven": true,
+        "Reason": "closed_source_preserves_identity_and_no_reference_escape",
+        "Methods": [
+          "44af2fdb-bb9c-4a1c-9665-6e7a2cc2c851:100663391:Void Touch(Terraria.Projectile)"
+        ],
+        "Instructions": 1
+      },
+      "elapsedMs": 0.0144
+    },
+    {
+      "label": "open virtual root invocation rejects",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "open_virtual_dispatch",
+        "Methods": [],
+        "Instructions": 0
+      },
+      "elapsedMs": 0
+    },
+    {
+      "label": "depth limit",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "depth_bound:EffectSummaryTests.Motion",
+        "Methods": [],
+        "Instructions": 4
+      },
+      "elapsedMs": 0.1302
+    },
+    {
+      "label": "method limit",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "method_bound:EffectSummaryTests.Motion",
+        "Methods": [],
+        "Instructions": 2
+      },
+      "elapsedMs": 0.0278
+    },
+    {
+      "label": "instruction limit",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "instruction_work_bound:EffectSummaryTests.Motion",
+        "Methods": [],
+        "Instructions": 2
+      },
+      "elapsedMs": 0.0208
+    },
+    {
+      "label": "byte limit",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "il_byte_bound:EffectSummaryTests.Motion",
+        "Methods": [],
+        "Instructions": 0
+      },
+      "elapsedMs": 0.0172
+    },
+    {
+      "label": "Entity.get_Center",
+      "expected": true,
+      "result": {
+        "Proven": true,
+        "Reason": "closed_source_preserves_identity_and_no_reference_escape",
+        "Methods": [
+          "97e3f8c4-850d-4b7c-a942-f418e140ae35:100665372:Void .ctor(Single, Single)",
+          "97e3f8c4-850d-4b7c-a942-f418e140ae35:100665444:Void .cctor()",
+          "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2:100663758:Microsoft.Xna.Framework.Vector2 get_Center()"
+        ],
+        "Instructions": 44
+      },
+      "elapsedMs": 1.1068
+    },
+    {
+      "label": "Entity.set_Center",
+      "expected": true,
+      "result": {
+        "Proven": true,
+        "Reason": "closed_source_preserves_identity_and_no_reference_escape",
+        "Methods": [
+          "97e3f8c4-850d-4b7c-a942-f418e140ae35:100665372:Void .ctor(Single, Single)",
+          "97e3f8c4-850d-4b7c-a942-f418e140ae35:100665444:Void .cctor()",
+          "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2:100663759:Void set_Center(Microsoft.Xna.Framework.Vector2)"
+        ],
+        "Instructions": 44
+      },
+      "elapsedMs": 0.2855
+    },
+    {
+      "label": "Projectile.GetProjectileSource_FromThis",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "reference_or_byref_result:Terraria.Projectile.GetProjectileSource_FromThis",
+        "Methods": [],
+        "Instructions": 0
+      },
+      "elapsedMs": 0.0767
+    },
+    {
+      "label": "Projectile.Kill",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "il_byte_bound:Terraria.Projectile.Kill",
+        "Methods": [],
+        "Instructions": 0
+      },
+      "elapsedMs": 6.6148
+    },
+    {
+      "label": "EntitySource_Parent.ctor",
+      "expected": false,
+      "result": {
+        "Proven": false,
+        "Reason": "reference_field_escape:Terraria.DataStructures.EntitySource_Parent..ctor",
+        "Methods": [
+          "5acdd3cf-4427-4856-8a41-a2d50a5de649:100664747:Void .ctor()"
+        ],
+        "Instructions": 6
+      },
+      "elapsedMs": 0.1706
+    }
+  ],
+  "warmGetterSummaryMs": {
+    "median": 0.0472,
+    "p95": 0.1155,
+    "max": 0.2463
+  }
+}

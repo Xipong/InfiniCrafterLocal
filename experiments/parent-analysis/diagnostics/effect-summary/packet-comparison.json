@@ -1,0 +1,37 @@
+{
+  "checks": [
+    {
+      "name": "raw packet exact bytes unchanged",
+      "passed": true
+    },
+    {
+      "name": "raw packet parsed equality",
+      "passed": true
+    },
+    {
+      "name": "proven beam632 retained",
+      "passed": true
+    },
+    {
+      "name": "conditional candidate601 retained",
+      "passed": true
+    },
+    {
+      "name": "frozen native source hashes unchanged",
+      "passed": true
+    }
+  ],
+  "baseline": {
+    "path": "ifc-magic-audit-20261105/capture-helper-final/LastPrism.packet.json",
+    "utf8Bytes": 933294,
+    "sha256": "10013c6fe9eff33978e6feed1094a0e63df8039f12dcf248bac3e552940caed3"
+  },
+  "summary": {
+    "path": "ifc-effect-summary-experiment-20261105/capture-summary/LastPrism.packet.json",
+    "utf8Bytes": 933294,
+    "sha256": "10013c6fe9eff33978e6feed1094a0e63df8039f12dcf248bac3e552940caed3"
+  },
+  "deltaBytes": 0,
+  "frozenSourceFilesVerified": 425,
+  "changed": []
+}
