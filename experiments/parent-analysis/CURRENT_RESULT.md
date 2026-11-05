@@ -28,7 +28,9 @@ Source table union сопоставляет локальные member aliases п
 - Перед добавлением C# view четыре полных raw packets — Molten Fury, Daedalus Stormbow, Wooden Arrow и обычные материалы — остались побайтно равны baseline.
 - После добавления C# view все 16 fingerprints по-прежнему равны предыдущему срезу. Удаление только распознанных source views из восьми новых полных packets точно восстанавливает восемь предыдущих packets: native stats, graphs, sourceMethods и nulls сохранены.
 
-Текущий полный raw Prepare для Last Prism занимает 1929657 знаков против 483029 в свежем baseline. Author dossier с читаемым source view — 287391 при неизменённом лимите 300000. Это разные формы данных; ни одно число не является числом токенов. Первый последовательный capture выделил около 2.98 GB managed memory cumulatively против 0.94 GB baseline; это не resident RAM и не независимый cold benchmark. Извлечение source остаётся дорогим, улучшение скорости или памяти не объявляется.
+Текущий полный raw Prepare для Last Prism занимает 1929657 знаков против 483029 в свежем baseline. Финальная проверка Author использует полную матрицу 8×8: все 64 упорядоченные пары из восьми настоящих captures, включая повторы и обратный порядок, проходят неизменённый лимит 300000. Максимум — StateConditionalBow + LastPrism: 289590 знаков, запас 10410. Raw transport packet и Author dossier — разные формы данных; эти числа не являются числом токенов.
+
+Первый последовательный capture суммарно выделил около 2.98 GB управляемой памяти против 0.94 GB baseline. Счётчик всех allocations не равен одновременно занятой ОЗУ или RSS; этот запуск не является независимым cold benchmark. Извлечение source остаётся дорогим, улучшение скорости или памяти не объявляется.
 
 ## Проверки и admission
 
@@ -43,16 +45,18 @@ Source table union сопоставляет локальные member aliases п
 | Source-view-free fingerprint: immediate и deferred capture | PASS 1/1; дополнительно совпали все 16 настоящих fingerprints |
 | Официальный tML resource packager и `.tmod` reader | PASS 1/1; exact managed DLL, notices, Info loader entry и payload hash |
 | Package/release verifier Python | PASS 61 tests и 5 subtests |
+| Static gates | Все 17 PASS |
 | Полный native baseline | 400 PASS / 270 FAIL |
 | Финальный полный native прогон: 682 checks | 412 PASS / 270 FAIL; все 270 failed names и полные причины совпали с baseline |
 | Actual Prepare → Author state-condition/profile preservation | PASS в обоих response formats; offline |
-| Стандартный Author admission на восьми свежих capture-парах | Все восемь PASS; Last Prism 287391 < 300000 |
+| Финальная canonical source-view матрица Author: 8×8 | Все 64 пары PASS; максимум StateConditionalBow + LastPrism 289590 / 300000, запас 10410 |
+| Полный Python набор | Итог partitions ещё не подведён; общий PASS count не объявляется |
 
 Полный native прогон в этой среде не GREEN: MonoMod не находит загруженный clrjit через numeric process lookup при несовпадении PID namespace и `/proc`. 247 failures прямо связаны с этой инициализацией; ещё 23 возникают в последующем состоянии того же процесса. Полный старый baseline воспроизводит тот же набор failures. Три проверенных отдельно motion/persistence cases проходят в обоих checkout. Это не основание объявлять полноценный release acceptance.
 
 Во время финального прогона все 432 C# inputs и compiled harness оставались неизменными. Новых failures, исчезнувших failures и изменившихся причин нет; 12 добавленных checks проходят. Legacy root/fingerprint comparisons проверяют все native facts независимо от читаемого view: только expected root очищается от распознанной аннотации, actual fingerprint сравнивается без изменения.
 
-Размерная проверка использует настоящий полный capture с восстановленными source effects. Лимит не увеличен; capabilities не удалялись. Итоговый capture после последних исправлений provider имеет те же восемь packet hashes, что и измеренный срез. Model/provider acceptance и качество первого предмета этой offline проверкой не подтверждаются.
+Размерная проверка использует настоящие полные captures с восстановленными source effects и финальную canonical source-view проекцию. Проверены hashes всех восьми исходных packets и их соответствие каждой из 64 комбинаций. В каждой паре представлены все 71 author-visible capability без пропусков и лишних entries. Лимит не увеличен; capabilities не удалялись. Model/provider acceptance и качество первого предмета этой offline проверкой не подтверждаются.
 
 ## Повторение и границы
 
@@ -60,7 +64,7 @@ Source table union сопоставляет локальные member aliases п
 
 ```sh
 python tools/checks/check_planner_prompt_usability.py \
-  --parent-captures /path/to/capture-output --out /path/to/report.json
+  --parent-captures /path/to/capture-output --all-pairs --out /path/to/report.json
 ```
 
 Проверенная среда: .NET SDK 8.0.427, tModLoader 2026.08.3.0, ParticleLibrary/Luminance. SHA256 `tModLoader.dll`:
