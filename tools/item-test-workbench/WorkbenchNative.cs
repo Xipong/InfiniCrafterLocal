@@ -82,6 +82,41 @@ internal static partial class EngineRuntimeChecks
         returning.Id="workbench-synthetic-return"; returning.SourceMode="test_fixture";
         File.WriteAllText(Path.Combine(directory,"synthetic-return.json"),SwarmWire(returning).ToJson());
     }
+    private static void CheckWorkbenchScenePreflight()
+    {
+        // Execute the actual entrypoint with invalid client scenes. Each must
+        // report its input error without graphics assets, world setup or a GPU.
+        string directory=Directory.CreateTempSubdirectory("workbench-preflight-").FullName;
+        try {
+            var baseline=JsonNode.Parse("""
+                {"playerUpdate":"client","ticks":1,"player":{"mana":200},
+                 "actions":[],"assertions":[{"kind":"no_nonfinite"}]}
+                """)!.AsObject();
+            var cases=new (string Name,Action<JsonObject> Change,string Reason)[]{
+                ("coordinates",s=>s["player"]!["x"]=1e100,"x must be finite"),
+                ("ticks",s=>s["ticks"]=0,"ticks must be"),
+                ("mana",s=>s["player"]!["mana"]=201,"mana exceeds native"),
+                ("crystals",s=>s["player"]!["manaCrystals"]=10,"manaCrystals must be"),
+                ("life",s=>s["player"]!["life"]=101,"Player life must be"),
+                ("action",s=>s["actions"]=new JsonArray(new JsonObject{["kind"]="primary",["tick"]=1}),"Every action tick"),
+                ("assertions",s=>s["assertions"]=new JsonArray(),"At least one explicit assertion"),
+                ("fishing",s=>s["fishing"]=new JsonObject{["reelInput"]="unknown"},"Fishing reelInput"),
+                ("mode",s=>s["playerUpdate"]="unknown","playerUpdate must be"),
+            };
+            foreach(var test in cases) {
+                var scene=(JsonObject)baseline.DeepClone();test.Change(scene);
+                string path=Path.Combine(directory,test.Name+".json");File.WriteAllText(path,scene.ToJsonString());
+                bool refused=false;
+                try { RunWorkbench(null,path,284,Path.Combine(directory,"native.json")); }
+                catch(ArgumentException error) when(error.Message.Contains(test.Reason,StringComparison.Ordinal)) { refused=true; }
+                if(!refused)throw new Exception("Missing pre-bootstrap input refusal: "+test.Name);
+                if(File.Exists(Path.Combine(directory,"native-proxy-preview.png")))throw new Exception("Graphics bootstrapped before scene admission");
+            }
+            Console.WriteLine("PASS: 9 actual scene input refusals before graphics/world bootstrap (not gameplay)");
+        }
+        finally { Directory.Delete(directory,true); }
+    }
+
     public static JsonObject RunWorkbench(string? itemPath, string scenarioPath, int? vanillaItemId = null, string? outputPath = null, string itemBoundary = "fresh")
     {
         if(itemBoundary is not ("fresh" or "local_cache")) throw new ArgumentException("item-boundary must be fresh or local_cache");
@@ -139,7 +174,6 @@ internal static partial class EngineRuntimeChecks
         bool fullPlayer=playerUpdate is "full" or "client" or "client_hybrid" or "client_vfx";
         int worldWidthTiles=WInt(scenario,"worldWidthTiles",100);
         if(worldWidthTiles is <100 or >400 || !fullPlayer && worldWidthTiles!=100)throw new ArgumentException("worldWidthTiles must be100..400 and requires full Player.Update outside default100");
-        using var graphics=clientPlayer?new WorkbenchGraphicsContext(Path.Combine(AppContext.BaseDirectory,"native-assets","GeneratedItem.png"),outputPath is null?null:Path.Combine(Path.GetDirectoryName(Path.GetFullPath(outputPath))!,"native-proxy-preview.png")):null;
         foreach(string actor in new[]{"player","dummy"}) foreach(string coordinate in new[]{"x","y"}) WFloat(scenario[actor],coordinate,0);
         int manaCrystals=WInt(scenario["player"],"manaCrystals",9);
         if(manaCrystals<0 || manaCrystals>9) throw new ArgumentException("manaCrystals must be 0..9");
@@ -230,6 +264,11 @@ internal static partial class EngineRuntimeChecks
         }
         }
         if (scenario["assertions"] is not JsonArray { Count: > 0 }) throw new ArgumentException("At least one explicit assertion is required");
+        int maxLife=WInt(scenario["player"],"maxLife",100), life=WInt(scenario["player"],"life",maxLife);
+        if(life<1 || life>maxLife) throw new ArgumentException("Player life must be positive and <= maxLife");
+        WFishingScene.Validate(scenario["fishing"],fullPlayer,worldWidthTiles);
+        // All input-only and support-matrix refusals precede GPU/world bootstrap.
+        using var graphics=clientPlayer?new WorkbenchGraphicsContext(Path.Combine(AppContext.BaseDirectory,"native-assets","GeneratedItem.png"),outputPath is null?null:Path.Combine(Path.GetDirectoryName(Path.GetFullPath(outputPath))!,"native-proxy-preview.png")):null;
         var frames = new JsonArray(); var assertions = new JsonArray(); var events = new JsonArray();
         var report = new JsonObject {
             ["schemaVersion"] = 1, ["status"] = "running",
@@ -289,7 +328,6 @@ internal static partial class EngineRuntimeChecks
                 ? new WOwnedTileRegistration() : null;
             TorchID.Initialize(); // Main.Initialize_AlmostEverything normally owns native torch light providers.
             foreach(var player in Terraria.Main.player) player.active=false;
-            WFishingScene.Validate(scenario["fishing"],fullPlayer,worldWidthTiles);
             if(fullPlayer) WPrepareFullWorld(worldWidthTiles);
             Terraria.Main.tileSolid[TileID.Dirt] = true;
             foreach (var rect in terrain) {
@@ -304,7 +342,6 @@ internal static partial class EngineRuntimeChecks
                 using var recallSpawn=new WRecallSpawn(owner,scenario["recallSpawn"],report["scene"]!.AsObject());
                 owner.statLifeMax = owner.statLifeMax2 = WInt(scenario["player"], "maxLife", 100);
                 owner.statLife = WInt(scenario["player"], "life", owner.statLifeMax);
-                if(owner.statLife<1 || owner.statLife>owner.statLifeMax) throw new ArgumentException("Player life must be positive and <= maxLife");
                 owner.statMana = owner.statManaMax = owner.statManaMax2 = WInt(scenario["player"], "mana", 200);
                 Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(seed);
                 Terraria.Main.SceneMetrics = new SceneMetrics();

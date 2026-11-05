@@ -323,7 +323,7 @@ def test_new_publication_identity_is_exact_structured_role_entity_recipe_and_byt
         identity = json.dumps([data['id'], role, entity, 'same_logical_id'], ensure_ascii=True, separators=(',', ':'), allow_nan=False).encode('ascii')
         scope = json.dumps([str(data.get('recipeMeta', {}).get('worldId') or 'unscoped'), data['id'], role], ensure_ascii=True, separators=(',', ':')).encode('ascii')
         label = re.sub(r'[^a-z0-9_-]+', '_', role.lower()).strip('_')[:24]
-        expected = label + '--' + sha(scope + b'\0' + identity + b'\0' + raw) + '.png' 
+        expected = label + '--' + sha(scope + b'\0' + identity + b'\0' + raw) + '.png'
         assert Path(result[0]).name == expected
         outcomes.append(result[0])
     assert len(set(outcomes)) == 3

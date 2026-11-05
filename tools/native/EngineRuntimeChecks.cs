@@ -25,6 +25,16 @@ internal static partial class EngineRuntimeChecks
             // Supply an isolated directory, never the player's actual saves.
             Terraria.Program.SavePath = sandbox;
             Terraria.Main.dedServ = true;
+            if (args.Length == 1 && args[0] == "--profile-parent-analysis")
+            {
+                ParentAnalysisFrameProfiling();
+                return 0;
+            }
+            if (args.Length == 2 && args[0] == "--profile-parent-craft")
+            {
+                ParentCraftFrameProfiling(args[1]);
+                return 0;
+            }
             if (args.Length == 2 && args[0] == "--check-filter")
                 return RunChecks(args[1]);
             if (args.Length == 2 && args[0] == "--replay-contracts")
@@ -35,7 +45,7 @@ internal static partial class EngineRuntimeChecks
                 return 0;
             }
             if (args.Length != 0)
-                throw new ArgumentException("Expected --replay-contracts <jsonl-path> or --capture-vfx-preview <json-path>");
+                throw new ArgumentException("Expected --check-filter <filter>, --replay-contracts <jsonl-path>, --capture-vfx-preview <json-path>, --profile-parent-analysis or --profile-parent-craft <plain|mixed|ammo>");
             return RunChecks();
         }
         finally { System.IO.Directory.Delete(sandbox, recursive: true); }
@@ -44,6 +54,12 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("audit native pure definition projections", AuditProjectionsDoNotNormalizeSource),
+            ("audit native failed network copy refusal", AuditNetworkCopyFailureNeverAliasesOriginal),
+            ("audit native atlas All early return", AuditAtlasAllSkipsEffectTraversal),
+            ("audit native durable compact save", AuditDiskFailureCannotProduceCompactOnlySave),
+            ("audit native craft manual mute", AuditCraftKeepsManualMute),
+            ("audit native queued draw preparation", AuditDrawQueuesColdTexturePreparation),
             ("lineage hash proof graph cycles and world expiry", LineageHashProofGraphRetainsCycleBoundaries),
             ("lineage hash proof mutable captions remain unordered", LineageHashProofMutableCaptionsStayUnordered),
             ("lineage hash proof complete bounded audit receipts", LineageHashProofReceiptsBoundEveryMutation),
@@ -57,6 +73,10 @@ internal static partial class EngineRuntimeChecks
             ("atlas recovery legacy sidecar exact read only", AtlasRecoveryReadsExactLegacyLineageSidecar),
             ("atlas recovery legacy sidecar negative boundaries", AtlasRecoveryRefusesInvalidLegacyLineageSidecar),
             ("atlas recovery legacy sidecar native detail drawing", AtlasRecoveryRestoresNativeIngredientDrawing),
+            ("parent source projection memo exact output and slice isolation", ParentSourceProjectionMemoPreservesExactOutput),
+            ("parent source projection memo bounds concurrency and retirement", ParentSourceProjectionMemoIsBoundedAndRetired),
+            ("parent source revisits preserve edges without frame waits", ParentSourceRevisitsPreserveEdgesWithoutFrameWaits),
+            ("parent source projection template exact graph indices and character boundary", ParentSourceProjectionTemplateUsesExactGraphIndices),
             ("atlas recovery self-bound historical parent cards", AtlasRecoveryReadsOnlySelfBoundHistoricalParentCards),
             ("atlas recovery committed bundled recipes", AtlasRecoveryReadsCommittedBundledRecipes),
             ("atlas recovery exact historical metadata read only", AtlasRecoveryReadsExactHistoricalMetadata),

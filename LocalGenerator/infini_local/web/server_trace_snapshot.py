@@ -14,11 +14,11 @@ from infini_local.pipelines.images.backends import sdcpp_debug_snapshot
 from infini_local.pipelines.transport.client import llm_auth_snapshot
 from infini_local.pipelines.transport.profiles import active_llm_provider
 from infini_local.storage import trace_runtime
-from infini_local.storage.trace_tools import tail_ndjson
+from infini_local.storage.trace_tools import read_trace_tail, trace_clip
 from infini_local.web.trace_dashboard import render_trace_snapshot_html
 
 
-def trace_snapshot() -> dict[str, Any]:
+def trace_snapshot(*, full: bool = False) -> dict[str, Any]:
     failure: Any = generation_debug.last_combine_failure_summary()
     try:
         if generation_debug.LAST_COMBINE_FAILURE_FILE.exists():
@@ -58,13 +58,14 @@ def trace_snapshot() -> dict[str, Any]:
         },
         "sdcpp": sdcpp_debug_snapshot(include_log_tail=True),
         "lastCombineFailure": failure,
-        "events": tail_ndjson(config.CACHE_DIR / "events.ndjson", trace_runtime.TRACE_EVENTS_TAIL),
-        "pipelineTrace": tail_ndjson(trace_runtime.TRACE_FILE, trace_runtime.TRACE_EVENTS_TAIL),
-        "promptTrace": tail_ndjson(trace_runtime.PROMPT_TRACE_FILE, min(trace_runtime.TRACE_EVENTS_TAIL, 80)),
+        "events": read_trace_tail(config.CACHE_DIR, config.CACHE_DIR / "events.ndjson", trace_runtime.TRACE_EVENTS_TAIL, full=full),
+        "pipelineTrace": read_trace_tail(config.CACHE_DIR, trace_runtime.TRACE_FILE, trace_runtime.TRACE_EVENTS_TAIL, full=full),
+        "promptTrace": read_trace_tail(config.CACHE_DIR, trace_runtime.PROMPT_TRACE_FILE, min(trace_runtime.TRACE_EVENTS_TAIL, 80), full=full),
     }
 
 
-def trace_snapshot_html() -> str:
+def trace_snapshot_html(*, full: bool = False) -> str:
     return render_trace_snapshot_html(
-        trace_snapshot(), app_version=config.APP_VERSION, trace_clip=trace_runtime._trace_clip,
+        trace_snapshot(full=full), app_version=config.APP_VERSION,
+        trace_clip=(lambda value, _: trace_clip(value, default_max_chars=0)) if full else trace_runtime._trace_clip,
     )

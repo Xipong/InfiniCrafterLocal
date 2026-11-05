@@ -23,6 +23,8 @@ from infini_local.core.http_io import HttpDeadlineExceeded, read_with_deadline, 
 from infini_local.core.image_dependencies import (
     Image,
 )
+from infini_local.core.images import config as visual_config
+from infini_local.core.images.errors import ImageBackendError, ImageBackendConfigurationError
 from infini_local.core.images.config import (
     A1111_BATCH_SIZE,
     A1111_HEIGHT,
@@ -91,8 +93,6 @@ from infini_local.core.images.config import (
     SDCPP_VAE,
     SDCPP_WIDTH,
     VISUAL_GENERATION_TIMEOUT,
-    ZIMAGE_POSITIVE_ONLY,
-    ZIMAGE_PROMPT_CONTRACT,
 )
 from infini_local.core.item_identity_tools import safe_file_part
 from infini_local.pipelines.images.prompts import (
@@ -213,12 +213,14 @@ def poll_comfyui_history(prompt_id: str, timeout: int | None = None) -> dict[str
                     # An error may still have preview images or earlier saved
                     # outputs. They do not establish successful execution.
                     if status.get("status_str") == "error" or failure:
-                        raise RuntimeError(f"ComfyUI prompt {prompt_id} failed: {failure or 'execution error'}")
+                        raise ImageBackendError(f"ComfyUI prompt {prompt_id} failed: {failure or 'execution error'}",
+                            category="provider_rejected", retryable=False)
                 outputs = entry.get("outputs") if isinstance(entry, dict) else None
                 if outputs:
                     return hist
                 if isinstance(status, dict) and (status.get("completed") is True or status.get("status_str") == "success"):
-                    raise RuntimeError(f"ComfyUI prompt {prompt_id} completed without image outputs")
+                    raise ImageBackendError(f"ComfyUI prompt {prompt_id} completed without image outputs",
+                        category="no_image", retryable=False)
         remaining = deadline - time.monotonic()
         if remaining > 0:
             time.sleep(min(max(0.1, COMFYUI_POLL_INTERVAL), remaining))
@@ -352,8 +354,10 @@ def extract_image_from_server_response(raw: bytes, ctype: str, out_path: Path, *
 
 def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> list[str]:
     if not ensure_sdcpp_server():
-        log_event("warn", "stable-diffusion.cpp server is not available; image asset generation will fail/retry", {"serverUrl": SDCPP_SERVER_URL, "autostart": SDCPP_SERVER_AUTOSTART})
-        return []
+        raise ImageBackendError(
+            "stable-diffusion.cpp server is unavailable: " + str(SDCPP_SERVER_STATE.last_start_error or SDCPP_SERVER_URL),
+            category="unavailable", retryable=False,
+        )
     deadline = time.monotonic() + SDCPP_SERVER_REQUEST_TIMEOUT
     if _effective_sdcpp_lora_prompt_tags():
         try:
@@ -377,6 +381,7 @@ def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_
     prompt = str(prompt or "")
     paths = SDCPP_SERVER_TXT2IMG_PATHS or ["/sdapi/v1/txt2img"]
     styles = [SDCPP_SERVER_PAYLOAD_STYLE] if SDCPP_SERVER_PAYLOAD_STYLE != "auto" else ["a1111", "sdcpp", "openai"]
+    last_failure = None
     for i in range(variants):
         # A fixed configured seed pins attempt 0; further variants must still differ,
         # otherwise best-of-N degenerates into N identical images.
@@ -409,6 +414,7 @@ def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_
                         ok = True
                         break
                     last_err = f"no image in response from {url} style={style} contentType={ctype} bodyPrefix={raw[:200]!r}"
+                    last_failure = ImageBackendError(last_err, category="no_image", retryable=True)
                 except (ImageOutputIOError, HttpDeadlineExceeded):
                     raise
                 except urlerror.HTTPError as e:
@@ -416,15 +422,23 @@ def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_
                     # close it before negotiation continues, independent of GC.
                     with e:
                         last_err = repr(e)
+                    last_failure = ImageBackendError(last_err, category="provider_rejected", retryable=e.code in {408, 429} or e.code >= 500)
+                    if e.code in {401, 403}:
+                        raise last_failure from e
                     remaining_seconds(deadline)
                 except Exception as e:
                     remaining_seconds(deadline)
                     last_err = repr(e)
+                    last_failure = ImageBackendError(last_err, category="transport", retryable=True)
             if ok:
                 break
         if not ok:
             trace_event("error", "SDCPP:txt2img", "sd.cpp generation failed", {"spriteId": sprite_id, "error": last_err, "paths": paths, "styles": styles})
             log_event("warn", "stable-diffusion.cpp server generation failed", {"spriteId": sprite_id, "error": last_err, "paths": paths})
+            if last_failure is not None and not last_failure.retryable:
+                raise last_failure
+    if not out and last_failure is not None:
+        raise last_failure
     return out
 
 def image_api_headers() -> dict[str, str]:
@@ -541,15 +555,14 @@ def generate_image_api(prompt: str, negative: str, sprite_id: str, preferred_can
     LLM API) can author the item contract while this backend creates PNGs.
     """
     if not IMAGE_API_BASE_URL:
-        log_event("warn", "image API backend has no base URL", {"backend": IMAGE_BACKEND})
-        return []
+        raise ImageBackendConfigurationError("image API backend has no base URL")
     if not IMAGE_API_KEY:
-        log_event("warn", "image API backend has no API key", {"backend": IMAGE_BACKEND, "baseUrl": IMAGE_API_BASE_URL})
-        return []
+        raise ImageBackendConfigurationError("image API backend has no API key")
     deadline = time.monotonic() + IMAGE_API_TIMEOUT
     variants = max(1, int(GENERATE_VARIANTS))
     out: list[str] = []
     url = image_api_url()
+    last_failure = None
     size = IMAGE_API_SIZE or "512x512"
     full_prompt = str(prompt or "")
     if negative:
@@ -575,6 +588,7 @@ def generate_image_api(prompt: str, negative: str, sprite_id: str, preferred_can
                 log_event("info", "image API generated sprite", {"spriteId": sprite_id, "model": IMAGE_API_MODEL, "url": url, "ms": int((time.time()-t0)*1000), "path": str(out_path)})
                 continue
             log_event("warn", "image API response had no usable image", {"spriteId": sprite_id, "contentType": ctype, "bodyPrefix": raw[:300].decode("utf-8", "replace")})
+            last_failure = ImageBackendError("image API response had no usable image", category="no_image", retryable=True)
         except (ImageOutputIOError, HttpDeadlineExceeded):
             raise
         except urlerror.HTTPError as e:
@@ -586,6 +600,9 @@ def generate_image_api(prompt: str, negative: str, sprite_id: str, preferred_can
                 raise
             except Exception:
                 remaining_seconds(deadline)
+            last_failure = ImageBackendError(f"image API HTTP {e.code}: {body}", category="provider_rejected", retryable=e.code in {408, 429} or e.code >= 500)
+            if e.code in {401, 403}:
+                raise last_failure from e
             # Some gateways reject response_format. Retry once without it.
             if e.code in {400, 404, 422}:
                 try:
@@ -598,19 +615,29 @@ def generate_image_api(prompt: str, negative: str, sprite_id: str, preferred_can
                     if extract_image_from_api_response(raw, ctype, out_path, IMAGE_API_TIMEOUT, deadline=deadline) and out_path.exists():
                         out.append(str(out_path))
                         continue
+                    last_failure = ImageBackendError("image API response without response_format had no usable image", category="no_image", retryable=True)
                 except (ImageOutputIOError, HttpDeadlineExceeded):
                     raise
                 except urlerror.HTTPError as e2:
                     with e2:
                         log_event("warn", "image API retry without response_format failed", {"spriteId": sprite_id, "error": repr(e2)})
+                    last_failure = ImageBackendError(f"image API HTTP {e2.code}: {e2.reason}", category="provider_rejected", retryable=e2.code in {408, 429} or e2.code >= 500)
+                    if e2.code in {401, 403}:
+                        raise last_failure from e2
                     remaining_seconds(deadline)
                 except Exception as e2:
                     remaining_seconds(deadline)
+                    last_failure = ImageBackendError(repr(e2), category="transport", retryable=True)
                     log_event("warn", "image API retry without response_format failed", {"spriteId": sprite_id, "error": repr(e2)})
             log_event("warn", "image API HTTP error", {"spriteId": sprite_id, "status": e.code, "body": body})
         except Exception as e:
             remaining_seconds(deadline)
+            last_failure = ImageBackendError(repr(e), category="transport", retryable=True)
             log_event("warn", "image API generation failed", {"spriteId": sprite_id, "error": repr(e)})
+        if last_failure is not None and not last_failure.retryable:
+            raise last_failure
+    if not out and last_failure is not None:
+        raise last_failure
     return out
 
 def generate_sdcpp(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> list[str]:
@@ -619,11 +646,7 @@ def generate_sdcpp(prompt: str, negative: str, sprite_id: str, preferred_canvas:
     v0.4.19 intentionally removed CLI/subprocess-per-image mode because it reloads
     model weights on every sprite and makes gameplay crafting unusably slow.
     """
-    out = generate_sdcpp_server(prompt, negative, sprite_id, preferred_canvas, output_dir=output_dir)
-    if out:
-        return out
-    log_event("warn", "stable-diffusion.cpp server unavailable; image asset will fail/retry instead of procedural authoring", {"serverUrl": SDCPP_SERVER_URL, "autostart": SDCPP_SERVER_AUTOSTART})
-    return []
+    return generate_sdcpp_server(prompt, negative, sprite_id, preferred_canvas, output_dir=output_dir)
 
 def append_a1111_lora(prompt: str) -> str:
     parts = [str(prompt or '').strip()]
@@ -675,6 +698,8 @@ def generate_a1111(prompt: str, negative: str, sprite_id: str, preferred_canvas:
     log_event("info", "a1111 images generated", {"spriteId": sprite_id, "count": len(out), "width": width, "height": height, "variants": variants, "batchSize": batch_size, "removeBg": REMOVE_BG,
                         "requirePillow": REQUIRE_PILLOW,
                         "pillowAvailable": Image is not None, "bgMode": BG_REMOVE_MODE})
+    if not out:
+        raise ImageBackendError("A1111 response had no images", category="no_image", retryable=True)
     return out
 
 def generate_comfyui(prompt: str, negative: str, sprite_id: str, *, output_dir: Path | None = None) -> list[str]:
@@ -687,10 +712,13 @@ def generate_comfyui(prompt: str, negative: str, sprite_id: str, *, output_dir: 
     """
     workflow_path = resolve_comfyui_workflow_path()
     if not workflow_path:
-        log_event("warn", "ComfyUI selected but no workflow template was found", {"workflow": COMFYUI_WORKFLOW, "spriteId": sprite_id})
-        return []
-    workflow = json.loads(workflow_path.read_text(encoding="utf-8-sig"))
+        raise ImageBackendConfigurationError(f"ComfyUI workflow template was not found: {COMFYUI_WORKFLOW}")
+    try:
+        workflow = json.loads(workflow_path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as exc:
+        raise ImageBackendConfigurationError(f"ComfyUI workflow cannot be read: {exc!r}") from exc
     out: list[str] = []
+    last_fetch_error = None
     for variant in range(max(1, int(GENERATE_VARIANTS))):
         seed = random.randint(1, 2**31 - 1)
         variant_workflow = json_deep_replace(workflow, comfyui_mapping(prompt, negative, sprite_id, seed))
@@ -708,11 +736,18 @@ def generate_comfyui(prompt: str, negative: str, sprite_id: str, *, output_dir: 
                 out.append(fetch_comfyui_image(meta, p))
             except ImageOutputIOError:
                 raise
+            except (urlerror.HTTPError, HttpDeadlineExceeded):
+                raise  # Preserve terminal rejection/deadline attribution at the attempt boundary.
             except Exception as e:
+                last_fetch_error = e
                 log_event("warn", "ComfyUI image fetch failed", {"spriteId": sprite_id, "meta": meta, "error": repr(e)})
         log_event("info", "ComfyUI images downloaded", {"spriteId": sprite_id, "count": len(out), "promptId": prompt_id, "removeBg": REMOVE_BG,
                             "requirePillow": REQUIRE_PILLOW,
                             "pillowAvailable": Image is not None, "bgMode": BG_REMOVE_MODE})
+    if not out:
+        if last_fetch_error is not None:
+            raise ImageBackendError(f"ComfyUI image fetch failed: {last_fetch_error!r}", category="transport", retryable=True) from last_fetch_error
+        raise ImageBackendError("ComfyUI completed without downloadable images", category="no_image", retryable=True)
     return out
 
 # Local config reader: image backend owns sd.cpp command construction now.
@@ -748,7 +783,7 @@ def _sdcpp_config() -> sdcpp_backend.SdcppBackendConfig:
         extra_args=SDCPP_SERVER_EXTRA_ARGS,
         server_url=SDCPP_SERVER_URL,
         health_paths=SDCPP_SERVER_HEALTH_PATHS,
-        zimage_prompt_contract=ZIMAGE_PROMPT_CONTRACT,
-        zimage_positive_only=ZIMAGE_POSITIVE_ONLY,
+        zimage_prompt_contract=visual_config.ZIMAGE_PROMPT_CONTRACT,
+        zimage_positive_only=visual_config.ZIMAGE_POSITIVE_ONLY,
         rocm_compat_root=SDCPP_ROCM_COMPAT_ROOT,
     )

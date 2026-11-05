@@ -15,7 +15,7 @@ def test_nullable_guidance_is_absent_without_schema(response_format):
     assert provider_nullable_transport_rule(response_format) == ""
 
 
-@pytest.mark.parametrize("stage", ["author", "repair", "format", "visual", "visual_repair", "vfx", "vfx_repair"])
+@pytest.mark.parametrize("stage", ["author", "repair", "visual", "visual_repair", "vfx", "vfx_repair"])
 @pytest.mark.parametrize("provider,base,api,model", [
     ("openai_compat", "https://api.openai.com/v1", "chat_completions", "gpt-6.1-sol"),
     ("openai_compat", "https://api.openai.com/v1", "responses", "gpt-6.1-sol"),
@@ -52,15 +52,14 @@ def test_shared_guidance_reaches_wire_once_and_fallback_retains_contract(monkeyp
     assert packet == before
 
 
-@pytest.mark.parametrize("stage", ["author", "format"])
 @pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
-def test_presentation_art_style_does_not_change_gameplay_or_syntax_packets(monkeypatch, stage, mode):
+def test_presentation_art_style_does_not_change_gameplay_author_packet(monkeypatch, mode):
     from infini_local.core import llm_config
 
     monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Default")
-    default, = stage_packets(monkeypatch, stage, format_mode=mode, labels=("same-design",))
+    default, = stage_packets(monkeypatch, "author", format_mode=mode, labels=("same-design",))
     monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Terraria Like")
-    styled, = stage_packets(monkeypatch, stage, format_mode=mode, labels=("same-design",))
+    styled, = stage_packets(monkeypatch, "author", format_mode=mode, labels=("same-design",))
     assert styled == default
 
 

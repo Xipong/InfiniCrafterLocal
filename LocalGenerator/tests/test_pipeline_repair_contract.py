@@ -617,6 +617,18 @@ def test_scoped_dependency_closure_freezes_entire_document(scenario, fixture, co
         assert codes == [code]
     transaction = RepairTransaction(current, report=report)
     scope = transaction.scope
+    if scenario == "collision":
+        # Diagnostics remain human-facing; neither wording nor a parseable but
+        # unrelated capability may become permission authority. Persisted error
+        # rows must retain the same typed alternatives after JSON roundtrip.
+        changed_report = json.loads(json.dumps(report))
+        for error in changed_report["errors"]:
+            if error["code"] == "event_not_emitted":
+                error["allowed"] = ["A producer must contact a tile.", "projectile_damage(damage=999)"]
+                error["message"] = "Translated diagnostic without capability syntax"
+        changed_scope = RepairTransaction(current, report=changed_report).scope
+        for key in ("fieldPermissions", "create", "mutable", "deletable", "eventAlternatives"):
+            assert changed_scope[key] == scope[key], key
     assert strict_schema_errors(scope, runtime_repair_scope_schema()) == []
     expected = copy.deepcopy(current)
     patch = _empty_gameplay_patch()

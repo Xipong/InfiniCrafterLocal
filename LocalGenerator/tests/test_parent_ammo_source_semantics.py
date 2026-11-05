@@ -106,6 +106,8 @@ def test_exact_native_ammo_rewrite_and_spawn_extraction():
     assert rules[4953][0]["outputProjectileId"] == 932
     shoot = next(s for s in sources if s["method"] == "Player.ItemCheck_Shoot")
     rows = {r["itemId"]: r for r in shoot["records"]}
+    assert rows[120]["rules"][0]["whenInputProjectileId"] == 1
+    assert rows[120]["rules"][0]["outputProjectileId"] == 2
     assert rows[3029]["spawnSites"][0]["projectileBasis"] == "current_shot_projectile"
     assert rows[4381]["spawnSites"][0]["projectileBasis"] == "current_shot_projectile"
     assert rows[3029]["spawnSites"][0]["nativeItemSpecificDelivery"] is True
@@ -154,3 +156,78 @@ def test_unknown_control_flow_does_not_become_unconditional_replacement():
     code = [I(1, "ldarg", 2), I(2, "const", 12), I(3, "stind.i4", None)]
     assert literal_rewrite(code, ("argument", 2)) == [{"outputProjectileId": 12, "sourceStoreIlOffset": 3}]
     assert literal_rewrite([I(0, "call", ("Opaque.Check", 0, False, True)), I(1, "brfalse", 5), *code], ("argument", 2)) is None
+
+
+def _nested_ammo_rewrite(*, pick=False, outer=(), inner=(), gap=(), entry=None):
+    """Synthetic source, with every label bound after the requested mutation."""
+    from native_hit_status_analysis import Instruction as I
+    item_arg, read = (1, [("ldarg", 2), ("ldind.i4", None)]) if pick else (2, [("ldloc", 0)])
+    pairs = [] if pick else [("ldarg", 2), ("ldfld", "Terraria.Item.shoot"), ("stloc", 0)]
+    labels = {}
+    if entry is not None:
+        pairs.append(("br", entry))
+    for condition in outer:
+        labels.setdefault("outer", len(pairs))
+        pairs += read + [("const", condition), ("bne", "end")]
+    pairs += list(gap)
+    labels["item"] = len(pairs)
+    pairs += [("ldarg", item_arg), ("ldfld", "Terraria.Item.type"), ("const", 90210), ("bne", "end")]
+    labels["body"] = len(pairs)
+    for condition in inner:
+        pairs += read + [("const", condition), ("bne", "end")]
+    pairs += [("ldarg", 2)] if pick else []
+    labels["literal"] = len(pairs)
+    pairs += [("const", 73), ("stind.i4", None) if pick else ("stloc", 0)]
+    labels["end"] = len(pairs)
+    pairs += [("ret", None)]
+    return [I(n, op, labels.get(arg, arg) if isinstance(arg, str) else arg)
+            for n, (op, arg) in enumerate(pairs)]
+
+
+@pytest.mark.parametrize("pick", [False, True])
+@pytest.mark.parametrize("outer,inner", [([], []), ([17], []), ([17, 17], []), ([17], [17]), ([], [17]), ([], [17, 17])])
+def test_native_ammo_nested_equalities_preserve_exact_input(pick, outer, inner):
+    from native_ammo_fact_analysis import ammo_method_facts
+    code = _nested_ammo_rewrite(pick=pick, outer=outer, inner=inner)
+    rows = ammo_method_facts(code, "PickAmmo" if pick else "ItemCheck_Shoot")
+    row, = rows
+    rule = {"outputProjectileId": 73, "sourceStoreIlOffset": code[-2].offset,
+            "sourceGuardIlOffset": next(ins.offset for ins in code if ins.op == "const" and ins.arg == 90210) + 1}
+    if outer or inner:
+        rule["whenInputProjectileId"] = 17
+    assert row["rules"] == [rule]
+    assert row["unrecognizedProjectileWriteOffsets"] == []
+
+
+@pytest.mark.parametrize("mutation", [
+    {"outer": [17, 18]},
+    {"outer": [17], "inner": [18]},
+    {"inner": [17, 18]},
+    {"outer": [17], "gap": [("const", 18), ("stloc", 0)]},
+    {"outer": [17], "gap": [("ldloca", 0), ("call", ("Opaque.Mutate", 1, False, False))]},
+    {"gap": [("call", ("Opaque.Check", 0, False, True)), ("brfalse", "end")]},
+    {"gap": [("ldloc", 0), ("const", 17), ("beq", "end")]},
+    {"outer": [17], "entry": "item"},
+    {"outer": [17], "entry": "body"},
+    {"outer": [17], "entry": "literal"},
+])
+def test_native_ammo_unproved_enclosing_shapes_remain_unknown(mutation):
+    from native_ammo_fact_analysis import ammo_method_facts, item_type_mentions
+    code = _nested_ammo_rewrite(**mutation)
+    rows = ammo_method_facts(code, "ItemCheck_Shoot")
+    assert item_type_mentions(code, 2) == [90210]
+    assert all(not row["rules"] for row in rows)
+    # A rejected type block remains an unmodeled item mention; a recognized
+    # item block must retain its unproved write, never imply input retention.
+    assert all(row["unrecognizedProjectileWriteOffsets"] for row in rows)
+
+
+@pytest.mark.parametrize("gap", [
+    [("ldarg", 2), ("const", 18), ("stind.i4", None)],
+    [("ldarg", 2), ("call", ("Opaque.Mutate", 1, False, False))],
+])
+def test_native_ammo_byref_mutation_does_not_inherit_outer_input(gap):
+    from native_ammo_fact_analysis import ammo_method_facts
+    row, = ammo_method_facts(_nested_ammo_rewrite(pick=True, outer=[17], gap=gap), "PickAmmo")
+    assert row["rules"] == []
+    assert row["unrecognizedProjectileWriteOffsets"]

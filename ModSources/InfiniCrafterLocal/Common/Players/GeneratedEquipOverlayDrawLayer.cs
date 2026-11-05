@@ -84,10 +84,10 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
                 RequestEquipCatchup(entry.Data.Id, null);
                 continue;
             }
-            Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(path);
+            Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGetReady(path);
             if (texture is null || texture.Width <= 0 || texture.Height <= 0)
             {
-                global::InfiniCrafterLocal.InfiniCrafterLocalMod.AssetSync?.EnsureAssetsForData(entry.Data);
+                global::InfiniCrafterLocal.InfiniCrafterLocalMod.AssetSync?.QueueEnsureAssetsForData(entry.Data);
                 RequestEquipCatchup(entry.Data.Id, path);
                 continue;
             }
@@ -286,7 +286,7 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
                 return;
             EquipCatchupTicks[key] = now;
         }
-        global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.RequestOneFromServer(id, forceAssetRetry: true);
+        global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.QueuePresentationRequest(id, forceAssetRetry: true);
     }
 }
 

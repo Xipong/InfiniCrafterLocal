@@ -31,6 +31,7 @@ public partial class GeneratedItem : ModItem
     internal GeneratedItemData? NativeHeldSourceData { get; private set; }
     private static int _warningCount;
     private int _lastHydrationTick = -9999;
+    private byte[]? _saveRecoveryDefinition;
     private bool _nativeToolPowersSuppressed;
     private RuntimeSpawnBudget _itemEventBudget = new(0);
     // Only pure apply_item_effects mobility needs an outcome-gated stack debit.
@@ -55,6 +56,7 @@ public partial class GeneratedItem : ModItem
     {
         var clone = (GeneratedItem)base.Clone(newEntity);
         clone.NativeHeldSourceData = Data;
+        clone._saveRecoveryDefinition = _saveRecoveryDefinition is null ? null : (byte[])_saveRecoveryDefinition.Clone();
         try { clone.Data = (Data ?? GeneratedItemData.Placeholder()).CloneForItemInstance(); }
         catch { clone.Data = GeneratedItemData.Placeholder(); }
         clone._itemPresentationToken=0;clone._itemPresentationGeneration=new object();
@@ -74,7 +76,7 @@ public partial class GeneratedItem : ModItem
         ResetPureMobilityUseOutcome();
         _itemEventBudget = new RuntimeSpawnBudget(0);
         _periodicItemEvents = default;
-        if(Data?.Id!=data?.Id){_itemPresentationToken=0;_itemPresentationGeneration=new object();_hasMaterialTransportIdentity=false;}
+        if(Data?.Id!=data?.Id){_itemPresentationToken=0;_itemPresentationGeneration=new object();_hasMaterialTransportIdentity=false;_saveRecoveryDefinition=null;}
         Data = data ?? GeneratedItemData.Placeholder();
         _nativeUseDefinitionData = null;
         _nativeToolPowersSuppressed = false;
@@ -121,8 +123,31 @@ public partial class GeneratedItem : ModItem
 
     public override void SaveData(TagCompound tag)
     {
-        try { tag["infiniJson"] = (Data ?? GeneratedItemData.Placeholder()).ToPlayerSaveJson(); }
-        catch { tag["infiniJson"] = GeneratedItemData.Placeholder().ToPlayerSaveJson(); }
+        GeneratedItemData data = Data ?? GeneratedItemData.Placeholder();
+        tag.Remove("infiniDefinitionV5");
+        if (GeneratedItemData.IsPlayerSaveReferenceOnly(data) && _saveRecoveryDefinition is not null)
+            tag["infiniDefinitionV5"] = _saveRecoveryDefinition;
+        var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
+        GeneratedItemData definition = data;
+        if (GeneratedItemData.IsPlayerSaveReferenceOnly(data) && GeneratedItemRegistryService.IsCurrentWorldData(data)
+            && registry is not null && registry.TryGet(data.Id, out var canonical)
+            && GeneratedItemRegistryService.IsCurrentWorldData(canonical) && !GeneratedItemData.IsPlayerSaveReferenceOnly(canonical))
+            definition = canonical;
+        if (!GeneratedItemData.IsPlayerSaveReferenceOnly(definition) && definition.Id != "placeholder")
+        {
+            // A compact reference alone is safe only after the full definition is
+            // durable. On failure retain a byte-array copy in the existing native
+            // TagCompound, rather than relying on the caller to abort its save.
+            // Byte arrays do not inherit TagIO's string payload limit.
+            string full = definition.ToLocalCacheJson();
+            var result = registry?.PersistOne(definition, full) ?? new(GeneratedDefinitionPersistenceStatus.NotApplicable);
+            if (!result.IsDurable)
+            {
+                tag["infiniDefinitionV5"] = System.Text.Encoding.UTF8.GetBytes(full);
+                if (result.Error is { } error) Warn($"Retained save recovery definition for '{data.Id}'", error);
+            }
+        }
+        tag["infiniJson"] = data.ToPlayerSaveJson();
         SaveNativePrefixLifecycle(tag);
     }
 
@@ -132,6 +157,25 @@ public partial class GeneratedItem : ModItem
         {
             string json = tag is not null && tag.ContainsKey("infiniJson") ? tag.GetString("infiniJson") ?? "" : "";
             GeneratedItemData reference = GeneratedItemData.FromPlayerSaveJson(json) ?? GeneratedItemData.Placeholder();
+            byte[]? recoveryPayload = null;
+            _saveRecoveryDefinition = null;
+            if (tag is not null && tag.ContainsKey("infiniDefinitionV5"))
+            try
+            {
+                var recovered = GeneratedItemData.FromLocalCacheJson(System.Text.Encoding.UTF8.GetString(tag.GetByteArray("infiniDefinitionV5")));
+                // Recovery is attached to this exact saved reference, not an ID-only
+                // registry substitution. Foreign data stays inert until its own world.
+                var recoveredReference = recovered is null ? null : GeneratedItemData.FromPlayerSaveJson(recovered.ToPlayerSaveJson());
+                if (recoveredReference is not null && recovered is not null && recovered.Id == reference.Id
+                    && recoveredReference.RecipeKey == reference.RecipeKey
+                    && recovered.RecipeMeta.WorldScoped == reference.RecipeMeta.WorldScoped
+                    && recovered.RecipeMeta.WorldId == reference.RecipeMeta.WorldId)
+                {
+                    recoveryPayload = tag.GetByteArray("infiniDefinitionV5");
+                    if (GeneratedItemRegistryService.IsCurrentWorldData(reference)) reference = recovered;
+                }
+            }
+            catch (Exception ex) { Warn("Saved definition recovery refused; compact identity retained", ex); }
             try { if (tag is not null) LoadNativePrefixLifecycle(tag); }
             catch (InvalidDataException ex)
             {
@@ -140,6 +184,7 @@ public partial class GeneratedItem : ModItem
                 RetainNativePrefixForHydration(0);
             }
             SetData(reference, ensureAssets: false, registerLocal: false, notifyNetState: false);
+            _saveRecoveryDefinition = recoveryPayload;
         }
         catch { SetData(GeneratedItemData.Placeholder(), ensureAssets: false, registerLocal: false, notifyNetState: false); }
     }
@@ -206,12 +251,25 @@ public partial class GeneratedItem : ModItem
                     registry.RequestOneFromServer(id, forceAssetRetry: false, forceDefinitionRefresh: true);
                 else assetSync?.EnsureAssetsForData(canonical, forceRetry: false);
             }
+            else if (GeneratedItemData.IsPlayerSaveReferenceOnly(Data) && _saveRecoveryDefinition is not null
+                && GeneratedItemData.FromLocalCacheJson(System.Text.Encoding.UTF8.GetString(_saveRecoveryDefinition)) is { } recovery
+                && recovery.Id == id && GeneratedItemRegistryService.IsCurrentWorldData(recovery))
+                SetData(recovery);
             else if (Main.netMode == NetmodeID.MultiplayerClient)
                 registry.RequestOneFromServer(id, forceAssetRetry: false);
             else if (!GeneratedItemData.IsPlayerSaveReferenceOnly(Data))
                 registry.RegisterLocal(Data, persist: false, ensureAssets: true);
         }
         catch (Exception ex) { Warn($"Runtime hydration failed for '{id}'", ex); }
+    }
+
+    private void QueueRuntimeHydration()
+    {
+        if (!GeneratedItemRegistryService.IsCurrentWorldData(Data) || Data.Id == "placeholder") return;
+        int now = (int)Main.GameUpdateCount;
+        if (now - _lastHydrationTick < 90) return;
+        _lastHydrationTick = now;
+        global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.QueuePresentationRequest(Data.Id);
     }
 
     private GeneratedItemData PresentationData()
@@ -270,7 +328,7 @@ public partial class GeneratedItem : ModItem
 
         if (!GeneratedHeldItemPresentation.TryGetHeldSpriteData(drawInfo, out var accepted)
             || accepted is null) return false;
-        var artwork = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites?.TryGet(accepted.Visual.SpritePath);
+        var artwork = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites?.TryGetReady(accepted.Visual.SpritePath);
         if (artwork is null) return false;
         Texture2D nativeTexture = nativeAsset.Value;
         ReplaceHeldCanvas(ref drawData, artwork, accepted.Visual.RenderSizePx);
@@ -310,7 +368,7 @@ public partial class GeneratedItem : ModItem
     {
         GeneratedItemData data = PresentationData();
         return !string.IsNullOrWhiteSpace(data.Visual.SpritePath)
-            && global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(data.Visual.SpritePath) is not null;
+            && global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGetReady(data.Visual.SpritePath) is not null;
     }
 
     // The static cross is an explicit unavailable/developer diagnostic only,
@@ -320,9 +378,9 @@ public partial class GeneratedItem : ModItem
 
     public override bool PreDrawInInventory(SpriteBatch spriteBatch, Vector2 position, Rectangle frame, Color drawColor, Color itemColor, Vector2 origin, float scale)
     {
-        EnsureRuntimeHydration();
+        QueueRuntimeHydration();
         GeneratedItemData data = PresentationData();
-        Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(data.Visual.SpritePath);
+        Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGetReady(data.Visual.SpritePath);
         if (texture is null) return AllowsDiagnosticProxy(data);
         Rectangle source = texture.Bounds;
         Vector2 drawOrigin = source.Size() / 2f;
@@ -339,9 +397,9 @@ public partial class GeneratedItem : ModItem
 
     public override bool PreDrawInWorld(SpriteBatch spriteBatch, Color lightColor, Color alphaColor, ref float rotation, ref float scale, int whoAmI)
     {
-        EnsureRuntimeHydration();
+        QueueRuntimeHydration();
         GeneratedItemData data = PresentationData();
-        Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(data.Visual.SpritePath, out _, out _, out Vector2[]? alphaHull);
+        Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGetReady(data.Visual.SpritePath, out _, out _, out Vector2[]? alphaHull);
         if (texture is null) return AllowsDiagnosticProxy(data);
         Rectangle source = texture.Bounds;
         Vector2 origin = source.Size() / 2f;

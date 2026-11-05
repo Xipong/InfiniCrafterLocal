@@ -40,7 +40,7 @@ public sealed partial class GeneratedProjectile
         SpritePresentationSelection selected = SpritePresentation.Entity(_data!, _entity!);
         string path = selected.Path;
         if (string.IsNullOrWhiteSpace(path) || !selected.RenderSizePx.HasValue || !selected.ForwardAngleDegrees.HasValue) return; // incomplete selected PNG fails closed; never infer frame metadata.
-        Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(path);
+        Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGetReady(path);
         if (texture is null) return;
         Rectangle source = texture.Bounds;
         // An explicit mirror or visual curve owns the complete bounded product.

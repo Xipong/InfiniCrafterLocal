@@ -12,7 +12,7 @@ from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 from infini_local.core.item_identity_tools import name_of, stable_hash
 from infini_local.core.json_debug import bounded_json_dumps
 from infini_local.core.llm_config import USE_LLM
-from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
+from infini_local.core.llm_json_tools import parse_first_valid_llm_json, parse_llm_json_with_syntax_fix
 from infini_local.core.llm_prompt_cache import with_instruction_segments
 from infini_local.core.llm_stage_messages import (
     generation_art_direction,
@@ -41,10 +41,8 @@ from infini_local.pipelines.author.item_contract import (
     RUNTIME_ROW_SHAPE_RULE,
     author_item_generation_provider_schema,
     author_item_provider_repair_response_schema,
-    author_item_provider_response_schema,
     author_item_repair_prompt_shape_card,
     author_item_repair_response_schema,
-    author_item_response_schema,
     project_provider_author_item_to_local,
 )
 from infini_local.pipelines.author.prompt import (
@@ -62,7 +60,6 @@ from infini_local.pipelines.transport.client import (
 from infini_local.pipelines.transport.profiles import active_llm_provider
 from infini_local.pipelines.transport.provider_wire import (
     apply_llm_common_options,
-    apply_minimum_reasoning_effort,
     effective_response_format,
     llm_json_response_format,
     llm_reasoning_system_suffix,
@@ -76,7 +73,6 @@ _AUTHOR_CACHE_PREFIX_KEYS = (
     "runtimeCapabilityContract", "requiredJsonShape",
 )
 _REPAIR_CACHE_PREFIX_KEYS = ("schema", "task", "rules", "runtimeVersions", "runtimeExecutionTruth")
-_FORMAT_REPAIR_CACHE_PREFIX_KEYS = ("schema", "task", "rules", "requiredJsonShape")
 
 
 _AUTHOR_SYSTEM = (
@@ -141,126 +137,8 @@ def build_initial_author_request(
     request = apply_llm_common_options(request, model_name=selected_model)
     system += provider_nullable_transport_rule(request.get("response_format"))
     request["messages"][0]["content"] = system
-    request = apply_minimum_reasoning_effort(request, model_name=selected_model, minimum="medium")
     request = with_instruction_segments(request, payload, _AUTHOR_CACHE_PREFIX_KEYS)
     return request, user_content, system
-
-
-def _repair_malformed_author_json(
-    *,
-    malformed_raw_text: str,
-    parse_error: BaseException,
-    original_recipe_context: str,
-    model_name: str,
-    source_response_format: Mapping[str, Any] | None = None,
-    recipe_key: str | None = None,
-) -> tuple[dict[str, Any], str]:
-    """Spend the one Gameplay Repair call on syntax-only Author recovery."""
-
-    original_context = json.loads(original_recipe_context)
-    recovered = recover_object_with_syntax_only_repairs(malformed_raw_text)
-    # Syntax recovery has one design source, not another Author request. Only
-    # unambiguous registered function identities may narrow its output grammar.
-    # Unknown/damaged identities keep the complete grammar and final refusal.
-    runtime = recovered.get("runtimeProgram") if isinstance(recovered, Mapping) else None
-    calls = runtime.get("calls") if isinstance(runtime, Mapping) else None
-    known_calls = isinstance(calls, list) and bool(calls) and all(
-        isinstance(row, Mapping) and isinstance(row.get("fn"), str) and row["fn"] in CAPABILITY_REGISTRY
-        for row in calls
-    )
-    functions = sorted({row["fn"] for row in calls}) if known_calls and isinstance(calls, list) else sorted(CAPABILITY_REGISTRY)
-    local_schema = author_item_response_schema()
-    # Generation length guidance must not force syntax-only Repair to clip raw
-    # advisory text. The exact-source comparison below still freezes every value.
-    for report_field in local_schema["properties"]["realization"]["properties"].values():
-        report_field.pop("minLength", None)
-        report_field.pop("maxLength", None)
-    # Syntax-only recovery must preserve current plain debug notes as well as
-    # historical structured reports; neither selects executable behavior.
-    for field in ("concept", "realization"):
-        local_schema["properties"][field] = {"anyOf": [local_schema["properties"][field], {"type": "string"}]}
-    call_schema = local_schema["properties"]["runtimeProgram"]["properties"]["calls"]
-    variants = [row for row in call_schema["items"]["oneOf"] if row["properties"]["fn"]["const"] in functions]
-    call_schema["items"] = {"oneOf": variants} if len(variants) > 1 else variants[0]
-    repair_context = {
-        "schema": "infini.gameplay-author-format-repair.v1",
-        "task": "Repair JSON syntax only and return the same complete Gameplay Author object.",
-        "rules": [
-            "Preserve every recoverable authored value, id, capability, parameter, binding transaction, concept, and realization from malformedRawText.",
-            "Do not redesign, add, drop, replace, normalize, or reinterpret gameplay. This call repairs only JSON syntax/container damage.",
-            "Call params must use allowedCallParamsReadOnly for their exact fn; do not invent undeclared params even if they sound plausible.",
-            "malformedRawText is the sole design source; never introduce a choice absent from it. Keep every source key and array row, including optional advisory text.",
-            "Return exactly one strict full Author JSON object with no markdown or prose, not the key index.",
-        ],
-        "allowedCallParamsReadOnly": {
-            name: sorted(CAPABILITY_REGISTRY[name].params) for name in functions
-        },
-        "requiredJsonShape": {
-            "root": list(local_schema["required"]),
-            "runtimeProgram": list(local_schema["properties"]["runtimeProgram"]["required"]),
-            "sourcePreservation": "Return the complete source object, not this key index. Copy source values and optional keys; fix syntax only.",
-        },
-        "parseError": f"{type(parse_error).__name__}: {parse_error}",
-        "malformedRawText": malformed_raw_text,
-    }
-    user_content = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
-    system = (
-        "You are the conditional Gameplay Format Repair for InfiniCrafterLocal. "
-        "Repair only JSON syntax/container damage in malformedRawText under the supplied preservation rules. "
-        "Do not reauthor or complete missing gameplay or invent undeclared params. Return the full Author JSON object."
-    )
-    messages = [
-        stage_chat_message("system", "author_repair_contract", system + llm_reasoning_system_suffix(model_name)),
-        stage_chat_message("user", "author_repair_context", user_content),
-    ]
-    request = apply_llm_common_options({
-        "model": model_name,
-        "messages": messages,
-        "temperature": _gameplay_repair_temperature(),
-        "response_format": llm_json_response_format(
-            "infini_low_level_runtime_author_format_repair",
-            schema=lambda: author_item_provider_response_schema(local_schema=local_schema),
-            strict=True,
-            auto_preference="json_schema",
-        ),
-    }, model_name=model_name)
-    messages[0]["content"] += provider_nullable_transport_rule(request.get("response_format"))
-    request = apply_minimum_reasoning_effort(request, model_name=model_name, minimum="medium")
-    request = with_instruction_segments(request, repair_context, _FORMAT_REPAIR_CACHE_PREFIX_KEYS)
-    trace_event(
-        "prompt", "LLM:gameplay_repair", "Conditional Gameplay Author format-repair request",
-        {"provider": active_llm_provider(), "model": model_name, "malformedChars": len(malformed_raw_text)},
-        prompt=request["messages"],
-    )
-    try:
-        # The Author caller owns the join; standalone syntax replays may lack it.
-        # Let the recorder explicitly refuse a missing join without blocking Repair.
-        trace_key = recipe_key if recipe_key is not None else original_context.get("recipeKey")
-        trace_stage_request("gameplay_format_repair", trace_key, request)
-        raw = llm_chat_json(with_llm_stage(request, "author_repair"), timeout=env_int("INFINI_LLM_TIMEOUT", int(GENERATION_DEFAULTS["INFINI_LLM_TIMEOUT"])))
-        content = str(raw["choices"][0]["message"]["content"])
-        trace_event(
-            "response", "LLM:gameplay_repair", "Conditional Gameplay Author format-repair response",
-            {"model": model_name, "chars": len(content), "transport": raw.get("_debug", {})},
-            response=content,
-        )
-        parsed = parse_first_valid_llm_json(content)
-        if not isinstance(parsed, Mapping):
-            raise PlannerUnavailable("Gameplay Author format Repair returned non-object JSON")
-        if recovered is None:
-            raise PlannerUnavailable("Gameplay format Repair cannot prove recoverable authored fields")
-        original = _prepare_parsed_author_item(recovered, response_format=source_response_format)
-        projected = project_provider_nullable_optionals_to_local(
-            parsed, local_schema, response_format=effective_response_format(request, raw),
-        )
-        repaired = _prepare_parsed_author_item(projected)
-        if original != repaired:
-            raise PlannerUnavailable("Gameplay format Repair changed recoverable authored fields")
-        return repaired, content
-    except PlannerUnavailable:
-        raise
-    except Exception as exc:
-        raise PlannerUnavailable(f"Gameplay Author format Repair failed: {exc!r}") from exc
 
 
 def try_llm_plan(
@@ -277,21 +155,15 @@ def try_llm_plan(
     if not USE_LLM:
         return None
     model_name = resolve_llm_model()
-    request, user_content, _ = build_initial_author_request(a, b, key, model_name=model_name)
+    request, _, _ = build_initial_author_request(a, b, key, model_name=model_name)
     try:
-        trace_event(
-            "prompt",
-            "LLM:gameplay_author",
-            f"Gameplay Author request: {name_of(a)} + {name_of(b)}",
-            {
-                "provider": active_llm_provider(),
-                "model": model_name,
+        trace_stage_request("gameplay_author", key, request,
+            prompt_title=f"Gameplay Author request: {name_of(a)} + {name_of(b)}",
+            prompt_payload={
+                "provider": active_llm_provider(), "model": model_name,
                 "responseFormat": bool(request.get("response_format")),
                 "messages": trace_message_summary(request.get("messages")),
-            },
-            prompt=user_content,
-        )
-        trace_stage_request("gameplay_author", key, request)
+            })
         raw = llm_chat_json(with_llm_stage(request, "planner"), timeout=env_int("INFINI_LLM_TIMEOUT", int(GENERATION_DEFAULTS["INFINI_LLM_TIMEOUT"])))
         content = raw["choices"][0]["message"]["content"]
         trace_event(
@@ -301,24 +173,11 @@ def try_llm_plan(
             {"provider": active_llm_provider(), "model": model_name, "chars": len(str(content)), "transport": raw.get("_debug", {})},
             response=content,
         )
-        format_repaired = False
-        format_repair_content = ""
-        try:
-            parsed = parse_first_valid_llm_json(content)
-            if not isinstance(parsed, dict):
-                raise TypeError("Gameplay Author returned non-object JSON")
-            item = _prepare_parsed_author_item(parsed, response_format=effective_response_format(request, raw))
-        except (ValueError, TypeError, json.JSONDecodeError) as parse_error:
-            item, format_repair_content = _repair_malformed_author_json(
-                malformed_raw_text=str(content),
-                parse_error=parse_error,
-                original_recipe_context=user_content,
-                model_name=model_name,
-                source_response_format=effective_response_format(request, raw),
-                recipe_key=key,
-            )
-            format_repaired = True
-        item.setdefault("id", "g_" + stable_hash(key, format_repair_content or content, length=16))
+        parsed, syntax_fix = parse_llm_json_with_syntax_fix(content)
+        item = _prepare_parsed_author_item(parsed, response_format=effective_response_format(request, raw))
+        if syntax_fix:
+            trace_event("fix", "LLM:gameplay_author", "Author JSON syntax recovered locally", syntax_fix)
+        item.setdefault("id", "g_" + stable_hash(key, content, length=16))
         item.setdefault("recipeKey", key)
         item.setdefault("schemaVersion", 5)
         item.setdefault("parentA", name_of(a))
@@ -333,11 +192,11 @@ def try_llm_plan(
             "runtimeApiVersion": RUNTIME_PROGRAM_API_VERSION,
             "llmRawOutput": str(content)[:12000],
         })
-        if format_repaired:
-            debug["gameplayFormatRepairRawOutput"] = format_repair_content[:12000]
+        if syntax_fix:
+            debug["gameplaySyntaxFix"] = syntax_fix
         accounting = stage_accounting(item)
         accounting["gameplayAuthorCalls"] = 1
-        accounting["gameplayRepairCalls"] = 1 if format_repaired else 0
+        accounting["gameplayRepairCalls"] = 0
         return item
     except PlannerUnavailable:
         raise
@@ -538,20 +397,12 @@ def repair_author_item_after_failure(
     }, model_name=model_name)
     messages[0]["content"] += provider_nullable_transport_rule(request.get("response_format"))
     request = with_instruction_segments(request, repair_context, _REPAIR_CACHE_PREFIX_KEYS)
-    trace_event(
-        "prompt",
-        "LLM:gameplay_repair",
-        "Conditional node-scoped Gameplay Repair request",
-        {
-            "provider": active_llm_provider(),
-            "model": model_name,
-            "errorCount": len(exact_errors),
-            "mutableCounts": {key: len(value) for key, value in (scope.get("mutable") or {}).items()},
-        },
-        prompt=request["messages"],
-    )
     try:
-        trace_stage_request("gameplay_repair", key, request, recipe_id=current.get("id"))
+        trace_stage_request("gameplay_repair", key, request, recipe_id=current.get("id"),
+            prompt_title="Conditional node-scoped Gameplay Repair request",
+            prompt_payload={"provider": active_llm_provider(), "model": model_name,
+                            "errorCount": len(exact_errors),
+                            "mutableCounts": {key: len(value) for key, value in (scope.get("mutable") or {}).items()}})
         raw = llm_chat_json(with_llm_stage(request, "author_repair"), timeout=env_int("INFINI_LLM_TIMEOUT", int(GENERATION_DEFAULTS["INFINI_LLM_TIMEOUT"])))
         content = raw["choices"][0]["message"]["content"]
         trace_event(

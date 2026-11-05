@@ -8,16 +8,11 @@ from infini_local.core.images import config as visual_config
 from infini_local.core.images.config import (
     CHILD_ICON_TARGET_FILL,
     FIELD_ICON_TARGET_FILL,
-    IMAGE_BACKEND,
     IMPACT_ICON_TARGET_FILL,
     ITEM_ICON_TARGET_FILL,
     PROJECTILE_ICON_TARGET_FILL,
-    SDCPP_MODEL,
-    SDCPP_SERVER_COMMAND_TEMPLATE,
-    SDCPP_SERVER_EXTRA_ARGS,
     SPRITE_EFFECT_CORE_ALPHA_THRESHOLD,
     SPRITE_ITEM_CORE_ALPHA_THRESHOLD,
-    ZIMAGE_PROMPT_CONTRACT,
 )
 
 # Minimum clear-background evidence for fitted assets; fitting padding cannot supply it.
@@ -118,17 +113,17 @@ def sprite_background_positive_clause() -> str:
 
 def image_backend_is_zimage() -> bool:
     """True when the configured image backend should use the Z-Image prompt contract."""
-    if (IMAGE_BACKEND or "").lower() != "sdcpp":
+    if (visual_config.IMAGE_BACKEND or "").lower() != "sdcpp":
         return False
-    mode = ZIMAGE_PROMPT_CONTRACT
+    mode = visual_config.ZIMAGE_PROMPT_CONTRACT.strip().lower()
     if mode in {"0", "false", "off", "no", "disabled", "disable"}:
         return False
     if mode in {"1", "true", "on", "yes", "force", "forced"}:
         return True
     hay = " ".join([
-        SDCPP_MODEL,
-        SDCPP_SERVER_COMMAND_TEMPLATE,
-        SDCPP_SERVER_EXTRA_ARGS,
+        visual_config.SDCPP_MODEL,
+        visual_config.SDCPP_SERVER_COMMAND_TEMPLATE,
+        visual_config.SDCPP_SERVER_EXTRA_ARGS,
     ]).lower().replace("_", "-")
     return "z-image" in hay or "zimage" in hay
 

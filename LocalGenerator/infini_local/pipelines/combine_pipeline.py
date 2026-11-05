@@ -45,8 +45,9 @@ from infini_local.pipelines.images.stage import maybe_generate_visual_assets, ov
 from infini_local.services import asset_sync_service
 from infini_local.services.combine_endpoint import generation_stage
 from infini_local.storage import craft_progress, world_storage
+from infini_local.storage.recipe_identity_index import RecipeIdentityConflict
 from infini_local.storage.trace_runtime import trace_event
-from infini_local.storage.world_storage import is_deliverable_recipe_payload, sanitize_recipe_for_delivery
+from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 from infini_local.core.item_identity_tools import item_identity
 from infini_local.storage.world_recipe_runtime import (
     cache_get,
@@ -93,26 +94,14 @@ def _assert_stage_topology(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _cached_payload_report(data: Any) -> dict[str, Any]:
-    errors: list[dict[str, Any]] = []
-    # Structural precheck only: the mandatory visual report below owns the one
-    # operation-scoped PNG assessment. Other storage callers stay strict by default.
-    if not is_deliverable_recipe_payload(data, check_assets=False):
-        errors.append({"path": "$", "message": "payload is not deliverable"})
-        return {"ok": False, "errors": errors}
-    assert isinstance(data, dict)
-    if str(data.get("runtimeApiVersion") or "") != RUNTIME_PROGRAM_API_VERSION:
-        errors.append({"path": "$.runtimeApiVersion", "message": f"expected {RUNTIME_PROGRAM_API_VERSION}"})
-    runtime = data.get("runtimeProgram")
-    if not isinstance(runtime, Mapping) or str(runtime.get("schema") or "") != RUNTIME_WIRE_SCHEMA:
-        errors.append({"path": "$.runtimeProgram.schema", "message": f"expected {RUNTIME_WIRE_SCHEMA}"})
-    wire = validate_runtime_wire(data)
-    errors.extend(copy.deepcopy(wire.get("errors") or []))
+    definition = world_storage.recipe_definition_report(data)
+    if not definition["ok"]:
+        return definition
+    errors = list(definition["errors"])
     visual = visual_delivery_report(data, check_backend_config=False)
     for problem in visual.get("problems") or []:
         errors.append({"path": "$.visual", "message": str(problem)})
-    vfx = validate_vfx_manifest_wire(data)
-    errors.extend(copy.deepcopy(vfx.get("errors") or []))
-    return {"ok": not errors, "errors": errors, "runtime": wire, "visual": visual, "vfx": vfx}
+    return {**definition, "ok": not errors, "errors": errors, "visual": visual}
 
 
 def _multi_dev_profile_id(payload: dict[str, Any]) -> str:
@@ -199,7 +188,8 @@ def combine_cache_lookup(payload: dict[str, Any]) -> tuple[str, dict[str, Any] |
     identity_version = str(payload.get("recipeIdentityVersion") or RECIPE_IDENTITY_VERSION)
     profile_id = _multi_dev_profile_id(payload)
     key = recipe_key(a, b, world_id, identity_version, profile_id)
-    cached = cache_get(key, world_id, world_name, validate_payload=_cached_payload_report)
+    # Storage owns exactly these canonical definition and visual gates already.
+    cached = cache_get(key, world_id, world_name)
     return key, sanitize_recipe_for_delivery(cached) if isinstance(cached, dict) else None
 
 
@@ -239,7 +229,11 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         key = recipe_key(a, b, world_id, identity_version, profile_id)
         # Recheck inside singleflight: a waiter delivers the committed winner.
         with world_storage.recipe_generation_lock(world_recipe_dir(world_id), key):
-            cached = cache_get(key, world_id, world_name, validate_payload=_cached_payload_report)
+            if recipe_key(a, b, world_id, identity_version, profile_id) != key:
+                # An external archive edit while waiting must not switch the
+                # actual join under another key's generation/checkpoint lock.
+                raise RecipeIdentityConflict("recipe identity changed while waiting; retry the craft")
+            cached = cache_get(key, world_id, world_name)
             if isinstance(cached, dict):
                 craft_progress.discard_progress(world_recipe_dir(world_id), key)
                 generation_debug.clear_combine_failure("cache_hit_delivered")

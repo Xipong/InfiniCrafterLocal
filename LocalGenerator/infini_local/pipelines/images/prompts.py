@@ -17,6 +17,7 @@ from infini_local.core.visual_contract_schema import front_hand_sprite_requireme
 
 from infini_local.core.images import config as visual_config
 from infini_local.core.images.contracts import chroma_rgb, uses_key_background, final_sprite_canvas, sprite_uses_soft_alpha, native_held_frame_facts
+from infini_local.core.images.contracts import image_backend_is_zimage
 from infini_local.pipelines.visual.assets import equipment_overlay_requirement
 
 
@@ -34,12 +35,9 @@ def chroma_name() -> str:
     return f"rgb({r},{g},{b})"
 
 
-def image_backend_is_zimage() -> bool:
-    return visual_config.IMAGE_BACKEND == "sdcpp"
-
-
 def zimage_positive_only_enabled() -> bool:
-    return bool(visual_config.ZIMAGE_POSITIVE_ONLY)
+    """This Z-Image option never suppresses another model's authored negative."""
+    return image_backend_is_zimage() and bool(visual_config.ZIMAGE_POSITIVE_ONLY)
 
 
 def compact_visual_words(value: Any, limit: int = 180) -> str:

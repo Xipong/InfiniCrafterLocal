@@ -209,7 +209,13 @@ def persist_transport_artifact(cache_dir: Path, raw: bytes, *, secrets: tuple[st
         target = directory / (digest + ".txt")
         if directory.is_symlink() or target.is_symlink() or (directory / "artifacts.lock").is_symlink():
             raise ValueError("linked_storage")
+        receipt = {"status": "stored", "path": target.relative_to(cache_dir).as_posix(),
+                   "sha256": digest, "bytes": len(clean), "sanitized": clean != raw}
         with _TRANSPORT_ARTIFACT_LOCK, _ndjson_process_lock(directory / "artifacts"):
+            if target.exists():
+                if target.read_bytes() != clean:
+                    raise ValueError("immutable_artifact_mismatch")
+                return receipt
             fd, name = tempfile.mkstemp(prefix=".transport-", dir=directory)
             try:
                 with os.fdopen(fd, "wb") as handle:
@@ -219,8 +225,7 @@ def persist_transport_artifact(cache_dir: Path, raw: bytes, *, secrets: tuple[st
                 os.replace(name, target)
             finally:
                 Path(name).unlink(missing_ok=True)
-        return {"status": "stored", "path": target.relative_to(cache_dir).as_posix(),
-                "sha256": digest, "bytes": len(clean), "sanitized": clean != raw}
+        return receipt
     except Exception as exc:
         return {"status": "refused", "reason": type(exc).__name__}
 
@@ -301,6 +306,69 @@ def _redact_diagnostic(value: Any) -> Any:
     return visit(value)
 
 
+# Complete bodies live once in the existing immutable digest store. NDJSON and
+# Studio tails retain bounded previews; explicit readers can verify and expand
+# references without changing historical inline records.
+_TRACE_INLINE_CHARS = 4096
+_TRACE_PREVIEW_CHARS = 420
+
+
+def compact_trace_value(cache_dir: Path, value: Any, *, preview_chars: int = _TRACE_PREVIEW_CHARS) -> Any:
+    if isinstance(value, str) and len(value) > _TRACE_INLINE_CHARS:
+        receipt = persist_transport_artifact(cache_dir, value.encode("utf-8"))
+        return {"_traceText": receipt, "preview": value[:max(0, min(preview_chars, _TRACE_PREVIEW_CHARS))]}
+    if isinstance(value, dict):
+        return {key: compact_trace_value(cache_dir, item, preview_chars=preview_chars) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [compact_trace_value(cache_dir, item, preview_chars=preview_chars) for item in value]
+    return value
+
+
+def expand_trace_value(cache_dir: Path, value: Any, *, strict: bool = True) -> Any:
+    """Reconstruct exact sanitized text; UI reads label failures, replay refuses them."""
+    if isinstance(value, dict):
+        if set(value) == {"_traceText", "preview"}:
+            try:
+                receipt = value["_traceText"]
+                if not isinstance(receipt, dict):
+                    raise ValueError("invalid trace text receipt")
+                if receipt.get("format") == "infini.stage-request-prompt.v1":
+                    return trace_clip(read_stage_request(cache_dir, receipt)["messages"], default_max_chars=0)
+                return read_transport_artifact(cache_dir, receipt).decode("utf-8")
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                if strict:
+                    raise
+                # Never echo exception text: it can contain paths or private bytes.
+                return f"<trace text unavailable: {type(exc).__name__}>"
+        return {key: expand_trace_value(cache_dir, item, strict=strict) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [expand_trace_value(cache_dir, item, strict=strict) for item in value]
+    return value
+
+
+def preview_trace_value(value: Any) -> Any:
+    """Display compact receipts as explicitly partial text without reading bodies."""
+    if isinstance(value, dict):
+        if set(value) == {"_traceText", "preview"}:
+            receipt = value["_traceText"]
+            if not isinstance(receipt, dict):
+                return "<trace text unavailable: invalid receipt>"
+            status = receipt.get("status")
+            notice = ("Preview only; full text: /trace?full=1 or exported cache replay"
+                      if status == "stored" else f"Trace text unavailable: {status} ({receipt.get('reason', 'unknown')})")
+            return str(value["preview"]) + "\n[" + notice + "]"
+        return {key: preview_trace_value(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [preview_trace_value(item) for item in value]
+    return value
+
+
+def read_trace_tail(cache_dir: Path, path: str | Path, limit: int = 80, *, full: bool = False) -> list[dict[str, Any]]:
+    """Bound event count for polling; expand only an explicit full-detail read."""
+    rows = tail_ndjson(path, limit)
+    return expand_trace_value(cache_dir, rows, strict=False) if full else rows
+
+
 def log_event(
     cache_dir: Path,
     level: str,
@@ -330,7 +398,7 @@ def log_event(
             "createdAt": time.time(),
             "level": normalized_level,
             "message": str(message),
-            "payload": payload,
+            "payload": compact_trace_value(cache_dir, json_slim(payload, 0)),
         }
         append_ndjson(cache_dir / "events.ndjson", event, max_bytes=0)
     except Exception:
@@ -368,7 +436,7 @@ def _echo_event(
         pass
 
 
-def persist_stage_request(cache_dir: Path, stage: str, recipe_key: str, request: dict[str, Any], *, recipe_id: str | None = None) -> dict[str, Any]:
+def persist_stage_request(cache_dir: Path, stage: str, recipe_key: str | None, request: dict[str, Any], *, recipe_id: str | None = None) -> dict[str, Any]:
     """Atomic complete sanitized stage messages, not an HTTP/auth snapshot."""
     receipt: dict[str, Any] = {"stage": stage, "recipeKey": recipe_key}
     if not any(type(value) is str and value for value in (recipe_key, recipe_id)):
@@ -411,6 +479,36 @@ def persist_stage_request(cache_dir: Path, stage: str, recipe_key: str, request:
     except Exception as exc:
         # Diagnostics cannot stop gameplay or disclose exception/request text.
         return {**receipt, "status": "refused", "reason": type(exc).__name__}
+
+
+def read_stage_request(cache_dir: Path, receipt: dict[str, Any]) -> dict[str, Any]:
+    """Read the existing immutable builder artifact, validating body and owner join."""
+    if receipt.get("status") != "stored":
+        raise ValueError("stage request not stored")
+    root = Path(cache_dir).resolve()
+    target = (root / receipt["path"]).resolve()
+    if not target.is_relative_to(root / "stage_requests"):
+        raise ValueError("stage request outside storage")
+    raw = target.read_bytes()
+    if len(raw) != receipt["bytes"] or hashlib.sha256(raw).hexdigest() != receipt["artifactSha256"]:
+        raise ValueError("stage request hash/size mismatch")
+    artifact = json.loads(raw)
+    messages = json.dumps(artifact["messages"], ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    if (artifact.get("schema") != "infini.stage-request-messages.v1"
+            or any(artifact.get(key) != receipt.get(key) for key in ("stage", "recipeKey", "messagesSha256"))
+            or hashlib.sha256(messages).hexdigest() != receipt["messagesSha256"]):
+        raise ValueError("stage request owner/messages mismatch")
+    return artifact
+
+
+def stage_request_prompt(receipt: dict[str, Any], messages: Any, *, preview_chars: int = _TRACE_PREVIEW_CHARS) -> dict[str, Any]:
+    """Reference an already-persisted message list instead of writing it as text too."""
+    try:
+        limit = max(0, min(preview_chars, _TRACE_PREVIEW_CHARS))
+        preview = trace_clip(_redact_diagnostic(messages), default_max_chars=0)[:limit]
+    except Exception:
+        preview = ""  # A refused diagnostic must never interrupt the stage.
+    return {"_traceText": {**receipt, "format": "infini.stage-request-prompt.v1"}, "preview": preview}
 
 
 def trace_clip(value: Any, *, default_max_chars: int, max_chars: int | None = None) -> str:
@@ -463,7 +561,7 @@ def trace_event(
         if payload is not None:
             event["payload"] = json_slim(payload, 0)
         if prompt is not None:
-            event["prompt"] = trace_clip(prompt, default_max_chars=0)
+            event["prompt"] = prompt if isinstance(prompt, dict) and set(prompt) == {"_traceText", "preview"} else trace_clip(prompt, default_max_chars=0)
         if negative is not None:
             event["negative"] = trace_clip(negative, default_max_chars=0)
         if response is not None:
@@ -471,7 +569,8 @@ def trace_event(
         if error is not None:
             event["error"] = trace_clip(error, default_max_chars=0)
         target = prompt_trace_file if kind in {"prompt", "response"} or prompt is not None else trace_file
-        append_ndjson(target, _redact_diagnostic(event), max_bytes=0)
+        preview_chars = min(trace_max_prompt_chars or _TRACE_PREVIEW_CHARS, _TRACE_PREVIEW_CHARS)
+        append_ndjson(target, compact_trace_value(cache_dir, _redact_diagnostic(event), preview_chars=preview_chars), max_bytes=0)
     except Exception:
         pass
 

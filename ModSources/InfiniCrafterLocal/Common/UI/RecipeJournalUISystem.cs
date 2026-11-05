@@ -394,7 +394,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     }
     private static void Sprite(SpriteBatch sb, GeneratedItemData data, Rectangle bounds)
     {
-        Texture2D? texture = InfiniCrafterLocalMod.Sprites?.TryGet(data.Visual.SpritePath);
+        Texture2D? texture = InfiniCrafterLocalMod.Sprites?.TryGetReady(data.Visual.SpritePath);
         if (texture is null)
         {
             // A visible pending asset marker, never a substitute item or synchronous load.

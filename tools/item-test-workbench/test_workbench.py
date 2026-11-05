@@ -16,6 +16,55 @@ def trace():
             'input':{'path':'</script><script>alert(1)</script>'},'assertions':[{'name':'negative control','status':'failed'}],
             'snapshots':[{'tick':i,'player':actor,'dummy':dict(actor,x=80),'projectiles':[dict(actor,id=7,entityId='<unsafe>',vx=2,vy=0,active=True,x=20+i*2)]} for i in range(3)]}
 
+def test_history_preview_and_export_use_the_same_bounded_recorded_samples(tmp_path: Path):
+    import copy
+    from collections import Counter
+    import xml.etree.ElementTree as ET
+    import pytest
+    playwright = pytest.importorskip("playwright.sync_api")
+    data: dict = trace()
+    prototype = data["snapshots"][0]
+    data["input"]["literal"] = "HISTORY_FRAME_COUNT CAMERA_MODE"
+    data["snapshots"] = []
+    for tick in range(150):
+        frame = copy.deepcopy(prototype)
+        frame["tick"] = tick
+        frame["projectiles"][0]["x"] = tick * 2
+        frame["projectiles"].append(dict(frame["projectiles"][0], id=9, active=False))
+        if tick == 0:
+            frame["projectiles"].append(dict(frame["projectiles"][0], id=8, x=500))
+        data["snapshots"].append(frame)
+    data["timeline"].update(requestedTicks=150, completedTicks=150)
+    path = tmp_path / "trace.json"
+    path.write_text(json.dumps(data))
+    output = tmp_path / "review"
+    w.render(path, output)
+    def coordinates(points):
+        return tuple(tuple(float(value) for value in point.split(",")) for point in points.split())
+    with playwright.sync_playwright() as runtime:
+        try:
+            browser = runtime.chromium.launch(headless=True)
+        except playwright.Error as error:
+            pytest.skip("Chromium unavailable: " + str(error))
+        try:
+            page = browser.new_page()
+            page.goto((output / "replay.html").as_uri())
+            for index in (0, 119, 120, 149):
+                page.locator("#seek").evaluate("(element, value) => {element.value=value; element.dispatchEvent(new Event('input'));}", index)
+                browser_points = page.locator("#scene polyline").evaluate_all("elements => elements.map(element => element.getAttribute('points'))")
+                svg = ET.fromstring(w.frame_svg(data, index))
+                export_points = [line.attrib["points"] for line in svg.findall(".//{http://www.w3.org/2000/svg}polyline")]
+                expected = [tuple((tick * 2 + 8, 36) for tick in range(max(0, index - 119), index + 1))]
+                if index < 120:
+                    expected.append(((508, 36),))
+                assert Counter(map(coordinates, browser_points)) == Counter(expected)
+                assert Counter(map(coordinates, export_points)) == Counter(expected)
+            assert page.locator("#trace").text_content() is not None
+            assert page.locator("#trace").evaluate("element => JSON.parse(element.textContent).input.literal") == data["input"]["literal"]
+        finally:
+            browser.close()
+
+
 class WorkbenchTests(unittest.TestCase):
     def test_loader_cli_rejects_retired_probe_pair_without_building(self):
         from unittest.mock import patch

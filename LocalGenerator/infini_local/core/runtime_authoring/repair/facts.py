@@ -19,7 +19,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     compatible_entity_reference_ids,
     referenced_entity_requirement_satisfied,
 )
-from infini_local.core.runtime_authoring.event_dependencies import event_dependency_alternatives
+from infini_local.core.runtime_authoring.event_dependencies import EventDependencyAlternative, event_dependency_alternatives
 from infini_local.core.runtime_authoring.event_producer_validation import item_body_contact_suppressed
 from infini_local.core.runtime_authoring.validator import _validate_requirement
 from infini_local.core.strict_json import loads as strict_json_loads
@@ -498,7 +498,8 @@ def _matching_entity_ids(rows: Mapping[str, list[dict[str, Any]]], kinds: Iterab
 def _event_producer_options(
     event: str, source_id: str, source_kind: str,
     rows: Mapping[str, list[dict[str, Any]]],
-) -> list[tuple[Any, tuple[str, ...]]]:
+    *, dependencies: tuple[EventDependencyAlternative, ...] | None = None,
+) -> list[tuple[EventDependencyAlternative, tuple[str, ...]]]:
     """Keep the event source separate from each exact binding action target."""
     spec = EVENT_KIND_REGISTRY.get(event)
     if spec is None:
@@ -508,8 +509,8 @@ def _event_producer_options(
                 call for call in rows["calls"] if str(call.get("target") or "") == source_id
             )):
         return []
-    options: list[tuple[Any, tuple[str, ...]]] = []
-    for dependency in event_dependency_alternatives(event, source_kind):
+    options: list[tuple[EventDependencyAlternative, tuple[str, ...]]] = []
+    for dependency in (event_dependency_alternatives(event, source_kind) if dependencies is None else dependencies):
         if source_kind not in spec.producer_binding_kinds or not dependency.required_bindings:
             options.append((dependency, (source_id,) * len(dependency.required_bindings)))
             continue

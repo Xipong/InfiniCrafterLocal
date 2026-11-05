@@ -56,7 +56,12 @@ internal static partial class EngineRuntimeChecks
             new object[] { id, file, bytes, Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant() });
 
     private static void DrawAssetOwner(GeneratedItem item)
-        => item.PreDrawInInventory(null!, Vector2.Zero, new Rectangle(0, 0, 32, 32), Color.White, Color.White, Vector2.Zero, 1);
+    {
+        // Existing selection/backoff observers explicitly prepare at lifecycle
+        // before borrowing through inventory. Cold Draw itself is tested separately.
+        InfiniMod.Sprites?.TryGet(item.Data.Visual.SpritePath);
+        item.PreDrawInInventory(null!, Vector2.Zero, new Rectangle(0, 0, 32, 32), Color.White, Color.White, Vector2.Zero, 1);
+    }
 
     private static void RuntimeSpriteConflictingCertificatesPreserveInventoryOwnership()
     {
@@ -104,6 +109,7 @@ internal static partial class EngineRuntimeChecks
                     }
                     // Trigger A's real hydration first; the regression assertion must
                     // observe B borrowing different bytes, not A choosing an equal-byte alias.
+                    sync.EnsureAssetsForData(a); // explicit lifecycle replaces the former draw-time hydration
                     observing = true;
                     try { DrawAssetOwner(aItem); } finally { observing = false; }
                     Observe(bItem, bPath, AssetOwnerOtherColor); Observe(aItem, aPath, AssetOwnerCanonical);
@@ -244,6 +250,9 @@ internal static partial class EngineRuntimeChecks
 
         internal Texture2D Draw(GeneratedItem item)
         {
+            // This observer owns explicit CPU preparation before real draw. Do
+            // not weaken lease/retirement stress by draining borrowers here.
+            Cache.TryGet(item.Data.Visual.SpritePath);
             int before = QueuedSprites;
             Equal(false, item.PreDrawInInventory(Batch, Vector2.Zero, new Rectangle(0, 0, 32, 32), Color.White, Color.White, Vector2.Zero, 1), "real inventory consumer queues runtime sprite");
             Equal(before + 1, QueuedSprites, "inventory submits exactly one real FNA sprite");
@@ -556,7 +565,7 @@ internal static partial class EngineRuntimeChecks
                         var item = ReviewItem(data);
                         typeof(GeneratedItem).GetField("_lastHydrationTick", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(item, (int)Terraria.Main.GameUpdateCount);
                         opened = null; openedBytes = null; validationsDuringDraw = 0; observing = true;
-                        try { item.PreDrawInInventory(null!, Vector2.Zero, new Rectangle(0, 0, 32, 32), Color.White, Color.White, Vector2.Zero, 1); }
+                        try { DrawAssetOwner(item); }
                         finally { observing = false; }
                         Equal(Path.GetFullPath(verified ? local : originalPath), opened ?? "", "real inventory consumer selects declared certified owner or valid local-only path: " + scenario);
                         Equal(true, canonical.SequenceEqual(openedBytes ?? Array.Empty<byte>()), "consumer bytes equal certified PNG or legitimate local-only PNG: " + scenario);

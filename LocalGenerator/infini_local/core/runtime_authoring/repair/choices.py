@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Iterable, Mapping
 
+from infini_local.core.runtime_authoring.event_dependencies import EventDependencyAlternative
 from infini_local.core.repair_merge import json_path_child
 from infini_local.core.runtime_authoring.binding_use_policy import (
     action_kind,
@@ -307,6 +308,7 @@ def _missing_event_producer_choices(
     event_target_kind: str,
     sole_item_entity_id: str,
     planned_item_capabilities_by_target: Mapping[str, set[str]],
+    dependencies: tuple[EventDependencyAlternative, ...],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[bool]]:
     """Plan complete producers against frozen calls and occupied input lanes.
 
@@ -315,7 +317,7 @@ def _missing_event_producer_choices(
     choices only; the scope builder remains the sole permission authority.
     """
     structured_alternatives = _event_producer_options(
-        event_name, event_target_id, event_target_kind, rows,
+        event_name, event_target_id, event_target_kind, rows, dependencies=dependencies,
     )
     allowed_event_alternatives: list[dict[str, Any]] = []
     event_create_choices: list[dict[str, Any]] = []

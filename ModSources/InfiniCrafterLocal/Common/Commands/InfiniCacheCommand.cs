@@ -119,7 +119,7 @@ public sealed class InfiniCacheCommand : ModCommand
             foreach (string path in RuntimeSpritePaths(data))
             {
                 pathCount++;
-                Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites?.TryGet(path);
+                Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites?.TryGetReady(path);
                 if (texture is not null)
                     loaded++;
             }

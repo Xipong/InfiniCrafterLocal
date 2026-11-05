@@ -332,6 +332,33 @@ def _check_combine_failure_transport_cause_traversal_is_safe() -> None:
     )["transportDebug"] == supplement
 
 
+def _check_large_text_receipts_are_shared_immutable_and_explicit_on_failure(tmp_path):
+    import pytest
+    body = "Exact\r\n  ж " + "x" * 9000 + " UNIQUE_TAIL"
+    trace_tools.trace_event(cache_dir=tmp_path, trace_prompts_enabled=True, trace_max_prompt_chars=32,
+                            trace_file=tmp_path / "pipeline.ndjson", prompt_trace_file=tmp_path / "prompts.ndjson",
+                            kind="response", stage="offline", title="receipt", response=body, payload={"nested": [body]})
+    row = trace_tools.tail_ndjson(tmp_path / "prompts.ndjson", 1)[0]
+    receipt = row["response"]["_traceText"]
+    assert row["response"]["preview"] == body[:32]
+    assert row["payload"]["nested"][0]["_traceText"] == receipt
+    path = tmp_path / receipt["path"]
+    before = path.stat()
+    trace_tools.log_event(tmp_path, "info", "same body", {"output": body})
+    assert path.stat().st_mtime_ns == before.st_mtime_ns
+    assert len(list((tmp_path / "transport_artifacts").glob("*.txt"))) == 1
+    assert trace_tools.expand_trace_value(tmp_path, row)["response"].encode() == body.encode()
+    assert trace_tools.expand_trace_value(tmp_path, {"response": "historical inline"}) == {"response": "historical inline"}
+    path.write_bytes(b"tampered historical artifact")
+    with pytest.raises(ValueError, match="hash/size"):
+        trace_tools.expand_trace_value(tmp_path, row)
+    refused = trace_tools.compact_trace_value(tmp_path, body)
+    assert refused["_traceText"]["status"] == "refused"
+    assert path.read_bytes() == b"tampered historical artifact"
+    with pytest.raises(ValueError, match="not stored"):
+        trace_tools.expand_trace_value(tmp_path, refused)
+
+
 # One collected item; local checks are discovered and isolated in source order.
 def test_trace_tools_contract_coarse_contract(request):
     from contract_checks import run_contract_checks

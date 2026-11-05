@@ -75,6 +75,8 @@ def _request_visual_kit(
         # or turning optional prose into an authority over accepted runtime.
         item_context["literalSynthesis"] = synthesis
     repair = repair_errors is not None
+    if repair and isinstance(previous, MalformedVisualDirectorOutput):
+        raise PlannerUnavailable("Visual syntax must be recovered locally before scoped Repair")
     scoped_repair = (repair and isinstance(repair_scope, Mapping) and "fieldPermissions" in repair_scope
                      and not any(error.get("path") == "$" for error in repair_errors or []))
     schema = (
@@ -97,12 +99,6 @@ def _request_visual_kit(
             "the exact repaired or newly missing fields. Extra rewrites are ignored. Runtime gameplay is immutable. "
             "Use assetModeCatalog for PNG delivery and runtime drawing, and responseSchema for patch shape. Return JSON only."
         )
-        if isinstance(previous, MalformedVisualDirectorOutput):
-            system += (
-                " The previous response is malformed JSON. Repair its syntax and container only: preserve all "
-                "recoverable visual fields and entity choices verbatim from malformedRawText; do not invent "
-                "an absent design. Emit the complete broken visual response through the repair patch fields."
-            )
         context = _visual_repair_context(previous, repair_scope or {})
         payload: dict[str, Any] = {
             "task": "Patch only exact invalid visualKit fields/rows.",
@@ -284,8 +280,9 @@ def _request_visual_kit(
     if not scoped_repair:
         request = with_schema_instruction_definitions(request, "responseSchema", definition_paths)
     stage_name = "visual_repair" if repair else "visual_director"
-    trace_event("prompt", "LLM:" + stage_name, "Visual stage request", {"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")}, prompt=request["messages"])
-    trace_stage_request(stage_name, data.get("recipeKey"), request, recipe_id=data.get("id"))
+    trace_stage_request(stage_name, data.get("recipeKey"), request, recipe_id=data.get("id"),
+                        prompt_title="Visual stage request",
+                        prompt_payload={"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")})
     raw = llm_chat_json(with_llm_stage(request, "visual_repair" if repair else "visual_director"), timeout=env_int("INFINI_LLM_TIMEOUT", int(GENERATION_DEFAULTS["INFINI_LLM_TIMEOUT"])))
     content = raw["choices"][0]["message"]["content"]
     trace_event("response", "LLM:" + stage_name, "Visual stage response", {"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")}, response=content)

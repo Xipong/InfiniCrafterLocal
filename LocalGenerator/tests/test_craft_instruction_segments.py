@@ -61,6 +61,7 @@ def stage_packets(monkeypatch, stage, format_mode="json_object", *, labels=("nov
     monkeypatch.setattr(vfx_transport, "resolve_llm_model", lambda: "test-model")
     monkeypatch.setattr(visual_request, "resolve_llm_model", lambda: "test-model")
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", format_mode)
+    assert stage in {"author", "repair", "visual", "visual_repair", "vfx", "vfx_repair"}
     packets = []
     def capture(packet, **kwargs):
         packets.append(packet)
@@ -79,9 +80,6 @@ def stage_packets(monkeypatch, stage, format_mode="json_object", *, labels=("nov
             if stage == "author":
                 request, _, _ = author.build_initial_author_request(a, {}, label, model_name="test-model")
                 capture(request)
-            elif stage == "format":
-                author._repair_malformed_author_json(malformed_raw_text='{"name":"' + label,
-                    parse_error=ValueError(label), original_recipe_context=json.dumps({"recipeKey": label}), model_name="test-model")
             elif stage == "repair":
                 item = build_runtime_fixture("workbench_blade")
                 use = next(c for c in item["runtimeProgram"]["calls"] if c["fn"] == "item_use")
@@ -104,7 +102,7 @@ def stage_packets(monkeypatch, stage, format_mode="json_object", *, labels=("nov
     return packets
 
 
-@pytest.mark.parametrize("stage", ["author", "repair", "format", "visual", "vfx"])
+@pytest.mark.parametrize("stage", ["author", "repair", "visual", "vfx"])
 def test_item_language_changes_only_text_authoring_instructions(monkeypatch, stage):
     monkeypatch.setattr(llm_config, "LANGUAGE", "en")
     english = stage_packets(monkeypatch, stage, labels=("same-recipe",))[0]
@@ -115,7 +113,7 @@ def test_item_language_changes_only_text_authoring_instructions(monkeypatch, sta
     assert english["response_format"] == russian["response_format"]
 
 
-@pytest.mark.parametrize("stage", ["repair", "format", "visual", "visual_repair", "vfx", "vfx_repair"])
+@pytest.mark.parametrize("stage", ["repair", "visual", "visual_repair", "vfx", "vfx_repair"])
 def test_every_production_stage_owns_only_complete_static_instructions(monkeypatch, stage):
     first, second = stage_packets(monkeypatch, stage)
     endpoint = first["_infini_prompt_cache"].get("staticDataMessageIndex", 1)
@@ -194,7 +192,7 @@ def test_generic_responses_preserves_explicit_developer_and_refuses_unknown_role
         llm_provider_wire._responses_payload_from_chat(source)
 
 
-@pytest.mark.parametrize("stage", ["author", "repair", "format", "visual", "visual_repair", "vfx", "vfx_repair"])
+@pytest.mark.parametrize("stage", ["author", "repair", "visual", "visual_repair", "vfx", "vfx_repair"])
 def test_local_chat_template_receives_one_initial_system_message(monkeypatch, stage):
     packet = stage_packets(monkeypatch, stage, labels=("local-probe",))[0]
     original = copy.deepcopy(packet)
@@ -257,7 +255,7 @@ def test_complete_instruction_declaration_rejects_malformed_authority(monkeypatc
         instruction_segment_index(packet)
 
 
-@pytest.mark.parametrize("stage", ["author", "repair", "format", "visual", "visual_repair", "vfx", "vfx_repair"])
+@pytest.mark.parametrize("stage", ["author", "repair", "visual", "visual_repair", "vfx", "vfx_repair"])
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_local_responses_template_receives_one_initial_instruction_block(monkeypatch, stage, format_mode):
     packet = stage_packets(monkeypatch, stage, format_mode, labels=("local-responses-probe",))[0]

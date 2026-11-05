@@ -157,6 +157,7 @@ def _google_reasoning_effort(reasoning: dict[str, Any]) -> str:
 
 
 _REASONING_INTENT_KEY = "_infini_reasoning_intent"
+_REASONING_MODE_KEY = "_infini_reasoning_mode"
 
 
 LLM_MODEL_OVERRIDE_KEY = "_infini_model_override"
@@ -232,6 +233,7 @@ def llm_reasoning_system_suffix(model_name: str = "") -> str:
 
 def apply_llm_common_options(req: dict[str, Any], *, model_name: str, default_max_tokens: int | None = None, allow_reasoning: bool = True) -> dict[str, Any]:
     req["max_tokens"] = llm_answer_max_tokens(default_max_tokens)
+    req[_REASONING_MODE_KEY] = config.LLM_REASONING_MODE
     if allow_reasoning:
         configured = _configured_reasoning_payload()
         if configured:
@@ -244,52 +246,6 @@ def apply_llm_common_options(req: dict[str, Any], *, model_name: str, default_ma
                 req["reasoning_effort"] = _google_reasoning_effort(reasoning)
             else:
                 req["reasoning"] = reasoning
-    return req
-
-
-_REASONING_EFFORT_RANK = {
-    "none": 0,
-    "minimal": 1,
-    "low": 2,
-    "medium": 3,
-    "high": 4,
-    "xhigh": 5,
-    "max": 6,
-}
-
-
-def apply_minimum_reasoning_effort(
-    req: dict[str, Any],
-    *,
-    model_name: str,
-    minimum: str = "medium",
-) -> dict[str, Any]:
-    """Apply a stage-local reasoning floor without lowering a stronger user choice."""
-    floor = str(minimum or "").strip().lower()
-    if floor not in _REASONING_EFFORT_RANK:
-        raise ValueError(f"unsupported minimum reasoning effort: {minimum!r}")
-    intent_raw = req.get(_REASONING_INTENT_KEY)
-    intent: dict[str, Any] = intent_raw if isinstance(intent_raw, dict) else {}
-    explicit_raw = req.get("reasoning")
-    explicit: dict[str, Any] = explicit_raw if isinstance(explicit_raw, dict) else {}
-    current = str(
-        req.get("reasoning_effort")
-        or explicit.get("effort")
-        or intent.get("effort")
-        or ""
-    ).strip().lower()
-    selected = current if _REASONING_EFFORT_RANK.get(current, -1) >= _REASONING_EFFORT_RANK[floor] else floor
-    reasoning = {"effort": selected, "exclude": bool(config.LLM_REASONING_EXCLUDE)}
-    req[_REASONING_INTENT_KEY] = dict(reasoning)
-    if profiles.active_llm_provider() == "local":
-        req.pop("reasoning", None)
-        req.pop("reasoning_effort", None)
-    elif _is_google_openai_compat_reasoning_model(model_name):
-        req.pop("reasoning", None)
-        req["reasoning_effort"] = _google_reasoning_effort(reasoning)
-    else:
-        req.pop("reasoning_effort", None)
-        req["reasoning"] = reasoning
     return req
 
 
@@ -331,6 +287,7 @@ def with_llm_stage(payload: dict[str, Any], stage: str) -> dict[str, Any]:
 def _clean_llm_payload(payload: dict[str, Any]) -> dict[str, Any]:
     out = json.loads(json.dumps(payload, ensure_ascii=False))
     out.pop(LLM_STAGE_KEY, None)
+    out.pop(_REASONING_MODE_KEY, None)
     out.pop(PROMPT_CACHE_METADATA_KEY, None)
     if out.get("response_format") is None:
         out.pop("response_format", None)

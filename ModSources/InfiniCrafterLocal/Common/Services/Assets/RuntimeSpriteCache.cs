@@ -76,6 +76,8 @@ public sealed class RuntimeSpriteCache : IDisposable
     private readonly Dictionary<string, DateTime> _missingOrBad = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _lock = new();
     private readonly List<Texture2D> _retiredTextures = new();
+    private readonly Dictionary<string, (string Selector, string World)> _pendingPreparation = new(StringComparer.OrdinalIgnoreCase);
+    private bool _preparationQueued;
     private bool _retirementQueued;
     private bool _disposed;
     private static readonly TimeSpan MissingRetryAfter = TimeSpan.FromSeconds(30);
@@ -120,6 +122,58 @@ public sealed class RuntimeSpriteCache : IDisposable
         }
     }
 
+    // Draw borrows only a published generation. The existing Main.Update queue
+    // owns cold file/decode/premultiply/upload work, just as it owns retirement.
+    public Texture2D? TryGetReady(string path) => TryGetReady(path, out _, out _, out _);
+    public Texture2D? TryGetReady(string path, out float forward) => TryGetReady(path, out forward, out _, out _);
+    internal Texture2D? TryGetReady(string path, out float forward, out Rectangle? bounds, out Vector2[]? hull)
+    {
+        forward = 0f; bounds = null; hull = null;
+        if (string.IsNullOrWhiteSpace(path) || Main.dedServ) return null;
+        lock (_lock)
+        {
+            if (_disposed) return null;
+            try
+            {
+                path = Environment.ExpandEnvironmentVariables(path).Trim();
+                string key = ResolveSelectedKey(path); // stat/selection only; no body read/hash/decode
+                if (key.Length > 320 || !key.EndsWith(".png", StringComparison.OrdinalIgnoreCase)) return null;
+                if (_textures.TryGetValue(key, out var cached))
+                {
+                    _hitCount++; cached.LastAccessTick = ++_accessCounter;
+                    forward = cached.LocalForwardRadians; bounds = cached.AlphaBounds; hull = cached.AlphaHull;
+                    return cached.Texture;
+                }
+                if (_missingOrBad.TryGetValue(key, out var failed) && DateTime.UtcNow - failed < MissingRetryAfter) return null;
+                if (_pendingPreparation.ContainsKey(key) || _pendingPreparation.Count >= MaxMissingOrBadRecords) return null;
+                _pendingPreparation[key] = (path, GeneratedItemRegistryService.CurrentWorldIdString());
+                if (!_preparationQueued)
+                {
+                    _preparationQueued = true;
+                    Main.QueueMainThreadAction(PreparePendingTextures);
+                }
+            }
+            catch { } // Invalid selectors are unavailable, never replacement art.
+            return null;
+        }
+    }
+
+    private void PreparePendingTextures()
+    {
+        lock (_lock)
+        {
+            // Clear/Invalidate remove queued keys before publication. One callback
+            // per cache also bounds canceled work while the owner drain is held.
+            var pending = new List<(string Selector, string World)>(_pendingPreparation.Values);
+            _pendingPreparation.Clear(); _preparationQueued = false;
+            if (_disposed) return;
+            foreach (var entry in pending)
+                if (entry.World == GeneratedItemRegistryService.CurrentWorldIdString())
+                    TryGet(entry.Selector); // same loader/limits/backoff and graphics owner
+        }
+    }
+
+    // Lifecycle preparation only; render consumers must use TryGetReady.
     public Texture2D? TryGet(string path) => TryGet(path, out _, out _);
 
     public Texture2D? TryGet(string path, out float localForwardRadians)
@@ -442,6 +496,7 @@ public sealed class RuntimeSpriteCache : IDisposable
         lock (_lock)
         {
             int removed = _textures.Count;
+            _pendingPreparation.Clear();
             // Clear/Mod.Unload can run on a loader worker, or while DrawData is
             // still borrowing a resident. Remove lookup authority now, but keep
             // resource ownership charged until the same Main.Update callback.
@@ -541,6 +596,7 @@ public sealed class RuntimeSpriteCache : IDisposable
     private void InvalidateKey(string key)
     {
         _missingOrBad.Remove(key);
+        _pendingPreparation.Remove(key);
         if (!_textures.Remove(key, out var cached)) return;
         RetireTexture(cached.Texture);
     }

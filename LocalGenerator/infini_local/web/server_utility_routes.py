@@ -43,10 +43,10 @@ def handle_get(handler: Any, path: str) -> bool:
         mp_connect_html(handler)
         return True
     if request_path == "/trace.json":
-        handler.json(trace_snapshot())
+        handler.json(trace_snapshot(full=parse_qs(urlparse(path).query).get("full") == ["1"]))
         return True
     if request_path == "/trace":
-        write_html(handler, trace_snapshot_html())
+        write_html(handler, trace_snapshot_html(full=parse_qs(urlparse(path).query).get("full") == ["1"]))
         return True
     if request_path.startswith("/sdcpp"):
         if request_path == "/sdcpp_start":

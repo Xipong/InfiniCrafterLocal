@@ -227,7 +227,6 @@ public sealed partial class InfiniCraftPlayer
         global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.RequestFullSyncFromServer();
         _registrySyncRetryTicks = 5 * 60;
         _registrySyncRetryStep = 0;
-        RememberPositiveAudioSettings();
         RestoreDeferredExitRefunds();
     }
 
@@ -521,7 +520,6 @@ public sealed partial class InfiniCraftPlayer
         if (HasPendingCraft)
             return false;
 
-        CaptureAudioSettingsSnapshot();
 
         SetCraftLaneOutcome(0, CraftLaneOutcomeKind.None, "");
         _request = request;
@@ -613,7 +611,6 @@ public sealed partial class InfiniCraftPlayer
         Common.VFX.InfiniItemVfxRuntime.RefreshItemPresentationWitnesses(Player);
         RefreshRemoteStationAuthority();
         TickCraftLanePresentation();
-        TickCraftAudioGuard();
         TickGeneratedUtilityCooldowns();
         TickGeneratedRegistryCatchup();
         TickGeneratedInventoryAssetPrefetch();
@@ -831,148 +828,9 @@ public sealed partial class InfiniCraftPlayer
     }
 
 
-    private void CaptureAudioSettingsSnapshot()
-    {
-        RememberPositiveAudioSettings();
-        _craftSoundVolumeSnapshot = PositiveOrFallback(ReadMainFloatSetting("soundVolume"), _lastGoodSoundVolume);
-        _craftMusicVolumeSnapshot = PositiveOrFallback(ReadMainFloatSetting("musicVolume"), _lastGoodMusicVolume);
-        _craftAmbientVolumeSnapshot = PositiveOrFallback(ReadMainFloatSetting("ambientVolume"), _lastGoodAmbientVolume);
-        _craftAudioGuardTicks = Math.Max(_craftAudioGuardTicks, PostCraftAudioGuardTicks);
-    }
-
-    private void RestoreSuspiciousAudioMute()
-    {
-        // Some external/edge craft paths have been observed to leave Terraria's global
-        // audio sliders at 0 after a generation finishes. This guard is intentionally
-        // narrow: it only restores a setting if it was positive at craft start and is
-        // now exactly/suspiciously muted. It does not normalize volumes or touch item
-        // sound profiles.
-        RestoreMainFloatIfSuspiciouslyMuted("soundVolume", _craftSoundVolumeSnapshot);
-        RestoreMainFloatIfSuspiciouslyMuted("musicVolume", _craftMusicVolumeSnapshot);
-        RestoreMainFloatIfSuspiciouslyMuted("ambientVolume", _craftAmbientVolumeSnapshot);
-        // Keep snapshots alive for a short post-craft window. Some resets happen one
-        // or more frames after ClearCraft(), so a single restore at finish was not enough.
-    }
-
-    private static float PositiveOrFallback(float current, float fallback)
-    {
-        if (current > 0.001f)
-            return current;
-        return fallback > 0.001f ? fallback : current;
-    }
-
-    private void RememberPositiveAudioSettings()
-    {
-        RememberPositiveAudioSetting("soundVolume", ref _lastGoodSoundVolume);
-        RememberPositiveAudioSetting("musicVolume", ref _lastGoodMusicVolume);
-        RememberPositiveAudioSetting("ambientVolume", ref _lastGoodAmbientVolume);
-    }
-
-    private static void RememberPositiveAudioSetting(string name, ref float cache)
-    {
-        float v = ReadMainFloatSetting(name);
-        if (v > 0.001f)
-            cache = v;
-    }
-
-    private void TickCraftAudioGuard()
-    {
-        bool active = HasPendingCraft || _craftAudioGuardTicks > 0;
-        if (!active)
-        {
-            RememberPositiveAudioSettings();
-            return;
-        }
-
-        RestoreSuspiciousAudioMute();
-        if (!HasPendingCraft && _craftAudioGuardTicks > 0)
-            _craftAudioGuardTicks--;
-
-        if (!HasPendingCraft && _craftAudioGuardTicks <= 0)
-        {
-            _craftSoundVolumeSnapshot = -1f;
-            _craftMusicVolumeSnapshot = -1f;
-            _craftAmbientVolumeSnapshot = -1f;
-            RememberPositiveAudioSettings();
-        }
-    }
-
-    private static float ReadMainFloatSetting(string name)
-    {
-        float main = ReadStaticFloat(typeof(Main), name);
-        if (main >= 0f)
-            return main;
-
-        // Some tML/audio paths expose the SFX slider through SoundEngine rather
-        // than Main.soundVolume.  Reflection keeps this compatible across tML
-        // builds and avoids compile-time dependency on a specific property shape.
-        if (string.Equals(name, "soundVolume", StringComparison.OrdinalIgnoreCase))
-        {
-            foreach (string alt in new[] { "SoundVolume", "soundVolume", "Volume" })
-            {
-                float v = ReadStaticFloat(typeof(Terraria.Audio.SoundEngine), alt);
-                if (v >= 0f)
-                    return v;
-            }
-        }
-        return -1f;
-    }
-
-    private static float ReadStaticFloat(Type type, string name)
-    {
-        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
-        try
-        {
-            var field = type.GetField(name, flags);
-            if (field is not null && field.GetValue(null) is float fv)
-                return fv;
-
-            var prop = type.GetProperty(name, flags);
-            if (prop is not null && prop.GetValue(null) is float pv)
-                return pv;
-        }
-        catch { }
-        return -1f;
-    }
-
-    private static void RestoreMainFloatIfSuspiciouslyMuted(string name, float snapshot)
-    {
-        if (snapshot <= 0.001f)
-            return;
-
-        RestoreStaticFloatIfSuspiciouslyMuted(typeof(Main), name, snapshot);
-        if (string.Equals(name, "soundVolume", StringComparison.OrdinalIgnoreCase))
-        {
-            foreach (string alt in new[] { "SoundVolume", "soundVolume", "Volume" })
-                RestoreStaticFloatIfSuspiciouslyMuted(typeof(Terraria.Audio.SoundEngine), alt, snapshot);
-        }
-    }
-
-    private static void RestoreStaticFloatIfSuspiciouslyMuted(Type type, string name, float snapshot)
-    {
-        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
-        try
-        {
-            var field = type.GetField(name, flags);
-            if (field is not null && field.GetValue(null) is float current)
-            {
-                if (current <= 0.001f)
-                    field.SetValue(null, Math.Clamp(snapshot, 0f, 1f));
-                return;
-            }
-
-            var prop = type.GetProperty(name, flags);
-            if (prop is not null && prop.CanWrite && prop.GetValue(null) is float currentProp && currentProp <= 0.001f)
-                prop.SetValue(null, Math.Clamp(snapshot, 0f, 1f));
-        }
-        catch { }
-    }
-
     private void ClearCraft()
     {
         _request?.Cancel();
-        RestoreSuspiciousAudioMute();
-        _craftAudioGuardTicks = Math.Max(_craftAudioGuardTicks, PostCraftAudioGuardTicks);
 
         _remoteCraftCancelRequested[0] = false;
         _request = null;

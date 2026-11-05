@@ -21,8 +21,6 @@ FIELDS = [
     _field('INFINI_CRAFT_HTTP_TIMEOUT_SECONDS', 'Ожидание крафта (сек.)', 'configure', hint='240 секунд: если крафт не готов, tModLoader попробует retry.'),
     _field('INFINI_CRAFT_HTTP_ATTEMPTS', 'Попыток крафта', 'configure'),
     _field('INFINI_COMBINE_BUSY_WAIT_SECONDS', 'Ожидание очереди (сек.)', 'configure', hint='Сколько секунд параллельный /combine ждёт текущий craft/cache вместо немедленного busy response. Для обычной игры: 210.'),
-    _field('INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED', 'Включить минимум для атакующих расходников', 'configure', hint='Применяется к delivery-копии fresh/cache-hit результата.', options=['1', '0']),
-    _field('INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD', 'Минимум за один крафт', 'configure', options=['2', '5', '10', '20', '25', '50', '99', '100', '250', '500', '999'], hint='Если authored craftYield/maxStack ниже, оба поднимаются до выбранного количества.'),
     _field('INFINI_MP_ASSET_TRANSPORT', 'Передача изображений', 'multiplayer', options=['native', 'http'], hint='native = PNG через Terraria packets; http = PNG через host /get_asset.'),
     _field('INFINI_ASSET_PUBLIC_BASE_URL', 'Внешний адрес ассетов', 'multiplayer', hint='Нужен только для HTTP: http://26.x.x.x:5055.'),
     _field('INFINI_TERRARIA_PORT', 'Порт Terraria', 'multiplayer', hint='Для друзей: Multiplayer → Join via IP → твой Radmin IP → этот порт. Обычно 7777.'),
@@ -161,7 +159,6 @@ def disabled_reasons(values, lan_enabled=False):
     transparent_bg = value('INFINI_BG_COLOR', 'magenta').lower() == 'transparent'
     posterize = value('INFINI_PIXEL_POSTERIZE', '1') == '1'
     strict_ai = value('INFINI_VISUAL_STRICT_AI_AUTHORSHIP', '1') == '1'
-    attack_consumable_debug = value('INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED', '0') == '1'
     asset_transport = (value('INFINI_MP_ASSET_TRANSPORT', 'native') or 'native').lower()
     local_llm = ['INFINI_LMSTUDIO_URL', 'INFINI_LMSTUDIO_MODEL']
     openrouter_llm = ['INFINI_OPENROUTER_API_KEY', 'INFINI_OPENROUTER_MODEL', 'INFINI_OPENROUTER_PROVIDER', 'INFINI_OPENROUTER_HTTP_REFERER', 'INFINI_OPENROUTER_APP_TITLE']
@@ -179,7 +176,6 @@ def disabled_reasons(values, lan_enabled=False):
         enabled = provider != 'openai_codex' and (llm_enabled or key != 'INFINI_LLM_REPAIR_TEMPERATURE')
         reason = 'Codex /responses не принимает temperature; значение сохраняется для других провайдеров.' if provider == 'openai_codex' else 'Use LLM=0; scoped same-author repair не вызывается.'
         set_field_enabled(key, enabled, reason)
-    set_field_enabled('INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD', attack_consumable_debug, 'Debug minimum выключен; поставь галочку выше, чтобы выбрать batch size.')
     for slot in (2, 3, 4):
         enabled = value(f'INFINI_LLM_POOL_{slot}_ENABLED', '0') == '1'
         for suffix in ('PROVIDER', 'BASE_URL', 'API_KEY', 'MODEL', 'API_MODE'):

@@ -377,6 +377,7 @@
             {
               "outputProjectileId": 2,
               "sourceStoreIlOffset": 536,
+              "whenInputProjectileId": 1,
               "sourceGuardIlOffset": 533
             }
           ],
@@ -391,6 +392,55 @@
             {
               "sourceSpawnIlOffset": 24632,
               "sourceGuardIlOffset": 23811,
+              "projectileBasis": "current_shot_projectile",
+              "nativeItemSpecificDelivery": true,
+              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
+              "trajectoryReference": {
+                "status": "native_branch_aim_and_spread_not_fully_modeled",
+                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
+              }
+            }
+          ],
+          "spawnOriginSetups": [],
+          "unrecognizedProjectileWriteOffsets": []
+        },
+        {
+          "itemId": 273,
+          "rules": [],
+          "spawnSites": [
+            {
+              "sourceSpawnIlOffset": 22870,
+              "sourceGuardIlOffset": 22794,
+              "projectileBasis": "current_shot_projectile",
+              "nativeItemSpecificDelivery": true,
+              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
+              "trajectoryReference": {
+                "status": "native_branch_aim_and_spread_not_fully_modeled",
+                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
+              }
+            },
+            {
+              "sourceSpawnIlOffset": 22930,
+              "sourceGuardIlOffset": 22794,
+              "projectileBasis": "current_shot_projectile",
+              "nativeItemSpecificDelivery": true,
+              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
+              "trajectoryReference": {
+                "status": "native_branch_aim_and_spread_not_fully_modeled",
+                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
+              }
+            }
+          ],
+          "spawnOriginSetups": [],
+          "unrecognizedProjectileWriteOffsets": []
+        },
+        {
+          "itemId": 368,
+          "rules": [],
+          "spawnSites": [
+            {
+              "sourceSpawnIlOffset": 23055,
+              "sourceGuardIlOffset": 22982,
               "projectileBasis": "current_shot_projectile",
               "nativeItemSpecificDelivery": true,
               "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
@@ -461,6 +511,68 @@
           "unrecognizedProjectileWriteOffsets": []
         },
         {
+          "itemId": 674,
+          "rules": [],
+          "spawnSites": [
+            {
+              "sourceSpawnIlOffset": 23496,
+              "sourceGuardIlOffset": 23420,
+              "projectileBasis": "current_shot_projectile",
+              "nativeItemSpecificDelivery": true,
+              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
+              "trajectoryReference": {
+                "status": "native_branch_aim_and_spread_not_fully_modeled",
+                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
+              }
+            },
+            {
+              "sourceSpawnIlOffset": 23563,
+              "sourceGuardIlOffset": 23420,
+              "projectileBasis": "fixed_projectile",
+              "nativeItemSpecificDelivery": true,
+              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
+              "trajectoryReference": {
+                "status": "native_branch_aim_and_spread_not_fully_modeled",
+                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
+              },
+              "projectileId": 982
+            }
+          ],
+          "spawnOriginSetups": [],
+          "unrecognizedProjectileWriteOffsets": []
+        },
+        {
+          "itemId": 675,
+          "rules": [],
+          "spawnSites": [
+            {
+              "sourceSpawnIlOffset": 23312,
+              "sourceGuardIlOffset": 23232,
+              "projectileBasis": "fixed_projectile",
+              "nativeItemSpecificDelivery": true,
+              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
+              "trajectoryReference": {
+                "status": "native_branch_aim_and_spread_not_fully_modeled",
+                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
+              },
+              "projectileId": 972
+            },
+            {
+              "sourceSpawnIlOffset": 23368,
+              "sourceGuardIlOffset": 23232,
+              "projectileBasis": "current_shot_projectile",
+              "nativeItemSpecificDelivery": true,
+              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
+              "trajectoryReference": {
+                "status": "native_branch_aim_and_spread_not_fully_modeled",
+                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
+              }
+            }
+          ],
+          "spawnOriginSetups": [],
+          "unrecognizedProjectileWriteOffsets": []
+        },
+        {
           "itemId": 679,
           "rules": [],
           "spawnSites": [
@@ -502,6 +614,37 @@
             }
           ],
           "spawnSites": [],
+          "spawnOriginSetups": [],
+          "unrecognizedProjectileWriteOffsets": []
+        },
+        {
+          "itemId": 757,
+          "rules": [],
+          "spawnSites": [
+            {
+              "sourceSpawnIlOffset": 23695,
+              "sourceGuardIlOffset": 23615,
+              "projectileBasis": "fixed_projectile",
+              "nativeItemSpecificDelivery": true,
+              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
+              "trajectoryReference": {
+                "status": "native_branch_aim_and_spread_not_fully_modeled",
+                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
+              },
+              "projectileId": 984
+            },
+            {
+              "sourceSpawnIlOffset": 23759,
+              "sourceGuardIlOffset": 23615,
+              "projectileBasis": "current_shot_projectile",
+              "nativeItemSpecificDelivery": true,
+              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
+              "trajectoryReference": {
+                "status": "native_branch_aim_and_spread_not_fully_modeled",
+                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
+              }
+            }
+          ],
           "spawnOriginSetups": [],
           "unrecognizedProjectileWriteOffsets": []
         },
@@ -783,6 +926,25 @@
             {
               "sourceSpawnIlOffset": 15339,
               "sourceGuardIlOffset": 15214,
+              "projectileBasis": "current_shot_projectile",
+              "nativeItemSpecificDelivery": true,
+              "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
+              "trajectoryReference": {
+                "status": "native_branch_aim_and_spread_not_fully_modeled",
+                "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"
+              }
+            }
+          ],
+          "spawnOriginSetups": [],
+          "unrecognizedProjectileWriteOffsets": []
+        },
+        {
+          "itemId": 1826,
+          "rules": [],
+          "spawnSites": [
+            {
+              "sourceSpawnIlOffset": 23180,
+              "sourceGuardIlOffset": 23107,
               "projectileBasis": "current_shot_projectile",
               "nativeItemSpecificDelivery": true,
               "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",

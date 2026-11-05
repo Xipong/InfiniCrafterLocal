@@ -298,7 +298,7 @@ public static partial class InfiniVfxRuntime
             {
                 case InfiniVfxRendererKind.SpriteStampTrail:
                     SpritePresentationSelection selected = SpritePresentation.Resolve(data, entityId, slot.TextureRole!);
-                    Texture2D? texture = InfiniCrafterLocalMod.Sprites.TryGet(selected.Path);
+                    Texture2D? texture = InfiniCrafterLocalMod.Sprites.TryGetReady(selected.Path);
                     if (texture is not null)
                         DrawSelectedSpriteTrail(texture, projectile, data.RuntimeProgram.TryGetEntity(entityId), selected, manifest, ref state, color, slot.Scale!.Value);
                     break;

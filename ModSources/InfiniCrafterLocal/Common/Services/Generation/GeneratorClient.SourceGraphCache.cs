@@ -35,7 +35,8 @@ public sealed partial class GeneratorClient
     // Synchronous diagnostic scopes retain their thread-local cache. Live craft
     // and export share a bounded, unload-invalidated cache of compiled methods.
     // Entries contain compiled source only, never Item/Player/global instances,
-    // live values, JSON projections, parent-specific slices or graph decisions.
+    // live values, parent-specific slices or graph decisions. Complete-method
+    // source projections use a separate byte-bounded memo below.
     internal sealed class ParentSourceGraphCache : IDisposable
     {
         internal const int MethodLimit = 256, InstructionLimit = 65_536;
@@ -44,6 +45,14 @@ public sealed partial class GeneratorClient
         private readonly object gate = new();
         private readonly Queue<(MethodBase Method, long Weight)> order = new();
         private long weight;
+        // Pure complete-method projections are expensive even after IL/CFG
+        // decoding is cached. Store immutable JSON, never graph member indices,
+        // live values, native identity slices or mutable caller-owned nodes.
+        internal const long ProjectionByteLimit = 16L * 1024 * 1024;
+        private readonly Dictionary<(MethodBase Method, string Key), object> projections = new();
+        private readonly Queue<((MethodBase Method, string Key) Key, long Weight)> projectionOrder = new();
+        private long projectionBytes;
+
         internal ParentSourceGraphCache(bool shared = false) => this.shared = shared;
         private readonly Dictionary<MethodBase, (object? Body, string? Refusal)> entries = new();
         private int instructions, scopes;
@@ -97,11 +106,56 @@ public sealed partial class GeneratorClient
             }
         }
 
+        internal bool TryGetProjection(MethodBase method, string key, out string? json)
+            => TryGetProjectionValue(method, "raw:" + key, out json);
+
+        internal void RememberProjection(MethodBase method, string key, string json)
+            => RememberProjectionValue(method, "raw:" + key, json, json.Length * (long)sizeof(char));
+
+        internal bool TryGetGraphProjection(MethodBase method, string key, out SourceGraphProjection? projection)
+            => TryGetProjectionValue(method, "graph:" + key, out projection);
+
+        internal void RememberGraphProjection(MethodBase method, string key, SourceGraphProjection projection)
+            => RememberProjectionValue(method, "graph:" + key, projection, projection.RetainedBytes);
+
+        private bool TryGetProjectionValue<T>(MethodBase method, string key, out T? value) where T : class
+        {
+            CheckThread();
+            lock (gate)
+            {
+                if (projections.TryGetValue((method, key), out object? retained) && retained is T typed)
+                { value = typed; return true; }
+                value = null; return false;
+            }
+        }
+
+        private void RememberProjectionValue(MethodBase method, string key, object value, long valueBytes)
+        {
+            CheckThread();
+            long bytes = 256L + key.Length * (long)sizeof(char) + valueBytes;
+            if (bytes > ProjectionByteLimit) return;
+            lock (gate)
+            {
+                if (disposed || projections.ContainsKey((method, key))) return;
+                while (projectionOrder.Count > 0 && (projections.Count >= 2048 || projectionBytes + bytes > ProjectionByteLimit))
+                {
+                    var oldest = projectionOrder.Dequeue();
+                    projections.Remove(oldest.Key); projectionBytes -= oldest.Weight;
+                }
+                projections.Add((method, key), value);
+                projectionOrder.Enqueue(((method, key), bytes)); projectionBytes += bytes;
+            }
+        }
+
         public void Dispose()
         {
             CheckThread();
             if (scopes != 0) throw new InvalidOperationException("Exit source capture scopes before disposing the cache.");
-            lock (gate) { entries.Clear(); order.Clear(); instructions = 0; weight = 0; disposed = true; }
+            lock (gate)
+            {
+                entries.Clear(); order.Clear(); instructions = 0; weight = 0;
+                projections.Clear(); projectionOrder.Clear(); projectionBytes = 0; disposed = true;
+            }
         }
 
         private void CheckThread()

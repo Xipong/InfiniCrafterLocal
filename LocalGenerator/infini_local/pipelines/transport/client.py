@@ -20,6 +20,7 @@ from infini_local.storage.trace_runtime import log_event
 
 
 def _perform_llm_http(url: str, wire: dict[str, Any], timeout: float, context: dict[str, Any], *, api_mode: str) -> dict[str, Any]:
+    diagnostics._admit_dispatch(timeout)
     state = diagnostics._CURRENT_LLM_DIAGNOSTICS.get()
     if state is None:
         return http.http_json(url, wire, timeout=timeout, headers=profiles.llm_headers(context=context))
@@ -35,6 +36,10 @@ def _perform_llm_http(url: str, wire: dict[str, Any], timeout: float, context: d
         "physicalAttemptIndex": None, "rateWaitMs": 0.0, "rateWaitReason": "none",
         "connectMs": None, "openMs": 0.0, "readMs": 0.0,
     }
+    log_event("info", "LLM reasoning before dispatch", {
+        **{name: state[name] for name in ("stage", "configuredReasoningMode", "requestedReasoning")},
+        "profileId": row["profileId"], "effectiveReasoning": effective_reasoning,
+    })
     token = diagnostics._CURRENT_LLM_ATTEMPT.set(row)
     try:
         return http.http_json(url, wire, timeout=timeout, headers=profiles.llm_headers(context=context))
@@ -339,6 +344,10 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: float, context: d
                 "effectiveResponseFormat": diagnostics._format_diagnostic(codex_wire),
                 "effectiveReasoning": diagnostics._reasoning_diagnostic(codex_wire),
             }
+            log_event("info", "LLM reasoning before dispatch", {
+                **{name: state[name] for name in ("stage", "configuredReasoningMode", "requestedReasoning")},
+                "profileId": profiles._profile_id(context), "effectiveReasoning": state["lastAttempt"]["effectiveReasoning"],
+            })
         from infini_local.services import codex_auth
         inherited_join, inherited_observer = codex_auth._GENERATION_OBSERVATIONS.get()
         join = {**inherited_join, **({name: state[name] for name in ("logicalCallId", "stage", "leaseId")} if state is not None else {})}
@@ -387,6 +396,8 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: float, context: d
             return result
         except Exception as error:
             if rejections._is_budget_or_auth_failure(error) or not rejections._responses_chat_fallback_allowed(error):
+                raise
+            if not diagnostics._dispatch_available():
                 raise
             had_working_chain = bool(lease is not None and lease.context is context and lease.previous_response_id)
             if had_working_chain:
@@ -470,6 +481,8 @@ def _llm_chat_json_single_context(payload: dict[str, Any], timeout: float, conte
         )
     except urlerror.HTTPError as error:
         if schema_downgraded or not rejections._strict_schema_rejected(error, prepared):
+            raise
+        if not diagnostics._dispatch_available():
             raise
         diagnosis = getattr(error, "_infini_shape_diagnosis", None)
         scope = rejections._strict_schema_rejection_scope(error, prepared)
@@ -591,86 +604,17 @@ def _is_profile_failover_failure(error: Exception) -> bool:
 
 
 
-def _with_transport_retry_debug(
-    result: dict[str, Any],
-    causes: list[str],
-    *,
-    prior_result: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    if not causes and prior_result is None:
+def _with_transport_retry_debug(result: dict[str, Any], causes: list[str]) -> dict[str, Any]:
+    if not causes:
         return result
     debug_candidate = result.get("_debug")
     debug: dict[str, Any] = debug_candidate if isinstance(debug_candidate, dict) else {}
-    prior_debug_candidate = prior_result.get("_debug") if isinstance(prior_result, dict) else None
-    prior_debug: dict[str, Any] = prior_debug_candidate if isinstance(prior_debug_candidate, dict) else {}
-    existing_causes = [str(value) for value in debug.get("transportRetryCauses") or []]
-    prior_causes = [str(value) for value in prior_debug.get("transportRetryCauses") or []]
     result["_debug"] = {
         **debug,
-        "transportRetryCount": (
-            int(prior_debug.get("transportRetryCount") or 0)
-            + int(debug.get("transportRetryCount") or 0)
-            + len(causes)
-        ),
-        "transportRetryCauses": [*prior_causes, *existing_causes, *causes],
+        "transportRetryCount": int(debug.get("transportRetryCount") or 0) + len(causes),
+        "transportRetryCauses": [*(debug.get("transportRetryCauses") or []), *causes],
     }
     return result
-
-
-
-def _llm_json_single_context_with_length_retry(
-    payload: dict[str, Any],
-    timeout: float,
-    context: dict[str, Any],
-) -> dict[str, Any]:
-    result = _llm_json_single_context(payload, timeout, context)
-    choices = result.get("choices") if isinstance(result, dict) else None
-    first = choices[0] if isinstance(choices, list) and choices and isinstance(choices[0], dict) else {}
-    model_name = str(payload.get(wire.LLM_MODEL_OVERRIDE_KEY) or resolve_llm_model(context) or "")
-    finish_reason = str(first.get("finish_reason") or "").lower()
-    raw_message = first.get("message")
-    message = raw_message if isinstance(raw_message, dict) else {}
-    content = str(message.get("content") or "")
-    malformed_json = False
-    complete_json = False
-    json_response_expected = isinstance(payload.get("response_format"), dict)
-    if json_response_expected or finish_reason == "length":
-        try:
-            parse_first_valid_llm_json(content)
-            complete_json = True
-        except (ValueError, TypeError, json.JSONDecodeError):
-            malformed_json = json_response_expected
-    gemini_length = (
-        finish_reason == "length"
-        and not complete_json
-        and "gemini-3.1-flash" in model_name.lower()
-        and wire._is_google_openai_compat_reasoning_model(model_name, context)
-    )
-    if not gemini_length and not malformed_json:
-        return result
-    # A total network-attempt budget of one is an acceptance contract: no
-    # content retry may silently turn one logical stage into a second HTTP
-    # request. The malformed response is returned to the caller for normal
-    # domain failure accounting.
-    if int(config.LLM_NETWORK_ATTEMPTS or 2) <= 1:
-        return result
-
-    retry_payload = copy.deepcopy(payload)
-    if gemini_length:
-        retry_payload.pop("reasoning", None)
-        retry_payload.pop("reasoning_effort", None)
-        retry_payload[wire._REASONING_INTENT_KEY] = {"effort": "minimal", "exclude": bool(config.LLM_REASONING_EXCLUDE)}
-    retry_cause = "length" if gemini_length else "malformed_json"
-    log_event("warn", "retrying incomplete JSON LLM response within the same logical call", {
-        "provider": profiles.active_llm_provider(context),
-        "model": model_name,
-        "finishReason": finish_reason,
-        "cause": retry_cause,
-    })
-    diagnostics._attempt_reason(retry_cause)
-    retry_result = _llm_json_single_context(retry_payload, timeout, context)
-    return _with_transport_retry_debug(retry_result, [retry_cause], prior_result=result)
-
 
 
 def _payload_without_model_override(payload: dict[str, Any]) -> dict[str, Any]:
@@ -703,7 +647,7 @@ def llm_chat_json(payload: dict[str, Any], timeout: float = 10) -> dict[str, Any
             attempted.add(lease.profile_id)
             attempt_payload = payload if lease.profile_id == override_profile_id else _payload_without_model_override(payload)
             try:
-                result = _llm_json_single_context_with_length_retry(attempt_payload, timeout, context)
+                result = _llm_json_single_context(attempt_payload, timeout, context)
                 return finish(_with_transport_retry_debug(result, retry_causes), attempt_payload)
             except Exception as profile_error:
                 remaining_seconds(diagnostics._request_deadline(timeout))
@@ -724,7 +668,7 @@ def llm_chat_json(payload: dict[str, Any], timeout: float = 10) -> dict[str, Any
     if lease is not None and lease.profile_id != lease.initial_profile_id:
         primary_payload = _payload_without_model_override(payload)
     try:
-        result = _llm_json_single_context_with_length_retry(primary_payload, timeout, primary)
+        result = _llm_json_single_context(primary_payload, timeout, primary)
         return finish(result, primary_payload)
     except Exception as first_error:
         remaining_seconds(diagnostics._request_deadline(timeout))
@@ -747,7 +691,7 @@ def llm_chat_json(payload: dict[str, Any], timeout: float = 10) -> dict[str, Any
             })
             _llm_backoff(delay)
             try:
-                result = _llm_json_single_context_with_length_retry(primary_payload, timeout, primary)
+                result = _llm_json_single_context(primary_payload, timeout, primary)
                 return finish(_with_transport_retry_debug(result, retry_causes), primary_payload)
             except Exception as retry_error:
                 last_error = retry_error

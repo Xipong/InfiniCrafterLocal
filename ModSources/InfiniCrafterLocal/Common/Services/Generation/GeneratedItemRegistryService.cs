@@ -32,6 +32,14 @@ public sealed class GeneratedHydrationDebugSnapshot
     public int CachedDefinitionCount { get; init; }
 }
 
+public enum GeneratedDefinitionPersistenceStatus { NotApplicable, Written, Unchanged, Failed }
+
+public readonly record struct GeneratedDefinitionPersistenceResult(
+    GeneratedDefinitionPersistenceStatus Status, Exception? Error = null)
+{
+    public bool IsDurable => Status is GeneratedDefinitionPersistenceStatus.Written or GeneratedDefinitionPersistenceStatus.Unchanged;
+}
+
 /// <summary>
 /// Per-world runtime registry for generated items.
 ///
@@ -68,12 +76,14 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
     private readonly Dictionary<string, int> _inFlightGeneratedItemHydration = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _lastGeneratedItemHydrationRequestTick = new(StringComparer.Ordinal);
     private bool _fullHydrationInFlight;
+    private bool _disposed;
     private int _lastFullHydrationRequestTick = -FullHydrationRequestRetryTicks;
     private int _hydrationCacheHitCount;
     private int _hydrationCacheMissCount;
     private int _hydrationRetryCount;
     private int _hydrationDuplicateSuppressedCount;
     private int _hydrationRequestSentCount;
+    private readonly Dictionary<string, object> _queuedPresentation = new(StringComparer.Ordinal);
     private readonly object _lock = new();
 
     public string StoreRoot { get; }
@@ -108,6 +118,7 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
         InfiniCrafterLocalMod.AssetSync?.ResetWorldDescriptors();
         lock (_lock)
         {
+            _queuedPresentation.Clear();
             _byId.Clear();
             _parentMetadata.Clear();
             _lineageRecoveryReceipts.Clear();
@@ -132,6 +143,8 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
     {
         lock (_lock)
         {
+            _disposed = true;
+            _queuedPresentation.Clear();
             _byId.Clear();
             _parentMetadata.Clear();
             _lineageRecoveryReceipts.Clear();
@@ -209,7 +222,12 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
             _lastGeneratedItemHydrationRequestTick.Remove(data.Id);
             _fullHydrationInFlight = false;
         }
-        if (persist) PersistOne(data);
+        if (persist)
+        {
+            var result = PersistOne(data);
+            if (result.Status == GeneratedDefinitionPersistenceStatus.Failed)
+                InfiniCrafterLocalMod.Instance?.Logger?.Warn($"Definition '{data.Id}' was admitted in memory but not persisted; item saves must retain recovery data: {result.Error}");
+        }
         if (ensureAssets)
             InfiniCrafterLocalMod.AssetSync?.EnsureAssetsForData(data);
     }
@@ -231,6 +249,29 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
         {
             if (client == ignoreClient || !Main.player[client].active) continue;
             EnqueueDefinitionForClient(data, client, highPriority: true);
+        }
+    }
+
+    // Draw requests only enqueue. Validation, discovery and packet work execute
+    // at the existing update boundary, with world/reload/dispose cancellation.
+    internal void QueuePresentationRequest(string id, bool forceAssetRetry = false)
+    {
+        string world = CurrentWorldIdString();
+        string key = id + "|" + forceAssetRetry;
+        lock (_lock)
+        {
+            if (_disposed || _queuedPresentation.ContainsKey(key) || _queuedPresentation.Count >= MaxHydrationRequestStateEntries) return;
+            var generation = new object(); _queuedPresentation[key] = generation;
+            Main.QueueMainThreadAction(() => {
+                lock (_lock)
+                {
+                    if (!_queuedPresentation.TryGetValue(key, out var active) || !ReferenceEquals(active, generation)) return;
+                    _queuedPresentation.Remove(key);
+                    if (world != CurrentWorldIdString()) return;
+                }
+                if (id.Length == 0) RequestFullSyncFromServer(forceAssetRetry);
+                else RequestOneFromServer(id, forceAssetRetry);
+            });
         }
     }
 
@@ -654,7 +695,8 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
 
     private static GeneratedItemData PrepareForNetworkSync(GeneratedItemData data, bool forceHostAssetMetadata)
     {
-        var clone = GeneratedItemData.FromJson(data.ToNetworkJson()) ?? data;
+        var clone = GeneratedItemData.FromJson(data.ToNetworkJson())
+            ?? throw new InvalidDataException($"Generated item '{data.Id}' network projection failed admission");
         if (forceHostAssetMetadata)
             StampHostAssetSyncMetadata(clone, force: true);
         return clone;
@@ -827,30 +869,38 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
         }
     }
 
-    private void PersistOne(GeneratedItemData data)
+    internal GeneratedDefinitionPersistenceResult PersistOne(GeneratedItemData data, string? fullProjection = null)
     {
         string tempPath = "";
         try
         {
-            if (!IsCurrentWorldData(data) || string.IsNullOrWhiteSpace(data.Id)) return;
+            if (!IsCurrentWorldData(data) || string.IsNullOrWhiteSpace(data.Id)
+                || GeneratedItemData.IsPlayerSaveReferenceOnly(data))
+                return new(GeneratedDefinitionPersistenceStatus.NotApplicable);
             string scopedRoot = WorldStoreRoot(data.RecipeMeta.WorldId.Trim());
             Directory.CreateDirectory(scopedRoot);
             string safe = StorageIdentity(data.Id);
             string path = Path.Combine(scopedRoot, safe + ".json");
+            string json = fullProjection ?? data.ToLocalCacheJson();
+            // Compare the full persisted projection, not the lossy network hash or ID.
+            // Read back the actual target; external deletion/corruption revokes durability.
+            if (File.Exists(path) && string.Equals(File.ReadAllText(path), json, StringComparison.Ordinal))
+                return new(GeneratedDefinitionPersistenceStatus.Unchanged);
             tempPath = Path.Combine(scopedRoot, $".{safe}.{Guid.NewGuid():N}.tmp");
             // Local disk cache is not a network packet: keep the full item/debug/prompt
             // contract so tooltips and /infinidumppicture remain useful after restart.
             using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
             {
-                writer.Write(data.ToLocalCacheJson());
+                writer.Write(json);
                 writer.Flush();
                 stream.Flush(flushToDisk: true);
             }
             File.Move(tempPath, path, overwrite: true);
             tempPath = "";
+            return new(GeneratedDefinitionPersistenceStatus.Written);
         }
-        catch { }
+        catch (Exception error) { return new(GeneratedDefinitionPersistenceStatus.Failed, error); }
         finally
         {
             if (!string.IsNullOrWhiteSpace(tempPath))

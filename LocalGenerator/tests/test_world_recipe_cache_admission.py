@@ -74,6 +74,61 @@ def _cache_only_endpoint(request):
     return responses[0]
 
 
+@pytest.mark.parametrize("cache_only,precheck_miss", [(False, False), (True, False), (False, True)])
+def test_missing_only_png_preserves_accepted_recipe_without_author_dispatch(cache_record, monkeypatch, cache_only, precheck_miss):
+    _, request, key, path, committed = cache_record
+    request["cacheOnly"] = cache_only
+    original = path.read_bytes()
+    sprite = Path(committed["visual"]["spritePath"])
+    pixels = sprite.read_bytes()
+    sprite.unlink()
+    # Both direct pipeline callers and HTTP must stop before any authoring.
+    monkeypatch.setattr(combine_pipeline, "USE_LLM", True)
+    monkeypatch.setattr(combine_pipeline, "begin_llm_item_lease", lambda *_a, **_k: pytest.fail("accepted recipe opened text-provider lease"))
+    monkeypatch.setattr(combine_pipeline, "try_llm_plan", lambda *_a, **_k: pytest.fail("accepted recipe reached Author"))
+    responses = []
+    handle_combine_request(
+        request, app_version="storage-regression",
+        combine_cache_lookup=(lambda _: (key, None)) if precheck_miss else combine_pipeline.combine_cache_lookup,
+        sanitize_recipe_for_delivery=world_storage.sanitize_recipe_for_delivery,
+        combine=combine_pipeline.combine,
+        trace_event=lambda *_: None,
+        json=lambda data: responses.append((200, data)),
+        json_status=lambda code, data: responses.append((code, data)),
+    )
+    assert len(responses) == 1
+    code, result = responses[0]
+    assert code == 409 and result["status"] == "accepted_recipe_assets_unavailable"
+    assert result["recipeKey"] == key and result["itemId"] == committed["id"]
+    assert result["cacheRecoveryAllowed"] is False
+    assert path.read_bytes() == original
+    assert not (path.parent.parent / "invalid").exists()
+    with pytest.raises(world_storage.RecipeAssetsUnavailable):
+        combine_pipeline.combine(request)
+    assert path.read_bytes() == original
+    # Reintroducing exact bytes is sufficient; no text/image models or identity rewrite.
+    sprite.write_bytes(pixels)
+    code, delivered = _cache_only_endpoint(request)
+    assert code == 200
+    for field in ("id", "runtimeProgram", "vfxManifest", "visual", "recipeMeta", "parentA", "parentB"):
+        assert delivered[field] == committed[field]
+    assert path.read_bytes() == original
+
+
+def test_cache_can_deliver_existing_exact_copy_from_other_serving_root(cache_record):
+    root, request, _, path, committed = cache_record
+    original = path.read_bytes()
+    sprite = Path(committed["visual"]["spritePath"])
+    pixels = sprite.read_bytes()
+    copy_path = root / sprite.name
+    copy_path.write_bytes(pixels)
+    sprite.unlink()
+    code, delivered = _cache_only_endpoint(request)
+    assert code == 200 and delivered["visual"] == committed["visual"]
+    assert visual_delivery_gate._resolved_asset_path(delivered["visual"]["spritePath"]) == copy_path
+    assert copy_path.read_bytes() == pixels and path.read_bytes() == original
+
+
 def _assert_whole_record_quarantine(path: Path, raw: bytes, reason: str):
     assert not path.exists(), "rejected record remained an active recipe"
     invalid = path.parent.parent / "invalid"
@@ -178,6 +233,12 @@ def test_optional_accepting_validator_cannot_replace_canonical_admission(cache_r
         called.append(delivered)
         return {"ok": True, "errors": []}
 
+    if corruption == "asset":
+        with pytest.raises(world_storage.RecipeAssetsUnavailable):
+            world_recipe_runtime.read_world_recipe_cache(key, request["worldId"], validate_payload=accepts_everything)
+        assert called == [] and path.read_bytes() == raw
+        assert not (path.parent.parent / "invalid").exists()
+        return
     result = world_recipe_runtime.read_world_recipe_cache(
         key, request["worldId"], validate_payload=accepts_everything,
     )
@@ -308,6 +369,12 @@ def test_canonical_refusal_survives_quarantine_io_failure(cache_record, monkeypa
     monkeypatch.setattr(world_storage, "quarantine_world_recipe_cache", refuse)
     monkeypatch.setattr(trace_runtime, "trace_event", lambda *event: events.append(event))
 
+    if rejection == "asset":
+        with pytest.raises(world_storage.RecipeAssetsUnavailable):
+            world_recipe_runtime.read_world_recipe_cache(key, request["worldId"])
+        assert path.read_bytes() == raw and events == []
+        assert _cache_only_endpoint(request)[0] == 409
+        return
     assert world_recipe_runtime.read_world_recipe_cache(key, request["worldId"]) is None
     assert path.read_bytes() == raw
     assert len(events) == 1 and events[0][0] == "warn"
@@ -376,12 +443,10 @@ def test_no_image_record_is_refused_by_both_storage_and_strict_combine(cache_rec
     world_storage.atomic_write_json(path, data)
     raw = path.read_bytes()
 
-    delivered = world_recipe_runtime.read_world_recipe_cache(key, request["worldId"])
-
-    assert delivered is None
-    receipt = _assert_whole_record_quarantine(path, raw, "low_level_runtime_contract_invalid")
-    assert receipt["details"]["runtimeReady"] is True and receipt["details"]["assetsReady"] is False
-    assert _cache_only_endpoint(request)[0] == 404
+    with pytest.raises(world_storage.RecipeAssetsUnavailable):
+        world_recipe_runtime.read_world_recipe_cache(key, request["worldId"])
+    assert path.read_bytes() == raw and not (path.parent.parent / "invalid").exists()
+    assert _cache_only_endpoint(request)[0] == 409
 
 
 @pytest.mark.parametrize(("raw", "component"), [

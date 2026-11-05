@@ -109,7 +109,7 @@ internal static partial class EngineRuntimeChecks
         var ui = typeof(GeneratedUtilityBuffUISystem);
         MethodInfo draw = ui.GetMethod("DrawStatuses", BindingFlags.Static | BindingFlags.NonPublic)!;
         MethodInfo status = ui.GetMethod("DrawStatus", BindingFlags.Static | BindingFlags.NonPublic)!;
-        using var readSprite = new Hook(typeof(RuntimeSpriteCache).GetMethod("TryGet", new[] { typeof(string) })!,
+        using var readSprite = new Hook(typeof(RuntimeSpriteCache).GetMethod("TryGetReady", new[] { typeof(string) })!,
             (RuntimeSpriteCache _, string path) => path == "reaction-charm.png" ? texture : null);
         using var drawBoundary = new ILHook(status, il =>
         {

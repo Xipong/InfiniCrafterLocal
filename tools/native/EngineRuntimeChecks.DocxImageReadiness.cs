@@ -71,14 +71,20 @@ internal static partial class EngineRuntimeChecks
                 Equal(false, item.PreDrawInWorld(probe.Batch, Color.White, Color.White, ref rotation, ref scale, 0), label + " world vetoes proxy");
                 Equal(before, probe.QueuedSprites, label + " does not fabricate replacement art");
             }
-            NoProxy("missing"); NoProxy("negative cache");
+            NoProxy("missing");
+            Equal(0, probe.Cache.GetDebugSnapshot().MissingOrBadCount, "draw defers missing-file preparation");
+            probe.Batch.End(); probe.DrainOwnerQueue(); probe.Batch.Begin();
+            NoProxy("negative cache");
             Equal(1, probe.Cache.GetDebugSnapshot().MissingOrBadCount, "one real missing-file failure");
             Equal(0, probe.Attempts, "missing file never reaches decode");
             CommitAssetOwner(probe.Sync, item.Data.Id, file, AssetOwnerCanonical);
             probe.Batch.End(); probe.DrainOwnerQueue(); probe.Batch.Begin();
             probe.Draw(item); Equal(1, probe.Loads.Count, "verified delivery clears negative cache and recovers immediately");
             probe.FailDecode = true; probe.Cache.Invalidate(item.Data.Visual.SpritePath);
-            NoProxy("decode failure"); NoProxy("failure backoff");
+            NoProxy("decode failure");
+            Equal(1, probe.Attempts, "draw defers the failed decode too");
+            probe.Batch.End(); probe.DrainOwnerQueue(); probe.Batch.Begin();
+            NoProxy("failure backoff");
             Equal(2, probe.Attempts, "one failed decode then shared inventory/world backoff");
             probe.FailDecode = false; probe.Cache.Invalidate(item.Data.Visual.SpritePath);
             probe.Draw(item); Equal(3, probe.Attempts, "explicit invalidation enables one real recovery decode");

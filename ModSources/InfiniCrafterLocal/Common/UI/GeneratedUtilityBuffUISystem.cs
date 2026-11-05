@@ -74,7 +74,7 @@ public sealed class GeneratedUtilityBuffUISystem : ModSystem
         foreach (GeneratedReactionCooldownStatusRow status in GeneratedReactionCooldownStatusView.Build(
             owner.CaptureGeneratedReactionCooldowns(), Language.ActiveCulture.CultureInfo))
         {
-            Texture2D? sprite = InfiniCrafterLocalMod.Sprites?.TryGet(status.SpritePath);
+            Texture2D? sprite = InfiniCrafterLocalMod.Sprites?.TryGetReady(status.SpritePath);
             // Only the accepted item's real PNG; asset hydration remains with the
             // existing cache. Missing artwork never fabricates an equipment icon.
             if (sprite is not null)

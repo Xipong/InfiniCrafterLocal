@@ -199,7 +199,7 @@ public sealed partial class InfiniDetachedVfxSystem
     }
 
     internal static Texture2D? MaterialTexture(string filePath,string? libraryId)
-        =>libraryId is null?InfiniCrafterLocalMod.Sprites.TryGet(filePath):VfxNativeTextureCache.TryGet(libraryId);
+        =>libraryId is null?InfiniCrafterLocalMod.Sprites.TryGetReady(filePath):VfxNativeTextureCache.TryGet(libraryId);
 
     internal static string ResolveMaterialTexture(GeneratedItemData data,string entityId,VfxTextureSpec texture)
     {

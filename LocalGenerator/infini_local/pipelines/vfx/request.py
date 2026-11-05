@@ -90,8 +90,8 @@ def call_llm_vfx_director(
         request = with_schema_instruction_definitions(request, "outputSchema", definition_paths)
     item = user.get("item") or {}
     recipe_id = item.get("id") if isinstance(item, Mapping) else None
-    trace_event("prompt", "LLM:" + stage_name, "VFX stage request", {"recipeId": recipe_id}, prompt=request["messages"])
-    trace_stage_request(stage_name, user.get("recipeKey"), request, recipe_id=recipe_id)
+    trace_stage_request(stage_name, user.get("recipeKey"), request, recipe_id=recipe_id,
+                        prompt_title="VFX stage request", prompt_payload={"recipeId": recipe_id})
     raw = llm_chat_json(with_llm_stage(request, stage_name), timeout=timeout)
     content = raw["choices"][0]["message"]["content"]
     trace_event("response", "LLM:" + stage_name, "VFX stage response", {"recipeId": recipe_id}, response=content)

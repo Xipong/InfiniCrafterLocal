@@ -11,6 +11,7 @@ from typing import Any, Callable
 
 from infini_local.core import strict_json
 from infini_local.core.env_utils import env_int
+from infini_local.storage.world_storage import RecipeAssetsUnavailable
 
 
 # AGENT MAP: service wrapper for /combine request/response behavior.
@@ -207,6 +208,18 @@ def _response_json_error(
         return True
 
 
+def _assets_unavailable(error: RecipeAssetsUnavailable, app_version: str, json_status: JsonStatusSender) -> None:
+    json_status(409, {
+        "ok": False, "status": "accepted_recipe_assets_unavailable",
+        "error": "accepted_recipe_assets_unavailable", "message": str(error),
+        "playerMessage": "The accepted recipe is retained, but its PNG assets are unavailable. Restore the original asset files; no new design was generated.",
+        "version": app_version, "httpStatus": 409, "retryable": False,
+        "cacheRecoveryAllowed": False, "recipeKey": error.recipe_key,
+        "itemId": error.item_id, "worldId": error.world_id,
+        "assetProblems": error.report.get("problems", [])[:24],
+    })
+
+
 def handle_combine_request(
     payload: dict[str, Any],
     *,
@@ -229,6 +242,9 @@ def handle_combine_request(
     cache_only = bool(payload.get("cacheOnly") or payload.get("cacheOnlyIfReady"))
     try:
         cache_key, cached = combine_cache_lookup(payload)
+    except RecipeAssetsUnavailable as asset_error:
+        _assets_unavailable(asset_error, app_version, json_status)
+        return
     except Exception as cache_error:
         if cache_lookup_passthrough_errors and isinstance(cache_error, cache_lookup_passthrough_errors):
             raise
@@ -364,6 +380,11 @@ def handle_combine_request(
                 _shutdown_refusal(json_status, app_version)
                 return
             data = combine(payload)
+        except RecipeAssetsUnavailable as asset_error:
+            # The serialized pipeline rechecks after admission: another craft may
+            # have committed while this request waited, then lost its PNG.
+            _assets_unavailable(asset_error, app_version, json_status)
+            return
         except Exception as error:
             attached = getattr(error, "_infini_failure_snapshot", None)
             snapshot: dict[str, Any] = deepcopy(attached) if isinstance(attached, dict) else {}

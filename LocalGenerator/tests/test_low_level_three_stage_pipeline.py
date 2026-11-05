@@ -246,105 +246,30 @@ def test_three_stage_wire_and_conditional_repairs(wire_transport, fixture_name, 
     _assert_stage_topology(final)
 
 
-FORMAT_CASES = [
-    pytest.param("gameplay", "recoverable", None, id="author-syntax-only"),
-    pytest.param("gameplay", "absent", "recoverable", id="author-cannot-invent-design"),
-    pytest.param("gameplay", "rewrite", "recoverable", id="author-cannot-rewrite-damage"),
-    pytest.param("gameplay", "budget", "repair budget already consumed", id="syntax-and-semantic-share-one-budget"),
-    pytest.param("visual", "recoverable", None, id="visual-syntax-only"),
-    pytest.param("visual", "rewrite", "recoverable", id="visual-cannot-rewrite-identity"),
-    pytest.param("visual", "absent", "recoverable", id="visual-cannot-invent-design"),
-    pytest.param("visual", "empty", "entity-complete visual kit", id="visual-one-repair-no-substitution"),
-    pytest.param("vfx", "recoverable", None, id="vfx-conditional-expression-to-strict-json"),
-    pytest.param("vfx", "long", None, id="vfx-complete-malformed-source"),
-]
-
-
-@pytest.mark.parametrize("stage,scenario,rejection", FORMAT_CASES)
-def test_single_format_repair_preserves_recoverable_design(wire_transport, monkeypatch, stage, scenario, rejection):
+@pytest.mark.parametrize("scenario", ["recoverable", "long"])
+def test_vfx_conditional_expression_uses_its_single_scoped_repair(wire_transport, monkeypatch, scenario):
     responses, requests = wire_transport
-    authored = build_runtime_fixture("workbench_blade")
-    data = compile_runtime_program(authored)
-    kit: dict = {}
-    data["debug"] = {"planner": "llm_low_level_runtime_author", "llmStageAccounting": {
-        "gameplayAuthorCalls": 1, "gameplayRepairCalls": 0,
-        "visualDirectorCalls": int(stage == "vfx"), "visualRepairCalls": 0,
-        "vfxDirectorCalls": 0, "vfxRepairCalls": 0,
-    }}
-    if stage == "gameplay":
-        if scenario == "budget":
-            next(c for c in authored["runtimeProgram"]["calls"] if c["id"] == "item_stats")["params"].pop("damage")
-        raw = json.dumps(authored)[:-1] + ",}"
-        patch = copy.deepcopy(authored)
-        if scenario == "absent":
-            raw = '{"name":"broken",'
-        elif scenario == "rewrite":
-            next(c for c in patch["runtimeProgram"]["calls"] if c["id"] == "item_stats")["params"]["damage"] += 1
-    elif stage == "visual":
-        kit = _visual_kit(data)
-        raw = json.dumps(kit)[:-1] + ",}"
-        patch = _visual_patch(data)
-        patch["animationPlan"] = kit["animationPlan"]
-        if scenario == "rewrite":
-            patch["itemPatch"]["visualIdentity"] = "replaced concept"
-            for row in patch["entitiesUpsert"]:
-                if "visualIdentity" in row:
-                    row["visualIdentity"] = "replaced concept"
-        elif scenario in {"absent", "empty"}:
-            raw = '{"schema":'
-            if scenario == "empty":
-                patch.update(itemPatch=None, entitiesUpsert=[])
-    else:
-        data = visual_stage_stage._apply_kit(data, _visual_kit(data))
-        valid = _vfx_output(data)
-        if scenario == "long":
-            monkeypatch.setattr(vfx_stage_config, "VFX_LLM_DIRECTOR_MAX_SLOTS", 12)
-            valid["slots"] = [{**copy.deepcopy(valid["slots"][0]), "id": f"slot_{i}"} for i in range(12)]
-        raw = json.dumps(valid, indent=2).replace('"layer": "BeforeProjectiles"', '"layer": "Projectiles" if false else "BeforeProjectiles"', 1)
-        if scenario == "long":
-            assert len(raw) > 12000 and raw.rfind('"endOpacity"') > 12000
-        patch = {"schema": VFX_REPAIR_PATCH_SCHEMA,
-                 "slotsUpsert": valid["slots"], "slotIdsDelete": [], "slotIndicesDelete": [], "note": "strict JSON"}
+    data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    data = visual_stage_stage._apply_kit(data, _visual_kit(data))
+    valid = _vfx_output(data)
+    if scenario == "long":
+        monkeypatch.setattr(vfx_stage_config, "VFX_LLM_DIRECTOR_MAX_SLOTS", 12)
+        valid["slots"] = [{**copy.deepcopy(valid["slots"][0]), "id": f"slot_{i}"} for i in range(12)]
+    raw = json.dumps(valid, indent=2).replace('"layer": "BeforeProjectiles"', '"layer": "Projectiles" if false else "BeforeProjectiles"', 1)
+    if scenario == "long":
+        assert len(raw) > 12000 and raw.rfind('"endOpacity"') > 12000
+    patch = {"schema": VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": valid["slots"],
+             "slotIdsDelete": [], "slotIndicesDelete": [], "note": "strict JSON"}
     responses.extend([raw, patch])
-    result = None
-    with pytest.raises(PlannerUnavailable, match=rejection) if rejection else nullcontext():
-        if stage == "gameplay":
-            result = gameplay_stage.try_llm_plan({}, {}, "a+b")
-            assert result is not None
-            if scenario == "budget":
-                combine_stage.compile_and_validate_authored_runtime(result, {}, {}, "a+b",
-                    run_stage=lambda _label, fn, *args, **kwargs: fn(*args, **kwargs))
-        elif stage == "visual":
-            result = visual_stage_stage.apply_visual_director(data, {}, {})
-        else:
-            result = attach_vfx_manifest(data, "a+b", llm_director=vfx_transport.call_llm_vfx_director)
-    names = {"gameplay": ["planner", "author_repair"], "visual": ["visual_director", "visual_repair"], "vfx": ["vfx_director", "vfx_repair"]}[stage]
-    assert [request["_infini_stage"] for request in requests] == names
-    assert not responses  # Any unbounded third request fails the recording transport too.
+    result = attach_vfx_manifest(data, "a+b", llm_director=vfx_transport.call_llm_vfx_director)
+    assert [request["_infini_stage"] for request in requests] == ["vfx_director", "vfx_repair"]
     context = request_dossier(requests[1])
     assert context["malformedRawText"] == raw
-    if stage == "gameplay":
-        assert "multiple" not in context["allowedCallParamsReadOnly"]["spawn_on_event"]
-        assert "count" in context["allowedCallParamsReadOnly"]["spawn_on_event"]
-    else:
-        assert context["exactErrors"][0]["message"].startswith("malformed_json:")
-        if stage == "vfx":
-            assert context["exactErrors"][0]["message"].startswith("malformed_json: JSONDecodeError:")
-    if result is not None:
-        keys = {"gameplay": ("gameplayAuthorCalls", "gameplayRepairCalls"),
-                "visual": ("visualDirectorCalls", "visualRepairCalls"), "vfx": ("vfxDirectorCalls", "vfxRepairCalls")}[stage]
-        assert [result["debug"]["llmStageAccounting"][key] for key in keys] == [1, 1]
-        if stage == "gameplay":
-            assert result["runtimeProgram"] == authored["runtimeProgram"]
-            assert "_llmHistory" not in result
-        elif stage == "visual":
-            assert result["visualKit"]["item"]["visualIdentity"] == "literal composition"
-            assert result["visualKit"]["animationPlan"] == kit["animationPlan"]
-        else:
-            assert result["vfxManifest"]["slots"][0]["layer"] == "BeforeProjectiles"
-            assert result["debug"]["vfxDirectorRaw"] == valid
-    if stage == "visual" and scenario == "empty":
-        assert data["debug"]["llmStageAccounting"]["visualRepairCalls"] == 1
+    assert context["exactErrors"][0]["message"].startswith("malformed_json: JSONDecodeError:")
+    assert result["vfxManifest"]["slots"][0]["layer"] == "BeforeProjectiles"
+    assert result["debug"]["vfxDirectorRaw"] == valid
+    assert result["debug"]["llmStageAccounting"]["vfxRepairCalls"] == 1
+    assert not responses
 
 
 @pytest.mark.parametrize("mode", ["json_schema", "json_object", "downgraded"])
@@ -370,20 +295,24 @@ def test_visual_format_repair_uses_source_transport_semantics(wire_transport, mo
     source["item"]["grip"] = None
     source["animationPlan"] = None
     patch = _visual_patch(data)
+    patch["itemPatch"]["grip"] = {"normalizedX": 0.5, "normalizedY": 0.5}
     if rewrite:
         patch["itemPatch"]["visualIdentity"] = "a different visual design"
     raw = json.dumps(source)[:-1] + ",}"
-    responses.extend([raw, patch])
-    if mode == "json_schema" and not rewrite:
-        result = visual_stage_stage.apply_visual_director(data, {}, {})
-        expected = copy.deepcopy(kit)
-        expected.pop("animationPlan")
-        assert result["visualKit"] == expected
-    else:
-        with pytest.raises(PlannerUnavailable, match="recoverable visual fields"):
-            visual_stage_stage.apply_visual_director(data, {}, {})
-    assert [request["_infini_stage"] for request in requests] == ["visual_director", "visual_repair"]
-    assert request_dossier(requests[1])["malformedRawText"] == raw
+    responses.append(raw)
+    if mode != "json_schema":
+        responses.append(patch)
+    result = visual_stage_stage.apply_visual_director(data, {}, {})
+    expected = copy.deepcopy(kit)
+    expected.pop("animationPlan")
+    if mode != "json_schema":
+        expected["item"]["grip"] = patch["itemPatch"]["grip"]
+        expected["animationPlan"] = None
+    assert result["visualKit"] == expected
+    assert result["debug"]["visualDirectorRawText"] == raw
+    assert [request["_infini_stage"] for request in requests] == (["visual_director"] if mode == "json_schema" else ["visual_director", "visual_repair"])
+    if mode != "json_schema":
+        assert not request_dossier(requests[1])["malformedRawText"]
     assert not responses
 
 

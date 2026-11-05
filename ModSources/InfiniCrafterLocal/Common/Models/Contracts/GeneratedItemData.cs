@@ -40,16 +40,14 @@ public sealed partial class GeneratedItemData
 
     public string ToJson()
     {
-        Normalize();
-        return JsonSerializer.Serialize(this, Options);
+        return JsonSerializer.Serialize(CloneNormalized(), Options);
     }
 
     public string ToLocalCacheJson() => ToJson();
 
     public string ToNetworkJson()
     {
-        Normalize();
-        GeneratedItemData clone = CloneUnchecked(this);
+        GeneratedItemData clone = CloneNormalized();
         StripAuthoringBulkForTransport(clone);
         string json = JsonSerializer.Serialize(clone, Options);
         if (Utf8ByteCount(json) > MaxDefinitionJsonBytes)
@@ -61,10 +59,8 @@ public sealed partial class GeneratedItemData
     // it must not lose identity merely because a network byte budget refuses it.
     internal GeneratedItemData CloneForItemInstance()
     {
-        Normalize();
-        GeneratedItemData clone = CloneUnchecked(this);
+        GeneratedItemData clone = CloneNormalized();
         StripAuthoringBulkForTransport(clone);
-        clone.Normalize();
         return clone;
     }
 
@@ -211,6 +207,16 @@ public sealed partial class GeneratedItemData
             },
             VfxManifest = VfxManifestSpec.Empty(),
         };
+    }
+
+    // Readers, registry admission and ApplyToItem own normalization of live data.
+    // Mutable callers also exist: serialize a private graph and validate that graph
+    // before projection, never partially normalize the source on success or failure.
+    private GeneratedItemData CloneNormalized()
+    {
+        var clone = CloneUnchecked(this);
+        clone.Normalize();
+        return clone;
     }
 
     private static GeneratedItemData CloneUnchecked(GeneratedItemData source)

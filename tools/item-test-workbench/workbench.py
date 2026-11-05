@@ -16,6 +16,7 @@ import sys
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 LIMIT = 64 * 1024 * 1024
+HISTORY_FRAME_COUNT = 120
 
 
 def read_json(path: Path):
@@ -210,9 +211,10 @@ def frame_svg(trace, index, camera="action"):
     for tile in trace.get("scene",{}).get("tiles",[]):
         out.append(f'<rect x="{tile["x"]}" y="{tile["y"]}" width="{tile["width"]}" height="{tile["height"]}" fill="#6b4f35" stroke="#c49a6c" stroke-width="1"/>')
     # Historical trails are recorded points only, never extrapolated.
-    ids = {str(p["id"]) for prior in trace["snapshots"][:index+1] for p in prior.get("projectiles", [])}
+    history = trace["snapshots"][max(0, index - HISTORY_FRAME_COUNT + 1):index+1]
+    ids = {str(p["id"]) for prior in history for p in prior.get("projectiles", [])}
     for pid in sorted(ids):
-        points = [f'{p["x"]+p["width"]/2},{p["y"]+p["height"]/2}' for prior in trace["snapshots"][:index+1]
+        points = [f'{p["x"]+p["width"]/2},{p["y"]+p["height"]/2}' for prior in history
                   for p in prior.get("projectiles", []) if str(p["id"]) == pid and p.get("active",True) and drawable(p)]
         if points:
             out.append(f'<polyline points="{" ".join(points)}" fill="none" stroke="#38bdf8" stroke-opacity=".35" stroke-width="1"/>')
@@ -318,7 +320,7 @@ outer.append(el('rect',{width:1000,height:600,fill:'#101827'}));
 outer.append(el('text',{x:20,y:30,fill:'#fbbf24','font-size':18},`NATIVE TELEMETRY REPLAY · NOT TERRARIA RENDER · tick ${s.tick}`));
 for(const t of trace.scene?.tiles||[])svg.append(el('rect',{x:t.x,y:t.y,width:t.width,height:t.height,fill:'#6b4f35',stroke:'#c49a6c','stroke-width':1}));
 const crowded=(s.projectiles||[]).length>3;
-const trails=new Map();for(let j=Math.max(0,i-120);j<=i;j++)for(const p of frames[j].projectiles||[]){if(p.active===false||![p.x,p.y,p.width,p.height].every(Number.isFinite))continue;const key=String(p.id);if(!trails.has(key))trails.set(key,[]);trails.get(key).push(`${p.x+p.width/2},${p.y+p.height/2}`);}
+const trails=new Map();for(let j=Math.max(0,i-HISTORY_FRAME_COUNT+1);j<=i;j++)for(const p of frames[j].projectiles||[]){if(p.active===false||![p.x,p.y,p.width,p.height].every(Number.isFinite))continue;const key=String(p.id);if(!trails.has(key))trails.set(key,[]);trails.get(key).push(`${p.x+p.width/2},${p.y+p.height/2}`);}
 for(const points of trails.values())svg.append(el('polyline',{points:points.join(' '),fill:'none',stroke:'#38bdf8','stroke-opacity':.35,'stroke-width':1}));
 for(const [a,color,label] of [[s.player,'#34d399','player'],[s.dummy,'#fb7185','dummy'],...(s.projectiles||[]).map(p=>[p,p.active===false?'#64748b':'#38bdf8',crowded?`#${p.id}`:`#${p.id} ${p.entityId||''}`])]){if(!a||![a.x,a.y,a.width,a.height].every(Number.isFinite))continue;svg.append(el('rect',{x:a.x,y:a.y,width:a.width,height:a.height,fill:color,'fill-opacity':.18,stroke:color,'stroke-width':1.5}));if(!(crowded&&a.active===false))svg.append(el('text',{x:label==='player'?a.x-4:label==='dummy'?a.x+a.width+4:a.x,y:a.y-(label==='player'||label==='dummy'?6:20+(crowded?(Number(a.id)||0)%5*10:0)),'text-anchor':label==='player'?'end':'start',fill:color,'font-size':10},label.length>24?label.slice(0,23)+'…':label));if(Number.isFinite(a.vx)&&Number.isFinite(a.vy))svg.append(el('line',{x1:a.x+a.width/2,y1:a.y+a.height/2,x2:a.x+a.width/2+a.vx*3,y2:a.y+a.height/2+a.vy*3,stroke:'#fff','stroke-width':1}));}
 for(const e of s.events||[])if(e.kind==='item_contact_query'&&valid(e)){svg.append(el('rect',{x:e.x,y:e.y,width:e.width,height:e.height,fill:'#fb923c','fill-opacity':.12,stroke:'#fb923c','stroke-width':1.5}));svg.append(el('text',{x:e.x,y:e.y-20,fill:'#fb923c','font-size':9},'native contact query (not hit)'));}
@@ -331,7 +333,7 @@ if('manaCost' in player){const slots=(player.armor||[]).map(a=>`${a.placement}:$
 if([player.x,player.y,player.width,player.height,player.aimX,player.aimY].every(Number.isFinite))svg.append(el('line',{x1:player.x+player.width/2,y1:player.y+player.height/2,x2:player.aimX,y2:player.aimY,stroke:'#34d399','stroke-opacity':.4,'stroke-dasharray':'3 4'}));
 if('generatedBuffTicks' in player){const stats=player.generatedItemExhaustion?.length?`Generated buff ticks ${player.generatedBuffTicks} · item exhaustion max ${Math.max(...player.generatedItemExhaustion.map(e=>e.remainingTicks))} · move ${player.moveSpeed} · life regen ${player.lifeRegen}`:`Generated buff ticks ${player.generatedBuffTicks} · jump boost ${player.jumpSpeedBoost} · move ${player.moveSpeed} · pick ${player.pickSpeed}`;outer.append(el('text',{x:20,y:525,fill:'#c4b5fd','font-size':14},stats));}
 outer.append(el('text',{x:20,y:550,fill:'#e2e8f0','font-size':16},`Player life ${player.life} · mana ${player.mana} · channel ${player.channel} | Dummy life ${dummy.life}${trace.execution?.clientGraphics?.nativeClientBranch?` · native animation ${pose?.itemAnimation}`:''}`));
-outer.append(el('text',{x:20,y:580,fill:'#94a3b8','font-size':12},`Camera: ${document.getElementById('camera').value} (offscreen actors may be omitted) · entity boxes · trails = last 120 frames`));
+outer.append(el('text',{x:20,y:580,fill:'#94a3b8','font-size':12},`Camera: ${document.getElementById('camera').value} (offscreen actors may be omitted) · entity boxes · trails = last HISTORY_FRAME_COUNT frames`));
 outer.append(svg);
 if(crowded){outer.append(el('text',{x:780,y:90,fill:'#e2e8f0','font-size':13},'Recorded projectiles'));(s.projectiles||[]).slice(0,18).forEach((p,row)=>outer.append(el('text',{x:780,y:110+row*18,fill:p.active===false?'#94a3b8':'#38bdf8','font-size':11},`#${p.id} ${String(p.entityId||'?').slice(0,18)} · ${p.active===false?'inactive':'active'} · dmg ${p.damage??'?'}`)));if(s.projectiles.length>18)outer.append(el('text',{x:780,y:455,fill:'#94a3b8','font-size':11},'More actors in exact JSON'));}
 if(trace.execution?.clientGraphics?.phaseFlags?.['Projectile.Update.dedServ']===false){const hits=(s.events||[]).filter(e=>e.kind==='item_hit'||e.kind==='hit');outer.append(el('text',{x:20,y:488,fill:'#86efac','font-size':13},`This snapshot: native item damage ${hits.filter(e=>e.kind==='item_hit').reduce((a,e)=>a+(e.damageDone||0),0)} · projectile damage ${hits.filter(e=>e.kind==='hit').reduce((a,e)=>a+(e.damageDone||0),0)} · critical hits ${hits.filter(e=>e.crit===true).length} · healed +${(s.events||[]).filter(e=>e.kind==='native_heal').reduce((a,e)=>a+(e.gained||0),0)}`));}
@@ -345,7 +347,7 @@ let timer=null;function stop(){clearInterval(timer);timer=null;document.getEleme
 document.getElementById('camera').onchange=()=>{stop();show(+seek.value)};seek.oninput=()=>{stop();show(+seek.value)};document.getElementById('previous').onclick=()=>{stop();show(+seek.value-1)};document.getElementById('next').onclick=()=>{stop();show(+seek.value+1)};
 document.getElementById('play').onclick=()=>{if(timer){stop();return}if(+seek.value===frames.length-1)show(0);document.getElementById('play').textContent='Pause';timer=setInterval(()=>{if(+seek.value>=frames.length-1){stop();return}show(+seek.value+1)},100)};show(0);
 })();
-</script>'''.replace('TRACE_DATA',data).replace('CAMERA_MODE',camera)
+</script>'''.replace('CAMERA_MODE',camera).replace('HISTORY_FRAME_COUNT',str(HISTORY_FRAME_COUNT)).replace('TRACE_DATA',data)
     (output / "replay.html").write_text(page,encoding="utf-8")
     # Keep representative SVG frames and all exact data; avoid thousands of duplicate assets.
     keyframes={0,frame_count//4,frame_count//2,3*frame_count//4,frame_count-1}

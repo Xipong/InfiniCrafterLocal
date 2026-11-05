@@ -47,11 +47,11 @@ def test_same_recipe_rechecks_cache_and_releases_failed_flight(pipeline_harness,
     entered, release, second_key = threading.Event(), threading.Event(), threading.Event()
     calls = []
     real_key = pipeline.recipe_key
-    key_calls = []
+    key_threads = set()
 
     def key(*args):
-        key_calls.append(1)
-        if len(key_calls) == 2:
+        key_threads.add(threading.get_ident())
+        if len(key_threads) == 2:
             second_key.set()
         return real_key(*args)
 

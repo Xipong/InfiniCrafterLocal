@@ -230,7 +230,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
                         });
                     continue;
                 }
-                Texture2D? texture = InfiniCrafterLocalMod.Sprites.TryGet(emission.TexturePath, out float localForwardRadians);
+                Texture2D? texture = InfiniCrafterLocalMod.Sprites.TryGetReady(emission.TexturePath, out float localForwardRadians);
                 if (texture is null || !SpendDraw(emission))
                     continue;
                 EnsureBegin();

@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 from http.server import ThreadingHTTPServer
+import os
 
 from infini_local.core.config_bootstrap import APP_VERSION, CACHE_DIR, WORLD_RECIPES_DIR
-from infini_local.core.env_utils import env_int, env_str
+from infini_local.core.env_utils import env_str
+from infini_local.core.server_endpoint import resolve_server_endpoint
 from infini_local.core.image_dependencies import Image, PILLOW_IMPORT_ERROR
 from infini_local.core.images import config as visual_config
 from infini_local.core.llm_config import ALLOW_DETERMINISTIC_DEV_FALLBACK, USE_LLM
@@ -16,6 +18,7 @@ from infini_local.web.server_handler import Handler
 
 
 def main() -> None:
+    endpoint = resolve_server_endpoint(os.environ)
     # Autostart happens in ThreadingHTTPServer workers, where Python forbids
     # signal registration. Install the process-tree cleanup on the main thread
     # before any request can launch sd.cpp.
@@ -23,8 +26,7 @@ def main() -> None:
     install_cleanup_handlers(SDCPP_SERVER_STATE, log_event)
     if visual_config.REQUIRE_PILLOW and Image is None and env_str("INFINI_IMAGE_BACKEND", visual_config.IMAGE_BACKEND).lower() != "off":
         raise SystemExit("Pillow is required for InfiniCrafterLocal visual generation/postprocess. Run OPEN_INFINICRAFT.bat setup. Import error: " + PILLOW_IMPORT_ERROR)
-    host = env_str("INFINI_HOST", "127.0.0.1")
-    port = env_int("INFINI_PORT", 5055, lo=1, hi=65535)
+    host, port = endpoint.bind_host, endpoint.port
     print(f"InfiniCrafterLocal v{APP_VERSION} listening on http://{host}:{port}")
     print(f"LLM={USE_LLM} provider={active_llm_provider()} model={resolve_llm_model() if USE_LLM else '<off>'} deterministicDevFallback={ALLOW_DETERMINISTIC_DEV_FALLBACK} imageBackend={visual_config.IMAGE_BACKEND} worldRecipes={WORLD_RECIPES_DIR}")
     if visual_config.IMAGE_BACKEND in {"sdcpp", "stablediffusioncpp", "stable-diffusion.cpp", "stable_diffusion_cpp"}:

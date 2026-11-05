@@ -31,7 +31,7 @@ Malformed provider/patch shape фатален: код не угадывает с
 <a id="format"></a>
 ## Синтаксический Repair первоначального ответа
 
-Для initial Gameplay/Visual JSON parse failure единственный conditional format pass видит исходный текст. Его output не новый design source. Scanner восстанавливает только объявленные однозначные punctuation/key-quote повреждения (включая trailing commas вне strings); восстановленный целый объект сравнивается с Repair output после объявленной lossless projection / Visual normalization. Изменение valid damage или visualIdentity отклоняется. Невозможность восстановить целый объект и доказать сохранность — fail closed, не произвольный JSON5 и не дописывание missing design. Gameplay Format Repair не получает повторный parent/balance/design dossier: grammar ограничивается exact известными `fn` восстановимого source, сам source сохраняется полностью; unknown identities не угадываются.
+Для initial Gameplay/Visual JSON parse failure используется локальный syntax-only Fix с `reason=fix:llm_json_syntax`, без LLM-вызова и расхода conditional Repair. Scanner восстанавливает только объявленные однозначные punctuation/key-quote повреждения и одну внешнюю скобку. Missing values, duplicate keys, array holes и несколько кандидатов на восстановление — fail closed, не JSON5 и не дописывание missing design. Исходный ответ сохраняется в trace; восстановленный объект проходит обычные provider projection и validation. Если после этого осталась содержательная ошибка, доступен прежний единственный frozen-first Repair с exact scope, без разрешения переписать валидные damage/visualIdentity.
 
 <a id="gameplay"></a>
 ## Gameplay scope и patch shape

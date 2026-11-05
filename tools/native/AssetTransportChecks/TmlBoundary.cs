@@ -95,7 +95,11 @@ namespace InfiniCrafterLocal.Common.Services
         public string Endpoint { get; set; } = "";
         public string AssetBaseUrlForSharing() => "";
     }
-    public sealed class RuntimeSpriteCache { public void Invalidate(string path) { } }
+    public sealed class RuntimeSpriteCache
+    {
+        public void Invalidate(string path) { }
+        public object? TryGetReady(string path) => null; // No texture owner in this CPU packet fixture.
+    }
     public static class LocalHttpQuietFailure
     {
         public static void ClearAll() { }

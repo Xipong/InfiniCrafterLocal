@@ -99,6 +99,7 @@ internal static partial class EngineRuntimeChecks
             var descriptors = probe.Sync.BuildServerAssetDescriptors(data);
             probe.Sync.RegisterRemoteAssetDescriptors(data.Id, descriptors); probe.Sync.EnsureAssetsForData(data);
             Equal(path, probe.Sync.ResolveCertifiedLocalPath(path)!, "fixture is lifecycle-certified before inventory calls");
+            probe.Cache.TryGet(path); // explicit lifecycle preparation, not a draw-time load
             int reads = 0;
             using var hook = new MonoMod.RuntimeDetour.ILHook(typeof(GeneratedAssetSyncService).GetMethod("IsValidCachedAsset", BindingFlags.Static | BindingFlags.NonPublic)!, il => {
                 var sites = il.Body.Instructions.Where(i => i.OpCode == Mono.Cecil.Cil.OpCodes.Call && i.Operand is Mono.Cecil.MethodReference m
@@ -110,12 +111,13 @@ internal static partial class EngineRuntimeChecks
                 var items = Enumerable.Range(0, 60).Select(_ => ReviewItem(data)).ToArray();
                 foreach (uint tick in new uint[] { 100, 101, 190 }) {
                     clock.SetValue(null, tick); reads = 0;
-                    foreach (var item in items) probe.Draw(item);
+                    foreach (var item in items)
+                        item.PreDrawInInventory(probe.Batch, Microsoft.Xna.Framework.Vector2.Zero, new Microsoft.Xna.Framework.Rectangle(0, 0, 32, 32), Microsoft.Xna.Framework.Color.White, Microsoft.Xna.Framework.Color.White, Microsoft.Xna.Framework.Vector2.Zero, 1);
                     Console.WriteLine($"DETAIL: certified inventory instances=60 tick={tick} PNG body reads={reads}");
                     Equal(0, reads, "unchanged certified proof/stat avoids per-instance PNG reads");
                 }
                 Equal(1L, probe.Cache.GetDebugSnapshot().LoadSuccessCount, "one successful CPU texture admission");
-                Equal(179L, probe.Cache.GetDebugSnapshot().HitCount, "179 actual hot cache consumers");
+                Equal(180L, probe.Cache.GetDebugSnapshot().HitCount, "180 actual inventory borrows of lifecycle-prepared texture");
                 probe.Sync.EnsureAssetsForData(data, true); Equal(1, reads, "explicit force retry revalidates body");
                 File.WriteAllBytes(path, AssetOwnerOtherColor); File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(1));
                 probe.Sync.EnsureAssetsForData(data); Equal(2, reads, "changed file stat rechecks body even inside cadence");

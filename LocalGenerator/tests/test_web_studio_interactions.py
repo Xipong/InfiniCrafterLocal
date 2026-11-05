@@ -76,6 +76,7 @@ def test_malformed_saved_config_keeps_polling_stop_and_recovery_available(studio
     def malformed(_path):
         raise error_type('Malformed saved configuration')
     monkeypatch.setattr(settings_env, 'parse_env', malformed)
+    config.write_text(config.read_text() + '# externally changed\n')
     server.commands.put({'id': 'stop-with-malformed-config', 'action': 'stop', 'values': {}, 'extra': {}})
     controller.tick()
     assert server._state['savedValues'] == good['savedValues']
@@ -677,8 +678,9 @@ def test_validate_restores_multiline_draft(studio, monkeypatch, validation_fails
     submitted = '<lora:browser:0.2>\n<lora:draft:0.3>'
     observed = []
 
-    def validate():
-        observed.append(app.values[key])
+    def validate(*, data, lan_enabled):
+        assert app.values[key] == original
+        observed.append(data[key])
         if validation_fails:
             raise ValueError('validation rejected draft')
 

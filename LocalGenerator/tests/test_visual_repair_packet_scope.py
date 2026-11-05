@@ -3,7 +3,7 @@ import copy
 
 import pytest
 from jsonschema import Draft202012Validator
-from infini_local.core.provider_schema import _provider_strict_projection
+from infini_local.core.errors import PlannerUnavailable
 from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 
 from prompt_packet_helpers import request_dossier
@@ -97,7 +97,7 @@ def test_hostile_complete_patch_still_hits_authoritative_frozen_filter(wire_tran
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-def test_whole_response_repair_keeps_complete_contract_and_raw_source(wire_transport, monkeypatch, mode):
+def test_unrecoverable_whole_response_never_dispatches_a_format_repair(wire_transport, monkeypatch, mode):
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
     source = visual_contract.MalformedVisualDirectorOutput(raw_text='{"schema":', error="syntax")
@@ -105,13 +105,9 @@ def test_whole_response_repair_keeps_complete_contract_and_raw_source(wire_trans
     ids = [row["id"] for row in data["runtimeProgram"]["entities"]]
     scope = visual_repair_scope._build_visual_repair_scope(source, errors, ids, "item")
     responses, requests = wire_transport
-    responses.append({})
-    visual_request._request_visual_kit(data, {}, {}, repair_errors=errors, previous=source, repair_scope=scope)
-    packet = request_dossier(requests[0])
-    expected = visual_contract._visual_repair_schema(ids, False, "item")
-    assert packet["responseSchema"] == (_provider_strict_projection(expected) if mode == "json_schema" else expected)
-    assert packet["malformedRawText"] == source.raw_text
-    assert "parentFactsReadOnly" in packet
+    with pytest.raises(PlannerUnavailable, match="syntax must be recovered locally"):
+        visual_request._request_visual_kit(data, {}, {}, repair_errors=errors, previous=source, repair_scope=scope)
+    assert not requests and not responses
 
 
 @pytest.mark.parametrize("bad_rows", [True, 7, {"malformed": "container"}])

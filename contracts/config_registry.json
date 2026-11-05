@@ -1,6 +1,6 @@
 {
   "authority": "derived-evidence-only",
-  "documentedFieldCount": 128,
+  "documentedFieldCount": 126,
   "entries": [
     {
       "declarations": [
@@ -1265,34 +1265,6 @@
       "visibility": "internal"
     },
     {
-      "declarations": [],
-      "default": [],
-      "documented": true,
-      "example": "10",
-      "gui": true,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD",
-      "owners": [],
-      "secret": false,
-      "type": "unknown",
-      "visibility": "gui"
-    },
-    {
-      "declarations": [],
-      "default": [],
-      "documented": true,
-      "example": "0",
-      "gui": true,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED",
-      "owners": [],
-      "secret": false,
-      "type": "unknown",
-      "visibility": "gui"
-    },
-    {
       "declarations": [
         {
           "default": false,
@@ -1358,13 +1330,6 @@
       "declarations": [
         {
           "default": "127.0.0.1",
-          "file": "LocalGenerator/infini_local/web/server.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        },
-        {
-          "default": "127.0.0.1",
           "file": "LocalGenerator/infini_local/web/server_status.py",
           "maximum": null,
           "minimum": null,
@@ -1379,7 +1344,6 @@
       "minimum": null,
       "name": "INFINI_HOST",
       "owners": [
-        "LocalGenerator/infini_local/web/server.py",
         "LocalGenerator/infini_local/web/server_status.py"
       ],
       "secret": false,
@@ -2660,15 +2624,6 @@
           "default": {
             "expression": "int(GENERATION_DEFAULTS[\"INFINI_LLM_TIMEOUT\"])"
           },
-          "file": "LocalGenerator/infini_local/pipelines/author/request.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        },
-        {
-          "default": {
-            "expression": "int(GENERATION_DEFAULTS[\"INFINI_LLM_TIMEOUT\"])"
-          },
           "file": "LocalGenerator/infini_local/pipelines/visual/request.py",
           "maximum": null,
           "minimum": null,
@@ -3091,33 +3046,25 @@
     {
       "declarations": [
         {
-          "default": 5055,
-          "file": "LocalGenerator/infini_local/web/server.py",
-          "maximum": 65535,
-          "minimum": 1,
-          "type": "integer"
-        },
-        {
-          "default": 5055,
+          "default": "",
           "file": "LocalGenerator/infini_local/web/server_status.py",
-          "maximum": 65535,
-          "minimum": 1,
-          "type": "integer"
+          "maximum": null,
+          "minimum": null,
+          "type": "string"
         }
       ],
-      "default": 5055,
+      "default": "",
       "documented": false,
       "example": null,
       "gui": true,
-      "maximum": 65535,
-      "minimum": 1,
+      "maximum": null,
+      "minimum": null,
       "name": "INFINI_PORT",
       "owners": [
-        "LocalGenerator/infini_local/web/server.py",
         "LocalGenerator/infini_local/web/server_status.py"
       ],
       "secret": false,
-      "type": "integer",
+      "type": "string",
       "visibility": "gui"
     },
     {
@@ -5221,15 +5168,15 @@
     }
   ],
   "errors": [],
-  "fieldCount": 212,
-  "fingerprint": "4d72e8cdd1a54000b373e06132bd55ffb9f8b4b5bcebe800e9e05f4936b3673a",
+  "fieldCount": 210,
+  "fingerprint": "0fbc95bd85a9c303eb400d831bc99d79d4ead06acb4df46e8d4420dba06ecdc0",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",
     "LocalGenerator/config.example.env",
     "C# INFINI_* references"
   ],
-  "guiFieldCount": 127,
+  "guiFieldCount": 125,
   "ok": true,
   "schema": "infini.config-registry.v1",
   "secretFieldCount": 10,
@@ -5240,14 +5187,6 @@
     },
     {
       "field": "INFINI_CRAFT_HTTP_TIMEOUT_SECONDS",
-      "kind": "presented_without_env_helper_declaration"
-    },
-    {
-      "field": "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD",
-      "kind": "presented_without_env_helper_declaration"
-    },
-    {
-      "field": "INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED",
       "kind": "presented_without_env_helper_declaration"
     },
     {

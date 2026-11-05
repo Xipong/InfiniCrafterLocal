@@ -512,16 +512,44 @@ def test_subscription_request_preserves_packet_and_only_supported_wire_options(m
     assert options["headers"]["ChatGPT-Account-Id"] == credentials.account_id
 
 
-@pytest.mark.parametrize("stage,configured,expected", [("visual_director", "high", "low"), ("planner", "high", "high"), ("planner", "max", "max")])
-def test_subscription_reasoning_respects_stage_owner_and_catalog_max(wire, monkeypatch, stage, configured, expected):
-    wire.configure(LLM_PROVIDER="openai_codex", LLM_REASONING_MODE=configured, CODEX_VISUAL_REASONING="low")
-    context = {"provider": "openai_codex", "model": "gpt-6-sol", "base_url": CODEX, "api_mode": "responses", "api_key": ""}
-    reasoning = llm_provider_wire.llm_reasoning_payload("gpt-6-sol", context)
-    assert reasoning is not None and reasoning["effort"] == configured
-    prepared = llm._payload_for_context({"messages": [{"role": "user", "content": "test"}], "reasoning": reasoning, llm_provider_wire.LLM_STAGE_KEY: stage}, context)
-    assert prepared["reasoning"]["effort"] == expected
-    if configured == "max":
-        assert llm_provider_wire.apply_minimum_reasoning_effort({"reasoning": reasoning}, model_name="gpt-6-sol", minimum="medium")["reasoning"]["effort"] == "max"
+@pytest.mark.parametrize("stage,configured,visual,expected", [
+    ("planner", "off", "low", None), ("planner", "none", "low", "none"),
+    ("planner", "low", "high", "low"), ("planner", "high", "low", "high"),
+    ("planner", "max", "low", "max"),
+    ("visual_director", "off", "low", "low"),
+    ("visual_repair", "high", "model_default", None),
+    ("visual_director", "low", "inherit", "low"),
+])
+def test_subscription_reasoning_respects_stage_owner_on_wire(wire, monkeypatch, subscription_sends, stage, configured, visual, expected):
+    from infini_local.pipelines.author.request import build_initial_author_request
+
+    wire.configure(LLM_PROVIDER="openai_codex", CODEX_LLM_MODEL="gpt-6-sol",
+                   LLM_REASONING_MODE=configured, CODEX_VISUAL_REASONING=visual,
+                   LLM_RESPONSE_FORMAT_MODE="json_object")
+    _, _, calls = subscription_sends
+    events = []
+    monkeypatch.setattr(llm, "log_event", lambda level, label, row: events.append((label, copy.deepcopy(row), len(calls))))
+    if stage == "planner":
+        request, _, _ = build_initial_author_request({}, {}, "codex-reasoning", model_name="gpt-6-sol")
+    else:
+        request = llm_provider_wire.apply_llm_common_options(packet(stage), model_name="gpt-6-sol")
+    request = llm_provider_wire.with_llm_stage(request, stage)
+    result = llm.llm_chat_json(request, 1)
+    assert len(calls) == 1 and calls[0][0] == CODEX + "/responses"
+    sent = calls[0][1]
+    effective = {"effort": expected} if expected is not None else {}
+    assert sent["reasoning"] == {**effective, "summary": "auto"}
+    assert "reasoning_effort" not in sent
+    assert all(not key.startswith("_infini_") for key in sent)
+    debug = result["_debug"]
+    assert debug["configuredReasoningMode"] == configured
+    assert debug["requestedReasoning"].get("effort") == (None if configured == "off" else configured)
+    assert debug["effectiveReasoning"] == effective
+    _, logged, dispatches = next(event for event in events if event[0] == "LLM reasoning before dispatch")
+    assert dispatches == 0
+    assert logged["configuredReasoningMode"] == configured
+    assert logged["requestedReasoning"] == debug["requestedReasoning"]
+    assert logged["effectiveReasoning"] == effective
 
 
 def test_account_catalog_protocol_discovers_newly_gated_models(monkeypatch, subscription):

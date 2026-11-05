@@ -122,27 +122,6 @@ def test_coherence_advice_preserves_explicit_useful_placement_and_nonplacement(m
         assert placement == []
 
 
-def test_format_repair_with_coherence_advice_preserves_existing_placement(monkeypatch):
-    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_object")
-    item = build_runtime_fixture("fishing_platform_tool")
-    before = copy.deepcopy(item)
-    content = json.dumps(item)
-    _, recipe_context, _ = build_initial_author_request({}, {}, "syntax-only", model_name="offline-test")
-    requests = []
-
-    def respond(request, **kwargs):
-        requests.append(request)
-        return {"choices": [{"message": {"content": content}}]}
-
-    monkeypatch.setattr(pipeline, "llm_chat_json", respond)
-    prepared, raw = pipeline._repair_malformed_author_json(
-        malformed_raw_text=content[:-1] + ",}", parse_error=ValueError("trailing comma"),
-        original_recipe_context=recipe_context, model_name="offline-test",
-    )
-    context = request_dossier(requests[0])
-    assert "concept" not in context["requiredJsonShape"], "syntax repair is not a second design request"
-    assert context["malformedRawText"] == content[:-1] + ",}"
-    assert prepared == before and item == before and raw == content
 
 
 def test_scoped_repair_does_not_use_coherence_advice_to_remove_valid_placement(monkeypatch):
@@ -373,7 +352,7 @@ def test_author_entrypoint_uses_effective_format_preserves_raw_and_carries_mode_
     _stats(item)["params"]["manaCost"] = None
     content = json.dumps(item)
     raw = content[:-1] + ",}" if malformed else content
-    responses = iter([raw, content] if malformed else [content])
+    responses = iter([raw])
     requests = []
 
     def respond(request, **kwargs):
@@ -386,51 +365,11 @@ def test_author_entrypoint_uses_effective_format_preserves_raw_and_carries_mode_
     assert ("manaCost" not in _stats(result)["params"]) is (actual == "json_schema")
     assert validate_runtime_program(result)["ok"] is (actual == "json_schema")
     assert result["debug"]["llmRawOutput"] == raw[:12000]
-    assert [r["_infini_stage"] for r in requests] == (["planner", "author_repair"] if malformed else ["planner"])
+    assert [r["_infini_stage"] for r in requests] == ["planner"]
     if malformed:
-        assert result["debug"]["gameplayFormatRepairRawOutput"] == content[:12000]
+        assert result["debug"]["gameplaySyntaxFix"]["reason"] == "fix:llm_json_syntax"
 
 
-@pytest.mark.parametrize(
-    "source_schema,mode,actual,accepted",
-    [
-        pytest.param(*r, id=("schema" if r[0] else "plain") + "-" + r[1] + "-" + str(i))
-        for i, r in enumerate(
-            (
-                (True, "json_schema", "json_schema", True),
-                (False, "json_object", "json_object", True),
-                (False, "off", "", True),
-                (False, "json_schema", "json_object", True),
-                (False, "json_schema", None, False),
-            )
-        )
-    ],
-)
-def test_format_repair_preserves_source_contract_without_mode_upgrade(monkeypatch, source_schema, mode, actual, accepted):
-    from infini_local.core.errors import PlannerUnavailable
-
-    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
-    item = build_runtime_fixture("workbench_blade")
-    _stats(item)["params"]["manaCost"] = None
-    content = json.dumps(item)
-    response = {"choices": [{"message": {"content": content}}]}
-    if actual is not None:
-        response["_debug"] = {"responseFormatType": actual}
-    monkeypatch.setattr(pipeline, "llm_chat_json", lambda *a, **kw: response)
-    args = {
-        "malformed_raw_text": content[:-1] + ",}",
-        "parse_error": ValueError("trailing comma"),
-        "original_recipe_context": "{}",
-        "model_name": "offline-test",
-        "source_response_format": _response_format() if source_schema else None,
-    }
-    if not accepted:
-        with pytest.raises(PlannerUnavailable, match="changed recoverable authored fields"):
-            pipeline._repair_malformed_author_json(**args)
-    else:
-        prepared, raw = pipeline._repair_malformed_author_json(**args)
-        assert ("manaCost" not in _stats(prepared)["params"]) is source_schema
-        assert raw == content
 
 
 @pytest.mark.parametrize(

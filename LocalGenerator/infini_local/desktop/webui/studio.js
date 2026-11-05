@@ -22,7 +22,7 @@
     INFINI_USE_LLM:'Генерация механики моделью', INFINI_PROMPT_STYLE:'Художественное направление', INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK:'Технический запасной генератор', INFINI_GUI_PIPELINE_PRESET:'Профиль настроек', INFINI_LLM_PROVIDER:'Источник текста и механики', INFINI_CODEX_LLM_MODEL:'Текстовая модель Codex', INFINI_LMSTUDIO_URL:'Адрес LM Studio', INFINI_LMSTUDIO_MODEL:'Локальная текстовая модель', INFINI_OPENROUTER_API_KEY:'Ключ OpenRouter', INFINI_OPENROUTER_MODEL:'Модель OpenRouter', INFINI_OPENROUTER_PROVIDER:'Площадка OpenRouter', INFINI_OPENROUTER_HTTP_REFERER:'Источник запросов', INFINI_OPENROUTER_APP_TITLE:'Имя приложения в OpenRouter', INFINI_OPENAI_COMPAT_BASE_URL:'Адрес совместимого API', INFINI_OPENAI_COMPAT_API_KEY:'Ключ совместимого API', INFINI_OPENAI_COMPAT_MODEL:'Модель совместимого API', INFINI_LLM_API_MODE:'Формат запроса к модели', INFINI_LLM_RESPONSE_FORMAT:'Формат ответа', INFINI_LLM_TEMPERATURE:'Вариативность идеи', INFINI_LLM_REPAIR_TEMPERATURE:'Вариативность исправления', INFINI_VISUAL_DIRECTOR_TEMPERATURE:'Вариативность арт-директора', INFINI_LLM_MAX_TOKENS:'Лимит ответа, токены', INFINI_LLM_TIMEOUT:'Ожидание LLM-стадии, секунды', INFINI_VFX_LLM_DIRECTOR_MAX_TOKENS:'Лимит VFX, токены', INFINI_VFX_LLM_DIRECTOR_TIMEOUT:'Ожидание VFX, секунды', INFINI_LLM_REASONING_MODE:'Глубина рассуждения', INFINI_LLM_REASONING_MAX_TOKENS:'Бюджет рассуждения, токены', INFINI_LLM_REASONING_EXCLUDE:'Не возвращать рассуждение в ответ', INFINI_LLM_LOCAL_REASONING_PROMPT:'Приватная самопроверка', INFINI_LLM_POOL_FAILURE_COOLDOWN_SECONDS:'Пауза после сбоя, секунды', INFINI_LLM_NETWORK_ATTEMPTS:'Сетевые попытки',
     INFINI_IMAGE_BACKEND:'Источник изображений', INFINI_IMAGE_PARALLEL:'Параллельная генерация изображений', INFINI_IMAGE_MAX_CONCURRENCY:'Параллельных изображений', INFINI_SDCPP_SERVER_EXE:'Программа sd.cpp', INFINI_SDCPP_ROCM_COMPAT_ROOT:'Папка совместимости ROCm', INFINI_SDCPP_MODEL:'Диффузионная модель', INFINI_SDCPP_VAE:'Модель VAE / AE', INFINI_SDCPP_LLM:'Текстовый энкодер', INFINI_SDCPP_LORA_DIR:'Папка LoRA', INFINI_SDCPP_LORA_FILE:'Файл LoRA', INFINI_SDCPP_LORA_WEIGHT:'Сила LoRA', INFINI_SDCPP_LORA_PROMPT_TAGS:'Теги LoRA', INFINI_SDCPP_SERVER_URL:'Адрес sd.cpp', INFINI_SDCPP_SERVER_AUTOSTART:'Способ запуска sd.cpp', INFINI_SDCPP_SERVER_COMMAND_MODE:'Способ запуска sd.cpp', INFINI_SDCPP_SERVER_COMMAND_TEMPLATE:'Шаблон команды запуска', INFINI_SDCPP_SERVER_EXTRA_ARGS:'Дополнительные аргументы', INFINI_SDCPP_SERVER_SHOW_CONSOLE:'Показывать консоль sd.cpp', INFINI_SDCPP_SERVER_LOG_FILE:'Файл журнала sd.cpp', INFINI_SDCPP_WIDTH:'Ширина исходника, px', INFINI_SDCPP_HEIGHT:'Высота исходника, px', INFINI_SDCPP_STEPS:'Шаги генерации', INFINI_SDCPP_CFG:'Влияние промпта / CFG', INFINI_SDCPP_SAMPLER:'Сэмплер', INFINI_SDCPP_SEED:'Seed изображения', INFINI_ZIMAGE_PROMPT_CONTRACT:'Правила промпта Z-Image', INFINI_ZIMAGE_POSITIVE_ONLY:'Только позитивный промпт', INFINI_CODEX_IMAGE_MODEL:'Модель изображений Codex', INFINI_CODEX_IMAGE_QUALITY:'Качество изображения', INFINI_CODEX_IMAGE_SIZE:'Размер изображения', INFINI_CODEX_IMAGE_TIMEOUT:'Ожидание Codex, секунды', INFINI_CODEX_VISUAL_REASONING:'Рассуждение арт-директора Codex', INFINI_IMAGE_API_BASE_URL:'Адрес API изображений', INFINI_IMAGE_API_KEY:'Ключ API изображений', INFINI_IMAGE_API_MODEL:'Модель изображений API', INFINI_IMAGE_API_PATH:'Путь API генерации', INFINI_IMAGE_API_SIZE:'Размер исходного изображения', INFINI_IMAGE_API_TIMEOUT:'Ожидание API, секунды', INFINI_A1111_URL:'Адрес Automatic1111', INFINI_COMFYUI_URL:'Адрес ComfyUI',
     INFINI_VISUAL_ASSET_MODE:'Состав визуальных ассетов', INFINI_VISUAL_DIRECTOR_LLM:'Нейросетевой арт-директор', INFINI_VISUAL_DIRECTOR_MAX_TOKENS:'Лимит арт-директора, токены', INFINI_VFX_LLM_DIRECTOR:'Нейросетевые визуальные эффекты', INFINI_REMOVE_BG:'Удалять фон', INFINI_BG_REMOVE_MODE:'Метод удаления фона', INFINI_BG_COLOR:'Фон исходного рисунка', INFINI_CHROMA_TOLERANCE:'Допуск цвета фона', INFINI_ALPHA_THRESHOLD:'Порог прозрачности', INFINI_SPRITE_KEYER_SPILL_RADIUS:'Радиус очистки краёв', INFINI_SPRITE_KEYER_RESIDUE_STEPS:'Шаги очистки остаточного цвета', INFINI_SPRITE_RETRIES:'Повторы при дефекте спрайта', INFINI_SAVE_SPRITE_STAGES:'Сохранять промежуточные спрайты', INFINI_PIXEL_POSTERIZE:'Ограничивать палитру', INFINI_MAX_COLORS:'Количество цветов', INFINI_SPRITE_MASTER_CANVAS:'Промежуточный холст, px', INFINI_SPRITE_DOWNSCALE_FILTER:'Фильтр уменьшения', INFINI_SPRITE_CHROMA_DEFRINGE:'Очищать цветные ореолы', INFINI_SPRITE_PREMULTIPLIED_RESIZE:'Учитывать прозрачность при resize', INFINI_VISUAL_STRICT_AI_AUTHORSHIP:'Строгое авторство модели', INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK:'Запасное процедурное изображение', INFINI_VISUAL_REQUIRE_ITEM_SPRITE:'Требовать спрайт предмета',
-    INFINI_HOST:'Интерфейс генератора', INFINI_PORT:'Порт генератора', INFINI_MP_ASSET_TRANSPORT:'Доставка спрайтов друзьям', INFINI_ASSET_PUBLIC_BASE_URL:'Публичный адрес ассетов', INFINI_TERRARIA_PORT:'Порт Terraria', INFINI_CRAFT_HTTP_TIMEOUT_SECONDS:'Ожидание крафта, секунды', INFINI_CRAFT_HTTP_ATTEMPTS:'Попытки соединения', INFINI_COMBINE_BUSY_WAIT_SECONDS:'Ожидание очереди, секунды', INFINI_MULTIDEV_CONCURRENCY:'Параллельные окна разработчика', INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED:'Отладочная выдача расходников', INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD:'Минимальная выдача расходников', INFINI_TRACE_PROMPTS:'Записывать промпты и этапы', INFINI_TRACE_MAX_PROMPT_CHARS:'Лимит предпросмотра, символы', INFINI_TRACE_EVENTS_TAIL:'Событий в журнале', INFINI_CONSOLE_EVENT_LEVEL:'Подробность консоли'
+    INFINI_HOST:'Интерфейс генератора', INFINI_PORT:'Порт генератора', INFINI_MP_ASSET_TRANSPORT:'Доставка спрайтов друзьям', INFINI_ASSET_PUBLIC_BASE_URL:'Публичный адрес ассетов', INFINI_TERRARIA_PORT:'Порт Terraria', INFINI_CRAFT_HTTP_TIMEOUT_SECONDS:'Ожидание крафта, секунды', INFINI_CRAFT_HTTP_ATTEMPTS:'Попытки соединения', INFINI_COMBINE_BUSY_WAIT_SECONDS:'Ожидание очереди, секунды', INFINI_MULTIDEV_CONCURRENCY:'Параллельные окна разработчика', INFINI_TRACE_PROMPTS:'Записывать промпты и этапы', INFINI_TRACE_MAX_PROMPT_CHARS:'Лимит предпросмотра, символы', INFINI_TRACE_EVENTS_TAIL:'Событий в журнале', INFINI_CONSOLE_EVENT_LEVEL:'Подробность консоли'
   };
   const shortHelp = {
     INFINI_IMAGE_PARALLEL:'Для облака: изображения одновременно с VFX Designer. Выключи при нехватке видеопамяти локальной модели. Если сохранён лимит 1, изображения идут по одному — поставь 2–4 ниже. Сохранить → перезапустить сервер.',
@@ -66,7 +66,7 @@
   const isCredentialKey = key => /(?:^|_)(?:API_KEY|TOKEN|PASSWORD|SECRET|CREDENTIALS?)(?:_|$)/i.test(key);
   function makeFields(remote) {
     const map = new Map((remote.fields || []).map(field => [field.key,{...field}]));
-    Object.keys({...remote.defaults,...(remote.savedValues || remote.values),...state.draft}).filter(key => key.startsWith('INFINI_')).forEach(key => {
+    Object.keys({...remote.defaults,...(remote.savedValues || remote.values),...state.draft}).filter(key => key.startsWith('INFINI_') && !(remote.inactiveSettings || []).includes(key)).forEach(key => {
       if (!map.has(key)) map.set(key,{key,label:names[key],help:remote.fieldHelp?.[key] || '',options:[],secret:isCredentialKey(key),advanced:!basicKeys.has(key),synthetic:true});
     });
     return [...map.values()].map(field => {
@@ -115,16 +115,16 @@
     if(pool && pool[2] !== 'ENABLED' && value(`INFINI_LLM_POOL_${pool[1]}_ENABLED`) !== '1') return t('Дополнительная линия выключена');
     if (pool && pool[2] === 'OPENROUTER_PROVIDER' && value(`INFINI_LLM_POOL_${pool[1]}_PROVIDER`) !== 'openrouter') return t('Для линии OpenRouter');
     if (['INFINI_LLM_TEMPERATURE','INFINI_LLM_REPAIR_TEMPERATURE','INFINI_VISUAL_DIRECTOR_TEMPERATURE','INFINI_LLM_MAX_TOKENS','INFINI_LLM_REASONING_MAX_TOKENS','INFINI_LLM_REASONING_EXCLUDE'].includes(key) && provider === 'openai_codex') return t('Codex не принимает этот параметр');
+    if (key === 'INFINI_LLM_REPAIR_TEMPERATURE' && value('INFINI_USE_LLM','1') !== '1') return t('Текстовая генерация выключена');
     if (key === 'INFINI_CODEX_VISUAL_REASONING' && provider !== 'openai_codex') return t('Для текстового Codex');
     const reasoning = value('INFINI_LLM_REASONING_MODE','off').toLowerCase().replaceAll('-','_');
     const reasoningOff = ['', 'off', 'false', '0', 'disabled', 'disable', 'none', 'no_reasoning'].includes(reasoning);
     const promptReasoning = ['prompt','prompt_light','prompt_strong','local_prompt','local_light','local_strong'].includes(reasoning);
     if (key === 'INFINI_LLM_REASONING_EXCLUDE' && (provider === 'local' || reasoningOff || promptReasoning)) return t('Для API reasoning, не prompt-only режима');
     if (key === 'INFINI_LLM_REASONING_MAX_TOKENS' && (provider === 'local' || !['tokens','token_budget','max_tokens','budget'].includes(reasoning))) return t('Для API с режимом бюджета токенов');
-    if (key === 'INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD' && value('INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED') !== '1') return t('Отладочная выдача выключена');
     if (['INFINI_IMAGE_PARALLEL','INFINI_IMAGE_MAX_CONCURRENCY'].includes(key) && backend === 'off') return t('Изображения выключены');
     if (key === 'INFINI_IMAGE_MAX_CONCURRENCY' && value('INFINI_IMAGE_PARALLEL') === '0') return t('Параллельная генерация выключена: запросы идут по одному');
-    if (['INFINI_VISUAL_DIRECTOR_LLM','INFINI_VFX_LLM_DIRECTOR'].includes(key) && !['full','all','projectile','visualpack','assetpack'].includes(value('INFINI_VISUAL_ASSET_MODE'))) return t('Дополнительные визуальные ассеты выключены');
+    if (['INFINI_VISUAL_DIRECTOR_LLM','INFINI_VFX_LLM_DIRECTOR'].includes(key) && (backend === 'off' || !['full','all','projectile','visualpack','assetpack'].includes(value('INFINI_VISUAL_ASSET_MODE')))) return t('Дополнительные визуальные ассеты выключены');
     if (['INFINI_CODEX_LLM_MODEL','INFINI_CODEX_VISUAL_REASONING'].includes(key) && value('INFINI_USE_LLM') === '0') return t('Текстовая генерация выключена');
     if (['INFINI_REMOVE_BG','INFINI_BG_REMOVE_MODE','INFINI_CHROMA_TOLERANCE','INFINI_SPRITE_KEYER_SPILL_RADIUS','INFINI_SPRITE_KEYER_RESIDUE_STEPS','INFINI_SPRITE_CHROMA_DEFRINGE'].includes(key) && value('INFINI_BG_COLOR') === 'transparent') return t('Нативная прозрачность: локальный keyer не используется');
     if (['INFINI_BG_REMOVE_MODE','INFINI_CHROMA_TOLERANCE','INFINI_SPRITE_KEYER_SPILL_RADIUS','INFINI_SPRITE_KEYER_RESIDUE_STEPS','INFINI_SPRITE_CHROMA_DEFRINGE'].includes(key) && value('INFINI_REMOVE_BG') === '0') return t('Удаление фона выключено');
@@ -133,18 +133,18 @@
     if (/^INFINI_OPENAI_COMPAT_/.test(key) && provider !== 'openai_compat') return t('Для совместимого API');
     if (/^INFINI_CODEX_LLM_/.test(key) && provider !== 'openai_codex') return t('Для ChatGPT / Codex');
     if (/^INFINI_(SDCPP_|ZIMAGE_)/.test(key) && backend !== 'sdcpp') return t('Для локального sd.cpp');
-    if (['INFINI_SDCPP_SERVER_EXE','INFINI_SDCPP_ROCM_COMPAT_ROOT','INFINI_SDCPP_MODEL','INFINI_SDCPP_VAE','INFINI_SDCPP_LLM','INFINI_SDCPP_SERVER_COMMAND_MODE','INFINI_SDCPP_SERVER_COMMAND_TEMPLATE','INFINI_SDCPP_SERVER_EXTRA_ARGS','INFINI_SDCPP_SERVER_SHOW_CONSOLE','INFINI_SDCPP_SERVER_LOG_FILE'].includes(key) && value('INFINI_SDCPP_SERVER_AUTOSTART') !== '1') return t('Для управляемого запуска sd.cpp');
     if (/^INFINI_CODEX_IMAGE_/.test(key) && backend !== 'openai_codex') return t('Для изображений ChatGPT / Codex');
     if (/^INFINI_IMAGE_API_/.test(key) && backend !== 'image_api') return t('Для внешнего Image API');
     if (key === 'INFINI_A1111_URL' && backend !== 'a1111') return t('Для Automatic1111');
     if (key === 'INFINI_COMFYUI_URL' && backend !== 'comfyui') return t('Для ComfyUI');
-    if (field.route === 'sprites' && backend === 'off') return t('Изображения выключены');
+    if (['INFINI_REMOVE_BG','INFINI_SPRITE_RETRIES','INFINI_PIXEL_POSTERIZE','INFINI_VISUAL_STRICT_AI_AUTHORSHIP','INFINI_BG_REMOVE_MODE','INFINI_CHROMA_TOLERANCE','INFINI_SPRITE_KEYER_SPILL_RADIUS','INFINI_SPRITE_KEYER_RESIDUE_STEPS','INFINI_SPRITE_CHROMA_DEFRINGE','INFINI_BG_COLOR','INFINI_ALPHA_THRESHOLD','INFINI_MAX_COLORS','INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK'].includes(key) && backend === 'off') return t('Изображения выключены');
+    if (['INFINI_BG_REMOVE_MODE','INFINI_CHROMA_TOLERANCE','INFINI_SPRITE_KEYER_SPILL_RADIUS','INFINI_SPRITE_KEYER_RESIDUE_STEPS','INFINI_SPRITE_CHROMA_DEFRINGE'].includes(key) && ['off','none'].includes(value('INFINI_BG_REMOVE_MODE','sprite_keyer'))) return t('Удаление фона выключено');
+    if (key === 'INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK' && value('INFINI_VISUAL_STRICT_AI_AUTHORSHIP','1') === '1') return t('Строгое авторство модели');
+    if (key === 'INFINI_LLM_LOCAL_REASONING_PROMPT' && !(promptReasoning || provider === 'local' && !reasoningOff)) return t('Для локального prompt reasoning');
     if (key === 'INFINI_MAX_COLORS' && value('INFINI_PIXEL_POSTERIZE') !== '1') return t('Палитра не ограничена');
     if (key === 'INFINI_ASSET_PUBLIC_BASE_URL' && value('INFINI_MP_ASSET_TRANSPORT') !== 'http') return t('Доставка идёт внутри Terraria');
     if (key === 'INFINI_ASSET_PUBLIC_BASE_URL' && !state.lan) return t('Режим LAN / Radmin выключен');
     if (key === 'INFINI_SDCPP_SERVER_COMMAND_TEMPLATE' && value('INFINI_SDCPP_SERVER_COMMAND_MODE') !== 'template') return t('Запуск использует автоматический argv');
-    // Native metadata describes the controller values, not unsaved browser edits.
-    if (field.disabled && !state.dirty.size && state.lan === state.baselineLan && Object.entries(state.remote?.values || {}).every(([name,val])=>value(name) === val)) return t(field.disabled);
     return '';
   }
   function maybeLoadCatalog() {
@@ -256,7 +256,7 @@
         }
         if (transforming && (state.lanEdit || 0) <= pending.clock) state.lan = !!(receipt.lanEnabled ?? pending.lan);
         // A handled callback is not proof of a disk write or a running generator.
-        if (['save','start','forceRestart'].includes(pending.action) && (receipt.status === 'succeeded' || /^saved:/i.test(remote.status || ''))) {
+        if (['save','start','forceRestart'].includes(pending.action) && receipt.status === 'succeeded') {
           if(!receipt.savedValues || !receipt.savedRevision) {
             reconcilePersistedValues(pending,{...receipt,savedValues:receipt.savedValues || saved},remote.defaults);
             if((state.lanEdit || 0) <= pending.clock && !receipt.savedValues) state.lan=state.baselineLan;
@@ -469,22 +469,22 @@
     return {name:off ? t('Обработка отключена'):t("{0} · холст {1} px", chosen('INFINI_SPRITE_DOWNSCALE_FILTER','box').toUpperCase(), chosen('INFINI_SPRITE_MASTER_CANVAS','—')),detail:off ? t('Изображения выключены'):`${background} · ${colors.toLocaleLowerCase()}`,background,colors};
   }
   function healthSummary() {
-    const home=state.remote?.home || {},raw=state.remote?.activity || '';
-    const match=/Сервер отвечает|Идёт генерация/.test(home.state || '') && !state.remote?.busy?.includes('server-action') ? raw.match(/active=(\d+), waiting=(\d+), accepting=(True|False)/) : null;
-    return {known:!!match,acceptingRequests:match ? match[3] === 'True' : null,active:match ? match[1]:'—',waiting:match ? match[2]:'—',accepting:match ? match[3] === 'True' ? t('Открыт'):t('Закрыт'):'—'};
+    const runtime=state.remote?.runtime || {};
+    const known=runtime.confirmed && !runtime.busy && Number.isInteger(runtime.active) && Number.isInteger(runtime.waiting) && typeof runtime.accepting === 'boolean';
+    return {known,acceptingRequests:known ? runtime.accepting:null,active:known ? runtime.active:'—',waiting:known ? runtime.waiting:'—',accepting:known ? runtime.accepting ? t('Открыт'):t('Закрыт'):'—'};
   }
   function configStatus() {
     if (state.dirty.size || state.lan !== state.baselineLan) return {title:t('Есть несохранённые изменения'),detail:t('Сводки настроек показывают черновик этой вкладки.'),tone:'draft'};
-    const applied=state.remote?.appliedConfig || '';
-    if (/restart|mismatch|differs/i.test(applied)) return {title:t('Нужен безопасный перезапуск'),detail:t('Последняя проверка обнаружила расхождение настроек с генератором.'),tone:'attention'};
-    if (/matches/i.test(applied)) return {title:t('Проверенные параметры совпадают'),detail:t('По последней проверке. Ключи и дополнительные модели не проверены.'),tone:'saved'};
+    const match=state.remote?.runtime?.config_match;
+    if (match === 'mismatch') return {title:t('Нужен безопасный перезапуск'),detail:t('Последняя проверка обнаружила расхождение настроек с генератором.'),tone:'attention'};
+    if (match === 'match') return {title:t('Проверенные параметры совпадают'),detail:t('По последней проверке. Ключи и дополнительные модели не проверены.'),tone:'saved'};
     return {title:t('Настройки сервера не сверены'),detail:t('Проверка соединения сравнит доступные параметры с сохранённым файлом.'),tone:'unknown'};
   }
   function nextStep() {
     if (state.dirty.size || state.lan !== state.baselineLan) return {title:t('Сохрани изменения'),description:t('Черновик ещё не записан в config.env.'),route:'configure',link:t('Открыть конфигурацию')};
     if(configStatus().tone === 'attention') return {title:t('Примени сохранённые настройки'),description:t('Используй безопасный перезапуск в панели генератора.'),route:'diagnostics',link:t('Посмотреть состояние')};
     if(healthSummary().acceptingRequests === false) return {title:t('Приём запросов закрыт'),description:t('Посмотри состояние генератора перед следующим крафтом.'),route:'diagnostics',link:t('Открыть диагностику')};
-    if (/Сервер отвечает|Идёт генерация/.test(state.remote?.home?.state || '')) return {title:t('Можно вернуться в Terraria'),description:t('Новые предметы создаются в игре с модом InfiniCrafterLocal.'),route:'help',link:t('Как начать крафт')};
+    if (state.remote?.runtime?.confirmed && !state.remote.runtime.busy) return {title:t('Можно вернуться в Terraria'),description:t('Новые предметы создаются в игре с модом InfiniCrafterLocal.'),route:'help',link:t('Как начать крафт')};
     return {title:t('Проверь соединение'),description:t('Получи состояние сохранённого или запущенного этой студией генератора.'),route:'diagnostics',link:t('Открыть диагностику')};
   }
   function configurationGaps() {
@@ -529,13 +529,13 @@
   function renderOperate() {
     if (!state.remote || state.page !== 'operate') return;
     const home=state.remote.home || {},next=nextStep(),gaps=configurationGaps(),config=configStatus(),health=healthSummary();
-    const busy=state.remote.busy?.includes('server-action'),running=/Сервер отвечает|Идёт генерация/.test(home.state || '');
+    const busy=!!state.remote.runtime?.busy,running=!!state.remote.runtime?.confirmed;
     const title=busy ? t('Проверяем состояние…'):home.state || t('Состояние не проверено');
-    const stationState=busy ? 'busy':running ? 'running':/внимание|подтверждено/.test(title) ? 'attention':'idle';
-    const detail=title === 'Идёт генерация' && health.known ? t('Последний снимок сервера: создаётся {0}, в очереди {1}. Для актуального состояния нажми «Проверить соединение».',health.active,health.waiting) : title === 'Сервер отвечает' ? t('Генератор отвечает. Новые предметы создаются в Terraria.') : title === 'Состояние ещё не проверено' ? t('Запусти генератор или проверь уже работающий сервер.') : home.detail || t('Запусти генератор или проверь соединение.');
+    const stationState=busy ? 'busy':running ? 'running':['attention','unconfirmed'].includes(home.code) ? 'attention':'idle';
+    const detail=home.code === 'generating' && health.known ? t('Последний снимок сервера: создаётся {0}, в очереди {1}. Для актуального состояния нажми «Проверить соединение».',health.active,health.waiting) : home.code === 'responding' ? t('Генератор отвечает. Новые предметы создаются в Terraria.') : home.code === 'unknown' ? t('Запусти генератор или проверь уже работающий сервер.') : home.detail || t('Запусти генератор или проверь соединение.');
     const endpoint=`${state.remote.savedValues?.INFINI_HOST || '127.0.0.1'}:${state.remote.savedValues?.INFINI_PORT || '5055'}`;
     const hasTrace=Object.values(state.remote.trace || {}).some(raw=>typeof raw === 'string' && raw.trim());
-    const signature=JSON.stringify([home,state.draft,state.lan,state.dirty.size,config,busy,state.remote.activity,state.remote.account?.authenticated,endpoint,hasTrace]);
+    const signature=JSON.stringify([home,state.remote.runtime,state.draft,state.lan,state.dirty.size,config,busy,state.remote.account?.authenticated,endpoint,hasTrace]);
     if(state.operateSignature === signature && $('.station')) {updateActionButtons();return;}
     state.operateSignature=signature;
     const focused=document.activeElement;

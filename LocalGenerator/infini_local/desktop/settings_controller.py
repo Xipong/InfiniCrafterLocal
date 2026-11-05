@@ -9,7 +9,6 @@ return results through queues; HTTP workers read published immutable snapshots.
 import heapq
 import itertools
 import os
-import re
 import time
 from pathlib import Path
 
@@ -20,6 +19,7 @@ from infini_local.desktop.settings_schema import DEFAULTS, PRESETS
 from infini_local.core.app_paths import CONFIG_PATH, EXAMPLE_PATH
 from infini_local.core.config_migration import migrate_config_file, environment_migration_status, explicit_config_keys
 from infini_local.core.env_utils import env_str
+from infini_local.core.server_endpoint import resolve_server_endpoint
 from infini_local.desktop.settings_fields import FIELDS, disabled_reasons
 from infini_local.desktop.studio_operations import StudioOperations
 from infini_local.desktop.settings_interactions import StudioActions
@@ -128,17 +128,20 @@ class SettingsController(StudioOperations):
             self.values["INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK"] = "0"
         self.field_disabled_reasons = disabled_reasons(self.values, self.lan_enabled)
 
-    def collect(self):
+    def collect(self, values=None, *, preset=None, lan_enabled=None):
+        draft = self.values if values is None else values
+        preset = self.preset if preset is None else preset
+        lan_enabled = self.lan_enabled if lan_enabled is None else lan_enabled
         data = parse_env(self.config_path) if self.config_path.exists() else dict(DEFAULTS)
         editable_keys = {field["key"] for field in FIELDS}
         # Unknown/manual extension settings are opaque wire values, not widgets.
         data.update({key: value.strip() if key in editable_keys else value
-                     for key, value in self.values.items()})
+                     for key, value in draft.items()})
         language = data.get("INFINI_LANGUAGE", DEFAULTS["INFINI_LANGUAGE"]).strip().lower()
         if language not in {"ru", "en"}:
             raise ValueError("INFINI_LANGUAGE must be ru or en")
         data["INFINI_LANGUAGE"] = language
-        data["INFINI_GUI_PIPELINE_PRESET"] = self.preset.strip()
+        data["INFINI_GUI_PIPELINE_PRESET"] = preset.strip()
         data["INFINI_SDCPP_SERVER_EXTRA_ARGS"] = " ".join(data.get("INFINI_SDCPP_SERVER_EXTRA_ARGS", "").split())
         template, repaired, reason = repair_command_template(data.get("INFINI_SDCPP_SERVER_COMMAND_TEMPLATE", ""), DEFAULT_COMMAND_TEMPLATE)
         if repaired:
@@ -147,7 +150,7 @@ class SettingsController(StudioOperations):
             self.status = f"sd.cpp command template repaired on save: {reason}"
         transport = "http" if data.get("INFINI_MP_ASSET_TRANSPORT", "native").lower() == "http" else "native"
         data["INFINI_MP_ASSET_TRANSPORT"] = transport
-        if self.lan_enabled and transport == "http":
+        if lan_enabled and transport == "http":
             data["INFINI_HOST"] = "0.0.0.0"
         else:
             if data.get("INFINI_HOST") == "0.0.0.0":
@@ -168,61 +171,83 @@ class SettingsController(StudioOperations):
         for key in ("INFINI_LANGUAGE", "INFINI_SDCPP_SERVER_COMMAND_TEMPLATE", "INFINI_SDCPP_SERVER_COMMAND_MODE",
                     "INFINI_MP_ASSET_TRANSPORT", "INFINI_HOST", "INFINI_ASSET_PUBLIC_BASE_URL",
                     "INFINI_SDCPP_LORA_DIR", "INFINI_SDCPP_LORA_PROMPT_TAGS", "INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK"):
-            if key in data:
+            if values is None and key in data:
                 self.values[key] = data[key]
         return data
 
     def save(self):
         data = self.collect()
+        data["INFINI_PORT"] = str(resolve_server_endpoint(data).port)
         write_env(self.config_path, data)
         self.values = data
         self.status = f"Saved: {self.config_path}"
         self._update_applied_config_feedback("Saved")
 
-    def apply_preset(self):
-        is_user = self.preset.startswith(USER_PRESET_PREFIX)
-        preset = self.user_presets.get(self.preset[len(USER_PRESET_PREFIX):]) if is_user else PRESETS.get(self.preset)
+    def apply_preset(self, values=None, *, preset=None, lan_enabled=None):
+        draft = dict(self.values if values is None else values)
+        label = self.preset if preset is None else preset
+        lan = self.lan_enabled if lan_enabled is None else lan_enabled
+        is_user = label.startswith(USER_PRESET_PREFIX)
+        preset = self.user_presets.get(label[len(USER_PRESET_PREFIX):]) if is_user else PRESETS.get(label)
         if preset is None:
             self.status = "Свои настройки сохранены без изменений. Для применения выбери готовый профиль."
-            return
+            draft["INFINI_GUI_PIPELINE_PRESET"] = label
+            return self._draft_result(draft, lan, commit=values is None)
         resize_choices = {} if is_user else {
             "INFINI_SPRITE_DOWNSCALE_FILTER": {"box", "bilinear", "bicubic", "lanczos"},
             "INFINI_SPRITE_PREMULTIPLIED_RESIZE": {"0", "1"},
         }
         for key, value in preset.items():
-            if key in resize_choices and self._value(key).lower() in resize_choices[key]:
+            if key in resize_choices and draft.get(key, DEFAULTS.get(key, "")).strip().lower() in resize_choices[key]:
                 continue
-            self.values[key] = value
+            draft[key] = value
         if is_user:
-            self.lan_enabled = self.values.get("INFINI_HOST") == "0.0.0.0"
-        self.values["INFINI_GUI_PIPELINE_PRESET"] = self.preset
-        self._refresh_visibility()
-        self._capture_profile_baseline()
+            lan = draft.get("INFINI_HOST") == "0.0.0.0"
+        draft["INFINI_GUI_PIPELINE_PRESET"] = label
+        outcome = self._draft_result(draft, lan, commit=values is None)
+        if values is None:
+            self.preset = label
+            self._capture_profile_baseline()
         self.status = "Профиль применён. Нажми «Сохранить», чтобы записать config.env; работающий сервер применит изменения после перезапуска."
+        return outcome
 
-    def use_selected_lora(self):
-        path = self._value("INFINI_SDCPP_LORA_FILE")
+    def _draft_result(self, draft, lan, *, commit=False):
+        if draft.get("INFINI_VISUAL_STRICT_AI_AUTHORSHIP", "1").strip() == "1":
+            draft["INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK"] = "0"
+        if commit:
+            self.values = draft
+            self.lan_enabled = lan
+            self._refresh_visibility()
+        return {"values": draft, "lanEnabled": bool(lan)}
+
+    def use_selected_lora(self, values=None, *, lan_enabled=None):
+        draft = dict(self.values if values is None else values)
+        path = draft.get("INFINI_SDCPP_LORA_FILE", "").strip()
         if not path:
             self.actions.notify("warning", "LoRA", "Сначала выбери LoRA file (*.safetensors/*.ckpt).")
             return {"ok": False, "message": "Сначала выбери файл LoRA."}
         directory = lora_dir_from_file(path) or str(Path(path).parent)
-        tag = lora_tag_from_file(path, self._value("INFINI_SDCPP_LORA_WEIGHT", "0.25"))
-        tags = self._value("INFINI_SDCPP_LORA_PROMPT_TAGS")
+        tag = lora_tag_from_file(path, draft.get("INFINI_SDCPP_LORA_WEIGHT", "0.25").strip())
+        tags = draft.get("INFINI_SDCPP_LORA_PROMPT_TAGS", "").strip()
         if tag not in tags:
             tags = (tags.rstrip() + " " + tag).strip()
-        self.values.update(INFINI_SDCPP_LORA_DIR=directory, INFINI_SDCPP_LORA_PROMPT_TAGS=tags)
+        draft.update(INFINI_SDCPP_LORA_DIR=directory, INFINI_SDCPP_LORA_PROMPT_TAGS=tags)
         self.status = f"LoRA подключена: --lora-model-dir {directory} + {tag}"
+        return self._draft_result(draft, self.lan_enabled if lan_enabled is None else lan_enabled, commit=values is None)
 
-    def clear_lora_settings(self):
+    def clear_lora_settings(self, values=None, *, lan_enabled=None):
+        draft = dict(self.values if values is None else values)
         for key in ("INFINI_SDCPP_LORA_FILE", "INFINI_SDCPP_LORA_DIR", "INFINI_SDCPP_LORA_PROMPT_TAGS"):
-            self.values[key] = ""
+            draft[key] = ""
         self.status = "LoRA file, prompt tags и LoRA dir очищены."
+        return self._draft_result(draft, self.lan_enabled if lan_enabled is None else lan_enabled, commit=values is None)
 
-    def reset_sprite_resize(self):
+    def reset_sprite_resize(self, values=None, *, lan_enabled=None):
+        draft = dict(self.values if values is None else values)
         for key in ("INFINI_SPRITE_DOWNSCALE_FILTER", "INFINI_SPRITE_PREMULTIPLIED_RESIZE"):
-            self.values[key] = DEFAULTS[key]
+            draft[key] = DEFAULTS[key]
         self.status = "Base resize: BOX, premultiplied RGBA=1. Нажми Save, чтобы сохранить."
-        self._refresh_visibility()
+        return self._draft_result(draft, self.lan_enabled if lan_enabled is None else lan_enabled, commit=values is None)
 
     @staticmethod
     def _pipeline_preset_from_config(data: dict[str, str], user_presets: dict[str, dict[str, str]] | None = None) -> str:
@@ -244,38 +269,29 @@ class SettingsController(StudioOperations):
         return CUSTOM_PRESET
 
     def refresh_home(self):
-        raw = self.status.lower()
-        applied = self.applied_config
-        applied_text = applied.lower() if applied is not None else ""
-        busy = "server-action" in self.actions.tasks or "checking" in raw or "checking" in applied_text
-        ack = self.__dict__.get("_applied_config_ack")
-        lifecycle = self.__dict__.get("_server_lifecycle", "unknown")
-        if busy:
-            title, detail = "Проверяем состояние…", "Перед действием проверяем сервер и текущую генерацию. Интерфейс остаётся доступным."
-        elif any(word in raw for word in ("refused", "failed", "unavailable", "unconfirmed", "not stopped", "ошиб", "не удалось")):
-            title, detail = "Нужно внимание", "Действие не выполнено. Подробности и исходное сообщение доступны в разделе «Диагностика»."
+        runtime = self.runtime_status()
+        lifecycle = runtime['lifecycle']
+        if runtime['busy']:
+            code, title, detail = "checking", "Проверяем состояние…", "Перед действием проверяем сервер и текущую генерацию. Интерфейс остаётся доступным."
+        elif runtime['reason_code'] == 'action_failed' or lifecycle == 'exited':
+            code, title, detail = "attention", "Нужно внимание", "Действие не выполнено. Подробности и исходное сообщение доступны в разделе «Диагностика»."
         elif lifecycle == "stopped":
-            title, detail = "Сервер остановлен", "Можно изменить настройки или запустить генератор снова."
+            code, title, detail = "stopped", "Сервер остановлен", "Можно изменить настройки или запустить генератор снова."
         elif lifecycle == "starting":
-            title, detail = "Сервер запускается", "Процесс запущен. Ждём подтверждения соединения; готовность ещё не проверена."
-        elif ack:
-            title, detail = "Сервер отвечает", "Получен ответ от сервера этой копии генератора. Полная проверка всех настроек и ключей не выполнялась."
-        elif "unconfirmed" in applied_text:
-            title, detail = "Соединение не подтверждено", "Сервер недоступен или его принадлежность этой копии не подтверждена. Проверь диагностику; чужие процессы не изменяются."
+            code, title, detail = "starting", "Сервер запускается", "Процесс запущен. Ждём подтверждения соединения; готовность ещё не проверена."
+        elif runtime['confirmed']:
+            code, title, detail = "responding", "Сервер отвечает", "Получен ответ от сервера этой копии генератора. Полная проверка всех настроек и ключей не выполнялась."
+            if runtime['active'] or runtime['waiting']:
+                code, title = "generating", "Идёт генерация"
+                detail = f"Последний снимок сервера: создаётся {runtime['active']}, в очереди {runtime['waiting']}. Для актуального состояния нажми «Проверить соединение»."
+        elif runtime['reason_code'] == 'health_unconfirmed':
+            code, title, detail = "unconfirmed", "Соединение не подтверждено", "Сервер недоступен или его принадлежность этой копии не подтверждена. Проверь диагностику; чужие процессы не изменяются."
         else:
-            title, detail = "Состояние ещё не проверено", "Настройки готовы к редактированию. Нажми «Проверить соединение» или запусти сервер."
-        activity = self.activity
-        snapshot = re.match(r"Backend last health snapshot: active=(\d+), waiting=(\d+), accepting=(True|False)", activity) if activity is not None else None
-        if ack and snapshot and not busy and title == "Сервер отвечает":
-            active, waiting = int(snapshot[1]), int(snapshot[2])
-            if active or waiting:
-                title = "Идёт генерация"
-                detail = f"Последний снимок сервера: создаётся {active}, в очереди {waiting}. Для актуального состояния нажми «Проверить соединение»."
-        self.home_state = title
-        self.home_detail = detail
+            code, title, detail = "unknown", "Состояние ещё не проверено", "Настройки готовы к редактированию. Нажми «Проверить соединение» или запусти сервер."
+        self.home_code, self.home_state, self.home_detail = code, title, detail
         config_note = "Изменения настроек применяются после безопасного перезапуска сервера. Ключи скрыты и не копируются в профили."
-        if "restart" in applied_text or "differs" in applied_text:
+        if runtime['config_match'] == 'mismatch':
             config_note = "Настройки изменены. Ответ сервера не подтверждает новые значения — нужен безопасный перезапуск."
-        elif "matches" in applied_text:
+        elif runtime['config_match'] == 'match':
             config_note = "Проверяемая часть настроек совпадает с сервером. Ключи и дополнительные модели этой проверкой не подтверждаются."
         self.home_config = config_note

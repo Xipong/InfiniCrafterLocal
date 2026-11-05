@@ -21,8 +21,9 @@ from infini_local.storage import trace_tools
 # authoring or repair logic belongs here.
 
 
-# Append-only black box recorder for GUI/debug: prompts, LLM responses, image prompts,
-# sd.cpp startup/image attempts and pipeline steps. This is debug state, not gameplay state.
+# Append-only debug recorder. Large exact sanitized bodies use immutable digest
+# receipts with bounded previews in events; trace_tools.expand_trace_value reads
+# complete text on demand. This is debug state, not gameplay state.
 TRACE_PROMPTS_ENABLED = env_bool("INFINI_TRACE_PROMPTS", True)
 TRACE_MAX_PROMPT_CHARS = max(0, env_int("INFINI_TRACE_MAX_PROMPT_CHARS", 0))
 TRACE_EVENTS_TAIL = max(20, min(500, env_int("INFINI_TRACE_EVENTS_TAIL", 120)))
@@ -88,12 +89,17 @@ def trace_event(kind: str, stage: str, title: str, payload: Any = None, *, promp
     )
 
 
-def trace_stage_request(stage: str, recipe_key: str, request: dict[str, Any], *, recipe_id: str | None = None) -> dict[str, Any]:
+def trace_stage_request(stage: str, recipe_key: str | None, request: dict[str, Any], *, recipe_id: str | None = None,
+                        prompt_title: str | None = None, prompt_payload: Any = None) -> dict[str, Any]:
     """The existing trace toggle controls full-message artifacts and their joins."""
     if not TRACE_PROMPTS_ENABLED:
         return {"status": "disabled"}
     receipt = trace_tools.persist_stage_request(CACHE_DIR, stage, recipe_key, request, recipe_id=recipe_id)
     trace_event("request_artifact", stage, "Exact sanitized stage request", receipt)
+    if prompt_title is not None:
+        trace_event("prompt", "LLM:" + stage, prompt_title, prompt_payload,
+                    prompt=trace_tools.stage_request_prompt(receipt, request.get("messages"),
+                                                          preview_chars=TRACE_MAX_PROMPT_CHARS or 420))
     return receipt
 
 

@@ -128,12 +128,17 @@ def literal_rewrite(code, target):
     pairs = [(i.op, i.arg) for i in code]
     condition = None
     cursor = 0
-    if pairs[:len(read)] == read and len(code) > len(read) + 1 and code[len(read)].op == "const":
-        branch = code[len(read) + 1]
-        if branch.op != "bne" or branch.arg <= branch.offset:
+    guards = []
+    while (pairs[cursor:cursor + len(read)] == read and len(code) > cursor + len(read) + 1
+           and code[cursor + len(read)].op == "const"):
+        value, branch = code[cursor + len(read):cursor + len(read) + 2]
+        if branch.op != "bne" or branch.arg <= branch.offset or not isinstance(value.arg, int):
             return None
-        condition = code[len(read)].arg
-        cursor = len(read) + 2
+        if condition is not None and condition != value.arg:
+            return None
+        condition = value.arg
+        guards.append(branch)
+        cursor += len(read) + 2
     body = code[cursor:]
     expected = len(write_prefix) + 2
     # A return/jump is allowed only after the assignment, never into its interior.
@@ -146,12 +151,61 @@ def literal_rewrite(code, target):
         return None
     if assignment.op != store or (kind == "local" and assignment.arg != slot):
         return None
-    if condition is not None and code[len(read) + 1].arg <= assignment.offset:
+    if any(branch.arg <= assignment.offset for branch in guards):
         return None
     rule = {"outputProjectileId": literal.arg, "sourceStoreIlOffset": assignment.offset}
     if condition is not None:
         rule["whenInputProjectileId"] = condition
     return [rule]
+
+
+def item_literal_rewrite(code, guard_offset, block, target):
+    """Certify the item write only with its complete contiguous input guards.
+
+    type_blocks proves the item test, not predicates outside that block.
+    Accept equalities of the same current projectile in either nesting order;
+    refuse other predicates, mutations, contradictions and bypassing entries.
+    """
+    item_guard = next(n for n, ins in enumerate(code) if ins.offset == guard_offset)
+    start = item_guard - 3  # ldarg; Item.type; constant; bne
+    kind, slot = target
+    read = [("ldarg", slot), ("ldind.i4", None)] if kind == "argument" else [("ldloc", slot)]
+
+    def targets(ins):
+        return ins.arg if ins.op == "switch" else [ins.arg] if ins.op.startswith("b") and isinstance(ins.arg, int) else []
+
+    first, end = code[start].offset, code[item_guard].arg
+    if any(not first <= ins.offset < end and any(first < destination < end for destination in targets(ins))
+           for ins in code):
+        return None
+    rules = literal_rewrite(block, target)
+    if not rules:
+        return None
+    enclosing = [(n, ins) for n, ins in enumerate(code[:start])
+                 if any(destination > code[start].offset for destination in targets(ins))]
+    condition = rules[0].get("whenInputProjectileId")
+    store = rules[0]["sourceStoreIlOffset"]
+    for n, branch in reversed(enclosing):
+        first = n - len(read) - 1
+        if branch.op != "bne" or branch.arg <= store or n + 1 != start:
+            return None
+        if first < 0 or [(ins.op, ins.arg) for ins in code[first:n - 1]] != read:
+            return None
+        value = code[n - 1]
+        if value.op != "const" or not isinstance(value.arg, int):
+            return None
+        if condition is not None and condition != value.arg:
+            return None
+        condition, start = value.arg, first
+    first = code[start].offset
+    for ins in code:
+        if first <= ins.offset <= store:
+            continue
+        if any(first < destination <= store for destination in targets(ins)):
+            return None
+    if condition is not None:
+        rules[0]["whenInputProjectileId"] = condition
+    return rules
 
 
 def ammo_method_facts(instructions, method):
@@ -180,7 +234,7 @@ def ammo_method_facts(instructions, method):
                 row["spawnOriginSetups"].append({"sourceConstructorIlOffset": call.offset,
                     "initialYRelativeToMountedCenterPx": -prefix[3].arg,
                     "scope": "Vector2 constructor Y argument inside this native spawn branch; later origin mutations, X coordinate and final spawn position not modeled"})
-        rules = literal_rewrite(block, target)
+        rules = item_literal_rewrite(code, guard, block, target)
         if rules:
             row["rules"].extend(dict(r, sourceGuardIlOffset=guard) for r in rules)
         elif target[0] == "local":
