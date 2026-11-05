@@ -71,10 +71,15 @@ class RawSpriteBackgroundError(ValueError):
 
 
 def _exterior_clear_fraction(img: Any) -> float:
-    """Real clear pixels connected to the raw frame, not interior cutouts."""
+    """Near-clear pixels connected to the raw frame, not interior cutouts.
+
+    Native-alpha providers can leave 1–2/255 opacity in otherwise empty space.
+    This tolerance belongs only to the read-only background-evidence mask: never
+    threshold the artwork itself or clip authored haze/antialiasing to get a pass.
+    """
     width, height = img.size
     mask = Image.new("L", (width + 2, height + 2), 0)
-    mask.paste(img.getchannel("A").point(lambda alpha: 255 if alpha else 0), (1, 1))
+    mask.paste(img.getchannel("A").point(lambda alpha: 255 if alpha > 2 else 0), (1, 1))
     ImageDraw.floodfill(mask, (0, 0), 1)
     padding = (width + 2) * (height + 2) - width * height
     return (mask.histogram()[1] - padding) / max(1, width * height)

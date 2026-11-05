@@ -2,6 +2,7 @@
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 import copy
+import json
 import os
 import subprocess
 import sys
@@ -71,6 +72,21 @@ def test_repeated_roles_keep_own_prompt_despite_stale_snapshot(monkeypatch):
         assert generation._join_image_result(data, completed, role) == expected
         assert data["debug"]["runtime:projectileFinalPrompt"] == expected
     assert data["debug"]["unrelated"] == "keep"
+
+
+@pytest.mark.parametrize('capacity', [1, 2])
+def test_successful_image_jobs_clear_previous_active_errors_in_joined_dto(offline_backend, monkeypatch, capacity):
+    data = _existing_texture_data('entity')
+    data['debug'] = {'spriteError': 'previous item failure', 'runtime:projectileSpriteError': 'previous body failure',
+                     'itemSpriteFailurePhase': 'processing', 'runtime:projectileSpriteFailurePhase': 'processing',
+                     'unrelated': 'keep'}
+    monkeypatch.setattr(generation, 'IMAGE_GENERATION_GATE', ImageRequestGate(capacity))
+    out = generation.maybe_generate_visual_assets(data)
+    orb = next(row for row in out['runtimeProgram']['entities'] if row['id'] == 'orb')
+    assert out['visual']['spriteStatus'] == orb['visual']['spriteStatus'] == 'generated'
+    for key in ('spriteError', 'runtime:projectileSpriteError', 'itemSpriteFailurePhase', 'runtime:projectileSpriteFailurePhase'):
+        assert key not in out['debug']
+    assert out['debug']['unrelated'] == 'keep'
 
 
 @pytest.mark.parametrize("capacity", [1, 2])
@@ -300,3 +316,46 @@ def test_image_jobs_preserve_empty_optional_exclusions_for_non_object_kit(offlin
     assert out["visual"]["spriteStatus"] == "generated"
     orb = next(row for row in out["runtimeProgram"]["entities"] if row["id"] == "orb")
     assert orb["visual"]["spriteStatus"] == "generated"
+
+
+@pytest.mark.parametrize('capacity', [1, 2])
+@pytest.mark.parametrize('failed_first', [True, False])
+def test_same_role_siblings_keep_owned_failure_until_that_asset_recovers(offline_backend, monkeypatch, capacity, failed_first):
+    from infini_local.storage.world_storage import delivery_safe_debug
+
+    data = _existing_texture_data('entity')
+    orb = next(row for row in data['runtimeProgram']['entities'] if row['id'] == 'orb')
+    sibling = copy.deepcopy(orb)
+    sibling['id'] = 'good_orb'
+    entities = data['runtimeProgram']['entities']
+    entities.insert(len(entities) if failed_first else entities.index(orb), sibling)
+    monkeypatch.setattr(generation, 'IMAGE_GENERATION_GATE', ImageRequestGate(capacity))
+    backend = generation.generate_sdcpp
+    fail = True
+    failed_asset = data['id'] + '_orb'
+
+    def provider(prompt, negative, asset_id, *args, **kwargs):
+        if fail and asset_id == failed_asset:
+            raise RuntimeError('failure unique to orb')
+        return backend(prompt, negative, asset_id, *args, **kwargs)
+
+    monkeypatch.setattr(generation, 'generate_sdcpp', provider)
+    output = generation.maybe_generate_visual_assets(data)
+    by_id = {row['id']: row for row in output['runtimeProgram']['entities']}
+    assert by_id['orb']['visual']['spriteStatus'] == 'failed'
+    assert by_id['good_orb']['visual']['spriteStatus'] == 'generated'
+    # Per-role summaries can show either sibling, but exact failed-asset evidence
+    # must survive the real sequential/parallel join and delivery serialization.
+    serialized = delivery_safe_debug(output['debug'])
+    assert 'failure unique to orb' in json.dumps(serialized)
+    outcomes = {row['assetId']: row for key, value in serialized.items()
+                if key.startswith('imageOutcome:') for row in [json.loads(value)]}
+    assert outcomes[failed_asset]['status'] == 'failed'
+    assert 'failure unique to orb' in outcomes[failed_asset]['error']
+    assert outcomes[data['id'] + '_good_orb']['error'] == ''
+    fail = False
+    recovered = generation.maybe_generate_visual_assets(output)
+    assert all(row['visual']['spriteStatus'] == 'generated'
+               for row in recovered['runtimeProgram']['entities'])
+    assert 'failure unique to orb' not in json.dumps(recovered['debug'])
+    assert 'runtime:projectileSpriteError' not in recovered['debug']
