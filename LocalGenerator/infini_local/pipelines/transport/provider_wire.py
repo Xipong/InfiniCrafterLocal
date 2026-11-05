@@ -157,6 +157,7 @@ def _google_reasoning_effort(reasoning: dict[str, Any]) -> str:
 
 
 _REASONING_INTENT_KEY = "_infini_reasoning_intent"
+_REASONING_POLICY_KEY = "_infini_reasoning_policy"
 
 
 LLM_MODEL_OVERRIDE_KEY = "_infini_model_override"
@@ -279,6 +280,13 @@ def apply_minimum_reasoning_effort(
         or ""
     ).strip().lower()
     selected = current if _REASONING_EFFORT_RANK.get(current, -1) >= _REASONING_EFFORT_RANK[floor] else floor
+    req[_REASONING_POLICY_KEY] = {
+        "configuredMode": config.LLM_REASONING_MODE,
+        "requestedEffort": current or None,
+        "minimumEffort": floor,
+        "selectedEffort": selected,
+        "floorApplied": selected != current,
+    }
     reasoning = {"effort": selected, "exclude": bool(config.LLM_REASONING_EXCLUDE)}
     req[_REASONING_INTENT_KEY] = dict(reasoning)
     if profiles.active_llm_provider() == "local":
@@ -331,6 +339,7 @@ def with_llm_stage(payload: dict[str, Any], stage: str) -> dict[str, Any]:
 def _clean_llm_payload(payload: dict[str, Any]) -> dict[str, Any]:
     out = json.loads(json.dumps(payload, ensure_ascii=False))
     out.pop(LLM_STAGE_KEY, None)
+    out.pop(_REASONING_POLICY_KEY, None)
     out.pop(PROMPT_CACHE_METADATA_KEY, None)
     if out.get("response_format") is None:
         out.pop("response_format", None)

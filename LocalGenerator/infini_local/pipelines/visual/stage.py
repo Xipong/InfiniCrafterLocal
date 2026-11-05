@@ -9,7 +9,7 @@ from typing import Any, Mapping
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.llm_config import USE_LLM
 from infini_local.core.llm_stage_messages import stage_accounting
-from infini_local.core.llm_json_tools import recover_object_with_syntax_only_repairs
+from infini_local.core.llm_json_tools import parse_llm_json_with_syntax_fix
 from infini_local.core.provider_schema import project_provider_nullable_optionals_to_local
 from infini_local.core.runtime_authoring.wire_views import runtime_visual_roles
 from infini_local.core.images.config import VISUAL_DIRECTOR_LLM
@@ -23,6 +23,7 @@ from infini_local.pipelines.visual.contract import (
 from infini_local.pipelines.visual.repair_scope import _build_visual_repair_scope
 from infini_local.pipelines.visual.repair import _apply_visual_repair_patch
 from infini_local.pipelines.visual.request import _request_visual_kit
+from infini_local.storage.trace_runtime import trace_event
 
 
 def attach_visual(data: dict[str, Any]) -> dict[str, Any]:
@@ -165,6 +166,21 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
     accounting = stage_accounting(data)
     accounting["visualDirectorCalls"] += 1
     raw = _request_visual_kit(data, a, b)
+    if isinstance(raw, MalformedVisualDirectorOutput):
+        source = raw
+        try:
+            raw, syntax_fix = parse_llm_json_with_syntax_fix(source.raw_text)
+        except (TypeError, ValueError) as error:
+            raise PlannerUnavailable(f"Visual Director returned unrecoverable JSON: {error}") from error
+        raw = project_provider_nullable_optionals_to_local(
+            raw, _response_schema(entity_ids, equipment_overlay_required, item_body_id),
+            response_format=source.response_format,
+        )
+        debug = data.setdefault("debug", {})
+        debug["visualDirectorRawText"] = source.raw_text[:12000]
+        if syntax_fix:
+            debug["visualSyntaxFix"] = syntax_fix
+            trace_event("fix", "LLM:visual_director", "Visual JSON syntax recovered locally", syntax_fix)
     kit, errors = _validate_kit(
         raw,
         entity_ids,
@@ -194,30 +210,6 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         )
         if kit is None:
             raise PlannerUnavailable("Visual Repair did not produce an entity-complete visual kit: " + json.dumps(errors[:16], ensure_ascii=False))
-        if isinstance(raw, MalformedVisualDirectorOutput):
-            source = recover_object_with_syntax_only_repairs(raw.raw_text)
-            if source is None:
-                raise PlannerUnavailable("Visual format Repair cannot prove recoverable visual fields")
-            # Compare local designs on both sides of syntax Repair. Strict
-            # transport's optional nulls mean absence only under the schema
-            # actually used for the original response, never a downgraded one.
-            source = project_provider_nullable_optionals_to_local(
-                source, _response_schema(entity_ids, equipment_overlay_required, item_body_id),
-                response_format=raw.response_format,
-            )
-            recovered_kit, _ = _validate_kit(
-                source, entity_ids, item_body_id,
-                equipment_overlay_required=equipment_overlay_required,
-                accepted_data=data,
-            )
-            if recovered_kit is None:
-                raise PlannerUnavailable("Visual format Repair cannot prove recoverable visual fields")
-            recovered_design = {key: value for key, value in recovered_kit.items() if key != "animationPlan"}
-            repaired_design = {key: value for key, value in kit.items() if key != "animationPlan"}
-            if recovered_design != repaired_design:
-                raise PlannerUnavailable("Visual format Repair changed recoverable visual fields")
-            if "animationPlan" in recovered_kit:
-                kit["animationPlan"] = copy.deepcopy(recovered_kit["animationPlan"])
         raw = repaired
         data.setdefault("debug", {})["visualRepairRawPatch"] = copy.deepcopy(patch)
         data["debug"]["visualRepairPatch"] = copy.deepcopy(repair_audit.get("filteredPatch") or {})

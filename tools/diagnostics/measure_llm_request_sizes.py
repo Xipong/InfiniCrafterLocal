@@ -25,7 +25,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 MODEL = "gpt-6.1"
-STAGES = ("author", "visual", "vfx", "gameplay_repair", "visual_repair", "vfx_repair", "format_repair")
+STAGES = ("author", "visual", "vfx", "gameplay_repair", "visual_repair", "vfx_repair")
 MODES = ("json_object", "json_schema")
 ROUTES = ("chat_completions", "responses", "codex_subscription")
 COHORT = ("vanilla_tool_fixture", "generated_plus_vanilla", "two_complex_generated")
@@ -208,13 +208,6 @@ class OfflineCapture:
             try:
                 if stage == "author":
                     self._invoke(self.author.try_llm_plan, a, b, cohort)
-                elif stage == "format_repair":
-                    source, context, _ = self._invoke(self.author.build_initial_author_request, a, b, cohort, model_name=MODEL)
-                    malformed = compact(authored)[:-1]
-                    evidence.update(malformedRawText=malformed)
-                    self.author._repair_malformed_author_json(malformed_raw_text=malformed,
-                        parse_error=ValueError("missing final brace"), original_recipe_context=context,
-                        model_name=MODEL, source_response_format=source.get("response_format"), recipe_key=cohort)
                 elif stage == "gameplay_repair":
                     broken = copy.deepcopy(authored)
                     next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "item_use")["params"].pop("useStyle")

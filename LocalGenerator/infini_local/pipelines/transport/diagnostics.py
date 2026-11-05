@@ -10,6 +10,7 @@ from functools import wraps
 from typing import Any
 
 from infini_local.core.http_io import remaining_seconds
+from infini_local.core import llm_config as config
 from infini_local.pipelines.transport import admission, profiles, rejections
 from infini_local.pipelines.transport import provider_wire as wire
 from infini_local.storage.trace_runtime import log_event
@@ -123,6 +124,8 @@ def _new_llm_diagnostics(payload: dict[str, Any]) -> dict[str, Any]:
         "stage": wire.llm_stage(payload), "leaseId": lease.lease_id if lease else "",
         "requestedApiMode": profiles._normalized_api_mode(profiles._primary_llm_context().get("api_mode")),
         "requestedResponseFormat": _format_diagnostic(payload), "requestedReasoning": _reasoning_diagnostic(payload),
+        "singleDispatch": int(config.LLM_NETWORK_ATTEMPTS or 2) <= 1, "dispatchCount": 0,
+        "reasoningPolicy": copy.deepcopy(payload.get(wire._REASONING_POLICY_KEY)),
         "physicalAttemptCount": 0, "physicalAttemptsDropped": 0, "physicalAttempts": [],
         "lastAttempt": {}, "nextReason": "initial", "rateWaitMsTotal": 0.0, "diagnosticEventCount": 0,
     }
@@ -134,6 +137,7 @@ def _llm_diagnostic_summary(state: dict[str, Any]) -> dict[str, Any]:
     return {
         **{name: state[name] for name in ("logicalCallId", "stage", "leaseId", "requestedApiMode",
            "requestedResponseFormat", "requestedReasoning", "physicalAttemptCount", "physicalAttemptsDropped", "rateWaitMsTotal")},
+        "reasoningPolicy": copy.deepcopy(state["reasoningPolicy"]),
         "physicalAttempts": copy.deepcopy(state["physicalAttempts"]),
         "rateWaitReason": last.get("rateWaitReason", "none"),
         "physicalAttemptScope": "llm_generation_http_post" if state["physicalAttemptCount"] is not None else "codex_owner_unobserved",
@@ -141,6 +145,26 @@ def _llm_diagnostic_summary(state: dict[str, Any]) -> dict[str, Any]:
         "effectiveReasoning": copy.deepcopy(last.get("effectiveReasoning")),
     }
 
+
+
+def _dispatch_available() -> bool:
+    state = _CURRENT_LLM_DIAGNOSTICS.get()
+    return state is None or not state["singleDispatch"] or state["dispatchCount"] == 0
+
+
+def _admit_dispatch(timeout: float) -> None:
+    """Enforce the single-attempt promise at the common dispatch boundary.
+
+    N>1 keeps the existing per-profile transient/negotiation policy. A dispatch
+    reservation is deliberately separate from observed network-start accounting:
+    even a fake HTTP sender or a pre-network failure cannot bypass this guard.
+    """
+    remaining_seconds(_request_deadline(timeout))
+    if not _dispatch_available():
+        raise RuntimeError("LLM single-attempt dispatch budget exhausted")
+    state = _CURRENT_LLM_DIAGNOSTICS.get()
+    if state is not None:
+        state["dispatchCount"] += 1
 
 
 def _attempt_reason(reason: str) -> None:

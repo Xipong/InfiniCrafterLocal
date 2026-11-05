@@ -105,7 +105,7 @@ def test_missing_recipe_join_is_an_explicit_refusal_not_an_unowned_artifact(monk
     assert not (tmp_path / 'stage_requests').exists()
 
 
-@pytest.mark.parametrize('stage', ['gameplay_author', 'gameplay_format_repair', 'gameplay_repair', 'visual_director', 'visual_repair'])
+@pytest.mark.parametrize('stage', ['gameplay_author', 'gameplay_repair', 'visual_director', 'visual_repair'])
 def test_actual_stage_seam_records_complete_request_before_provider_without_live_calls(monkeypatch, tmp_path, stage):
     from infini_local.pipelines.author import request as author
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
@@ -135,10 +135,6 @@ def test_actual_stage_seam_records_complete_request_before_provider_without_live
     with pytest.raises(CaptureComplete):
         if stage == 'gameplay_author':
             author.try_llm_plan(parent, parent, 'r_capture')
-        elif stage == 'gameplay_format_repair':
-            _, context, _ = author.build_initial_author_request(parent, parent, 'r_capture', model_name='offline-model')
-            author._repair_malformed_author_json(malformed_raw_text=json.dumps(source)[:-1] + ',}',
-                parse_error=ValueError('fixture syntax'), original_recipe_context=context, model_name='offline-model')
         elif stage == 'gameplay_repair':
             broken = copy.deepcopy(source)
             next(row for row in broken['runtimeProgram']['calls'] if row['fn'] == 'item_stats')['params']['damage'] = -1
@@ -180,67 +176,6 @@ def test_actual_stage_seam_records_complete_request_before_provider_without_live
             assert 'geometryCoverage' in packet['spritePresentationReadOnly']
 
 
-@pytest.mark.parametrize('context_join', [None, 'not_the_owner'], ids=['missing-dossier-join', 'stale-dossier-join'])
-@pytest.mark.parametrize('changed_value', [False, True], ids=['syntax-only', 'semantic-change-refused'])
-def test_format_repair_capture_joins_author_owner_without_changing_frozen_fields(monkeypatch, tmp_path, context_join, changed_value):
-    from infini_local.core.errors import PlannerUnavailable
-    from infini_local.pipelines.author import request as author
-    from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-    _cache(monkeypatch, tmp_path)
-    monkeypatch.setattr(author, 'USE_LLM', True)
-    monkeypatch.setattr(author, 'resolve_llm_model', lambda: 'offline-model')
-    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
-    native_builder = author.build_initial_author_request
-    def build_without_owner_join(*args, **kwargs):
-        request, user, system = native_builder(*args, **kwargs)
-        dossier = json.loads(user)
-        if context_join is None:
-            del dossier['recipeKey']
-        else:
-            dossier['recipeKey'] = context_join
-        user = json.dumps(dossier, ensure_ascii=False, separators=(',', ':'))
-        index = request['_infini_prompt_cache']['instructionMessageIndex'] + 1
-        dynamic = json.loads(request['messages'][index]['content'])
-        if context_join is None:
-            del dynamic['recipeKey']
-        else:
-            dynamic['recipeKey'] = context_join
-        static_before = copy.deepcopy(request['messages'][index - 1])
-        request['messages'][index]['content'] = json.dumps(dynamic, ensure_ascii=False, separators=(',', ':'))
-        assert request['messages'][index]['role'] == 'user'
-        assert request['messages'][index - 1] == static_before
-        assert dossier_text(request) == user
-        return request, user, system
-    monkeypatch.setattr(author, 'build_initial_author_request', build_without_owner_join)
-    frozen = build_runtime_fixture('workbench_blade')
-    repaired = copy.deepcopy(frozen)
-    if changed_value:
-        next(c for c in repaired['runtimeProgram']['calls'] if c['fn'] == 'item_stats')['params']['damage'] += 1
-    malformed = json.dumps(frozen)[:-1] + ',}'
-    repaired_text = json.dumps(repaired)
-    responses = iter([malformed, repaired_text])
-    requests = []
-    def respond(request, **kwargs):
-        requests.append(copy.deepcopy(request))
-        return {'choices': [{'message': {'content': next(responses)}}], '_debug': {'responseFormatType': 'json_object'}}
-    monkeypatch.setattr(author, 'llm_chat_json', respond)
-    if changed_value:
-        with pytest.raises(PlannerUnavailable, match='changed recoverable authored fields'):
-            author.try_llm_plan({}, {}, 'r_actual_owner')
-    else:
-        result = author.try_llm_plan({}, {}, 'r_actual_owner')
-        assert {key: result[key] for key in frozen} == frozen
-        assert result['debug']['gameplayFormatRepairRawOutput'] == repaired_text[:12000]
-    artifacts = [json.loads(path.read_bytes()) for path in (tmp_path / 'stage_requests').glob('*.json')]
-    assert {row['stage'] for row in artifacts} == {'gameplay_author', 'gameplay_format_repair'}
-    assert all(row['recipeKey'] == 'r_actual_owner' for row in artifacts)
-    captured = next(row for row in artifacts if row['stage'] == 'gameplay_format_repair')
-    assert captured['messages'] == requests[1]['messages']
-    dossier = request_dossier(captured, declaration=requests[1])
-    assert dossier['malformedRawText'] == malformed
-    assert 'originalRecipeContext' not in dossier
-    assert captured['recipeKey'] == 'r_actual_owner', 'trace join remains at its owner, not in model design context'
-    assert [request['_infini_stage'] for request in requests] == ['planner', 'author_repair']
 
 
 def test_unknown_sprite_reference_never_comes_from_collider_dump_or_fallback(monkeypatch, tmp_path):

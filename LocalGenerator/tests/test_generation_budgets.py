@@ -80,7 +80,7 @@ def _observe(*, stages, repair, corrupt_budget):
     authored = build_runtime_fixture("workbench_blade")
     original_program = copy.deepcopy(compile_runtime_program(authored)["runtimeProgram"])
     if repair == "format":
-        replies.extend([json.dumps(authored)[:-1] + ",}", authored])
+        replies.append(json.dumps(authored)[:-1] + ",}")
     elif repair == "semantic":
         damaged = copy.deepcopy(authored)
         damaged["runtimeProgram"]["calls"][0]["params"].pop("damage")
@@ -159,10 +159,8 @@ def test_gameplay_repair_respects_bounded_canonical_setting(monkeypatch, overrid
     assert packet["temperature"] == expected
 
 
-def test_format_repair_uses_the_same_scoped_default_at_transport():
-    assert budget_rows(observe(repair="format")) == [
-        (18000, 600, 0.5, "medium"), (18000, 600, 0.12, "medium"),
-    ]
+def test_format_fix_uses_no_extra_transport_budget():
+    assert budget_rows(observe(repair="format")) == [(18000, 600, 0.5, "medium")]
 
 
 def test_all_stage_callers_share_budget_including_the_single_repair():

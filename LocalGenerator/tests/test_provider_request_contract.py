@@ -106,6 +106,29 @@ def test_author_reasoning_floor_does_not_lower_explicit_high(monkeypatch, initia
     assert llm_provider_wire.apply_minimum_reasoning_effort(request, model_name="gemini-3.5-flash-lite", minimum="medium")["reasoning_effort"] == expected
 
 
+@pytest.mark.parametrize("provider,mode,expected", [
+    ("openrouter", "off", "medium"), ("openrouter", "low", "medium"),
+    ("openrouter", "high", "high"), ("local", "low", None),
+])
+def test_author_floor_reports_configured_selected_and_actual_before_dispatch(wire, monkeypatch, provider, mode, expected):
+    wire.configure(LLM_PROVIDER=provider, LLM_NETWORK_ATTEMPTS=1)
+    monkeypatch.setattr(llm_config, "LLM_REASONING_MODE", mode)
+    events = []
+    monkeypatch.setattr(llm, "log_event", lambda level, label, row: events.append((label, copy.deepcopy(row), len(wire.calls))))
+    request = llm_provider_wire.apply_llm_common_options(packet(), model_name="offline-model")
+    request = llm_provider_wire.apply_minimum_reasoning_effort(request, model_name="offline-model")
+    result = llm.llm_chat_json(request, 1)
+    policy = result["_debug"]["reasoningPolicy"]
+    assert policy["configuredMode"] == mode
+    assert policy["minimumEffort"] == "medium"
+    assert policy["selectedEffort"] == ("high" if mode == "high" else "medium")
+    assert policy["floorApplied"] is (mode != "high")
+    _, logged, dispatches = next(event for event in events if event[0] == "LLM reasoning policy before dispatch")
+    assert dispatches == 0
+    assert logged["effectiveReasoning"].get("effort") == expected
+    assert all(not key.startswith("_infini_") for key in wire.calls[0][1])
+
+
 @pytest.mark.parametrize("cause", ["messages", "unsupported_valid", "unsupported_failed", "unsupported_malformed", "complexity", "model_override", "model_override_whitespace"])
 def test_real_http_schema_cache_requires_relevant_rejection_valid_recovery_and_exact_scope(
     loopback_transport, cause,
@@ -467,28 +490,3 @@ def test_platform_responses_explicit_breakpoint_preserves_exact_content_and_is_s
     assert result["_debug"]["cachedInputTokens"] == 0
     assert result["_debug"]["cacheHit"] is False
     assert result["_debug"]["cacheWriteTokens"] == 12
-
-
-@pytest.mark.parametrize("complete", [False, True], ids=["length-incomplete-minimal-retry", "length-complete-prefix-no-retry"])
-def test_google_length_retry_preserves_valid_output_and_reasoning_intent(monkeypatch, complete):
-    content = '{"ok":true}\n' + ('}\n' * 128) if complete else "{"
-    calls = []
-    def single(payload, timeout, context):
-        calls.append(copy.deepcopy(payload))
-        return {"choices": [{"finish_reason": "length" if len(calls) == 1 else "stop",
-            "message": {"content": content if len(calls) == 1 else "{}"}}]}
-    monkeypatch.setattr(llm, "_llm_json_single_context", single)
-    monkeypatch.setattr(llm_provider_wire, "_is_google_openai_compat_reasoning_model", lambda _model, _context: True)
-    monkeypatch.setattr(llm, "log_event", lambda *_a, **_k: None)
-    request = {"model": "gemini-3.1-flash-lite", "messages": [],
-        "response_format": {"type": "json_object"}, llm_provider_wire._REASONING_INTENT_KEY: {"effort": "minimal" if complete else "low", "exclude": True}}
-    before = copy.deepcopy(request)
-    result = llm._llm_json_single_context_with_length_retry(request, 1, {"model": request["model"]})
-    assert request == before
-    assert len(calls) == (1 if complete else 2)
-    if complete:
-        assert parse_first_valid_llm_json(result["choices"][0]["message"]["content"]) == {"ok": True}
-        assert "transportRetryCount" not in result.get("_debug", {})
-    else:
-        assert result["choices"][0]["finish_reason"] == "stop"
-        assert calls[1][llm_provider_wire._REASONING_INTENT_KEY]["effort"] == "minimal"

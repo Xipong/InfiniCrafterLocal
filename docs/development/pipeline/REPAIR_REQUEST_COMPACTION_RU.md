@@ -50,28 +50,22 @@ Initial Director schemas/public exports и полная post-merge admission н�
   обязана существовать для каждого scoped packet: неизменная полная schema
   ради cache hit не нужна. Provider schema остаётся inline/self-contained.
 
-## Format Repair
+## Локальный синтаксический Fix
 
-Gameplay Format Repair получает точный `malformedRawText`, parse error,
-краткий индекс корневых ключей и допустимые params только тех exact `fn`, которые
-однозначно восстанавливаются из источника. Из canonical Author schema выбираются
-эти же call variants; новый набор params или второй Author API не создаётся.
-Неизвестные/повреждённые identities сохраняют полный grammar domain и прежний
-fail-closed, а не угадываются по prose. Nullable inverse читает именно отправленную
-local schema. Первоначальный Author packet и Gameplay semantic Repair не меняются.
+Для initial Gameplay Author и Visual Director дополнительного Format Repair LLM-вызова нет.
+`core/llm_json_tools.py` локально восстанавливает только существующие однозначные
+punctuation/key-quote случаи и единственную внешнюю скобку. Receipt
+`reason=fix:llm_json_syntax`, `sourceChars` виден в debug/trace; исходный полный
+ответ остаётся в stage trace, preview в debug ограничен 12 000 символами.
+Несколько кандидатов на восстановление, duplicate keys, missing values, array holes
+и nonfinite constants не превращаются в новый дизайн: стадия отказывает без Repair.
 
-Родители, balance, повторный concept/design guide и остальные поля
-`originalRecipeContext` модели не отправляются: единственный источник дизайна —
-исходный ответ. `recipeKey` остаётся у trace owner, не теряется вместе с dossier.
-Equality с синтаксически восстановимым исходным Author object продолжает отвергать
-любое добавление, удаление или изменение gameplay; невозможность доказать источник
-остаётся отказом. Никакие values, strings или массивы source не обрезаются.
-
-Visual Format Repair сравнивает восстановленный исходник и исправленный ответ
-после перевода каждого из его фактического provider-формата в local shape.
-Optional `null` исходного strict response означает отсутствие; при `json_object`
-или transport downgrade он остаётся authored value. Синтаксическое исправление
-не разрешает менять внешность или удалять невалидные authored поля.
+Восстановленный объект проходит обычные provider nullable projection и предметную
+проверку. Optional `null` исходного strict response означает отсутствие только по
+фактическому исходному envelope; при `json_object` или downgrade это authored value.
+Неизвестный `fn` не угадывается, а передаётся обычному валидатору. Локальный Fix не
+расходует единственный semantic Repair: он по-прежнему видит invalid fragments,
+exact permissions и frozen read-only context и не вправе переписывать valid siblings.
 
 VFX передаёт `malformedRawText` целиком, включая хвост после 12 000 символов:
 это источник исправляемого ответа, а не preview для логов. Общий лимит одной
@@ -94,9 +88,9 @@ PYTHONPATH=LocalGenerator python tools/diagnostics/measure_llm_request_sizes.py 
 
 `test_repair_request_compaction.py` проверяет real request → nullable inverse →
 frozen merge с сохранением accepted omission, create/event support, пустой scope,
-полный fn/whole-call scope, неизвестные names и отказ Format Repair при изменении
-damage. Существующий corpus продолжает проверять single Repair budget,
-синтаксическое восстановление и невозможность заполнить отсутствующий дизайн.
+полный fn/whole-call scope и неизвестные names. `test_format_repair_packet_scope.py`
+проверяет локальный Fix, сохранность raw/design, отказ на неоднозначном/неполном
+источнике и оставшийся single semantic Repair с замороженными valid siblings.
 
 Strict provider grammar теперь отвергает out-of-scope fn ещё на decoding.
 Отдельные negative tests намеренно возвращают такой ответ вопреки envelope:

@@ -22,7 +22,7 @@ def test_author_does_not_build_unused_provider_schema(monkeypatch, mode):
         calls.append(True)
         return {"type": "object", "properties": {"marker": {"type": "string"}}}
 
-    monkeypatch.setattr(author, "author_item_provider_response_schema", schema)
+    monkeypatch.setattr(author, "author_item_generation_provider_schema", schema)
     request, _, _ = author.build_initial_author_request({}, {}, "one", model_name="test-model")
     assert calls == []
     assert request.get("response_format") == ({"type": "json_object"} if mode == "json_object" else None)
@@ -119,8 +119,7 @@ class _RequestCaptured(BaseException):
     """Stop at the real transport seam without a remote request or fake response."""
 
 
-@pytest.mark.parametrize("syntax_only", [False, True])
-def test_repair_declares_only_static_guidance_as_cacheable(monkeypatch, syntax_only):
+def test_repair_declares_only_static_guidance_as_cacheable(monkeypatch):
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
 
@@ -136,34 +135,22 @@ def test_repair_declares_only_static_guidance_as_cacheable(monkeypatch, syntax_o
     monkeypatch.setattr(author, "llm_chat_json", capture)
     for label in ("first", "second"):
         with pytest.raises(_RequestCaptured):
-            if syntax_only:
-                author._repair_malformed_author_json(
-                    malformed_raw_text='{"name": "' + label,
-                    parse_error=ValueError(label),
-                    original_recipe_context=json.dumps({"recipeKey": label}),
-                    model_name="test-model",
-                )
-            else:
-                item = build_runtime_fixture("workbench_blade")
-                item["name"] = label
-                use = next(c for c in item["runtimeProgram"]["calls"] if c["fn"] == "item_use")
-                del use["params"]["useStyle"]
-                report = validate_runtime_program(item)
-                author.repair_author_item_after_failure(item, {"name": label}, {}, label, failure_report=report)
+            item = build_runtime_fixture("workbench_blade")
+            item["name"] = label
+            use = next(c for c in item["runtimeProgram"]["calls"] if c["fn"] == "item_use")
+            del use["params"]["useStyle"]
+            report = validate_runtime_program(item)
+            author.repair_author_item_after_failure(item, {"name": label}, {}, label, failure_report=report)
     static, prefix, full = _marked_prefix(requests[0])
     other_static, other_prefix, other_full = _marked_prefix(requests[1])
     assert static == other_static
     assert prefix == other_prefix
     assert full != other_full
-    if syntax_only:
-        assert set(static) == {"schema", "task", "rules", "requiredJsonShape"}
-        assert "allowedCallParamsReadOnly" in full, "source-dependent function grammar stays dynamic"
-    else:
-        assert set(static) == {"schema", "task", "rules", "runtimeVersions", "runtimeExecutionTruth"}
-        # Conditional cards remain scoped, never replaced by the entire Author catalog for a cache hit.
-        assert "blockerCapabilities" not in static
-        assert "repairScope" not in static
-        assert list(full)[-1] == "requiredJsonShape"
+    assert set(static) == {"schema", "task", "rules", "runtimeVersions", "runtimeExecutionTruth"}
+    # Conditional cards remain scoped, never replaced by the entire Author catalog for a cache hit.
+    assert "blockerCapabilities" not in static
+    assert "repairScope" not in static
+    assert list(full)[-1] == "requiredJsonShape"
 
 
 @pytest.mark.parametrize("repair", [False, True])

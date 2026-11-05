@@ -616,9 +616,9 @@ def test_failover_adopts_target_for_later_stages(wire, failure):
 
 @pytest.mark.parametrize("stage,mode,attempts", [
     pytest.param("planner", "chat_completions", 1, id="author-single-attempt"),
-    pytest.param("visual_director", "responses", 2, id="visual-bounded-content-retry"),
+    pytest.param("visual_director", "responses", 2, id="visual-multi-attempt-no-content-reroll"),
 ])
-def test_content_retry_keeps_selected_pin_model_and_logical_call(wire, stage, mode, attempts):
+def test_content_failure_returns_unchanged_without_reroll(wire, stage, mode, attempts):
     wire.configure(LLM_API_MODE=mode, LLM_NETWORK_ATTEMPTS=attempts)
     first = {"id": "resp_partial", "output_text": "{"} if mode == "responses" else {
         "choices": [{"finish_reason": "length", "message": {"content": "{"}}]}
@@ -630,20 +630,13 @@ def test_content_retry_keeps_selected_pin_model_and_logical_call(wire, stage, mo
         result = transport.llm_chat_json(request, timeout=1)
         assert lease.call_count == 1 and lease.failovers == [] and len(lease.stages) == 1
         assert lease.context["openrouter_provider"] == PIN
-    assert len(wire.calls) == attempts
+    assert len(wire.calls) == 1
     assert all(body["provider"] == {"only": [PIN], "allow_fallbacks": False} for _, body, _ in wire.calls)
     assert all(body["model"] == f"override/{stage}" for _, body, _ in wire.calls)
     assert all(llm_provider_wire.LLM_MODEL_OVERRIDE_KEY not in body for _, body, _ in wire.calls)
     assert request == before
-    if attempts == 2:
-        retry_body = dict(wire.calls[1][1])
-        if mode == "responses":
-            assert retry_body.pop("previous_response_id") == "resp_partial"
-        assert retry_body == wire.calls[0][1]
-        assert result["_debug"]["transportRetryCauses"] == ["malformed_json"]
-    else:
-        assert result["choices"][0]["message"]["content"] == "{"
-        assert "transportRetryCount" not in result.get("_debug", {})
+    assert result["choices"][0]["message"]["content"] == "{"
+    assert "transportRetryCount" not in result.get("_debug", {})
 
 
 @pytest.mark.parametrize("provider,mode,attempts", [
@@ -668,6 +661,51 @@ def test_transient_retry_budget_never_changes_selected_route(wire, provider, mod
     assert len(wire.calls) == attempts and len({url for url, _, _ in wire.calls}) == 1
     assert all(body.get("provider") == ({"only": [PIN], "allow_fallbacks": False} if provider == "openrouter" else None) for _, body, _ in wire.calls)
     assert all(body["model"] == "override/retry" for _, body, _ in wire.calls)
+
+
+@pytest.mark.parametrize("cause", ["schema", "protocol", "malformed", "transient", "pool"])
+def test_single_attempt_means_one_physical_dispatch_on_every_fallback(wire, cause):
+    wire.configure(LLM_NETWORK_ATTEMPTS=1, LLM_API_MODE="auto" if cause == "protocol" else "chat_completions")
+    if cause == "pool":
+        wire.configure(LLM_POOL_PROFILES=({"id": "llm_2", "enabled": True, "provider": "openrouter",
+            "base_url": "https://secondary.example/v1", "model": "second", "api_key": "synthetic"},))
+    if cause == "malformed":
+        wire.replies.append({"choices": [{"message": {"content": "{"}}]})
+    else:
+        wire.replies.append(schema_error("https://primary.example") if cause == "schema" else 404 if cause == "protocol" else 503)
+    with llm_profiles.llm_item_lease("single-dispatch") as lease:
+        if cause == "malformed":
+            assert transport.llm_chat_json(packet(schema=False), 1)["choices"][0]["message"]["content"] == "{"
+        else:
+            with pytest.raises(urllib.error.HTTPError):
+                transport.llm_chat_json(packet(schema=cause == "schema"), 1)
+        assert not lease.failovers
+    assert len(wire.calls) == 1
+
+
+@pytest.mark.parametrize("stage", STAGES)
+def test_transient_then_malformed_response_does_not_start_a_third_generation(wire, stage):
+    wire.configure(LLM_NETWORK_ATTEMPTS=2)
+    wire.replies.extend([503, {"choices": [{"message": {"content": '{"missing":'}}]}])
+    result = transport.llm_chat_json(packet(stage), 1)
+    assert result["choices"][0]["message"]["content"] == '{"missing":'
+    assert len(wire.calls) == 2
+    assert result["_debug"]["transportRetryCauses"] == ["transient_http"]
+
+
+def test_google_length_does_not_reroll_or_lower_reasoning(wire):
+    wire.configure(LLM_PROVIDER="openai_compat", LLM_NETWORK_ATTEMPTS=2,
+        OPENAI_COMPAT_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai",
+        OPENAI_COMPAT_MODEL="gemini-3.1-flash-lite")
+    wire.replies.append({"choices": [{"finish_reason": "length", "message": {"content": "{"}}]})
+    request = packet()
+    request[llm_provider_wire._REASONING_INTENT_KEY] = {"effort": "low", "exclude": True}
+    before = copy.deepcopy(request)
+    result = transport.llm_chat_json(request, 1)
+    assert len(wire.calls) == 1
+    assert wire.calls[0][1]["reasoning_effort"] == "low"
+    assert result["choices"][0]["message"]["content"] == "{"
+    assert request == before
 
 
 class RateClock:

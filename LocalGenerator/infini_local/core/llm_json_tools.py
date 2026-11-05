@@ -164,13 +164,15 @@ def recover_object_with_syntax_only_repairs(text: str) -> dict[str, Any] | None:
     colon, and one missing outer brace after a complete nested object are
     eligible. Strings and scalar tokens are copied byte-for-byte; missing
     values, array holes, duplicate keys, and non-JSON constants fail.
-    The caller must compare the recovered object with Format Repair's answer.
+    Multiple candidate objects are ambiguous; domain validation remains the caller's responsibility.
     """
     candidates = json_object_candidates(text)
     if not candidates:
         closed = _candidate_with_one_missing_root_closer(text)
         if closed is not None:
             candidates = [closed]
+    if len(candidates) != 1:
+        return None
     for candidate in candidates:
         output: list[str] = []
         containers: list[str] = []
@@ -244,6 +246,25 @@ def recover_object_with_syntax_only_repairs(text: str) -> dict[str, Any] | None:
         if isinstance(recovered, dict):
             return recovered
     return None
+
+
+def parse_llm_json_with_syntax_fix(text: str) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Parse normally, or recover one unambiguous syntax-only source locally.
+
+    The compact receipt is not acceptance: callers still project provider nulls
+    and validate the ordinary Author/Visual contract. Keep raw text at the stage
+    evidence boundary, not a second model-generated copy of the same object.
+    """
+    try:
+        return parse_first_valid_llm_json(text), None
+    except (TypeError, ValueError) as error:
+        try:
+            recovered = recover_object_with_syntax_only_repairs(text)
+        except (TypeError, ValueError):
+            recovered = None
+        if recovered is None:
+            raise error
+        return recovered, {"reason": "fix:llm_json_syntax", "sourceChars": len(text)}
 
 
 def parse_first_valid_llm_json(text: str) -> dict[str, Any]:

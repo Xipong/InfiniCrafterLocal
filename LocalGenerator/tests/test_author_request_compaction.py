@@ -119,16 +119,6 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
         {"id": lifetime["id"], "paths": ['params.lifetimeSeconds']}]
     assert item == invalid_before and parents == before
 
-    # Syntax-only Repair preserves its exact malformed source, not a second
-    # design dossier containing parents and balance instructions.
-    with pytest.raises(_CapturedBeforeTransport):
-        author._repair_malformed_author_json(
-            malformed_raw_text=json.dumps(item)[:-1] + ",}", parse_error=ValueError("trailing comma"),
-            original_recipe_context=serialized, model_name="offline-readonly-context")
-    format_packet = request_dossier(captured[1])
-    assert "originalRecipeContext" not in format_packet
-    assert json.loads(format_packet["malformedRawText"][:-2] + "}") == item
-
     # A different declared maximum must reach the real packet, not a copied cap.
     cap = CAPABILITY_REGISTRY["projectile_lifetime"]
     changed = replace(cap, params={**cap.params, "lifetimeSeconds": replace(spec, maximum=350)})

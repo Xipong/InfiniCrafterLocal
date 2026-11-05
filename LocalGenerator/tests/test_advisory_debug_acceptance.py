@@ -110,10 +110,6 @@ def test_development_visual_accepts_nonobject_realization(monkeypatch, value):
 
 
 def test_format_repair_preserves_string_reports_through_actual_strict_schema(monkeypatch):
-    from jsonschema import Draft202012Validator
-    from infini_local.pipelines.author.item_contract import author_item_response_schema
-    from test_codex_subscription_contract import _encode_nullable_fixture
-
     source = build_runtime_fixture('workbench_blade')
     source['concept'] = '  Идея 🌟\nA design hypothesis, not an execution claim.  '
     source['realization'] = '  Реализация\r\nOnly the authored events execute.  '
@@ -123,16 +119,8 @@ def test_format_repair_preserves_string_reports_through_actual_strict_schema(mon
 
     def respond(request, **_kwargs):
         requests.append(deepcopy(request))
-        assert len(requests) <= 2
-        if len(requests) == 1:
-            content = malformed
-        else:
-            # Encode ordinary runtime optionals independently, leaving the exact
-            # new string reports intact; validate against the actual sent schema.
-            encoded = _encode_nullable_fixture(source, author_item_response_schema())
-            schema = request['response_format']['json_schema']['schema']
-            Draft202012Validator(schema).validate(encoded)
-            content = json.dumps(encoded, ensure_ascii=False)
+        assert len(requests) == 1
+        content = malformed
         return {'choices': [{'message': {'content': content}}],
                 '_debug': {'responseFormatType': 'json_schema'}}
 
@@ -140,7 +128,8 @@ def test_format_repair_preserves_string_reports_through_actual_strict_schema(mon
     accepted = author.try_llm_plan({}, {}, 'syntax-only-reports')
     assert accepted is not None
     delivered = compile_and_validate_authored_runtime(accepted, {}, {}, 'syntax-only-reports', run_stage=_run_stage)
-    assert len(requests) == 2
+    assert len(requests) == 1
+    assert delivered['debug']['gameplaySyntaxFix']['reason'] == 'fix:llm_json_syntax'
     assert delivered['concept'] == before['concept']
     assert delivered['realization'] == before['realization']
     assert delivered['runtimeProgram'] == compile_runtime_program(before)['runtimeProgram']
@@ -287,10 +276,6 @@ def test_separate_player_description_and_full_debug_through_real_handoffs(monkey
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
 @pytest.mark.parametrize('length', [0, 4001, 5500, 100000])
 def test_format_repair_preserves_separated_notes_without_promoting_debug(monkeypatch, mode, length):
-    from jsonschema import Draft202012Validator
-    from infini_local.pipelines.author.item_contract import author_item_response_schema
-    from test_codex_subscription_contract import _encode_nullable_fixture
-
     source = build_runtime_fixture('workbench_blade')
     source['concept'] = '  A brief idea 🌟  '
     source['realization'] = {'description': '  Use the blade.\r\n', 'selfEvaluation': '  Dash is not implemented.  ' + 'д' * length}
@@ -299,20 +284,15 @@ def test_format_repair_preserves_separated_notes_without_promoting_debug(monkeyp
 
     def respond(request, **_kwargs):
         responses.append(request)
-        assert len(responses) <= 2
-        if len(responses) == 1:
-            content = json.dumps(source)[:-1] + ',}'
-        else:
-            encoded = _encode_nullable_fixture(source, author_item_response_schema()) if mode == 'json_schema' else source
-            if mode == 'json_schema':
-                Draft202012Validator(request['response_format']['json_schema']['schema']).validate(encoded)
-            content = json.dumps(encoded)
+        assert len(responses) == 1
+        content = json.dumps(source)[:-1] + ',}'
         return {'choices': [{'message': {'content': content}}], '_debug': {'responseFormatType': mode}}
 
     offline_builder(monkeypatch, mode, respond)
     accepted = author.try_llm_plan({}, {}, 'separate-syntax-repair')
     delivered = compile_and_validate_authored_runtime(accepted, {}, {}, 'separate-syntax-repair', run_stage=_run_stage)
-    assert len(responses) == 2
+    assert len(responses) == 1
+    assert delivered['debug']['gameplaySyntaxFix']['reason'] == 'fix:llm_json_syntax'
     assert delivered['realization'] == before['realization']
     assert delivered['concept'] == before['concept']
     assert delivered['runtimeProgram'] == compile_runtime_program(before)['runtimeProgram']

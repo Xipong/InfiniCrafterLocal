@@ -449,7 +449,7 @@ def test_current_scoped_repair_preserves_original_bad_rows_and_frozen_lanes():
     assert source == before
 
 
-def test_actual_initial_format_and_scoped_repair_builders_share_current_grammar(monkeypatch):
+def test_actual_initial_and_scoped_repair_builders_share_current_grammar(monkeypatch):
     import json
 
     from infini_local.pipelines.author import request as pipeline
@@ -470,17 +470,7 @@ def test_actual_initial_format_and_scoped_repair_builders_share_current_grammar(
         repaired, dossier = _offline_gameplay_repair(monkeypatch, broken, patch, mode)
         assert "usePolicy" not in json.dumps(dossier["requiredJsonShape"])
         assert repaired["runtimeProgram"] == source["runtimeProgram"]
-    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
-    content = json.dumps(source)
-    requests = []
-    def respond(request, **kwargs):
-        requests.append(request)
-        return {"choices": [{"message": {"content": content}}]}
-    monkeypatch.setattr(pipeline, "llm_chat_json", respond)
-    prepared, _ = pipeline._repair_malformed_author_json(malformed_raw_text=content[:-1] + ",}",
-        parse_error=ValueError("trailing comma"), original_recipe_context=user, model_name="offline")
-    assert prepared == source
-    assert "usePolicy" not in json.dumps(request_dossier(requests[0])["requiredJsonShape"])
+
 
 
 def test_unresolved_body_is_declaration_repair_not_synthetic_target_authority():

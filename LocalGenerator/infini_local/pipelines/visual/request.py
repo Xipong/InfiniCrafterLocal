@@ -75,6 +75,8 @@ def _request_visual_kit(
         # or turning optional prose into an authority over accepted runtime.
         item_context["literalSynthesis"] = synthesis
     repair = repair_errors is not None
+    if repair and isinstance(previous, MalformedVisualDirectorOutput):
+        raise PlannerUnavailable("Visual syntax must be recovered locally before scoped Repair")
     scoped_repair = (repair and isinstance(repair_scope, Mapping) and "fieldPermissions" in repair_scope
                      and not any(error.get("path") == "$" for error in repair_errors or []))
     schema = (
@@ -97,12 +99,6 @@ def _request_visual_kit(
             "the exact repaired or newly missing fields. Extra rewrites are ignored. Runtime gameplay is immutable. "
             "Use assetModeCatalog for PNG delivery and runtime drawing, and responseSchema for patch shape. Return JSON only."
         )
-        if isinstance(previous, MalformedVisualDirectorOutput):
-            system += (
-                " The previous response is malformed JSON. Repair its syntax and container only: preserve all "
-                "recoverable visual fields and entity choices verbatim from malformedRawText; do not invent "
-                "an absent design. Emit the complete broken visual response through the repair patch fields."
-            )
         context = _visual_repair_context(previous, repair_scope or {})
         payload: dict[str, Any] = {
             "task": "Patch only exact invalid visualKit fields/rows.",

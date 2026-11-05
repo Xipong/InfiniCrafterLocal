@@ -100,9 +100,6 @@ def test_actual_outgoing_packets_preserve_roles_schema_and_frozen_authority(capt
         assert full["repairScope"] == expected["repairScope"]
         assert full["acceptedItemContext"]["runtimeProgram"] == evidence["broken"]["runtimeProgram"]
         assert full["repairScope"]["fieldPermissions"]
-    elif stage == "format_repair":
-        assert full["malformedRawText"] == evidence["malformedRawText"]
-        assert "originalRecipeContext" not in full, "syntax-only repair has one exact design source"
 
     for route in ROUTES:
         observed = capture.wire(packet, route)
@@ -144,15 +141,14 @@ def test_actual_outgoing_packets_preserve_roles_schema_and_frozen_authority(capt
     assert packet == before
 
 
-def test_author_and_format_provider_shape_matches_actual_author_consumer(capture):
+def test_author_provider_shape_matches_actual_author_consumer(capture):
     from infini_local.pipelines.author.item_contract import author_item_response_schema
     from test_codex_subscription_contract import _encode_nullable_fixture
-    for stage in ("author", "format_repair"):
+    for stage in ("author",):
         packet, evidence = capture.builder(stage, COHORT[0], "json_schema")
         schema = schema_from_wire(capture.wire(packet, "responses")["packet"])
         source = copy.deepcopy(evidence["inputs"]["authored"])
-        # Initial generation omits advisory roots; format Repair retains the
-        # legacy optional-report grammar and its nullable provider wrappers.
+        # Initial generation omits advisory roots.
         source.pop("realization", None)
         local_schema = author_item_response_schema()
         if stage == "author":
@@ -223,7 +219,7 @@ def dict_nodes(value):
             yield from dict_nodes(child)
 
 
-@pytest.mark.parametrize("stage", [stage for stage in STAGES if stage not in {"vfx_repair", "format_repair"}])
+@pytest.mark.parametrize("stage", [stage for stage in STAGES if stage != "vfx_repair"])
 def test_changed_parent_context_is_dynamic_and_retains_generated_facts(capture, stage):
     first, _ = capture.builder(stage, COHORT[0], "json_object")
     # Compare the same runtime/overlay grammar with changed parent facts; an
