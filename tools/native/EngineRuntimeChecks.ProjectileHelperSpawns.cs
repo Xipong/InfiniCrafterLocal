@@ -357,6 +357,35 @@ internal static partial class EngineRuntimeChecks
         var duplicate = original.DeepClone().AsObject();
         Equal(true, Merge(duplicate, original.DeepClone().AsObject()), "exact duplicate source program can coalesce");
         Equal(true, JsonNode.DeepEquals(original, duplicate), "exact merge has no semantic or ordered-row change");
+        // Independent source sinks may encounter overloads in another order.
+        // Full member identity aligns their aliases without changing baseline
+        // spellings, native string constants or an unknown future schema.
+        const string alias = "Projectile.NewProjectile#123";
+        var renamed = original.DeepClone().AsObject();
+        var renamedProgram = renamed["identitySelected"]!.AsObject();
+        var renamedSymbols = renamedProgram["symbols"]!.AsObject();
+        renamedSymbols[alias] = renamedSymbols["Projectile.NewProjectile"]!.DeepClone();
+        renamedSymbols.Remove("Projectile.NewProjectile");
+        foreach (var row in renamedProgram["observations"]!.AsArray())
+            if (row!["call"]?.GetValue<string>() == "Projectile.NewProjectile") row["call"] = alias;
+        string renamedBefore = renamed.ToJsonString();
+        var reboundTarget = original.DeepClone().AsObject();
+        Equal(true, Merge(reboundTarget, renamed), "equal typed source member can merge despite sink-local alias spelling");
+        Equal(original.ToJsonString(), reboundTarget.ToJsonString(), "alias union keeps original accepted spellings and all rows");
+        Equal(renamedBefore, renamed.ToJsonString(), "incoming source graph remains immutable during namespace alignment");
+        var textSource = renamed.DeepClone().AsObject();
+        textSource["identitySelected"]!["symbols"]!["Nullable`1..ctor"] = "System.Nullable`1[System.Int32]..ctor(System.Int32)";
+        textSource["identitySelected"]!["dependencies"]!["literal_text"] = new JsonObject {
+            ["expression"] = "Nullable`1..ctor[" + alias + "[\"" + alias + "\"]]", ["at"] = 2000000000, ["block"] = 0, ["requiredPredicates"] = new JsonArray() };
+        var textTarget = original.DeepClone().AsObject();
+        Equal(true, Merge(textTarget, textSource), "known symbolic expression can align identifiers around quoted native text");
+        Equal("Nullable`1..ctor[Projectile.NewProjectile[\"" + alias + "\"]]", textTarget["identitySelected"]!["dependencies"]!["literal_text"]!["expression"]!.GetValue<string>(), "generic type atom and native string constant remain literal while member identifier is rebound");
+        var unknownNamespace = renamed.DeepClone().AsObject();
+        unknownNamespace["identitySelected"]!["observations"]![0]!["futureSymbolUse"] = alias;
+        var unknownTarget = original.DeepClone().AsObject();
+        Equal(false, Merge(unknownTarget, unknownNamespace), "unrecognized expression fields refuse alias alignment");
+        Equal(original.ToJsonString(), unknownTarget.ToJsonString(), "unrecognized schema cannot partly rename baseline");
+
         foreach (string mismatch in new[] { "identity", "symbol", "observation", "duplicate_row", "missing_offset", "future_wrapper" })
         {
             var target = original.DeepClone().AsObject(); var addition = original.DeepClone().AsObject();

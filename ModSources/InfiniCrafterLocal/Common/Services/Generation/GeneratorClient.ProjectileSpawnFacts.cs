@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Text.Json.Nodes;
 using Terraria;
 
@@ -99,6 +101,113 @@ public sealed partial class GeneratorClient
         return new(programs, references, methods);
     }
 
+    private static bool TryAlignProjectileSourceSymbols(JsonObject target, JsonObject source, out JsonObject aligned)
+    {
+        aligned = source;
+        if (target["symbols"] is not JsonObject targetSymbols || source["symbols"] is not JsonObject sourceSymbols) return false;
+        var names = new Dictionary<string, string>(StringComparer.Ordinal);
+        var reserved = targetSymbols.Select(pair => pair.Key).Concat(sourceSymbols.Select(pair => pair.Key)).ToHashSet(StringComparer.Ordinal);
+        foreach (var pair in sourceSymbols)
+        {
+            if (pair.Value is not JsonValue signature || !signature.TryGetValue<string>(out var member)) return false;
+            string? existing = targetSymbols.Where(entry => entry.Value is JsonValue value && value.TryGetValue<string>(out var text) && text == member)
+                .Select(entry => entry.Key).OrderBy(name => name, StringComparer.Ordinal).FirstOrDefault();
+            string name = existing ?? pair.Key;
+            if (existing is null && targetSymbols.ContainsKey(name) && !JsonNode.DeepEquals(targetSymbols[name], pair.Value))
+            {
+                string prefix = Regex.Replace(name, @"#\d+$", "");
+                int suffix = 0;
+                do { name = prefix + "#" + suffix++; } while (reserved.Contains(name));
+                reserved.Add(name);
+            }
+            names[pair.Key] = name;
+        }
+        if (names.All(pair => pair.Key == pair.Value)) return true;
+        // Only the serializer's known expression-bearing fields can be rebound.
+        // A new schema may refer to symbols elsewhere and must stay separate.
+        var fields = new[] { "method", "sourceModuleVersionId", "sourceMethodSha256", "observations", "dependencies", "predicates", "symbols", "coverage", "unresolved", "identitySelection" };
+        if (source.Any(pair => !fields.Contains(pair.Key)) || names.Any(pair => !Regex.IsMatch(pair.Key, @"^[A-Za-z_][A-Za-z0-9_.`]*(?:#\d+)?$")
+            || !Regex.IsMatch(pair.Value, @"^[A-Za-z_][A-Za-z0-9_.`]*(?:#\d+)?$"))) return false;
+        var copy = source.DeepClone().AsObject();
+        bool Text(JsonObject row, string key)
+        {
+            if (row[key] is null) return true;
+            if (row[key] is not JsonValue value || !value.TryGetValue<string>(out var expression)
+                || !TryRewriteProjectileSourceIdentifiers(expression, names, out string rewritten)) return false;
+            row[key] = rewritten;
+            return true;
+        }
+        bool Row(JsonObject row)
+        {
+            var known = new[] { "kind", "at", "block", "requiredPredicates", "expression", "call", "receiver", "arguments", "scope", "orderedSourceUses", "id", "op", "inputs", "successors" };
+            if (row.Any(pair => !known.Contains(pair.Key)) || !Text(row, "expression") || !Text(row, "call") || !Text(row, "receiver")) return false;
+            if (row["arguments"] is JsonObject arguments)
+            {
+                foreach (string key in arguments.Select(pair => pair.Key).ToArray()) if (!Text(arguments, key)) return false;
+            }
+            else if (row["arguments"] is not null) return false;
+            if (row["inputs"] is JsonArray inputs)
+                for (int n = 0; n < inputs.Count; n++)
+                {
+                    if (inputs[n] is not JsonValue value || !value.TryGetValue<string>(out var expression)
+                        || !TryRewriteProjectileSourceIdentifiers(expression, names, out var rewritten)) return false;
+                    inputs[n] = rewritten;
+                }
+            else if (row["inputs"] is not null) return false;
+            if (row["orderedSourceUses"] is JsonArray uses)
+            {
+                foreach (var use in uses) if (use is not JsonObject next || !Row(next)) return false;
+            }
+            else if (row["orderedSourceUses"] is not null) return false;
+            return true;
+        }
+        if (copy["observations"] is not JsonArray observations || copy["dependencies"] is not JsonObject dependencies || copy["predicates"] is not JsonArray predicates) return false;
+        foreach (var row in observations.Concat(dependencies.Select(pair => pair.Value)).Concat(predicates))
+            if (row is not JsonObject value || !Row(value)) return false;
+        var rebound = new JsonObject();
+        foreach (var pair in sourceSymbols)
+        {
+            string name = names[pair.Key];
+            if (rebound.ContainsKey(name) && !JsonNode.DeepEquals(rebound[name], pair.Value)) return false;
+            rebound[name] = pair.Value?.DeepClone();
+        }
+        copy["symbols"] = rebound;
+        aligned = copy;
+        return true;
+    }
+
+    private static bool TryRewriteProjectileSourceIdentifiers(string expression, Dictionary<string, string> names, out string rewritten)
+    {
+        // SourceOperand writes string constants as JSON literals. Tokenize
+        // identifier atoms and copy quoted strings verbatim, including escapes.
+        // Renaming a member can never alter text inside a native string literal.
+        var text = new StringBuilder(expression.Length);
+        for (int at = 0; at < expression.Length;)
+        {
+            int start = at;
+            if (expression[at] == '"')
+            {
+                bool closed = false;
+                for (at++; at < expression.Length; at++)
+                {
+                    if (expression[at] == '\\') { at++; continue; }
+                    if (expression[at] == '"') { at++; closed = true; break; }
+                }
+                if (!closed) { rewritten = expression; return false; }
+                text.Append(expression, start, at - start);
+            }
+            else if (char.IsLetter(expression[at]) || expression[at] == '_')
+            {
+                for (at++; at < expression.Length && (char.IsLetterOrDigit(expression[at]) || expression[at] is '_' or '.' or '#' or '`'); at++) { }
+                string identifier = expression[start..at];
+                text.Append(names.TryGetValue(identifier, out string? name) ? name : identifier);
+            }
+            else text.Append(expression[at++]);
+        }
+        rewritten = text.ToString();
+        return true;
+    }
+
     private static bool TryMergeProjectileSourcePrograms(JsonObject destination, JsonObject addition)
     {
         // Exact source-table union only. Overloaded symbol aliases, different
@@ -122,6 +231,7 @@ public sealed partial class GeneratorClient
         var source = selected ? addition["identitySelected"]!.AsObject() : addition;
         foreach (string key in new[] { "method", "sourceModuleVersionId", "sourceMethodSha256", "coverage", "identitySelection" })
             if (!JsonNode.DeepEquals(target[key], source[key])) return false;
+        if (!TryAlignProjectileSourceSymbols(target, source, out source)) return false;
         foreach (string key in new[] { "dependencies", "symbols" })
         {
             if (target[key] is not JsonObject left || source[key] is not JsonObject right) return false;
