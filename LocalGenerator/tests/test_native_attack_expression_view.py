@@ -95,6 +95,47 @@ def test_full_qualified_symbol_metadata_has_reversible_readable_type_aliases():
     assert json.dumps(expand_attack_expressions(result)) == json.dumps(source)
 
 
+@pytest.mark.parametrize("source,expected", [
+    ("(this).Projectile.ai", "(this).P.ai"),
+    ("ldflda(Entity.velocity,this)", "ldflda(E.velocity,this)"),
+    ("Vector2.add[(this).Entity.position,Vector2.mul[(this).Entity.velocity,45]]",
+     "Vec.add[(this).E.position,Vec.mul[(this).E.velocity,45]]"),
+    ("set((this).Projectile.scale,(1+(l1@130*0.6)))", "set((this).P.scale,(1+(l1@130*0.6)))"),
+    ('Native.Call["Projectile,Entity,Vector2,P,E,Vec",-1E-05,-0.0]',
+     'Native.Call["Projectile,Entity,Vector2,P,E,Vec",-1E-05,-0.0]'),
+    ('Native.Call[{"Projectile":"Entity","P":"Vec"},["Vector2",0,false]]',
+     'Native.Call[{"Projectile":"Entity","P":"Vec"},["Vector2",0,false]]'),
+    ("SomeProjectile.Call[(other).EntityProxy.value]", "SomeProjectile.Call[(other).EntityProxy.value]"),
+    ("stfld(Projectile.rotation,this,add(Utils.ToRotation[ldfld(Entity.velocity,this)],unresolved_local_definition_bound(;1)))",
+     "stfld(Projectile.rotation,this,add(Utils.ToRotation[ldfld(Entity.velocity,this)],unresolved_local_definition_bound(;1)))"),
+])
+def test_native_namespace_aliases_preserve_expression_structure_and_opaque_literals(source, expected):
+    from infini_local.pipelines.context.attack_namespaces import shorten_expression_names
+    assert shorten_expression_names(source) == expected
+
+
+def test_native_namespace_aliases_preserve_complete_symbol_signature_and_overload_identity():
+    from infini_local.pipelines.context.attack_namespaces import shorten_symbol_name, shorten_symbol_signature
+    symbol = 'Projectile.NewProjectile#2'
+    signature = ('T.Projectile.NewProjectile(T.DataStructures.IEntitySource,Xna.Vector2,Xna.Vector2,int,float,'
+                 'ref T.Entity[],System.Nullable<Xna.Vector2>)')
+    assert shorten_symbol_name(symbol) == 'P.NewProjectile#2'
+    assert shorten_symbol_signature(signature) == (
+        'T.P.NewProjectile(T.DataStructures.IEntitySource,Xna.Vec,Xna.Vec,int,float,'
+        'ref T.E[],System.Nullable<Xna.Vec>)')
+    assert shorten_symbol_signature('Native.Name("Projectile",-1E-05)') == 'Native.Name("Projectile",-1E-05)'
+
+
+@pytest.mark.parametrize("source", ["P.type", "Native.E", "Vec.add[this,2]", "opaque<P.type>"])
+def test_preexisting_native_namespace_alias_identifiers_refuse_reinterpretation(source):
+    from infini_local.pipelines.context.attack_namespaces import (
+        shorten_expression_names, shorten_symbol_name, shorten_symbol_signature,
+    )
+    for shorten in (shorten_expression_names, shorten_symbol_name, shorten_symbol_signature):
+        with pytest.raises(ValueError, match='collides'):
+            shorten(source)
+
+
 def test_unknown_nested_fields_and_literal_tooltips_are_not_interpreted():
     source = attack_fixture()
     source["future"] = {"expression": "mul(1,2)", "tooltipLines": ["add(1,2)"]}
