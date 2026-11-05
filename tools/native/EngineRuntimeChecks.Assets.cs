@@ -80,11 +80,13 @@ internal static partial class EngineRuntimeChecks
     private static string AssetLifetimeFile() => "asset_lifetime_" + Guid.NewGuid().ToString("N") + ".png";
     private static void DeleteAssetLifetimeFiles(GeneratedAssetSyncService service, string file)
     {
+        string? canonical = service.ResolveLocalPath(file);
+        if (canonical is not null) File.Delete(canonical);
         File.Delete(Path.Combine(service.CacheRoot, file)); File.Delete(Path.Combine(service.CacheRoot, file) + ".part");
     }
     private static void CheckStoppedAssetLifetime(GeneratedAssetSyncService service, AssetHeldResponse server, string file)
     {
-        Equal(false, File.Exists(Path.Combine(service.CacheRoot, file)), "disposed worker cannot publish");
+        Equal(true, service.ResolveLocalPath(file) is null, "disposed worker cannot publish");
         Equal(false, File.Exists(Path.Combine(service.CacheRoot, file) + ".part"), "disposed worker leaves no part");
         Equal(0, service.GetDebugSnapshot().KnownMissingCount, "disposed worker cannot resurrect retry state");
         Equal(0, service.GetDebugSnapshot().InFlightCount, "disposed worker retires in-flight state");
@@ -139,6 +141,7 @@ internal static partial class EngineRuntimeChecks
                 Equal(false, worker.IsCompleted, "actual worker waits behind body/status barrier");
                 if (disposed) service.Dispose();
                 await DrainAssetLifetimeWorker(worker, server); await server.CloseAsync();
+                local = service.ResolveLocalPath(file) ?? local;
                 Equal(valid && !disposed, File.Exists(local), "published file: disposed=" + disposed + ", outcome=" + outcome);
                 if (valid && !disposed) Equal(true, AssetLifetimePng.SequenceEqual(File.ReadAllBytes(local)), "active service commits exact verified bytes");
                 Equal(!disposed && !valid ? 1 : 0, service.GetDebugSnapshot().KnownMissingCount,

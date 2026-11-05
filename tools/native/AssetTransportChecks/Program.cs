@@ -138,15 +138,18 @@ internal static class Program
         {
             foreach (var entry in Expected)
             {
-                string path = Path.Combine(Client.CacheRoot, entry.Key);
+                string path = Client.ResolveLocalPath(entry.Key) ?? throw new InvalidOperationException("missing " + entry.Key);
                 Require(File.Exists(path), "missing " + entry.Key);
+                Require(Path.GetFileName(Path.GetDirectoryName(path)) == "final", "received PNG is not in canonical final storage");
+                Require(!File.Exists(Path.Combine(Client.CacheRoot, entry.Key)), "received PNG duplicated into flat cache");
                 byte[] actual = File.ReadAllBytes(path);
                 Require(actual.SequenceEqual(entry.Value), "bytes changed: " + entry.Key);
                 Require(SHA256.HashData(actual).SequenceEqual(SHA256.HashData(entry.Value)), "SHA mismatch");
                 Require(!File.Exists(path + ".part"), "partial file escaped commit");
             }
         }
-        internal void AssertNoFiles() => Require(!Directory.EnumerateFiles(Client.CacheRoot).Any(), "unverified bytes reached cache");
+        internal void AssertNoFiles() => Require(!Directory.EnumerateFiles(Client.CacheRoot, "*", SearchOption.AllDirectories)
+            .Any(path => path.EndsWith(".png", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".part", StringComparison.OrdinalIgnoreCase)), "unverified bytes reached cache");
         public void Dispose()
         {
             Server.Dispose(); Client.Dispose(); ModPacket.OnSend = (_, _) => { };

@@ -92,7 +92,8 @@ def _asset_manifest_entry(data: dict[str, Any], asset: dict[str, Any]) -> dict[s
 def write_visual_manifest(data: dict[str, Any], plan: list[dict[str, Any]]) -> None:
     try:
         item_id = str(data.get("id") or "sprite")
-        path = SPRITE_DIR / f"{item_id}_asset_manifest.json"
+        from infini_local.storage.image_store import item_directory
+        path = item_directory(SPRITE_DIR, data) / "manifest.json"
         runtime = data.get("runtimeProgram") if isinstance(data.get("runtimeProgram"), dict) else {}
         manifest = {
             "schema": "infini.visual.runtime-entity-assets.v3",

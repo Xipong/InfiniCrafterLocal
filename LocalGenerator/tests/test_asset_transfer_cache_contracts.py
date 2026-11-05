@@ -24,7 +24,7 @@ from infini_local.qa.live_no_image_fixture import write_no_image_fixture_png
 from infini_local.services.sdcpp_service import ImageRequestGate
 from infini_local.web.vfx_debug_routes import _sample_data
 from tests.vfx_image_fixtures import HttpCapture, _data, _request, _slot, offline_backend
-from pipeline_test_support import isolated_serving_roots, png_assessments, selected_pngs
+from pipeline_test_support import isolated_serving_roots, png_assessments, selected_pngs, legacy_transfer_fixture
 
 
 def _get_asset(filename: str) -> HttpCapture:
@@ -139,6 +139,7 @@ def test_final_png_dimension_admission_matches_client_512_ceiling(
     from PIL import Image
 
     data = visual_sprite_generation.maybe_generate_visual_assets(_data([]))
+    legacy_transfer_fixture(data, visual_delivery_gate.SPRITE_DIR)
     target = Path(data['visual']['spritePath'])
     # Fully encoded manual pixels, not a forged/truncated IHDR.
     Image.new('RGBA', (width, height), (210, 100, 20, 255)).save(target)
@@ -160,6 +161,7 @@ def test_whole_roster_exact_byte_limits_include_inactive_members_and_cache(offli
     from infini_local.services.asset_sync_service import MAX_ASSET_RESPONSE_BYTES
 
     data = visual_sprite_generation.maybe_generate_visual_assets(_data([_request(layout="strip")]))
+    legacy_transfer_fixture(data, visual_delivery_gate.SPRITE_DIR)
     item = Path(data["visual"]["spritePath"])
     ingredient = Path(data["vfxManifest"]["assets"][0]["spritePath"])
     overlay = tmp_path / "unused_byte_budget_member.png"
@@ -208,8 +210,9 @@ def test_png_assessment_is_operation_local_and_once_per_selected_file(
     refused = assess(data)
     visual = refused["visual"] if consumer == "cache" else refused
     assert not refused["ok"]
-    assert "asset_roster_invalid_png" in {row["code"] for row in visual["problems"]}
-    assert dict(png_assessments) == dict.fromkeys(files, 1)
+    assert "asset_roster_file_missing" in {row["code"] for row in visual["problems"]}
+    # The index rejects a changed immutable PNG before pixel decoding.
+    assert dict(png_assessments) == dict.fromkeys(files - {Path(data["visual"]["spritePath"]).resolve()}, 1)
     assert data == before
 
 
@@ -220,6 +223,7 @@ def test_delivery_refuses_png_snapshot_changed_during_assessment(
     import os
 
     data = visual_sprite_generation.maybe_generate_visual_assets(_data([]))
+    legacy_transfer_fixture(data, visual_delivery_gate.SPRITE_DIR)
     item = Path(data['visual']['spritePath'])
     raw = item.read_bytes()
     real = asset_sync_service.is_complete_png_file
@@ -258,6 +262,7 @@ def test_delivery_refuses_valid_symlink_retarget_between_slots_and_roster(
     from PIL import Image
 
     data = visual_sprite_generation.maybe_generate_visual_assets(_data([]))
+    legacy_transfer_fixture(data, visual_delivery_gate.SPRITE_DIR)
     item = Path(data['visual']['spritePath'])
     original = tmp_path / 'selected_before.png'
     replacement = tmp_path / 'selected_after.png'
@@ -626,6 +631,7 @@ def test_transfer_selection_matches_readiness_and_cache(offline_backend, tmp_pat
     from PIL.PngImagePlugin import PngInfo
     from infini_local.services.asset_sync_service import MAX_ASSET_RESPONSE_BYTES
     data = visual_sprite_generation.maybe_generate_visual_assets(_data([]) if legacy else _data([_request(layout="strip")]))
+    legacy_transfer_fixture(data, visual_delivery_gate.SPRITE_DIR)
     assert world_storage.is_deliverable_recipe_payload(data) and _cached_payload_report(data)["ok"]
     asset = data["vfxManifest"]["assets"][0] if not legacy else None
     canonical = Path(asset["spritePath"]) if asset else Path(data["visual"]["spritePath"])

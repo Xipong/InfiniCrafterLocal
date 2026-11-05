@@ -23,6 +23,7 @@ def configure_environment(data_dir: Path, save_dir: Path | None) -> None:
     load_env_file(data_dir / "config.env")
     if save_dir is not None:
         dump_dir = save_dir / "InfiniCrafterLocal"
+        os.environ.setdefault("INFINI_IMAGE_DIR", str(dump_dir / "images"))
         for name, filename in (("INFINI_ITEMS_RUNTIME_DUMP", "items_runtime_dump.jsonl"),
                                ("INFINI_PROJECTILES_RUNTIME_DUMP", "projectiles_runtime_dump.jsonl")):
             os.environ.setdefault(name, str(dump_dir / filename))

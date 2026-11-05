@@ -201,7 +201,10 @@ public partial class GeneratedItem : ModItem
             {
                 if (GeneratedItemData.IsPlayerSaveReferenceOnly(Data))
                     SetData(canonical, ensureAssets: false, registerLocal: false, notifyNetState: false);
-                global::InfiniCrafterLocal.InfiniCrafterLocalMod.AssetSync?.EnsureAssetsForData(canonical, forceRetry: false);
+                var assetSync = global::InfiniCrafterLocal.InfiniCrafterLocalMod.AssetSync;
+                if (assetSync?.NeedsRemoteDescriptorRefresh(canonical, forceRetry: false) == true)
+                    registry.RequestOneFromServer(id, forceAssetRetry: false, forceDefinitionRefresh: true);
+                else assetSync?.EnsureAssetsForData(canonical, forceRetry: false);
             }
             else if (Main.netMode == NetmodeID.MultiplayerClient)
                 registry.RequestOneFromServer(id, forceAssetRetry: false);

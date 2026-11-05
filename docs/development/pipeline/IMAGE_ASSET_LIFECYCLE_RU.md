@@ -32,15 +32,40 @@ sd.cpp: `core/images/config.py` читает настройки и владее�
 
 Приватный immutable request разделяет logical asset ID, audit role, processing role, canvas/topology и конечную publication policy. Result содержит committed path, raw path, оба score, final prompt, validation/attempt receipts и failure phase. Это технические структуры Python, не новый LLM output, asset registry, VM или система callbacks.
 
-У каждой invocation и попытки свой private `output_dir` вне `SPRITE_DIR` и world-recipe serving roots. Этот путь явно передаётся backend/postprocess/stages/refit; module-global directories не переключаются. Backend gate не расширяется на CPU/postprocess/publication.
+У каждой invocation и попытки свой private `output_dir` в `images/worlds/<мир>/<предмет>/diagnostics`, вне индексируемой папки `final`. Этот путь явно передаётся backend/postprocess/stages/refit; module-global directories не переключаются. Backend gate не расширяется на CPU/postprocess/publication.
 
 Legacy logical IDs и retry suffixes, ComfyUI `{{SPRITE_ID}}`, authored prompts и seed policy не меняются ради изоляции файлов. У VFX сохраняется прежний nonce/digest, уже передававшийся backend. Custom ComfyUI workflow может сам выбирать remote SaveImage filenames: локальная изоляция не обещает изменить его remote storage.
 
-Raw/stages остаются **private diagnostic files**, а не публичными ассетами. Обычное место — `image-diagnostics` рядом с `SPRITE_DIR`; если оно пересекается с serving roots, выбирается private temporary-root directory. Конкретный путь и `retained_private` записываются в debug receipt. Автоматическая очистка/квота диагностики в этой версии не добавлена: каталог может накапливаться; его не следует включать в переносимые исходники или раздачу PNG.
+Raw/stages остаются **private diagnostic files**, а не публичными ассетами. Их private каталог находится рядом с `final` внутри папки предмета; HTTP не обходит дерево картинок и не раздаёт диагностику. Конкретный путь и `retained_private` записываются в debug receipt. Принятый bake переносится в постоянное хранилище, а JSON receipt указывает на этот единственный финал. При включённых промежуточных этапах байтовый дубль `30_baked_final` также не остаётся. Raw, master и неудачные попытки сохраняются. Автоматическая очистка/квота диагностики не добавлена.
 
-Новые non-VFX PNG получают ASCII filename по structured `[recipeId, auditRole, entityId, logicalAssetId]` и окончательным bytes, а не по конкатенации строк. Поэтому `impact:orb` и `entity:orb_impact` не могут перезаписать результат друг друга, даже когда старый logical asset ID совпал. VFX сохраняет прежний алгоритм `[recipeId, assetId] + NUL + bytes` и prefix.
+## Постоянное хранилище на каждом ПК
 
-Publisher пишет собственный уникальный `.part`, делает flush/fsync и atomic replace в конечном serving root. Hydration public path происходит только после commit. Mutable retry→canonical copy удалён. Имена существующих recipes/PNG не переименовываются и не мигрируются; новый materialization использует новый immutable filename.
+Встроенная Studio и игра используют один `<Main.SavePath>/InfiniCrafterLocal/images`. Native launcher передаёт уже выбранный image root в Studio; managed restart сохраняет его при запуске Python, даже если в `config.env` остался прежний standalone override. Внешний standalone-генератор по умолчанию использует `<INFINI_DATA_DIR или LocalGenerator>/images`. Если standalone запущен на том же ПК и должен разделять файлы с игрой, укажи его `INFINI_IMAGE_DIR` равным `<Main.SavePath>/InfiniCrafterLocal/images`; при собственном другом расположении задай одинаковый `INFINI_IMAGE_DIR` обоим процессам.
+
+Структура:
+
+```text
+images/
+  worlds/<имя мира>--<ID digest>/<имя предмета>--<ID digest>/
+    .identity.json
+    manifest.json
+    final/item--<digest>.png
+    final/runtime_projectile--<digest>.png
+    diagnostics/<роль>-<попытка>/attempt-0/...
+  .index/<digest имени wire-файла>.json
+```
+
+На Windows canonical root нормализуется в extended absolute path (`\\?\` либо `\\?\UNC\`); wire и относительный index не содержат этот технический prefix. Это снимает зависимость файлового I/O от стандартного MAX_PATH, но live Windows/PIL smoke остаётся отдельной проверкой. Unicode-имена ограничены по длине и безопасны для Windows; точные ID входят в digest, поэтому одинаковые имена, различия регистра и запрещённые символы не объединяют разные предметы. `.identity.json` хранит точные ID и актуальное имя. Переименование мира/предмета обновляет metadata, но не перемещает уже найденный каталог. Неизвестный каталог с совпавшим именем не перезаписывается.
+
+Новые final PNG имеют читаемую роль и digest, учитывающий world/item/role, прежнюю exact publication identity и окончательные bytes. Значения backend logical IDs, seeds, prompts и VFX nonce не меняются. Внешний сетевой контракт остаётся basename + length + SHA-256, без абсолютного пути ПК: финальная delivery-проекция индексированных PNG отправляет basename. Индекс связывает его с относительным `final`-путём. C# читает и сертифицирует тот же локальный файл без HTTP-копии. У multiplayer-клиента и генератора на другом ПК есть собственное локальное хранилище; полученные байты проходят прежние length/SHA/PNG проверки.
+
+Owners диска: `storage/image_store.py` и native `SharedImageStore`. Byte-range lock `.store.lock` сериализует файловые изменения между Python/C#. PNG записывается через уникальный `.part`, flush/fsync, atomic replace; alias публикуется только после PNG. Повреждённый indexed identity не разрешает выбрать shadow из старого cache. Диагностика никогда не индексируется как final.
+
+### Переход существующих данных
+
+Миграция ленивая: при чтении принятого world recipe/гидратации native item переносятся только его известные complete PNG из `cache/sprites` и `asset_cache`. Исходные DTO и gameplay schema не преобразуются. Старое basename сохраняется как alias, поэтому прежний абсолютный путь/URL продолжает разрешаться через AssetSync. Исходный файл убирается лишь после записи и проверки canonical bytes + alias; byte-identical копии объединяются. Иные bytes, неизвестные файлы и каталоги не удаляются. Повторный проход не создаёт PNG-дублей. Сбой записи оставляет исходные данные доступными для следующей попытки.
+
+Записанные legacy `image-*` diagnostic directories переносят известные raw/stage/master PNG в папку соответствующего предмета. Совпавшие с принятым финалом bytes заменяются `.final.json` receipt. Неопознанные файлы остаются на прежнем месте. Никакой массовой очистки старого cache или автоматического удаления истории нет.
 
 VFX ID сохраняется буквально, включая регистр. `Glow/glow` и `spark/spark_refit` не должны сталкиваться при case-insensitive sync/refit. Конечный ASCII digest учитывает exact identity и окончательные PNG bytes; raw ID не становится filename, новое содержимое не перезаписывает ранее распределённое имя. Это техническое именование, не дополнительная integrity authority.
 
@@ -112,7 +137,7 @@ Debug snapshot сохраняет resident `TextureCount`/`EstimatedTextureBytes
 
 Offline provider responses и native fixture PNG являются явно ручными тестовыми данными. Эти проверки не означают live image-model quality, Terraria game-loop, двухклиентный MP или измеренное ускорение генерации. Ошибка диска больше не тратит дополнительные image requests, но обычная генерация всё ещё ограничена временем выбранного backend; FPS и latency улучшения без замеров не заявляются.
 
-Текущие owners: `test_image_attempt_contracts.py`, `test_image_adapter_contracts.py`, `test_vfx_ingredient_generation_contracts.py`, `test_sprite_render_contracts.py`, `test_vfx_dependency_delivery_contracts.py`, `test_asset_transfer_cache_contracts.py`; C# — existing registered `EngineRuntimeChecks` partials. Команды и scope доказательства — [test owners](../TESTING_RU.md). Исторические предложения image flags не выдаются за текущие defects/coverage: [decision record](../../archive/VISUAL_AUDIT_HISTORY_RU.md#image-flags).
+Текущие owners: `test_persistent_image_store.py`, `test_image_attempt_contracts.py`, `test_image_adapter_contracts.py`, `test_vfx_ingredient_generation_contracts.py`, `test_sprite_render_contracts.py`, `test_vfx_dependency_delivery_contracts.py`, `test_asset_transfer_cache_contracts.py`; C# — existing registered `EngineRuntimeChecks` partials. Команды и scope доказательства — [test owners](../TESTING_RU.md). Исторические предложения image flags не выдаются за текущие defects/coverage: [decision record](../../archive/VISUAL_AUDIT_HISTORY_RU.md#image-flags).
 
 Настройка параллельности применяется после сохранения и перезапуска генератора (gate не меняется во время активных запросов). Существующий явно сохранённый `INFINI_IMAGE_MAX_CONCURRENCY=1` не повышается автоматически: старое значение по умолчанию неотличимо от осознанного ограничения VRAM. Для облака установите 2–4; новые конфигурации получают 4. Выключенная галочка также отключает перекрытие image-запросов с VFX Designer: сохраняется порядок Visual Director → VFX Designer → последовательные изображения. Отмена при неожиданном исключении снимает ещё не начатые задачи; уже отправленные HTTP-запросы завершаются в пределах существующих provider timeout, перед выходом worker-потоки присоединяются.
 

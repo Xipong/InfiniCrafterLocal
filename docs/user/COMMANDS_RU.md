@@ -117,7 +117,9 @@ pipeline автоматически; полный AI и непокрытая п�
 Все игровые экспорты лежат внутри **`InfiniCrafterLocal/` в пользовательской папке сохранений tModLoader** (`Main.SavePath`), не в каталоге Steam и не в `LocalGenerator/cache`.
 
 - `generated_items/<id>.json` — определения созданных предметов;
-- `asset_cache/` — полученные PNG/JSON;
+- `images/worlds/<мир>/<предмет>/final/` — постоянные PNG с понятной ролью в имени; встроенная Studio и игра читают один файл;
+- `images/worlds/<мир>/<предмет>/diagnostics/` — сырые попытки и промежуточные этапы; принятый финал не дублируется;
+- `asset_cache/` — старые файлы: известные PNG переносятся при использовании, неизвестные не удаляются;
 - `runtime_dump_manifest.json` и `runtime_dump_snapshots/<snapshotId>/{items_runtime_dump.jsonl,projectiles_runtime_dump.jsonl}` — `/infinidump`; старые root JSONL не используются без manifest;
 - `picture_dumps/` — галереи изображений.
 

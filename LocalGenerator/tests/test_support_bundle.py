@@ -219,3 +219,24 @@ def test_verification_rejects_missing_duplicate_and_modified_members(cache, tmp_
                 bundle._add(archive, name, data)
         with pytest.raises(ValueError):
             bundle.verify_bundle(target)
+
+
+@pytest.mark.parametrize("include_images", [False, True])
+def test_persistent_image_store_is_included_without_unknown_or_private_core_files(cache, tmp_path, include_images):
+    images = tmp_path / "images"
+    final_name = "worlds/Мир--123/Жезл--456/final/item--digest.png"
+    raw_name = "worlds/Мир--123/Жезл--456/diagnostics/item-1/attempt-0/raw.png"
+    _write(images, final_name, _png())
+    _write(images, raw_name, _png())
+    _write(images, ".index/private.json", b'{"not":"exported"}')
+    _write(images, "unknown.txt", b'leave unknown data alone')
+    output = tmp_path / "with-images.tar.xz"
+    before = {p: p.read_bytes() for p in images.rglob("*") if p.is_file()}
+    bundle.export_bundle(cache, output, image_root=images, include_images=include_images)
+    manifest = bundle.verify_bundle(output)
+    included = {row["path"] for row in manifest["included"]}
+    assert "images/" + final_name in included
+    assert ("images/" + raw_name in included) is include_images
+    assert "images/.index/private.json" not in included
+    assert "images/unknown.txt" not in included
+    assert all(p.read_bytes() == raw for p, raw in before.items())

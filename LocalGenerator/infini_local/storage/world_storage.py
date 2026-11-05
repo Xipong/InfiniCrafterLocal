@@ -330,6 +330,9 @@ def sanitize_recipe_for_delivery(data: Any) -> Any:
     if recipe_meta is not None:
         out["recipeMeta"] = recipe_meta
 
+    from infini_local.core.config_bootstrap import SPRITE_DIR
+    from infini_local.storage.image_store import compact_delivery_paths
+    compact_delivery_paths(SPRITE_DIR, out)
     return out
 
 
@@ -484,6 +487,25 @@ def read_world_recipe_cache(
         # contract. A caller can add stricter checks, never replace this baseline.
         runtime_ready = is_deliverable_recipe_payload(data, check_assets=False)
         vfx_report = validate_vfx_manifest_wire(data)
+        if runtime_ready and vfx_report["ok"]:
+            from infini_local.core.config_bootstrap import SPRITE_DIR
+            from infini_local.storage.image_store import adopt_recipe, adopt_diagnostics
+            # This relocates bytes only. Saved gameplay paths and definitions keep
+            # their exact meaning through the persistent old-filename aliases.
+            migration_data = copy.deepcopy(data)
+            migration_data.setdefault("recipeMeta", {})["worldName"] = str(world_name or "")
+            for phase, migrate in (("finals", adopt_recipe), ("diagnostics", adopt_diagnostics)):
+                try:
+                    migrate(SPRITE_DIR, migration_data)
+                except OSError as exc:
+                    # Relocation is optional for an already valid cache record.
+                    # The regular admission below still rejects corrupt indexed
+                    # identity instead of falling back to a legacy shadow PNG.
+                    from infini_local.storage.trace_runtime import trace_event
+                    trace_event("warn", "COMBINE:cache", "image relocation deferred", {
+                        "recipeKey": recipe_key_value, "worldId": str(world_id),
+                        "phase": phase, "error": repr(exc),
+                    })
         assets_ready = runtime_ready and _cache_assets_ready(data)
         debug = data.setdefault("debug", {})
         debug.update({"cacheHit": "world_file", "cacheScope": "world"})
