@@ -18,7 +18,7 @@ public static class GeneratedHeldItemPresentation
 
     internal static bool HasReadyHeldSprite(PlayerDrawSet draw)
         => TryGetHeldSpriteData(draw,out var data)
-            && global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites?.TryGet(data!.Visual.SpritePath) is not null;
+            && global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites?.TryGetReady(data!.Visual.SpritePath) is not null;
 
     internal static bool TryGetHeldSpriteData(PlayerDrawSet draw,out GeneratedItemData? data)
     {
@@ -46,7 +46,7 @@ public static class GeneratedHeldItemPresentation
         // Readiness does not second-guess that native draw decision.
         if(presentationItem.noUseGraphic||presentationItem.useStyle<=ItemUseStyleID.None)return false;
         if(string.IsNullOrWhiteSpace(data.Visual.SpritePath)) {RequestHeldItemCatchup(id,null);return false;}
-        if(global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites?.TryGet(data.Visual.SpritePath) is null) {
+        if(global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites?.TryGetReady(data.Visual.SpritePath) is null) {
             RequestHeldItemCatchup(id,data.Visual.SpritePath);
         }
         return true;
@@ -73,9 +73,9 @@ public static class GeneratedHeldItemPresentation
             HeldAssetRequestTicks[key] = now;
         }
         if (!string.IsNullOrWhiteSpace(id))
-            global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.RequestOneFromServer(id, forceAssetRetry: true);
+            global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.QueuePresentationRequest(id, forceAssetRetry: true);
         else
-            global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.RequestFullSyncFromServer(forceAssetRetry: true);
+            global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.QueuePresentationRequest("", forceAssetRetry: true);
     }
 
     private static bool HasPngPath(string? value)

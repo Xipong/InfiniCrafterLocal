@@ -19,6 +19,7 @@ internal static class RecipeJournalView
 
     internal static bool MatchesEffect(GeneratedItemData data, EffectFilter filter)
     {
+        if (filter == EffectFilter.All) return true;
         var program = data.RuntimeProgram;
         var effects = new List<IItemEffectsSpec>();
         foreach (var binding in program.Bindings)
@@ -35,7 +36,6 @@ internal static class RecipeJournalView
                 && program.TryGetEffectGroup(action.EffectGroupId ?? "") is { } reactive) effects.Add(reactive);
         return filter switch
         {
-            EffectFilter.All => true,
             EffectFilter.Healing => effects.Any(e => e.HealLife > 0 || e.GeneratedBuff?.LifeRegen > 0)
                 || program.Entities.Any(e => e.Events.Any(a => a.ActionCode == RuntimeEventActionCode.HealOwner)),
             EffectFilter.Mining => data.Gameplay.PickPower > 0 || data.Gameplay.AxePower > 0 || data.Gameplay.HammerPower > 0

@@ -134,6 +134,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
     private int _retryCount;
     private int _duplicateSuppressedCount;
     private int _downloadStartedCount;
+    private readonly Dictionary<string, (GeneratedItemData Data, object Generation)> _queuedEnsure = new(StringComparer.Ordinal);
     private readonly object _lock = new();
     private bool _disposed; // Guarded by _lock, including the final file commit.
     private readonly CancellationTokenSource _downloadCancellation = new();
@@ -164,6 +165,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
             _remoteDescriptorsByItem.Clear();
             _serverDescriptorsByItem.Clear();
             _certifiedDescriptorsByFile.Clear();
+            _queuedEnsure.Clear();
         }
         // Cancellation can synchronously invoke transport callbacks. Never run
         // them under _lock, and never dispose their CTS while a worker uses it.
@@ -191,6 +193,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
             _remoteDescriptorsByItem.Clear();
             _serverDescriptorsByItem.Clear();
             _certifiedDescriptorsByFile.Clear();
+            _queuedEnsure.Clear();
         }
     }
 
@@ -262,6 +265,25 @@ public sealed class GeneratedAssetSyncService : IDisposable
         RebindCertifiedLocalAsset(file);
     }
 
+    internal void QueueEnsureAssetsForData(GeneratedItemData data)
+    {
+        if (Main.dedServ || !GeneratedItemRegistryService.IsCurrentWorldData(data)) return;
+        lock (_lock)
+        {
+            if (_disposed || _queuedEnsure.Count >= MaxInFlightDownloads) return;
+            if (_queuedEnsure.TryGetValue(data.Id, out var existing) && ReferenceEquals(existing.Data, data)) return;
+            var generation = new object(); _queuedEnsure[data.Id] = (data, generation);
+            Main.QueueMainThreadAction(() => {
+                lock (_lock)
+                {
+                    if (_disposed || !_queuedEnsure.TryGetValue(data.Id, out var active) || !ReferenceEquals(active.Generation, generation)) return;
+                    _queuedEnsure.Remove(data.Id);
+                }
+                EnsureAssetsForData(data); // unchanged PNG/length/SHA and delivery admission
+            });
+        }
+    }
+
     public void EnsureAssetsForData(GeneratedItemData? data)
         => EnsureAssetsForData(data, forceRetry: false);
 
@@ -307,6 +329,9 @@ public sealed class GeneratedAssetSyncService : IDisposable
             lock (_lock) _cacheMissCount++;
             missing.Add(file);
         }
+
+        foreach (string path in RuntimeAssetPaths(data))
+            InfiniCrafterLocalMod.Sprites?.TryGetReady(path);
 
         if (missing.Count == 0)
             return;

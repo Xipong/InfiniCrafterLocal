@@ -22,7 +22,6 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     public const int CraftRecoveryTimeoutTicks = 20 * 60 * 60;
     public const int CraftRetryBackoffBaseTicks = 5 * 60;
     public const int CraftRetryBackoffMaxTicks = 20 * 60;
-    public const int PostCraftAudioGuardTicks = 15 * 60;
     // Multiplayer crafting is server-authoritative via InfiniNetPacketIds.RequestServerCraft;
     // clients never commit authoritative GeneratedItemData.
     public const int RemoteServerCraftTimeoutTicks = CraftRecoveryTimeoutTicks;
@@ -58,13 +57,6 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
     private readonly List<Item> _deferredExitRefunds = new();
     private bool _pendingRefundSavedForWorldExit;
     private bool _pendingRemoteCraftSavedForWorldExit;
-    private float _craftSoundVolumeSnapshot = -1f;
-    private float _craftMusicVolumeSnapshot = -1f;
-    private float _craftAmbientVolumeSnapshot = -1f;
-    private float _lastGoodSoundVolume = -1f;
-    private float _lastGoodMusicVolume = -1f;
-    private float _lastGoodAmbientVolume = -1f;
-    private int _craftAudioGuardTicks;
     private int _registrySyncRetryTicks;
     private int _registrySyncRetryStep;
     private int _generatedBuffTicks;

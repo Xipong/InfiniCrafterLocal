@@ -54,7 +54,6 @@ public sealed partial class InfiniCraftPlayer
         if (HasPendingCraft)
             return false;
 
-        CaptureAudioSettingsSnapshot();
         SetCraftLaneOutcome(0, CraftLaneOutcomeKind.None, "");
         _remoteCraftCancelRequested[0] = false;
 

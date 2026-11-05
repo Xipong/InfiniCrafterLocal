@@ -54,6 +54,12 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("audit native pure definition projections", AuditProjectionsDoNotNormalizeSource),
+            ("audit native failed network copy refusal", AuditNetworkCopyFailureNeverAliasesOriginal),
+            ("audit native atlas All early return", AuditAtlasAllSkipsEffectTraversal),
+            ("audit native durable compact save", AuditDiskFailureCannotProduceCompactOnlySave),
+            ("audit native craft manual mute", AuditCraftKeepsManualMute),
+            ("audit native queued draw preparation", AuditDrawQueuesColdTexturePreparation),
             ("lineage hash proof graph cycles and world expiry", LineageHashProofGraphRetainsCycleBoundaries),
             ("lineage hash proof mutable captions remain unordered", LineageHashProofMutableCaptionsStayUnordered),
             ("lineage hash proof complete bounded audit receipts", LineageHashProofReceiptsBoundEveryMutation),

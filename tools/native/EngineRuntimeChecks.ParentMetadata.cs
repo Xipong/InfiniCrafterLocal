@@ -101,8 +101,10 @@ internal static partial class EngineRuntimeChecks
                 Equal(true, registry.TryGet(data.Id, out var canonical), "persisted clone reloads through canonical registry");
                 EqualParentMetadata(data, canonical, "registry persisted clone");
                 var files = Directory.GetFiles(registry.StoreRoot, "*.json", SearchOption.AllDirectories);
-                var before = files.ToDictionary(file => file, File.ReadAllText);
                 var saved = new TagCompound(); host.SaveData(saved);
+                // Saving the full host may enrich a previously stripped clone's
+                // persisted authoring data. The following reference must not replace it.
+                var before = files.ToDictionary(file => file, File.ReadAllText);
                 var reference = GeneratedPrefixHost(GeneratedItemData.Placeholder());
                 reference.LoadData(PersistenceNbtRoundtrip(saved));
                 Equal(true, GeneratedItemData.IsPlayerSaveReferenceOnly(reference.Data), "SaveData/LoadData remains reference-only until hydration");
