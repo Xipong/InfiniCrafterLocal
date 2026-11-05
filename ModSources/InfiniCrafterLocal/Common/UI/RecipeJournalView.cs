@@ -15,7 +15,7 @@ internal static class RecipeJournalView
 
     internal static GeneratedItemData[] Children(GeneratedItemData parent, IEnumerable<GeneratedItemData> known)
         => Entries(known, parent.RecipeMeta.WorldId, "", _ => false, false)
-            .Where(d => d.RecipeMeta.ParentIdentities?.Contains("generated:" + parent.Id, StringComparer.Ordinal) == true).ToArray();
+            .Where(d => d.AtlasParentIdentities?.Contains("generated:" + parent.Id, StringComparer.Ordinal) == true).ToArray();
 
     internal static bool MatchesEffect(GeneratedItemData data, EffectFilter filter)
     {
@@ -55,14 +55,14 @@ internal static class RecipeJournalView
         => records.Where(d => d is not null && d.RecipeMeta.WorldScoped && d.RecipeMeta.WorldId == world
                 && !GeneratedItemData.IsPlayerSaveReferenceOnly(d) && d.Id != "placeholder"
                 && (!onlyFavorites || favorite(d.Id))
-                && (string.IsNullOrWhiteSpace(query) || new[] { d.Name, d.ParentA, d.ParentB }
+                && (string.IsNullOrWhiteSpace(query) || new[] { d.Name, d.ParentA, d.ParentB, d.AtlasParentName(0), d.AtlasParentName(1) }
                     .Any(text => (text ?? "").Contains(query.Trim(), StringComparison.OrdinalIgnoreCase))))
             .GroupBy(d => d.Id, StringComparer.Ordinal).Select(g => g.First())
             .OrderByDescending(d => favorite(d.Id)).ThenBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
 
     internal static GeneratedItemData? Parent(GeneratedItemData child, int index, IEnumerable<GeneratedItemData> known)
     {
-        string[] identities = child.RecipeMeta.ParentIdentities;
+        string[] identities = child.AtlasParentIdentities;
         if (identities is null || index < 0 || index >= identities.Length) return null;
         string identity = identities[index];
         if (!identity.StartsWith("generated:", StringComparison.Ordinal)) return null;

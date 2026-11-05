@@ -186,7 +186,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         var discoveries = RecipeJournalView.Entries(_known, Main.worldID.ToString(), "", player.IsJournalFavorite, false);
         var entries = RecipeJournalView.Entries(discoveries, Main.worldID.ToString(), _query, player.IsJournalFavorite, _favoritesOnly)
             .Where(d => RecipeJournalView.MatchesEffect(d, _effectFilter)
-                && (_ingredientFilter.Length == 0 || d.RecipeMeta.ParentIdentities?.Contains("generated:" + _ingredientFilter, StringComparer.Ordinal) == true)).ToArray();
+                && (_ingredientFilter.Length == 0 || d.AtlasParentIdentities?.Contains("generated:" + _ingredientFilter, StringComparer.Ordinal) == true)).ToArray();
         if (_selected.Length == 0 && entries.Length > 0)
         {
             // Hydration may finish while the player is typing; auto-selection must not steal focus.
@@ -254,7 +254,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
             ItemSlotBackground(sb, slot, active, hover);
             Sprite(sb, entry, new Rectangle(slot.X + 6, slot.Y + 6, 36, 36));
             if (player.IsJournalFavorite(entry.Id)) Label(sb, "★", new Vector2(slot.Right - 14, slot.Y + 1), Gold, 0.5f, 14);
-            if (hover) _hoverText = entry.Name + "\n" + entry.ParentA + " + " + entry.ParentB;
+            if (hover) _hoverText = entry.Name + "\n" + entry.AtlasParentName(0) + " + " + entry.AtlasParentName(1);
             if (click && hover) { Select(entry.Id); Main.mouseLeftRelease = false; }
         }
         int wheel = PlayerInput.ScrollWheelDeltaForUI;
@@ -286,7 +286,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         if (area.Width < 60 || area.Height < 40) return;
         for (int i = 0; i < DetailNativeParents.Length; i++)
         {
-            string identity = data.RecipeMeta.ParentIdentities is { } identities && i < identities.Length ? identities[i] : "";
+            string identity = data.AtlasParentIdentities is { } identities && i < identities.Length ? identities[i] : "";
             if (string.Equals(DetailParentIdentities[i], identity, StringComparison.Ordinal)) continue;
             DetailParentIdentities[i] = identity;
             DetailNativeParents[i] = RecipeNativeItemResolver.ResolveParent(data, i);
@@ -310,7 +310,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         {
             if (area.Bottom - y >= 20) Label(sb, data.Name, new Vector2(x, y), Ink, 0.7f, w);
             if (area.Bottom - y >= 45)
-                Paragraph(sb, data.ParentA + " + " + data.ParentB, new Rectangle(x, y + 25, w, Math.Max(0, area.Bottom - y - 30)), Muted, 0.6f);
+                Paragraph(sb, data.AtlasParentName(0) + " + " + data.AtlasParentName(1), new Rectangle(x, y + 25, w, Math.Max(0, area.Bottom - y - 30)), Muted, 0.6f);
             return;
         }
         Label(sb, data.Name, new Vector2(x, y), Ink, 0.85f, w);
@@ -363,11 +363,12 @@ public sealed partial class RecipeJournalUISystem : ModSystem
             else CenterLabel(sb, "?", slot, Muted, 0.7f);
             if (!compact)
             {
-                string name = p == 0 ? data.ParentA : data.ParentB;
+                string name = p == 0 ? data.AtlasParentName(0) : data.AtlasParentName(1);
                 int nameWidth = Math.Max(0, joinX - slot.Right - 28);
                 Label(sb, name, new Vector2(slot.Right + 10, slot.Y + 2), parent is null ? Muted : Link, 0.6f, nameWidth);
             }
-            if (hover) _hoverText = (p == 0 ? data.ParentA : data.ParentB) + (parent is null ? "" : "\n" + Text("OpenParent"));
+            if (hover) _hoverText = data.AtlasParentName(p)
+                + (parent is null ? "" : "\n" + Text("OpenParent"));
             if (parent is not null && click && hover) { Select(parent.Id); return; }
         }
         ItemSlotBackground(sb, result, true, result.Contains(cursor.ToPoint()));
@@ -377,7 +378,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         CenterLabel(sb, Text("Result"), new Rectangle(result.X - 28, y + diagramHeight - 7, result.Width + 40, 20), Ink, 0.55f);
         y += diagramHeight + 18;
         // Names remain readable outside the tiny wells; only exact generated parents are clickable.
-        string parents = data.ParentA + " + " + data.ParentB;
+        string parents = data.AtlasParentName(0) + " + " + data.AtlasParentName(1);
         if (compact && y + 22 <= area.Bottom - 10)
         {
             Label(sb, parents, new Vector2(x, y), Link, 0.62f, w);

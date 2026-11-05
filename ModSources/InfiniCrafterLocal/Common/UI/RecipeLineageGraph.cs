@@ -94,11 +94,11 @@ internal sealed class RecipeLineageGraph
             visiting.Add(identity);
             for (int slot = 0; slot < 2; slot++)
             {
-                string[]? ids = data.RecipeMeta.ParentIdentities;
+                string[]? ids = data.AtlasParentIdentities;
                 string parentIdentity = ids is not null && slot < ids.Length ? ids[slot] ?? "" : "";
                 // Unknown slots cannot be merged by caption (even if their captions match).
                 if (string.IsNullOrWhiteSpace(parentIdentity)) parentIdentity = "missing:" + identity + ":" + slot;
-                int parent = Visit(parentIdentity, slot == 0 ? data.ParentA : data.ParentB, depth + 1);
+                int parent = Visit(parentIdentity, slot == 0 ? data.AtlasParentName(0) : data.AtlasParentName(1), depth + 1);
                 var repeated = edges.FirstOrDefault(e => e.Parent == parent && e.Child == current);
                 if (repeated is not null)
                 {
