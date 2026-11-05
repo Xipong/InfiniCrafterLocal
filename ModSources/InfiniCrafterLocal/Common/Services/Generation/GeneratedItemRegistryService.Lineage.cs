@@ -110,11 +110,11 @@ public sealed partial class GeneratedItemRegistryService
     }
 
     private sealed record ParentMetadata(string Id, string World, string RecipeKey,
-        string ParentA, string ParentB, string[] Identities, bool HasCaptions = true)
+        string ParentA, string ParentB, string[] Identities, bool HasCaptions = true, AtlasParentSet? UnorderedProof = null)
     {
         internal static ParentMetadata Capture(GeneratedItemData data) => new(data.Id,
             data.RecipeMeta.WorldId, data.RecipeKey, data.ParentA, data.ParentB,
-            data.RecipeMeta.ParentIdentities?.ToArray() ?? Array.Empty<string>());
+            data.RecipeMeta.ParentIdentities?.ToArray() ?? Array.Empty<string>(), UnorderedProof: data.RecoveredAtlasParents);
 
         internal bool Matches(GeneratedItemData data) => data.RecipeMeta.WorldScoped
             && Id == data.Id && World == data.RecipeMeta.WorldId && RecipeKey == data.RecipeKey
@@ -123,7 +123,7 @@ public sealed partial class GeneratedItemRegistryService
             && (!HasCaptions || ParentA == data.ParentA && ParentB == data.ParentB);
     }
 
-    private void RestoreMissingParentMetadata(GeneratedItemData data, IEnumerable<ParentMetadata> sources)
+    private void RestoreMissingParentMetadata(GeneratedItemData data, IEnumerable<ParentMetadata> sources, bool auditRecovery = true)
     {
         string[] current = data.RecipeMeta.ParentIdentities ?? Array.Empty<string>();
         if (current.Length > 2) return; // Do not reinterpret malformed positional metadata.
@@ -139,8 +139,9 @@ public sealed partial class GeneratedItemRegistryService
             string[] exact = candidates.Select(source => source.Identities.ElementAtOrDefault(slot) ?? "")
                 .Where(identity => !string.IsNullOrWhiteSpace(identity)).Distinct(StringComparer.Ordinal).Take(2).ToArray();
             if (exact.Length != 1) continue; // Missing or contradictory evidence stays unknown.
+            if (auditRecovery && _lineageRecoveryReceipts.Count >= 512) continue; // No unaudited recovery mutation.
             restored[slot] = exact[0]; changed = true;
-            if (_lineageRecoveryReceipts.Count < 512)
+            if (auditRecovery)
                 _lineageRecoveryReceipts.Add($"fix:restore_exact_recipe_parent_identity:{data.Id}:{slot}");
         }
         if (changed) data.RecipeMeta.ParentIdentities = restored;

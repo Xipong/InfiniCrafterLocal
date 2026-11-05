@@ -24,9 +24,9 @@ public sealed partial class RecipeJournalUISystem
         internal bool Matches(GeneratedItemData data) => ReferenceEquals(Data, data)
             && Id == data.Id && World == data.RecipeMeta.WorldId && Scoped == data.RecipeMeta.WorldScoped
             && ReferenceOnly == GeneratedItemData.IsPlayerSaveReferenceOnly(data)
-            && Name == data.Name && ParentA == data.ParentA && ParentB == data.ParentB
-            && (Parents is null ? data.RecipeMeta.ParentIdentities is null
-                : data.RecipeMeta.ParentIdentities is { } ids && Parents.SequenceEqual(ids));
+            && Name == data.Name && ParentA == data.AtlasParentName(0) && ParentB == data.AtlasParentName(1)
+            && (Parents is null ? data.AtlasParentIdentities is null
+                : data.AtlasParentIdentities is { } ids && Parents.SequenceEqual(ids));
     }
     private static LineageInput[] _lineageInputs = Array.Empty<LineageInput>();
     private static int _lineageWorld;
@@ -146,8 +146,8 @@ public sealed partial class RecipeJournalUISystem
         bool rootChanged = _lineageRoot != _selected;
         _lineageRoot = _selected; _lineageSnapshot = _known; _lineageWorld = Main.worldID;
         _lineageInputs = _known.Select(d => new LineageInput(d, d.Id, d.RecipeMeta.WorldId,
-            d.RecipeMeta.WorldScoped, GeneratedItemData.IsPlayerSaveReferenceOnly(d), d.Name, d.ParentA, d.ParentB,
-            d.RecipeMeta.ParentIdentities?.ToArray())).ToArray();
+            d.RecipeMeta.WorldScoped, GeneratedItemData.IsPlayerSaveReferenceOnly(d), d.Name, d.AtlasParentName(0), d.AtlasParentName(1),
+            d.AtlasParentIdentities?.ToArray())).ToArray();
         _lineage = selected is null ? null : RecipeLineageGraph.Build(selected, _known);
         if (rootChanged) _lineageCanvas = Rectangle.Empty;
     }

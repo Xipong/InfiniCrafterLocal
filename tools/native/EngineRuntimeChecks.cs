@@ -44,6 +44,12 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("lineage hash proof graph cycles and world expiry", LineageHashProofGraphRetainsCycleBoundaries),
+            ("lineage hash proof mutable captions remain unordered", LineageHashProofMutableCaptionsStayUnordered),
+            ("lineage hash proof complete bounded audit receipts", LineageHashProofReceiptsBoundEveryMutation),
+            ("lineage hash proof registry conflict and foreign evidence", LineageHashProofRegistryConflictAndForeign),
+            ("lineage hash proof boundaries", LineageHashProofBoundaries),
+            ("lineage hash proof large-world budget", LineageHashProofLargeWorldBudget),
             ("atlas header visible glyph centering and safe inset", AtlasHeaderUsesVisibleGlyphsAndInsetControls),
             ("atlas packaged skin alpha matches PNG loading", AtlasPackagedSkinPixelsMatchPngAlpha),
             ("atlas unload graphics stay on main thread across reload", AtlasUnloadRetiresOwnedGraphicsOnMainThread),

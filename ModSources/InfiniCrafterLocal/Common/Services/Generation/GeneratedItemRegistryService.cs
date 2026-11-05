@@ -196,7 +196,13 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
         lock (_lock)
         {
             if (_parentMetadata.TryGetValue(data.Id, out var ancestry))
-                RestoreMissingParentMetadata(data, new[] { ancestry });
+            {
+                // Reattach already admitted evidence during hydration. This is not
+                // another recovery and must not depend on the discovery audit budget.
+                RestoreMissingParentMetadata(data, new[] { ancestry }, auditRecovery: false);
+                if (ancestry.UnorderedProof is { } proof && proof.Matches(data))
+                    data.RecoveredAtlasParents = proof;
+            }
             _parentMetadata[data.Id] = ParentMetadata.Capture(data);
             _byId[data.Id] = data;
             _inFlightGeneratedItemHydration.Remove(data.Id);
@@ -781,6 +787,10 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
             foreach (var pair in _byId)
             {
                 RestoreMissingParentMetadata(pair.Value, lineageSources[pair.Key]);
+            }
+            RestoreHashProvenParentMetadata(lineageSources);
+            foreach (var pair in _byId)
+            {
                 _parentMetadata[pair.Key] = ParentMetadata.Capture(pair.Value);
             }
         }

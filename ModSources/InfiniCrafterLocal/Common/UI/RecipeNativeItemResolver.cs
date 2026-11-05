@@ -15,7 +15,7 @@ internal static class RecipeNativeItemResolver
 {
     internal static Item? ResolveParent(GeneratedItemData data, int index)
     {
-        string[]? identities = data.RecipeMeta.ParentIdentities;
+        string[]? identities = data.AtlasParentIdentities;
         return identities is not null && index >= 0 && index < identities.Length
             ? Resolve(identities[index]) : null;
     }
