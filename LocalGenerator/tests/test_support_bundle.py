@@ -95,6 +95,8 @@ def test_export_keeps_compact_trace_receipts_reconstructable_without_original_ca
     trace_tools.trace_event(cache_dir=cache, trace_prompts_enabled=True, trace_max_prompt_chars=64,
                             trace_file=cache / "pipeline_trace.ndjson", prompt_trace_file=cache / "prompt_trace.ndjson",
                             kind="response", stage="offline", title="exact output", response=exact)
+    request = {"messages": [{"role": "user", "content": exact}]}
+    request_receipt = trace_tools.persist_stage_request(cache, "offline", "r_export", request)
     output = tmp_path / "support.tar.xz"
     bundle.export_bundle(cache, output)
     bundle.verify_bundle(output)
@@ -108,6 +110,29 @@ def test_export_keeps_compact_trace_receipts_reconstructable_without_original_ca
     stored = trace_tools.tail_ndjson(relocated / "prompt_trace.ndjson", 1)[0]
     assert len(stored["response"]["preview"]) == 64
     assert trace_tools.expand_trace_value(relocated, stored)["response"].encode() == exact.encode()
+    request_raw = (relocated / request_receipt["path"]).read_bytes()
+    assert hashlib.sha256(request_raw).hexdigest() == request_receipt["artifactSha256"]
+    assert json.loads(request_raw)["messages"] == request["messages"]
+
+
+@pytest.mark.parametrize("fault", ["tampered-body", "new-credential"])
+def test_export_refuses_invalid_immutable_receipts_instead_of_publishing_broken_references(tmp_path, monkeypatch, fault):
+    from infini_local.storage import trace_tools
+    cache = tmp_path / "cache"
+    credential = "newly-known-opaque-credential-7654321"
+    body = credential + " ж" * 9000
+    stored = trace_tools.compact_trace_value(cache, body)
+    target = cache / stored["_traceText"]["path"]
+    if fault == "tampered-body":
+        target.write_bytes(b"tampered")
+    else:
+        monkeypatch.setenv("INFINI_LLM_API_KEY", credential)
+    before = target.read_bytes()
+    output = tmp_path / "support.tar.xz"
+    with pytest.raises(bundle.BundleError, match="immutable diagnostic artifact"):
+        bundle.export_bundle(cache, output)
+    assert not output.exists()
+    assert target.read_bytes() == before
 
 
 def test_export_redacts_known_and_escaped_credentials_but_keeps_original(cache, tmp_path, monkeypatch):

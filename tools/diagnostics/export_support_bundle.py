@@ -139,8 +139,16 @@ def _safe_bytes(name: str, data: bytes, secrets: tuple[str, ...]) -> bytes:
                     raise BundleError("PNG has trailing private data; review separately")
                 return data
         raise BundleError("incomplete PNG in diagnostic cache")
+    # Digest-named bodies are immutable receipt targets, not disposable text
+    # copies. Re-redacting them would silently invalidate references in NDJSON
+    # and stage-request events; refuse rather than publish an unreadable bundle.
+    immutable = re.fullmatch(r"(?:transport_artifacts|stage_requests)/([0-9a-f]{64})\.(?:txt|json)", name)
+    if immutable and hashlib.sha256(data).hexdigest() != immutable.group(1):
+        raise BundleError("immutable diagnostic artifact digest mismatch")
     text = data.decode("utf-8")
     clean = redact_credentials(text, secrets)
+    if immutable and clean != text:
+        raise BundleError("immutable diagnostic artifact needs additional credential redaction; review separately")
     if clean != text and (name.endswith(".json") or ".ndjson" in name):
         original_rows = text.splitlines() if ".ndjson" in name else [text]
         clean_rows = clean.splitlines() if ".ndjson" in name else [clean]
