@@ -15,7 +15,7 @@ def test_exported_trace_names_the_selected_codex_model(monkeypatch, tmp_path, se
     monkeypatch.setattr(server, "active_llm_provider", lambda: "openai_codex")
     monkeypatch.setattr(server, "llm_auth_snapshot", lambda: auth)
     monkeypatch.setattr(server, "sdcpp_debug_snapshot", lambda **_kwargs: {})
-    monkeypatch.setattr(server, "tail_ndjson", lambda *_args: [])
+    monkeypatch.setattr(server, "read_trace_tail", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(server.generation_debug, "last_combine_failure_summary", lambda: {})
     monkeypatch.setattr(server.generation_debug, "LAST_COMBINE_FAILURE_FILE", tmp_path / "missing-failure.json")
 
