@@ -73,6 +73,7 @@ internal static partial class EngineRuntimeChecks
             ("weapon replacement profiles conditional opaque hook evidence", WeaponReplacementProfilesKeepConditionalAndOpaqueHookEvidence),
             ("weapon replacement profiles deferred cancellation parity", WeaponReplacementProfilesMatchDeferredAndCancelledCapture),
             ("parent source projection memo exact output and slice isolation", ParentSourceProjectionMemoPreservesExactOutput),
+            ("parent source sparse locals match dense oracle", ParentSourceSparseLocalsMatchDenseOracle),
             ("parent source projection memo bounds concurrency and retirement", ParentSourceProjectionMemoIsBoundedAndRetired),
             ("parent source revisits preserve edges without frame waits", ParentSourceRevisitsPreserveEdgesWithoutFrameWaits),
             ("parent source projection template exact graph indices and character boundary", ParentSourceProjectionTemplateUsesExactGraphIndices),
