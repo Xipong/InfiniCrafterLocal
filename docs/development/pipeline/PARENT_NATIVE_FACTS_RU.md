@@ -27,22 +27,20 @@
   `nativeSourceFacts[N]` того же dossier. Это lossless sharing, не удаление фактов или выбор «лучшего»
   наблюдения. Порядок/кратность массивов и типы сохраняются после раскрытия;
   literal tooltip и accepted generated-parent packets остаются inline.
-- **Ammo observations:** `playerInventoryAmmoRaw` / `playerInventoryProjectileRaw`
-  и `fallbackAmmoRaw` / `fallbackProjectileRaw` остаются отдельными компактными
-  списками. Native producer ограничивает каждый набор тремя кандидатами; Python
-  сохраняет порядок, кратность, provenance, slots и наблюдённую пустоту. Это не
-  «лучший патрон» и не effective DPS. Текущее количество `stack` намеренно
-  не передаётся Author: временный запас игрока не является механикой родителя.
-  `playerInventoryObservation` отличает завершённый bounded scan (`observed`)
-  от `unavailable` (`no_player` / `inventory_scan_failed`). Только наблюдённый
-  пустой инвентарь даёт `[]`; отсутствие наблюдения даёт `null` в native wire и
-  отсутствие массива в model-facing packet. Player-free fingerprint не выдаёт
-  отсутствие игрока за пустой инвентарь. Явный request-local `ammoRaw`, даже
-  пустой, не заимствует fingerprint-примеры. Это category-match scan в порядке
-  inventory, не исполнение native PickAmmo и не обещание пригодности к выстрелу.
-  При отсутствии собственного `shoot` weapon
-  effective projectile теперь остаётся неизвестным, а не выбирается из инвентаря.
-  Это исправление информации о родителе, не изменение игрового выстрела.
+- **Weapon ammo context:** `mode=weapon_uses_ammo` передаёт `ammoId`,
+  `ammoCategoryName`, собственный `weaponShootFieldProjectileRaw` и
+  `projectileSemanticsReference`. `nativeReplacementProjectileRaw` сохраняет
+  полные профили известных literal outputs из собственного source оружия,
+  включая условные замены и fixed spawn sites. Это механика оружия, а не
+  выбранные примеры боеприпасов. Полный каталог предметов и инвентарь не
+  сканируются; обычные/особые патроны не выбираются как примеры, их damage не
+  прибавляется к weapon damage. Один захват проецируется в root и fingerprint.
+  Python также исключает старые inventory/fallback lists и candidate bindings
+  из model-facing контекста сохранённых пакетов, но сохраняет объявленные
+  replacement profiles вместе с их исходным scope, включая старые пакеты.
+  При отсутствии собственного `shoot` projectile остаётся неизвестным.
+  Если сам родитель является боеприпасом (`this_item_is_ammo`), его собственные
+  identity, damage, knockback, projectile и ammo-owned hook facts сохраняются.
 
 ## Source-derived ammo configurations
 
@@ -54,40 +52,58 @@
 разрешают заявлять прежний call order.
 
 `projectileSemanticsReference` сохраняет source stages, точные input-projectile
-условия, source spawn sites и неразобранные gates. `candidateProjectileBindings`
-связывает наблюдаемый/representative ammo input с этими правилами. Произвольный
-hook, неизвестная ветка или неполный roster остаются unknown, не «обычной стрелой».
+условия, source spawn sites и неразобранные gates. Произвольный hook,
+неизвестная ветка или неполный roster остаются unknown, не «обычной стрелой».
 Поддержанные ModItem/GlobalItem override shapes читаются из metadata без
-исполнения; ammo-owned `PickAmmo` отдельно от weapon `ModifyShootStats`/`Shoot`.
-При подтверждённых сертификатах `PickAmmo` и его lookup читается текущая
-`AmmoID.Sets.SpecificLauncherAmmoProjectileMatches`: моды могут изменять эту
-таблицу. Offline-анализатор проверяет всю цепочку с общим join и отсутствием
-посторонних входов: таблица → category offset → положительный ammo.shoot либо
-сохранённый weapon.shoot. Поэтому отсутствие пары в таблице разрешает только
-подтверждённую следующую ветку. Нулевой ammo.shoot не исключает кандидата
-(Rocket I, гель); это поле не обязано само быть итоговым projectile ID.
+исполнения. Weapon `ModifyShootStats`/`Shoot` остаются source evidence; выбранный
+ammo-owned `PickAmmo` не наблюдается. Собственный ammo-parent `PickAmmo`
+по-прежнему описывается как факт этого родителя.
 
-Регрессии закреплённого binary: Pulse Bow заменяет projectile любого arrow
-input на 357; Hellwing меняет только current projectile 1 на 485, сохраняя
-специальные inputs отдельно; Daedalus сохраняет projectile identity, но имеет
+Текущие строки `AmmoID.Sets.SpecificLauncherAmmoProjectileMatches` не
+перечисляются и не выбираются. При проверенных сертификатах PickAmmo и lookup
+helper сохраняется символическая цепочка: таблица → category offset →
+положительный ammo.shoot либо собственный weapon.shoot. Несовпадение helper
+certificate убирает это утверждение и оставляет явный unverified status.
+Неизвестный table entry, ammo input и итоговый projectile раскрываются в unknowns.
+
+Регрессии закреплённого tML 1.4.4.9 binary: Pulse Bow заменяет projectile любого
+arrow input на 357; Hellwing меняет только current projectile 1 на 485,
+Molten Fury — только 1 на 2. Это условие на текущий projectile, не на ammo-item
+ID: Flaming/Jester/Holy сохраняют 2/5/91, а другой ammo-item с projectile 1
+может пройти ту же ветку. Для Hellwing сохраняется полный bat profile 485;
+его свойства не приписываются специальным стрелам. Daedalus сохраняет
+projectile identity, но имеет
 собственный aerial delivery с constructor Y `MountedCenter−600` и консервативным
 условным spawn-count range 2–4. Это не полный aim/spread, итоговая скорость,
 вероятности, cadence, guaranteed hits или обещание неизменённых mod hooks.
 
-При доказанной замене входной projectile profile исключается, отдельно
-передаётся source-output reference. **Ammo-item damage, speed и knockback
-сохраняются независимо от замены projectile.** Это вклады, а не универсальная
-формула сложения или итоговый DPS. Неизвестный transfer поведения не удаляет
-известный вклад ammo damage. Specials не получают механики базовой стрелы
-по умолчанию.
+Extractor проверяет также смежные внешние projectile predicates вокруг
+item-type guard, а не только тело внутренней ветки. Противоречивые условия,
+посторонний вход, изменение проверенного значения или непонятный control flow
+не становятся безусловной заменой. Независимо доказанный literal при
+неизвестной применимости остаётся в `unresolvedLiteralWrites` с причиной и
+границей ownership; полный профиль разрешён только при доказанной связи с
+item guard. Неизвестная запись имеет приоритет в aggregate summary, но не
+стирает другие доказанные rules и profiles.
 
-Для будущего Author конфигурации сравниваются раздельно, без автоматического
-среднего или выбора «сильнейшей» стрелы. Inventory observation показывает
-фактические inputs, не весь доступный progression; fallback examples не
-доказывают владение или доступность. Source-подтверждённая условная способность
-оружия остаётся отдельным ориентиром даже без её ammo в текущем inventory.
-Нет нового progression solver, recommended damage corridor или скрытого
-перебаланса сохранённого ребёнка при смене патронов.
+Условия замены и literal output IDs остаются source evidence независимо от
+текущего инвентаря. Для каждого известного literal output сохраняется полный
+`ProjectileRawSnapshot`: defaults, attack/status/motion/collision references
+при наличии, один переход к `referencedProjectiles` и derived units при
+известном clock. Один профиль обслуживает повторные source sites того же ID;
+`sourceReferences` сохраняет все исходные условия, порядок и сертификаты.
+Условная замена не требует наличия или выбора подходящего ammo в инвентаре.
+Недоступный snapshot или незарегистрированный literal остаётся явно unknown;
+opaque hook не получает выдуманный ID и не стирает независимо известный профиль.
+Профиль не доказывает исполнение ветки, итоговый снаряд, damage или speed:
+dispatch, later rewrites и gameplay gates сохраняют свои границы достоверности.
+Лимит прежней выборки из трёх ammo-примеров не ограничивает source outputs.
+
+Derived candidate bindings и inventory/fallback profiles конкретных
+ammo-примеров не передаются. Author сам выбирает преобразование и поведение
+нового предмета. Нет выбора «сильнейшей» стрелы, progression solver,
+рекомендованного damage corridor или скрытого перебаланса. Самостоятельные
+weapon stats и полноценные stats ammo-родителя остаются разными источниками.
 
 ## Причины неполного identity window
 

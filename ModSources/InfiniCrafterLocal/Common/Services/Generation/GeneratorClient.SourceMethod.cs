@@ -32,6 +32,7 @@ public sealed partial class GeneratorClient
             internal Dictionary<int, HashSet<string>> Incoming = new(), Outgoing = new();
         }
         internal readonly MethodBase Method;
+        private readonly bool completeSource;
         internal readonly Dictionary<string, Value> Values = new();
         internal readonly List<Value> Statements = new();
         internal readonly Dictionary<int, Block> Blocks = new();
@@ -147,6 +148,7 @@ public sealed partial class GeneratorClient
         {
             currentParentAnalysis?.ThrowIfCancelled();
             Method = method;
+            completeSource = sourceSlice is null && sourceNext is null && selectedSuccessors is null;
             // A full method containing exception regions is unsupported regardless
             // of its instructions. Refuse before decoding potentially huge IL.
             if (sourceSlice is null && method.GetMethodBody()?.ExceptionHandlingClauses.Count > 0)
@@ -390,6 +392,45 @@ public sealed partial class GeneratorClient
 
         internal JsonObject Project(IEnumerable<Value> roots, int controlLimit = 64)
         {
+            currentParentAnalysis?.ThrowIfCancelled();
+            var rootRows = roots.Distinct().ToArray();
+            ParentSourceGraphCache? cache = completeSource ? activeParentSourceGraphCache ?? currentParentAnalysis?.SourceCache : null;
+            string key = controlLimit.ToString(CultureInfo.InvariantCulture) + ":" + string.Join(",", rootRows.Select(value => value.Id));
+            if (cache is not null && cache.TryGetProjection(Method, key, out string? retained))
+                return JsonNode.Parse(retained!)!.AsObject();
+            JsonObject result = ProjectCore(rootRows, controlLimit);
+            currentParentAnalysis?.ThrowIfCancelled();
+            cache?.RememberProjection(Method, key, result.ToJsonString());
+            return result;
+        }
+
+        internal SourceGraphProjection ProjectForGraph(IEnumerable<Value> roots, int controlLimit = 64)
+        {
+            currentParentAnalysis?.ThrowIfCancelled();
+            var rootRows = roots.Distinct().ToArray();
+            ParentSourceGraphCache? cache = completeSource ? activeParentSourceGraphCache ?? currentParentAnalysis?.SourceCache : null;
+            string key = controlLimit.ToString(CultureInfo.InvariantCulture) + ":" + string.Join(",", rootRows.Select(value => value.Id));
+            if (cache is not null && cache.TryGetGraphProjection(Method, key, out var retained)) return retained!;
+            JsonObject row = ProjectCore(rootRows, controlLimit);
+            var members = new List<MemberInfo>(); var counts = new List<int>();
+            var indices = new Dictionary<string, int>(StringComparer.Ordinal);
+            int Member(MemberInfo member)
+            {
+                string identity = member.Module.ModuleVersionId + ":" + member.MetadataToken + ":" + SourceMember(member);
+                if (!indices.TryGetValue(identity, out int index))
+                { index = members.Count; indices.Add(identity, index); members.Add(member); counts.Add(0); }
+                counts[index]++; return index;
+            }
+            // These are template-local indices, never a graph's member table.
+            CompactSourceMethod(row, Method, this, Member);
+            var result = new SourceGraphProjection(row.ToJsonString(), members.ToArray(), counts.ToArray());
+            currentParentAnalysis?.ThrowIfCancelled();
+            cache?.RememberGraphProjection(Method, key, result);
+            return result;
+        }
+
+        private JsonObject ProjectCore(Value[] rootRows, int controlLimit)
+        {
             var selected = new HashSet<string>();
             var opaqueLocals = new HashSet<string>();
             bool ExceedsDependencyBound(Value value)
@@ -416,11 +457,12 @@ public sealed partial class GeneratorClient
                     foreach (string input in value.Inputs) pending.Push(input);
                 }
             }
-            var rootRows = roots.Distinct().ToArray();
             foreach (var value in rootRows) Include(value.Id);
             // Close the source slice over control dependencies too. Joins retain
             // the guards of ALL definitions, including ternaries and loop bodies.
             var branches = Statements.Where(v => v.Op == "switch" || IsBranch(new AmmoIl(v.At, v.Op, v.Operand))).ToArray();
+            var orderedBranches = branches.OrderBy(value => rootRows.Length == 0 ? value.At
+                : rootRows.Min(root => Math.Abs(root.At - value.At))).ToArray();
             var retainedControls = new HashSet<string>();
             var omittedControls = new HashSet<string>();
             int previous;
@@ -428,7 +470,7 @@ public sealed partial class GeneratorClient
             {
                 previous = selected.Count;
                 var selectedBlocks = selected.Select(id => Values[id].Block).ToHashSet();
-                foreach (var branch in branches.OrderBy(v => rootRows.Length == 0 ? v.At : rootRows.Min(root => Math.Abs(root.At - v.At))))
+                foreach (var branch in orderedBranches)
                 {
                     var region = ControlledRegion(branch.Block);
                     if (selectedBlocks.Any(region.Contains))
@@ -478,6 +520,65 @@ public sealed partial class GeneratorClient
             if (opaqueLocals.Count > 0) result["unresolvedLocalDependencyCount"] = opaqueLocals.Count;
             if (Unknown.Count > 0) result["unresolved"] = new JsonArray(Unknown.Distinct().Select(s => (JsonNode?)JsonValue.Create(s)).ToArray());
             return result;
+        }
+    }
+
+    private static JsonObject CompactSourceMethod(JsonObject row, MethodBase method, ParentSourceMethod? body,
+        Func<MemberInfo, int> member)
+    {
+        row.Remove("method"); row.Remove("signature"); row.Remove("fieldTypes"); row.Remove("sourceModuleVersionId");
+        row["method"] = member(method);
+        if (row["sourceMethodSha256"] is JsonNode sha) { row.Remove("sourceMethodSha256"); row["sha256"] = sha; }
+        if (row["arguments"] is not null) row["arguments"] = new JsonArray(method.GetParameters().Select(p => (JsonNode?)JsonValue.Create(p.Name)).ToArray());
+        if (body is not null && row["values"] is JsonObject values)
+            foreach (var value in values)
+                if (body.Values[value.Key].Operand is MemberInfo sourceMember) value.Value![1] = new JsonObject { ["member"] = member(sourceMember) };
+        return row;
+    }
+
+    // Rebind a pure source template to the current graph. Counting reference
+    // digits gives the exact JSON length without materializing rejected large
+    // candidates. Every candidate still registers its members in original order.
+    internal sealed class SourceGraphProjection
+    {
+        internal const int CharacterLimit = 6500;
+        private readonly string? json;
+        private readonly MemberInfo[] members;
+        private readonly int[] uses;
+        private readonly int characters;
+
+        internal SourceGraphProjection(string json, MemberInfo[] members, int[] uses)
+        {
+            this.members = (MemberInfo[])members.Clone(); this.uses = (int[])uses.Clone(); characters = json.Length;
+            long minimum = characters;
+            for (int index = 0; index < members.Length; index++)
+                minimum -= uses[index] * (index.ToString(CultureInfo.InvariantCulture).Length - 1);
+            // A candidate too large even with all one-digit indices can never
+            // be selected. Retain its exact length and registration effects,
+            // not megabytes of JSON that no parent can consume.
+            this.json = minimum <= CharacterLimit ? json : null;
+        }
+
+        internal long RetainedBytes => (json?.Length ?? 0) * (long)sizeof(char) + members.Length * 128L;
+        internal (int[] Members, long Characters) Bind(Func<MemberInfo, int> register)
+        {
+            int[] mapping = members.Select(register).ToArray();
+            long length = characters;
+            for (int index = 0; index < mapping.Length; index++)
+                length += uses[index] * (mapping[index].ToString(CultureInfo.InvariantCulture).Length
+                    - index.ToString(CultureInfo.InvariantCulture).Length);
+            return (mapping, length);
+        }
+        internal JsonObject Materialize(int[] mapping)
+        {
+            if (json is null) throw new InvalidOperationException("Oversized source projection cannot be materialized.");
+            var row = JsonNode.Parse(json)!.AsObject();
+            row["method"] = mapping[row["method"]!.GetValue<int>()];
+            if (row["values"] is JsonObject values)
+                foreach (var value in values)
+                    if (value.Value?[1] is JsonObject operand && operand["member"] is JsonNode index)
+                        operand["member"] = mapping[index.GetValue<int>()];
+            return row;
         }
     }
 
