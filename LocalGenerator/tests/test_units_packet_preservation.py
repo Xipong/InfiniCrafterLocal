@@ -61,19 +61,20 @@ def offline_packets(monkeypatch, request):
         path.write_text(json.dumps({"scope": "synthetic offline production requests; no model response", "requests": captured}, ensure_ascii=False, indent=2) + "\n")
 
 
-def _source_packets(parent, captured):
-    request, _, _ = author.build_initial_author_request(parent, {}, "source-fact-units", model_name="offline-test-model")
+def _source_packets(parent, captured, other_parent=None):
+    other_parent = other_parent or {}
+    request, _, _ = author.build_initial_author_request(parent, other_parent, "source-fact-units", model_name="offline-test-model")
     captured.append(request)
     broken = build_runtime_fixture("workbench_blade")
     next(call for call in broken["runtimeProgram"]["calls"] if call["fn"] == "projectile_lifetime")["params"]['lifetimeSeconds'] = (0) / 60
     report = validate_runtime_program(broken)
     assert not report["ok"]
     with pytest.raises(_CapturedRequest):
-        author.repair_author_item_after_failure(broken, parent, {}, "source-fact-units", failure_report=report)
+        author.repair_author_item_after_failure(broken, parent, other_parent, "source-fact-units", failure_report=report)
     data = _accepted_visual_data("workbench_blade")
     for repair in (False, True):
         with pytest.raises(_CapturedRequest):
-            visual_request._request_visual_kit(data, parent, {}, **({"repair_errors": [], "previous": {}, "repair_scope": {}} if repair else {}))
+            visual_request._request_visual_kit(data, parent, other_parent, **({"repair_errors": [], "previous": {}, "repair_scope": {}} if repair else {}))
     a, r, vd, vr = [request_dossier(row) for row in captured]
     return [a["parents"]["A"]["packet"]["raw"], r["parents"]["a"]["packet"]["raw"],
             vd["parents"]["parentA"]["packet"]["raw"], vr["parentFactsReadOnly"]["parentA"]["packet"]["raw"]]
@@ -236,7 +237,7 @@ def test_current_live_and_dump_ammo_packets_remain_available(monkeypatch):
         "playerInventoryAmmoRaw": [{"type": 97, "damage": 5}], "playerInventoryProjectileRaw": [{"type": 1}],
         "fallbackAmmoRaw": [{"type": 97}], "fallbackProjectileRaw": [{"type": 1}]}}
     compact = parents.compact_ammo_profile(item)
-    assert compact == item["ammoRaw"]
+    assert compact == {"mode": "weapon_uses_ammo", "ammoId": 97}
     assert parents.effective_projectile_profile_of(item) == {}
     looked_up = []
     def lookup(projectile_id):
@@ -258,18 +259,15 @@ def test_current_live_and_dump_ammo_packets_remain_available(monkeypatch):
     live["effectiveProjectileRaw"] = {"type": 43, "damage": 19, "source": "literal native observation"}
     before = copy.deepcopy(live)
     assert parents.compact_ammo_profile(live) == {
-        "mode": "weapon_uses_ammo", "ammoId": 97, "ammoItemRaw": {"type": 97, "damage": 5},
-        "projectileRaw": {"type": 42}, "weaponShootFieldProjectileRaw": {"type": 42},
-        **{key: compact[key] for key in ("playerInventoryAmmoRaw", "playerInventoryProjectileRaw",
-                                       "fallbackAmmoRaw", "fallbackProjectileRaw")},
+        "mode": "weapon_uses_ammo", "ammoId": 97, "weaponShootFieldProjectileRaw": {"type": 42},
     }
     assert parents.effective_projectile_profile_of(live) == live["effectiveProjectileRaw"]
     raw = raw_parent_card_for_llm(live)["raw"]
     assert raw["effectiveProjectile"] == {"type": 43, "source": "literal native observation"}
     assert raw["directProjectile"]["type"] == 42
-    assert raw["ammo"]["ammoItemRaw"]["type"] == 97
+    assert "ammoItemRaw" not in raw["ammo"]
     for key in ("playerInventoryAmmoRaw", "playerInventoryProjectileRaw", "fallbackAmmoRaw", "fallbackProjectileRaw"):
-        assert raw["ammo"][key] == compact[key]
+        assert key not in raw["ammo"]
     assert "exampleAmmo" not in raw["ammo"] and "exampleProjectile" not in raw["ammo"]
     assert live == before
 

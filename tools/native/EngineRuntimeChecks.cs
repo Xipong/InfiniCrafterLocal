@@ -25,6 +25,16 @@ internal static partial class EngineRuntimeChecks
             // Supply an isolated directory, never the player's actual saves.
             Terraria.Program.SavePath = sandbox;
             Terraria.Main.dedServ = true;
+            if (args.Length == 1 && args[0] == "--profile-parent-analysis")
+            {
+                ParentAnalysisFrameProfiling();
+                return 0;
+            }
+            if (args.Length == 2 && args[0] == "--profile-parent-craft")
+            {
+                ParentCraftFrameProfiling(args[1]);
+                return 0;
+            }
             if (args.Length == 2 && args[0] == "--check-filter")
                 return RunChecks(args[1]);
             if (args.Length == 2 && args[0] == "--replay-contracts")
@@ -35,7 +45,7 @@ internal static partial class EngineRuntimeChecks
                 return 0;
             }
             if (args.Length != 0)
-                throw new ArgumentException("Expected --replay-contracts <jsonl-path> or --capture-vfx-preview <json-path>");
+                throw new ArgumentException("Expected --check-filter <filter>, --replay-contracts <jsonl-path>, --capture-vfx-preview <json-path>, --profile-parent-analysis or --profile-parent-craft <plain|mixed|ammo>");
             return RunChecks();
         }
         finally { System.IO.Directory.Delete(sandbox, recursive: true); }
@@ -57,6 +67,15 @@ internal static partial class EngineRuntimeChecks
             ("atlas recovery legacy sidecar exact read only", AtlasRecoveryReadsExactLegacyLineageSidecar),
             ("atlas recovery legacy sidecar negative boundaries", AtlasRecoveryRefusesInvalidLegacyLineageSidecar),
             ("atlas recovery legacy sidecar native detail drawing", AtlasRecoveryRestoresNativeIngredientDrawing),
+            ("weapon ammo context avoids item defaults catalog traversal", WeaponAmmoContextDoesNotTraverseDefaults),
+            ("weapon ammo context preserves actual ammo parent", WeaponAmmoContextPreservesAmmoParentIdentity),
+            ("weapon replacement profiles preserve native mechanics", WeaponReplacementProfilesPreserveNativeMechanics),
+            ("weapon replacement profiles conditional opaque hook evidence", WeaponReplacementProfilesKeepConditionalAndOpaqueHookEvidence),
+            ("weapon replacement profiles deferred cancellation parity", WeaponReplacementProfilesMatchDeferredAndCancelledCapture),
+            ("parent source projection memo exact output and slice isolation", ParentSourceProjectionMemoPreservesExactOutput),
+            ("parent source projection memo bounds concurrency and retirement", ParentSourceProjectionMemoIsBoundedAndRetired),
+            ("parent source revisits preserve edges without frame waits", ParentSourceRevisitsPreserveEdgesWithoutFrameWaits),
+            ("parent source projection template exact graph indices and character boundary", ParentSourceProjectionTemplateUsesExactGraphIndices),
             ("atlas recovery self-bound historical parent cards", AtlasRecoveryReadsOnlySelfBoundHistoricalParentCards),
             ("atlas recovery committed bundled recipes", AtlasRecoveryReadsCommittedBundledRecipes),
             ("atlas recovery exact historical metadata read only", AtlasRecoveryReadsExactHistoricalMetadata),
@@ -98,7 +117,7 @@ internal static partial class EngineRuntimeChecks
             ("client tooltip corrupt save cancellation recovery", ClientTooltipCorruptSaveCancellationRecovery),
             ("journal lifecycle without draw", JournalSessionRetiresWithoutDrawing),
             ("parent fixed spawn source native oracle", ParentFixedSpawnFactsMatchNativeBranchAndRequest),
-            ("parent ammo inventory observation unknown versus empty", ParentAmmoInventoryObservationDistinguishesUnavailableAndEmpty),
+            ("parent ammo context independent of inventory", ParentAmmoInventoryObservationDistinguishesUnavailableAndEmpty),
             ("parent environment references conditional fail closed", ParentEnvironmentReferencesAreConditionalAndFailClosed),
             ("parent banner registry matches native conditional components", ParentBannerRegistryMatchesConditionalNativeComponents),
             ("parent equipment source pieces and conditional sets", ParentEquipmentFactsSeparatePiecesAndConditionalSets),

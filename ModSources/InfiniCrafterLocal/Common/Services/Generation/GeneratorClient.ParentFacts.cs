@@ -19,7 +19,7 @@ using Terraria.ModLoader;
 namespace InfiniCrafterLocal.Common.Services;
 
 // Request-local parent observations and their explicit wire/fingerprint projections.
-// Native facts are captured once; player-dependent ammo remains a separate observation.
+// Native facts and ammo-source context are captured once for envelope projections.
 public sealed partial class GeneratorClient
 {
     // Read-only source certificate; the audited AI_001 body is compared by
@@ -91,10 +91,11 @@ public sealed partial class GeneratorClient
         snapshot["stack"] = item.stack;
         snapshot["moddedOrigin"] = sourceMod != "Terraria";
         snapshot["directProjectileRaw"] = native.DirectProjectileRaw?.DeepClone();
-        // Player-aware ammo observations intentionally differ from fingerprint's
-        // player-free reference candidates and must remain separate captures.
+        // Weapon ammo facts describe category and source conversion only. No
+        // inventory or representative loadout is selected for either envelope.
         snapshot["effectiveProjectileRaw"] = JsonSerializer.SerializeToNode(EffectiveProjectileRawFromItem(craftItem, player), WireJsonOptions);
-        snapshot["ammoRaw"] = JsonSerializer.SerializeToNode(AmmoRawFromItem(craftItem, player), WireJsonOptions);
+        JsonNode? ammoRaw = JsonSerializer.SerializeToNode(AmmoRawFromItem(craftItem, null), WireJsonOptions);
+        snapshot["ammoRaw"] = ammoRaw?.DeepClone();
         // Only generated parents carry authored design tags.
         snapshot["tags"] = JsonSerializer.SerializeToNode(existing?.Tags is { Length: > 0 } ? existing.Tags : Array.Empty<string>(), WireJsonOptions);
         snapshot["runtimeFacts"] = native.RuntimeFacts.DeepClone();
@@ -103,7 +104,7 @@ public sealed partial class GeneratorClient
         snapshot["fingerprint"] = FingerprintFromFacts(sourceMod, internalName, autoFeatures, nameTokens, native, originalPrefix,
             craftItem.ModItem is null, existing?.Name ?? craftItem.Name,
             JsonSerializer.SerializeToNode(EffectiveProjectileRawFromItem(craftItem, null), WireJsonOptions),
-            JsonSerializer.SerializeToNode(AmmoRawFromItem(craftItem, null), WireJsonOptions));
+            ammoRaw?.DeepClone());
         snapshot["generatedData"] = JsonSerializer.SerializeToNode(existing, WireJsonOptions);
         snapshot["craftInput"] = JsonSerializer.SerializeToNode(new
         {
@@ -536,14 +537,6 @@ public sealed partial class GeneratorClient
         catch { return ""; }
     }
 
-    private sealed class AmmoCandidate
-    {
-        public Item Item { get; set; } = new();
-        public string Source { get; set; } = "runtime_scan";
-        public int InventorySlot { get; set; } = -1;
-        public int Score { get; set; } = 0;
-    }
-
     private static object? DirectProjectileRawFromItem(Item item)
     {
         if (item.shoot <= ProjectileID.None)
@@ -553,10 +546,8 @@ public sealed partial class GeneratorClient
 
     private static object? EffectiveProjectileRawFromItem(Item item, Player? player)
     {
-        // Effective projectile is no longer allowed to silently replace a weapon's own
-        // shoot field with the "best" ammo candidate.  Ammo examples are context, not
-        // the parent weapon identity: many Terraria/modded weapons have their own shoot
-        // mechanics even when useAmmo is set.
+        // This is only the parent's own projectile declaration. No inventory
+        // loadout or representative ammo supplies a replacement weapon identity.
         if (item.ammo > AmmoID.None && item.shoot > ProjectileID.None)
             return ProjectileRawSnapshot(item.shoot, item.shootSpeed, "this_ammo_item.shoot", item, -1);
 
@@ -564,7 +555,7 @@ public sealed partial class GeneratorClient
             return ProjectileRawSnapshot(item.shoot, item.shootSpeed, item.useAmmo > AmmoID.None ? "weapon_item.shoot_field" : "item.shoot", item, -1);
 
         // No own shoot field means unknown here. Inventory/representative ammo
-        // remain observations in ammoRaw, never a replacement weapon identity.
+        // are not collected and cannot replace the weapon's own identity.
 
         return null;
     }
@@ -585,119 +576,22 @@ public sealed partial class GeneratorClient
         if (item.useAmmo <= AmmoID.None)
             return null;
 
-        var inventory = FindPlayerAmmoCandidates(item.useAmmo, player, 3, out string inventoryStatus);
-        var fallback = FindRepresentativeAmmoCandidates(item.useAmmo, 3);
+        // A weapon contributes its category and own source mechanics, not a
+        // chosen ammo loadout. Do not enumerate defaults or inspect inventory.
         var semantics = CaptureAmmoProjectileSemantics(item);
-        var bindings = (inventory ?? new List<AmmoCandidate>()).Concat(fallback)
-            .ToDictionary(candidate => candidate, candidate => BindAmmoCandidateProjectile(item, candidate, semantics));
-        bool KeepInputProfile(AmmoCandidate candidate) => bindings[candidate]["includeInputProjectileProfile"]!.GetValue<bool>();
-        var replacementTypes = bindings.Values.Where(binding => binding["includeReplacementProjectileProfile"]!.GetValue<bool>())
-            .Select(binding => binding["sourceRuleOutputProjectileId"]!.GetValue<int>()).Distinct().Take(3).ToArray();
         return new
         {
             mode = "weapon_uses_ammo",
             ammoId = item.useAmmo,
+            ammoCategoryName = TerrariaRuntimeVocabulary.CanonicalAmmoCategoryToken(item.useAmmo),
             projectileSemanticsReference = semantics,
-            candidateProjectileBindings = bindings.Values.ToArray(),
-            nativeReplacementProjectileRaw = replacementTypes.Select(type => SourceReplacementProjectileRaw(type, item)).ToArray(),
-            playerInventoryObservation = new
-            {
-                source = "Player.inventory",
-                status = inventoryStatus == "observed" ? "observed" : "unavailable",
-                reason = inventoryStatus == "observed" ? null : inventoryStatus,
-                candidateLimit = 3,
-                selection = "inventory_order_category_match_not_native_PickAmmo"
-            },
-            // This is the weapon's own shoot field.  It may be a default ammo placeholder,
-            // or it may be a custom mechanic.  The LLM gets it separately from ammo candidates.
-            weaponShootFieldProjectileRaw = item.shoot > ProjectileID.None ? ProjectileRawSnapshot(item.shoot, item.shootSpeed, "weapon_item.shoot_field", item, -1) : null,
-            // Null means the inventory was not observed. Only a completed scan
-            // can publish [] as an observed lack of matching candidates.
-            playerInventoryAmmoRaw = inventory?.Select(c => AmmoItemRawSnapshot(c.Item, c.Source, c.InventorySlot)).ToArray(),
-            playerInventoryProjectileRaw = inventory?.Where(c => c.Item.shoot > ProjectileID.None && KeepInputProfile(c)).Select(c => ProjectileRawSnapshot(c.Item.shoot, c.Item.shootSpeed, c.Source + ".shoot", c.Item, c.InventorySlot)).ToArray(),
-            fallbackAmmoRaw = fallback.Select(c => AmmoItemRawSnapshot(c.Item, c.Source, c.InventorySlot)).ToArray(),
-            fallbackProjectileRaw = fallback.Where(c => c.Item.shoot > ProjectileID.None && KeepInputProfile(c)).Select(c => ProjectileRawSnapshot(c.Item.shoot, c.Item.shootSpeed, c.Source + ".shoot", c.Item, c.InventorySlot)).ToArray()
+            nativeReplacementProjectileRaw = CaptureSourceReplacementProjectileProfiles(item, semantics),
+            // The declaration may be a placeholder. Known literal conversions
+            // above have independent profiles; their conditions remain unresolved.
+            // Table-driven selection stays symbolic, without choosing ammunition.
+            weaponShootFieldProjectileRaw = item.shoot > ProjectileID.None
+                ? ProjectileRawSnapshot(item.shoot, item.shootSpeed, "weapon_item.shoot_field", item, -1) : null
         };
-    }
-
-    private static List<AmmoCandidate>? FindPlayerAmmoCandidates(int ammoId, Player? player, int maxCount, out string status)
-    {
-        status = player is null ? "no_player" : "inventory_scan_failed";
-        var outList = new List<AmmoCandidate>();
-        if (player is null || ammoId <= AmmoID.None)
-            return null;
-        try
-        {
-            for (int i = 0; i < player.inventory.Length; i++)
-            {
-                Item ammo = player.inventory[i];
-                if (ammo is null || ammo.IsAir || ammo.stack <= 0)
-                    continue;
-                if (ammo.ammo == ammoId)
-                {
-                    outList.Add(new AmmoCandidate
-                    {
-                        // Generated ammo shares one proxy type; its instance definition
-                        // must accompany request-only normalization, just like a parent.
-                        Item = CraftIdentityItem(ammo, ammo.ModItem is GeneratedItem generatedAmmo ? generatedAmmo.Data : null),
-                        Source = "player_inventory_ammo_candidate_base_no_prefix",
-                        InventorySlot = i,
-                        Score = i
-                    });
-                    if (outList.Count >= Math.Max(1, maxCount))
-                        break;
-                }
-            }
-            status = "observed";
-        }
-        catch { return null; }
-        return outList;
-    }
-
-    private static List<AmmoCandidate> FindRepresentativeAmmoCandidates(int ammoId, int maxCount)
-    {
-        var outList = new List<AmmoCandidate>();
-        if (ammoId <= AmmoID.None)
-            return outList;
-        try
-        {
-            for (int type = InfiniTerrariaSentinels.FirstValidItemType; type < ItemLoader.ItemCount; type++)
-            {
-                try
-                {
-                    Item ammo = new();
-                    ammo.SetDefaults(type);
-                    if (ammo.IsAir || ammo.ammo != ammoId)
-                        continue;
-                    outList.Add(new AmmoCandidate
-                    {
-                        Item = ammo,
-                        Source = "fallback_basic_ammo_scan",
-                        InventorySlot = -1,
-                        Score = AmmoCandidateScore(ammo)
-                    });
-                }
-                catch { }
-            }
-        }
-        catch { }
-        return outList.OrderBy(c => c.Score).ThenBy(c => c.Item.type).Take(Math.Max(1, maxCount)).ToList();
-    }
-
-    private static int AmmoCandidateScore(Item ammo)
-    {
-        int score = 0;
-        string internalName = InternalName(ammo).ToLowerInvariant();
-        string displayName = (ammo.Name ?? "").ToLowerInvariant();
-        // Fallback ammo is only a neutral raw example for the LLM, not an "ideal" ammo choice.
-        // Prefer simple cheap vanilla ammo; avoid endless/infinite and high-tier/modded examples
-        // unless no simpler candidates exist.
-        if (internalName.Contains("endless") || internalName.Contains("infinite") || displayName.Contains("endless") || displayName.Contains("infinite")) score += 100000;
-        if (ammo.ModItem is not null) score += 5000;
-        score += Math.Max(0, ammo.rare) * 1000;
-        score += Math.Clamp(ammo.value / 5, 0, 20000);
-        score += Math.Max(0, ammo.damage) * 25;
-        return score;
     }
 
     private static object AmmoItemRawSnapshot(Item ammo, string source, int inventorySlot)
