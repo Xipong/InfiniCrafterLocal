@@ -166,7 +166,10 @@ def test_comfyui_explicit_workflow_does_not_select_an_unrelated_auto_template(tm
     monkeypatch.setattr(backends, "COMFYUI_LORA_NAME", "")
     assert backends.resolve_comfyui_workflow_path() is None
     monkeypatch.setattr(backends, "http_json", lambda *args, **kwargs: pytest.fail("An unselected workflow was queued"))
-    assert backends.generate_comfyui("literal", "", "missing-workflow", output_dir=tmp_path) == []
+    from infini_local.core.images.errors import ImageBackendConfigurationError
+    with pytest.raises(ImageBackendConfigurationError, match="workflow template was not found") as failed:
+        backends.generate_comfyui("literal", "", "missing-workflow", output_dir=tmp_path)
+    assert failed.value.category == "configuration" and not failed.value.retryable
     if explicit_kind == "directory":
         explicit.rmdir()
     explicit.write_text("{}")
