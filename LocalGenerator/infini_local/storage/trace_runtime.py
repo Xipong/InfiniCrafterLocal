@@ -89,12 +89,17 @@ def trace_event(kind: str, stage: str, title: str, payload: Any = None, *, promp
     )
 
 
-def trace_stage_request(stage: str, recipe_key: str, request: dict[str, Any], *, recipe_id: str | None = None) -> dict[str, Any]:
+def trace_stage_request(stage: str, recipe_key: str | None, request: dict[str, Any], *, recipe_id: str | None = None,
+                        prompt_title: str | None = None, prompt_payload: Any = None) -> dict[str, Any]:
     """The existing trace toggle controls full-message artifacts and their joins."""
     if not TRACE_PROMPTS_ENABLED:
         return {"status": "disabled"}
     receipt = trace_tools.persist_stage_request(CACHE_DIR, stage, recipe_key, request, recipe_id=recipe_id)
     trace_event("request_artifact", stage, "Exact sanitized stage request", receipt)
+    if prompt_title is not None:
+        trace_event("prompt", "LLM:" + stage, prompt_title, prompt_payload,
+                    prompt=trace_tools.stage_request_prompt(receipt, request.get("messages"),
+                                                          preview_chars=TRACE_MAX_PROMPT_CHARS or 420))
     return receipt
 
 

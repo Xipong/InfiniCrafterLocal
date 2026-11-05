@@ -280,8 +280,9 @@ def _request_visual_kit(
     if not scoped_repair:
         request = with_schema_instruction_definitions(request, "responseSchema", definition_paths)
     stage_name = "visual_repair" if repair else "visual_director"
-    trace_event("prompt", "LLM:" + stage_name, "Visual stage request", {"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")}, prompt=request["messages"])
-    trace_stage_request(stage_name, data.get("recipeKey"), request, recipe_id=data.get("id"))
+    trace_stage_request(stage_name, data.get("recipeKey"), request, recipe_id=data.get("id"),
+                        prompt_title="Visual stage request",
+                        prompt_payload={"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")})
     raw = llm_chat_json(with_llm_stage(request, "visual_repair" if repair else "visual_director"), timeout=env_int("INFINI_LLM_TIMEOUT", int(GENERATION_DEFAULTS["INFINI_LLM_TIMEOUT"])))
     content = raw["choices"][0]["message"]["content"]
     trace_event("response", "LLM:" + stage_name, "Visual stage response", {"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")}, response=content)

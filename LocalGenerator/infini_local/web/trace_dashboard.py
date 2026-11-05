@@ -9,6 +9,8 @@ not know about runtime globals, LLM config, or combine state; it only formats da
 import html
 from typing import Any, Callable
 
+from infini_local.storage.trace_tools import preview_trace_value
+
 
 def render_trace_snapshot_html(snap: dict[str, Any], *, app_version: str, trace_clip: Callable[[Any, int | None], str]) -> str:
     def esc(x: Any) -> str:
@@ -21,6 +23,7 @@ def render_trace_snapshot_html(snap: dict[str, Any], *, app_version: str, trace_
     def event_list(items: list[dict[str, Any]], with_prompts: bool = False) -> str:
         parts = []
         for ev in reversed(items[-80:]):
+            ev = preview_trace_value(ev)
             title = ev.get("title") or ev.get("message") or ev.get("stage") or "event"
             stage = ev.get("stage") or ev.get("level") or ev.get("kind") or ""
             body = {k: v for k, v in ev.items() if k not in {"prompt", "negative", "response"}}
@@ -52,7 +55,7 @@ def render_trace_snapshot_html(snap: dict[str, Any], *, app_version: str, trace_
     return "".join([
         '<!doctype html><meta charset="utf-8"><title>InfiniCrafter trace</title><style>', style, '</style>',
         f'<h1>InfiniCrafterLocal trace v{esc(app_version)}</h1>',
-        '<p><a href="/trace.json">trace.json</a> · <a href="/sdcpp_debug">sdcpp_debug</a> · <a href="/health">health</a></p>',
+        '<p><a href="/trace.json">trace.json (bounded)</a> · <a href="/trace?full=1">Full details</a> · <a href="/trace.json?full=1">Full JSON</a> · <a href="/sdcpp_debug">sdcpp_debug</a> · <a href="/health">health</a></p>',
         '<div class="grid">', *cards, '</div>',
         '<section class="card"><h2>Prompt trace</h2>', event_list(snap.get("promptTrace") or [], True), '</section>',
         '<section class="card"><h2>Pipeline trace</h2>', event_list(snap.get("pipelineTrace") or [], False), '</section>',

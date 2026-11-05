@@ -8,18 +8,23 @@ from typing import Any
 from infini_local.core.env_utils import env_str
 from infini_local.pipelines.transport import provider_wire as wire
 from infini_local.storage.trace_runtime import log_event
+from infini_local.storage.trace_tools import expand_trace_value
 
 
-def _replay_content_from_json_object(obj: Any, stage: str) -> str | None:
+def _replay_content_from_json_object(obj: Any, stage: str, *, cache_dir: Path | None = None) -> str | None:
     if isinstance(obj, str):
         return obj
     if isinstance(obj, dict):
         # Stage-keyed JSON object: {"planner":"...", "vfx_director":"..."}.
         direct = obj.get(stage)
+        if cache_dir is not None and isinstance(direct, dict) and set(direct) == {"_traceText", "preview"}:
+            direct = expand_trace_value(cache_dir, direct)
         if isinstance(direct, str):
             return direct
         for key in ("content", "text", "response", "raw"):
             value = obj.get(key)
+            if cache_dir is not None and isinstance(value, dict) and set(value) == {"_traceText", "preview"}:
+                value = expand_trace_value(cache_dir, value)
             if isinstance(value, str):
                 return value
         choices = obj.get("choices")
@@ -56,12 +61,12 @@ def _load_llm_replay_raw(spec: str, stage: str) -> tuple[str, str]:
     suffix = path.suffix.lower()
     raw = path.read_text(encoding="utf-8")
     if suffix == ".json":
-        content = _replay_content_from_json_object(json.loads(raw), stage)
+        content = _replay_content_from_json_object(json.loads(raw), stage, cache_dir=path.parent)
         if content is None:
             raise ValueError(f"Could not extract replay content from {path}")
         return content, str(path)
 
-    if suffix == ".jsonl":
+    if suffix in {".jsonl", ".ndjson"}:
         fallback: str | None = None
         for line in raw.splitlines():
             if not line.strip():
@@ -69,10 +74,14 @@ def _load_llm_replay_raw(spec: str, stage: str) -> tuple[str, str]:
             obj = json.loads(line)
             if isinstance(obj, dict):
                 obj_stage = str(obj.get("stage") or obj.get("hop") or obj.get("kind") or "").strip()
-                content = _replay_content_from_json_object(obj, stage)
+                obj_stage = obj_stage.removeprefix("LLM:")
+                aliases = {"planner": {"gameplay_author"}, "author_repair": {"gameplay_repair", "gameplay_format_repair"}}
+                if obj_stage not in {"", stage, "*", "all", "llm", *aliases.get(stage, set())}:
+                    continue
+                content = _replay_content_from_json_object(obj, stage, cache_dir=path.parent)
                 if content is None:
                     continue
-                if obj_stage in {stage, "*", "all", "llm"}:
+                if obj_stage:
                     return content, f"{path}#{obj_stage or 'line'}"
                 if fallback is None and not obj_stage:
                     fallback = content

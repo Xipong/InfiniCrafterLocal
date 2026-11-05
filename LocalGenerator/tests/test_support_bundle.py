@@ -97,6 +97,10 @@ def test_export_keeps_compact_trace_receipts_reconstructable_without_original_ca
                             kind="response", stage="offline", title="exact output", response=exact)
     request = {"messages": [{"role": "user", "content": exact}]}
     request_receipt = trace_tools.persist_stage_request(cache, "offline", "r_export", request)
+    trace_tools.trace_event(cache_dir=cache, trace_prompts_enabled=True, trace_max_prompt_chars=64,
+                            trace_file=cache / "pipeline_trace.ndjson", prompt_trace_file=cache / "prompt_trace.ndjson",
+                            kind="prompt", stage="offline", title="request",
+                            prompt=trace_tools.stage_request_prompt(request_receipt, request["messages"]))
     output = tmp_path / "support.tar.xz"
     bundle.export_bundle(cache, output)
     bundle.verify_bundle(output)
@@ -107,12 +111,16 @@ def test_export_keeps_compact_trace_receipts_reconstructable_without_original_ca
                 content = archive.extractfile(member)
                 assert content is not None
                 _write(relocated, member.name.removeprefix("cache/"), content.read())
-    stored = trace_tools.tail_ndjson(relocated / "prompt_trace.ndjson", 1)[0]
+    stored = next(row for row in trace_tools.tail_ndjson(relocated / "prompt_trace.ndjson", 10) if "response" in row)
     assert len(stored["response"]["preview"]) == 64
-    assert trace_tools.expand_trace_value(relocated, stored)["response"].encode() == exact.encode()
+    from infini_local.pipelines.transport.replay import _load_llm_replay_raw
+    replayed, _ = _load_llm_replay_raw(str(relocated / "prompt_trace.ndjson"), "offline")
+    assert replayed.encode() == exact.encode()
     request_raw = (relocated / request_receipt["path"]).read_bytes()
     assert hashlib.sha256(request_raw).hexdigest() == request_receipt["artifactSha256"]
     assert json.loads(request_raw)["messages"] == request["messages"]
+    full = trace_tools.read_trace_tail(relocated, relocated / "prompt_trace.ndjson", 10, full=True)
+    assert json.loads(full[-1]["prompt"]) == request["messages"]
 
 
 @pytest.mark.parametrize("fault", ["tampered-body", "new-credential"])

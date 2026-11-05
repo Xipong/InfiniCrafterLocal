@@ -324,15 +324,49 @@ def compact_trace_value(cache_dir: Path, value: Any, *, preview_chars: int = _TR
     return value
 
 
-def expand_trace_value(cache_dir: Path, value: Any) -> Any:
-    """Reconstruct sanitized exact text, failing explicitly on absent/tampered bodies."""
+def expand_trace_value(cache_dir: Path, value: Any, *, strict: bool = True) -> Any:
+    """Reconstruct exact sanitized text; UI reads label failures, replay refuses them."""
     if isinstance(value, dict):
         if set(value) == {"_traceText", "preview"}:
-            return read_transport_artifact(cache_dir, value["_traceText"]).decode("utf-8")
-        return {key: expand_trace_value(cache_dir, item) for key, item in value.items()}
+            try:
+                receipt = value["_traceText"]
+                if not isinstance(receipt, dict):
+                    raise ValueError("invalid trace text receipt")
+                if receipt.get("format") == "infini.stage-request-prompt.v1":
+                    return trace_clip(read_stage_request(cache_dir, receipt)["messages"], default_max_chars=0)
+                return read_transport_artifact(cache_dir, receipt).decode("utf-8")
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                if strict:
+                    raise
+                # Never echo exception text: it can contain paths or private bytes.
+                return f"<trace text unavailable: {type(exc).__name__}>"
+        return {key: expand_trace_value(cache_dir, item, strict=strict) for key, item in value.items()}
     if isinstance(value, (tuple, list)):
-        return [expand_trace_value(cache_dir, item) for item in value]
+        return [expand_trace_value(cache_dir, item, strict=strict) for item in value]
     return value
+
+
+def preview_trace_value(value: Any) -> Any:
+    """Display compact receipts as explicitly partial text without reading bodies."""
+    if isinstance(value, dict):
+        if set(value) == {"_traceText", "preview"}:
+            receipt = value["_traceText"]
+            if not isinstance(receipt, dict):
+                return "<trace text unavailable: invalid receipt>"
+            status = receipt.get("status")
+            notice = ("Preview only; full text: /trace?full=1 or exported cache replay"
+                      if status == "stored" else f"Trace text unavailable: {status} ({receipt.get('reason', 'unknown')})")
+            return str(value["preview"]) + "\n[" + notice + "]"
+        return {key: preview_trace_value(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [preview_trace_value(item) for item in value]
+    return value
+
+
+def read_trace_tail(cache_dir: Path, path: str | Path, limit: int = 80, *, full: bool = False) -> list[dict[str, Any]]:
+    """Bound event count for polling; expand only an explicit full-detail read."""
+    rows = tail_ndjson(path, limit)
+    return expand_trace_value(cache_dir, rows, strict=False) if full else rows
 
 
 def log_event(
@@ -402,7 +436,7 @@ def _echo_event(
         pass
 
 
-def persist_stage_request(cache_dir: Path, stage: str, recipe_key: str, request: dict[str, Any], *, recipe_id: str | None = None) -> dict[str, Any]:
+def persist_stage_request(cache_dir: Path, stage: str, recipe_key: str | None, request: dict[str, Any], *, recipe_id: str | None = None) -> dict[str, Any]:
     """Atomic complete sanitized stage messages, not an HTTP/auth snapshot."""
     receipt: dict[str, Any] = {"stage": stage, "recipeKey": recipe_key}
     if not any(type(value) is str and value for value in (recipe_key, recipe_id)):
@@ -445,6 +479,36 @@ def persist_stage_request(cache_dir: Path, stage: str, recipe_key: str, request:
     except Exception as exc:
         # Diagnostics cannot stop gameplay or disclose exception/request text.
         return {**receipt, "status": "refused", "reason": type(exc).__name__}
+
+
+def read_stage_request(cache_dir: Path, receipt: dict[str, Any]) -> dict[str, Any]:
+    """Read the existing immutable builder artifact, validating body and owner join."""
+    if receipt.get("status") != "stored":
+        raise ValueError("stage request not stored")
+    root = Path(cache_dir).resolve()
+    target = (root / receipt["path"]).resolve()
+    if not target.is_relative_to(root / "stage_requests"):
+        raise ValueError("stage request outside storage")
+    raw = target.read_bytes()
+    if len(raw) != receipt["bytes"] or hashlib.sha256(raw).hexdigest() != receipt["artifactSha256"]:
+        raise ValueError("stage request hash/size mismatch")
+    artifact = json.loads(raw)
+    messages = json.dumps(artifact["messages"], ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    if (artifact.get("schema") != "infini.stage-request-messages.v1"
+            or any(artifact.get(key) != receipt.get(key) for key in ("stage", "recipeKey", "messagesSha256"))
+            or hashlib.sha256(messages).hexdigest() != receipt["messagesSha256"]):
+        raise ValueError("stage request owner/messages mismatch")
+    return artifact
+
+
+def stage_request_prompt(receipt: dict[str, Any], messages: Any, *, preview_chars: int = _TRACE_PREVIEW_CHARS) -> dict[str, Any]:
+    """Reference an already-persisted message list instead of writing it as text too."""
+    try:
+        limit = max(0, min(preview_chars, _TRACE_PREVIEW_CHARS))
+        preview = trace_clip(_redact_diagnostic(messages), default_max_chars=0)[:limit]
+    except Exception:
+        preview = ""  # A refused diagnostic must never interrupt the stage.
+    return {"_traceText": {**receipt, "format": "infini.stage-request-prompt.v1"}, "preview": preview}
 
 
 def trace_clip(value: Any, *, default_max_chars: int, max_chars: int | None = None) -> str:
@@ -497,7 +561,7 @@ def trace_event(
         if payload is not None:
             event["payload"] = json_slim(payload, 0)
         if prompt is not None:
-            event["prompt"] = trace_clip(prompt, default_max_chars=0)
+            event["prompt"] = prompt if isinstance(prompt, dict) and set(prompt) == {"_traceText", "preview"} else trace_clip(prompt, default_max_chars=0)
         if negative is not None:
             event["negative"] = trace_clip(negative, default_max_chars=0)
         if response is not None:

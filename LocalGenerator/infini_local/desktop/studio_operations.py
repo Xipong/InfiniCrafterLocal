@@ -790,6 +790,7 @@ class StudioOperations:
             return str(value)
 
     def _fmt_event_line(self, ev: dict, include_prompts: bool = False) -> str:
+        ev = trace_tools.preview_trace_value(ev)
         ts = ev.get("ts") or ev.get("createdAt") or ""
         stage = ev.get("stage") or ev.get("level") or ev.get("kind") or "event"
         title = ev.get("title") or ev.get("message") or ""
@@ -851,6 +852,8 @@ class StudioOperations:
         summary.append("")
         summary.append("TRACE FILES")
         summary.append(self._pretty(trace_cfg))
+        summary.append("Bounded previews only. Full server details: " + self._server_base_url() + "/trace?full=1")
+        summary.append("Offline: export the cache with tools/diagnostics/export_support_bundle.py; replay preserves full receipt-backed text.")
         self._set_trace_text("summary", "\n".join(summary))
 
         prompt_events = snap.get("promptTrace") or []

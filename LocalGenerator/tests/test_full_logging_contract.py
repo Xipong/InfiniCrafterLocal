@@ -77,6 +77,8 @@ def test_real_director_seams_store_complete_response_and_request_without_semanti
         rows = trace_tools.expand_trace_value(tmp_path, trace_tools.tail_ndjson(trace_runtime.PROMPT_TRACE_FILE, 10))
         assert any(row.get("response") == raw for row in rows), "no response tail may disappear"
         assert any(json.loads(row["prompt"]) == captured[0]["messages"] for row in rows if row.get("prompt"))
+        prompt_bytes = json.dumps(captured[0]["messages"], ensure_ascii=False, indent=2).encode()
+        assert not any(path.read_bytes() == prompt_bytes for path in (tmp_path / "transport_artifacts").glob("*.txt")), "full message-list trace must reuse the stage request, not store a second body"
     else:
         assert list(tmp_path.iterdir()) == []
 
