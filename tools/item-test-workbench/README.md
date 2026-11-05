@@ -33,6 +33,10 @@ python tools/item-test-workbench/workbench.py loader-run \
   --mod /path/to/Dependency.dll /path/to/Dependency --out /path/to/run
 ```
 
+Only run trusted mod DLLs/archives. They execute native mod code with the host
+process's permissions. The temporary save/world directory isolates test data;
+it is **not a security sandbox** for untrusted code.
+
 Each root must contain `build.txt` and the original content files. The loader
 orders supplied mods by their declared dependency names; CLI order need not
 match load order. Use repeatable `--mod DLL SOURCE_ROOT` for all additional mods.
@@ -84,6 +88,70 @@ standalone child processes, without launching `Terraria.Main` or a server.
 `verify_multi_mod_loader.py` exercises separate dependent fixture assemblies,
 dependency ordering, missing/cyclic dependencies and the effects of each mod's
 hooks on combat.
+
+### Native mod animation diagnostics
+
+`loader-run --render` captures each **actual post-update frame** in the loader
+process, using real `Main.DrawProj` and `PlayerRenderer.DrawPlayers`. It does
+not replay manual AI/poses or reset animations between frames:
+
+```bash
+python tools/item-test-workbench/workbench.py loader-run \
+  --native-item ExampleMod/ExampleItem \
+  --mod /path/to/ExampleMod.dll /path/to/ExampleMod \
+  --scenario tools/item-test-workbench/scenarios/loader-native-grounded.json \
+  --render --player-assets /path/to/player-assets --out /path/to/native-run
+```
+
+Requires the same matching tML native libraries/PixelShader and pinned community
+player PNGs used by the existing native renderer. `INFINI_PLAYER_ASSET_DIR` can
+replace `--player-assets`. Mod textures must be actual PNG resources named by
+`ModItem.Texture` / `ModProjectile.Texture` in the supplied content roots or
+archives. Missing resources and unsupported `Terraria/` texture aliases fail;
+no weapon art, texture substitutions or binary assets are included.
+
+The output contains `native.json` with CPU snapshots and a `nativeRender`
+receipt, plus every 640×640 PNG under `native-frames/frames/`. The wrapper
+verifies every tick, decoded PNG and frame SHA-256 before accepting a passing
+render. The camera follows the actual player at zoom 1, on a neutral background
+with diagnostic white lighting. This is not the existing generated-item GIF
+probe, and does not claim complete `Main.Draw` ordering.
+
+The narrow draw path supports an unequipped starter player, ordinary visible
+native mod projectiles and the native held-projectile layer. It rejects
+custom `DrawBehind` overrides, hidden non-held projectiles, generated/vanilla
+content, equipment/mounts and server mode. NPC/world/dust/gore drawing, custom
+client effects, full client mod lifecycle and networking remain unsupported.
+Updates still execute in the standalone loader's dedicated mode; temporarily
+observing client drawing does not establish client-update parity. Authored draw
+hooks execute real mod code and can consume RNG or change mod state. The renderer
+restores its own temporary bindings/camera and native player draw geometry, not
+arbitrary hook side effects. Equality with a CPU-only run is verified for the
+supplied fixture, not guaranteed for an arbitrary mod. Draw exceptions
+(including ones swallowed by native drawing) produce an error, not a blank PASS.
+
+CPU snapshots now expose commanded input before `Player.Update`, resolved item
+timers/release state, player position/velocity/`gfxOffY`/composite arms and public
+projectile identity/AI fields after the full update. No weapon-private fields or
+additional gameplay hooks are queried. Draw receipts record actual shared `ProjectileLoader.PreDraw`
+entries separately: the native player layer can draw a just-expired held slot
+for one last frame even though it no longer appears among active projectiles.
+That native behavior is recorded, not repaired. For animation review, start from a settled
+scene: the supplied grounded example includes 45 **visible idle ticks** before
+input, standing at y=710 above a floor at y=752. These are not hidden warm-up
+updates and can be changed explicitly. Check the trace rather than attributing
+spawn/collision/`gfxOffY` shifts to a weapon's pose.
+
+Community asset version labels do not certify each source file. In particular,
+the pinned `MagicPixel` is 1×1000, not a one-pixel image. Its SHA and decoded
+geometry are reported unchanged. A custom thin-line draw should use an explicit
+1×1 source rectangle; the workbench does not replace the texture or repair mod
+`PreDraw` code. Official Terraria 1.4.4.9 byte identity remains unverified.
+
+`verify_loader_render.py` compares CPU/rendered snapshots and native hook counts
+for independent free/held fixture projectiles, verifies actual custom PreDraw
+pixels and negative draw/resource controls. This is fixture coverage, not proof
+that arbitrary dependency mods or weapons render faithfully.
 
 A separate local utility for exercising an **already generated InfiniCrafterLocal
 item JSON**, then inspecting its behavior with code and vision. Runs do not call an

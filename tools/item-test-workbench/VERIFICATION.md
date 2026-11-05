@@ -382,3 +382,18 @@ record or green `no_nonfinite` alone is not evidence of visible contour pixels.
 `verify_native_light.py --native-dll <built ItemTestWorkbench.dll> --out <fresh-directory>` checks the original periodic/self `nativeLight` emitter with RGB80/178/195 and intensity0.35. A synthetic native source and actual native player are placed below the existing world surface, because the normal surface ambient light (and `viewport_fill`) can mask such modest additive illumination. The test compares native `Lighting.GetColor` samples and actual rendered player pixels with identical no-slot and zero-intensity controls, including native attenuation after the source expires, deterministic fresh-process reset, capture-off lifecycle and viewport-fill gameplay controls. No fake glow, brightness multiplier or authored item edit is used.
 
 Per tick the stand now executes its existing single `Lighting.LightTiles` phase **after** `InfiniDetachedVfxSystem.PostUpdateEverything`, so queued native light from that phase is not delayed by an additional stand-side frame. Four native warmup phases and `Dust.UpdateDust` ordering remain unchanged. Native lighting itself may update across multiple phases; the test does not demand instantaneous illumination or extinction. Other `nativeLight` event/anchor combinations remain unadmitted.
+
+## Loader animation regression
+
+`verify_loader_render.py --native-dll HOST --mod-dll FIXTURE --mod-root ROOT
+--player-assets ASSETS --out FRESH_DIRECTORY` compares CPU and rendered
+standalone-loader timelines for independent free and held projectile fixtures.
+It verifies native PreDraw counts, custom red pixels with PreDraw=false, native
+player pixels, exact frame receipts, stable settled geometry, release input,
+cleanup and explicit error/unsupported controls. Existing CPU loader verifiers
+remain required. It does not execute Main.Update/Main.Draw, client mod loading,
+a saved world, a complete dependency lifecycle or multiplayer.
+
+Offline `test_workbench.py` rejects missing, duplicate and out-of-order CPU
+ticks, and missing/tampered/outside-path PNG evidence. Synthetic test reports
+and images are not native execution evidence.

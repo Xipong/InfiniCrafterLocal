@@ -19,6 +19,8 @@ internal sealed class WorkbenchGraphicsContext : IDisposable
     private readonly GraphicsDeviceManager manager;
     private readonly AssetRepository assets;
     public GraphicsDevice Device => manager.GraphicsDevice;
+    internal GameServiceContainer Services => game.Services;
+    internal GraphicsDeviceManager Manager => manager;
     public Asset<Texture2D> ItemTexture { get; }
     public Asset<Texture2D> ProjectileTexture { get; }
     public JsonObject Provenance { get; }
@@ -109,5 +111,5 @@ internal sealed class WorkbenchGraphicsContext : IDisposable
         IntPtr address=getProc("glGetString");if(address==IntPtr.Zero) return "unavailable";
         return Marshal.PtrToStringAnsi(Marshal.GetDelegateForFunctionPointer<GetString>(address)(name))??"unavailable";
     }
-    public void Dispose(){ItemTexture.Dispose();assets.Dispose();((IDisposable)manager).Dispose();game.Dispose();}
+    public void Dispose(){ProjectileTexture.Dispose();ItemTexture.Dispose();assets.Dispose();((IDisposable)manager).Dispose();game.Dispose();}
 }

@@ -55,7 +55,7 @@ internal static partial class EngineRuntimeChecks
 
     // Narrow opt-in scene over the actual autoloaded IFC assembly. It deliberately
     // refuses assertions and scripted actions for phases it cannot yet model.
-    internal static JsonObject RunWorkbenchNativeLoaderScene(string? itemPath, string? nativeItem, string scenarioPath, string sandbox, string itemBoundary, IReadOnlyList<WNativeLoader.ModInput> extraMods, bool serverMode = false)
+    internal static JsonObject RunWorkbenchNativeLoaderScene(string? itemPath, string? nativeItem, string scenarioPath, string sandbox, string itemBoundary, IReadOnlyList<WNativeLoader.ModInput> extraMods, bool serverMode = false, Action<int, Player>? observeFrame = null)
     {
         if(itemBoundary is not ("fresh" or "local_cache")) throw new ArgumentException("item-boundary must be fresh or local_cache");
         if((itemPath is null)==(nativeItem is null))throw new ArgumentException("Specify exactly one generated JSON or native item identifier");
@@ -200,10 +200,20 @@ internal static partial class EngineRuntimeChecks
                     else {altHeld=kind=="alt";if(altHeld && data is null && !ItemLoader.AltFunctionUse(owner.HeldItem,owner))throw new NotSupportedException("Native item has no alternate use");owner.altFunctionUse=altHeld?1:0;owner.controlUseItem=true;owner.channel=owner.HeldItem.channel;}
                 }
                 if(altHeld && owner.controlUseItem)owner.altFunctionUse=1;
+                var commandedInput = new JsonObject {
+                    ["useItem"] = owner.controlUseItem, ["channel"] = owner.channel,
+                    ["altFunctionUse"] = owner.altFunctionUse,
+                    ["aimX"] = WFinite(Terraria.Main.MouseWorld.X), ["aimY"] = WFinite(Terraria.Main.MouseWorld.Y)
+                };
                 omitted=WLoaderTick(new WLoaderTickOps(()=>owner.Update(0),()=>{if(dummy.active)dummy.UpdateNPC(id);},()=>{for(int slot=0;slot<Terraria.Main.maxProjectiles;slot++)if(Terraria.Main.projectile[slot].active)Terraria.Main.projectile[slot].Update(slot);},null,null,null,null,null));
                 CheckNetworkMode();
                 var effect=RuntimeNpcEffects.GetTotals(dummy);
-                frames.Add(new JsonObject{["tick"]=tick,["phase"]="post_update",["npcLife"]=dummy.life,["lifeRegen"]=dummy.lifeRegen,["vx"]=WFinite(dummy.velocity.X),["vy"]=WFinite(dummy.velocity.Y),["effectCount"]=effect.Count,["defenseDelta"]=effect.Defense,["lifeRegenPenalty"]=effect.Regen,["contactMultiplier"]=effect.Contact,["velocityRetentionPerTick"]=effect.Retention,["activeProjectiles"]=Terraria.Main.projectile.Count(p=>p.active),["playerFinite"]=WEntityFinite(owner),["npcFinite"]=WEntityFinite(dummy),["projectilesFinite"]=Terraria.Main.projectile.Where(p=>p.active).All(WEntityFinite)});
+                frames.Add(new JsonObject{["tick"]=tick,["phase"]="post_update",["commandedInput"]=commandedInput,
+                    ["player"]=WLoaderPlayerSnapshot(owner),["projectiles"]=new JsonArray(Terraria.Main.projectile.Where(p=>p.active).Select(p=>(JsonNode?)WLoaderProjectileSnapshot(p)).ToArray()),["npcLife"]=dummy.life,["lifeRegen"]=dummy.lifeRegen,["vx"]=WFinite(dummy.velocity.X),["vy"]=WFinite(dummy.velocity.Y),["effectCount"]=effect.Count,["defenseDelta"]=effect.Defense,["lifeRegenPenalty"]=effect.Regen,["contactMultiplier"]=effect.Contact,["velocityRetentionPerTick"]=effect.Retention,["activeProjectiles"]=Terraria.Main.projectile.Count(p=>p.active),["playerFinite"]=WLoaderPlayerFinite(owner),["npcFinite"]=WEntityFinite(dummy),["projectilesFinite"]=Terraria.Main.projectile.Where(p=>p.active).All(WLoaderProjectileFinite)});
+                // Observe the exact post-update state while native content is loaded.
+                // The callback must not advance simulation or replace ItemCheck/AI.
+                observeFrame?.Invoke(tick, owner);
+                CheckNetworkMode();
             }
             foreach(var a in checks) {
                 string kind=a!["kind"]!.GetValue<string>();bool ok;
@@ -218,4 +228,37 @@ internal static partial class EngineRuntimeChecks
             return new JsonObject{["schemaVersion"]=1,["status"]=assertions.Any(a=>a!["status"]!.GetValue<string>()=="failed")?"failed":"passed",["execution"]=new JsonObject{["backend"]="standalone-tml-loader",["fullGameParity"]=false,["networkMode"]=Terraria.Main.netMode,["localPlayer"]=Terraria.Main.myPlayer,["requestedServerMode"]=serverMode,["playerInputScope"]=serverMode?"remote player slot 0; no client or network session":"controlled local player; no network session",["contentCount"]=loader.ContentCount,["productionAssembly"]=loader.Mod.Code.Location,["additionalMod"]=loader.AdditionalMod?.Name,["additionalAssembly"]=loader.AdditionalMod?.Code.Location,["additionalMods"]=new JsonArray(loader.AdditionalMods.Select(m=>(JsonNode?)new JsonObject{["name"]=m.Name,["assembly"]=m.Code.Location}).ToArray()),["missingIfcModDependencies"]=new JsonArray(loader.MissingIfcDependencies.Select(x=>(JsonNode?)JsonValue.Create(x)).ToArray()),["limitations"]=new JsonArray("Dependency versions are not validated", "Source-root mods use reconstructed Mod.File; archive inputs retain original Mod.File", "Asset readers and client lifecycle are incomplete"),["scope"]=targetName is null?"Native IFC/tML autoload and real Player/NPC/Projectile updates with scripted input; controlled stationary NPC; not Main.Update or full game":"Native IFC/tML autoload and real Player/NPC/Projectile updates with scripted input; target uses native mod NPC defaults and AI; not Main.Update or full game",["omittedEnginePhases"]=new JsonArray(omitted.Select(x=>(JsonNode?)JsonValue.Create(x)).ToArray()),["worldRegistered"]=currentWorld},["input"]=new JsonObject{["itemPath"]=itemPath is null?null:Path.GetFullPath(itemPath),["nativeItem"]=nativeItem,["nativeItemType"]=itemType,["nativeNpc"]=targetName,["nativeNpcType"]=targetType,["scenarioPath"]=Path.GetFullPath(scenarioPath),["itemBoundary"]=itemBoundary},["snapshots"]=frames,["assertions"]=assertions,["combat"]=new JsonObject{["spawns"]=spawns,["hits"]=hits,["initialLife"]=initialLife,["finalLife"]=dummy.life}};
         } finally {SystemLoader.OnWorldUnload(); CheckNetworkMode();}
     }
+    // Public native state only: no weapon-specific reflection or additional gameplay hooks.
+    private static bool WLoaderPlayerFinite(Player player) => WEntityFinite(player)
+        && float.IsFinite(player.gfxOffY) && float.IsFinite(player.fullRotation)
+        && float.IsFinite(player.compositeFrontArm.rotation) && float.IsFinite(player.compositeBackArm.rotation);
+
+    private static bool WLoaderProjectileFinite(Projectile projectile) => WEntityFinite(projectile)
+        && float.IsFinite(projectile.scale) && projectile.ai.All(float.IsFinite) && projectile.localAI.All(float.IsFinite);
+
+    private static JsonObject WLoaderPlayerSnapshot(Player player) => new() {
+        ["x"]=WFinite(player.position.X),["y"]=WFinite(player.position.Y),
+        ["vx"]=WFinite(player.velocity.X),["vy"]=WFinite(player.velocity.Y),
+        ["width"]=player.width,["height"]=player.height,["gfxOffY"]=WFinite(player.gfxOffY),
+        ["direction"]=player.direction,["fullRotation"]=WFinite(player.fullRotation),
+        ["itemAnimation"]=player.itemAnimation,["itemAnimationMax"]=player.itemAnimationMax,["itemTime"]=player.itemTime,
+        ["heldProj"]=player.heldProj,["controlUseItem"]=player.controlUseItem,["releaseUseItem"]=player.releaseUseItem,
+        ["altFunctionUse"]=player.altFunctionUse,["channel"]=player.channel,
+        ["itemRotation"]=WFinite(player.itemRotation),["itemX"]=WFinite(player.itemLocation.X),["itemY"]=WFinite(player.itemLocation.Y),
+        ["frontArm"]=new JsonObject{["enabled"]=player.compositeFrontArm.enabled,["rotation"]=WFinite(player.compositeFrontArm.rotation),["stretch"]=player.compositeFrontArm.stretch.ToString()},
+        ["backArm"]=new JsonObject{["enabled"]=player.compositeBackArm.enabled,["rotation"]=WFinite(player.compositeBackArm.rotation),["stretch"]=player.compositeBackArm.stretch.ToString()}
+    };
+
+    private static JsonObject WLoaderProjectileSnapshot(Projectile projectile) => new() {
+        ["slot"]=projectile.whoAmI,["identity"]=projectile.identity,["owner"]=projectile.owner,
+        ["nativeType"]=projectile.type,["modType"]=projectile.ModProjectile?.FullName,
+        ["x"]=WFinite(projectile.position.X),["y"]=WFinite(projectile.position.Y),
+        ["width"]=projectile.width,["height"]=projectile.height,
+        ["vx"]=WFinite(projectile.velocity.X),["vy"]=WFinite(projectile.velocity.Y),
+        ["rotation"]=WFinite(projectile.rotation),["scale"]=WFinite(projectile.scale),["timeLeft"]=projectile.timeLeft,
+        ["friendly"]=projectile.friendly,["hostile"]=projectile.hostile,["tileCollide"]=projectile.tileCollide,
+        ["ai"]=new JsonArray(projectile.ai.Select(WFinite).ToArray()),
+        ["localAI"]=new JsonArray(projectile.localAI.Select(WFinite).ToArray())
+    };
+
 }

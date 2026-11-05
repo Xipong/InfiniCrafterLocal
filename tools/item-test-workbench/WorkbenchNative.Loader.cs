@@ -299,7 +299,10 @@ internal sealed class WNativeLoader : IDisposable
         if (requireAssets && !Directory.Exists(Path.Combine(assetSource, "Assets"))) {
             string original = Path.Combine(root, "Assets");
             if (requireAssets && !Directory.Exists(original)) throw new DirectoryNotFoundException("IFC Assets directory missing");
-            assetSource = Path.Combine(sandbox, "asset-content", name);
+            // Each native registration owns an immutable content snapshot. A
+            // repeated scope may use the same sandbox/mod name; never overwrite
+            // another scope's resources or collide with its previous staging.
+            assetSource = Path.Combine(sandbox, "asset-content", name, Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(assetSource);
             if (Directory.Exists(original)) foreach (string file in Directory.EnumerateFiles(original, "*", SearchOption.AllDirectories)) {
                 string destination = Path.Combine(assetSource, "Assets", Path.GetRelativePath(original, file));
