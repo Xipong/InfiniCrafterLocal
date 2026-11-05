@@ -155,7 +155,7 @@ def try_llm_plan(
     if not USE_LLM:
         return None
     model_name = resolve_llm_model()
-    request, user_content, _ = build_initial_author_request(a, b, key, model_name=model_name)
+    request, _, _ = build_initial_author_request(a, b, key, model_name=model_name)
     try:
         trace_stage_request("gameplay_author", key, request,
             prompt_title=f"Gameplay Author request: {name_of(a)} + {name_of(b)}",
