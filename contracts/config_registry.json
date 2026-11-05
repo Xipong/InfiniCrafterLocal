@@ -1,6 +1,6 @@
 {
   "authority": "derived-evidence-only",
-  "documentedFieldCount": 125,
+  "documentedFieldCount": 126,
   "entries": [
     {
       "declarations": [
@@ -1560,6 +1560,35 @@
       "secret": false,
       "type": "string",
       "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": {
+            "expression": "STATE_ROOT / \"images\""
+          },
+          "file": "LocalGenerator/infini_local/core/config_bootstrap.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "path"
+        }
+      ],
+      "default": {
+        "expression": "STATE_ROOT / \"images\""
+      },
+      "documented": true,
+      "example": "",
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_IMAGE_DIR",
+      "owners": [
+        "LocalGenerator/infini_local/core/config_bootstrap.py",
+        "ModSources/InfiniCrafterLocal/Common/Services/Assets/SharedImageStore.cs"
+      ],
+      "secret": false,
+      "type": "path",
+      "visibility": "documented"
     },
     {
       "declarations": [
@@ -5139,8 +5168,8 @@
     }
   ],
   "errors": [],
-  "fieldCount": 209,
-  "fingerprint": "e1a119c7fd92d2fa67bbbfa9d2b5a20e8ca1116cd933e75a8768a48d96393b9e",
+  "fieldCount": 210,
+  "fingerprint": "0fbc95bd85a9c303eb400d831bc99d79d4ead06acb4df46e8d4420dba06ecdc0",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",
