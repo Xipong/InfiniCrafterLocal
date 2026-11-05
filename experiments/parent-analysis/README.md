@@ -6,18 +6,18 @@
 
 ## Что исполняется, а что сохранено для исследования
 
-| Направление | Где находится | Статус исходного опубликованного среза `be864d01` |
+| Направление | Текущая реализация | Статус |
 |---|---|---|
-| Оружие без подбора inventory/fallback ammo | `GeneratorClient.AmmoFacts.cs`, Python parent context | Активный код; настоящий ammo-parent сохраняет свои факты |
-| Canonical replacement profiles и outer guards | `GeneratorClient.AmmoFacts.cs`, source catalog | Активный код; неизвестный результат остаётся неизвестным |
-| Bounded CFG для native ammo | `cfg/native-ammo-control-flow.patch` | Архив кандидата; не применяется сборкой |
-| Child-spawn extraction из helper methods | `helper/helper-spawns.patch` | Архив кандидата; старый замер превышает стандартный Author budget |
-| Copy-on-write source state | `helper/copy-on-write-*.patch` | Два альтернативных кандидата; не складывать друг с другом |
-| Closed-call effect summary | `diagnostics/effect-summary/` | Исследование; на сохранённом Last Prism packet экономия равна нулю |
-| Inline/sparse source analysis | `diagnostics/prism-inline/` | Исследование; production selector и packet integration отсутствуют |
-| Source relevance | `diagnostics/source-relevance/` | Исследование; удаление фактов при сохранении имеющегося доказательства не обосновано |
+| Оружие и ammo-parent | `GeneratorClient.AmmoFacts.cs`, Python parent context | Активно; inventory/fallback ammo не выбирается |
+| Canonical replacement profiles и outer guards | Native source catalog и ammo capture | Активно; условия и неизвестный итог сохраняются |
+| Bounded CFG для native ammo | `tools/generate/native_ammo_control_flow.py` | Включено; сохраняются state-dependent условия |
+| Child-spawn extraction из helpers | `GeneratorClient.ProjectileSpawnFacts.cs` | Включено; source calls, guards и one-hop profiles связаны |
+| Inline actor effects и sparse locals | `GeneratorClient.SourceGraph.cs`, `GeneratorClient.SourceMethod.cs` | Включено; собственные bounds и явные отказы |
+| Последовательность source operations | Python `attack_behavior.py` и stage projections | Включено; определения, alias uses, guards и switch связаны в одном представлении |
+| Copy-on-write source state | `helper/copy-on-write-*.patch` | Архив альтернатив; автоматически не применяется |
+| Closed-call summaries, relevance и старый inline study | `diagnostics/` | Исследовательские материалы; не являются активным runtime |
 
-В таблице зафиксирован исходный срез, чтобы последующие изменения кода не меняли смысл исторических результатов. Финальный статус включённых изменений следует проверять по текущему коду и свежей записи в `CURRENT_RESULT.md`.
+Свежие проверки и ограничения находятся в `CURRENT_RESULT.md`. Исторические patches не применяются автоматически; включённые реализации принадлежат обычным source owners репозитория.
 
 ## Граница корректности
 
@@ -57,5 +57,3 @@ Capture сохраняет восемь representative пар и `report.json` �
 `ORIGINAL_*`, старые отчёты, logs и `*-provenance.json` сохраняют результаты прежних workspace snapshots. Их counts, пути и утверждения «unpublished» относятся к этим snapshots. Manifest связывает patch с исходными и конечными SHA256; patch не применяется автоматически при сборке. Старые counts нельзя складывать или переносить на новое сочетание изменений.
 
 Сохранены авторские harness sources и summaries. Внешние DLL, большие generated IL/CFG captures и часть исходных frozen inputs отсутствуют. Поэтому диагностические scripts внутри архива могут ссылаться на отсутствующие workspace inputs; они не являются готовыми командами проверки текущего checkout.
-
-В исходном README ошибочно перечислялись `ifc-parent-graph-prototype-20261105/`, `ifc-source-listing-experiment-20261105/`, `fixtures/`, `representations-provenance.json`, `run_representation_tests.py` и `EVALUATION-PLAN.md`. Этих файлов в срезе `be864d01` нет; прежнее описание не подтверждает наличие codecs, их проверок или результатов в репозитории.
