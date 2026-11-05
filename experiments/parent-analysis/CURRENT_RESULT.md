@@ -12,7 +12,7 @@ Helper extraction дополняет доказанные source calls и one-ho
 
 Для Last Prism доступны полный AI_075 (32044 знака), исходный dispatch guard и style84 body дочернего profile632 (13989 знаков), collision и position integration. Большие или неподдержанные records не подменяются догадками. Model-facing выбор работает по проверенным методам отдельно и сохраняет полные capabilities.
 
-Pinned ILSpy 8.2.0.7535 и MIT notices поставляются внутри `.tmod`. Он читает metadata/IL без запуска исходного поведения, внешней программы или загрузки зависимости во время игры. Исследуемые методы, getters, constructors, source factories и callbacks ради этого view не вызываются. Root draw не входит в игровое C# view; исходные draw graphs сохраняются.
+Pinned ILSpy 8.2.0.7535 и MIT notices поставляются внутри `.tmod`. Он читает metadata/IL без запуска исходного поведения, внешней программы или скачивания зависимости во время игры. Исследуемые методы, getters, constructors, source factories и callbacks ради этого view не вызываются. Root draw не входит в игровое C# view; исходные draw graphs сохраняются.
 
 Source table union сопоставляет локальные member aliases по точной полной сигнатуре. Существующие baseline rows и их имена сохраняются; строковые константы не переписываются. Неизвестная схема или конфликт дают отказ объединения. Generic member names проверены отдельным regression после обнаружения настоящего ``Nullable`1..ctor`` в Last Prism.
 
@@ -28,7 +28,7 @@ Source table union сопоставляет локальные member aliases п
 - Перед добавлением C# view четыре полных raw packets — Molten Fury, Daedalus Stormbow, Wooden Arrow и обычные материалы — остались побайтно равны baseline.
 - После добавления C# view все 16 fingerprints по-прежнему равны предыдущему срезу. Удаление только распознанных source views из восьми новых полных packets точно восстанавливает восемь предыдущих packets: native stats, graphs, sourceMethods и nulls сохранены.
 
-Текущий полный raw Prepare для Last Prism занимает 1929657 знаков против 483029 в свежем baseline. Финальная проверка Author использует полную матрицу 8×8: все 64 упорядоченные пары из восьми настоящих captures, включая повторы и обратный порядок, проходят неизменённый лимит 300000. Максимум — StateConditionalBow + LastPrism: 289590 знаков, запас 10410. Raw transport packet и Author dossier — разные формы данных; эти числа не являются числом токенов.
+Текущий полный raw Prepare для Last Prism занимает 1929657 знаков против 483029 в свежем baseline. Финальная проверка Author использует полную матрицу 8×8: все 64 упорядоченные пары из восьми настоящих captures, включая повторы и обратный порядок, проходят неизменённый лимит 300000. Максимум — StateConditionalBow + LastPrism: 289776 знаков, запас 10224. Raw transport packet и Author dossier — разные формы данных; эти числа не являются числом токенов.
 
 Первый последовательный capture суммарно выделил около 2.98 GB управляемой памяти против 0.94 GB baseline. Счётчик всех allocations не равен одновременно занятой ОЗУ или RSS; этот запуск не является независимым cold benchmark. Извлечение source остаётся дорогим, улучшение скорости или памяти не объявляется.
 
@@ -49,8 +49,8 @@ Source table union сопоставляет локальные member aliases п
 | Полный native baseline | 400 PASS / 270 FAIL |
 | Финальный полный native прогон: 682 checks | 412 PASS / 270 FAIL; все 270 failed names и полные причины совпали с baseline |
 | Actual Prepare → Author state-condition/profile preservation | PASS в обоих response formats; offline |
-| Финальная canonical source-view матрица Author: 8×8 | Все 64 пары PASS; максимум StateConditionalBow + LastPrism 289590 / 300000, запас 10410 |
-| Полный Python набор | Итог partitions ещё не подведён; общий PASS count не объявляется |
+| Финальная canonical source-view матрица Author: 8×8 | Все 64 пары PASS; максимум StateConditionalBow + LastPrism 289776 / 300000, запас 10224 |
+| Полный Python набор | 9243 PASS; все шесть canonical partitions прошли, итоговая агрегация PASS |
 
 Полный native прогон в этой среде не GREEN: MonoMod не находит загруженный clrjit через numeric process lookup при несовпадении PID namespace и `/proc`. 247 failures прямо связаны с этой инициализацией; ещё 23 возникают в последующем состоянии того же процесса. Полный старый baseline воспроизводит тот же набор failures. Три проверенных отдельно motion/persistence cases проходят в обоих checkout. Это не основание объявлять полноценный release acceptance.
 
@@ -75,4 +75,4 @@ fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5
 
 Assembly SHA совпадает с native catalogs; source module MVID — `033e87cd-cefe-4dc6-a1fb-e14aa938bbb2`. Другие версии tML и полный Calamity roster этим результатом не подтверждаются.
 
-Игра, графика, multiplayer, model/provider calls и `.tmod` packaging не запускались. Packet preservation подтверждает передачу доступных source observations; оно не доказывает полноту произвольного native поведения, читаемость моделью или качество первого созданного предмета. Архивные counts и старые diagnostics не прибавляются к этим результатам.
+Игровая сессия, графика, multiplayer, model/provider calls и release-packaging полного `.tmod` со Studio не выполнялись. Packet preservation подтверждает передачу доступных source observations; оно не доказывает полноту произвольного native поведения, читаемость моделью или качество первого созданного предмета. Архивные counts и старые diagnostics не прибавляются к этим результатам.
