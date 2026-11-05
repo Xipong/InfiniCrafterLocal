@@ -51,7 +51,15 @@ def test_delayed_save_and_transform_ack_never_hide_unsaved_draft(tmp_path, monke
                 browser = playwright.chromium.launch(headless=True, executable_path=browser_executable)
                 try:
                     page = browser.new_page(viewport={'width':1440, 'height':1000})
-                    page.goto(server.url + '#configure')
+                    page.goto(server.url + '#providers')
+                    page.wait_for_selector('#field-INFINI_LLM_TEMPERATURE')
+                    assert page.locator('[data-field-row=INFINI_LLM_REPAIR_TEMPERATURE] [data-inactive-source]').count() == 1
+                    page.locator('#field-INFINI_LLM_TEMPERATURE').fill('0.6')
+                    assert page.locator('#save-tray').is_visible()
+                    page.locator('[data-route=configure]').click()
+                    page.locator('[data-route=providers]').click()
+                    assert page.locator('[data-field-row=INFINI_LLM_REPAIR_TEMPERATURE] [data-inactive-source]').count() == 1
+                    page.locator('[data-route=configure]').click()
                     page.wait_for_selector('#preset-select')
                     page.locator('details[data-details="all-settings"]').evaluate('(e)=>e.open=true')
                     cache = str(tmp_path / 'new-cache')

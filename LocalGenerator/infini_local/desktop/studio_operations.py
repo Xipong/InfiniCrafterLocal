@@ -21,6 +21,7 @@ from pathlib import Path, PureWindowsPath
 
 from infini_local.storage import trace_tools
 from infini_local.core import http_io
+from infini_local.core.server_endpoint import resolve_server_endpoint
 from infini_local.core.config_validation import retired_config_errors
 from infini_local.services.sdcpp_backend import lora_dir_from_file
 from infini_local.core.app_paths import (
@@ -150,11 +151,7 @@ class StudioOperations:
 
     def _server_base_url(self) -> str:
         data = self.collect()
-        host = data.get("INFINI_HOST") or "127.0.0.1"
-        if host == "0.0.0.0":
-            host = "127.0.0.1"
-        port = data.get("INFINI_PORT") or "5055"
-        return f"http://{host}:{port}"
+        return resolve_server_endpoint(data).base_url
 
     def _saved_or_owned_server_base_url(self):
         if self.proc is not None and self.proc.poll() is None:
@@ -163,10 +160,7 @@ class StudioOperations:
                 return owned
         from infini_local.desktop.settings_env import parse_env
         values = parse_env(self.config_path if self.config_path.exists() else self.example_path)
-        host = values.get('INFINI_HOST') or '127.0.0.1'
-        if host == '0.0.0.0':
-            host = '127.0.0.1'
-        return f"http://{host}:{values.get('INFINI_PORT') or '5055'}"
+        return resolve_server_endpoint(values).base_url
 
     @staticmethod
     def _norm_path_for_compare(value: str | Path) -> str:
@@ -246,9 +240,14 @@ class StudioOperations:
         return False
 
 
-    def validate_paths(self):
-        data = self.collect()
+    def validate_paths(self, *, data=None, lan_enabled=None):
+        data = self.collect() if data is None else data
+        lan_enabled = self.lan_enabled if lan_enabled is None else lan_enabled
         warnings = retired_config_errors(data)
+        try:
+            resolve_server_endpoint(data)
+        except ValueError as exc:
+            warnings.append(str(exc))
         backend = data.get("INFINI_IMAGE_BACKEND", "")
         if backend == "sdcpp" and data.get("INFINI_SDCPP_SERVER_AUTOSTART") == "1":
             exe = data.get("INFINI_SDCPP_SERVER_EXE", "")
@@ -296,7 +295,7 @@ class StudioOperations:
         if backend == "image_api" and not data.get("INFINI_IMAGE_API_KEY"):
             warnings.append("Image API выбран, но API key пустой.")
         asset_transport = (data.get("INFINI_MP_ASSET_TRANSPORT") or "native").strip().lower()
-        if self.lan_enabled and asset_transport == "http":
+        if lan_enabled and asset_transport == "http":
             url = data.get("INFINI_ASSET_PUBLIC_BASE_URL", "")
             if not url or "26.x.x.x" in url:
                 warnings.append("Radmin/LAN включён, но Public asset URL не заполнен реальным Radmin IP: http://26.xxx.xxx.xxx:5055")
@@ -528,16 +527,48 @@ class StudioOperations:
     def _update_applied_config_feedback(self, state: str = ""):
         prefix = state + "; " if state else ""
         ack = self.__dict__.get("_applied_config_ack")
-        if not ack or ack.get("baseUrl") != self._server_base_url():
+        self._config_match = "unknown"
+        try:
+            target = self._server_base_url() if ack else None
+        except ValueError:
+            target = None
+        if not ack or ack.get("baseUrl") != target:
             self.applied_config = (prefix + "Runtime config unconfirmed (partial non-secret projection; pools/secrets unverified).")
             return
         proposed = self._proposed_effective_config()
         mismatches = [key for key in proposed if proposed[key] != ack["effectiveConfig"].get(key)]
+        self._config_match = "mismatch" if mismatches else "match"
         if mismatches:
             text = "Restart required / runtime mismatch: " + ", ".join(mismatches) + ". Partial non-secret projection; pools/secrets unverified."
         else:
             text = "Runtime matches launch settings at last health check (partial non-secret projection; pools/secrets unverified)."
         self.applied_config = (prefix + text)
+
+    def runtime_status(self):
+        ack = self.__dict__.get('_applied_config_ack')
+        activity = ack.get('activity') if ack else None
+        last = self.actions.last_action
+        failed = last.get('status') == 'failed'
+        busy = any(name in self.actions.tasks for name in ('server-action', 'health-config'))
+        return {
+            'lifecycle': self.__dict__.get('_server_lifecycle', 'unknown'),
+            'confirmed': bool(ack), 'busy': busy,
+            'active': activity['active'] if activity else None,
+            'waiting': activity['waiting'] if activity else None,
+            'accepting': activity['accepting'] if activity else None,
+            'config_match': self.__dict__.get('_config_match', 'unknown') if ack else 'unknown',
+            'reason_code': 'action_failed' if failed else 'health_unconfirmed' if not ack and self.__dict__.get('_health_checked', False) else '',
+            'reason_params': {'action': last.get('action')} if failed else {},
+        }
+
+    @staticmethod
+    def _generation_activity(activity):
+        if not isinstance(activity, dict):
+            return None
+        active, waiting, accepting = (activity.get(key) for key in ('active', 'waiting', 'accepting'))
+        if type(active) is not int or active < 0 or type(waiting) is not int or waiting < 0 or type(accepting) is not bool:
+            return None
+        return dict(active=active, waiting=waiting, accepting=accepting)
 
     @staticmethod
     def _generation_activity_text(activity) -> str:
@@ -636,6 +667,7 @@ class StudioOperations:
         # inputs here and return results through the same bounded queue pattern.
         if self.__dict__.get("_gui_closed", False):
             return
+        self._health_checked = True
         studio_request = bool(self.actions.command_id)
         observed_proc = self.proc
         owned = observed_proc is not None and observed_proc.poll() is None
@@ -668,7 +700,8 @@ class StudioOperations:
             if image_state == "ready" and image.get("processAlive") is not True:
                 image_state = "unknown"
             return {"sdcppLifecycle": image_state, "pid": snap.get("pid"), "baseUrl": base_url, "effectiveConfig": safe,
-                    "activityText": self._generation_activity_text(snap.get("generationActivity"))}
+                    "activityText": self._generation_activity_text(snap.get("generationActivity")),
+                    "activity": self._generation_activity(snap.get("generationActivity"))}
 
         def apply(ok, ack):
             current_target = self._saved_or_owned_server_base_url() if studio_request or owned else self._server_base_url()
@@ -844,20 +877,20 @@ class StudioOperations:
         self.status = "Открываем папку конфигурации."
         return {"ok": True, "message": self.status}
 
-    def open_cache_folder(self):
-        cache = self._effective_cache_dir()
+    def open_cache_folder(self, *, cache=None):
+        cache = self._effective_cache_dir() if cache is None else cache
         cache.mkdir(parents=True, exist_ok=True)
         os.startfile(cache) if os.name == "nt" else webbrowser.open(cache.as_uri())
         self.status = (f"Opened launch cache: {cache}")
 
-    def clear_trace_files(self, *, confirmed=False):
+    def clear_trace_files(self, *, confirmed=False, base_url=None, cache=None):
         if "trace-clear" in self.actions.tasks:
             self.trace_status = ("Trace clear already in progress.")
             return {"ok": False, "message": "Очистка журнала уже выполняется."}
         if not confirmed:
             return {"ok": False, "message": "Trace clear requires confirmation."}
-        base_url = self._server_base_url()
-        cache = self._effective_cache_dir()
+        base_url = self._server_base_url() if base_url is None else base_url
+        cache = self._effective_cache_dir() if cache is None else cache
         self.actions.cancel("trace")
         self.trace_status = ("Clearing trace…")
 

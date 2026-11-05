@@ -11,8 +11,9 @@ from infini_local.core.config_bootstrap import (
 )
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
 from infini_local.core.contract_versions import TMODLOADER_GREY_ZONE_NOTES
-from infini_local.core.env_utils import env_int, env_str
+from infini_local.core.env_utils import env_str
 from infini_local.core.image_dependencies import Image
+from infini_local.core.server_endpoint import resolve_port
 from infini_local.core.images import config as visual_config
 from infini_local.core.llm_config import ALLOW_DETERMINISTIC_DEV_FALLBACK, LANGUAGE, USE_LLM
 from infini_local.core.vfx.config import (
@@ -28,7 +29,7 @@ from infini_local.services import combine_endpoint, network_info_service
 
 def multiplayer_connect_info() -> dict[str, Any]:
     return network_info_service.multiplayer_connect_info(
-        local_generator_port=env_int("INFINI_PORT", 5055, lo=1, hi=65535),
+        local_generator_port=resolve_port(env_str("INFINI_PORT", "")),
         terraria_port=TERRARIA_PORT,
         asset_public_base_url=ASSET_PUBLIC_BASE_URL,
         asset_transport=ASSET_TRANSPORT,

@@ -49,7 +49,7 @@ class StudioActions:
                                    'actionId': self.notification_id or self.command_id})
         del self.notifications[:-64]
 
-    def finish(self, identifier, ok, message, *, cancelled=False, result=None, saved=False):
+    def finish(self, identifier, ok, message, *, cancelled=False, result=None, saved=False, values=None, lan_enabled=None):
         self.pending_ids.discard(identifier)
         receipt = self.results.get(identifier)
         if receipt is None or receipt['status'] != 'running':
@@ -59,9 +59,10 @@ class StudioActions:
         if result is not None:
             updates['result'] = result
         if not self.app._gui_closed and receipt['action'] in {'applyPreset', 'clearLora', 'useLora', 'resetSprite', 'savePreset', 'save', 'start', 'forceRestart'}:
-            updates['values'] = self.app._current_profile_settings()
-            updates['values']['INFINI_GUI_PIPELINE_PRESET'] = self.app.preset
-            updates['lanEnabled'] = bool(self.app.lan_enabled)
+            updates['values'] = dict(values) if values is not None else self.app._current_profile_settings()
+            if values is None:
+                updates['values']['INFINI_GUI_PIPELINE_PRESET'] = self.app.preset
+            updates['lanEnabled'] = bool(self.app.lan_enabled if lan_enabled is None else lan_enabled)
         if (ok or saved) and receipt['action'] in {'save', 'start', 'forceRestart', 'acceptDefaults'}:
             from infini_local.desktop.settings_env import parse_env
             CONFIG_PATH = self.app.config_path

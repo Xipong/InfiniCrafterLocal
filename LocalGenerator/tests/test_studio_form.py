@@ -11,28 +11,40 @@ def test_home_health_feedback_is_honest_when_check_failed_or_stale(tmp_path):
     home = SettingsController(tmp_path / 'config.env')
     try:
         home.status = 'Готово'
-        home.applied_config = 'Runtime config unconfirmed: unavailable'
+        home._health_checked = True
+        home.applied_config = 'Любой перевод'
         home.refresh_home()
         assert home.home_state == 'Соединение не подтверждено'
-        home.applied_config = 'Checking runtime config'
+        home.actions.tasks['health-config'] = {}
+        home.applied_config = 'Любой перевод'
         home.refresh_home()
         assert home.home_state == 'Проверяем состояние…'
-        home.activity = 'Backend last health snapshot: active=2, waiting=1, accepting=True'
-        home._applied_config_ack = {'pid': 1234}
-        home.applied_config = 'Runtime config matches (partial)'
+        home.actions.tasks.clear()
+        home.activity = 'Текст без счётчиков'
+        home._applied_config_ack = {'pid': 1234, 'activity': {'active': 2, 'waiting': 1, 'accepting': True}}
+        home._config_match = 'match'
+        home.applied_config = 'Произвольная формулировка'
         home.refresh_home()
         assert home.home_state == 'Идёт генерация'
         assert '2' in home.home_detail and '1' in home.home_detail
         assert 'снимок' in home.home_detail.lower()
-        home.applied_config = 'Runtime config differs; restart'
+        before = home.runtime_status(), home.home_state, home.home_detail, home.home_config
+        for wording in ('failed checking restart', 'ошибка matches unavailable', 'Сервер остановлен', ''):
+            home.status = home.activity = home.applied_config = wording
+            home.refresh_home()
+            assert (home.runtime_status(), home.home_state, home.home_detail, home.home_config) == before
+        home._config_match = 'mismatch'
+        home.applied_config = 'Произвольная формулировка'
         home.refresh_home()
         assert 'Настройки изменены' in home.home_config
         assert 'перезапуск' in home.home_config
         # A negative status phrase never certifies successful stop.
-        home.status = 'Port still busy: helper has not stopped; no new server launched.'
+        home.actions.last_action = {'status': 'failed', 'action': 'stop'}
+        home.status = 'Произвольная формулировка'
         home.refresh_home()
         assert home.home_state == 'Нужно внимание'
         home._applied_config_ack = None
+        home.actions.last_action = {}
         home._server_lifecycle = 'stopped'
         home.applied_config = 'Stopped; Runtime config unconfirmed'
         for unrelated in ('Server stopped through guarded /shutdown.', 'Saved: config.env', 'Codex OAuth: сессия готова'):

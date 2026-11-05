@@ -291,10 +291,36 @@ class StudioController:
         self.app, self.server = app, server
         self.fields = self._fields()
         self._saved_values: dict | None = None
+        self._projections = {}
 
     def _fields(self):
         from infini_local.desktop.settings_fields import FIELDS
         return copy.deepcopy(FIELDS)
+
+    @staticmethod
+    def _file_witness(path):
+        try:
+            info = path.stat()
+            return (str(path.resolve()), info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        except FileNotFoundError:
+            return (str(path), None)
+
+    def _cached(self, name, witness, build):
+        cached = self._projections.get(name)
+        if cached is None or cached[0] != witness:
+            value = build()
+            self._projections[name] = (witness, value)
+            return value
+        return cached[1]
+
+    def _saved_projection(self, witness):
+        path, example = self.app.config_path, self.app.example_path
+        values = self.app.read_saved_settings()
+        revision = saved_config_revision(path, example_path=example)
+        source = path if path.exists() else example
+        if witness != (path.exists(), self._file_witness(source)):
+            raise OSError('Конфигурация изменилась во время чтения; повторяем проверку.')
+        return values, revision
 
     def snapshot(self):
         from itertools import islice
@@ -314,41 +340,43 @@ class StudioController:
         saved_revision = None
         try:
             # Match SettingsGui startup: a fresh install loads the example.
-            saved_values = self.app.read_saved_settings()
+            source = CONFIG_PATH if CONFIG_PATH.exists() else EXAMPLE_PATH
+            witness = (CONFIG_PATH.exists(), self._file_witness(source))
+            # Recheck at every save admission; this cache is display-only.
+            saved_values, saved_revision = self._cached('saved', witness, lambda: self._saved_projection(witness))
+            saved_values = dict(saved_values)
             self._saved_values = dict(saved_values)
-            saved_revision = saved_config_revision(CONFIG_PATH, example_path=self.app.example_path)
         except (OSError, ValueError, UnicodeError) as exc:
             # A transient read failure must not kill polling or certify a draft.
             saved_values = dict(self._saved_values or DEFAULTS)
             saved_error = f'Не удалось проверить сохранённую конфигурацию: {exc}'
         try:
-            defaults_update = defaults_offer(CONFIG_PATH)
+            defaults_update = self._cached('defaults', (self._file_witness(CONFIG_PATH), self._file_witness(CONFIG_PATH.with_name(CONFIG_PATH.name + '.defaults.json'))), lambda: defaults_offer(CONFIG_PATH))
         except (OSError, UnicodeError, ValueError) as exc:
             # A recommendation read must not take the entire control plane down.
             defaults_update = {'changes': [], 'dismissed': True}
             saved_error = saved_error or f'Не удалось проверить рекомендации: {exc}'
         try:
-            migration_file = read_migration_receipt(CONFIG_PATH)
+            destination = CONFIG_PATH.resolve()
+            migration_file = self._cached('migration', (self._file_witness(CONFIG_PATH), self._file_witness(destination.with_name(destination.name + '.migration.json'))), lambda: read_migration_receipt(CONFIG_PATH))
         except OSError:
             migration_file = {'changed': False, 'changes': [], 'error': 'Не удалось прочитать отчёт миграции настроек.'}
             saved_error = saved_error or migration_file['error']
         migration = {'file': migration_file, 'environment': environment_migration_status()}
         saved_values['INFINI_GUI_PIPELINE_PRESET'] = self.app._pipeline_preset_from_config(saved_values, self.app.user_presets)
         saved_lan = saved_values.get('INFINI_HOST') == '0.0.0.0' or bool(saved_values.get('INFINI_ASSET_PUBLIC_BASE_URL'))
-        fields = [dict(field, disabled=self.app.field_disabled_reasons.get(field['key'], '')) for field in self.fields]
+        fields = self._cached('fields', (tuple(self.app.field_disabled_reasons.items()), tuple(self.app.codex_models)), lambda: [dict(field, disabled=self.app.field_disabled_reasons.get(field['key'], ''), **({'options': list(self.app.codex_models)} if field['key'] == 'INFINI_CODEX_LLM_MODEL' else {})) for field in self.fields])
         # Keep generic reasoning choices in the shared snapshot. Each browser
         # selects Codex catalog efforts for its own unsaved provider/model draft.
-        for field in fields:
-            if field['key'] == 'INFINI_CODEX_LLM_MODEL':
-                field['options'] = list(self.app.codex_models)
         # The catalog owner already validates/redacts model IDs. Publish only
         # bounded text-model metadata, so each tab can describe its own draft
         # selection without mutating the shared controller or querying providers.
-        text_models = {
+        models = tuple(islice(self.app.__dict__.get('_codex_text_models', {}).values(), 256))
+        text_models = self._cached('models', models, lambda: {
             model.slug: {'efforts': [effort for effort in model.efforts if effort in EFFORTS],
                          'defaultEffort': model.default_effort if model.default_effort in EFFORTS else ''}
-            for model in islice(self.app.__dict__.get('_codex_text_models', {}).values(), 256)
-        }
+            for model in models
+        })
         self.app.observe_runtime_notifications()
         self.app.refresh_home()
         return {
@@ -356,9 +384,11 @@ class StudioController:
             'defaults': DEFAULTS, 'fieldHelp': FIELD_HELP, 'defaultsUpdate': defaults_update,
             'configMigration': migration,
             'fields': fields, 'presets': PRESETS,
+            'inactiveSettings': ['INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED', 'INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD'],
             'userPresets': self.app.user_presets, 'status': saved_error or self.app.status,
             'activity': self.app.activity, 'appliedConfig': self.app.applied_config,
-            'home': {'state': self.app.home_state, 'detail': self.app.home_detail,
+            'runtime': self.app.runtime_status(),
+            'home': {'code': self.app.home_code, 'state': self.app.home_state, 'detail': self.app.home_detail,
                      'config': self.app.home_config},
             'traceStatus': self.app.trace_status,
             'notifications': self.app.actions.notifications, 'actionResults': list(self.app.actions.results.values()),
@@ -377,30 +407,20 @@ class StudioController:
 
     def apply(self, command):
         identifier = self.app.actions.start(command)
-        transient = command['action'] in {'health', 'trace', 'validate', 'clearTrace', 'openCache', 'stop', 'applyPreset', 'clearLora', 'useLora', 'resetSprite', 'savePreset'}
-        draft = None
-        if transient:
-            draft = (dict(self.app.values), self.app.preset, self.app.lan_enabled,
-                     copy.deepcopy(self.app._profile_baseline), self.app._profile_baseline_label)
         try:
             outcome = self._apply(command)
             pending = identifier in self.app.actions.pending_ids
             if not pending:
                 outcome = outcome if isinstance(outcome, dict) else {}
                 self.app.actions.finish(identifier, outcome.get('ok', True), outcome.get('message', self.app.status if not self.app._gui_closed else 'Студия закрыта.'),
-                                    result=outcome.get('result'), saved=outcome.get('saved', False))
+                                    result=outcome.get('result'), saved=outcome.get('saved', False),
+                                    values=outcome.get('values'), lan_enabled=outcome.get('lanEnabled'))
         except (OSError, ValueError, AttributeError, RuntimeError) as exc:
             self.app.actions.finish(identifier, False, str(exc))
             raise
         finally:
             self.app.actions.command_id = None
             self.app.actions.expected_config_revision = None
-            if draft is not None:
-                # Diagnostics and draft transforms return their captured result,
-                # but do not replace another browser tab's shared launch state.
-                (self.app.values, self.app.preset, self.app.lan_enabled,
-                 self.app._profile_baseline, self.app._profile_baseline_label) = draft
-                self.app._refresh_visibility()
 
     def _apply(self, command):
         from infini_local.desktop.settings_env import CUSTOM_PRESET, USER_PRESET_PREFIX, save_user_preset
@@ -436,26 +456,41 @@ class StudioController:
                     app.values[key] = value
         if action == 'clearTrace' and extra.get('confirm') is not True:
             raise ValueError('Подтверди очистку журнала в браузере.')
-        if action in {'health', 'trace', 'clearTrace', 'openCache', 'stop'}:
+        if action in {'trace', 'clearTrace', 'openCache'}:
+            from infini_local.core.server_endpoint import resolve_server_endpoint
             from infini_local.desktop.settings_env import parse_env
-            from infini_local.desktop.settings_schema import DEFAULTS
-            EXAMPLE_PATH = app.example_path
             owned = app.proc is not None and app.proc.poll() is None
-            saved = app.__dict__.get('_owned_launch_settings') if owned else None
-            if saved is None:
-                saved = parse_env(CONFIG_PATH if CONFIG_PATH.exists() else EXAMPLE_PATH)
-            target = dict(DEFAULTS, **saved)
-            target['INFINI_GUI_PIPELINE_PRESET'] = app._pipeline_preset_from_config(target, app.user_presets)
-            self._values(target, {'lanEnabled': target.get('INFINI_HOST') == '0.0.0.0' or bool(target.get('INFINI_ASSET_PUBLIC_BASE_URL'))})
-        elif action not in {'acceptDefaults', 'declineDefaults', 'help', 'openConfig', 'openConfigFolder', 'browse', 'exitStudio', 'codexLogin', 'codexStatus', 'codexCatalog', 'codexPing', 'codexLogout', 'stop', 'cancelTrace'}:
+            target = app.__dict__.get('_owned_launch_settings') if owned else None
+            if target is None:
+                target = parse_env(CONFIG_PATH if CONFIG_PATH.exists() else app.example_path)
+            base_url = resolve_server_endpoint(target).base_url
+            cache = app._cache_dir_from_environment({**os.environ, **target})
+            if action == 'trace':
+                return app.refresh_trace(base_url=base_url, cache=cache)
+            if action == 'clearTrace':
+                return app.clear_trace_files(confirmed=True, base_url=base_url, cache=cache)
+            return app.open_cache_folder(cache=cache)
+        if action in {'applyPreset', 'clearLora', 'useLora', 'resetSprite', 'savePreset', 'validate'}:
+            draft = {**app.values, **command.get('values', {})}
+            lan = extra.get('lanEnabled', app.lan_enabled)
+            if action == 'validate':
+                return app.validate_paths(data=app.collect(draft, preset=draft.get('INFINI_GUI_PIPELINE_PRESET', app.preset), lan_enabled=lan), lan_enabled=lan)
+            if action == 'applyPreset':
+                return app.apply_preset(draft, preset=str(extra.get('name', CUSTOM_PRESET)), lan_enabled=lan)
+            if action == 'savePreset':
+                name = str(extra.get('name', '')).strip()
+                app.user_presets = save_user_preset(CONFIG_PATH.with_name('gui_user_presets.json'), name, draft, overwrite=extra.get('overwrite') is True)
+                draft['INFINI_GUI_PIPELINE_PRESET'] = USER_PRESET_PREFIX + name
+                app.status = f'Профиль «{name}» сохранён. config.env не изменён.'
+                return {'values': draft, 'lanEnabled': lan}
+            return {'clearLora': app.clear_lora_settings, 'useLora': app.use_selected_lora, 'resetSprite': app.reset_sprite_resize}[action](draft, lan_enabled=lan)
+        if action in {'save', 'start', 'forceRestart'}:
             self._values(command.get('values', {}), extra)
         callbacks = {'save': app.save, 'start': app.start_server, 'stop': app.stop_server,
-                     'health': app._delayed_health_check, 'validate': app.validate_paths,
-                     'trace': app.refresh_trace, 'codexLogin': app.codex_login,
+                     'health': app._delayed_health_check, 'codexLogin': app.codex_login,
                      'codexStatus': app.codex_status, 'codexCatalog': app.refresh_codex_text_catalog,
-                     'codexPing': app.ping_codex_image_account, 'clearLora': app.clear_lora_settings,
-                     'useLora': app.use_selected_lora, 'resetSprite': app.reset_sprite_resize,
-                     'openCache': app.open_cache_folder, 'openConfigFolder': app.open_config_folder,
+                     'codexPing': app.ping_codex_image_account,
+                     'openConfigFolder': app.open_config_folder,
                      'cancelTrace': app.cancel_trace_refresh,
                      'codexLogout': app.codex_logout}
         if action in {'acceptDefaults', 'declineDefaults'}:
@@ -468,19 +503,8 @@ class StudioController:
                           'Рекомендации отклонены. config.env не изменён.')
         elif action in callbacks:
             return callbacks[action]()
-        elif action == 'clearTrace':
-            return app.clear_trace_files(confirmed=True)
         elif action == 'forceRestart':
             return app.force_restart_server(confirmed=extra.get('confirm') is True)
-        elif action == 'applyPreset':
-            app.preset = str(extra.get('name', CUSTOM_PRESET))
-            app.apply_preset()
-        elif action == 'savePreset':
-            name = str(extra.get('name', '')).strip()
-            app.user_presets = save_user_preset(CONFIG_PATH.with_name('gui_user_presets.json'), name, app._current_profile_settings(), overwrite=extra.get('overwrite') is True)
-            app.preset = USER_PRESET_PREFIX + name
-            app._capture_profile_baseline()
-            app.status = f'Профиль «{name}» сохранён. config.env не изменён.'
         elif action == 'browse':
             from infini_local.desktop.windows_folder_picker import choose_folder, is_available
             key, path = extra.get('key'), extra.get('path', '')

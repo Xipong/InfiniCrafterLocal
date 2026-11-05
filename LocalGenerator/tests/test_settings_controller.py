@@ -354,3 +354,59 @@ def test_retired_profile_identity_does_not_rewrite_or_mislabel_settings():
     original = dict(data)
     assert SettingsController._pipeline_preset_from_config(data) == 'Custom'
     assert data == original
+
+
+def test_inert_settings_are_preserved_as_opaque_values(studio):
+    app, controller = studio
+    key = 'INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD'
+    write_env(app.config_path, {**DEFAULTS, key: ' 77 ', key + '_ENABLED': '1'})
+    apply(controller, 'save', {'INFINI_PORT': '6060'})
+    saved = parse_env(app.config_path)
+    assert saved[key] == ' 77 '
+    assert saved[key + '_ENABLED'] == '1'
+    snap = controller.snapshot()
+    assert key in snap['inactiveSettings']
+    assert key not in {field['key'] for field in snap['fields']}
+
+
+def test_snapshot_caches_unchanged_files_but_observes_external_edits(studio, monkeypatch):
+    from infini_local.desktop import settings_defaults
+    from infini_local.core import config_migration
+    app, controller = studio
+    reads = dict(saved=0, defaults=0, migration=0)
+    def counted(name, fn):
+        def call(*args, **kwargs):
+            reads[name] += 1
+            return fn(*args, **kwargs)
+        return call
+    monkeypatch.setattr(app, 'read_saved_settings', counted('saved', app.read_saved_settings))
+    monkeypatch.setattr(settings_defaults, 'defaults_offer', counted('defaults', settings_defaults.defaults_offer))
+    monkeypatch.setattr(config_migration, 'read_migration_receipt', counted('migration', config_migration.read_migration_receipt))
+    first = controller.snapshot()
+    initial_reads = dict(reads)
+    for _ in range(10):
+        snap = controller.snapshot()
+        assert snap['savedRevision'] == first['savedRevision']
+        assert snap['fields'] is first['fields']
+    assert reads == initial_reads
+    # Same-size replacement with the previous mtime still invalidates by inode/ctime.
+    source = app.config_path
+    previous = source.stat()
+    replacement = source.with_name('replacement.env')
+    replacement.write_bytes(source.read_bytes().replace(b'5055', b'6066'))
+    os.utime(replacement, ns=(previous.st_atime_ns, previous.st_mtime_ns))
+    os.replace(replacement, source)
+    changed = controller.snapshot()
+    assert changed['savedValues']['INFINI_PORT'] == '6066'
+    assert changed['savedRevision'] != first['savedRevision']
+    assert reads['saved'] == initial_reads['saved'] + 1
+    with pytest.raises(ValueError, match='другой вкладке'):
+        apply(controller, 'save', {'INFINI_PORT': '7077'}, {'savedRevision': first['savedRevision']})
+    assert parse_env(source)['INFINI_PORT'] == '6066'
+    # Sidecar-only decisions invalidate their own projection, not saved config.
+    decision = source.with_name(source.name + '.defaults.json')
+    decision.write_text('{}')
+    before = dict(reads)
+    controller.snapshot()
+    assert reads['defaults'] == before['defaults'] + 1
+    assert reads['saved'] == before['saved']

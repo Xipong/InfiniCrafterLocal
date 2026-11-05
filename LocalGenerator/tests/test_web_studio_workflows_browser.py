@@ -45,6 +45,64 @@ def browser_studio():
             server.close()
 
 
+def test_runtime_dashboard_uses_structured_status_not_translated_prose(browser_studio):
+    page, server, snapshot = browser_studio
+    snapshot['runtime'] = {'confirmed': True, 'busy': False, 'lifecycle': 'responding',
+                           'active': 2, 'waiting': 1, 'accepting': True, 'config_match': 'match'}
+    snapshot['home'] = {'code': 'generating', 'state': 'Произвольный перевод', 'detail': 'Новая формулировка'}
+    snapshot['activity'] = 'Не машиночитаемая строка'
+    snapshot['appliedConfig'] = 'failed restart differs'
+    server.publish(snapshot)
+    page.goto(server.url)
+    page.wait_for_selector('.station[data-state="running"]')
+    assert page.locator('.server-readout strong').all_text_contents() == ['2', '1', 'Открыт']
+    assert page.locator('[data-config-tone="saved"]').count() == 1
+    snapshot['activity'] = 'active=999, waiting=888, accepting=False'
+    snapshot['appliedConfig'] = 'checking unavailable'
+    snapshot['home']['state'] = 'Сервер остановлен'
+    server.publish(snapshot)
+    page.wait_for_function('()=>document.querySelector("#generator-title")?.textContent === "Сервер остановлен"')
+    assert page.locator('.station[data-state="running"]').count() == 1
+    assert page.locator('.server-readout strong').all_text_contents() == ['2', '1', 'Открыт']
+    assert page.locator('[data-config-tone="saved"]').count() == 1
+
+
+def test_python_browser_applicability_parity_for_unsaved_drafts(browser_studio):
+    from infini_local.desktop.settings_fields import FIELDS, disabled_reasons
+    from infini_local.desktop.settings_schema import DEFAULTS
+    page, server, snapshot = browser_studio
+    cases = [
+        {}, {'INFINI_USE_LLM': '0'}, {'INFINI_LLM_PROVIDER': 'openai_codex'},
+        {'INFINI_LLM_PROVIDER': 'openrouter', 'INFINI_LLM_REASONING_MODE': 'tokens'},
+        {'INFINI_LLM_PROVIDER': 'openai_compat', 'INFINI_LLM_REASONING_MODE': 'prompt_light'},
+        {'INFINI_IMAGE_BACKEND': 'off'}, {'INFINI_IMAGE_BACKEND': 'image_api'},
+        {'INFINI_IMAGE_BACKEND': 'openai_codex'}, {'INFINI_IMAGE_BACKEND': 'a1111'},
+        {'INFINI_BG_COLOR': 'transparent'}, {'INFINI_REMOVE_BG': '0'},
+        {'INFINI_BG_REMOVE_MODE': 'off'}, {'INFINI_VISUAL_STRICT_AI_AUTHORSHIP': '0'},
+        {'INFINI_IMAGE_PARALLEL': '0'}, {'INFINI_PIXEL_POSTERIZE': '0'},
+        {'INFINI_LLM_POOL_2_ENABLED': '1', 'INFINI_LLM_POOL_2_PROVIDER': 'openrouter'},
+        {'INFINI_MP_ASSET_TRANSPORT': 'http'},
+    ]
+    for index, edits in enumerate(cases):
+        values = {**DEFAULTS, **edits}
+        snapshot.update(values=values, savedValues=values, defaults=DEFAULTS,
+                        fields=copy.deepcopy(FIELDS), savedRevision=f'case-{index}')
+        server.publish(snapshot)
+        page.goto(server.url + f'&case={index}#configure')
+        page.wait_for_selector('#field-INFINI_LLM_TEMPERATURE', state='attached')
+        # Dirty a genuinely unrelated field through the shipped form handler.
+        page.locator('details[data-details="all-settings"]').evaluate('(element)=>element.open=true')
+        page.locator('#field-INFINI_PORT').fill('6060')
+        page.locator('[data-route=providers]').click()
+        page.locator('[data-route=configure]').click()
+        page.wait_for_selector('#preset-select')
+        assert page.locator('#save-tray').is_visible()
+        actual = page.locator('[data-field-row]').evaluate_all("rows=>Object.fromEntries(rows.filter(row=>!row.querySelector('[data-derived]')).map(row=>[row.dataset.fieldRow,!!row.querySelector('[data-inactive-source]')]))")
+        expected = disabled_reasons({**values, 'INFINI_PORT': '6060'}, False)
+        assert len(set(actual) & set(expected)) > 100
+        assert {key: actual[key] for key in expected if key in actual} == {key: bool(expected[key]) for key in expected if key in actual}, edits
+
+
 @pytest.mark.parametrize('viewport', [{'width': 1440, 'height': 1000}, {'width': 390, 'height': 844}])
 @pytest.mark.parametrize('route', ['operate', 'configure'])
 def test_config_folder_is_visible_and_preserves_draft_after_action(browser_studio, viewport, route):

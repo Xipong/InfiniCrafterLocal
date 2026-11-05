@@ -284,6 +284,7 @@ def test_snapshot_distinguishes_controller_edits_from_persisted_settings(tmp_pat
     def unreadable(_path):
         raise PermissionError('test config is temporarily unreadable')
     monkeypatch.setattr(settings_env, 'parse_env', unreadable)
+    config.write_text(config.read_text() + '# external change\n')
     failed_read = controller.snapshot()
     assert failed_read['savedValues'] == saved['savedValues']
     assert 'temporarily unreadable' in failed_read['status']

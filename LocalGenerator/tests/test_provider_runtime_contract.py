@@ -101,8 +101,8 @@ def test_combine_endpoint_preserves_admission_cache_and_failure_owner(endpoint, 
     endpoint.semaphore.release()
 
 
-@pytest.mark.parametrize("port,expected,echo_levels", [("-7", 1, ("warn", "error")), ("70000", 65535, ())])
-def test_server_startup_owns_cleanup_registration_before_bounded_bind(monkeypatch, capsys, port, expected, echo_levels):
+@pytest.mark.parametrize("port,expected,echo_levels", [("1", 1, ("warn", "error")), ("65535", 65535, ())])
+def test_server_startup_owns_cleanup_registration_before_validated_bind(monkeypatch, capsys, port, expected, echo_levels):
     events = []
     monkeypatch.setenv("INFINI_PORT", port)
     monkeypatch.setenv("INFINI_HOST", "127.0.0.1")

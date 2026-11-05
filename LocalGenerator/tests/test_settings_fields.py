@@ -17,7 +17,8 @@ def test_metadata_preserves_secret_multiline_and_independent_pool_controls():
     assert fields['INFINI_SDCPP_LORA_PROMPT_TAGS']['multiline'] is True
     assert fields['INFINI_OPENAI_COMPAT_API_KEY']['secret'] is True
     assert fields['INFINI_LLM_MAX_TOKENS']['secret'] is False
-    assert fields['INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED']['options'] == ['1', '0']
+    assert 'INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED' not in fields
+    assert 'INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD' not in DEFAULTS
 
 
 def test_codex_disables_unsupported_parameters_without_rewriting_values():
