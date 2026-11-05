@@ -51,7 +51,7 @@ def test_unknown_hit_status_is_never_inferred_from_identity_or_ai(projectile):
     assert "onHitStatusReference" not in compact_projectile_profile(projectile)
 
 
-def test_parent_ammo_observations_reach_author_with_scope_multiplicity_and_empty_inventory():
+def test_legacy_ammo_candidate_status_is_excluded_without_altering_weapon_facts():
     observation = {"source": "verified native", "effects": [], "randomOutcomes": [
         {"sourceRandomCallIlOffset": 123, "randomMinimumInclusive": 0, "randomMaximumExclusive": 3,
          "alternatives": [
@@ -71,11 +71,10 @@ def test_parent_ammo_observations_reach_author_with_scope_multiplicity_and_empty
     before = copy.deepcopy(parent)
     _, user, _ = author.build_initial_author_request(parent, {}, "ammo-source", model_name="offline-test-model")
     packet = json.loads(user)
-    assert "sourceSameAs" in user
     raw = expand_native_source_references(packet)["parents"]["A"]["packet"]["raw"]
     assert raw["item"]["lifeRegen"] == {"value": 1, "units": "HP/s"}
     assert raw["directProjectile"] == {"type": 10, "armorPenetration": 5}
-    assert raw["ammo"] == parent["ammoRaw"]
+    assert raw["ammo"] == {"mode": "weapon_uses_ammo", "ammoId": 931}
     assert parent == before
 
 

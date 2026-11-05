@@ -63,7 +63,7 @@ def test_profile_update_counts_and_zero_are_exact(extra_updates, speed, seconds)
     assert observed['raw.effectiveProjectile.timeLeft']['equivalent']['value'] == 0
 
 
-def test_ammo_candidates_keep_identity_order_flags_and_do_not_select_or_sum_speeds():
+def test_legacy_ammo_candidates_do_not_gain_derived_motion_context():
     profile = {'source': 'inventory.shoot', 'inventorySlot': 3, 'itemShootSpeed': 2,
                'extraUpdates': 0, 'timeLeft': 600}
     source = {'item': {'shootSpeed': 6, 'useAmmo': 97}, 'ammo': {
@@ -78,14 +78,7 @@ def test_ammo_candidates_keep_identity_order_flags_and_do_not_select_or_sum_spee
     before = copy.deepcopy(source)
     result = parent_stat_context(source)
     observed = rows(result)
-    for index in range(2):
-        row = observed[f'raw.ammo.playerInventoryProjectileRaw[{index}].itemShootSpeed']
-        assert row['equivalent'] == {'value': 7.5, 'units': 'blocks/s'}
-    assert 'equivalent' not in observed['raw.ammo.playerInventoryAmmoRaw[0].shootSpeed']
-    assert 'equivalent' not in observed['raw.ammo.fallbackAmmoRaw[0].shootSpeed']
-    assert observed['raw.ammo.fallbackProjectileRaw[0].itemShootSpeed']['equivalent']['value'] == 45
-    assert observed['raw.ammo.nativeReplacementProjectileRaw[0].timeLeft']['equivalent']['value'] == 5
-    assert not any(path.startswith('raw.ammo.projectileRaw.') for path in observed)
+    assert not any(path.startswith('raw.ammo.') for path in observed)
     assert result['ammo'] == before['ammo'] and source == before
 
 

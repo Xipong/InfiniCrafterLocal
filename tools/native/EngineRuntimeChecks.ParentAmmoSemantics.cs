@@ -35,28 +35,11 @@ internal static partial class EngineRuntimeChecks
             using var packet = JsonDocument.Parse(new GeneratorClient().Prepare(item, new Item(ItemID.DirtBlock), owner).PayloadJson);
             var raw = packet.RootElement.GetProperty("itemA").GetProperty("ammoRaw");
             Equal(true, raw.TryGetProperty("projectileSemanticsReference", out var reference), "Prepare publishes source-aware ammo semantics");
-            for (int i = 0; i < 2; i++)
-            {
-                Equal(owner.inventory[54 + i].damage, raw.GetProperty("playerInventoryAmmoRaw")[i].GetProperty("damage").GetInt32(), "every weapon configuration retains observed ammo-item damage independently of projectile conversion");
-                Equal(owner.inventory[54 + i].knockBack, raw.GetProperty("playerInventoryAmmoRaw")[i].GetProperty("knockback").GetSingle(), "ammo knockback contribution is not projectile identity");
-            }
+            AssertWeaponAmmoHasNoCandidates(raw);
+            Equal(item.useAmmo, raw.GetProperty("ammoId").GetInt32(), "weapon ammo category remains explicit");
             Equal(relation, reference.GetProperty("ammoProjectileRelation").GetString(), "native projectile identity relation");
             Equal("unknown_without_gameplay_execution", reference.GetProperty("finalShotOutcome").GetString(), "source proof is not live shot evidence");
             Equal(true, reference.GetProperty("unknowns").GetArrayLength() > 0, "ambient and hooks remain explicit");
-            if (relation == "replaced")
-            {
-                Equal(0, raw.GetProperty("playerInventoryProjectileRaw").GetArrayLength(), "proved replacement does not export input arrow projectile mechanics");
-                Equal(0, raw.GetProperty("fallbackProjectileRaw").GetArrayLength(), "representative input arrow profiles are also irrelevant to replaced firing");
-                Equal(projectile, raw.GetProperty("nativeReplacementProjectileRaw")[0].GetProperty("type").GetInt32(), "source replacement has its own bounded projectile reference");
-            }
-            if (relation == "conditionally_replaced")
-            {
-                var bindings = raw.GetProperty("candidateProjectileBindings").EnumerateArray().Where(x => x.GetProperty("candidateSource").GetString()!.Contains("player_inventory")).ToArray();
-                Equal(projectile, bindings[0].GetProperty("sourceRuleOutputProjectileId").GetInt32(), "wooden input maps to native replacement");
-                Equal(ProjectileID.FireArrow, bindings[1].GetProperty("sourceRuleOutputProjectileId").GetInt32(), "special ammo bypasses conditional rewrite");
-                Equal(1, raw.GetProperty("playerInventoryProjectileRaw").GetArrayLength(), "only retained special input keeps its projectile profile");
-                Equal(ProjectileID.FireArrow, raw.GetProperty("playerInventoryProjectileRaw")[0].GetProperty("type").GetInt32(), "retained special profile is not discarded");
-            }
             if (projectile > 0)
             {
                 var rule = reference.GetProperty("stages").EnumerateArray().SelectMany(s => s.GetProperty("rules").EnumerateArray()).First();
@@ -90,49 +73,37 @@ internal static partial class EngineRuntimeChecks
     {
         var owner = new Player();
         foreach (int weaponType in new[] { 1946, 3930 })
-            foreach (int ammoType in new[] { 771, 772, 773, 774 })
-            {
-                var weapon = new Item(weaponType);
-                owner.inventory[54] = new Item(ammoType, 20);
-                Equal(true, owner.PickAmmo(weapon, out int actual, out _, out _, out _, out _, dontConsume: true), "native rocket selection oracle");
-                using var packet = JsonDocument.Parse(new GeneratorClient().Prepare(weapon, new Item(ItemID.DirtBlock), owner).PayloadJson);
-                var raw = packet.RootElement.GetProperty("itemA").GetProperty("ammoRaw");
-                var binding = raw.GetProperty("candidateProjectileBindings").EnumerateArray().First(x => x.GetProperty("inventorySlot").GetInt32() == 54);
-                Equal(actual, binding.GetProperty("sourceRuleOutputProjectileId").GetInt32(), "specific rocket table precedes generic offset");
-                Equal(actual, raw.GetProperty("nativeReplacementProjectileRaw")[0].GetProperty("type").GetInt32(), "exported rocket projectile profile agrees with native selection");
-            }
-        // A live table may be changed by mods. Capture its current entry, then
-        // follow only the next arm of the completely certified native chain.
+        {
+            var weapon = new Item(weaponType);
+            using var packet = JsonDocument.Parse(new GeneratorClient().Prepare(weapon, new Item(ItemID.DirtBlock), owner).PayloadJson);
+            var raw = packet.RootElement.GetProperty("itemA").GetProperty("ammoRaw");
+            AssertWeaponAmmoHasNoCandidates(raw);
+            var reference = raw.GetProperty("projectileSemanticsReference");
+            var selection = reference.GetProperty("stages")[0].GetProperty("defaultProjectileSelection");
+            Equal(true, selection.GetProperty("specificMatchLookupFirst").GetBoolean(), "certified symbolic chain keeps table-first precedence");
+            Equal(true, selection.GetProperty("categoryOffsetSelectors").GetArrayLength() > 0, "conditional category offsets stay explicit");
+            Equal("unknown_without_gameplay_execution", reference.GetProperty("finalShotOutcome").GetString(), "unselected rocket output is not asserted");
+            Equal(true, reference.GetProperty("unknowns").EnumerateArray().Any(value => value.GetString()!.Contains("table entries are not resolved")), "unresolved live table entries are disclosed");
+        }
+        // Changing a live ammo mapping does not manufacture a selected loadout.
         var table = AmmoID.Sets.SpecificLauncherAmmoProjectileMatches[1946];
         int original = table[772];
         try
         {
             var weapon = new Item(1946); owner.inventory[54] = new Item(772, 20);
+            string before = AmmoSemantics(weapon).ToJsonString();
             table[772] = ProjectileID.Bee;
-            using (var packet = JsonDocument.Parse(new GeneratorClient().Prepare(weapon, new Item(ItemID.DirtBlock), owner).PayloadJson))
-            {
-                var raw = packet.RootElement.GetProperty("itemA").GetProperty("ammoRaw");
-                var binding = raw.GetProperty("candidateProjectileBindings").EnumerateArray().First(x => x.GetProperty("inventorySlot").GetInt32() == 54);
-                Equal(ProjectileID.Bee, binding.GetProperty("sourceRuleOutputProjectileId").GetInt32(), "capture observes current table entry");
-            }
-            table.Remove(772);
-            using (var packet = JsonDocument.Parse(new GeneratorClient().Prepare(weapon, new Item(ItemID.DirtBlock), owner).PayloadJson))
-            {
-                var raw = packet.RootElement.GetProperty("itemA").GetProperty("ammoRaw");
-                var binding = raw.GetProperty("candidateProjectileBindings").EnumerateArray().First(x => x.GetProperty("inventorySlot").GetInt32() == 54);
-                Equal(true, owner.PickAmmo(weapon, out int actual, out _, out _, out _, out _, dontConsume: true), "native table-miss selection oracle");
-                Equal(actual, binding.GetProperty("sourceRuleOutputProjectileId").GetInt32(), "table miss follows certified offset arm");
-                Equal(actual, raw.GetProperty("nativeReplacementProjectileRaw")[0].GetProperty("type").GetInt32(), "offset exports native output profile");
-            }
+            Equal(before, AmmoSemantics(weapon).ToJsonString(), "source-only conversion facts do not choose a live mapping entry");
+            Equal(true, owner.PickAmmo(weapon, out int actual, out _, out _, out _, out _, dontConsume: true), "native oracle still selects concrete ammo during actual gameplay");
+            Equal(ProjectileID.Bee, actual, "actual native selection differs while source context remains symbolic");
         }
         finally { table[772] = original; }
         var flame = new Item(ItemID.Flamethrower); owner.inventory[54] = new Item(ItemID.Gel, 20);
         Equal(0, owner.inventory[54].shoot, "zero ammo.shoot is a valid native input");
-        Equal(true, owner.PickAmmo(flame, out int flameType, out _, out _, out _, out _, dontConsume: true), "native zero-shoot ammo oracle");
         using var flamePacket = JsonDocument.Parse(new GeneratorClient().Prepare(flame, new Item(ItemID.DirtBlock), owner).PayloadJson);
         var flameRaw = flamePacket.RootElement.GetProperty("itemA").GetProperty("ammoRaw");
-        var flameBinding = flameRaw.GetProperty("candidateProjectileBindings").EnumerateArray().First(x => x.GetProperty("inventorySlot").GetInt32() == 54);
-        Equal(flameType, flameBinding.GetProperty("sourceRuleOutputProjectileId").GetInt32(), "non-positive ammo.shoot retains native weapon projectile");
+        AssertWeaponAmmoHasNoCandidates(flameRaw);
+        Equal(flame.shoot, flameRaw.GetProperty("weaponShootFieldProjectileRaw").GetProperty("type").GetInt32(), "weapon own projectile survives without a concrete gel example");
     }
 
     private static void AssertAmmoSourceAgainstNativeShotRequests()
@@ -260,19 +231,15 @@ internal static partial class EngineRuntimeChecks
                 // it. Exercise the exact production ammo capture owner directly.
                 var capture = typeof(GeneratorClient).GetMethod("AmmoRawFromItem", BindingFlags.Static | BindingFlags.NonPublic)!;
                 var ammo = JsonSerializer.SerializeToElement(capture.Invoke(null, new object[] { weapon, owner }));
-                var binding = ammo.GetProperty("candidateProjectileBindings")[0];
-                if (suppress)
-                {
-                    Equal("suppressed_default_shot", ammo.GetProperty("projectileSemanticsReference").GetProperty("ammoProjectileRelation").GetString(), "summary also respects Global Shoot admission before ModItem");
-                    Equal(JsonValueKind.Null, binding.GetProperty("sourceRuleOutputProjectileId").ValueKind, "Global Shoot false skips ModItem Shoot and default spawn");
-                    Equal(0, ammo.GetProperty("nativeReplacementProjectileRaw").GetArrayLength(), "skipped ModItem spawn cannot supply a replacement profile");
-                }
-                else
-                {
-                    Equal(ProjectileID.Bee, binding.GetProperty("sourceRuleOutputProjectileId").GetInt32(), "ModItem fixed Shoot follows all ModifyShootStats, not owner-group array order");
-                    Equal(ProjectileID.Bee, ammo.GetProperty("nativeReplacementProjectileRaw")[0].GetProperty("type").GetInt32(), "actual Prepare supplies the explicit ModItem spawn, not prior Global type ref");
-                }
-                Equal(owner.inventory[54].damage, ammo.GetProperty("playerInventoryAmmoRaw")[0].GetProperty("damage").GetInt32(), "mixed hook projection keeps ammo damage");
+                AssertWeaponAmmoHasNoCandidates(ammo);
+                var semantics = ammo.GetProperty("projectileSemanticsReference");
+                Equal(suppress ? "suppressed_default_shot" : "ignored_replaced_by_hook_projectiles",
+                    semantics.GetProperty("ammoProjectileRelation").GetString(), "source summary respects Global Shoot admission before ModItem");
+                var hooks = semantics.GetProperty("hooks").EnumerateArray().ToArray();
+                Equal(true, hooks.Any(h => h.GetProperty("shape").GetString() == "literal_projectile_replacement"), "Global ModifyShootStats literal is retained as source evidence");
+                Equal(true, hooks.Any(h => h.GetProperty("shape").GetString() == "fixed_projectile_spawn_suppresses_default" && h.GetProperty("projectileId").GetInt32() == ProjectileID.Bee), "ModItem own spawn is retained without selecting an outgoing shot");
+                Equal(true, semantics.GetProperty("stages")[0].GetProperty("hookDispatchTrace").GetArrayLength() > 0, "certified hook dispatch remains explicit");
+                Equal("unknown_without_gameplay_execution", semantics.GetProperty("finalShotOutcome").GetString(), "mixed source hooks do not assert selected final projectile");
             }
         }
         finally { lookup.SetValue(null, oldLookup); }

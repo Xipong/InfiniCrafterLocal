@@ -109,16 +109,10 @@ def _native_motion_units(raw: dict[str, Any]) -> dict[str, Any]:
         observe(raw.get(name), f"raw.{name}", projectile=True)
     ammo = raw.get("ammo")
     if isinstance(ammo, dict):
-        observe(ammo.get("ammoItemRaw"), "raw.ammo.ammoItemRaw")
-        for name in ("projectileRaw", "weaponShootFieldProjectileRaw"):
-            observe(ammo.get(name), f"raw.ammo.{name}", projectile=True)
-        for name, projectile in (("playerInventoryAmmoRaw", False), ("fallbackAmmoRaw", False),
-                                 ("playerInventoryProjectileRaw", True), ("fallbackProjectileRaw", True),
-                                 ("nativeReplacementProjectileRaw", True)):
-            candidates = ammo.get(name)
-            if isinstance(candidates, list):
-                for index, profile in enumerate(candidates):
-                    observe(profile, f"raw.ammo.{name}[{index}]", projectile=projectile)
+        if ammo.get("mode") == "this_item_is_ammo":
+            observe(ammo.get("ammoItemRaw"), "raw.ammo.ammoItemRaw")
+            observe(ammo.get("projectileRaw"), "raw.ammo.projectileRaw", projectile=True)
+        observe(ammo.get("weaponShootFieldProjectileRaw"), "raw.ammo.weaponShootFieldProjectileRaw", projectile=True)
     if not values:
         return {}
     return {

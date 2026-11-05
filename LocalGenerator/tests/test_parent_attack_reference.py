@@ -126,7 +126,7 @@ def test_serialized_author_all_projectile_surfaces_keep_exact_observations(monke
         raw = dossier["parents"][side]["packet"]["raw"]
         assert_exact_json(raw["directProjectile"], direct)
         assert_exact_json(raw["effectiveProjectile"], effective)
-        assert_exact_json(raw["ammo"], ammo)
+        assert_exact_json(raw["ammo"], {"mode": "weapon_uses_ammo", "weaponShootFieldProjectileRaw": effective})
     assert not any("attackReference" in row["source"] for row in dossier["sourceWireUnits"]["scopes"])
     assert_exact_json(parent, before)
 
@@ -144,7 +144,7 @@ def test_distinct_attack_references_never_alias_effective_or_ammo_profiles(packe
     direct = {"type": 42, "attackReference": left}
     distinct = {"type": 42, "attackReference": right}
     parent = {"directProjectileRaw": direct, "effectiveProjectileRaw": distinct,
-              "ammoRaw": {"projectileRaw": distinct, "weaponShootFieldProjectileRaw": distinct}}
+              "ammoRaw": {"mode": "this_item_is_ammo", "projectileRaw": distinct, "weaponShootFieldProjectileRaw": distinct}}
     request, _, _ = author.build_initial_author_request(parent, {}, "distinct-attack", model_name="offline")
     raw = expand_native_source_references(request_dossier(request))["parents"]["A"]["packet"]["raw"]
     assert_exact_json(raw["directProjectile"], direct)
@@ -159,7 +159,7 @@ def test_identical_attack_profile_alias_retains_only_top_level_source_difference
     direct = {"type": 42, "source": "direct fixture", "attackReference": observation}
     same = {**copy.deepcopy(direct), "source": "effective fixture"}
     raw = raw_parent_card_for_llm({"directProjectileRaw": direct, "effectiveProjectileRaw": same,
-        "ammoRaw": {"projectileRaw": same, "weaponShootFieldProjectileRaw": same}})["raw"]
+        "ammoRaw": {"mode": "this_item_is_ammo", "projectileRaw": same, "weaponShootFieldProjectileRaw": same}})["raw"]
     assert_exact_json(raw["directProjectile"], direct)
     expected_alias = {"sameAs": "raw.directProjectile", "source": "effective fixture"}
     assert raw["effectiveProjectile"] == expected_alias

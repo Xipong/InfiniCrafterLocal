@@ -152,7 +152,7 @@ def test_author_prioritizes_playable_composition_without_turning_advisory_into_a
 
 
 @pytest.mark.parametrize('mode', ['json_schema', 'json_object'])
-def test_parent_ammo_packet_retains_damage_without_inventory_stack(monkeypatch, mode):
+def test_parent_weapon_packet_excludes_concrete_ammo(monkeypatch, mode):
     offline_builder(monkeypatch, mode, lambda *args, **kwargs: pytest.fail('unexpected model call'))
     source = {'name': 'Observed ammo context', 'ammoRaw': {
         'mode': 'weapon_uses_ammo', 'playerInventoryAmmoRaw': [{'type': 40, 'damage': 5, 'stack': 9}],
@@ -162,8 +162,8 @@ def test_parent_ammo_packet_retains_damage_without_inventory_stack(monkeypatch, 
     request, _, _ = author.build_initial_author_request(source, {}, 'ammo-balance-guidance', model_name='offline')
     packet = request_dossier(_serialized_chat_request(monkeypatch, request), declaration=request)
     ammo = packet['parents']['A']['packet']['raw']['ammo']
-    assert ammo['playerInventoryAmmoRaw'][0]['damage'] == 5
-    assert 'stack' not in ammo['playerInventoryAmmoRaw'][0]
+    assert 'playerInventoryAmmoRaw' not in ammo
+    assert ammo['projectileSemanticsReference'] == source['ammoRaw']['projectileSemanticsReference']
     assert source == before
 
 

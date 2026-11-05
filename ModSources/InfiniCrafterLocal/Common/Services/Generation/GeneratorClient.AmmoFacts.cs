@@ -52,6 +52,17 @@ public sealed partial class GeneratorClient
                 stage["sourceStageCallSites"] = baseline["sourceStageCallSites"]!.DeepClone();
                 if (method == "Player.PickAmmo")
                 {
+                    // The table's entries are deliberately not inspected, but
+                    // the helper implementing its symbolic lookup must still
+                    // match the certified source before its chain is published.
+                    if (AuditedNativeCertificate(AmmoSpecificMatchCertificate.Value, "ammo")
+                        != baseline["defaultProjectileSelection"]?["specificMatchLookupCertificate"]?.GetValue<string>())
+                    {
+                        stage["defaultProjectileSelection"] = null;
+                        stage["defaultProjectileSelectionStatus"] = "unverified_specific_match_helper";
+                        unknowns.Add("Current specific-ammo lookup helper is unverified; its default selection chain is withheld.");
+                        unknownWrite = true;
+                    }
                     var dispatch = baseline["hookDispatchTrace"]!.AsArray();
                     bool verified = dispatch.OfType<JsonObject>().All(row => {
                         string name = row["method"]!.GetValue<string>();
@@ -129,127 +140,14 @@ public sealed partial class GeneratorClient
             : ownDelivery ? "retained_with_native_item_delivery" : "retained_in_default_ammo_path";
         unknowns.Add("Known literal item rules do not certify absence of other native rewrites or a final shot. Native item-specific spawn sites may change origin, count and trajectory even when their projectile argument is retained.");
         unknowns.Add("CanShoot, ammo availability, player hooks and other gameplay gates may change or suppress shooting; source inspection does not execute them.");
+        unknowns.Add("Selected ammo and its PickAmmo overrides are not observed. Current specific launcher/ammo match table entries are not resolved; the table-first selection chain remains symbolic. No final projectile is asserted.");
         if (offsetSelection)
             unknowns.Add("Verified complete selection chain reads the current specific-match table first, then category offsets or the positive-ammo/default arm. This does not certify later rewrites or a final shot.");
         return new JsonObject {
             ["status"] = "source_inspected", ["ammoProjectileRelation"] = relation,
             ["finalShotOutcome"] = "unknown_without_gameplay_execution",
             ["stages"] = stages, ["hooks"] = hooks, ["unknowns"] = unknowns,
-            ["scope"] = "Read-only parent source evidence, never required child mechanics. Retained projectile identity is not a claim of normal direct-arrow delivery. Inventory ammo entries are candidate inputs, not observed fired behavior. Ammo-item damage, speed and knockback remain separate native inputs when projectile identity is replaced; no universal additive final-damage formula is asserted. Author explicitly chooses generated behavior." };
-    }
-
-    private static JsonObject BindAmmoCandidateProjectile(Item weapon, AmmoCandidate candidate, JsonObject semantics)
-    {
-        int input = candidate.Item.shoot, current = input;
-        bool changed = false, suppressed = false, opaque = false, known = true;
-        var ownSpawns = new HashSet<int>();
-        var proofs = new JsonArray();
-        void Apply(JsonObject rule, string method)
-        {
-            if (rule["whenInputProjectileId"] is JsonNode condition && (!known || condition.GetValue<int>() != current)) return;
-            if (rule["outputProjectileId"] is not JsonNode output) return;
-            current = output.GetValue<int>(); changed = true; known = true;
-            proofs.Add(new JsonObject { ["method"] = method, ["rule"] = rule.DeepClone() });
-        }
-        void Hooks(IEnumerable<JsonObject>? hooks)
-        {
-            if (hooks is null) return;
-            foreach (var hook in hooks)
-            {
-                string shape = hook["shape"]!.GetValue<string>();
-                if (shape is "literal_projectile_replacement" or "conditional_literal_projectile_replacement") Apply(hook, hook["method"]!.GetValue<string>());
-                else if (shape == "fixed_projectile_spawn_suppresses_default") { current = hook["projectileId"]!.GetValue<int>(); ownSpawns.Add(current); changed = true; known = true; }
-                else if (shape == "suppresses_default_shot") suppressed = true;
-                else if (shape == "opaque") opaque = true;
-            }
-        }
-        var stages = semantics["stages"]!.AsArray().OfType<JsonObject>().ToArray();
-        foreach (var stage in stages)
-        {
-            if (stage["method"]!.GetValue<string>() == "Player.PickAmmo")
-            {
-                if (stage["defaultProjectileSelection"] is not JsonObject selection
-                    || selection["specificMatchLookupFirst"]?.GetValue<bool>() != true
-                    || AuditedNativeCertificate(AmmoSpecificMatchCertificate.Value, "ammo") != selection["specificMatchLookupCertificate"]?.GetValue<string>())
-                    known = false;
-                else try
-                {
-                    if (AmmoID.Sets.SpecificLauncherAmmoProjectileMatches.TryGetValue(weapon.type, out var matches)
-                        && matches.TryGetValue(candidate.Item.type, out int matched))
-                    {
-                        current = matched; changed = true;
-                        proofs.Add(new JsonObject { ["method"] = "Player.PickAmmo", ["source"] = "SpecificLauncherAmmoProjectileMatches", ["projectileId"] = matched });
-                    }
-                    else if (selection["categoryOffsetSelectors"] is JsonArray offsets
-                        && offsets.OfType<JsonObject>().Any(selector => selector["ammoCategoryId"]!.GetValue<int>() == weapon.useAmmo))
-                    {
-                        current = checked(weapon.shoot + input); changed = current != input;
-                        proofs.Add(new JsonObject { ["method"] = "Player.PickAmmo", ["source"] = "certified_category_offset", ["projectileId"] = current });
-                    }
-                    else if (input <= ProjectileID.None)
-                    {
-                        current = weapon.shoot; changed = current != input;
-                        proofs.Add(new JsonObject { ["method"] = "Player.PickAmmo", ["source"] = "certified_retained_weapon_shoot", ["projectileId"] = current });
-                    }
-                }
-                catch { known = false; }
-            }
-            foreach (var rule in stage["rules"]!.AsArray().OfType<JsonObject>()) Apply(rule, stage["method"]!.GetValue<string>());
-            if (stage["method"]!.GetValue<string>() == "Player.PickAmmo") Hooks(CaptureAmmoInputHookReference(candidate.Item)?["hooks"]?.AsArray().OfType<JsonObject>());
-        }
-        var weaponHooks = semantics["hooks"]!.AsArray().OfType<JsonObject>().ToArray();
-        var dispatch = stages.SelectMany(stage => stage["hookDispatchTrace"] is JsonArray rows
-            ? rows.OfType<JsonObject>() : Enumerable.Empty<JsonObject>()).ToArray();
-        var phases = stages.Where(stage => stage["method"]!.GetValue<string>() == "Player.ItemCheck_Shoot")
-            .SelectMany(stage => stage["sourceStageCallSites"] is JsonArray sites ? sites.OfType<JsonObject>() : Enumerable.Empty<JsonObject>())
-            .OrderBy(site => site["sourceCallIlOffset"]!.GetValue<int>())
-            .Select(site => site["method"]!.GetValue<string>())
-            .Where(name => name is "Terraria.ModLoader.CombinedHooks.ModifyShootStats" or "Terraria.ModLoader.CombinedHooks.Shoot")
-            .Select(name => name.Substring(name.LastIndexOf('.') + 1)).ToArray();
-        bool globalShootStopped = false;
-        if (weaponHooks.Length > 0 && phases.Length != 2) opaque = true;
-        foreach (string phase in phases)
-        {
-            var matching = weaponHooks.Where(hook => hook["phase"]?.GetValue<string>() == phase).ToArray();
-            if (matching.Length == 0) continue;
-            var trace = dispatch.SingleOrDefault(row => row["method"]!.GetValue<string>() == "Terraria.ModLoader.ItemLoader." + phase);
-            if (trace?["directHookCalls"] is not JsonArray calls) { opaque = true; continue; }
-            foreach (string callback in calls.Select(call => call!.GetValue<string>()))
-            {
-                string owner = callback.StartsWith("Terraria.ModLoader.GlobalItem.") ? "GlobalItem" : "ModItem";
-                if (phase == "Shoot" && owner == "ModItem" && globalShootStopped) continue;
-                var owned = matching.Where(hook => hook["ownerKind"]?.GetValue<string>() == owner).ToArray();
-                Hooks(owned);
-                // Native ItemLoader calls every GlobalItem.Shoot, then admits
-                // ModItem.Shoot only when all globals allowed it. Own spawns
-                // remain distinct from the ref-projectile being modified.
-                if (phase == "Shoot" && owner == "GlobalItem")
-                    globalShootStopped |= owned.Any(hook => hook["shape"]!.GetValue<string>() is "suppresses_default_shot" or "fixed_projectile_spawn_suppresses_default");
-            }
-        }
-        if (ownSpawns.Count > 1) opaque = true; // Multiple actual spawns are not one guessed identity.
-        if (ownSpawns.Count == 1) { current = ownSpawns.Single(); suppressed = false; known = true; }
-        string relation = semantics["ammoProjectileRelation"]!.GetValue<string>();
-        bool unconditional = relation is "replaced" or "replaced_by_inspected_hook" or "ignored_replaced_by_hook_projectiles";
-        bool retainInput = known && !suppressed && !opaque && !unconditional && current == input;
-        var binding = new JsonObject {
-            ["candidateSource"] = candidate.Source, ["inventorySlot"] = candidate.InventorySlot,
-            ["inputProjectileId"] = input, ["sourceRuleOutputProjectileId"] = suppressed || opaque || !known ? null : current,
-            ["includeInputProjectileProfile"] = retainInput,
-            ["includeReplacementProjectileProfile"] = changed && known && !suppressed && !opaque && current > ProjectileID.None && current < ProjectileLoader.ProjectileCount,
-            ["relation"] = suppressed ? "default_shot_suppressed" : opaque ? "unknown_hook_outcome" : !known ? "unknown_native_ammo_selection" : changed ? "source_rule_projection" : "input_retained_in_supported_source_rules",
-            ["matchedSourceRules"] = proofs,
-            ["scope"] = "Candidate input bound through supported source rules and current specific-match table only. Ambient player state, opaque hooks and unmodeled native writes are unresolved; not an observed or guaranteed final shot." };
-        return binding;
-    }
-
-    private static object? SourceReplacementProjectileRaw(int type, Item weapon)
-    {
-        if (type <= ProjectileID.None || type >= ProjectileLoader.ProjectileCount) return null;
-        var raw = System.Text.Json.JsonSerializer.SerializeToNode(ProjectileRawSnapshot(type, weapon.shootSpeed,
-            "source_inspected_replacement_projectile_identity_not_final_shot", weapon, -1), WireJsonOptions)?.AsObject();
-        raw?.Remove("itemShootSpeed");
-        return raw;
+            ["scope"] = "Read-only parent source evidence, never required child mechanics. Retained projectile identity is not a claim of normal direct-arrow delivery. No ammo loadout or representative ammunition is selected. Ammo-item damage, speed and knockback remain separate native inputs when projectile identity is replaced; no universal additive final-damage formula is asserted. Author explicitly chooses generated behavior." };
     }
 
     private static void CaptureAmmoHooks(Type type, Type baseType, JsonArray hooks, bool ammoInput = false)
@@ -272,7 +170,7 @@ public sealed partial class GeneratorClient
         catch { rosterAvailable = false; }
         return hooks.Count == 0 ? null : new JsonObject {
             ["hooks"] = hooks, ["attachedGlobalRosterObserved"] = rosterAvailable,
-            ["scope"] = "ItemLoader.PickAmmo calls the selected ammo.ModItem then its GlobalItems, not the weapon's ModItem. Candidate-only source inspection; not native ammo selection or a guaranteed final projectile." };
+            ["scope"] = "ItemLoader.PickAmmo calls the selected ammo.ModItem then its GlobalItems, not the weapon's ModItem. Ammo-parent source inspection; not native ammo selection or a guaranteed final projectile." };
     }
 
     private sealed record AmmoIl(int Offset, string Op, object? Arg);

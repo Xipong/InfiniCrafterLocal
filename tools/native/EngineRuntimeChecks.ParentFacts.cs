@@ -142,7 +142,11 @@ internal static partial class EngineRuntimeChecks
             if (label == "generated_placement")
                 Equal(0, facts.GetProperty("placeStyle").GetInt32(), "explicit zero placement style survives");
             if (label == "ammo_weapon")
-                Equal(false, CanonicalParentFactJson(root.GetProperty("ammoRaw")) == CanonicalParentFactJson(fingerprint.GetProperty("ammoRaw")), "player ammo observations remain separate from fingerprint reference ammo");
+            {
+                AssertWeaponAmmoHasNoCandidates(root.GetProperty("ammoRaw"));
+                AssertWeaponAmmoHasNoCandidates(fingerprint.GetProperty("ammoRaw"));
+                Equal(CanonicalParentFactJson(root.GetProperty("ammoRaw")), CanonicalParentFactJson(fingerprint.GetProperty("ammoRaw")), "player-independent weapon category and source facts match across root and fingerprint");
+            }
             snapshots[label] = CanonicalParentFactJson(root);
         }
         // Optional local before/after evidence; never an application output or a fixture import.
