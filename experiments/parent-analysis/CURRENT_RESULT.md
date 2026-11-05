@@ -10,7 +10,7 @@ Helper extraction дополняет доказанные source calls и one-ho
 
 Для модели определения значений, addressed-local uses/stores, effects и switch находятся в одной последовательности операций с source steps и guards. Alias uncertainty и snapshots остаются явными. Model-facing проекция согласована для прямых и связанных native profiles.
 
-Source table union сопоставляет локальные member aliases по точной полной сигнатуре. Существующие baseline rows и их имена сохраняются; строковые константы не переписываются. Неизвестная схема или конфликт дают отказ объединения. Generic member names проверены отдельным regression после обнаружения настоящего `Nullable`1..ctor` в Last Prism.
+Source table union сопоставляет локальные member aliases по точной полной сигнатуре. Существующие baseline rows и их имена сохраняются; строковые константы не переписываются. Неизвестная схема или конфликт дают отказ объединения. Generic member names проверены отдельным regression после обнаружения настоящего ``Nullable`1..ctor`` в Last Prism.
 
 Один Author ответ по-прежнему содержит полный предмет. Дополнительного classifier, обязательного LLM pass или вызовов инструментов моделью нет.
 
