@@ -89,7 +89,7 @@ public sealed partial class GeneratorClient
                     stage["unrecognizedProjectileWriteOffsets"] = facts["unrecognizedProjectileWriteOffsets"]!.DeepClone();
                     foreach (var rule in facts["rules"]!.AsArray().OfType<JsonObject>())
                     {
-                        if (rule["whenInputProjectileId"] is null) replaced = true;
+                        if (rule["whenInputProjectileId"] is null && rule["whenSourceCondition"] is null) replaced = true;
                         else conditional = true;
                     }
                     ownDelivery |= facts["spawnSites"]!.AsArray().Count > 0;

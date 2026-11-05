@@ -29,7 +29,7 @@ internal static partial class EngineRuntimeChecks
             (ItemID.WoodenBow, "retained_in_default_ammo_path", 0),
             (ItemID.MoltenFury, "conditionally_replaced", ProjectileID.FireArrow),
             (4381, "replaced", 819), (3052, "replaced", 495), (2223, "replaced", 357),
-            (3019, "conditionally_replaced", 485), (4953, "unknown_native_projectile_semantics", 932),
+            (3019, "conditionally_replaced", 485), (4953, "conditionally_replaced", 932),
             (ItemID.DaedalusStormbow, "retained_with_native_item_delivery", 0) })
         {
             var item = new Item(type);
@@ -66,6 +66,7 @@ internal static partial class EngineRuntimeChecks
         if (!string.IsNullOrWhiteSpace(export))
         {
             System.IO.File.WriteAllText(export, new GeneratorClient().Prepare(new Item(2223), new Item(ItemID.DaedalusStormbow), owner).PayloadJson);
+            System.IO.File.WriteAllText(export + ".state-conditional.json", new GeneratorClient().Prepare(new Item(4953), new Item(ItemID.DirtBlock), owner).PayloadJson);
             System.IO.File.WriteAllText(export + ".molten.json", new GeneratorClient().Prepare(new Item(ItemID.MoltenFury), new Item(ItemID.WoodenArrow), owner).PayloadJson);
             System.IO.File.WriteAllText(export + ".hellwing.json", new GeneratorClient().Prepare(new Item(3019), new Item(4381), owner).PayloadJson);
         }
@@ -166,7 +167,57 @@ internal static partial class EngineRuntimeChecks
             Equal(2, moltenSpecialRetentionCases, "Molten Fury Jester and Holy negative conversion cases both execute");
             Equal(0, mismatches.Count, "actual native ItemCheck spawn requests agree with exact source-stage predicates: " + string.Join("; ", mismatches));
             Console.WriteLine($"AMMO ORACLE PASS cases={cases} moltenSpecialRetained={moltenSpecialRetentionCases}");
+            int stateCases = 0;
+            foreach (int elapsed in new[] { 0, 2, 4, 5, 6, 8 })
+                foreach (int ammoType in new[] { ItemID.WoodenArrow, ItemID.FlamingArrow, ItemID.JestersArrow, ItemID.HolyArrow })
+                {
+                    var item = new Item(4953); player.inventory[0] = item;
+                    var ammo = new Item(ammoType, 20); player.inventory[54] = ammo;
+                    player.itemAnimationMax = item.useAnimation;
+                    player.itemAnimation = item.useAnimation - elapsed; player.itemTime = 0;
+                    var source = AmmoSemantics(item);
+                    var stage = source["stages"]!.AsArray().OfType<JsonObject>().Single(s => s["method"]!.GetValue<string>() == "Player.ItemCheck_Shoot");
+                    var rule = stage["rules"]!.AsArray().OfType<JsonObject>().Single();
+                    Equal(0, stage["unrecognizedProjectileWriteOffsets"]!.AsArray().Count, "state-conditioned source write is proved");
+                    Equal(true, player.PickAmmo(item, out int picked, out _, out _, out _, out _, dontConsume: true), "state matrix picks actual ammo");
+                    var predicate = rule["whenSourceCondition"]!.AsObject();
+                    Equal("bne", predicate["opcode"]!.GetValue<string>(), "state condition preserves IL comparison");
+                    Equal(false, predicate["taken"]!.GetValue<bool>(), "literal is on equality fallthrough");
+                    bool applies = NativeAmmoConditionValue(predicate["left"]!, player) == NativeAmmoConditionValue(predicate["right"]!, player);
+                    Equal(elapsed / 2 == 2, applies, "source snapshot expression preserves native integer division, including odd elapsed tick");
+                    int expected = applies ? rule["outputProjectileId"]!.GetValue<int>() : picked;
+                    requests.Clear(); Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(91);
+                    nativeShoot.Invoke(player, new object[] { player.whoAmI, item, player.GetWeaponDamage(item) });
+                    Equal(true, requests.Count > 0, "state-conditioned native shoot reaches an actual spawn request");
+                    Equal(true, requests.All(request => request.Type == expected), $"state source agrees with actual native requests: elapsed={elapsed} ammo={ammoType} expected={expected}");
+                    Console.WriteLine($"STATE AMMO ORACLE elapsed={elapsed} ammo={ammoType} pick={picked} source={expected} actual=[{string.Join(",", requests.Select(request => request.Type))}]");
+                    stateCases++;
+                }
+            Equal(24, stateCases, "state-conditioned native matrix covers six states and four ammo identities");
         });
+    }
+
+    // Test-only evaluation against deliberately fixed player fields. Production
+    // only publishes these source snapshots and never executes a condition.
+    private static int NativeAmmoConditionValue(JsonNode node, Player player)
+    {
+        string kind = node["kind"]!.GetValue<string>();
+        if (kind == "constant") return node["value"]!.GetValue<int>();
+        if (kind == "local_definition") return NativeAmmoConditionValue(node["value"]!, player);
+        if (kind == "field")
+        {
+            string member = node["member"]!.GetValue<string>();
+            Equal("argument", node["receiver"]!["kind"]!.GetValue<string>(), "test field has exact argument receiver");
+            Equal(0, node["receiver"]!["index"]!.GetValue<int>(), "test field belongs to player receiver");
+            return (int)typeof(Player).GetField(member.Substring(member.LastIndexOf('.') + 1))!.GetValue(player)!;
+        }
+        if (kind == "binary")
+        {
+            int left = NativeAmmoConditionValue(node["left"]!, player), right = NativeAmmoConditionValue(node["right"]!, player);
+            return node["operator"]!.GetValue<string>() switch { "sub" => left - right, "div" => left / right,
+                "add" => left + right, "mul" => left * right, _ => throw new InvalidOperationException("unsupported test expression") };
+        }
+        throw new InvalidOperationException("unsupported test condition value");
     }
 
     private sealed class ConstantAmmoHook : ModItem

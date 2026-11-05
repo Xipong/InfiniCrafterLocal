@@ -128,6 +128,7 @@ def decode(path, method_owner="Projectile", method_name="StatusNPC", id_owner="T
     if body.exception_handlers and not allow_opaque:
         raise ValueError("exception handlers are outside supported native subset")
     instructions = DecodedInstructions()
+    instructions.has_exception_handlers = bool(body.exception_handlers)
     called_methods = {}
     module_id = str(uuid.UUID(bytes_le=pe.net.mdtables.Module.rows[0].Mvid.value))
 

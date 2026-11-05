@@ -1855,13 +1855,18 @@
         },
         {
           "itemId": 3859,
-          "rules": [],
+          "rules": [
+            {
+              "outputProjectileId": 710,
+              "sourceStoreIlOffset": 20293,
+              "sourceScope": "normal_flow_from_item_branch_entry; exact_source_observations_not_final_shot",
+              "sourceGuardIlOffset": 20268
+            }
+          ],
           "unresolvedLiteralWrites": [],
           "spawnSites": [],
           "spawnOriginSetups": [],
-          "unrecognizedProjectileWriteOffsets": [
-            20293
-          ]
+          "unrecognizedProjectileWriteOffsets": []
         },
         {
           "itemId": 3930,
@@ -2063,7 +2068,67 @@
         },
         {
           "itemId": 4953,
-          "rules": [],
+          "rules": [
+            {
+              "outputProjectileId": 932,
+              "sourceStoreIlOffset": 10873,
+              "sourceScope": "normal_flow_from_item_branch_entry; exact_source_observations_not_final_shot",
+              "whenSourceCondition": {
+                "kind": "branch",
+                "opcode": "bne",
+                "taken": false,
+                "sourceBranchIlOffset": 10866,
+                "left": {
+                  "kind": "local_definition",
+                  "local": 135,
+                  "sourceIlOffset": 10863,
+                  "sourceStoreIlOffset": 10599,
+                  "scope": "value_at_store",
+                  "value": {
+                    "kind": "binary",
+                    "operator": "div",
+                    "left": {
+                      "kind": "binary",
+                      "operator": "sub",
+                      "left": {
+                        "kind": "field",
+                        "member": "Terraria.Player.itemAnimationMax",
+                        "receiver": {
+                          "kind": "argument",
+                          "index": 0,
+                          "sourceIlOffset": 10584
+                        },
+                        "sourceIlOffset": 10585
+                      },
+                      "right": {
+                        "kind": "field",
+                        "member": "Terraria.Player.itemAnimation",
+                        "receiver": {
+                          "kind": "argument",
+                          "index": 0,
+                          "sourceIlOffset": 10590
+                        },
+                        "sourceIlOffset": 10591
+                      },
+                      "sourceIlOffset": 10596
+                    },
+                    "right": {
+                      "kind": "constant",
+                      "value": 2,
+                      "sourceIlOffset": 10597
+                    },
+                    "sourceIlOffset": 10598
+                  }
+                },
+                "right": {
+                  "kind": "constant",
+                  "value": 2,
+                  "sourceIlOffset": 10865
+                }
+              },
+              "sourceGuardIlOffset": 10517
+            }
+          ],
           "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
@@ -2090,9 +2155,7 @@
             }
           ],
           "spawnOriginSetups": [],
-          "unrecognizedProjectileWriteOffsets": [
-            10873
-          ]
+          "unrecognizedProjectileWriteOffsets": []
         },
         {
           "itemId": 4956,

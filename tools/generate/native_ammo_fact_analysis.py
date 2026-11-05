@@ -1,11 +1,12 @@
 """Bounded IL source shapes for ammo projectile rewrites; never execute game code.
 
-Only complete literal assignment blocks and equality-guarded literal assignments
-are certificates. Spawn arguments are source references, not simulated gameplay.
+Complete literal blocks and bounded CFG-certified literal write sites are
+source certificates. Predicates retain source snapshots; no gameplay is simulated.
 """
 from __future__ import annotations
 
 from native_attack_fact_analysis import Unrecognized, direct_call_count, straight_line_arguments, type_blocks
+from native_ammo_control_flow import literal_store_predicates
 
 
 def adjusted_counted_spawn(block, call_offset):
@@ -242,6 +243,8 @@ def projectile_write_offsets(block, target):
 
 
 def ammo_method_facts(instructions, method):
+    if getattr(instructions, "has_exception_handlers", False):
+        raise ValueError("exception handlers are outside ammo control-flow certificates")
     code = [i for i in instructions if i.op != "nop"]
     pick = method == "PickAmmo"
     if pick:
@@ -274,11 +277,13 @@ def ammo_method_facts(instructions, method):
                     "initialYRelativeToMountedCenterPx": -prefix[3].arg,
                     "scope": "Vector2 constructor Y argument inside this native spawn branch; later origin mutations, X coordinate and final spawn position not modeled"})
         rules, reason, ownership = item_literal_rewrite(code, guard, block, target)
+        if not rules:
+            rules = literal_store_predicates(code, guard, block, target)
+            certified = {r["sourceStoreIlOffset"] for r in rules}
+            row["unrecognizedProjectileWriteOffsets"].extend(offset for offset in projectile_write_offsets(block, target) if offset not in certified)
         if rules:
             row["rules"].extend(dict(r, sourceGuardIlOffset=guard) for r in rules)
         else:
-            row["unrecognizedProjectileWriteOffsets"].extend(projectile_write_offsets(block, target))
-        if not rules:
             row["unresolvedLiteralWrites"].extend(unresolved_literal_writes(block, target, guard, reason, ownership))
         for n, call in enumerate(block):
             if call.op != "call" or call.arg[0] != "Terraria.Projectile.NewProjectile":

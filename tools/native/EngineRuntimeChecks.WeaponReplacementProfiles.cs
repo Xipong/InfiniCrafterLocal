@@ -71,6 +71,11 @@ internal static partial class EngineRuntimeChecks
             Equal("source_conditions_not_evaluated", reference["conditionStatus"]!.GetValue<string>(), "profile does not evaluate its branch");
             if (itemType is ItemID.MoltenFury or 3019 or 4953)
                 Equal(ProjectileID.WoodenArrowFriendly, reference["sourceFact"]!["whenInputProjectileId"]!.GetValue<int>(), "conditional input predicate survives unresolved");
+            if (itemType == 4953)
+            {
+                Equal(2, profile["sourceReferences"]!.AsArray().Count, "one full profile preserves both input and player-state source sites");
+                Equal(true, profile["sourceReferences"]!.AsArray().OfType<JsonObject>().Any(r => r["sourceFact"]?["whenSourceCondition"] is JsonObject), "state predicate survives into exact profile provenance");
+            }
             if (itemType == 3930)
                 Equal("native_fixed_projectile_spawn", reference["kind"]!.GetValue<string>(), "own fixed spawn uses certified source identity, not launcher table");
             if (itemType == ItemID.MoltenFury)
