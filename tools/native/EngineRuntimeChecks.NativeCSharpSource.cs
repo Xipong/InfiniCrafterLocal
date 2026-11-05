@@ -144,6 +144,18 @@ internal static partial class EngineRuntimeChecks
         Equal(1, other["coveredWindows"]!.AsArray().Count, "unrelated dispatcher EH does not erase a closed region");
         var body = new BlockStatement(); body.Statements.Add(new GotoStatement("Done"));
         Equal("csharp_region_nonlocal_control_unsupported", (string)CSharpOwner.GetMethod("CSharpRegionRefusal", CSharpFlags)!.Invoke(null, new object[] { body, method })!, "nonlocal goto cannot become a standalone source region");
+        var program = new JsonObject { ["method"] = record["method"]!.DeepClone(),
+            ["sourceModuleVersionId"] = record["sourceModuleVersionId"]!.DeepClone(),
+            ["sourceMethodSha256"] = record["sourceMethodSha256"]!.DeepClone(), ["coverage"] = "fixture_source_only" };
+        var roles = new JsonObject { ["draw"] = new JsonObject { ["programs"] = new JsonArray(program) },
+            ["motion"] = new JsonObject { ["programs"] = new JsonArray(program.DeepClone()) } };
+        string drawBefore = roles["draw"]!.ToJsonString();
+        var selected = (System.Collections.IEnumerable)CSharpOwner.GetMethod("CSharpPrograms", CSharpFlags)!
+            .Invoke(null, new object[] { roles, Array.Empty<object>() })!;
+        var paths = selected.Cast<object>().Select(value => (object[])CSharpFixtureMember(value, "Path")).ToArray();
+        Equal(1, paths.Length, "source ownership selects gameplay while an actual draw graph is present");
+        Equal("motion", (string)paths[0][0], "draw is outside the source provider role");
+        Equal(drawBefore, roles["draw"]!.ToJsonString(), "draw graph remains exact for motif and layer extraction");
     }
 
     private static void NativeCSharpLastPrismRetainsReadableHelperAndInlineEffects()
@@ -167,5 +179,8 @@ internal static partial class EngineRuntimeChecks
         Equal(true, records.Concat(child["nativeCSharpSource"]!["records"]!.AsArray().OfType<JsonObject>())
             .All(record => record["graphPaths"]!.AsArray().All(path => !path!.AsArray().Any(part => part is JsonValue value && value.TryGetValue<string>(out string? text) && text == "identitySelected"))),
             "replacement paths never overlap outer and selected program owners");
+        Equal(true, records.Concat(child["nativeCSharpSource"]!["records"]!.AsArray().OfType<JsonObject>())
+            .All(record => record["graphPaths"]!.AsArray().All(path => path!.AsArray()[0]!.ToString() != "draw")),
+            "actual source records never target the draw owner");
     }
 }

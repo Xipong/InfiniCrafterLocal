@@ -222,6 +222,10 @@ public sealed partial class GeneratorClient
                 yield return new(row, path);
             foreach (var pair in row)
             {
+                // Author derives draw motifs from the established graph before
+                // omitting draw. Presentation stages also consume that graph;
+                // this gameplay source view must never take ownership of it.
+                if (path.Length == 0 && pair.Key == "draw") continue;
                 if (pair.Key is "sourceMethods" or "nativeCSharpSource" || program && pair.Key == "identitySelected") continue;
                 foreach (var child in CSharpPrograms(pair.Value, path.Append((object)pair.Key).ToArray())) yield return child;
             }
