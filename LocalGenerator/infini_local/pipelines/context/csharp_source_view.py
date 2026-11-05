@@ -19,8 +19,10 @@ SOURCE_READING = (
     "nativeCSharpSourceRef resolves to nativeCSharpSource.records.id in this same parent reference. "
     "A whole_method record retains all its source branches; conditional_ast_regions retains only the "
     "producer-certified closed regions and their explicit entry/coverage limits. Source calls/hooks and "
-    "enclosing flow are not evaluated. graphCapture preserves extraction gaps; the full captured graphs "
-    "remain diagnostic evidence. sourceLocation binds requiredPredicates IDs to certified IL/source "
+    "enclosing flow are not evaluated. Record coverage, entry limits and unresolveds remain here; "
+    "graph extraction limits and proof receipts remain in raw diagnostics. The view does not prove "
+    "effects of unshown callees/property accessors, behavior under native detours/global aliases, or "
+    "caller identity preservation. sourceLocation binds requiredPredicates IDs to certified IL/source "
     "locations; unavailable mappings remain unknown, never true conditions or guaranteed spawns."
 )
 _CERT = ("method", "sourceModuleVersionId", "sourceMethodSha256")
