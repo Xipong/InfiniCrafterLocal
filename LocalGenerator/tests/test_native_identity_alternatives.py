@@ -74,6 +74,7 @@ def test_projected_disclosure_unknown_schema_does_not_authorize_stage_omission(m
 def test_actual_author_request_keeps_other_identity_choices_visible(monkeypatch, mode):
     from infini_local.core import llm_config
     from infini_local.pipelines.author.request import build_initial_author_request
+    from infini_local.pipelines.context.attack_tables import unpack_attack_tables
     from prompt_packet_helpers import request_dossier, expand_native_source_references
     monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     parents = [{'directProjectileRaw': {'type': entry['identityPredicates']['Projectile.type'],
@@ -82,6 +83,7 @@ def test_actual_author_request_keeps_other_identity_choices_visible(monkeypatch,
     request, _, _ = build_initial_author_request(*parents, 'alternative-discovery', model_name='offline')
     packet = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
     for label in ('A', 'B'):
-        integration = packet['parents'][label]['packet']['raw']['directProjectile']['attackReference']['positionIntegration']
+        reference = unpack_attack_tables(packet['parents'][label]['packet']['raw']['directProjectile']['attackReference'])
+        integration = reference['positionIntegration']
         assert known_identity_alternatives(integration['identityAlternatives'])
         assert len(integration['identityAlternatives']['cases']) == 8
