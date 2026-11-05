@@ -94,6 +94,7 @@ public sealed partial class GeneratorClient
         private readonly JsonArray nodes = new(), edges = new(), roots = new(), gaps = new();
         private readonly JsonArray members = new(), modules = new();
         private readonly Dictionary<string, int> memberIndices = new(StringComparer.Ordinal);
+        private readonly Dictionary<MemberInfo, int> reflectedMemberIndices = new();
         private readonly Dictionary<Guid, int> moduleIndices = new();
         private readonly Dictionary<string, int> admitted = new(StringComparer.Ordinal);
         private readonly Dictionary<string, HashSet<FieldInfo>?> focuses = new(StringComparer.Ordinal);
@@ -123,25 +124,17 @@ public sealed partial class GeneratorClient
         }
         private int Member(MemberInfo member)
         {
+            if (reflectedMemberIndices.TryGetValue(member, out int existing)) return existing;
             string key = member.Module.ModuleVersionId + ":" + member.MetadataToken + ":" + SourceMember(member);
-            if (memberIndices.TryGetValue(key, out int existing)) return existing;
-            int id = members.Count; memberIndices[key] = id;
+            if (memberIndices.TryGetValue(key, out existing)) { reflectedMemberIndices[member] = existing; return existing; }
+            int id = members.Count; memberIndices[key] = id; reflectedMemberIndices[member] = id;
             var row = new JsonObject { ["name"] = SourceMember(member), ["module"] = Module(member.Module) };
             if (member is FieldInfo field) row["type"] = field.FieldType.FullName;
             if (member is MethodInfo method) row["returns"] = method.ReturnType.FullName;
             members.Add(row); return id;
         }
         private JsonObject CompactMethod(JsonObject row, MethodBase method, ParentSourceMethod? body = null)
-        {
-            row.Remove("method"); row.Remove("signature"); row.Remove("fieldTypes"); row.Remove("sourceModuleVersionId");
-            row["method"] = Member(method);
-            if (row["sourceMethodSha256"] is JsonNode sha) { row.Remove("sourceMethodSha256"); row["sha256"] = sha; }
-            if (row["arguments"] is not null) row["arguments"] = new JsonArray(method.GetParameters().Select(p => (JsonNode?)JsonValue.Create(p.Name)).ToArray());
-            if (body is not null && row["values"] is JsonObject values)
-                foreach (var value in values)
-                    if (body.Values[value.Key].Operand is MemberInfo member) value.Value![1] = new JsonObject { ["member"] = Member(member) };
-            return row;
-        }
+            => CompactSourceMethod(row, method, body, Member);
         private void PruneMembers()
         {
             var used = nodes.OfType<JsonObject>().Where(n => n["method"] is JsonValue).Select(n => n["method"]!.GetValue<int>()).ToHashSet();
@@ -314,6 +307,10 @@ public sealed partial class GeneratorClient
 
         private void Projectile(int id, int? from, int? at, string kind)
         {
+            // An already visited identity uses this graph's first snapshot.
+            // Keep every callsite edge without another frame-long rendezvous.
+            if (projectiles.Contains(id))
+            { Edge(from, null, kind, at, JsonValue.Create(id), "already_visited_projectile_identity"); return; }
             var snapshot = SourceSnapshotOnMain(() =>
             {
                 bool registered = id > 0 && id < ProjectileLoader.ProjectileCount;
@@ -388,6 +385,9 @@ public sealed partial class GeneratorClient
 
         private void Buff(int id, string receiver, int? from, int? at)
         {
+            void RequestEdge() => Edge(from, null, "buff_request", at, new JsonObject { ["buffId"] = id, ["receiver"] = receiver,
+                ["admission"] = "AddBuff_request_only; immunity_and_refresh_may_change_outcome" });
+            if (buffs.Contains((id, receiver))) { RequestEdge(); return; }
             var snapshot = SourceSnapshotOnMain(() =>
             {
                 bool registered = id > 0 && id < BuffLoader.BuffCount;
@@ -398,9 +398,8 @@ public sealed partial class GeneratorClient
                 return (Registered: registered, Owner: owner, Related: related, Unavailable: unavailable);
             });
             if (!snapshot.Registered) { Edge(from, null, "buff_request", at, unresolved: "buff_identity_not_registered"); return; }
-            Edge(from, null, "buff_request", at, new JsonObject { ["buffId"] = id, ["receiver"] = receiver,
-                ["admission"] = "AddBuff_request_only; immunity_and_refresh_may_change_outcome" });
-            if (!buffs.Add((id, receiver))) return;
+            RequestEdge();
+            buffs.Add((id, receiver));
             if (snapshot.Owner is not null)
                 foreach (var method in Overrides(snapshot.Owner, typeof(ModBuff)).Where(m => BuffEvents.Contains(m.Name)))
                 {
@@ -449,8 +448,9 @@ public sealed partial class GeneratorClient
             // Already delivered numeric fragments need not be copied into a
             // second catalog. Their exact native flags still seed loaded-mod
             // consumer discovery, including modifications of vanilla buffs.
+            string knownJson = known.ToJsonString();
             foreach (var field in target.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-                if (known.ToJsonString().Contains("\"" + target.FullName + "." + field.Name + "\"", StringComparison.Ordinal)) watched.Add(field);
+                if (knownJson.Contains("\"" + target.FullName + "." + field.Name + "\"", StringComparison.Ordinal)) watched.Add(field);
             if (known["fragments"] is JsonArray knownFragments && knownFragments.Count > 0) return;
             string name = receiver == "npc" ? "UpdateNPC_BuffSetFlags" : "UpdateBuffs";
             MethodInfo? method = target.GetMethod(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -543,10 +543,11 @@ public sealed partial class GeneratorClient
             // Bound individual slices too, so one large method cannot erase
             // every other node in the parent graph. Refusal is explicit.
             var selectedStatements = statements;
-            var row = CompactMethod(body.Project(selectedStatements), method, body);
-            if (row.ToJsonString().Length > 6500) row = CompactMethod(body.Project(selectedStatements, controlLimit: 8), method, body);
-            if (row.ToJsonString().Length > 6500) row = CompactMethod(body.Project(selectedStatements, controlLimit: 0), method, body);
-            while (row.ToJsonString().Length > 6500 && selectedStatements.Length > 1)
+            var projection = body.ProjectForGraph(selectedStatements);
+            var bound = projection.Bind(Member);
+            if (bound.Characters > SourceGraphProjection.CharacterLimit) { projection = body.ProjectForGraph(selectedStatements, controlLimit: 8); bound = projection.Bind(Member); }
+            if (bound.Characters > SourceGraphProjection.CharacterLimit) { projection = body.ProjectForGraph(selectedStatements, controlLimit: 0); bound = projection.Bind(Member); }
+            while (bound.Characters > SourceGraphProjection.CharacterLimit && selectedStatements.Length > 1)
             {
                 int Priority(ParentSourceMethod.Value value) => value.Operand is MethodInfo call
                     && (call.DeclaringType == typeof(Projectile) && call.Name is "NewProjectile" or "NewProjectileDirect"
@@ -555,18 +556,23 @@ public sealed partial class GeneratorClient
                     : value.Op == "ret" ? 2 : value.Op is "call" or "callvirt" ? 3 : 4;
                 selectedStatements = selectedStatements.OrderBy(Priority).ThenBy(v => v.At)
                     .Take(Math.Max(1, selectedStatements.Length / 2)).OrderBy(v => v.At).ToArray();
-                row = CompactMethod(body.Project(selectedStatements, controlLimit: 0), method, body);
+                projection = body.ProjectForGraph(selectedStatements, controlLimit: 0); bound = projection.Bind(Member);
             }
-            if (row.ToJsonString().Length > 6500)
+            JsonObject row;
+            if (bound.Characters > SourceGraphProjection.CharacterLimit)
             {
                 row = CompactMethod(MethodSourceIdentitySafe(method), method);
                 row["coverage"] = "source_slice_exceeds_method_character_bound";
                 Gap("method_character_bound");
             }
-            else if (selectedStatements.Length != statements.Length)
+            else
             {
-                row["omittedStatementCount"] = statements.Length - selectedStatements.Length;
-                Gap("method_statement_slice_bound");
+                row = projection.Materialize(bound.Members);
+                if (selectedStatements.Length != statements.Length)
+                {
+                    row["omittedStatementCount"] = statements.Length - selectedStatements.Length;
+                    Gap("method_statement_slice_bound");
+                }
             }
             if (row["unresolvedEnclosingBranchCount"] is not null) Gap("control_dependency_slice_bound");
             row["id"] = node;

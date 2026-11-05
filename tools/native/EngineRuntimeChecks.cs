@@ -25,6 +25,16 @@ internal static partial class EngineRuntimeChecks
             // Supply an isolated directory, never the player's actual saves.
             Terraria.Program.SavePath = sandbox;
             Terraria.Main.dedServ = true;
+            if (args.Length == 1 && args[0] == "--profile-parent-analysis")
+            {
+                ParentAnalysisFrameProfiling();
+                return 0;
+            }
+            if (args.Length == 2 && args[0] == "--profile-parent-craft")
+            {
+                ParentCraftFrameProfiling(args[1]);
+                return 0;
+            }
             if (args.Length == 2 && args[0] == "--check-filter")
                 return RunChecks(args[1]);
             if (args.Length == 2 && args[0] == "--replay-contracts")
@@ -35,7 +45,7 @@ internal static partial class EngineRuntimeChecks
                 return 0;
             }
             if (args.Length != 0)
-                throw new ArgumentException("Expected --replay-contracts <jsonl-path> or --capture-vfx-preview <json-path>");
+                throw new ArgumentException("Expected --check-filter <filter>, --replay-contracts <jsonl-path>, --capture-vfx-preview <json-path>, --profile-parent-analysis or --profile-parent-craft <plain|mixed|ammo>");
             return RunChecks();
         }
         finally { System.IO.Directory.Delete(sandbox, recursive: true); }
@@ -44,6 +54,10 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("parent source projection memo exact output and slice isolation", ParentSourceProjectionMemoPreservesExactOutput),
+            ("parent source projection memo bounds concurrency and retirement", ParentSourceProjectionMemoIsBoundedAndRetired),
+            ("parent source revisits preserve edges without frame waits", ParentSourceRevisitsPreserveEdgesWithoutFrameWaits),
+            ("parent source projection template exact graph indices and character boundary", ParentSourceProjectionTemplateUsesExactGraphIndices),
             ("lineage hash proof graph cycles and world expiry", LineageHashProofGraphRetainsCycleBoundaries),
             ("lineage hash proof mutable captions remain unordered", LineageHashProofMutableCaptionsStayUnordered),
             ("lineage hash proof complete bounded audit receipts", LineageHashProofReceiptsBoundEveryMutation),
