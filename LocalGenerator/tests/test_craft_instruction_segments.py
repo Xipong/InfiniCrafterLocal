@@ -61,6 +61,7 @@ def stage_packets(monkeypatch, stage, format_mode="json_object", *, labels=("nov
     monkeypatch.setattr(vfx_transport, "resolve_llm_model", lambda: "test-model")
     monkeypatch.setattr(visual_request, "resolve_llm_model", lambda: "test-model")
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", format_mode)
+    assert stage in {"author", "repair", "visual", "visual_repair", "vfx", "vfx_repair"}
     packets = []
     def capture(packet, **kwargs):
         packets.append(packet)
