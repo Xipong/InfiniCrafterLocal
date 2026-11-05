@@ -150,6 +150,10 @@ def test_actual_stage_seam_records_complete_request_before_provider_without_live
     artifact = json.loads(paths[0].read_bytes())
     assert artifact['stage'] == stage and artifact['recipeKey'] == 'r_capture'
     assert artifact['messages'] == captured[0]['messages'] and artifact['sanitized'] is False
+    prompt_row = next(row for row in trace_tools.tail_ndjson(trace_runtime.PROMPT_TRACE_FILE, 10) if 'prompt' in row)
+    assert prompt_row['prompt']['_traceText']['path'] == paths[0].relative_to(tmp_path).as_posix()
+    assert json.loads(trace_tools.expand_trace_value(tmp_path, prompt_row)['prompt']) == captured[0]['messages']
+    assert not list((tmp_path / 'transport_artifacts').glob('*.txt')), 'stage messages must not have a second full text copy'
     assert (parent, source) == before
     if stage.startswith('visual'):
         assert data == data_before

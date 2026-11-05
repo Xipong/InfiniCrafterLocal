@@ -157,19 +157,13 @@ def try_llm_plan(
     model_name = resolve_llm_model()
     request, user_content, _ = build_initial_author_request(a, b, key, model_name=model_name)
     try:
-        trace_event(
-            "prompt",
-            "LLM:gameplay_author",
-            f"Gameplay Author request: {name_of(a)} + {name_of(b)}",
-            {
-                "provider": active_llm_provider(),
-                "model": model_name,
+        trace_stage_request("gameplay_author", key, request,
+            prompt_title=f"Gameplay Author request: {name_of(a)} + {name_of(b)}",
+            prompt_payload={
+                "provider": active_llm_provider(), "model": model_name,
                 "responseFormat": bool(request.get("response_format")),
                 "messages": trace_message_summary(request.get("messages")),
-            },
-            prompt=user_content,
-        )
-        trace_stage_request("gameplay_author", key, request)
+            })
         raw = llm_chat_json(with_llm_stage(request, "planner"), timeout=env_int("INFINI_LLM_TIMEOUT", int(GENERATION_DEFAULTS["INFINI_LLM_TIMEOUT"])))
         content = raw["choices"][0]["message"]["content"]
         trace_event(
@@ -403,20 +397,12 @@ def repair_author_item_after_failure(
     }, model_name=model_name)
     messages[0]["content"] += provider_nullable_transport_rule(request.get("response_format"))
     request = with_instruction_segments(request, repair_context, _REPAIR_CACHE_PREFIX_KEYS)
-    trace_event(
-        "prompt",
-        "LLM:gameplay_repair",
-        "Conditional node-scoped Gameplay Repair request",
-        {
-            "provider": active_llm_provider(),
-            "model": model_name,
-            "errorCount": len(exact_errors),
-            "mutableCounts": {key: len(value) for key, value in (scope.get("mutable") or {}).items()},
-        },
-        prompt=request["messages"],
-    )
     try:
-        trace_stage_request("gameplay_repair", key, request, recipe_id=current.get("id"))
+        trace_stage_request("gameplay_repair", key, request, recipe_id=current.get("id"),
+            prompt_title="Conditional node-scoped Gameplay Repair request",
+            prompt_payload={"provider": active_llm_provider(), "model": model_name,
+                            "errorCount": len(exact_errors),
+                            "mutableCounts": {key: len(value) for key, value in (scope.get("mutable") or {}).items()}})
         raw = llm_chat_json(with_llm_stage(request, "author_repair"), timeout=env_int("INFINI_LLM_TIMEOUT", int(GENERATION_DEFAULTS["INFINI_LLM_TIMEOUT"])))
         content = raw["choices"][0]["message"]["content"]
         trace_event(
