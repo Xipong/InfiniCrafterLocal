@@ -48,15 +48,44 @@ def captured_reports(directory: Path) -> list[dict]:
     return reports
 
 
+def captured_pair_reports(directory: Path) -> list[dict]:
+    """Check both parent orders, including equal ingredients, without model I/O."""
+    ingredients = []
+    for path in sorted(directory.glob("*.packet.json")):
+        source = path.read_bytes()
+        packet = json.loads(source)
+        if not isinstance(packet, dict) or not isinstance(packet.get("itemA"), dict):
+            raise ValueError(f"Invalid parent capture: {path.name}")
+        ingredients.append((path.name, hashlib.sha256(source).hexdigest(), packet["itemA"]))
+    if not ingredients:
+        raise ValueError(f"No *.packet.json captures in {directory}")
+    reports = []
+    for name_a, hash_a, a in ingredients:
+        for name_b, hash_b, b in ingredients:
+            row = {"parents": [name_a, name_b], "sourceSha256": [hash_a, hash_b]}
+            try:
+                row.update(build_report(a, b, "parent-context-pair-check"))
+            except (ValueError, TypeError) as error:
+                row.update(ok=False, error=str(error))
+            reports.append(row)
+    return reports
+
+
 def main() -> int:
     ap=argparse.ArgumentParser(); ap.add_argument("--out", type=Path); ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--parent-captures", type=Path, help="Also check every canonical Prepare *.packet.json in this directory")
+    ap.add_argument("--all-pairs", action="store_true", help="Check every ordered pair of the captured itemA ingredients")
     args=ap.parse_args()
+    if args.all_pairs and not args.parent_captures:
+        ap.error("--all-pairs requires --parent-captures")
     r=build_report()
     if args.parent_captures:
         try:
             r["captures"] = captured_reports(args.parent_captures)
             r["ok"] = r["ok"] and all(row["ok"] for row in r["captures"])
+            if args.all_pairs:
+                r["pairs"] = captured_pair_reports(args.parent_captures)
+                r["ok"] = r["ok"] and all(row["ok"] for row in r["pairs"])
         except (OSError, ValueError) as error:
             r.update(ok=False, captureError=str(error))
     text=json.dumps(r,ensure_ascii=False,indent=2,sort_keys=True)+"\n"
