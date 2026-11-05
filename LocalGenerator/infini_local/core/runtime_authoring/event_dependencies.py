@@ -40,6 +40,21 @@ class EventDependencyAlternative:
     required_bindings: tuple[EventBindingRequirement, ...] = ()
 
     @classmethod
+    def from_row(cls, row: Mapping[str, Any]) -> EventDependencyAlternative:
+        """Rehydrate the validator's JSON-safe dataclass projection, not prose."""
+        return cls(
+            required_calls=tuple(EventCallRequirement(
+                requirement["capability"],
+                tuple((name, value) for name, value in requirement["exact_params"]),
+            ) for requirement in row["required_calls"]),
+            required_bindings=tuple(EventBindingRequirement(
+                tuple(requirement["any_of_inputs"]),
+                tuple(requirement["any_of_actions"]),
+                requirement["required_contact_damage"],
+            ) for requirement in row["required_bindings"]),
+        )
+
+    @classmethod
     def required_call(
         cls,
         capability: str,

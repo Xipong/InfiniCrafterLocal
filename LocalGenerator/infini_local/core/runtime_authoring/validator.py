@@ -36,6 +36,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     target_updates_per_tick,
 )
 from infini_local.core.runtime_authoring.event_dependencies import (
+    EventDependencyAlternative,
     event_alternative_is_present,
     event_dependency_alternatives,
     event_dependency_descriptors,
@@ -126,12 +127,16 @@ class ValidationIssue:
     message: str
     allowed: tuple[str, ...] = ()
     related_ids: tuple[str, ...] = ()
+    event_dependencies: tuple[EventDependencyAlternative, ...] = ()
 
     def row(self) -> dict[str, Any]:
         out = asdict(self)
         out["allowed"] = list(self.allowed)
         out["relatedIds"] = list(self.related_ids)
         out.pop("related_ids", None)
+        dependencies = out.pop("event_dependencies")
+        if dependencies:
+            out["eventDependencies"] = dependencies
         return out
 
 
@@ -295,19 +300,19 @@ def _event_available(
     kind: str,
     calls_by_target: Mapping[str, list[dict[str, Any]]],
     bindings: list[dict[str, Any]],
-) -> tuple[bool, tuple[str, ...], str]:
+) -> tuple[bool, tuple[str, ...], str, tuple[EventDependencyAlternative, ...]]:
     spec = EVENT_KIND_REGISTRY.get(event)
     if spec is None:
-        return False, tuple(EVENT_KIND_REGISTRY), f"unknown event '{event}'"
+        return False, tuple(EVENT_KIND_REGISTRY), f"unknown event '{event}'", ()
     if kind not in spec.source_kinds:
-        return False, spec.source_kinds, f"{kind} cannot emit {event}"
+        return False, spec.source_kinds, f"{kind} cannot emit {event}", ()
 
     target_calls = calls_by_target.get(target_id, [])
     alternatives = event_dependency_alternatives(event, kind)
     if kind in spec.producer_binding_kinds:
         if item_body_event_produced(event, target_id=target_id, target_calls=target_calls, bindings=bindings):
-            return True, (), ""
-        return False, event_dependency_descriptors(alternatives), f"{event} requires an enabled item-body producer on {target_id}"
+            return True, (), "", alternatives
+        return False, event_dependency_descriptors(alternatives), f"{event} requires an enabled item-body producer on {target_id}", alternatives
 
     for alternative in alternatives:
         if event_alternative_is_present(
@@ -316,8 +321,8 @@ def _event_available(
             target_calls=target_calls,
             bindings=bindings,
         ):
-            return True, (), ""
-    return False, event_dependency_descriptors(alternatives), f"{event} requires one exact declared producer alternative on {target_id}"
+            return True, (), "", alternatives
+    return False, event_dependency_descriptors(alternatives), f"{event} requires one exact declared producer alternative on {target_id}", alternatives
 
 
 def _validate_requirement(
@@ -763,7 +768,7 @@ def _validate_requirement(
         selected_bindings = bindings
         if event == "on_use" and isinstance(when, Mapping) and when.get("useInput") in ("primary_use", "alternate_use"):
             selected_bindings = [binding for binding in bindings if binding.get("input") == when["useInput"]]
-        ok, allowed, message = _event_available(
+        ok, allowed, message, alternatives = _event_available(
             event=event,
             target_id=target_id,
             kind=kind,
@@ -771,7 +776,7 @@ def _validate_requirement(
             bindings=selected_bindings,
         )
         if not ok:
-            return ValidationIssue(f"{path}.params.{requirement.param}", "event_not_emitted", message, allowed, (target_id,))
+            return ValidationIssue(f"{path}.params.{requirement.param}", "event_not_emitted", message, allowed, (target_id,), alternatives)
         return None
     return ValidationIssue(path, "unknown_registry_requirement", f"Registry requirement kind '{requirement.kind}' has no validator implementation.")
 

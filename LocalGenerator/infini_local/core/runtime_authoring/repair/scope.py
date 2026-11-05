@@ -6,6 +6,7 @@ import copy
 import re
 from typing import Any, Iterable, Mapping
 
+from infini_local.core.runtime_authoring.event_dependencies import EventDependencyAlternative
 from infini_local.core.repair_merge import json_path_child, json_path_relative
 from infini_local.core.runtime_authoring.binding_use_policy import (
     action_kind,
@@ -211,7 +212,19 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         code = str(error.get("code") or error.get("kind") or "")
         allowed = _values(error.get("allowed"))
         related = [str(value) for value in _values(error.get("relatedIds")) if str(value)]
-        required_caps, exact_params = _capability_constraints(allowed)
+        event_dependencies = tuple(
+            EventDependencyAlternative.from_row(row) for row in error.get("eventDependencies", ())
+        ) if code == "event_not_emitted" else ()
+        if code == "event_not_emitted":
+            required_caps = {requirement.capability for alternative in event_dependencies
+                             for requirement in alternative.required_calls}
+            exact_params = [
+                {"capability": requirement.capability, "param": name, "equals": copy.deepcopy(value)}
+                for alternative in event_dependencies for requirement in alternative.required_calls
+                for name, value in requirement.exact_params
+            ]
+        else:
+            required_caps, exact_params = _capability_constraints(allowed)
         policy = REPAIR_ERROR_POLICY.get(code)
         if policy is None and not code.startswith("shape_"):
             non_repairable_errors.append({
@@ -1269,7 +1282,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 target_ids = [row_id for row_id in related if namespace_by_id.get(row_id) == "entities"]
                 if not target_ids and node_namespace == "calls":
                     target_ids = [str(node_row.get("target") or "")]
-            fns = _capability_names(allowed)
+            fns = required_caps if code == "event_not_emitted" else _capability_names(allowed)
             fns = {
                 name for name in fns
                 if _candidate_capability_viable(name, target_ids, rows)
@@ -1308,11 +1321,6 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     for constraint in exact_params:
                         if constraint.get("capability") == call.get("fn"):
                             grant("calls", call_id, f"params.{constraint.get('param')}")
-                    if code == "event_not_emitted":
-                        for descriptor in allowed:
-                            match = re.fullmatch(r"([A-Za-z0-9_]+)\(([A-Za-z0-9_]+)=([^)]*)\)", str(descriptor))
-                            if match and match.group(1) == call.get("fn"):
-                                grant("calls", call_id, f"params.{match.group(2)}")
             if not existing_candidates:
                 allow_new_call(target_ids, fns)
             if code == "event_not_emitted" and node_namespace == "calls" and target_ids:
@@ -1327,6 +1335,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 ) = _missing_event_producer_choices(
                     rows,
                     event_name=event_name,
+                    dependencies=event_dependencies,
                     event_target_id=event_target_id,
                     event_target_kind=event_target_kind,
                     sole_item_entity_id=sole_item_entity_id,

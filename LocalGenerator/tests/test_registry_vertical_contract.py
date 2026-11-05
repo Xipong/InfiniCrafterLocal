@@ -145,6 +145,39 @@ def test_event_registry_mutation_reaches_validator_and_repair_projection(monkeyp
     assert scope["repairRequirements"][0]["requiredOneOfCapabilities"] == ["projectile_collision"]
 
 
+def test_event_dependency_groups_survive_json_rows_and_repair_without_registry_requery(monkeypatch):
+    from infini_local.core.runtime_authoring.event_dependencies import EventCallRequirement, EventDependencyAlternative
+    from infini_local.core.runtime_authoring.repair import facts
+
+    authored = build_runtime_fixture("workbench_blade")
+    assert validator.validate_runtime_program(authored)["ok"]
+    calls = authored["runtimeProgram"]["calls"]
+    next(row for row in calls if row["id"] == "shed_nails")["params"]["when"] = "on_tile_collision"
+    alternatives = (EventDependencyAlternative(required_calls=(
+        EventCallRequirement.create("projectile_collision", {"tileCollide": True}),
+        EventCallRequirement.create("projectile_damage"),
+    )),)
+    original = validator.event_dependency_alternatives
+    monkeypatch.setattr(validator, "event_dependency_alternatives",
+                        lambda event, kind: alternatives if event == "on_tile_collision" else original(event, kind))
+    errors = json.loads(json.dumps(validator.validate_runtime_program(authored)["errors"]))
+    assert [row["code"] for row in errors] == ["event_not_emitted"]
+    assert EventDependencyAlternative.from_row(errors[0]["eventDependencies"][0]) == alternatives[0]
+    errors[0]["allowed"] = ["A translated grouped producer requirement"]
+    def unexpected_requery(*args):
+        raise AssertionError("Repair must consume the validator's grouped alternatives")
+    monkeypatch.setattr(facts, "event_dependency_alternatives", unexpected_requery)
+    scope = repair_scope.build_runtime_repair_scope(authored, errors)
+    option = scope["eventAlternatives"][0]["allowed"][0]
+    assert option["requiredCalls"] == [
+        {"fn": "projectile_collision", "targetId": "workbench_blade", "exactParams": [{"param": "tileCollide", "value": True}]},
+        {"fn": "projectile_damage", "targetId": "workbench_blade", "exactParams": []},
+    ]
+    permissions = {row["id"]: row["paths"] for row in scope["fieldPermissions"]["calls"]}
+    assert permissions["workbench_blade_collision"] == ["params.tileCollide"]
+    assert not permissions.get("workbench_blade_damage")
+
+
 @pytest.mark.parametrize("name", list(EVENT_KIND_REGISTRY))
 def test_author_event_cards_preserve_all_nonempty_producer_conditions(name):
     from infini_local.pipelines.author.prompt import sharp_engine_fn_catalog_for_llm
