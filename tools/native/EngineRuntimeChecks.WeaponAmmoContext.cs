@@ -48,7 +48,8 @@ internal static partial class EngineRuntimeChecks
         {
             using var element = JsonDocument.Parse(item["ammoRaw"]!.ToJsonString());
             AssertWeaponAmmoHasNoCandidates(element.RootElement);
-            Equal(true, JsonNode.DeepEquals(item["ammoRaw"], item["fingerprint"]!["ammoRaw"]), "root/fingerprint carry identical category and source conversion facts");
+            AssertParentFingerprintNativeFacts(item["ammoRaw"], item["fingerprint"]!["ammoRaw"],
+                "root/fingerprint category and source conversion facts", requireRootView: true);
         }
         Equal(first.damage, actual["itemA"]!["damage"]!.GetValue<int>(), "weapon damage never includes arbitrary ammo damage");
         Equal(second.damage, actual["itemB"]!["damage"]!.GetValue<int>(), "other weapon retains its independent native damage");
@@ -69,7 +70,8 @@ internal static partial class EngineRuntimeChecks
         Equal(arrow.knockBack, ammo.GetProperty("ammoItemRaw").GetProperty("knockback").GetSingle(), "ammo parent own knockback survives");
         Equal(arrow.shoot, ammo.GetProperty("projectileRaw").GetProperty("type").GetInt32(), "ammo parent's own projectile survives");
         Equal(arrow.damage, parent.GetProperty("damage").GetInt32(), "root remains ammo's own stats");
-        Equal(ammo.GetRawText(), parent.GetProperty("fingerprint").GetProperty("ammoRaw").GetRawText(), "ammo parent fingerprint retains full independent identity");
+        AssertParentFingerprintNativeFacts(ammo, parent.GetProperty("fingerprint").GetProperty("ammoRaw"),
+            "ammo parent fingerprint retains full independent identity", requireRootView: true);
         AssertWeaponAmmoHasNoCandidates(packet.RootElement.GetProperty("itemB").GetProperty("ammoRaw"));
     }
 }

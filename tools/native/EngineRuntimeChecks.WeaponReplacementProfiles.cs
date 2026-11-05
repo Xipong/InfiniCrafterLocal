@@ -338,8 +338,8 @@ internal static partial class EngineRuntimeChecks
             var packet = JsonNode.Parse(prepared.PayloadJson)!;
             Equal(5, packet["itemA"]!["ammoRaw"]!["nativeReplacementProjectileRaw"]!.AsArray().Count,
                 "actual deferred Prepare retains all five source-defined GlobalItem outputs");
-            Equal(true, JsonNode.DeepEquals(packet["itemA"]!["ammoRaw"], packet["itemA"]!["fingerprint"]!["ammoRaw"]),
-                "actual source-defined roster packet preserves root/fingerprint parity");
+            AssertParentFingerprintNativeFacts(packet["itemA"]!["ammoRaw"], packet["itemA"]!["fingerprint"]!["ammoRaw"],
+                "actual source-defined roster packet root/fingerprint parity", requireRootView: true);
             string? export = Environment.GetEnvironmentVariable("INFINI_REPLACEMENT_PROFILE_DIR");
             if (!string.IsNullOrWhiteSpace(export))
             {
@@ -370,7 +370,8 @@ internal static partial class EngineRuntimeChecks
             PumpParentAnalysis(Task.Run(deferred.CompleteAnalysis));
             var actual = JsonNode.Parse(deferred.PayloadJson)!;
             Equal(true, JsonNode.DeepEquals(expected, actual), "replacement profiles have exact synchronous/deferred parity with frozen inputs");
-            Equal(true, JsonNode.DeepEquals(actual["itemA"]!["ammoRaw"], actual["itemA"]!["fingerprint"]!["ammoRaw"]), "root/fingerprint share every replacement mechanic and condition");
+            AssertParentFingerprintNativeFacts(actual["itemA"]!["ammoRaw"], actual["itemA"]!["fingerprint"]!["ammoRaw"],
+                "root/fingerprint share every replacement mechanic and condition", requireRootView: true);
             Equal(false, deferred.PayloadJson.Contains("$infiniSourceAnalysis", StringComparison.Ordinal), "replacement profiles cannot leak unresolved source markers");
             if (!string.IsNullOrWhiteSpace(export)) File.WriteAllText(Path.Combine(export, type + ".json"), deferred.PayloadJson);
         }

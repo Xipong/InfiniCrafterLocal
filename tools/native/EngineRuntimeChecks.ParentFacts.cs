@@ -113,7 +113,7 @@ internal static partial class EngineRuntimeChecks
                 + "rarityDetails,reuseDelay,shoot,shootProjectileFullName,shootSpeed,type,useAmmo,useAmmoCategoryName,useAnimation,useStyle,"
                 + "useStyleName,useTime,useTurn,value"),
                 string.Join(",", facts.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal)), label + " exact facts keys");
-            Equal(CanonicalParentFactJson(facts), CanonicalParentFactJson(fingerprint.GetProperty("runtimeFacts")), label + " same nested native facts");
+            AssertParentFingerprintNativeFacts(facts, fingerprint.GetProperty("runtimeFacts"), label + " nested native facts");
             foreach (JsonElement view in new[] { root, facts, fingerprint })
             {
                 Equal(nativeParent, view.TryGetProperty("parentSourceGraph", out JsonElement graph), label + " explicit graph presence by parent provenance");
@@ -134,7 +134,7 @@ internal static partial class EngineRuntimeChecks
                 if (root.TryGetProperty(property.Name, out JsonElement direct))
                     Equal(CanonicalParentFactJson(property.Value), CanonicalParentFactJson(direct), label + " root fact " + property.Name);
                 if (fingerprint.TryGetProperty(property.Name, out JsonElement repeated))
-                    Equal(CanonicalParentFactJson(property.Value), CanonicalParentFactJson(repeated), label + " fingerprint fact " + property.Name);
+                    AssertParentFingerprintNativeFacts(property.Value, repeated, label + " fingerprint fact " + property.Name);
             }
             if (label == "generated")
                 foreach (string key in new[] { "createTile", "createWall", "placeStyle" })
@@ -145,8 +145,12 @@ internal static partial class EngineRuntimeChecks
             {
                 AssertWeaponAmmoHasNoCandidates(root.GetProperty("ammoRaw"));
                 AssertWeaponAmmoHasNoCandidates(fingerprint.GetProperty("ammoRaw"));
-                Equal(CanonicalParentFactJson(root.GetProperty("ammoRaw")), CanonicalParentFactJson(fingerprint.GetProperty("ammoRaw")), "player-independent weapon category and source facts match across root and fingerprint");
+                AssertParentFingerprintNativeFacts(root.GetProperty("ammoRaw"), fingerprint.GetProperty("ammoRaw"),
+                    "player-independent weapon category and source facts across root and fingerprint", requireRootView: true);
             }
+            if (label == "ammo_stack")
+                AssertParentFingerprintNativeFacts(root.GetProperty("ammoRaw"), fingerprint.GetProperty("ammoRaw"),
+                    "actual ammo parent facts across root and fingerprint", requireRootView: true);
             snapshots[label] = CanonicalParentFactJson(root);
         }
         // Optional local before/after evidence; never an application output or a fixture import.

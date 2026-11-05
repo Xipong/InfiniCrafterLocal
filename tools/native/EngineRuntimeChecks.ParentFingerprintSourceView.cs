@@ -1,11 +1,77 @@
 using System;
+using System.IO;
 using System.Reflection;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using InfiniCrafterLocal.Common.Services;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static bool IsReadableNativeView(JsonElement owner, JsonProperty property)
+    {
+        static bool Named(JsonElement value, string name, string text) => value.ValueKind == JsonValueKind.Object
+            && value.TryGetProperty(name, out var field) && field.ValueKind == JsonValueKind.String && field.GetString() == text;
+        static bool Version(JsonElement value, int? exact) => value.ValueKind == JsonValueKind.Object
+            && value.TryGetProperty("version", out var version) && version.ValueKind == JsonValueKind.Number
+            && version.TryGetInt32(out int number) && (exact.HasValue ? number == exact.Value : number > 0);
+        return property.Name == "nativeCSharpSource" && Named(owner, "source", "read_only_native_attack_source")
+            && Version(owner, 1) && Named(property.Value, "source", "verified_decompiled_native_csharp") && Version(property.Value, null);
+    }
+
+    // Independent test observer: copy every JSON token through a streaming writer,
+    // excluding only the declared display supplement. Do not call production's
+    // fingerprint filter or reconstruct native mechanics as expected data.
+    private static string NativeFactsWithoutReadableView(JsonElement value)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream)) Write(value, writer);
+        using var document = JsonDocument.Parse(stream.ToArray());
+        return CanonicalParentFactJson(document.RootElement);
+
+        static void Write(JsonElement node, Utf8JsonWriter writer)
+        {
+            if (node.ValueKind == JsonValueKind.Object)
+            {
+                writer.WriteStartObject();
+                foreach (var property in node.EnumerateObject())
+                {
+                    if (IsReadableNativeView(node, property)) continue;
+                    writer.WritePropertyName(property.Name); Write(property.Value, writer);
+                }
+                writer.WriteEndObject();
+            }
+            else if (node.ValueKind == JsonValueKind.Array)
+            {
+                writer.WriteStartArray();
+                foreach (var child in node.EnumerateArray()) Write(child, writer);
+                writer.WriteEndArray();
+            }
+            else node.WriteTo(writer);
+        }
+    }
+
+    private static int ReadableNativeViewCount(JsonElement value)
+    {
+        int count = 0;
+        if (value.ValueKind == JsonValueKind.Object)
+            foreach (var property in value.EnumerateObject())
+                count += (IsReadableNativeView(value, property) ? 1 : 0) + ReadableNativeViewCount(property.Value);
+        else if (value.ValueKind == JsonValueKind.Array)
+            foreach (var child in value.EnumerateArray()) count += ReadableNativeViewCount(child);
+        return count;
+    }
+
+    private static void AssertParentFingerprintNativeFacts(JsonElement root, JsonElement fingerprint, string label, bool requireRootView = false)
+    {
+        if (requireRootView) Equal(true, ReadableNativeViewCount(root) > 0, label + " source view remains in request observations");
+        Equal(0, ReadableNativeViewCount(fingerprint), label + " fingerprint excludes recognized display metadata");
+        Equal(NativeFactsWithoutReadableView(root), CanonicalParentFactJson(fingerprint), label + " preserves every non-view native fact");
+    }
+
+    private static void AssertParentFingerprintNativeFacts(JsonNode? root, JsonNode? fingerprint, string label, bool requireRootView = false)
+        => AssertParentFingerprintNativeFacts(JsonSerializer.SerializeToElement(root), JsonSerializer.SerializeToElement(fingerprint), label, requireRootView);
+
     private static JsonObject FingerprintSourceViewFixture(bool deferred, JsonObject projectile, int damage = 12)
     {
         var facts = new JsonObject {
@@ -71,6 +137,12 @@ internal static partial class EngineRuntimeChecks
             var first = FingerprintSourceViewFixture(deferred, firstView);
             var changed = FingerprintSourceViewFixture(deferred, changedView);
             var fingerprint = first["fingerprint"]!;
+            AssertParentFingerprintNativeFacts(first["directProjectileRaw"], fingerprint["directProjectileRaw"],
+                "independent direct-projectile parity observer", requireRootView: true);
+            AssertParentFingerprintNativeFacts(first["effectiveProjectileRaw"], fingerprint["effectiveProjectileRaw"],
+                "independent effective-projectile parity observer", requireRootView: true);
+            AssertParentFingerprintNativeFacts(first["ammoRaw"], fingerprint["ammoRaw"],
+                "independent replacement/child parity observer", requireRootView: true);
             Equal(true, JsonNode.DeepEquals(baseline["fingerprint"], fingerprint), "optional display adds no fingerprint input: " + deferred);
             Equal(true, JsonNode.DeepEquals(fingerprint, changed["fingerprint"]), "display text, settings and format version do not change identity: " + deferred);
             Equal(false, JsonNode.DeepEquals(first["directProjectileRaw"], changed["directProjectileRaw"]), "root retains distinct source displays: " + deferred);
@@ -83,8 +155,12 @@ internal static partial class EngineRuntimeChecks
             Equal(false, JsonNode.DeepEquals(fingerprint, FingerprintSourceViewFixture(deferred, firstView, damage: 13)["fingerprint"]), "native stat changes still change fingerprint: " + deferred);
             var changedNative = firstView.DeepClone().AsObject();
             changedNative["attackReference"]!["sourceMethods"]![0]!["sourceMethodSha256"] = "different-native-il";
+            Equal(false, NativeFactsWithoutReadableView(JsonSerializer.SerializeToElement(firstView))
+                == NativeFactsWithoutReadableView(JsonSerializer.SerializeToElement(changedNative)), "parity observer cannot hide native IL drift: " + deferred);
             Equal(false, JsonNode.DeepEquals(fingerprint, FingerprintSourceViewFixture(deferred, changedNative)["fingerprint"]), "native IL changes still change fingerprint: " + deferred);
             var future = FingerprintSourceViewFixture(deferred, View("unknown_future_source_family", 1, "opaque"));
+            AssertParentFingerprintNativeFacts(future["directProjectileRaw"], future["fingerprint"]!["directProjectileRaw"],
+                "independent parity observer retains unknown source families");
             Equal("unknown_future_source_family", future["fingerprint"]!["directProjectileRaw"]!["attackReference"]!["nativeCSharpSource"]!["source"]!.GetValue<string>(),
                 "unknown source family stays literal: " + deferred);
         }

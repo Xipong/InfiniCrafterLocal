@@ -37,7 +37,8 @@ internal static partial class EngineRuntimeChecks
         using var prepared = JsonDocument.Parse(new GeneratorClient().Prepare(gun, gun, owner).PayloadJson);
         var parent = prepared.RootElement.GetProperty("itemA");
         AssertWeaponAmmoHasNoCandidates(parent.GetProperty("ammoRaw"));
-        Equal(parent.GetProperty("ammoRaw").GetRawText(), parent.GetProperty("fingerprint").GetProperty("ammoRaw").GetRawText(), "root and fingerprint share weapon facts, not player loadouts");
+        AssertParentFingerprintNativeFacts(parent.GetProperty("ammoRaw"), parent.GetProperty("fingerprint").GetProperty("ammoRaw"),
+            "root and fingerprint share weapon facts, not player loadouts", requireRootView: true);
         string? packet = Environment.GetEnvironmentVariable("INFINI_PARENT_AMMO_PACKET");
         if (!string.IsNullOrEmpty(packet)) System.IO.File.WriteAllText(packet, prepared.RootElement.GetRawText());
         owner.inventory = null!;
