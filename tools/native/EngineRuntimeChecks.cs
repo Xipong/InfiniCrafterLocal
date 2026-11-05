@@ -556,6 +556,7 @@ internal static partial class EngineRuntimeChecks
             ("legacy detached VFX client cleanup does not require Draw", DetachedVfxClientCleanupDoesNotRequireDraw),
             ("native craft HTTP timeout default override floor and cancellation", () => CraftHttpTimeoutUsesNativeEnvironmentAsync().GetAwaiter().GetResult()),
             ("cache-only flag preserves request", CacheOnlyFlagPreservesRequest),
+            ("craft gzip transport preserves cache and generation payloads", () => CraftGzipTransportPreservesRequestAsync().GetAwaiter().GetResult()),
             ("generator delivery requires identity", GeneratorDeliveryRequiresIdentity),
             ("parent summary unicode roundtrip", ParentSummaryUnicodeRoundtrip),
             ("generated parent prefix is request-only", GeneratedParentPrefixIsRequestOnly),

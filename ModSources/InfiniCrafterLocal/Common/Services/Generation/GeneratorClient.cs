@@ -2,9 +2,12 @@
 using InfiniCrafterLocal.Common;
 using InfiniCrafterLocal.Common.Models;
 using System;
+using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -369,6 +372,34 @@ public sealed partial class GeneratorClient
         return null;
     }
 
+    // Lossless transport normalization only. The prepared JSON and all parent
+    // projections remain unchanged; the receiver decodes before strict parsing,
+    // recipe identity, cache lookup, or model-facing projection. Every request
+    // accepted by an older server's 2 MiB cap remains plain JSON. Only requests
+    // that already exceeded that cap require the new decoder; incompressible
+    // bodies are never made larger.
+    internal static HttpContent CreateCraftHttpContent(string payloadJson)
+    {
+        byte[] bytes = Encoding.UTF8.GetBytes(payloadJson);
+        bool compressed = false;
+        const int LegacyJsonBodyLimitBytes = 2 * 1024 * 1024;
+        if (bytes.Length > LegacyJsonBodyLimitBytes)
+        {
+            using var buffer = new MemoryStream();
+            using (var gzip = new GZipStream(buffer, CompressionLevel.Fastest, leaveOpen: true))
+                gzip.Write(bytes);
+            if (buffer.Length < bytes.Length)
+            {
+                bytes = buffer.ToArray();
+                compressed = true;
+            }
+        }
+        var content = new ByteArrayContent(bytes);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
+        if (compressed) content.Headers.ContentEncoding.Add("gzip");
+        return content;
+    }
+
     private static string WithCacheOnlyFlag(string payloadJson)
     {
         var payload = System.Text.Json.Nodes.JsonNode.Parse(payloadJson ?? "{}") as System.Text.Json.Nodes.JsonObject
@@ -427,7 +458,7 @@ public sealed partial class GeneratorClient
             request.CancellationToken.ThrowIfCancellationRequested();
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(request.CancellationToken);
             cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
-            using var body = new StringContent(WithCacheOnlyFlag(request.PayloadJson), Encoding.UTF8, "application/json");
+            using var body = CreateCraftHttpContent(WithCacheOnlyFlag(request.PayloadJson));
             using var response = Http.PostAsync(Endpoint, body, cts.Token).GetAwaiter().GetResult();
             if (!response.IsSuccessStatusCode)
                 return null;
@@ -512,7 +543,7 @@ public sealed partial class GeneratorClient
             request.CancellationToken.ThrowIfCancellationRequested();
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(request.CancellationToken);
             cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
-            using var body = new StringContent(request.PayloadJson, Encoding.UTF8, "application/json");
+            using var body = CreateCraftHttpContent(request.PayloadJson);
             using var response = Http.PostAsync(Endpoint, body, cts.Token).GetAwaiter().GetResult();
             string responseJson = response.Content.ReadAsStringAsync(cts.Token).GetAwaiter().GetResult();
             if (!response.IsSuccessStatusCode)

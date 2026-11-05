@@ -32,6 +32,7 @@ from infini_local.pipelines.author.item_contract import (
 from infini_local.pipelines.combine_balance import stat_profile_for
 from infini_local.pipelines.context.parent_stage import NATIVE_SOURCE_REFERENCE_RULE, parent_context_for_stage
 from infini_local.pipelines.context.cards import raw_parent_card_for_llm
+from infini_local.pipelines.context.author_source_notation import compact_author_parent_context
 from infini_local.pipelines.context.stats import parent_stat_context
 from infini_local.pipelines.pipeline_runtime_constants import LLM_ITEM_RAW_KEYS
 
@@ -423,7 +424,7 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], key: str) -> 
         # but this preserves a large exact request prefix without hiding or
         # removing any Author capability.
         "recipeKey": key,
-        **parent_context_for_stage(parents, stage="author"),
+        **compact_author_parent_context(parent_context_for_stage(parents, stage="author")),
         "balanceCorridor": corridor,
         "sourceWireUnits": source_wire_units_for_llm([row["packet"] for row in parents.values()]),
     }

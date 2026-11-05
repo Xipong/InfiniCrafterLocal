@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -134,6 +135,8 @@ internal static partial class EngineRuntimeChecks
         internal readonly TaskCompletionSource<bool> Held = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal readonly TaskCompletionSource<bool> RecoveryReplied = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal readonly ConcurrentQueue<string> Requests = new();
+        internal readonly ConcurrentQueue<string> Payloads = new();
+        internal readonly ConcurrentQueue<string> ContentEncodings = new();
         internal string Endpoint { get; }
         internal volatile bool FatalGeneration;
         internal bool RejectSecondGeneration;
@@ -159,13 +162,16 @@ internal static partial class EngineRuntimeChecks
                     {
                         using TcpClient peer = await listener.AcceptTcpClientAsync(stop.Token);
                         await using NetworkStream stream = peer.GetStream();
-                        using var reader = new StreamReader(stream, Encoding.UTF8, false, 1024, leaveOpen: true);
-                        string? line = await reader.ReadLineAsync(stop.Token);
+                        string? line = await ReadHeaderLine(stream, stop.Token);
                         bool discovery = line == "GET /mp_connect.json HTTP/1.1";
                         if (!discovery) Equal("POST /combine HTTP/1.1", line ?? "", "canonical craft HTTP route");
                         int length = 0;
-                        while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(stop.Token)))
+                        string encoding = "identity";
+                        while (!string.IsNullOrEmpty(line = await ReadHeaderLine(stream, stop.Token)))
+                        {
                             if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase)) length = int.Parse(line[15..].Trim());
+                            if (line.StartsWith("Content-Encoding:", StringComparison.OrdinalIgnoreCase)) encoding = line[17..].Trim();
+                        }
                         if (discovery)
                         {
                             Interlocked.Increment(ref discoveryRequests);
@@ -177,16 +183,21 @@ internal static partial class EngineRuntimeChecks
                             catch (Exception error) when (heldDiscovery && error is IOException or SocketException) { }
                             continue;
                         }
-                        if (length < 1 || length > 8192) throw new InvalidDataException("bounded fixture expects ASCII request JSON");
-                        char[] body = new char[length];
-                        int received = 0;
-                        while (received < length)
+                        if (length < 1 || length > 2 * 1024 * 1024) throw new InvalidDataException("bounded fixture request");
+                        byte[] body = new byte[length];
+                        await stream.ReadExactlyAsync(body, stop.Token);
+                        string text;
+                        if (encoding == "gzip")
                         {
-                            int count = await reader.ReadAsync(body.AsMemory(received), stop.Token);
-                            if (count == 0) throw new EndOfStreamException("incomplete fixture request");
-                            received += count;
+                            using var compressed = new MemoryStream(body);
+                            using var gzip = new GZipStream(compressed, CompressionMode.Decompress);
+                            using var reader = new StreamReader(gzip, Encoding.UTF8);
+                            text = await reader.ReadToEndAsync(stop.Token);
                         }
-                        using var payload = JsonDocument.Parse(new string(body));
+                        else text = Encoding.UTF8.GetString(body);
+                        Payloads.Enqueue(text);
+                        ContentEncodings.Enqueue(encoding);
+                        using var payload = JsonDocument.Parse(text);
                         bool cache = payload.RootElement.TryGetProperty("cacheOnly", out var flag) && flag.GetBoolean();
                         Requests.Enqueue(cache ? "cache" : "generate");
                         int ordinal = Requests.Count;
@@ -206,6 +217,19 @@ internal static partial class EngineRuntimeChecks
                 catch (ObjectDisposedException) when (stop.IsCancellationRequested) { } // Stop may race the next accept on Windows.
             });
         }
+        private static async Task<string> ReadHeaderLine(NetworkStream stream, CancellationToken token)
+        {
+            using var bytes = new MemoryStream();
+            byte[] one = new byte[1];
+            while (bytes.Length < 8192)
+            {
+                await stream.ReadExactlyAsync(one, token);
+                if (one[0] == (byte)'\n') return Encoding.ASCII.GetString(bytes.ToArray()).TrimEnd('\r');
+                bytes.WriteByte(one[0]);
+            }
+            throw new InvalidDataException("bounded fixture header");
+        }
+
         internal void Release() => release.TrySetResult(true);
         public async ValueTask DisposeAsync()
         {
