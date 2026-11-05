@@ -21,6 +21,146 @@ from tests.test_image_attempt_contracts import Response, offline, png
 from tests.vfx_image_fixtures import _data, _request, offline_backend
 
 
+@pytest.mark.parametrize('mode,model,active', [
+    ('0', 'z_image_turbo.gguf', False), ('off', 'z-image-turbo.gguf', False),
+    ('1', 'flux.2-klein.gguf', True), ('on', 'flux.2-klein.gguf', True),
+    ('auto', 'z_image_turbo.gguf', True), ('auto', 'flux.2-klein.gguf', False),
+])
+@pytest.mark.parametrize('positive_only', [False, True])
+@pytest.mark.parametrize('style', ['a1111', 'sdcpp', 'openai'])
+def test_model_policy_reaches_retry_and_real_sdcpp_payload(offline, monkeypatch, mode, model, active, positive_only, style):
+    from infini_local.core.images import config, contracts
+    from infini_local.pipelines.images import prompts, retry
+
+    for key, value in {'IMAGE_BACKEND': 'sdcpp', 'ZIMAGE_PROMPT_CONTRACT': mode,
+                       'ZIMAGE_POSITIVE_ONLY': positive_only, 'SDCPP_MODEL': model,
+                       'SDCPP_SERVER_COMMAND_TEMPLATE': '', 'SDCPP_SERVER_EXTRA_ARGS': ''}.items():
+        monkeypatch.setattr(config, key, value)
+    assert contracts.image_backend_is_zimage() is active
+    assert prompts.image_backend_is_zimage() is active
+    prompt = retry.build_retry_prompt_from_validation('Literal brass subject', {}, 'item', 1, 32)
+    assert ('Revision 1:' in prompt) is active
+    assert ('STRICT RETRY 1:' in prompt) is not active
+    monkeypatch.setattr(backend, 'SDCPP_SERVER_PAYLOAD_STYLE', style)
+    payloads = []
+
+    def response(req, **kwargs):
+        payloads.append(json.loads(req.data))
+        return Response(png((210, 100, 20)))
+
+    monkeypatch.setattr(backend, 'urlopen_no_redirect', response)
+    backend.generate_sdcpp(prompt, 'literal authored negative', 'policy')
+    assert len(payloads) == 1
+    wire = payloads[0]
+    if style == 'openai':
+        assert ('literal authored negative' in wire['prompt']) is not (active and positive_only)
+    else:
+        assert wire['negative_prompt'] == ('' if active and positive_only else 'literal authored negative')
+        assert ('zimage_prompt_contract' in wire) is active
+        if active:
+            assert wire['zimage_prompt_contract'] == mode
+            assert wire['zimage_positive_only_prompt'] is positive_only
+
+
+@pytest.mark.parametrize('fault,category', [
+    ('missing_url', 'configuration'), ('missing_key', 'configuration'),
+    ('missing_workflow', 'configuration'), ('server_unavailable', 'unavailable'),
+    ('http401', 'provider_rejected'), ('http403', 'provider_rejected'),
+    ('sdcpp_http401', 'provider_rejected'), ('sdcpp_http403', 'provider_rejected'),
+    ('a1111_http401', 'provider_rejected'), ('comfyui_execution', 'provider_rejected'),
+])
+def test_terminal_adapter_cause_survives_attempt_without_retry_or_fallback(offline, monkeypatch, fault, category):
+    from email.message import Message
+    from urllib.error import HTTPError
+
+    root, _ = offline
+    monkeypatch.setattr(generation, 'SPRITE_RETRIES', 3)
+    monkeypatch.setattr(generation, 'VISUAL_ALLOW_PROCEDURAL_FALLBACK', True)
+    monkeypatch.setattr(generation, 'VISUAL_STRICT_AI_AUTHORSHIP', False)
+    monkeypatch.setattr(generation, 'IMAGE_BACKEND', 'image_api')
+    monkeypatch.setattr(backend, 'IMAGE_API_BASE_URL', 'https://offline.invalid')
+    monkeypatch.setattr(backend, 'IMAGE_API_KEY', 'offline-not-a-secret')
+    calls = []
+
+    def rejected(req, **kwargs):
+        calls.append(req)
+        raise HTTPError(req.full_url, int(fault[-3:]), 'offline denied', Message(), Response(b'offline denied'))
+
+    monkeypatch.setattr(backend, 'urlopen_no_redirect', rejected)
+    if fault == 'missing_url':
+        monkeypatch.setattr(backend, 'IMAGE_API_BASE_URL', '')
+    elif fault == 'missing_key':
+        monkeypatch.setattr(backend, 'IMAGE_API_KEY', '')
+    elif fault == 'missing_workflow':
+        monkeypatch.setattr(generation, 'IMAGE_BACKEND', 'comfyui')
+        monkeypatch.setattr(backend, 'resolve_comfyui_workflow_path', lambda: None)
+    elif fault == 'server_unavailable':
+        monkeypatch.setattr(generation, 'IMAGE_BACKEND', 'sdcpp')
+        monkeypatch.setattr(backend, 'ensure_sdcpp_server', lambda: False)
+        monkeypatch.setattr(backend.SDCPP_SERVER_STATE, 'last_start_error', 'offline model file missing')
+    elif fault.startswith('sdcpp_'):
+        monkeypatch.setattr(generation, 'IMAGE_BACKEND', 'sdcpp')
+        monkeypatch.setattr(backend, 'SDCPP_SERVER_PAYLOAD_STYLE', 'auto')
+    elif fault.startswith('a1111_'):
+        monkeypatch.setattr(generation, 'IMAGE_BACKEND', 'a1111')
+
+        def rejected_a1111(*args, **kwargs):
+            calls.append(args)
+            raise HTTPError('https://offline.invalid', 401, 'offline denied', Message(), Response(b'offline denied'))
+
+        monkeypatch.setattr(backend, 'http_json', rejected_a1111)
+    elif fault == 'comfyui_execution':
+        monkeypatch.setattr(generation, 'IMAGE_BACKEND', 'comfyui')
+        workflow = root.parent / 'offline-workflow.json'
+        workflow.write_text('{}')
+        monkeypatch.setattr(backend, 'resolve_comfyui_workflow_path', lambda: workflow)
+        monkeypatch.setattr(backend, 'http_json', lambda *_a, **_k: {'prompt_id': 'pid'})
+        monkeypatch.setattr(backend, 'http_get_json', lambda *_a, **_k: {'pid': {'status': {
+            'status_str': 'error', 'messages': [['execution_error', {'exception_message': 'offline invalid node'}]],
+        }}})
+    data = {'id': 'terminal-cause', 'visual': {'imagePrompt': 'one isolated authored brass fixture'}}
+    result = generation.maybe_generate_sprite(data)
+    assert result['visual']['spriteStatus'] == ('backend_config_error' if category == 'configuration' else 'failed')
+    assert result['visual']['spritePath'] == ''
+    attempts = json.loads(result['debug']['itemSpriteValidation'])
+    assert len(attempts) == 1 and attempts[0]['category'] == category
+    assert attempts[0]['retryable'] is False
+    assert attempts[0]['error'] and attempts[0].get('status') != 'no_raw_image'
+    assert len(calls) == (1 if 'http' in fault else 0)
+    if fault == 'server_unavailable':
+        assert 'offline model file missing' in attempts[0]['error']
+    elif fault == 'comfyui_execution':
+        assert 'offline invalid node' in attempts[0]['error']
+    assert not list(root.glob('*.png'))
+
+
+def test_retryable_adapter_failure_is_retained_in_attempts_not_success_error(offline, monkeypatch):
+    from email.message import Message
+    from urllib.error import HTTPError
+
+    root, _ = offline
+    monkeypatch.setattr(generation, 'IMAGE_BACKEND', 'image_api')
+    monkeypatch.setattr(generation, 'SPRITE_RETRIES', 1)
+    monkeypatch.setattr(backend, 'IMAGE_API_BASE_URL', 'https://offline.invalid')
+    monkeypatch.setattr(backend, 'IMAGE_API_KEY', 'offline-not-a-secret')
+    calls = []
+
+    def transient_then_image(req, **kwargs):
+        calls.append(req)
+        if len(calls) == 1:
+            raise HTTPError(req.full_url, 503, 'offline transient', Message(), Response(b'offline unavailable'))
+        return Response(png((210, 100, 20)))
+
+    monkeypatch.setattr(backend, 'urlopen_no_redirect', transient_then_image)
+    result = generation.maybe_generate_sprite({'id': 'transient', 'visual': {'imagePrompt': 'one isolated brass fixture'}})
+    assert result['visual']['spriteStatus'] == 'generated' and len(calls) == 2
+    assert asset_sync_service.is_complete_png_file(result['visual']['spritePath'])
+    attempts = json.loads(result['debug']['itemSpriteValidation'])
+    assert len(attempts) == 2 and attempts[0]['category'] == 'provider_rejected'
+    assert attempts[0]['retryable'] is True and '503' in attempts[0]['error']
+    assert 'spriteError' not in result['debug'] and 'itemSpriteFailurePhase' not in result['debug']
+
+
 @pytest.mark.parametrize('setting', ['COMFYUI_WORKFLOW', 'COMFYUI_WORKFLOW_NO_LORA', 'COMFYUI_WORKFLOW_LORA'])
 def test_comfyui_configured_workflow_uses_persistent_state(tmp_path, monkeypatch, setting):
     runtime = tmp_path / 'runtime' / 'LocalGenerator'
@@ -412,7 +552,11 @@ def test_image_negotiation_closes_rejected_http_response_bodies(offline, monkeyp
     monkeypatch.setattr(backend, 'IMAGE_API_BASE_URL', 'https://offline.invalid')
     monkeypatch.setattr(backend, 'IMAGE_API_KEY', 'offline-fixture-not-a-secret')
     adapter = backend.generate_sdcpp_server if kind == 'sdcpp' else backend.generate_image_api
-    assert adapter('literal prompt', 'literal negative', 'http_error_owner') == []
+    from infini_local.core.images.errors import ImageBackendError
+    with pytest.raises(ImageBackendError) as failed:
+        adapter('literal prompt', 'literal negative', 'http_error_owner')
+    assert failed.value.category == 'provider_rejected' and failed.value.retryable is True
+    assert '500' in str(failed.value)
     assert len(errors) == expected_calls
     assert all(error.closed for error in errors), 'adapter leaked a rejected HTTP body across negotiation'
 

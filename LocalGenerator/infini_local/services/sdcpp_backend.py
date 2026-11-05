@@ -454,6 +454,9 @@ def server_payload(
     style = (style or "auto").lower()
     prompt = append_lora_prompt_tags(prompt, cfg.lora_prompt_tags)
     prompt, structured_loras = structured_server_loras(prompt, cfg.lora_file)
+    # Positive-only is independent of selecting the prompt contract, and applies
+    # only when that Z-Image contract is active (including explicit force=on).
+    positive_only = is_zimage and positive_only
     neg = "" if positive_only else (negative or "")
     if style in {"a1111", "auto"}:
         payload: dict[str, Any] = {
@@ -475,6 +478,10 @@ def server_payload(
             payload["lora"] = structured_loras
         return payload
     if style == "openai":
+        # This wrapper has no negative channel; preserve authored negatives in
+        # the one supported prompt instead of silently dropping them.
+        if neg:
+            prompt += "\n\nAvoid: " + neg
         payload = {"prompt": prompt, "n": 1, "size": f"{width}x{height}", "response_format": "b64_json"}
         if structured_loras:
             payload["lora"] = structured_loras

@@ -14,8 +14,10 @@ from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError
 
 from infini_local.core.http_io import HttpDeadlineExceeded
+from infini_local.core.images.errors import ImageBackendError, ImageBackendConfigurationError
 from infini_local.core.item_identity_tools import safe_file_part
 from infini_local.core.config_bootstrap import SPRITE_DIR, WORLD_RECIPES_DIR
 from infini_local.core.runtime_authoring.capability_registry import VISUAL_ROLE_BY_ENTITY_KIND
@@ -60,10 +62,6 @@ from infini_local.pipelines.images.soul import attach_visual_soul_from_sprite
 # AGENT MAP: image backend calls/retry/refit for item and role-separated visual assets.
 # This module mutates only visual/attack asset paths/status/debug fields after prompts
 # and plans are already authored.
-
-
-class ImageBackendConfigurationError(RuntimeError):
-    """Selected image backend cannot produce an authored sprite in this configuration."""
 
 
 def _authored_sprite_topology(data: dict[str, Any], role: str) -> tuple[str, int, int]:
@@ -516,19 +514,29 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
                     "assetId": request.logical_asset_id, "attempt": attempt, "raw": best, "final": published,
                     "score": result.technical_score, "candidateScore": result.candidate_score, "status": status, "validation": validation,
                 })
-                result = replace(result, public_path=published, status=status, failure_phase="")
+                result = replace(result, public_path=published, status=status, error="", failure_phase="")
                 return _finish_image_request(data, request, result, attempts)
         except Exception as exc:
+            if phase == "backend" and isinstance(exc, HTTPError):
+                rejected = exc
+                rejected.close()
+                exc = ImageBackendError(f"HTTP {rejected.code}: {rejected.reason}",
+                    category="provider_rejected", retryable=rejected.code in {408, 429} or rejected.code >= 500)
             # The Codex adapter wraps OSError, including TimeoutError.
             # Restore transport deadline attribution without retrying the image
             # lifecycle (or misreporting a deadline as a local PNG write fault).
             if isinstance(exc, ImageOutputIOError) and isinstance(exc.__cause__, HttpDeadlineExceeded):
                 exc = exc.__cause__
-            attempts.append({"attempt": attempt, "ok": False, "error": repr(exc), "phase": phase})
-            result = replace(result, public_path="", status="failed", error=repr(exc), failure_phase=phase)
+            failure = {"attempt": attempt, "ok": False, "error": repr(exc), "phase": phase}
+            if isinstance(exc, ImageBackendError):
+                failure.update(category=exc.category, retryable=exc.retryable)
+            attempts.append(failure)
+            status = "backend_config_error" if isinstance(exc, ImageBackendConfigurationError) else "failed"
+            result = replace(result, public_path="", status=status, error=repr(exc), failure_phase=phase)
             trace_event("error", f"IMAGE:{request.audit_role}", "sprite generation attempt failed", {"assetId": request.logical_asset_id, "attempt": attempt, "backend": IMAGE_BACKEND}, error=repr(exc))
             log_event("warn", f"{request.audit_role} sprite generation attempt failed", {"attempt": attempt, "error": repr(exc), "trace": traceback.format_exc()})
-            if (isinstance(exc, (CodexError, ImageOutputIOError, HttpDeadlineExceeded)) or phase == "publication"
+            if ((isinstance(exc, ImageBackendError) and not exc.retryable)
+                    or isinstance(exc, (CodexError, ImageOutputIOError, HttpDeadlineExceeded)) or phase == "publication"
                     or (isinstance(exc, OSError) and phase in {"processing", "projection"})):
                 terminal = True
                 break
