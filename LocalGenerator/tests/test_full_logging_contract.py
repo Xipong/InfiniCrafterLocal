@@ -74,14 +74,14 @@ def test_real_director_seams_store_complete_response_and_request_without_semanti
         assert len(artifacts) == 1
         artifact = json.loads(artifacts[0].read_bytes())
         assert artifact["stage"] == stage and artifact["messages"] == captured[0]["messages"]
-        rows = trace_tools.tail_ndjson(trace_runtime.PROMPT_TRACE_FILE, 10)
+        rows = trace_tools.expand_trace_value(tmp_path, trace_tools.tail_ndjson(trace_runtime.PROMPT_TRACE_FILE, 10))
         assert any(row.get("response") == raw for row in rows), "no response tail may disappear"
         assert any(json.loads(row["prompt"]) == captured[0]["messages"] for row in rows if row.get("prompt"))
     else:
         assert list(tmp_path.iterdir()) == []
 
 
-def test_gui_displays_full_stored_record_even_when_older_rows_are_not_in_tail(monkeypatch, tmp_path):
+def test_gui_displays_bounded_receipt_and_exact_body_remains_readable(monkeypatch, tmp_path):
     _runtime_cache(monkeypatch, tmp_path)
     monkeypatch.setattr(trace_runtime, "TRACE_PROMPTS_ENABLED", True)
     clean = "exact\r\n " + "ж" * 140000 + " GUI_RECORD_TAIL"
@@ -91,7 +91,10 @@ def test_gui_displays_full_stored_record_even_when_older_rows_are_not_in_tail(mo
     snapshot = gui._load_local_trace_snapshot(cache=tmp_path)
     gui._render_trace_snapshot(snapshot)
     assert len(snapshot["promptTrace"]) == 120
-    assert clean in gui.trace["prompts"]
+    assert snapshot["promptTrace"][-1]["response"]["preview"] == clean[:420]
+    assert "ж" * 300 in gui.trace["prompts"]
+    assert "GUI_RECORD_TAIL" not in gui.trace["prompts"]
+    assert trace_tools.expand_trace_value(tmp_path, snapshot["promptTrace"])[-1]["response"] == clean
     assert len(trace_tools.tail_ndjson(trace_runtime.PROMPT_TRACE_FILE, 200)) == 121
 
 
@@ -222,7 +225,7 @@ def test_full_failure_snapshots_are_archived_per_request_not_only_latest(monkeyp
         generation_debug.record_combine_failure("author", RuntimeError(str(index)), None, {"text": "ж" * 70000, "index": index}, [])
     rows = trace_tools.tail_ndjson(trace_runtime.TRACE_FILE, 5)
     assert [row["payload"]["partialData"]["index"] for row in rows] == [0, 1]
-    assert all(row["payload"]["partialData"]["text"] == "ж" * 70000 for row in rows)
+    assert all(row["payload"]["partialData"]["text"] == "ж" * 70000 for row in trace_tools.expand_trace_value(tmp_path, rows))
 
 
 def test_default_web_trace_displays_complete_record_payload(monkeypatch):
@@ -315,7 +318,10 @@ def test_full_runtime_record_preserves_every_content_field_and_payload(monkeypat
     clean = "\r\nExact  Ж\\u0410 " + "ж" * 140000 + " COMPLETE_TAIL"
     trace_runtime.trace_event("prompt", "offline", "exact", {"text": clean},
                               prompt=clean, negative=clean, response=clean, error=clean)
-    row = trace_tools.tail_ndjson(trace_runtime.PROMPT_TRACE_FILE, 1)[0]
+    stored = trace_tools.tail_ndjson(trace_runtime.PROMPT_TRACE_FILE, 1)[0]
+    assert len(json.dumps(stored, ensure_ascii=False)) < 6000
+    assert len(list((tmp_path / "transport_artifacts").glob("*.txt"))) == 1
+    row = trace_tools.expand_trace_value(tmp_path, stored)
     for field in ("prompt", "negative", "response", "error"):
         assert row[field].encode() == clean.encode(), field
     assert row["payload"] == {"text": clean}
@@ -389,7 +395,9 @@ def test_full_runtime_trace_retains_records_past_former_rolling_limit(monkeypatc
         trace_runtime.trace_event("response", "offline", str(index), response=clean)
     rows = trace_tools.tail_ndjson(trace_runtime.PROMPT_TRACE_FILE, 10)
     assert [row["title"] for row in rows] == [str(index) for index in range(5)]
-    assert all(row["response"] == clean for row in rows)
+    assert all(row["response"] == clean for row in trace_tools.expand_trace_value(tmp_path, rows))
+    assert len(list((tmp_path / "transport_artifacts").glob("*.txt"))) == 1
+    assert trace_runtime.PROMPT_TRACE_FILE.stat().st_size < 6000
     assert not list(tmp_path.glob("prompt_trace.ndjson.[0-9]*"))
 
 
@@ -414,7 +422,9 @@ def test_full_runtime_events_are_complete_and_append_only(monkeypatch, tmp_path)
         trace_runtime.log_event("info", str(index), {"text": clean})
     rows = trace_tools.tail_ndjson(tmp_path / "events.ndjson", 10)
     assert [row["message"] for row in rows] == [str(index) for index in range(5)]
-    assert all(row["payload"] == {"text": clean} for row in rows)
+    assert all(row["payload"] == {"text": clean} for row in trace_tools.expand_trace_value(tmp_path, rows))
+    assert len(list((tmp_path / "transport_artifacts").glob("*.txt"))) == 1
+    assert (tmp_path / "events.ndjson").stat().st_size < 6000
 
 
 @pytest.mark.parametrize("kind", ["prompt", "response", "step", "warn", "error", "request_artifact"])

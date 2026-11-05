@@ -209,7 +209,13 @@ def persist_transport_artifact(cache_dir: Path, raw: bytes, *, secrets: tuple[st
         target = directory / (digest + ".txt")
         if directory.is_symlink() or target.is_symlink() or (directory / "artifacts.lock").is_symlink():
             raise ValueError("linked_storage")
+        receipt = {"status": "stored", "path": target.relative_to(cache_dir).as_posix(),
+                   "sha256": digest, "bytes": len(clean), "sanitized": clean != raw}
         with _TRANSPORT_ARTIFACT_LOCK, _ndjson_process_lock(directory / "artifacts"):
+            if target.exists():
+                if target.read_bytes() != clean:
+                    raise ValueError("immutable_artifact_mismatch")
+                return receipt
             fd, name = tempfile.mkstemp(prefix=".transport-", dir=directory)
             try:
                 with os.fdopen(fd, "wb") as handle:
@@ -219,8 +225,7 @@ def persist_transport_artifact(cache_dir: Path, raw: bytes, *, secrets: tuple[st
                 os.replace(name, target)
             finally:
                 Path(name).unlink(missing_ok=True)
-        return {"status": "stored", "path": target.relative_to(cache_dir).as_posix(),
-                "sha256": digest, "bytes": len(clean), "sanitized": clean != raw}
+        return receipt
     except Exception as exc:
         return {"status": "refused", "reason": type(exc).__name__}
 
@@ -301,6 +306,35 @@ def _redact_diagnostic(value: Any) -> Any:
     return visit(value)
 
 
+# Complete bodies live once in the existing immutable digest store. NDJSON and
+# Studio tails retain bounded previews; explicit readers can verify and expand
+# references without changing historical inline records.
+_TRACE_INLINE_CHARS = 4096
+_TRACE_PREVIEW_CHARS = 420
+
+
+def compact_trace_value(cache_dir: Path, value: Any, *, preview_chars: int = _TRACE_PREVIEW_CHARS) -> Any:
+    if isinstance(value, str) and len(value) > _TRACE_INLINE_CHARS:
+        receipt = persist_transport_artifact(cache_dir, value.encode("utf-8"))
+        return {"_traceText": receipt, "preview": value[:max(0, min(preview_chars, _TRACE_PREVIEW_CHARS))]}
+    if isinstance(value, dict):
+        return {key: compact_trace_value(cache_dir, item, preview_chars=preview_chars) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [compact_trace_value(cache_dir, item, preview_chars=preview_chars) for item in value]
+    return value
+
+
+def expand_trace_value(cache_dir: Path, value: Any) -> Any:
+    """Reconstruct sanitized exact text, failing explicitly on absent/tampered bodies."""
+    if isinstance(value, dict):
+        if set(value) == {"_traceText", "preview"}:
+            return read_transport_artifact(cache_dir, value["_traceText"]).decode("utf-8")
+        return {key: expand_trace_value(cache_dir, item) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [expand_trace_value(cache_dir, item) for item in value]
+    return value
+
+
 def log_event(
     cache_dir: Path,
     level: str,
@@ -330,7 +364,7 @@ def log_event(
             "createdAt": time.time(),
             "level": normalized_level,
             "message": str(message),
-            "payload": payload,
+            "payload": compact_trace_value(cache_dir, json_slim(payload, 0)),
         }
         append_ndjson(cache_dir / "events.ndjson", event, max_bytes=0)
     except Exception:
@@ -471,7 +505,8 @@ def trace_event(
         if error is not None:
             event["error"] = trace_clip(error, default_max_chars=0)
         target = prompt_trace_file if kind in {"prompt", "response"} or prompt is not None else trace_file
-        append_ndjson(target, _redact_diagnostic(event), max_bytes=0)
+        preview_chars = min(trace_max_prompt_chars or _TRACE_PREVIEW_CHARS, _TRACE_PREVIEW_CHARS)
+        append_ndjson(target, compact_trace_value(cache_dir, _redact_diagnostic(event), preview_chars=preview_chars), max_bytes=0)
     except Exception:
         pass
 

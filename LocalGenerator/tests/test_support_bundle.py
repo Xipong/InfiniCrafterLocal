@@ -88,6 +88,28 @@ def test_roundtrip_keeps_all_history_duplicates_and_original_pixels(cache, tmp_p
         assert entry["sourceSha256"] == entry["sha256"] == hashlib.sha256(delivered[entry["path"].removeprefix("cache/")]).hexdigest()
 
 
+def test_export_keeps_compact_trace_receipts_reconstructable_without_original_cache(tmp_path):
+    from infini_local.storage import trace_tools
+    cache = tmp_path / "cache"
+    exact = 'Exact\r\n {"dup":1,"dup":2,"escaped":"\\u0410"} ' + "ж" * 9000 + " TAIL"
+    trace_tools.trace_event(cache_dir=cache, trace_prompts_enabled=True, trace_max_prompt_chars=64,
+                            trace_file=cache / "pipeline_trace.ndjson", prompt_trace_file=cache / "prompt_trace.ndjson",
+                            kind="response", stage="offline", title="exact output", response=exact)
+    output = tmp_path / "support.tar.xz"
+    bundle.export_bundle(cache, output)
+    bundle.verify_bundle(output)
+    relocated = tmp_path / "relocated cache"
+    with tarfile.open(output) as archive:
+        for member in archive:
+            if member.name.startswith("cache/"):
+                content = archive.extractfile(member)
+                assert content is not None
+                _write(relocated, member.name.removeprefix("cache/"), content.read())
+    stored = trace_tools.tail_ndjson(relocated / "prompt_trace.ndjson", 1)[0]
+    assert len(stored["response"]["preview"]) == 64
+    assert trace_tools.expand_trace_value(relocated, stored)["response"].encode() == exact.encode()
+
+
 def test_export_redacts_known_and_escaped_credentials_but_keeps_original(cache, tmp_path, monkeypatch):
     token = "sk-example-secret-123456789"
     known = "plain-secret-from-environment"

@@ -21,8 +21,9 @@ from infini_local.storage import trace_tools
 # authoring or repair logic belongs here.
 
 
-# Append-only black box recorder for GUI/debug: prompts, LLM responses, image prompts,
-# sd.cpp startup/image attempts and pipeline steps. This is debug state, not gameplay state.
+# Append-only debug recorder. Large exact sanitized bodies use immutable digest
+# receipts with bounded previews in events; trace_tools.expand_trace_value reads
+# complete text on demand. This is debug state, not gameplay state.
 TRACE_PROMPTS_ENABLED = env_bool("INFINI_TRACE_PROMPTS", True)
 TRACE_MAX_PROMPT_CHARS = max(0, env_int("INFINI_TRACE_MAX_PROMPT_CHARS", 0))
 TRACE_EVENTS_TAIL = max(20, min(500, env_int("INFINI_TRACE_EVENTS_TAIL", 120)))
