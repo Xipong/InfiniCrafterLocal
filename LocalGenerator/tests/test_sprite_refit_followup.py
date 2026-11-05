@@ -56,9 +56,9 @@ def test_production_refit_publishes_master_detail_without_second_generation(tmp_
     output_dir = pipeline[0]["output_dir"]
     original = output_dir / "stripe.png"
     refit = output_dir / "stripe_refit.png"
-    assert refit.exists()
+    assert not refit.exists(), "accepted refit is stored only in final"
     assert json.loads(data["debug"][role + "SpriteRefit"])["samplingSource"] == "pre_bake_master"
-    assert Path(published).read_bytes() == refit.read_bytes()
+    assert json.loads(data["debug"][role + "SpriteRefit"])["to"] == published
     assert pipeline[0]["source"].read_bytes() == pipeline[0]["source_bytes"]
     before = post_validation.validate_processed_sprite(str(original), role, expected_canvas=24)
     assert not before["ok"] and not post_validation.sprite_validation_fatal(before)
@@ -104,7 +104,8 @@ def test_unavailable_master_preserves_bake_and_uses_only_safe_existing_source(pi
     assert pipeline[0]["source"].read_bytes() == pipeline[0]["source_bytes"]
     if master_state == "malformed":
         assert status == "generated_warn_invalid"
-        assert Path(published).read_bytes() == original.read_bytes()
+        assert not original.exists()
+        assert json.loads(data["debug"]["fieldSpriteValidation"])[0]["final"] == published
         assert "fieldSpriteRefit" not in data["debug"]
     else:
         assert status == "generated"
@@ -129,8 +130,12 @@ def test_local_refit_io_fault_never_spends_another_generation(tmp_path, pipeline
             raise OSError(errno.EACCES, "offline injected read denial")
         return image_open(path, *args, **kwargs)
 
-    def failing_replace(*_args):
-        raise OSError(errno.EIO, "offline injected atomic replace failure")
+    import os
+    replace = os.replace
+    def failing_replace(*args):
+        if Path(args[1]).suffix == ".png":
+            raise OSError(errno.EIO, "offline injected atomic replace failure")
+        return replace(*args)
 
     monkeypatch.setattr(Image.Image, "save", failing_save)
     monkeypatch.setattr(Image, "open", failing_open)
@@ -147,7 +152,8 @@ def test_local_refit_io_fault_never_spends_another_generation(tmp_path, pipeline
     assert len(pipeline) == 1
     assert pipeline[0]["source"].read_bytes() == pipeline[0]["source_bytes"]
     assert previous.read_bytes() == previous_bytes
-    assert list(public.iterdir()) == [previous]  # no exposed candidate or .part
+    assert not list(public.rglob("*.part"))
+    assert list(public.glob("*.png")) == [previous]  # diagnostics remain private, no final commit
     assert data["debug"]["fieldSpriteFailurePhase"] == ("publication" if fault == "publication" else "processing")
 
 
@@ -198,8 +204,9 @@ def test_fatal_refit_is_not_published_over_usable_original(pipeline, source_pixe
     published, _, _, status = generation.generate_visual_asset(data, "item", "authored solid square", "", "square", 24)
     assert published and status == "generated_warn_invalid" and len(pipeline) == 1, data
     original = pipeline[0]["output_dir"] / "square.png"
-    assert Path(published).read_bytes() == original.read_bytes()
+    assert not original.exists()
     rows = json.loads(data["debug"]["itemSpriteValidation"])
+    assert rows[0]["final"] == published
     assert not post_validation.sprite_validation_fatal(rows[0]["validation"])
     assert post_validation.sprite_validation_fatal(rows[0]["refit"]["validation"])
     assert "itemSpriteRefit" not in data["debug"]

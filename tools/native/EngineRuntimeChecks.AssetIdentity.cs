@@ -109,20 +109,20 @@ internal static partial class EngineRuntimeChecks
                     Observe(bItem, bPath, AssetOwnerOtherColor); Observe(aItem, aPath, AssetOwnerCanonical);
                     Equal(true, sync.ResolveCertifiedLocalPath(aPath) is null, "conflict forbids certificate priority even after hydration");
                     sync.RegisterRemoteAssetDescriptors(b.Id, Array.Empty<GeneratedAssetWireDescriptor>());
-                    Observe(aItem, Path.Combine(sync.CacheRoot, file), AssetOwnerCanonical);
+                    Observe(aItem, sync.ResolveLocalPath(file)!, AssetOwnerCanonical);
                     // Equal identities may share the existing proof; replacing a manifest must rebind it.
                     sync.RegisterRemoteAssetDescriptors(b.Id, aDescriptors);
                     sync.RegisterRemoteAssetDescriptors(a.Id, Array.Empty<GeneratedAssetWireDescriptor>());
-                    Observe(aItem, Path.Combine(sync.CacheRoot, file), AssetOwnerCanonical);
+                    Observe(aItem, sync.ResolveLocalPath(file)!, AssetOwnerCanonical);
                     sync.RegisterRemoteAssetDescriptors(a.Id, aDescriptors);
                     sync.RegisterRemoteAssetDescriptors(b.Id, bDescriptors);
                     Observe(bItem, bPath, AssetOwnerOtherColor);
                     sync.RegisterRemoteAssetDescriptors(b.Id, Array.Empty<GeneratedAssetWireDescriptor>());
-                    File.WriteAllBytes(Path.Combine(sync.CacheRoot, file), new byte[] { 1, 2, 3 });
+                    File.WriteAllBytes(sync.ResolveLocalPath(file)!, new byte[] { 1, 2, 3 });
                     sync.EnsureAssetsForData(a);
                     Observe(aItem, aPath, AssetOwnerCanonical);
                     CommitAssetOwner(sync, a.Id, file, AssetOwnerCanonical);
-                    Observe(aItem, Path.Combine(sync.CacheRoot, file), AssetOwnerCanonical);
+                    Observe(aItem, sync.ResolveLocalPath(file)!, AssetOwnerCanonical);
                     sync.Dispose(); sync.RegisterRemoteAssetDescriptors(a.Id, aDescriptors);
                     Equal(true, sync.ResolveCertifiedLocalPath(aPath) is null, "disposal clears and cannot rebind the index");
                     Observe(aItem, aPath, AssetOwnerCanonical);
@@ -154,6 +154,7 @@ internal static partial class EngineRuntimeChecks
                 sprites.SetValue(null, cache); assetSync.SetValue(null, sync);
                 var data = AssetOwnerData("selected_retry", originalPath);
                 CommitAssetOwner(sync, data.Id, file, AssetOwnerCanonical);
+                canonicalPath = sync.ResolveLocalPath(file)!;
                 peers.Registry.RegisterLocal(data, persist: false, ensureAssets: true);
                 // A relative, whitespace-padded selector must still remember the final full key.
                 data.Visual.SpritePath = "  " + Path.GetRelativePath(Environment.CurrentDirectory, originalPath) + "  ";
@@ -332,6 +333,7 @@ internal static partial class EngineRuntimeChecks
                         _ => original,
                     };
                     CommitAssetOwner(probe.Sync, "alias", file, AssetOwnerCanonical);
+                    canonical = probe.Sync.ResolveLocalPath(file)!;
                     probe.Batch.End(); probe.DrainOwnerQueue(); probe.Batch.Begin();
                     var item = probe.Item("alias", selector);
                     string storedSelector = item.Data.Visual.SpritePath;
@@ -525,9 +527,11 @@ internal static partial class EngineRuntimeChecks
                         var descriptor = new GeneratedAssetWireDescriptor { FileName = file, Length = canonical.Length, Sha256 = hash };
                         if (verified) {
                             typeof(GeneratedAssetSyncService).GetMethod("CommitVerifiedAsset", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(sync, new object[] { "asset_owner_review", file, canonical, hash });
+                            local = sync.ResolveLocalPath(file)!;
                             sync.RegisterRemoteAssetDescriptors("asset_owner_review", new[] { descriptor });
                         } else if (scenario.StartsWith("changed-", StringComparison.Ordinal)) {
                             typeof(GeneratedAssetSyncService).GetMethod("CommitVerifiedAsset", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(sync, new object[] { "asset_owner_review", file, canonical, hash });
+                            local = sync.ResolveLocalPath(file)!;
                             sync.RegisterRemoteAssetDescriptors("asset_owner_review", new[] { descriptor });
                             if (scenario == "changed-descriptor-local") {
                                 descriptor = new GeneratedAssetWireDescriptor { FileName = file, Length = otherColor.Length, Sha256 = Convert.ToHexString(SHA256.HashData(otherColor)).ToLowerInvariant() };

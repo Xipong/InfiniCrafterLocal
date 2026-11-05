@@ -153,7 +153,7 @@ def verify_resources(read: Callable[[str], bytes], *, source_root: Path | None =
             bad_state = ("config.env", "config.env.defaults.json", "gui_user_presets.json", "codex-auth.json")
             for path in files:
                 parts = PurePosixPath(path).parts
-                if (PurePosixPath(path).name in bad_state
+                if (parts[:2] == ("LocalGenerator", "images") or PurePosixPath(path).name in bad_state
                         or any(part in {".git", ".venv", "__pycache__", "cache", "prompt_traces", ".codex"} for part in parts)):
                     raise ValueError(f"Operator state/development debris in Studio runtime: {path}")
             bad = archive.testzip()

@@ -22,6 +22,7 @@ build_logs/
 *:Zone.Identifier
 
 LocalGenerator/cache/
+LocalGenerator/images/
 LocalGenerator/output/
 LocalGenerator/outputs/
 LocalGenerator/generated_assets/

@@ -5,6 +5,7 @@ import copy
 import hashlib
 import io
 import json
+import re
 from pathlib import Path
 import threading
 import pytest
@@ -290,8 +291,9 @@ def test_private_retained_raw_and_stages_are_not_served_or_rostered(offline, mon
     raw = Path(data['visual']['spriteRawPath'])
     assert raw.exists() and raw.is_relative_to(private)
     evidence = [raw, *private.rglob('*_stage_*.png')]
-    assert len(evidence) == 5
-    assert all(path.exists() and not path.is_relative_to(root) for path in evidence)
+    assert len(evidence) == 4  # The accepted final bake is referenced, never copied.
+    assert all(path.exists() and path.is_relative_to(private) for path in evidence)
+    assert not list(private.rglob("*_stage_30_baked_final.png"))
     for path in evidence:
         assert serve(root, path)['code'] == serve(root, path, 'sprite')['code'] == 404
     assert sync.runtime_asset_files(data) == [Path(result[0]).name]
@@ -319,27 +321,30 @@ def test_new_publication_identity_is_exact_structured_role_entity_recipe_and_byt
         assert result[3] == 'generated'
         raw = Path(result[0]).read_bytes()
         identity = json.dumps([data['id'], role, entity, 'same_logical_id'], ensure_ascii=True, separators=(',', ':'), allow_nan=False).encode('ascii')
-        expected = 'infini_asset_png_' + sha(identity + b'\0' + raw) + '.png'
+        scope = json.dumps([str(data.get('recipeMeta', {}).get('worldId') or 'unscoped'), data['id'], role], ensure_ascii=True, separators=(',', ':')).encode('ascii')
+        label = re.sub(r'[^a-z0-9_-]+', '_', role.lower()).strip('_')[:24]
+        expected = label + '--' + sha(scope + b'\0' + identity + b'\0' + raw) + '.png' 
         assert Path(result[0]).name == expected
         outcomes.append(result[0])
     assert len(set(outcomes)) == 3
 
 @pytest.mark.parametrize('kind', ['vfx_cutout', 'vfx_strip'])
-def test_vfx_publication_hash_stays_byte_identical_to_accepted_algorithm(offline, kind):
+def test_vfx_publication_preserves_identity_with_world_scoped_storage(offline, kind):
     root, requests = offline
     data = _data([_request('grain', layout='strip' if kind == 'vfx_strip' else 'cutout')])
     result = invoke(kind, 'ignored_vfx_id', data)
     assert result[3] == 'generated'
     raw = Path(result[0]).read_bytes()
     identity = json.dumps([data['vfxManifest']['recipeId'], 'grain'], ensure_ascii=True, separators=(',', ':'), allow_nan=False).encode('ascii')
-    assert Path(result[0]).name == 'infini_vfx_png_' + sha(identity + b'\0' + raw) + '.png'
+    scope = json.dumps([str(data.get('recipeMeta', {}).get('worldId') or 'unscoped'), data['id'], 'vfx_grain'], ensure_ascii=True, separators=(',', ':')).encode('ascii')
+    assert Path(result[0]).name == 'vfx_grain--' + sha(scope + b'\0' + identity + b'\0' + raw) + '.png'
 
 @pytest.mark.parametrize('save_stages', [False, True])
 def test_logical_path_tokens_cannot_escape_the_private_output_owner(offline, monkeypatch, save_stages):
     root, requests = offline
     workspace = root.parent / 'private-invocation'
     workspace.mkdir()
-    monkeypatch.setattr(generation, '_new_image_workspace', lambda: workspace)
+    monkeypatch.setattr(generation, '_new_image_workspace', lambda *args: workspace)
     monkeypatch.setattr(post, 'SAVE_SPRITE_STAGES', save_stages)
     victim = root.parent.parent / 'victim.png'
     victim.write_bytes(png((10, 90, 220)))
@@ -358,7 +363,8 @@ def test_logical_path_tokens_cannot_escape_the_private_output_owner(offline, mon
     assert logical_ids == ['../../../victim'], 'storage isolation changed semantic backend identity'
     assert victim.read_bytes() == previous, 'logical identity escaped its owned output directory'
     attempts = json.loads(data['debug']['itemSpriteValidation'])
-    assert all(Path(row[key]).resolve().is_relative_to(workspace / 'attempt-0') for row in attempts for key in ('raw', 'final'))
+    assert all(Path(row['raw']).resolve().is_relative_to(workspace / 'attempt-0') for row in attempts)
+    assert all(Path(row['final']) == Path(result[0]) for row in attempts)
 
 def test_impact_publication_entity_identity_does_not_change_legacy_processing_topology(offline, monkeypatch):
     root, requests = offline
@@ -383,7 +389,8 @@ def test_impact_publication_entity_identity_does_not_change_legacy_processing_to
     raw = Path(producer['impactSpritePath']).read_bytes()
     logical = next(row['assetId'] for row in build_visual_asset_plan(out) if row['role'] == 'impact:orb')
     identity = json.dumps([data['id'], 'impact', 'orb', logical], ensure_ascii=True, separators=(',', ':'), allow_nan=False).encode('ascii')
-    assert Path(producer['impactSpritePath']).name == 'infini_asset_png_' + sha(identity + b'\0' + raw) + '.png'
+    scope = json.dumps([str(data.get('recipeMeta', {}).get('worldId') or 'unscoped'), data['id'], 'impact'], ensure_ascii=True, separators=(',', ':')).encode('ascii')
+    assert Path(producer['impactSpritePath']).name == 'impact--' + sha(scope + b'\0' + identity + b'\0' + raw) + '.png'
 
 
 IMAGE_ROLES = ("item", "entity", "impact", "equip_overlay", "vfx_cutout", "vfx_strip")
@@ -646,6 +653,27 @@ def test_procedural_recovery_also_delivers_compact_png(offline, monkeypatch):
         assert delivered.size == (32, 32)
     assert sync.is_complete_png_file(path)
     assert serve(root, path)['raw'] == Path(path).read_bytes()
+
+
+def test_successful_explicit_dev_fallback_keeps_only_one_final_png(offline, monkeypatch):
+    root, requests = offline
+    monkeypatch.setattr(generation, 'VISUAL_ALLOW_PROCEDURAL_FALLBACK', True)
+    monkeypatch.setattr(generation, 'VISUAL_STRICT_AI_AUTHORSHIP', False)
+    monkeypatch.setattr(generation, '_generate_backend_variants', lambda *args, **kwargs: [])
+    def fixture(data, role, *, sprite_dir, **kwargs):
+        path = sprite_dir / 'offline_procedural.png'
+        path.write_bytes(png((210, 100, 20)))
+        return str(path)
+    monkeypatch.setattr(generation.visual_asset_pipeline, 'generate_procedural_asset', fixture)
+    data = _data([])
+    result = invoke('item', 'dev_fallback', data)
+    assert result[3] == 'fallback_after_failed_generation'
+    canonical = Path(result[0]).read_bytes()
+    private = Path(json.loads(data['debug']['itemSpriteDiagnostics'])['directory'])
+    assert not [p for p in private.rglob('*.png') if p.read_bytes() == canonical]
+    receipt = json.loads((private / 'result.json').read_text())
+    assert receipt['attempts'][-1]['attempt'] == 'fallback'
+    assert receipt['attempts'][-1]['final'] == result[0]
 
 
 def native_codex_responses(monkeypatch, alpha_values):

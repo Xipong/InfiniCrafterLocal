@@ -399,3 +399,18 @@ def test_world_paths_keep_bounded_filename_identity(tmp_path, raw, component):
     assert world_dir == tmp_path / ("world_" + (component or "unknown_world"))
     assert recipe_file == world_dir / "recipes" / ((component or "recipe") + ".json")
     assert recipe_file.resolve().is_relative_to(tmp_path.resolve())
+
+
+@pytest.mark.parametrize("phase", ["adopt_recipe", "adopt_diagnostics"])
+def test_image_migration_io_failure_does_not_revoke_valid_cache(cache_record, monkeypatch, phase):
+    from infini_local.storage import image_store, trace_runtime
+    _, request, key, path, _ = cache_record
+    events = []
+    def unavailable(*args, **kwargs):
+        raise PermissionError("read-only image relocation destination")
+    monkeypatch.setattr(image_store, phase, unavailable)
+    monkeypatch.setattr(trace_runtime, "trace_event", lambda *args: events.append(args))
+    result = world_recipe_runtime.read_world_recipe_cache(key, request["worldId"])
+    assert result is not None and result["debug"]["cacheHit"] == "world_file"
+    assert path.exists()
+    assert any(event[2] == "image relocation deferred" for event in events)

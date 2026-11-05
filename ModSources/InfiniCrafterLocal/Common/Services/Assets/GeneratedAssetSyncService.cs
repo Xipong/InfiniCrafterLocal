@@ -141,11 +141,18 @@ public sealed class GeneratedAssetSyncService : IDisposable
     private bool _downloadCancellationCompleted; // Cancel callbacks have finished; guarded by _lock.
 
     public string CacheRoot { get; }
+    internal string LegacyCacheRoot { get; }
+    private readonly SharedImageStore _imageStore;
+    private readonly Dictionary<string, GeneratedItemData> _storageOwners = new(StringComparer.Ordinal);
+    private int _storageEpoch;
+    private sealed record StorageScope(int Epoch, string WorldId, string WorldName, string ItemId, string ItemName, string Role);
 
     public GeneratedAssetSyncService()
     {
         string save = string.IsNullOrWhiteSpace(Main.SavePath) ? AppContext.BaseDirectory : Main.SavePath;
-        CacheRoot = Path.Combine(save, "InfiniCrafterLocal", "asset_cache");
+        CacheRoot = SharedImageStore.DefaultRoot(save);
+        LegacyCacheRoot = Path.Combine(save, "InfiniCrafterLocal", "asset_cache");
+        _imageStore = new SharedImageStore(CacheRoot);
         Directory.CreateDirectory(CacheRoot);
     }
 
@@ -163,6 +170,8 @@ public sealed class GeneratedAssetSyncService : IDisposable
             _serverAssetRequestTicks.Clear();
             _remoteDescriptorsByItem.Clear();
             _serverDescriptorsByItem.Clear();
+            _storageOwners.Clear();
+            _storageEpoch++;
             _certifiedDescriptorsByFile.Clear();
         }
         // Cancellation can synchronously invoke transport callbacks. Never run
@@ -190,15 +199,88 @@ public sealed class GeneratedAssetSyncService : IDisposable
             _serverAssetRequestTicks.Clear();
             _remoteDescriptorsByItem.Clear();
             _serverDescriptorsByItem.Clear();
+            _storageOwners.Clear();
+            _storageEpoch++;
             _certifiedDescriptorsByFile.Clear();
         }
+    }
+
+    private string LocalAssetPath(string file)
+    {
+        SharedImageStore.Entry? indexed = _imageStore.Resolve(file);
+        if (indexed is not null) return indexed.Path;
+        if (_imageStore.HasIndex(file)) return ""; // A broken alias cannot borrow legacy shadow bytes.
+        string flat = Path.Combine(CacheRoot, file);
+        if (_imageStore.IsOwnedPath(flat) && File.Exists(flat)) return flat; // Read-only flat-store compatibility.
+        string legacy = Path.Combine(LegacyCacheRoot, file);
+        if (new SharedImageStore(LegacyCacheRoot).IsOwnedPath(legacy) && File.Exists(legacy)) return legacy;
+        return _imageStore.IsOwnedPath(flat) ? flat : "";
+    }
+
+    internal bool HasSharedAsset(string path) => _imageStore.HasIndex(FileNameFromPath(path));
+
+    internal bool IsSharedPath(string path)
+    {
+        try
+        {
+            string relative = Path.GetRelativePath(CacheRoot, Path.GetFullPath(path));
+            return !Path.IsPathRooted(relative) && relative != ".." && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+        }
+        catch { return false; }
+    }
+
+    internal bool CanUseDirectLocalSource
+    {
+        get
+        {
+            if (Main.netMode == NetmodeID.MultiplayerClient) return false;
+            GeneratorClient? generator = InfiniCrafterLocalMod.Generator;
+            return generator is null || (Uri.TryCreate(generator.Endpoint, UriKind.Absolute, out Uri? endpoint)
+                && (endpoint.Scheme is "http" or "https") && endpoint.IsLoopback);
+        }
+    }
+
+    private string LocalAssetPathForData(string file, GeneratedItemData data)
+    {
+        string local = LocalAssetPath(file);
+        if (File.Exists(local) || _imageStore.HasIndex(file) || !CanUseDirectLocalSource) return local;
+        // Legacy/external generators on this machine may still return an exact
+        // absolute source. Reuse that accepted file without a second HTTP copy.
+        foreach (string raw in RuntimeAssetPaths(data))
+            if (FileNameFromPath(raw) == file && !IsSharedPath(raw) && File.Exists(raw)) return Path.GetFullPath(raw);
+        return local;
+    }
+
+    private void AdoptLegacyAsset(string file, GeneratedItemData data, GeneratedAssetWireDescriptor? descriptor)
+    {
+        string legacy = Path.Combine(LegacyCacheRoot, file);
+        try
+        {
+            if (!File.Exists(legacy) || (File.GetAttributes(legacy) & FileAttributes.ReparsePoint) != 0
+                || (File.GetAttributes(LegacyCacheRoot) & FileAttributes.ReparsePoint) != 0
+                || !IsValidCachedAsset(legacy, descriptor)) return;
+            byte[] bytes = File.ReadAllBytes(legacy);
+            string canonical = _imageStore.Publish(file, bytes, data.RecipeMeta.WorldId, Main.worldName, data.Id, data.Name, AssetRole(data, file));
+            // Publication and alias precede cleanup. Unknown/conflicting old
+            // files survive; a failed unlink can be retried on later admission.
+            if (File.ReadAllBytes(canonical).AsSpan().SequenceEqual(bytes)
+                && File.ReadAllBytes(legacy).AsSpan().SequenceEqual(bytes)) File.Delete(legacy);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException or System.Text.Json.JsonException or KeyNotFoundException or FormatException) { }
+    }
+
+    private GeneratedAssetWireDescriptor? SharedDescriptor(string file)
+    {
+        SharedImageStore.Entry? entry = _imageStore.Resolve(file);
+        return entry is null ? null : new GeneratedAssetWireDescriptor
+            { FileName = file, Length = entry.Length, Sha256 = entry.Sha256 };
     }
 
     public string? ResolveLocalPath(string? originalPath)
     {
         string file = FileNameFromPath(originalPath);
         if (string.IsNullOrWhiteSpace(file)) return null;
-        string local = Path.Combine(CacheRoot, file);
+        string local = LocalAssetPath(file);
         return File.Exists(local) ? local : null;
     }
 
@@ -216,7 +298,8 @@ public sealed class GeneratedAssetSyncService : IDisposable
                 var info = new FileInfo(proof.Path);
                 // No PNG decode or hashing in Draw. A changed cache file loses
                 // authority until the existing lifecycle validator certifies it again.
-                if (info.Exists && info.Length == descriptor.Length && info.Length == proof.Length
+                if ((!IsSharedPath(proof.Path) || _imageStore.IsOwnedPath(proof.Path))
+                    && info.Exists && info.Length == descriptor.Length && info.Length == proof.Length
                     && info.LastWriteTimeUtc.Ticks == proof.WriteTicks) return proof.Path;
             }
             catch { }
@@ -275,10 +358,19 @@ public sealed class GeneratedAssetSyncService : IDisposable
 
         string itemId = (data.Id ?? "").Trim();
         string[] files = AssetFilesFromData(data).ToArray();
+        lock (_lock) _storageOwners[itemId] = data;
+        foreach (string file in files) AdoptLegacyAsset(file, data, TryGetRemoteDescriptor(itemId, file));
+        // Native/local generators have no peer manifest. The shared index provides
+        // the exact byte identity for lifecycle validation and renderer selection.
+        if (Main.netMode != NetmodeID.MultiplayerClient && files.Any(file => TryGetRemoteDescriptor(itemId, file) is null))
+        {
+            var sharedDescriptors = files.Select(SharedDescriptor).Where(x => x is not null).Cast<GeneratedAssetWireDescriptor>().ToArray();
+            if (sharedDescriptors.Length > 0) RegisterRemoteAssetDescriptors(itemId, sharedDescriptors);
+        }
         var missing = new List<string>();
         foreach (string file in files)
         {
-            string local = Path.Combine(CacheRoot, file);
+            string local = LocalAssetPathForData(file, data);
             bool valid;
             lock (_lock)
             {
@@ -351,7 +443,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
 
         string baseUrl = BestBaseUrl(data);
         if (!string.IsNullOrWhiteSpace(baseUrl))
-            QueueDownloads(baseUrl, missing, forceRetry: forceRetry);
+            QueueDownloads(baseUrl, missing, forceRetry: forceRetry, itemId: itemId);
     }
 
     internal bool NeedsRemoteDescriptorRefresh(GeneratedItemData? data, bool forceRetry)
@@ -367,16 +459,15 @@ public sealed class GeneratedAssetSyncService : IDisposable
 
         foreach (string file in AssetFilesFromData(data))
         {
-            string local = Path.Combine(CacheRoot, file);
             GeneratedAssetWireDescriptor? descriptor = TryGetRemoteDescriptor(itemId, file);
-            if (NeedsDescriptorRefreshForAsset(local, descriptor, forceRetry))
+            if (NeedsDescriptorRefreshForAsset("", descriptor, forceRetry))
                 return true;
         }
         return false;
     }
 
     private static bool NeedsDescriptorRefreshForAsset(string local, GeneratedAssetWireDescriptor? descriptor, bool forceRetry)
-        => descriptor is null && (forceRetry || !IsValidCachedAsset(local, descriptor: null));
+        => descriptor is null; // Warm disk bytes do not replace this connection's authoritative peer manifest.
 
     internal void RegisterRemoteAssetDescriptors(string itemId, IEnumerable<GeneratedAssetWireDescriptor> descriptors)
     {
@@ -423,6 +514,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
         if (!GeneratedItemRegistryService.IsCurrentWorldData(data)) return Array.Empty<GeneratedAssetWireDescriptor>();
         string itemId = (data.Id ?? "").Trim();
         string cacheKey = data.RecipeMeta.WorldId.Trim() + "|" + itemId;
+        lock (_lock) _storageOwners[itemId] = data;
         var paths = RuntimeAssetPaths(data).Where(p => !string.IsNullOrWhiteSpace(FileNameFromPath(p))).ToArray();
         if (!string.IsNullOrWhiteSpace(itemId))
         {
@@ -444,6 +536,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
         {
             string file = FileNameFromPath(rawPath);
             if (string.IsNullOrWhiteSpace(file)) continue;
+            AdoptLegacyAsset(file, data, SharedDescriptor(file));
             string source = ResolveServerSourcePath(rawPath, file);
             if (string.IsNullOrWhiteSpace(source)) continue;
             try
@@ -453,6 +546,8 @@ public sealed class GeneratedAssetSyncService : IDisposable
                 var before = LocalAssetStat(source);
                 if (before is null || before.Value.Length <= 0 || before.Value.Length > MaxAssetBytes) continue;
                 string hash = ComputeFileSha256Hex(source);
+                SharedImageStore.Entry? shared = _imageStore.Resolve(file);
+                if (shared is not null && (shared.Length != before.Value.Length || shared.Sha256 != hash)) continue;
                 if (before is null || before != LocalAssetStat(source)) continue;
                 descriptors.Add(new GeneratedAssetWireDescriptor
                 {
@@ -625,7 +720,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
                 // sibling names in the item-level batch when one becomes due.
                 if (now - pending.RequestedTick >= PacketFallbackDelayTicks)
                 {
-                    string local = Path.Combine(CacheRoot, pending.FileName);
+                    string local = LocalAssetPath(pending.FileName);
                     GeneratedAssetWireDescriptor? descriptor = TryGetRemoteDescriptor(pending.ItemId, pending.FileName);
                     if (IsValidCachedAsset(local, descriptor))
                     {
@@ -1013,7 +1108,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
         try
         {
             if (Directory.Exists(CacheRoot))
-                cacheFiles = Directory.EnumerateFiles(CacheRoot, "*.png", SearchOption.TopDirectoryOnly).Count();
+                cacheFiles = Directory.EnumerateFiles(CacheRoot, "*.png", SearchOption.AllDirectories).Count(path => Path.GetFileName(Path.GetDirectoryName(path)) == "final");
         }
         catch { }
 
@@ -1049,7 +1144,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
         {
             string file = SanitizeFileName(raw);
             if (string.IsNullOrWhiteSpace(file)) continue;
-            string local = Path.Combine(CacheRoot, file);
+            string local = LocalAssetPath(file);
             GeneratedAssetWireDescriptor? descriptor = string.IsNullOrWhiteSpace(itemId)
                 ? TryFindRemoteDescriptor(file)
                 : TryGetRemoteDescriptor(itemId, file);
@@ -1096,11 +1191,13 @@ public sealed class GeneratedAssetSyncService : IDisposable
 
     private async Task DownloadOneAsync(string baseUrl, string itemId, string file, string local, string key, GeneratedAssetWireDescriptor? descriptor)
     {
+        StorageScope? scope;
         CancellationToken cancellationToken;
         lock (_lock)
         {
             if (_disposed) return;
             cancellationToken = _downloadCancellation.Token;
+            scope = CaptureStorageScope(itemId, file);
             _activeHttpDownloads++;
         }
         bool ownsSlot = false, integrityFailure = false;
@@ -1136,7 +1233,13 @@ public sealed class GeneratedAssetSyncService : IDisposable
                 integrityFailure = true;
                 throw new InvalidDataException("asset hash mismatch");
             }
-            CommitVerifiedAsset(itemId, file, bytes, actualHash);
+            lock (_lock)
+            {
+                if (_disposed || scope is null || scope.Epoch != _storageEpoch
+                    || scope.WorldId != GeneratedItemRegistryService.CurrentWorldIdString()) return;
+                if (!CommitVerifiedAssetInScope(itemId, file, bytes, actualHash, scope))
+                    throw new IOException("Verified PNG could not be committed to its owned image store.");
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -1146,17 +1249,24 @@ public sealed class GeneratedAssetSyncService : IDisposable
         {
             lock (_lock)
             {
-                if (_disposed) return;
+                if (_disposed || scope is null || scope.Epoch != _storageEpoch
+                    || scope.WorldId != GeneratedItemRegistryService.CurrentWorldIdString()) return;
                 if (LocalHttpQuietFailure.IsExpectedOffline(ex))
                     LocalHttpQuietFailure.Record("asset:" + SanitizeBaseUrl(baseUrl), ex, TimeSpan.FromSeconds(60));
                 _knownMissing[key] = DateTime.UtcNow;
             }
             if (integrityFailure && Main.netMode == NetmodeID.MultiplayerClient && !string.IsNullOrWhiteSpace(itemId))
             {
-                Main.QueueMainThreadAction(() => InfiniCrafterLocalMod.GeneratedItems?.RequestOneFromServer(
-                    itemId,
-                    forceAssetRetry: true,
-                    forceDefinitionRefresh: true));
+                Main.QueueMainThreadAction(() =>
+                {
+                    lock (_lock)
+                    {
+                        if (_disposed || scope is null || scope.Epoch != _storageEpoch
+                            || scope.WorldId != GeneratedItemRegistryService.CurrentWorldIdString()) return;
+                        InfiniCrafterLocalMod.GeneratedItems?.RequestOneFromServer(
+                            itemId, forceAssetRetry: true, forceDefinitionRefresh: true);
+                    }
+                });
             }
         }
         finally
@@ -1173,21 +1283,39 @@ public sealed class GeneratedAssetSyncService : IDisposable
         }
     }
 
+    // Called under _lock. Copy identity/display values, not a mutable definition.
+    private StorageScope? CaptureStorageScope(string itemId, string file)
+    {
+        _storageOwners.TryGetValue(itemId, out var owner);
+        if (owner is null) InfiniCrafterLocalMod.GeneratedItems?.TryGet(itemId, out owner!);
+        if (owner is not null && !GeneratedItemRegistryService.IsCurrentWorldData(owner)) return null;
+        if (owner is null && Main.netMode == NetmodeID.MultiplayerClient) return null;
+        return new(_storageEpoch, owner?.RecipeMeta.WorldId ?? GeneratedItemRegistryService.CurrentWorldIdString(),
+            Main.worldName, itemId, owner?.Name ?? itemId, owner is null ? "asset" : AssetRole(owner, file));
+    }
+
     private void CommitVerifiedAsset(string itemId, string file, byte[] bytes, string expectedHash)
     {
-        if (!IsCompletePng(bytes) || !string.Equals(ComputeSha256Hex(bytes), expectedHash, StringComparison.OrdinalIgnoreCase))
-            return;
-        string local = Path.Combine(CacheRoot, file);
-        string partPath = local + ".part";
+        lock (_lock)
+        {
+            StorageScope? scope = CaptureStorageScope(itemId, file);
+            if (scope is not null) CommitVerifiedAssetInScope(itemId, file, bytes, expectedHash, scope);
+        }
+    }
+
+    private bool CommitVerifiedAssetInScope(string itemId, string file, byte[] bytes, string expectedHash, StorageScope scope)
+    {
+        if (!SharedImageStore.IsFileName(file) || !IsCompletePng(bytes)
+            || !string.Equals(ComputeSha256Hex(bytes), expectedHash, StringComparison.OrdinalIgnoreCase)) return false;
         try
         {
+            string local;
             lock (_lock)
             {
-                if (_disposed) return;
-                Directory.CreateDirectory(CacheRoot);
-                File.WriteAllBytes(partPath, bytes);
+                if (_disposed || scope.Epoch != _storageEpoch
+                    || scope.WorldId != GeneratedItemRegistryService.CurrentWorldIdString()) return false;
+                local = _imageStore.Publish(file, bytes, scope.WorldId, scope.WorldName, scope.ItemId, scope.ItemName, scope.Role);
                 InvalidateCertifiedLocalAsset(file);
-                File.Move(partPath, local, overwrite: true);
                 if (!string.IsNullOrWhiteSpace(itemId))
                 {
                     if (!_remoteDescriptorsByItem.TryGetValue(itemId, out var map))
@@ -1202,11 +1330,10 @@ public sealed class GeneratedAssetSyncService : IDisposable
                     _pendingPacketAssets.Remove(key);
             }
             Main.QueueMainThreadAction(() => InfiniCrafterLocalMod.Sprites?.Invalidate(local));
+            return true;
         }
-        catch
-        {
-            try { if (File.Exists(partPath)) File.Delete(partPath); } catch { }
-        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException or System.Text.Json.JsonException or KeyNotFoundException or FormatException)
+        { return false; /* Keep existing canonical bytes and pending retries on a failed publication. */ }
     }
 
     private async Task<byte[]> DownloadAssetBytesWithBoundedStreamAsync(string url, CancellationToken cancellationToken)
@@ -1249,6 +1376,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
 
     private static (long Length, long WriteTicks)? LocalAssetStat(string local)
     {
+        if (string.IsNullOrWhiteSpace(local)) return null;
         try
         {
             var info = new FileInfo(local);
@@ -1276,10 +1404,17 @@ public sealed class GeneratedAssetSyncService : IDisposable
 
     private string ResolveServerSourcePath(string rawPath, string file)
     {
-        try { if (!string.IsNullOrWhiteSpace(rawPath) && File.Exists(rawPath)) return Path.GetFullPath(rawPath); } catch { }
         try
         {
-            string cached = Path.Combine(CacheRoot, file);
+            SharedImageStore.Entry? indexed = _imageStore.Resolve(file);
+            if (indexed is not null) return indexed.Path;
+            if (_imageStore.HasIndex(file)) return "";
+            // Only host-side accepted generator definitions may name a legacy
+            // local source. A peer's absolute path is never a filesystem grant.
+            if (CanUseDirectLocalSource && !string.IsNullOrWhiteSpace(rawPath)
+                && !IsSharedPath(rawPath) && File.Exists(rawPath) && rawPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                return Path.GetFullPath(rawPath);
+            string cached = LocalAssetPath(file);
             if (File.Exists(cached)) return cached;
         }
         catch { }
@@ -1287,16 +1422,22 @@ public sealed class GeneratedAssetSyncService : IDisposable
     }
 
     private static IEnumerable<string> RuntimeAssetPaths(GeneratedItemData data)
+        => RuntimeAssetSlots(data).Select(slot => slot.Path);
+
+    private static string AssetRole(GeneratedItemData data, string file)
+        => RuntimeAssetSlots(data).FirstOrDefault(slot => string.Equals(FileNameFromPath(slot.Path), file, StringComparison.OrdinalIgnoreCase)).Role ?? "asset";
+
+    private static IEnumerable<(string Role, string Path)> RuntimeAssetSlots(GeneratedItemData data)
     {
         foreach (VfxAssetSpec asset in data.VfxManifest.Assets ?? Array.Empty<VfxAssetSpec>())
-            yield return asset.SpritePath;
-        yield return data.Visual?.SpritePath ?? "";
-        yield return data.Visual?.EquipOverlayPath ?? "";
+            yield return ("vfx_" + asset.Id, asset.SpritePath);
+        yield return ("item", data.Visual?.SpritePath ?? "");
+        yield return ("equip_overlay", data.Visual?.EquipOverlayPath ?? "");
         foreach (RuntimeEntitySpec entity in data.RuntimeProgram.Entities)
             if (entity?.Visual is not null)
             {
-                yield return entity.Visual.SpritePath ?? "";
-                yield return entity.Visual.ImpactSpritePath ?? "";
+                yield return ("entity_" + entity.Id, entity.Visual.SpritePath ?? "");
+                yield return ("impact_" + entity.Id, entity.Visual.ImpactSpritePath ?? "");
             }
     }
 
@@ -1362,7 +1503,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
         using FileStream stream = File.OpenRead(path);
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
-    private static bool IsCompletePng(byte[] bytes)
+    internal static bool IsCompletePng(byte[] bytes)
     {
         try
         {

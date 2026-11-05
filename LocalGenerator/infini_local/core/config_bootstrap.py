@@ -10,7 +10,7 @@ redeclaring bootstrap state locally.
 import os
 from infini_local.core.config_validation import reject_retired_config
 
-from infini_local.core.app_paths import CONFIG_PATH, ROOT, STATE_ROOT
+from infini_local.core.app_paths import CONFIG_PATH, ROOT, STATE_ROOT, persistent_filesystem_path
 from infini_local.core.env_utils import env_path, env_str, load_env_file
 
 from infini_local import APP_VERSION
@@ -22,11 +22,13 @@ reject_retired_config(os.environ)
 
 RECIPE_IDENTITY_VERSION = env_str("INFINI_RECIPE_IDENTITY_VERSION", "recipe_v4_25_no_item_family_routing")
 CACHE_DIR = env_path("INFINI_CACHE_DIR", STATE_ROOT / "cache")
-SPRITE_DIR = CACHE_DIR / "sprites"
+LEGACY_SPRITE_DIR = CACHE_DIR / "sprites"
+# Final PNGs are persistent assets, not an expendable generator cache.
+SPRITE_DIR = persistent_filesystem_path(env_path("INFINI_IMAGE_DIR", STATE_ROOT / "images"))
 WORLD_RECIPES_DIR = env_path("INFINI_WORLD_RECIPES_DIR", CACHE_DIR / "world_recipes")
 
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
-SPRITE_DIR.mkdir(parents=True, exist_ok=True)
+# The image store is created lazily by its write owner, never just on import.
 WORLD_RECIPES_DIR.mkdir(parents=True, exist_ok=True)
 
 # Public URL other Terraria clients should use to fetch generated assets from this generator.
@@ -43,6 +45,7 @@ __all__ = [
     "DATA_DIR",
     "CACHE_DIR",
     "SPRITE_DIR",
+    "LEGACY_SPRITE_DIR",
     "WORLD_RECIPES_DIR",
     "ASSET_PUBLIC_BASE_URL",
     "ASSET_TRANSPORT",

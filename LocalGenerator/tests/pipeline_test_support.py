@@ -124,3 +124,36 @@ def install_campaign_fault(monkeypatch, *, boundary, consumer, change):
 
     monkeypatch.setattr(combine_pipeline, attr, consumed)
     return visited
+
+
+def legacy_transfer_fixture(data, root):
+    """Explicit pre-index fixture for byte-mutation and legacy precedence tests.
+
+    Generated immutable PNGs use their index. These tests intentionally edit
+    bytes and therefore move the fixture to the separately supported flat
+    legacy transport, rather than silently violating an immutable identity.
+    """
+    from infini_local.storage import image_store
+    replacements = {}
+    for raw in asset_sync_service.runtime_asset_paths(data):
+        if not raw or raw in replacements:
+            continue
+        source = Path(raw)
+        if not source.is_file() or source.parent.name != "final":
+            continue
+        destination = root / source.name
+        source.replace(destination)
+        image_store._index_path(root, source.name).unlink()
+        replacements[str(source)] = str(destination)
+    def project(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if isinstance(value, str) and value in replacements:
+                    node[key] = replacements[value]
+                else:
+                    project(value)
+        elif isinstance(node, list):
+            for row in node:
+                project(row)
+    project(data)
+    return data

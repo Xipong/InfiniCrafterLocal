@@ -109,6 +109,11 @@ def _contract_check_missing_or_unreadable_registry_is_distinguished() -> None:
     assert "not readable" in corrupt["reason"]
 
 
+def _contract_check_repository_environment_declarations_are_consistent() -> None:
+    report = _load_registry_module().build_registry()
+    assert report["ok"], report["errors"]
+
+
 # One collected item per contract module: the checks above keep source order and
 # their own tracebacks. The shared runner discovers them by prefix, so a new check
 # cannot be silently left out of a hand-maintained dispatch list.

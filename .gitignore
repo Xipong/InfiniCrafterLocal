@@ -35,6 +35,7 @@ TestResults/
 
 # Local generator/runtime outputs
 LocalGenerator/cache/
+LocalGenerator/images/
 LocalGenerator/output/
 LocalGenerator/outputs/
 LocalGenerator/generated_assets/

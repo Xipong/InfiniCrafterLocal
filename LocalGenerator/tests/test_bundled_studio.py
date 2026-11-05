@@ -53,7 +53,7 @@ class BundledPathsTests(unittest.TestCase):
         self.data = self.root / "Документы" / "My Games" / "Studio data"
         self.save = self.root / "custom tML save"
 
-    def run_application(self, *, runtime: Path | None = None, updates: dict | None = None) -> dict:
+    def run_application(self, *, runtime: Path | None = None, updates: dict | None = None, environment: dict | None = None) -> dict:
         script = r'''
 import importlib.util, json, os, sys
 from pathlib import Path
@@ -77,6 +77,7 @@ print(json.dumps({
     "root": str(app_paths.ROOT), "state": str(app_paths.STATE_ROOT),
     "config": str(app.config_path), "cwd": str(Path.cwd()),
     "cache": str(config_bootstrap.CACHE_DIR.resolve()),
+    "images": str(config_bootstrap.SPRITE_DIR.resolve()),
     "worlds": str(config_bootstrap.WORLD_RECIPES_DIR.resolve()),
     "proposedCache": proposed["cacheDir"], "proposedWorlds": proposed["worldRecipesDir"],
     "prompt": saved.get("INFINI_PROMPT_STYLE"), "language": saved.get("INFINI_LANGUAGE"),
@@ -88,7 +89,7 @@ app.on_close()
         result = subprocess.run(
             [sys.executable, "-I", "-B", "-c", script, str(runtime or self.runtime),
              str(self.data), str(self.save), json.dumps(updates)],
-            cwd=self.root, env=isolated_environment(), capture_output=True,
+            cwd=self.root, env={**isolated_environment(), **(environment or {})}, capture_output=True,
             text=True, encoding="utf-8", timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return json.loads(result.stdout)
@@ -104,6 +105,7 @@ app.on_close()
         self.assertEqual(first["state"], str(self.data))
         self.assertEqual(first["cwd"], str(self.data))
         self.assertEqual(first["cache"], str(self.data / "cache"))
+        self.assertEqual(first["images"], str(self.save / "InfiniCrafterLocal/images"))
         self.assertEqual(first["worlds"], str(self.data / "cache/world_recipes"))
         cache_item = Path(first["worlds"]) / "saved-recipe.json"
         cache_item.write_bytes(b'{"retained": true}')
@@ -112,7 +114,7 @@ app.on_close()
         second = self.run_application(runtime=second_runtime)
         self.assertEqual(second["root"], str(second_runtime))
         self.assertNotEqual(first["root"], second["root"])
-        for key in ("state", "config", "cache", "worlds", "prompt", "language"):
+        for key in ("state", "config", "cache", "images", "worlds", "prompt", "language"):
             self.assertEqual(second[key], first[key], key)
         self.assertEqual(second["prompt"], "retained player settings")
         self.assertEqual((self.data / "config.env").read_bytes(), config_bytes)
@@ -146,6 +148,15 @@ app.on_close()
                          str(self.save / "InfiniCrafterLocal/projectiles_runtime_dump.jsonl"))
         self.assertEqual(result["prompt"], "existing profile")
 
+    def test_tml_inherited_image_root_wins_over_saved_python_override(self):
+        self.data.mkdir(parents=True)
+        saved_root = self.root / "old standalone images"
+        native_root = self.root / "Игра" / "общие картинки"
+        (self.data / "config.env").write_text("INFINI_IMAGE_DIR=" + str(saved_root) + "\n", encoding="utf-8")
+        result = self.run_application(environment={"INFINI_IMAGE_DIR": str(native_root)})
+        self.assertEqual(result["images"], str(native_root))
+        self.assertIn(str(saved_root), (self.data / "config.env").read_text(encoding="utf-8"))
+
     def test_help_is_read_only_and_source_launch_keeps_its_state_location(self):
         before = inventory(self.runtime)
         result = subprocess.run(
@@ -170,7 +181,7 @@ app.on_close()
             "import json, os, sys\nfrom pathlib import Path\nimport child_fixture\n"
             "print(json.dumps({'value': child_fixture.VALUE, 'cwd': str(Path.cwd()), "
             "'data': os.environ.get('INFINI_DATA_DIR'), 'launch_id': os.environ.get('INFINI_STUDIO_LAUNCH_ID'), "
-            "'utf8': sys.flags.utf8_mode, "
+            "'images': os.environ.get('INFINI_IMAGE_DIR'), 'utf8': sys.flags.utf8_mode, "
             "'unbuffered': sys.stdout.write_through}, ensure_ascii=False))\n", encoding="utf-8")
         before = inventory(self.runtime)
         script = r'''
@@ -184,7 +195,9 @@ spec.loader.exec_module(entry)
 entry.configure_environment(data, save)
 from infini_local.desktop.settings_controller import SettingsController
 app = SettingsController()
-app.update_values({"INFINI_LANGUAGE": "en", "INFINI_DATA_DIR": "must-not-replace-selected-data"})
+app._managed_by_tmodloader = True
+app.update_values({"INFINI_LANGUAGE": "en", "INFINI_DATA_DIR": "must-not-replace-selected-data",
+                   "INFINI_IMAGE_DIR": "must-not-replace-native-image-root"})
 with patch("infini_local.desktop.studio_operations.subprocess.Popen") as launch:
     result = app._start_server_after_guard()
     assert result["ok"], result
@@ -193,6 +206,8 @@ with patch("infini_local.desktop.studio_operations.subprocess.Popen") as launch:
     options = launch.call_args.kwargs
     assert options["env"]["INFINI_STUDIO_LAUNCH_ID"] == app._owned_server_launch_id
     assert len(app._owned_server_launch_id) == 32
+    assert options["env"]["INFINI_IMAGE_DIR"] == str(save / "InfiniCrafterLocal/images")
+    assert app._owned_launch_settings["INFINI_IMAGE_DIR"] == options["env"]["INFINI_IMAGE_DIR"]
 app.on_close()
 # Embedded Python ignores PYTHON* settings. -E reproduces that interpreter
 # boundary here, without depending on Windows or a downloaded runtime.
@@ -210,6 +225,7 @@ print(child.stdout, end="")
         launch_id = child.pop("launch_id")
         self.assertRegex(launch_id, r"^[0-9a-f]{32}$")
         self.assertEqual(child, {"value": "готово", "cwd": str(self.data), "data": str(self.data),
+                                 "images": str(self.save / "InfiniCrafterLocal/images"),
                                  "utf8": 1, "unbuffered": True})
         self.assertTrue((self.data / "config.env").is_file())
         self.assertEqual(inventory(self.runtime), before)

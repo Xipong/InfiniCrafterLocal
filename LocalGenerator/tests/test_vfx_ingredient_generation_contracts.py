@@ -124,13 +124,13 @@ def test_case_and_processing_suffix_ids_have_distinct_immutable_png_names(offlin
     assets = out["vfxManifest"]["assets"]
     assert [asset["id"] for asset in assets] == list(ids)
     names = [Path(asset["spritePath"]).name for asset in assets]
-    assert all(name.startswith("infini_vfx_png_") for name in names)
+    assert all(name.startswith("vfx_") for name in names)
     assert len({name.casefold() for name in names}) == len(ids)
     assert all(asset["spriteStatus"] == "generated" for asset in assets)
     roster = asset_sync_service.runtime_asset_files(out)
     assert set(names) <= set(roster)
     assert len(roster) == len(ids) + 1
-    assert all(name in [Path(asset["spritePath"]).name for asset in assets] for name in roster if name.startswith("infini_vfx_png_"))
+    assert all(name in [Path(asset["spritePath"]).name for asset in assets] for name in roster if name.startswith("vfx_"))
     assert len([call for call in calls if call["id"].startswith("infini_vfx_job_")]) == len(ids)
 
 def test_same_authored_asset_id_changed_png_does_not_replace_distributed_file(offline_backend, monkeypatch):
@@ -152,7 +152,7 @@ def test_same_authored_asset_id_changed_png_does_not_replace_distributed_file(of
     assert new_path != old_path
     assert new_path.read_bytes() != old_bytes
     assert old_path.read_bytes() == old_bytes
-    assert not list(new_path.parent.glob(".infini_vfx_png_*.part"))
+    assert not list(new_path.parent.glob(".vfx_*.part"))
 
 @pytest.mark.parametrize("collision", ["item", "ingredient", "different_directory_same_name"])
 def test_delivery_rejects_cross_role_or_cross_request_filename_aliasing(offline_backend, tmp_path, collision):
@@ -218,7 +218,7 @@ def test_strip_retry_keeps_asymmetric_uv_landmarks_and_publishes_only_final_png(
         assert image.getpixel((31, 11))[2] > image.getpixel((31, 11))[0]
     assert "retry" not in Path(asset["spritePath"]).name
     assert "refit" not in Path(asset["spritePath"]).name
-    assert len([name for name in asset_sync_service.runtime_asset_files(out) if name.startswith("infini_vfx_png_")]) == 1
+    assert len([name for name in asset_sync_service.runtime_asset_files(out) if name.startswith("vfx_")]) == 1
 
 def test_tiny_strip_does_not_enter_silhouette_refit(offline_backend, monkeypatch):
     original_backend = visual_sprite_generation.generate_sdcpp
@@ -247,6 +247,8 @@ def test_tiny_strip_does_not_enter_silhouette_refit(offline_backend, monkeypatch
 def test_ready_asset_cannot_exceed_existing_network_file_limit(offline_backend):
     from PIL.PngImagePlugin import PngInfo
     out = visual_sprite_generation.maybe_generate_visual_assets(_data())
+    from pipeline_test_support import legacy_transfer_fixture
+    legacy_transfer_fixture(out, visual_delivery_gate.SPRITE_DIR)
     path = Path(out["vfxManifest"]["assets"][0]["spritePath"])
     info = PngInfo()
     info.add_text("offline_fixture_padding", "x" * (8 * 1024 * 1024))
@@ -349,7 +351,7 @@ def test_ingredient_plan_pixels_and_delivery(offline_backend, monkeypatch, asset
     if renderer == "shared" or (layout == "strip" and canvas == 32):
         assert asset["spriteStatus"] == "generated"
     path = Path(asset["spritePath"])
-    assert path.name.startswith("infini_vfx_png_")
+    assert path.name.startswith("vfx_")
     assert asset["spriteUrl"] == "/sprite/" + path.name
     assert 0.0 < asset["spriteTechnicalScore"] <= 1.0
     assert asset_sync_service.is_complete_png_file(path)
@@ -427,8 +429,10 @@ def test_required_ingredient_failure_projection(offline_backend, monkeypatch, tm
         original = getattr(owner, name)
         def stage_boundary(*args, **kwargs):
             role = kwargs.get("role", args[3] if name == "prepare_sprite_master" and len(args) > 3 else args[2] if name == "bake_sprite_from_master" and len(args) > 2 else "item")
-            if name == "replace" and Path(args[1]).name.startswith("infini_vfx_png_"):
-                assert Path(args[0]).suffix == ".part" and asset_sync_service.is_complete_png_file(args[0])
+            if name == "replace" and (Path(args[1]).name.startswith("vfx_") or (Path(args[1]).parent.name == ".index" and "vfx_" in Path(args[0]).read_text(errors="ignore"))):
+                assert Path(args[0]).suffix == ".part"
+                assert (asset_sync_service.is_complete_png_file(args[0]) if Path(args[1]).suffix == ".png"
+                        else json.loads(Path(args[0]).read_text())["role"].startswith("vfx_"))
                 raise OSError("offline atomic publication failure")
             if fault == "native_alpha_postprocess_io" and role == "vfx_cutout":
                 raise OSError("offline postprocess write failure")
@@ -452,12 +456,12 @@ def test_required_ingredient_failure_projection(offline_backend, monkeypatch, tm
     if fault == "wrong_canvas":
         attempts = json.loads(out["debug"]["vfx:" + request["id"] + "SpriteValidation"])
         assert "final_canvas_mismatch" in attempts[0]["validation"]["reasons"]
-    if fault == "provider_procedural": assert not list(tmp_path.glob("infini_vfx_png_*.png"))
+    if fault == "provider_procedural": assert not list(tmp_path.glob("vfx_*.png"))
     if fault == "partial_backend":
         assert assets[0]["spriteStatus"] == "generated" and asset_sync_service.is_complete_png_file(assets[0]["spritePath"])
     if old_path:
         assert old_path.read_bytes() == old_bytes
-        assert not list(tmp_path.glob(".infini_vfx_png_*.part"))
+        assert not list(tmp_path.glob(".vfx_*.part"))
     report = visual_delivery_gate.visual_delivery_report(out, check_backend_config=False)
     assert not report["ok"]
     if fault == "partial_backend": assert any(problem.get("assetId") == "bad" for problem in report["problems"])
