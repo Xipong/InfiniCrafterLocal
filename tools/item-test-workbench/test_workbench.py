@@ -73,6 +73,74 @@ class WorkbenchTests(unittest.TestCase):
                     else:
                         with self.assertRaises(RuntimeError):w.execute_loader_run(args)
 
+    def test_loader_run_rejects_truncated_duplicate_and_unordered_ticks(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);scene=root/'scene.json';dll=root/'ItemTestWorkbench.dll'
+            scene.write_text('{"ticks":3}');dll.write_bytes(b'host')
+            for index,ticks in enumerate(([2], [0,2], [0,0,2], [1,0,2], [0,1,2,2])):
+                args=SimpleNamespace(timeout=10,item=None,native_item='WoodenBoomerang',scenario=scene,
+                    out=root/str(index),no_build=True,item_boundary='fresh')
+                def run(command,**kwargs):
+                    Path(command[command.index('--output')+1]).write_text(json.dumps({
+                        'status':'passed','snapshots':[{'tick':tick} for tick in ticks],
+                        'assertions':[{'status':'passed'}]}))
+                    return subprocess.CompletedProcess(command,0,'','')
+                with self.subTest(ticks=ticks),patch.object(w,'native_executable',return_value=(dll,{})), \
+                     patch.object(w,'build_state',return_value={}),patch.object(w.subprocess,'run',side_effect=run):
+                    with self.assertRaisesRegex(RuntimeError,'Incomplete native loader report'):
+                        w.execute_loader_run(args)
+
+    def test_loader_render_requires_supported_source_before_build(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        for item,native,server in ((Path('item.json'),None,False),(None,'WoodenBoomerang',False),(None,'Fixture/Item',True)):
+            args=SimpleNamespace(timeout=10,item=item,native_item=native,item_boundary='fresh',render=True,server_mode=server)
+            with self.subTest(item=item,native=native,server=server),patch.object(w,'native_executable') as build:
+                with self.assertRaisesRegex(ValueError,'requires a native Mod/Item'):
+                    w.execute_loader_run(args)
+                build.assert_not_called()
+
+    def test_loader_render_rejects_missing_tampered_and_external_frames(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);frames=root/'frames';frames.mkdir();image=frames/'frame-000.png'
+            Image.new('RGB',(640,640),(20,24,32)).save(image)
+            frame={'tick':0,'path':str(image),'width':640,'height':640,'sha256':w.digest(image)}
+            report={'frameCount':1,'frames':[frame]}
+            w.validate_loader_render(report,root,1)
+            for changed in ({'path':str(root/'other.png')},{'sha256':'0'*64},{'tick':1},{'width':1}):
+                with self.subTest(changed=changed),self.assertRaises(RuntimeError):
+                    w.validate_loader_render({'frameCount':1,'frames':[dict(frame,**changed)]},root,1)
+            with self.assertRaises(RuntimeError):w.validate_loader_render(report,root,2)
+            image.unlink()
+            with self.assertRaises(RuntimeError):w.validate_loader_render(report,root,1)
+
+    def test_loader_render_wires_cli_and_requires_native_receipts(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);scene=root/'scene.json';dll=root/'ItemTestWorkbench.dll'
+            scene.write_text('{"ticks":1}');dll.write_bytes(b'host')
+            for complete in (True,False):
+                args=SimpleNamespace(timeout=10,item=None,native_item='Fixture/Item',scenario=scene,
+                    out=root/str(complete),no_build=True,item_boundary='fresh',render=True,player_assets=root)
+                def run(command,**kwargs):
+                    self.assertEqual(command[command.index('--player-assets')+1],str(root))
+                    render=Path(command[command.index('--loader-render-output')+1]);(render/'frames').mkdir(parents=True)
+                    image=render/'frames/frame-000.png';Image.new('RGB',(640,640)).save(image)
+                    report={'status':'passed','snapshots':[{'tick':0}],'assertions':[{'status':'passed'}]}
+                    if complete:report['nativeRender']={'frameCount':1,'frames':[{'tick':0,'path':str(image),'width':640,'height':640,'sha256':w.digest(image)}]}
+                    Path(command[command.index('--output')+1]).write_text(json.dumps(report))
+                    return subprocess.CompletedProcess(command,0,'','')
+                with patch.object(w,'native_executable',return_value=(dll,{})),patch.object(w,'build_state',return_value={}),patch.object(w.subprocess,'run',side_effect=run):
+                    if complete:self.assertEqual(w.execute_loader_run(args),0)
+                    else:
+                        with self.assertRaisesRegex(RuntimeError,'Incomplete native loader render'):
+                            w.execute_loader_run(args)
+
     def test_loader_receipt_tracks_effective_production_content_override(self):
         from types import SimpleNamespace
         from unittest.mock import patch

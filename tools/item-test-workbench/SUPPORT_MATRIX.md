@@ -113,3 +113,20 @@ cooldown are observed; Player.Spawn, actual bed validation, arbitrary destinatio
 safety and multiplayer are not certified.
 
 Native torch light providers are initialized through the original `TorchID.Initialize` before scene/content setup, matching the native Main bootstrap owner. `verify_status_dust.py` exercises on-hit Shadowflame/Frostburn2 through NPC and Dust update, real dust pixels, expiry, fresh-process reset and no-hit/no-buff/no-draw controls. This does not expand the authored `nativeDust` selector admission or certify arbitrary mod torch providers.
+
+## Standalone loader draw observer
+
+`loader-run --render` observes actual post-Player/NPC/Projectile updates using
+Main.DrawProj and PlayerRenderer on a neutral background. It is separate from
+the generated-item renderer and leaves all existing admission rules intact.
+Only unequipped starter players, explicit native mod PNG textures, ordinary
+visible mod projectiles and native held-projectile drawing are admitted.
+Custom DrawBehind overrides, hidden non-held projectiles, vanilla texture
+aliases, generated items, mounts/equipment and server rendering fail explicitly.
+CPU updates remain dedicated-mode; client lifecycle, NPC/world/dust/gore art,
+custom effects, sound and multiplayer are not covered. A frame is post-update
+evidence, never an independently replayed AI pose. See README for grounding,
+source texture provenance and the exact frame integrity checks.
+Draw hooks may consume native RNG or change mod state; no general side-effect
+isolation or CPU-only trajectory equivalence is claimed. The fixture comparison
+checks that bounded fixture, not every arbitrary mod's draw hooks.

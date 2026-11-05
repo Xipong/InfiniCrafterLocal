@@ -107,6 +107,8 @@ jobs:
           host="$base/bin/Release/net8.0/ItemTestWorkbench.dll"
           dotnet "$host" --check-assertions
           dotnet "$host" --check-owned-registration
+          INFINI_MOD_SOURCE_ROOT="$PWD/ModSources/InfiniCrafterLocal" \
+            dotnet "$host" --check-owned-registration
           python "$base/verify_world.py" --no-build --out artifacts/workbench-ci/world \
             2>&1 | tee artifacts/workbench-ci/world.log
           python "$base/verify_quality.py" --native-dll "$host" --out artifacts/workbench-ci/owned-quality \
@@ -144,6 +146,20 @@ jobs:
             --dependency-tmod "$RUNNER_TEMP/WorkbenchObserverFixture.tmod" \
             --dependent-tmod "$RUNNER_TEMP/WorkbenchDependentFixture.tmod" \
             2>&1 | tee artifacts/workbench-ci/loader-tmod.log
+      - name: Verify actual native loader animation capture
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=tools/item-test-workbench
+          host="$base/bin/Release/net8.0/ItemTestWorkbench.dll"
+          fixture="$base/fixture-mod/bin/Release/net8.0/WorkbenchObserverFixture.dll"
+          python "$base/verify_loader_scene.py" --native-dll "$host" --mod-dll "$fixture" \
+            --mod-root "$base/fixtures/WorkbenchObserverFixture" \
+            2>&1 | tee artifacts/workbench-ci/loader-scene.log
+          python "$base/verify_loader_render.py" --native-dll "$host" --mod-dll "$fixture" \
+            --mod-root "$base/fixtures/WorkbenchObserverFixture" --player-assets "$INFINI_PLAYER_ASSET_DIR" \
+            --out artifacts/workbench-ci/loader-render \
+            2>&1 | tee artifacts/workbench-ci/loader-render.log
       - name: Render a Luminance on-hit particle using the real resource
         shell: bash
         run: |

@@ -1,0 +1,48 @@
+{
+  "ticks": 120,
+  "seed": 1,
+  "playerUpdate": "full",
+  "player": {
+    "x": 800,
+    "y": 710
+  },
+  "dummy": {
+    "x": 1100,
+    "y": 710
+  },
+  "tiles": [
+    {
+      "tileX": 1,
+      "tileY": 47,
+      "width": 97,
+      "height": 1
+    }
+  ],
+  "actions": [
+    {
+      "tick": 45,
+      "kind": "aim",
+      "x": 1100,
+      "y": 731
+    },
+    {
+      "tick": 45,
+      "kind": "primary"
+    },
+    {
+      "tick": 46,
+      "kind": "release"
+    }
+  ],
+  "assertions": [
+    {
+      "kind": "spawned"
+    },
+    {
+      "kind": "all_inactive"
+    },
+    {
+      "kind": "no_nonfinite"
+    }
+  ]
+}

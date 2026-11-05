@@ -509,6 +509,12 @@ def execute_loader_run(args):
         raise ValueError("Supply exactly one --item or --native-item")
     if item is None and args.item_boundary != "fresh":
         raise ValueError("item-boundary applies only to generated JSON")
+    render = getattr(args, "render", False)
+    player_assets = getattr(args, "player_assets", None)
+    if render and (getattr(args, "server_mode", False) or item is not None or "/" not in (native_item or "")):
+        raise ValueError("Loader rendering requires a native Mod/Item in single-player mode")
+    if player_assets is not None and not render:
+        raise ValueError("--player-assets requires --render")
     scenario, output = args.scenario.resolve(), args.out.resolve()
     if item is not None:read_json(item)
     scene = read_json(scenario)
@@ -540,6 +546,14 @@ def execute_loader_run(args):
     # The native host permits a source-root override. Bind evidence to the
     # effective metadata/assets, not just the default copied build content.
     env, _ = native_environment()
+    if render:
+        player_assets = player_assets or env.get("INFINI_PLAYER_ASSET_DIR")
+        if not player_assets:
+            raise ValueError("--render requires --player-assets or INFINI_PLAYER_ASSET_DIR")
+        player_assets = Path(player_assets).expanduser().resolve(strict=True)
+        if not player_assets.is_dir():
+            raise ValueError("Player assets must be an existing directory")
+        command += ["--loader-render-output", str(output / "native-frames"), "--player-assets", str(player_assets)]
     configured_root = env.get("INFINI_MOD_SOURCE_ROOT", "")
     production_root = (Path(configured_root) if configured_root.strip() else dll.parent / "native-mod").resolve()
     env["INFINI_MOD_SOURCE_ROOT"] = str(production_root)
@@ -583,10 +597,35 @@ def execute_loader_run(args):
         raise RuntimeError("Native loader report and process exit disagree; inspect logs")
     if status == "passed":
         frames, checks = trace.get("snapshots", []), trace.get("assertions", [])
-        if not checks or any(c.get("status") != "passed" for c in checks) or not frames or frames[-1].get("tick") != scene.get("ticks",120)-1:
+        if not checks or any(c.get("status") != "passed" for c in checks) or [f.get("tick") for f in frames] != list(range(scene.get("ticks",120))):
             raise RuntimeError("Incomplete native loader report cannot pass")
-    print(json.dumps({"status": status, "trace": str(output / "native.json"), "combat": trace.get("combat")}, ensure_ascii=False))
+        if render:
+            validate_loader_render(trace.get("nativeRender"), output / "native-frames", scene.get("ticks", 120))
+    print(json.dumps({"status": status, "trace": str(output / "native.json"), "combat": trace.get("combat"),
+                      "nativeFrames": str(output / "native-frames") if render else None}, ensure_ascii=False))
     return expected
+
+
+def validate_loader_render(report, root, ticks):
+    """Require exact native frame evidence, never accept a partial visual run."""
+    root = root.resolve()
+    if not isinstance(report, dict) or report.get("frameCount") != ticks:
+        raise RuntimeError("Incomplete native loader render report")
+    frames = report.get("frames", [])
+    if [f.get("tick") for f in frames] != list(range(ticks)):
+        raise RuntimeError("Incomplete native loader render timeline")
+    for frame in frames:
+        path = root / "frames" / f"frame-{frame['tick']:03d}.png"
+        if Path(frame.get("path", "")).absolute() != path or path.is_symlink() or not path.is_file() or path.resolve() != path:
+            raise RuntimeError("Native loader frame is missing or outside its expected path")
+        if frame.get("width") != 640 or frame.get("height") != 640 or frame.get("sha256") != digest(path):
+            raise RuntimeError("Native loader frame does not match its receipt")
+        # Decode the complete PNG, not just its extension or IHDR.
+        from PIL import Image
+        with Image.open(path) as image:
+            image.load()
+            if image.format != "PNG" or image.size != (640, 640):
+                raise RuntimeError("Native loader frame has invalid PNG geometry")
 
 
 def execute_run(args):
@@ -715,6 +754,8 @@ def main():
     r.add_argument("--timeout",type=int,default=180)
     r.add_argument("--mod", dest="mods", type=Path, nargs=2, action="append", default=[], metavar=("DLL", "SOURCE_ROOT"), help="Additional original mod and source root; repeat for each dependency")
     r.add_argument("--server-mode", action="store_true", help="Use native server network mode for loading and the controlled CPU scene")
+    r.add_argument("--render", action="store_true", help="Capture actual native mod post-update player/projectile drawing as PNGs; limited diagnostic scene")
+    r.add_argument("--player-assets", type=Path, help="Pinned community player PNG root for --render (or INFINI_PLAYER_ASSET_DIR)")
     r.add_argument("--tmod", dest="tmods", type=Path, action="append", default=[], metavar="PATH", help="Additional original .tmod archive; repeat for dependencies")
     r=sub.add_parser("report",help="Audit a saved run and emit compact agent evidence; no execution");r.add_argument("run",type=Path);r.add_argument("--out",type=Path);r.add_argument("--contact-sheet",action="store_true")
     r=sub.add_parser("suite",help="Execute an explicit scenario matrix, preserving expected native failures");r.add_argument("manifest",type=Path);r.add_argument("--out",type=Path,required=True);r.add_argument("--no-build",action="store_true");r.add_argument("--plan",action="store_true",help="Read-only input validation and case listing; not a run")

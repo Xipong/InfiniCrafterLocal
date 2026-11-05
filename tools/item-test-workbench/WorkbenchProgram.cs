@@ -36,7 +36,7 @@ internal static class WorkbenchProgram
             if (args.Length == 1 && args[0] == "--check-owned-registration") { EngineRuntimeChecks.CheckWorkbenchOwnedRegistration(); return 0; }
             if (args.Length == 2 && args[0] == "--write-fixtures") { EngineRuntimeChecks.WriteWorkbenchFixtures(args[1]); return 0; }
             if(nativeLoaderScene) args=args.Where(a=>a!="--native-loader-scene").ToArray();
-            string itemBoundary="fresh"; string? item = null, nativeItem = null, scenario = null; int? vanillaItem = null;
+            string itemBoundary="fresh"; string? item = null, nativeItem = null, scenario = null; int? vanillaItem = null; string? loaderRenderOutput = null, playerAssets = null;
             var additionalDlls = new List<string>(); var additionalRoots = new List<string>(); var tmodPaths = new List<string>(); bool serverMode = false;
             for (int i = 0; i < args.Length; i += 2)
             {
@@ -53,6 +53,8 @@ internal static class WorkbenchProgram
                     case "--tmod": tmodPaths.Add(args[i+1]); break;
                     case "--scenario": scenario = args[i + 1]; break;
                     case "--output": output = args[i + 1]; break;
+                    case "--loader-render-output": loaderRenderOutput = args[i + 1]; break;
+                    case "--player-assets": playerAssets = args[i + 1]; break;
                     default: throw new ArgumentException("Unknown argument: " + args[i]);
                 }
             }
@@ -60,10 +62,16 @@ internal static class WorkbenchProgram
             if((vanillaItem.HasValue || nativeItem is not null) && itemBoundary!="fresh") throw new ArgumentException("item-boundary applies only to generated JSON input");
             if(!nativeLoaderScene && nativeItem is not null)throw new ArgumentException("--native-item requires --native-loader-scene");
             if(!nativeLoaderScene && (additionalDlls.Count != 0 || additionalRoots.Count != 0 || tmodPaths.Count != 0 || serverMode))throw new ArgumentException("Additional mod options require --native-loader-scene");
+            if (loaderRenderOutput is not null && (!nativeLoaderScene || nativeItem is null || !nativeItem.Contains('/') || item is not null || serverMode))
+                throw new ArgumentException("Loader rendering requires --native-loader-scene and --native-item MOD/ITEM, without server mode or generated JSON");
+            if (playerAssets is not null && loaderRenderOutput is null) throw new ArgumentException("--player-assets requires --loader-render-output");
             var extraMods = ModInputs(additionalDlls, additionalRoots, tmodPaths);
             Terraria.Program.SavePath = sandbox;
             Terraria.Main.dedServ = true;
-            var report = nativeLoaderScene?EngineRuntimeChecks.RunWorkbenchNativeLoaderScene(item,nativeItem ?? vanillaItem?.ToString(),scenario,sandbox,itemBoundary,extraMods,serverMode):EngineRuntimeChecks.RunWorkbench(item, scenario, vanillaItem, output, itemBoundary);
+            using var renderer = loaderRenderOutput is null ? null : new WNativeLoaderRenderer(loaderRenderOutput,
+                playerAssets ?? Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR") ?? throw new ArgumentException("Loader rendering requires --player-assets or INFINI_PLAYER_ASSET_DIR"));
+            var report = nativeLoaderScene?EngineRuntimeChecks.RunWorkbenchNativeLoaderScene(item,nativeItem ?? vanillaItem?.ToString(),scenario,sandbox,itemBoundary,extraMods,serverMode,renderer is null ? null : renderer.Capture):EngineRuntimeChecks.RunWorkbench(item, scenario, vanillaItem, output, itemBoundary);
+            if (renderer is not null) report["nativeRender"] = renderer.Report.DeepClone();
             Write(output, report);
             return report["status"]!.GetValue<string>() switch { "passed" => 0, "failed" => 1, _ => 2 };
         }
