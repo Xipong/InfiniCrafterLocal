@@ -313,9 +313,12 @@ static async Task CheckBundledRuntime(string resources, string saveDirectory)
 
     using var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(5) };
     Uri url;
+    string selectedImages = Path.Combine(saveDirectory, "selected images с пробелами");
+    InfiniCrafterLocal.InfiniCrafterLocalMod.AssetSync = new GeneratedAssetSyncService(selectedImages);
     using (var studio = new BundledStudio(new Terraria.ModLoader.Mod(resources), saveDirectory))
     {
         url = await studio.StartAsync();
+        RequireLaunchedImageRoot(studio, selectedImages);
         using HttpResponseMessage response = await client.GetAsync(url);
         Require(response.IsSuccessStatusCode && response.Content.Headers.ContentType?.MediaType == "text/html", "production C# launcher serves Studio HTML");
         Require(await studio.StartAsync() == url, "repeated opens reuse the running Studio instance");
@@ -331,10 +334,13 @@ static async Task CheckBundledRuntime(string resources, string saveDirectory)
     {
         // Expected: graceful shutdown or the bounded process cleanup released the listener.
     }
+    InfiniCrafterLocal.InfiniCrafterLocalMod.AssetSync = null;
     using (var first = new BundledStudio(new Terraria.ModLoader.Mod(resources), saveDirectory))
     using (var second = new BundledStudio(new Terraria.ModLoader.Mod(resources), saveDirectory))
     {
         Uri[] addresses = await Task.WhenAll(first.StartAsync(), second.StartAsync()).WaitAsync(TimeSpan.FromSeconds(100));
+        RequireLaunchedImageRoot(first, SharedImageStore.DefaultRoot(saveDirectory));
+        RequireLaunchedImageRoot(second, SharedImageStore.DefaultRoot(saveDirectory));
         Require(addresses[0] != addresses[1], "two mod instances own distinct ready Studio processes");
         foreach (Uri address in addresses)
         {
@@ -344,6 +350,16 @@ static async Task CheckBundledRuntime(string resources, string saveDirectory)
     }
     Require(File.ReadAllText(retained) == "persistent user data", "process shutdown preserves user data");
     Console.WriteLine("PASS: actual packaged Python startup, browser HTTP response, repeated-open reuse, external opener and owned-process shutdown through production C#.");
+}
+
+static void RequireLaunchedImageRoot(BundledStudio studio, string expected)
+{
+    // Inspect the actual launched process, rather than duplicating argument
+    // construction in a helper that could diverge from StartCoreAsync.
+    var processField = typeof(BundledStudio).GetField("_process", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+    var process = (System.Diagnostics.Process)processField.GetValue(studio)!;
+    Require(process.StartInfo.Environment["INFINI_IMAGE_DIR"] == expected,
+        "production process launch receives the selected image root");
 }
 
 static byte[] Archive(params (string Path, string Contents)[] entries) =>

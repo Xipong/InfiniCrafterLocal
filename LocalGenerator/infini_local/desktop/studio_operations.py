@@ -22,7 +22,6 @@ from pathlib import Path, PureWindowsPath
 from infini_local.storage import trace_tools
 from infini_local.core import http_io
 from infini_local.core.config_validation import retired_config_errors
-from infini_local.core.env_utils import env_str
 from infini_local.services.sdcpp_backend import lora_dir_from_file
 from infini_local.core.app_paths import (
     ROOT,
@@ -437,9 +436,9 @@ class StudioOperations:
         # The managed launcher binds Python to the game's already selected image
         # store. A saved Python-only override must not split this shared root on
         # the next generator restart. Standalone Studio keeps its editable path.
-        native_image_root = env_str("INFINI_IMAGE_DIR", "")
-        if self.__dict__.get("_managed_by_tmodloader") and native_image_root:
-            launch_values["INFINI_IMAGE_DIR"] = native_image_root
+        if self.__dict__.get("_managed_by_tmodloader"):
+            from infini_local.core.config_bootstrap import SPRITE_DIR
+            launch_values["INFINI_IMAGE_DIR"] = str(SPRITE_DIR)
         launch_url = self._server_base_url()
         env = os.environ.copy()
         env.update(launch_values)

@@ -1607,21 +1607,11 @@
           "maximum": null,
           "minimum": null,
           "type": "path"
-        },
-        {
-          "default": "",
-          "file": "LocalGenerator/infini_local/desktop/studio_operations.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
         }
       ],
-      "default": [
-        {
-          "expression": "STATE_ROOT / \"images\""
-        },
-        ""
-      ],
+      "default": {
+        "expression": "STATE_ROOT / \"images\""
+      },
       "documented": true,
       "example": "",
       "gui": false,
@@ -1630,11 +1620,10 @@
       "name": "INFINI_IMAGE_DIR",
       "owners": [
         "LocalGenerator/infini_local/core/config_bootstrap.py",
-        "LocalGenerator/infini_local/desktop/studio_operations.py",
         "ModSources/InfiniCrafterLocal/Common/Services/Assets/SharedImageStore.cs"
       ],
       "secret": false,
-      "type": "conflict",
+      "type": "path",
       "visibility": "documented"
     },
     {
@@ -5231,18 +5220,9 @@
       "visibility": "documented"
     }
   ],
-  "errors": [
-    {
-      "field": "INFINI_IMAGE_DIR",
-      "kind": "type_conflict",
-      "values": [
-        "path",
-        "string"
-      ]
-    }
-  ],
+  "errors": [],
   "fieldCount": 212,
-  "fingerprint": "f9b930619706df5b5ca3988504737fdfb3c42f5669553813d68dc68cc0d199ff",
+  "fingerprint": "4d72e8cdd1a54000b373e06132bd55ffb9f8b4b5bcebe800e9e05f4936b3673a",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",
@@ -5250,7 +5230,7 @@
     "C# INFINI_* references"
   ],
   "guiFieldCount": 127,
-  "ok": false,
+  "ok": true,
   "schema": "infini.config-registry.v1",
   "secretFieldCount": 10,
   "warnings": [
