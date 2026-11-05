@@ -44,7 +44,7 @@ def _current_image_control_delivery():
     data = generation.maybe_generate_visual_assets(data)
     path = Path(data["visual"]["spritePath"])
     raw = path.read_bytes()
-    alias_file = path.with_name("docx-image-ready.png")
+    alias_file = delivery.SPRITE_DIR / "docx-image-ready.png"
     alias_file.write_bytes(raw)
     alias = "https://offline.invalid/sprites/" + alias_file.name + "?revision=2#cached"
     data["visual"]["spritePath"] = alias
@@ -151,7 +151,7 @@ def test_captured_image_facts_have_current_final_offline_projection(offline_back
         assert historical.mode == current.mode == "RGBA"
         assert historical.getbbox() and current.getbbox()
         assert current.getchannel("A").getextrema() == (0, 255)
-    assert outgoing["visual"]["spriteUrl"].startswith("/sprite/infini_asset_png_")
+    assert outgoing["visual"]["spriteUrl"].startswith("/sprite/item--")
 
 
 

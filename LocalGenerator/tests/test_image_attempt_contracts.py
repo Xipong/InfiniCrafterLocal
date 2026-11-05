@@ -5,6 +5,7 @@ import copy
 import hashlib
 import io
 import json
+import re
 from pathlib import Path
 import threading
 import pytest
@@ -290,8 +291,9 @@ def test_private_retained_raw_and_stages_are_not_served_or_rostered(offline, mon
     raw = Path(data['visual']['spriteRawPath'])
     assert raw.exists() and raw.is_relative_to(private)
     evidence = [raw, *private.rglob('*_stage_*.png')]
-    assert len(evidence) == 5
-    assert all(path.exists() and not path.is_relative_to(root) for path in evidence)
+    assert len(evidence) == 4  # The accepted final bake is referenced, never copied.
+    assert all(path.exists() and path.is_relative_to(private) for path in evidence)
+    assert not list(private.rglob("*_stage_30_baked_final.png"))
     for path in evidence:
         assert serve(root, path)['code'] == serve(root, path, 'sprite')['code'] == 404
     assert sync.runtime_asset_files(data) == [Path(result[0]).name]
@@ -319,27 +321,30 @@ def test_new_publication_identity_is_exact_structured_role_entity_recipe_and_byt
         assert result[3] == 'generated'
         raw = Path(result[0]).read_bytes()
         identity = json.dumps([data['id'], role, entity, 'same_logical_id'], ensure_ascii=True, separators=(',', ':'), allow_nan=False).encode('ascii')
-        expected = 'infini_asset_png_' + sha(identity + b'\0' + raw) + '.png'
+        scope = json.dumps([str(data.get('recipeMeta', {}).get('worldId') or 'unscoped'), data['id'], role], ensure_ascii=True, separators=(',', ':')).encode('ascii')
+        label = re.sub(r'[^a-z0-9_-]+', '_', role.lower()).strip('_')[:24]
+        expected = label + '--' + sha(scope + b'\0' + identity + b'\0' + raw) + '.png'
         assert Path(result[0]).name == expected
         outcomes.append(result[0])
     assert len(set(outcomes)) == 3
 
 @pytest.mark.parametrize('kind', ['vfx_cutout', 'vfx_strip'])
-def test_vfx_publication_hash_stays_byte_identical_to_accepted_algorithm(offline, kind):
+def test_vfx_publication_preserves_identity_with_world_scoped_storage(offline, kind):
     root, requests = offline
     data = _data([_request('grain', layout='strip' if kind == 'vfx_strip' else 'cutout')])
     result = invoke(kind, 'ignored_vfx_id', data)
     assert result[3] == 'generated'
     raw = Path(result[0]).read_bytes()
     identity = json.dumps([data['vfxManifest']['recipeId'], 'grain'], ensure_ascii=True, separators=(',', ':'), allow_nan=False).encode('ascii')
-    assert Path(result[0]).name == 'infini_vfx_png_' + sha(identity + b'\0' + raw) + '.png'
+    scope = json.dumps([str(data.get('recipeMeta', {}).get('worldId') or 'unscoped'), data['id'], 'vfx_grain'], ensure_ascii=True, separators=(',', ':')).encode('ascii')
+    assert Path(result[0]).name == 'vfx_grain--' + sha(scope + b'\0' + identity + b'\0' + raw) + '.png'
 
 @pytest.mark.parametrize('save_stages', [False, True])
 def test_logical_path_tokens_cannot_escape_the_private_output_owner(offline, monkeypatch, save_stages):
     root, requests = offline
     workspace = root.parent / 'private-invocation'
     workspace.mkdir()
-    monkeypatch.setattr(generation, '_new_image_workspace', lambda: workspace)
+    monkeypatch.setattr(generation, '_new_image_workspace', lambda *args: workspace)
     monkeypatch.setattr(post, 'SAVE_SPRITE_STAGES', save_stages)
     victim = root.parent.parent / 'victim.png'
     victim.write_bytes(png((10, 90, 220)))
@@ -358,7 +363,8 @@ def test_logical_path_tokens_cannot_escape_the_private_output_owner(offline, mon
     assert logical_ids == ['../../../victim'], 'storage isolation changed semantic backend identity'
     assert victim.read_bytes() == previous, 'logical identity escaped its owned output directory'
     attempts = json.loads(data['debug']['itemSpriteValidation'])
-    assert all(Path(row[key]).resolve().is_relative_to(workspace / 'attempt-0') for row in attempts for key in ('raw', 'final'))
+    assert all(Path(row['raw']).resolve().is_relative_to(workspace / 'attempt-0') for row in attempts)
+    assert all(Path(row['final']) == Path(result[0]) for row in attempts)
 
 def test_impact_publication_entity_identity_does_not_change_legacy_processing_topology(offline, monkeypatch):
     root, requests = offline
@@ -383,7 +389,8 @@ def test_impact_publication_entity_identity_does_not_change_legacy_processing_to
     raw = Path(producer['impactSpritePath']).read_bytes()
     logical = next(row['assetId'] for row in build_visual_asset_plan(out) if row['role'] == 'impact:orb')
     identity = json.dumps([data['id'], 'impact', 'orb', logical], ensure_ascii=True, separators=(',', ':'), allow_nan=False).encode('ascii')
-    assert Path(producer['impactSpritePath']).name == 'infini_asset_png_' + sha(identity + b'\0' + raw) + '.png'
+    scope = json.dumps([str(data.get('recipeMeta', {}).get('worldId') or 'unscoped'), data['id'], 'impact'], ensure_ascii=True, separators=(',', ':')).encode('ascii')
+    assert Path(producer['impactSpritePath']).name == 'impact--' + sha(scope + b'\0' + identity + b'\0' + raw) + '.png'
 
 
 IMAGE_ROLES = ("item", "entity", "impact", "equip_overlay", "vfx_cutout", "vfx_strip")
@@ -646,3 +653,133 @@ def test_procedural_recovery_also_delivers_compact_png(offline, monkeypatch):
         assert delivered.size == (32, 32)
     assert sync.is_complete_png_file(path)
     assert serve(root, path)['raw'] == Path(path).read_bytes()
+
+
+def test_successful_explicit_dev_fallback_keeps_only_one_final_png(offline, monkeypatch):
+    root, requests = offline
+    monkeypatch.setattr(generation, 'VISUAL_ALLOW_PROCEDURAL_FALLBACK', True)
+    monkeypatch.setattr(generation, 'VISUAL_STRICT_AI_AUTHORSHIP', False)
+    monkeypatch.setattr(generation, '_generate_backend_variants', lambda *args, **kwargs: [])
+    def fixture(data, role, *, sprite_dir, **kwargs):
+        path = sprite_dir / 'offline_procedural.png'
+        path.write_bytes(png((210, 100, 20)))
+        return str(path)
+    monkeypatch.setattr(generation.visual_asset_pipeline, 'generate_procedural_asset', fixture)
+    data = _data([])
+    result = invoke('item', 'dev_fallback', data)
+    assert result[3] == 'fallback_after_failed_generation'
+    canonical = Path(result[0]).read_bytes()
+    private = Path(json.loads(data['debug']['itemSpriteDiagnostics'])['directory'])
+    assert not [p for p in private.rglob('*.png') if p.read_bytes() == canonical]
+    receipt = json.loads((private / 'result.json').read_text())
+    assert receipt['attempts'][-1]['attempt'] == 'fallback'
+    assert receipt['attempts'][-1]['final'] == result[0]
+
+
+def native_codex_responses(monkeypatch, alpha_values):
+    """Actual Codex adapter, PNG writes and processing; replace only HTTP/auth."""
+    import base64
+    import time
+    from infini_local.services import codex_auth
+
+    monkeypatch.setattr(generation, 'IMAGE_BACKEND', 'openai_codex')
+    monkeypatch.setattr(config, 'IMAGE_BACKEND', 'openai_codex')
+    monkeypatch.setattr(config, 'IMAGE_BACKEND_RAW', 'openai_codex')
+    monkeypatch.setattr(config, 'REMOVE_BG', False)
+    monkeypatch.setattr(config, 'BG_COLOR', 'transparent')
+    credentials = codex_auth.Credentials('offline-access-not-real', 'offline-refresh-not-real', 'offline-account', time.time() + 3600)
+    monkeypatch.setattr(codex_auth, 'get_credentials', lambda: credentials)
+    calls = []
+
+    def respond(url, payload, **kwargs):
+        assert url == 'https://chatgpt.com/backend-api/codex/images/generations'
+        assert payload['background'] == 'transparent'
+        alpha = alpha_values[len(calls)]
+        image = Image.new('RGBA', (64, 64), (235, 235, 235, alpha))
+        ImageDraw.Draw(image).ellipse((8, 8, 55, 55), fill=(130, 180, 50, 255 if alpha == 255 else 144))
+        stream = io.BytesIO()
+        image.save(stream, format='PNG')
+        calls.append({'payload': payload, 'raw': stream.getvalue()})
+        return {'data': [{'b64_json': base64.b64encode(stream.getvalue()).decode()}]}
+
+    monkeypatch.setattr(codex_auth, 'post_json', respond)
+    return calls
+
+
+@pytest.mark.parametrize('background_alpha', [1, 2])
+def test_codex_near_clear_field_delivers_first_attempt_without_quality_retry(offline, monkeypatch, background_alpha):
+    root, _ = offline
+    calls = native_codex_responses(monkeypatch, [background_alpha])
+    monkeypatch.setattr(generation, 'SPRITE_RETRIES', 2)
+    data = _data([])
+    result = invoke('runtime:field', 'soft_field', data)
+    assert result[3] == 'generated' and result[0]
+    assert len(calls) == 1, 'near-clear native alpha spent another image request'
+    attempts = json.loads(data['debug']['runtime:fieldSpriteValidation'])
+    assert len(attempts) == 1 and attempts[0]['validation']['ok']
+    assert Path(attempts[0]['raw']).read_bytes() == calls[0]['raw']
+    assert serve(root, result[0])['raw'] == Path(result[0]).read_bytes()
+    with Image.open(result[0]) as final:
+        assert sum(final.getchannel('A').histogram()[1:255]) > 0
+
+
+@pytest.mark.parametrize('kind,prefix', [('item', 'item'), ('runtime:field', 'runtime:field'), ('vfx_cutout', 'vfx:grain')])
+def test_background_retry_uses_exact_reason_and_clears_current_error_on_success(offline, monkeypatch, kind, prefix):
+    root, _ = offline
+    calls = native_codex_responses(monkeypatch, [255, 0])
+    monkeypatch.setattr(generation, 'SPRITE_RETRIES', 2)
+    error_key = 'spriteError' if kind == 'item' else prefix + 'SpriteError'
+    data = _data([_request('grain')])
+    data['debug'] = {error_key: 'an error from a previous invocation'}
+    result = invoke(kind, 'background_retry', data)
+    assert result[3] == 'generated' and result[0]
+    assert len(calls) == 2
+    attempts = json.loads(data['debug'][prefix + 'SpriteValidation'])
+    assert attempts[0]['phase'] == 'processing'
+    assert attempts[0]['validation']['reasons'] == ['native_alpha_raw_background_opaque']
+    assert Path(attempts[0]['raw']).read_bytes() == calls[0]['raw']
+    assert 'empty transparent space around the authored subject' in calls[1]['payload']['prompt']
+    assert attempts[1]['validation']['ok']
+    assert error_key not in data['debug'], 'a successful retry retained an active SpriteError'
+    assert prefix + 'SpriteFailurePhase' not in data['debug']
+    assert 'RawSpriteBackgroundError' in attempts[0]['error'], 'historical evidence must remain'
+    assert serve(root, result[0])['raw'] == Path(result[0]).read_bytes()
+
+
+def test_visible_background_still_fails_with_bounded_targeted_codex_retry(offline, monkeypatch):
+    root, _ = offline
+    calls = native_codex_responses(monkeypatch, [128, 128])
+    monkeypatch.setattr(generation, 'SPRITE_RETRIES', 1)
+    data = _data([])
+    result = invoke('runtime:field', 'visible_matte', data)
+    assert result[3] == 'failed' and not result[0] and not result[1]
+    assert len(calls) == 2
+    attempts = json.loads(data['debug']['runtime:fieldSpriteValidation'])
+    assert all(row['validation']['reasons'] == ['raw_background_not_removed'] for row in attempts)
+    assert 'empty transparent space around the authored subject' in calls[1]['payload']['prompt']
+    assert 'RawSpriteBackgroundError' in data['debug']['runtime:fieldSpriteError']
+    assert not list(root.glob('infini_asset_png_*.png'))
+
+
+def test_retry_diagnostic_does_not_leak_from_an_older_failed_attempt(offline, monkeypatch):
+    calls = native_codex_responses(monkeypatch, [255, 0, 0])
+    monkeypatch.setattr(generation, 'SPRITE_RETRIES', 2)
+    process = generation.postprocess_sprite
+
+    def second_attempt_error(path, asset_id, *args, **kwargs):
+        if asset_id.endswith('_retry1'):
+            raise RuntimeError('injected processing fault without a provider-content diagnosis')
+        return process(path, asset_id, *args, **kwargs)
+
+    monkeypatch.setattr(generation, 'postprocess_sprite', second_attempt_error)
+    data = _data([])
+    result = invoke('runtime:field', 'distinct_failures', data)
+    assert result[3] == 'generated' and result[0]
+    assert len(calls) == 3
+    assert 'fix these technical issues' in calls[1]['payload']['prompt']
+    assert 'fix these technical issues' not in calls[2]['payload']['prompt']
+    attempts = json.loads(data['debug']['runtime:fieldSpriteValidation'])
+    assert attempts[0]['validation']['reasons'] == ['native_alpha_raw_background_opaque']
+    assert 'validation' not in attempts[1]
+    assert attempts[2]['validation']['ok']
+    assert 'runtime:fieldSpriteError' not in data['debug']

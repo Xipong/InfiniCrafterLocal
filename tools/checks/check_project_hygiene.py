@@ -40,7 +40,7 @@ def iter_project_dirs() -> list[Path]:
             continue
         if _is_forbidden_release_metadata(rel, p):
             continue
-        if rel.parts[:2] == ("LocalGenerator", "cache"):
+        if rel.parts[:2] in {("LocalGenerator", "cache"), ("LocalGenerator", "images")}:
             continue
         dirs.append(p)
     return [ROOT] + dirs
@@ -59,7 +59,7 @@ def check_documentation_layout() -> None:
 def _is_runtime_junk(rel: Path, p: Path) -> bool:
     if any(part in PACKAGED_METADATA_DIRS for part in rel.parts):
         return True
-    if any(part == "cache" and rel.parts[:1] == ("LocalGenerator",) for part in rel.parts):
+    if rel.parts[:2] == ("LocalGenerator", "images") or any(part == "cache" and rel.parts[:1] == ("LocalGenerator",) for part in rel.parts):
         return True
     return any(part in RUNTIME_JUNK_NAMES for part in rel.parts) or p.suffix == ".pyc"
 

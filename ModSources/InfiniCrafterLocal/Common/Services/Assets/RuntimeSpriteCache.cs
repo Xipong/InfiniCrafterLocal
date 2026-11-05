@@ -200,7 +200,7 @@ public sealed class RuntimeSpriteCache : IDisposable
                 key = ResolveSelectedKey(path);
                 // Check the selected local file, not its transport alias. A ready
                 // URL may contain query/fragment data but still names this exact PNG.
-                if (key.Length > 320 || !key.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                if (key.Length > 1024 || !key.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                 {
                     _missCount++;
                     return null;
@@ -300,11 +300,25 @@ public sealed class RuntimeSpriteCache : IDisposable
     {
         string? certified = InfiniCrafterLocalMod.AssetSync?.ResolveCertifiedLocalPath(path);
         if (certified is not null) return Path.GetFullPath(certified);
+        // Peer manifests require exact SHA/length proof before presentation. A
+        // stale same-name file or local path is not an alternate peer authority.
+        if (Main.netMode == Terraria.ID.NetmodeID.MultiplayerClient) return "";
         // URI/foreign-platform aliases need not be valid local paths. Resolve
         // the existing sync owner's basename before attempting GetFullPath.
-        if (File.Exists(path)) return Path.GetFullPath(path);
+        if (Main.netMode != Terraria.ID.NetmodeID.MultiplayerClient
+            && InfiniCrafterLocalMod.AssetSync?.CanUseDirectLocalSource != false
+            && InfiniCrafterLocalMod.AssetSync?.IsSharedPath(path) != true && File.Exists(path)) return Path.GetFullPath(path);
+        // Indexed finals have a declared immutable byte identity. Lifecycle
+        // validation must certify it first; a rejected file cannot return through
+        // a basename fallback or an older cached texture generation.
+        if (InfiniCrafterLocalMod.AssetSync?.HasSharedAsset(path) == true) return "";
         string? synced = InfiniCrafterLocalMod.AssetSync?.ResolveLocalPath(path);
-        return Path.GetFullPath(!string.IsNullOrWhiteSpace(synced) && File.Exists(synced) ? synced : path);
+        if (!string.IsNullOrWhiteSpace(synced) && File.Exists(synced)) return Path.GetFullPath(synced);
+        if (Main.netMode == Terraria.ID.NetmodeID.MultiplayerClient
+            || InfiniCrafterLocalMod.AssetSync?.CanUseDirectLocalSource == false
+            || (InfiniCrafterLocalMod.AssetSync?.IsSharedPath(path) == true && File.Exists(path)))
+            return ""; // Remote absolute/relative paths never grant local filesystem access.
+        return Path.GetFullPath(path);
     }
 
     private static float PrepareTextureAndMeasureLocalForwardRadians(Texture2D texture, out Rectangle alphaBounds, out Vector2[] alphaHull)

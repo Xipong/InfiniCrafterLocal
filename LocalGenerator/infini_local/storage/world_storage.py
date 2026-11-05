@@ -330,6 +330,9 @@ def sanitize_recipe_for_delivery(data: Any) -> Any:
     if recipe_meta is not None:
         out["recipeMeta"] = recipe_meta
 
+    from infini_local.core.config_bootstrap import SPRITE_DIR
+    from infini_local.storage.image_store import compact_delivery_paths
+    compact_delivery_paths(SPRITE_DIR, out)
     return out
 
 
@@ -500,6 +503,22 @@ def read_world_recipe_cache(
         # contract. A caller can add stricter checks, never replace this baseline.
         definition = recipe_definition_report(data)
         runtime_ready = definition["ok"]
+        if runtime_ready:
+            from infini_local.core.config_bootstrap import SPRITE_DIR
+            from infini_local.storage.image_store import adopt_recipe, adopt_diagnostics
+            # This relocates bytes only, after definition admission and before
+            # readiness. Missing PNGs never revoke the accepted recipe identity.
+            migration_data = copy.deepcopy(data)
+            migration_data.setdefault("recipeMeta", {})["worldName"] = str(world_name or "")
+            for phase, migrate in (("finals", adopt_recipe), ("diagnostics", adopt_diagnostics)):
+                try:
+                    migrate(SPRITE_DIR, migration_data)
+                except OSError as exc:
+                    from infini_local.storage.trace_runtime import trace_event
+                    trace_event("warn", "COMBINE:cache", "image relocation deferred", {
+                        "recipeKey": recipe_key_value, "worldId": str(world_id),
+                        "phase": phase, "error": repr(exc),
+                    })
         assets = _cache_assets_report(data) if runtime_ready else None
         assets_ready = bool(assets and assets["ok"])
         debug = data.setdefault("debug", {})

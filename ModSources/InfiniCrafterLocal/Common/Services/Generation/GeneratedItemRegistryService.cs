@@ -428,6 +428,11 @@ public sealed partial class GeneratedItemRegistryService : IDisposable
         ushort count = 0;
         foreach (GeneratedItemData data in Snapshot().Take(MaxKnownDefinitionHashes))
         {
+            // Definitions may be warm on disk while this connection has no peer
+            // asset manifest. Omit their hashes so the server sends descriptors
+            // again; otherwise a reconnect could suppress every ready texture.
+            if (Main.netMode == NetmodeID.MultiplayerClient
+                && InfiniCrafterLocalMod.AssetSync?.NeedsRemoteDescriptorRefresh(data, forceRetry: false) != false) continue;
             long start = entries.Position;
             string id = data.Id ?? "";
             entryWriter.Write(id.Length <= 96 ? id : id[..96]);

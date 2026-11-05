@@ -194,7 +194,7 @@ def safe_asset_file_from_query(q: dict[str, list[str]], *, sprite_dir: Path, wor
     if re.fullmatch(r"[A-Za-z0-9._@+\-]{1,140}", raw):
         for suffix in [".png", ".json"]:
             n = raw + suffix
-            if (sprite_dir / n).exists() or (world_recipes_dir / n).exists():
+            if find_asset_file(n, sprite_dir=sprite_dir, world_recipes_dir=world_recipes_dir) is not None:
                 return n
     return ""
 
@@ -202,7 +202,14 @@ def safe_asset_file_from_query(q: dict[str, list[str]], *, sprite_dir: Path, wor
 def find_asset_file(name: str, *, sprite_dir: Path, world_recipes_dir: Path) -> Path | None:
     if not name:
         return None
-    roots = [sprite_dir, world_recipes_dir]
+    from infini_local.storage import image_store
+
+    indexed = image_store.resolve(sprite_dir, name)
+    if indexed is not None:
+        return indexed
+    if image_store.has_index(sprite_dir, name):
+        return None  # A corrupt indexed identity must not select an old shadow.
+    roots = [sprite_dir, *image_store.legacy_roots(sprite_dir), world_recipes_dir]
     for root in roots:
         candidate = root / name
         try:

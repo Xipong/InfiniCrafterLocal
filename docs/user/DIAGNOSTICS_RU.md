@@ -110,11 +110,11 @@
 Для передачи не обязательно упаковывать весь cache обычным ZIP. Останови генератор и из корня исходников выполни:
 
 ```bash
-python tools/diagnostics/export_support_bundle.py --cache LocalGenerator/cache --out support-core.tar.xz
+python tools/diagnostics/export_support_bundle.py --cache LocalGenerator/cache --image-store LocalGenerator/images --out support-core.tar.xz
 python tools/diagnostics/export_support_bundle.py --verify support-core.tar.xz
 ```
 
-Если фактический cache расположен иначе, укажи его путь. `core` сохраняет **всю** историю запросов, ответов и ошибок, exact stage requests, transport artifacts, рецепты и игровые PNG. Промежуточные картинки `image-diagnostics` остаются в исходном cache; их пути, размеры и SHA-256 перечислены в `support-manifest.json`. Для разбора исходного рисунка, удаления фона, crop/grip и неудачных image attempts добавь `--include-image-diagnostics` и выбери новое имя архива. Без этих картинок core не заменяет полный визуальный разбор.
+Если фактический cache или images расположен иначе, укажи их пути. Для встроенной Studio это `<tML Save>/InfiniCrafterLocal/Studio/data/cache` и `<tML Save>/InfiniCrafterLocal/images`. `core` сохраняет **всю** историю запросов, ответов и ошибок, exact stage requests, transport artifacts, рецепты и игровые PNG. Промежуточные картинки старого `image-diagnostics` и новых папок предметов `diagnostics` не включаются в core; их пути, размеры и SHA-256 перечислены в `support-manifest.json`. Для разбора исходного рисунка, удаления фона, crop/grip и неудачных image attempts добавь `--include-image-diagnostics` и выбери новое имя архива. Без этих картинок core не заменяет полный визуальный разбор.
 
 Это обычный `tar.xz`: его можно открыть 7-Zip или `tar`, новый формат хранения игры не нужен. Сплошное сжатие использует повторы между файлами и запросами. На проверенном cache из 1 836 файлов исходный ZIP занимал 100.66 МБ; byte-for-byte перепаковка всей диагностики без lock-файлов — 64.98 МБ, а core без промежуточных картинок — 1.98 МБ. Это измерение одного архива, не обещанный размер любого cache.
 

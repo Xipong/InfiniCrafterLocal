@@ -265,7 +265,7 @@ def test_real_image_retry_keeps_selected_owner_grip_without_png_or_provider_call
     monkeypatch.setattr(images, "IMAGE_BACKEND", "openai_codex")
     monkeypatch.setattr(images, "IMAGE_BACKEND_CONFIG_ERROR", "")
     monkeypatch.setattr(images, "SPRITE_RETRIES", 1)
-    monkeypatch.setattr(images, "_new_image_workspace", lambda: tmp_path)
+    monkeypatch.setattr(images, "_new_image_workspace", lambda *args: tmp_path)
     calls = []
 
     def offline_no_image(prompt, negative, asset_id, canvas, *, output_dir=None):

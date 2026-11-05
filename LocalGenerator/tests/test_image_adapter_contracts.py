@@ -263,8 +263,12 @@ def test_each_adapter_surfaces_raw_filesystem_errors_as_terminal_local_io(adapte
     monkeypatch.setattr(Path, 'write_bytes', denied_raw)
     # Codex uses its own atomic writer, not Path.write_bytes.
     if name == 'openai_codex':
+        import os
+        replace = os.replace
         def denied_replace(*args):
-            raise PermissionError('offline Codex raw commit fault')
+            if '_raw_' in Path(args[1]).name:
+                raise PermissionError('offline Codex raw commit fault')
+            return replace(*args)
         monkeypatch.setattr(visual_asset_pipeline, 'generate_procedural_asset', lambda *args, **kwargs: pytest.fail('unexpected fallback'))
         from infini_local.services import codex_image_backend
         monkeypatch.setattr(codex_image_backend.os, 'replace', denied_replace)
@@ -344,7 +348,10 @@ def test_sdcpp_local_response_read_failure_never_retries_or_substitutes_art(
     else:
         assert result['visual']['spriteStatus'] == 'failed'
     diagnostics = json.loads(result['debug']['itemSpriteDiagnostics'])
-    assert not Path(diagnostics['directory']).is_relative_to(root)
+    private = Path(diagnostics['directory'])
+    assert private.is_relative_to(root) and private.parent.name == 'diagnostics'
+    for raw in private.rglob('*.png'):
+        assert asset_sync_service.find_asset_file(raw.name, sprite_dir=root, world_recipes_dir=root / 'world-recipes') is None
     assert generation.IMAGE_GENERATION_GATE._semaphore.acquire(blocking=False)
     generation.IMAGE_GENERATION_GATE._semaphore.release()
 

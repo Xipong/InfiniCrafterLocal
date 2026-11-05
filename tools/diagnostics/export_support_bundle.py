@@ -48,7 +48,16 @@ def _allowed(path: Path) -> bool:
     )
 
 
-def _inventory(cache: Path) -> tuple[dict[str, tuple], int]:
+def _allowed_image(path: Path) -> bool:
+    if (path.is_absolute() or any(part in {".", ".."} or "\\" in part or ":" in part or part.startswith(".") for part in path.parts)
+            or len(path.parts) < 4 or path.parts[0] != "worlds"):
+        return False
+    if len(path.parts) == 4:
+        return path.name == "manifest.json"
+    return path.parts[3] in {"final", "diagnostics"} and path.suffix in {".png", ".json"}
+
+
+def _inventory(cache: Path, *, images: bool = False) -> tuple[dict[str, tuple], int]:
     """Never follow links or read unrecognized configuration/authentication files."""
     found: dict[str, tuple] = {}
     ignored = 0
@@ -58,7 +67,7 @@ def _inventory(cache: Path) -> tuple[dict[str, tuple], int]:
             path = Path(directory) / name
             relative = path.relative_to(cache)
             info = path.lstat()
-            if not _allowed(relative) or not stat.S_ISREG(info.st_mode):
+            if not (_allowed_image(relative) if images else _allowed(relative)) or not stat.S_ISREG(info.st_mode):
                 ignored += 1
                 continue
             found[relative.as_posix()] = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
@@ -183,8 +192,11 @@ def verify_bundle(path: Path) -> dict:
             if not member.isfile() or member.name in names:
                 raise BundleError("duplicate or non-file archive member")
             names.add(member.name)
-            if member.name != MANIFEST and (not member.name.startswith("cache/") or not _allowed(Path(member.name[6:]))):
-                raise BundleError("unsupported archive member path")
+            if member.name != MANIFEST:
+                allowed = (member.name.startswith("cache/") and _allowed(Path(member.name[6:]))) or (
+                    member.name.startswith("images/") and _allowed_image(Path(member.name[7:])))
+                if not allowed:
+                    raise BundleError("unsupported archive member path")
             stream = archive.extractfile(member)
             if stream is None:
                 raise BundleError("unreadable archive member")
@@ -202,7 +214,7 @@ def verify_bundle(path: Path) -> dict:
         return manifest
 
 
-def export_bundle(cache: Path, output: Path, *, include_images: bool = False) -> dict:
+def export_bundle(cache: Path, output: Path, *, include_images: bool = False, image_root: Path | None = None) -> dict:
     if not cache.is_dir() or any(path.is_symlink() for path in (cache, *cache.parents)):
         raise BundleError("cache must be an existing unlinked directory")
     cache = cache.resolve()
@@ -210,7 +222,17 @@ def export_bundle(cache: Path, output: Path, *, include_images: bool = False) ->
     if output.resolve().is_relative_to(cache) or output.exists() or output.is_symlink():
         raise BundleError("output must be a new file outside the cache")
     inventory, ignored = _inventory(cache)
-    if not inventory:
+    sources = {"cache": (cache, inventory)}
+    if image_root is not None:
+        if not image_root.is_dir() or any(path.is_symlink() for path in (image_root, *image_root.parents)):
+            raise BundleError("image store must be an existing unlinked directory")
+        image_root = image_root.resolve()
+        if output.resolve().is_relative_to(image_root):
+            raise BundleError("output must be outside the image store")
+        image_inventory, image_ignored = _inventory(image_root, images=True)
+        ignored += image_ignored
+        sources["images"] = (image_root, image_inventory)
+    if not any(entries for _, entries in sources.values()):
         raise BundleError("no supported diagnostic files found")
     secrets = env_credential_values()
     manifest = {
@@ -218,7 +240,7 @@ def export_bundle(cache: Path, output: Path, *, include_images: bool = False) ->
         "included": [], "omittedImageFiles": [], "ignoredFileCount": ignored,
         "notes": [
             "Source cache is unchanged. No record truncation, sampling or retention deletion.",
-            "Core excludes image-diagnostics only; use full for original raw/master visual evidence.",
+            "Core excludes image-diagnostics and per-item diagnostics; use full for original raw/master visual evidence.",
             "Known environment credentials and recognized credential patterns are redacted in text.",
             "Redacted copies are not original backups; sourceSha256 records identity, not recoverable secret values.",
             "Arbitrary personal text and local paths are not anonymized; review before sharing.",
@@ -229,21 +251,23 @@ def export_bundle(cache: Path, output: Path, *, include_images: bool = False) ->
     temporary = Path(temporary_name)
     try:
         with os.fdopen(fd, "wb") as stream, tarfile.open(fileobj=stream, mode="w:xz", preset=6) as archive:
-            for name, snapshot in sorted(inventory.items()):
-                if redact_credentials(name, secrets) != name:
-                    raise BundleError("cache filename contains credentials; review separately")
-                raw = _read_unchanged(cache, name, snapshot)
-                source_hash = hashlib.sha256(raw).hexdigest()
-                if name.startswith("image-diagnostics/") and not include_images:
-                    manifest["omittedImageFiles"].append({"path": "cache/" + name, "bytes": len(raw), "sha256": source_hash})
-                    continue
-                clean = _safe_bytes(name, raw, secrets)
-                entry = {"path": "cache/" + name, "bytes": len(clean), "sha256": hashlib.sha256(clean).hexdigest(),
-                         "sourceSha256": source_hash, "redacted": clean != raw}
-                manifest["included"].append(entry)
-                _add(archive, entry["path"], clean)
-            if _inventory(cache)[0] != inventory:
-                raise BundleError("cache changed; stop generation and retry")
+            for namespace, (source_root, entries) in sources.items():
+                for name, snapshot in sorted(entries.items()):
+                    if redact_credentials(name, secrets) != name:
+                        raise BundleError("cache filename contains credentials; review separately")
+                    raw = _read_unchanged(source_root, name, snapshot)
+                    source_hash = hashlib.sha256(raw).hexdigest()
+                    private_image = name.startswith("image-diagnostics/") or (namespace == "images" and "diagnostics" in Path(name).parts)
+                    if private_image and not include_images:
+                        manifest["omittedImageFiles"].append({"path": namespace + "/" + name, "bytes": len(raw), "sha256": source_hash})
+                        continue
+                    clean = _safe_bytes(name, raw, secrets)
+                    entry = {"path": namespace + "/" + name, "bytes": len(clean), "sha256": hashlib.sha256(clean).hexdigest(),
+                             "sourceSha256": source_hash, "redacted": clean != raw}
+                    manifest["included"].append(entry)
+                    _add(archive, entry["path"], clean)
+                if _inventory(source_root, images=namespace == "images")[0] != entries:
+                    raise BundleError("cache changed; stop generation and retry")
             _add(archive, MANIFEST, json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8"))
         verify_bundle(temporary)
         # Atomic, exclusive publication. An existing output is never overwritten.
@@ -258,19 +282,20 @@ def export_bundle(cache: Path, output: Path, *, include_images: bool = False) ->
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cache", type=Path, help="Stopped generator's cache directory")
+    parser.add_argument("--image-store", type=Path, help="Persistent images directory, including final PNGs and optional raw attempts")
     parser.add_argument("--out", type=Path, help="New .tar.xz file outside cache")
     parser.add_argument("--include-image-diagnostics", action="store_true", help="Include original private raw/master images")
     parser.add_argument("--verify", type=Path, help="Verify an existing bundle without extracting it")
     args = parser.parse_args()
     if args.verify:
-        if args.cache or args.out or args.include_image_diagnostics:
+        if args.cache or args.out or args.include_image_diagnostics or args.image_store:
             parser.error("--verify cannot be combined with export arguments")
         manifest = verify_bundle(args.verify)
         print(json.dumps({"verified": True, "mode": manifest["mode"], "files": len(manifest["included"])}))
     else:
         if not args.cache or not args.out:
             parser.error("export requires --cache and --out")
-        print(json.dumps(export_bundle(args.cache, args.out, include_images=args.include_image_diagnostics)))
+        print(json.dumps(export_bundle(args.cache, args.out, include_images=args.include_image_diagnostics, image_root=args.image_store)))
     return 0
 
 

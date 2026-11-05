@@ -246,7 +246,10 @@ public partial class GeneratedItem : ModItem
             {
                 if (GeneratedItemData.IsPlayerSaveReferenceOnly(Data))
                     SetData(canonical, ensureAssets: false, registerLocal: false, notifyNetState: false);
-                global::InfiniCrafterLocal.InfiniCrafterLocalMod.AssetSync?.EnsureAssetsForData(canonical, forceRetry: false);
+                var assetSync = global::InfiniCrafterLocal.InfiniCrafterLocalMod.AssetSync;
+                if (assetSync?.NeedsRemoteDescriptorRefresh(canonical, forceRetry: false) == true)
+                    registry.RequestOneFromServer(id, forceAssetRetry: false, forceDefinitionRefresh: true);
+                else assetSync?.EnsureAssetsForData(canonical, forceRetry: false);
             }
             else if (GeneratedItemData.IsPlayerSaveReferenceOnly(Data) && _saveRecoveryDefinition is not null
                 && GeneratedItemData.FromLocalCacheJson(System.Text.Encoding.UTF8.GetString(_saveRecoveryDefinition)) is { } recovery

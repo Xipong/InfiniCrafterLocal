@@ -9,6 +9,7 @@
   <ItemGroup>
     <Compile Include="../../../ModSources/InfiniCrafterLocal/Common/Services/Studio/StudioBundle.cs" Link="StudioBundle.cs" />
     <Compile Include="../../../ModSources/InfiniCrafterLocal/Common/Services/Studio/BundledStudio.cs" Link="BundledStudio.cs" />
+    <Compile Include="../../../ModSources/InfiniCrafterLocal/Common/Services/Assets/SharedImageStore.cs" Link="SharedImageStore.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="TmlBoundary.cs" />
   </ItemGroup>

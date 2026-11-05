@@ -12,6 +12,7 @@ namespace Terraria
         public static bool dedServ;
         public static uint GameUpdateCount;
         public static string SavePath = "";
+        public static string worldName = "Test World";
         public static Player[] player = Enumerable.Range(0, maxPlayers).Select(_ => new Player()).ToArray();
         public static void QueueMainThreadAction(Action action) => action();
     }
@@ -54,6 +55,7 @@ namespace InfiniCrafterLocal.Common.Models
     public sealed class GeneratedItemData
     {
         public string Id { get; set; } = "probe";
+        public string Name { get; set; } = "Probe";
         public RecipeMeta RecipeMeta { get; } = new();
         public Visual Visual { get; } = new();
         public VfxManifest VfxManifest { get; } = new();
@@ -71,9 +73,9 @@ namespace InfiniCrafterLocal.Common.Models
         public string EquipOverlayPath { get; set; } = "";
         public string ImpactSpritePath { get; set; } = "";
     }
-    public sealed class VfxAssetSpec { public string SpritePath { get; set; } = ""; }
+    public sealed class VfxAssetSpec { public string Id { get; set; } = "material"; public string SpritePath { get; set; } = ""; }
     public sealed class VfxManifest { public VfxAssetSpec[] Assets { get; set; } = Array.Empty<VfxAssetSpec>(); }
-    public sealed class RuntimeEntitySpec { public Visual Visual { get; } = new(); }
+    public sealed class RuntimeEntitySpec { public string Id { get; set; } = "entity"; public Visual Visual { get; } = new(); }
     public sealed class RuntimeProgram { public RuntimeEntitySpec[] Entities { get; set; } = Array.Empty<RuntimeEntitySpec>(); }
 }
 namespace InfiniCrafterLocal.Common.Services
@@ -82,6 +84,7 @@ namespace InfiniCrafterLocal.Common.Services
     {
         internal readonly Dictionary<string, Models.GeneratedItemData> Items = new(StringComparer.Ordinal);
         internal int RefreshRequests;
+        public static string CurrentWorldIdString() => "test-world";
         public static bool IsCurrentWorldData(Models.GeneratedItemData data) => data.RecipeMeta.WorldId == "test-world";
         public bool TryGet(string id, out Models.GeneratedItemData data) => Items.TryGetValue(id, out data!);
         public void RequestOneFromServer(string itemId, bool forceAssetRetry = true, bool forceDefinitionRefresh = false)

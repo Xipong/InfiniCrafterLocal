@@ -87,6 +87,9 @@ internal sealed class BundledStudio : IDisposable
         start.Environment["PYTHONNOUSERSITE"] = "1";
         start.Environment["PYTHONDONTWRITEBYTECODE"] = "1";
         start.Environment["PYTHONIOENCODING"] = "utf-8";
+        // The game owns the shared root. A Python-only saved override must not
+        // silently split the bundled generator from its native asset consumer.
+        start.Environment["INFINI_IMAGE_DIR"] = InfiniCrafterLocalMod.AssetSync?.CacheRoot ?? SharedImageStore.DefaultRoot(_saveDirectory);
 
         var process = new Process { StartInfo = start, EnableRaisingEvents = true };
         var ready = new TaskCompletionSource<Uri>(TaskCreationOptions.RunContinuationsAsynchronously);

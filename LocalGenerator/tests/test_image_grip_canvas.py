@@ -1,6 +1,7 @@
 """Preserve explicit final-canvas contacts through real sdcpp pixel delivery."""
 from __future__ import annotations
 import copy
+import json
 import pytest
 from PIL import Image, ImageDraw
 from infini_local.core.images import config
@@ -119,3 +120,21 @@ def test_recoverable_bake_error_keeps_the_same_contact(tmp_path, monkeypatch):
     assert path and status in {"generated", "generated_warn_invalid"}
     image = Image.open(path).convert("RGBA")
     assert min(((x - .2 * image.width) ** 2 + (y - .8 * image.height) ** 2) ** .5 for x, y in _blue_pixels(image)) < 1.5
+
+
+def test_frame_retry_targets_square_canvas_without_leaving_active_error(tmp_path, monkeypatch):
+    bad_calls = _backend(monkeypatch, tmp_path, width=160)
+    bad = stage.generate_sdcpp
+    good_calls = _backend(monkeypatch, tmp_path)
+    good = stage.generate_sdcpp
+    monkeypatch.setattr(stage, 'generate_sdcpp', lambda *args, **kwargs: (good if bad_calls else bad)(*args, **kwargs))
+    monkeypatch.setattr(stage, 'SPRITE_RETRIES', 1)
+    data = _data()
+    path, status = _generate(data, 'held_body')
+    assert path and status in {'generated', 'generated_warn_invalid'}
+    assert len(bad_calls) == len(good_calls) == 1
+    assert 'square raw canvas' in good_calls[0][0]
+    attempts = json.loads(data['debug']['runtime:held_bodySpriteValidation'])
+    assert attempts[0]['validation']['reasons'] == ['authored_grip_requires_square_frame']
+    assert 'runtime:held_bodySpriteError' not in data['debug']
+    assert 'runtime:held_bodySpriteFailurePhase' not in data['debug']

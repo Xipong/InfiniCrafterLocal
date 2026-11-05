@@ -88,3 +88,56 @@ def test_wrong_matte_with_enclosed_hole_cannot_escape_through_rescue(tmp_path,mo
         post.postprocess_sprite(str(path),'bad-rescue',32,'runtime:projectile',output_dir=tmp_path/'out')
     assert path.read_bytes()==before
     assert not (tmp_path/'out/bad-rescue.png').exists()
+
+
+@pytest.mark.parametrize('background_alpha', [0, 1, 2])
+@pytest.mark.parametrize('role', ['runtime:field', 'impact', 'vfx_cutout'])
+def test_near_clear_exterior_is_evidence_without_erasing_soft_alpha(tmp_path, monkeypatch, background_alpha, role):
+    monkeypatch.setattr(config, 'BG_COLOR', 'transparent')
+    monkeypatch.setattr(config, 'REMOVE_BG', False)
+    monkeypatch.setattr(post, 'SAVE_SPRITE_STAGES', True)
+    image = Image.new('RGBA', (64, 64), (90, 110, 30, background_alpha))
+    draw = ImageDraw.Draw(image)
+    draw.ellipse((8, 8, 55, 55), fill=(100, 150, 40, 8))
+    draw.ellipse((16, 16, 47, 47), fill=(120, 180, 60, 144))
+    path = tmp_path / 'soft.png'
+    image.save(path)
+    before = path.read_bytes()
+    pixels_before = image.tobytes()
+    assert post._exterior_clear_fraction(image) > .5
+    assert image.tobytes() == pixels_before, 'background evidence must be read-only'
+    result = post.postprocess_sprite(str(path), 'soft', 32, role, output_dir=tmp_path / 'out')
+    with Image.open(tmp_path / 'out/soft_stage_10_sprite_keyer_fullres.png') as processed:
+        assert processed.getchannel('A').tobytes() == image.getchannel('A').tobytes()
+        assert processed.getpixel((32, 9)) == (100, 150, 40, 8), 'authored faint haze was clipped'
+    assert validation.validate_processed_sprite(result, role, expected_canvas=32)['ok']
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize('background_alpha', [3, 8, 128, 254, 255])
+def test_visible_exterior_and_enclosed_near_clear_hole_are_not_background_evidence(tmp_path, monkeypatch, background_alpha):
+    monkeypatch.setattr(config, 'BG_COLOR', 'transparent')
+    monkeypatch.setattr(config, 'REMOVE_BG', False)
+    image = Image.new('RGBA', (64, 64), (235, 235, 235, background_alpha))
+    ImageDraw.Draw(image).rectangle((8, 8, 55, 55), fill=(90, 110, 30, 2))
+    path = tmp_path / 'enclosed.png'
+    image.save(path)
+    before = path.read_bytes()
+    assert post._exterior_clear_fraction(image) == 0
+    with pytest.raises(post.RawSpriteBackgroundError, match='exterior transparency'):
+        post.postprocess_sprite(str(path), 'enclosed', 32, 'runtime:field', output_dir=tmp_path / 'out')
+    assert path.read_bytes() == before
+    assert not (tmp_path / 'out/enclosed.png').exists()
+
+
+def test_near_clear_exterior_still_supports_pre_guard_technical_rescue(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, 'BG_COLOR', 'transparent')
+    monkeypatch.setattr(config, 'REMOVE_BG', False)
+    path = source(tmp_path, (90, 110, 30, 2))
+    before = path.read_bytes()
+    monkeypatch.setattr(post, 'apply_background_removal', fail_before_background_guard)
+    result = post.postprocess_sprite(str(path), 'rescued-soft', 32, 'impact', output_dir=tmp_path / 'out')
+    report = validation.validate_processed_sprite(result, 'impact', expected_canvas=32)
+    assert not validation.sprite_validation_fatal(report)
+    assert report['stats']['partialPct'] > 0
+    assert path.read_bytes() == before

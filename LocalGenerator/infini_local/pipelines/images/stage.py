@@ -38,6 +38,7 @@ from infini_local.core.images.config import (
 from infini_local.services import codex_auth, visual_asset_pipeline
 from infini_local.services.codex_auth import CodexError
 from infini_local.services.visual_asset_pipeline import ImageOutputIOError, load_image_input, save_image_output, sprite_status_from_raw_path, truncate_prompt_at_boundary
+from infini_local.storage import image_store
 from infini_local.storage.trace_runtime import (
     log_event,
     trace_event,
@@ -51,7 +52,7 @@ from infini_local.pipelines.images.backends import (
 )
 from infini_local.pipelines.images.retry import build_retry_prompt_from_validation
 from infini_local.pipelines.images.pixels import cleanup_alpha, bake_sprite_from_master, resize_rgba_premultiplied
-from infini_local.pipelines.images.postprocess import pick_best_sprite, postprocess_sprite
+from infini_local.pipelines.images.postprocess import RawSpriteBackgroundError, RawSpriteFrameError, pick_best_sprite, postprocess_sprite
 from infini_local.pipelines.images.validation import sprite_validation_fatal, technical_validation_score, validate_processed_sprite
 from infini_local.pipelines.images.manifest import write_visual_manifest
 from infini_local.pipelines.visual.assets import build_visual_asset_plan
@@ -255,30 +256,18 @@ def refit_processed_sprite_to_contract(path: str, asset_id: str, canvas: int, ro
     except (OSError, ValueError, TypeError, AttributeError):
         return ""
 
-def _publish_image_png(identity: bytes, path: str, *, prefix: str = "infini_asset_png_") -> str:
-    """Commit final bytes atomically; AssetSync still owns integrity descriptors."""
-    raw = Path(path).read_bytes()
-    name = prefix + hashlib.sha256(identity + b"\0" + raw).hexdigest() + ".png"
-    SPRITE_DIR.mkdir(parents=True, exist_ok=True)
-    destination = SPRITE_DIR / name
-    fd, temporary = tempfile.mkstemp(prefix="." + name + ".", suffix=".part", dir=SPRITE_DIR)
-    try:
-        with os.fdopen(fd, "wb") as stream:
-            stream.write(raw)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, destination)
-    finally:
-        Path(temporary).unlink(missing_ok=True)
-    return str(destination.resolve())
+def _publish_image_png(identity: bytes, path: str, *, prefix: str = "infini_asset_png_",
+                       data: dict[str, Any] | None = None, role: str = "item") -> str:
+    """Publish one immutable final PNG; wire lookup is an indexed basename."""
+    del prefix  # Historical prefixes remain readable through migration aliases.
+    return str(image_store.publish(SPRITE_DIR, data or {}, role, identity, Path(path)))
 
 
 def _publish_vfx_png(data: dict[str, Any], asset_id: str, path: str) -> str:
-    """Keep the accepted VFX exact recipe/asset + NUL + bytes identity."""
     manifest = data["vfxManifest"]
-    recipe_id = manifest["recipeId"]
-    identity = json.dumps([recipe_id, asset_id], ensure_ascii=True, separators=(",", ":"), allow_nan=False).encode("ascii")
-    return _publish_image_png(identity, path, prefix="infini_vfx_png_")
+    identity = json.dumps([manifest["recipeId"], asset_id], ensure_ascii=True,
+                          separators=(",", ":"), allow_nan=False).encode("ascii")
+    return _publish_image_png(identity, path, data=data, role="vfx_" + asset_id)
 
 
 class _PublicationPolicy(Enum):
@@ -333,27 +322,29 @@ def _runtime_publication_identity(data: dict[str, Any], role: str, entity_id: st
                       separators=(",", ":"), allow_nan=False).encode("ascii")
 
 
-def _new_image_workspace() -> Path:
-    """Retain invocation-owned diagnostics outside both PNG-serving roots.
-
-    These are cache diagnostics, not temporary public assets. Retention is explicit
-    in each result receipt; no invocation deletes another invocation's evidence.
-    """
-    root = SPRITE_DIR.parent / "image-diagnostics"
-    serving_roots = (SPRITE_DIR.resolve(), WORLD_RECIPES_DIR.resolve())
-    if any(root.resolve().is_relative_to(serving) for serving in serving_roots):
-        root = Path(tempfile.gettempdir()) / "infini-image-diagnostics"
-    if any(root.resolve().is_relative_to(serving) for serving in serving_roots):
-        raise OSError("private image diagnostics must be outside PNG-serving roots")
-    root.mkdir(parents=True, exist_ok=True)
-    return Path(tempfile.mkdtemp(prefix="image-", dir=root))
+def _new_image_workspace(data: dict[str, Any] | None = None, role: str = "asset") -> Path:
+    """Attempts share item ownership, but never enter the final-PNG index."""
+    return image_store.diagnostics_directory(SPRITE_DIR, data or {}, role)
 
 
 def _finish_image_request(data: dict[str, Any], request: _ImageRequest, result: _ImageResult,
                           attempts: list[dict[str, Any]]) -> _ImageResult:
+    if result.public_path and result.private_dir:
+        redirected = image_store.finish_diagnostics(Path(result.private_dir), Path(result.public_path), attempts, result.status)
+        if result.refit:
+            result = replace(result, refit={key: redirected.get(value, value) if isinstance(value, str) else value
+                                           for key, value in result.refit.items()})
     result = replace(result, attempts=tuple(attempts))
     debug = data.setdefault("debug", {})
     prefix = "item" if request.policy is _PublicationPolicy.ITEM else request.audit_role
+    # Runtime siblings may share a role prefix. Keep a compact, identity-owned
+    # outcome so a later successful sibling cannot erase a current failure.
+    # Stable bounded keys also survive delivery's debug-key length limit.
+    outcome_key = "imageOutcome:" + hashlib.sha256(request.publication_identity).hexdigest()
+    debug[outcome_key] = json.dumps({
+        "assetId": request.logical_asset_id, "role": request.audit_role,
+        "status": result.status, "error": result.error, "failurePhase": result.failure_phase,
+    }, ensure_ascii=False)
     debug[prefix + "FinalPrompt"] = result.final_prompt
     debug[prefix + "FinalPromptAttempt"] = result.final_prompt_attempt
     debug[prefix + "SpriteFramePolicy"] = "preserve_authored_grip" if request.preserve_frame else "role_contract"
@@ -362,8 +353,11 @@ def _finish_image_request(data: dict[str, Any], request: _ImageRequest, result: 
         debug[prefix + "SpriteDiagnostics"] = json.dumps({
             "retention": "retained_private", "directory": result.private_dir,
         }, ensure_ascii=False)
+    error_key = "spriteError" if request.policy is _PublicationPolicy.ITEM else prefix + "SpriteError"
     if result.error:
-        debug["spriteError" if request.policy is _PublicationPolicy.ITEM else prefix + "SpriteError"] = result.error
+        debug[error_key] = result.error
+    else:
+        debug.pop(error_key, None)
     if result.failure_phase:
         debug[prefix + "SpriteFailurePhase"] = result.failure_phase
     else:
@@ -391,6 +385,7 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
     """The sole budget → generate → process → validate/refit → commit lifecycle."""
     result = _ImageResult(final_prompt=request.prompt if request.final_frame_clause else truncate_prompt_at_boundary(request.prompt, 1800))
     attempts: list[dict[str, Any]] = []
+    retry_validation: dict[str, Any] = {}
     if IMAGE_BACKEND == "off":
         return replace(result, status="prompt_only")
     config_error = _backend_configuration_error()
@@ -399,7 +394,7 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
         trace_event("error", f"IMAGE:{request.audit_role}", "image backend configuration is invalid", {"backend": IMAGE_BACKEND, "error": config_error})
         return replace(result, status="backend_config_error", failure_phase="configuration", error=config_error)
     try:
-        workspace = _new_image_workspace()
+        workspace = _new_image_workspace(data, request.audit_role)
     except OSError as exc:
         result = replace(result, failure_phase="processing", error=repr(exc))
         return _finish_image_request(data, request, result, attempts)
@@ -440,7 +435,7 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
                 if not retry_source.endswith(suffix):
                     raise ValueError("image final-frame clause is not the owned prompt tail")
                 retry_source = retry_source[:-len(suffix)] + guidance
-            prompt = build_retry_prompt_from_validation(retry_source, result.validation or {}, request.processing_role, attempt, request.canvas)
+            prompt = build_retry_prompt_from_validation(retry_source, retry_validation, request.processing_role, attempt, request.canvas)
             if request.final_frame_clause:
                 if not prompt.endswith(guidance):
                     raise ValueError("image retry builder omitted its owned guidance tail")
@@ -451,6 +446,7 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
             "backend": IMAGE_BACKEND, "canvas": request.canvas, "spriteRetries": SPRITE_RETRIES,
         }, prompt=prompt, negative=request.negative)
         phase = "processing"
+        best = ""
         try:
             output_dir = workspace / f"attempt-{attempt}"
             output_dir.mkdir()
@@ -465,6 +461,7 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
                     asset_id=attempt_id, canvas=request.canvas, role=request.processing_role, output_dir=output_dir)
             variants = [path for path in variants if path and Path(path).exists()]
             if not variants:
+                retry_validation = {}
                 attempts.append({"attempt": attempt, "ok": False, "status": "no_raw_image"})
                 if request.policy is _PublicationPolicy.ITEM:
                     trace_event("step", "IMAGE:item", "no raw image returned", {"assetId": request.logical_asset_id, "attempt": attempt, "backend": IMAGE_BACKEND})
@@ -498,6 +495,7 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
             if refit_path:
                 row["refit"] = {"path": refit_path, "validation": refit_validation}
             attempts.append(row)
+            retry_validation = validation
             last_path = final
             result = replace(result, raw_path=str(Path(best).resolve()), technical_score=row["score"], candidate_score=row["candidateScore"], validation=validation)
             if validation.get("ok") or not sprite_validation_fatal(validation):
@@ -507,7 +505,7 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
                     continue
                 phase = "publication"
                 published = (_publish_vfx_png(data, request.audit_role.removeprefix("vfx:"), final) if required_vfx
-                             else _publish_image_png(request.publication_identity, final))
+                             else _publish_image_png(request.publication_identity, final, data=data, role=request.audit_role))
                 status = sprite_status_from_raw_path(best, IMAGE_BACKEND, invalid=not bool(validation.get("ok")))
                 phase = "projection"
                 trace_event("step", f"IMAGE:{request.audit_role}", "sprite accepted", {
@@ -527,7 +525,15 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
             # lifecycle (or misreporting a deadline as a local PNG write fault).
             if isinstance(exc, ImageOutputIOError) and isinstance(exc.__cause__, HttpDeadlineExceeded):
                 exc = exc.__cause__
+            # Raw contract failures happen before final validation. Carry their
+            # exact reason into retry guidance, not a previous PNG's report.
+            retry_validation = ({"ok": False, "reasons": [str(exc).partition(":")[0]], "role": request.processing_role}
+                                if isinstance(exc, (RawSpriteBackgroundError, RawSpriteFrameError)) else {})
             failure = {"attempt": attempt, "ok": False, "error": repr(exc), "phase": phase}
+            if best:
+                failure["raw"] = best
+            if retry_validation:
+                failure["validation"] = retry_validation
             if isinstance(exc, ImageBackendError):
                 failure.update(category=exc.category, retryable=exc.retryable)
             attempts.append(failure)
@@ -546,7 +552,7 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
         # it never turns a local commit failure or VFX failure into a usable PNG.
         if not terminal and request.policy is _PublicationPolicy.RUNTIME_ASSET and not sprite_validation_fatal(result.validation) and Path(last_path).exists():
             try:
-                published = _publish_image_png(request.publication_identity, last_path)
+                published = _publish_image_png(request.publication_identity, last_path, data=data, role=request.audit_role)
                 result = replace(result, public_path=published, status="generated_warn_invalid", failure_phase="", late_warning=True)
                 return _finish_image_request(data, request, result, attempts)
             except OSError as exc:
@@ -567,7 +573,9 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
             if sprite_validation_fatal(fallback_validation):
                 raise ValueError("procedural fallback did not produce a valid final sprite canvas")
             phase = "publication"
-            published = _publish_image_png(request.publication_identity, final)
+            published = _publish_image_png(request.publication_identity, final, data=data, role=request.audit_role)
+            attempts.append({"attempt": "fallback", "raw": fallback, "final": final,
+                             "validation": fallback_validation, "status": "fallback_after_failed_generation"})
             result = replace(result, public_path=published, raw_path=str(Path(fallback).resolve()), status="fallback_after_failed_generation", technical_score=0.0, failure_phase="")
             return _finish_image_request(data, request, result, attempts)
         except Exception as exc:
@@ -723,9 +731,12 @@ def _generate_independent_images(data: dict[str, Any], plan: list[dict[str, Any]
 def _join_image_result(data, completed, role):
     result, diagnostics, prefix = completed[role]
     debug = data.setdefault("debug", {})
-    # _finish_image_request explicitly clears this key after a successful job.
+    # _finish_image_request clears these current-result keys after success.
+    # Worker snapshots have fresh diagnostics, so deletion must also cross the
+    # join boundary; update alone would retain the parent's historical error.
     if prefix + "SpriteValidation" in diagnostics:
         debug.pop(prefix + "SpriteFailurePhase", None)
+        debug.pop("spriteError" if role == "item" else prefix + "SpriteError", None)
     debug.update(diagnostics)
     return result
 

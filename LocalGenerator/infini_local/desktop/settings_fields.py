@@ -125,7 +125,7 @@ FIELDS = [
     _field('INFINI_SPRITE_KEYER_SPILL_RADIUS', 'Радиус очистки края', 'sprites', hint='sprite_keyer: radius узкой refine-edge зоны для подавления magenta spill. Обычно 3.'),
     _field('INFINI_SPRITE_KEYER_RESIDUE_STEPS', 'Проходов очистки', 'sprites', hint='sprite_keyer: сколько шагов проходить по connected magenta/dark-key residue от выбранного фона. Обычно 8.'),
     _field('INFINI_SPRITE_RETRIES', 'Попыток генерации', 'sprites'),
-    _field('INFINI_SAVE_SPRITE_STAGES', 'Сохранять этапы PNG', 'sprites', options=['1', '0'], hint='1 = сохранять 00_raw / 10_bg_removed_fullres / 20_master_norm / 30_baked_final в cache\\sprites для дебага.'),
+    _field('INFINI_SAVE_SPRITE_STAGES', 'Сохранять этапы PNG', 'sprites', options=['1', '0'], hint='1 = сохранять raw / bg_removed / master в images/worlds/<мир>/<предмет>/diagnostics; финал хранится один раз в final.'),
     _field('INFINI_SPRITE_MASTER_CANVAS', 'Промежуточный размер', 'sprites', hint='Большой промежуточный RGBA-canvas перед финальным 32/48/64 bake. Нужен для master-first нормализации: вырезали фон, вписали объект в 256x256, потом уже уменьшили в 32/48/64.'),
     _field('INFINI_SPRITE_DOWNSCALE_FILTER', 'Фильтр уменьшения', 'sprites', options=['box', 'bilinear', 'bicubic', 'lanczos'], hint='box — базовый фильтр; pipeline preset сохраняет выбранный фильтр. Reset BOX вернёт box и premultiplied=1.'),
     _field('INFINI_SPRITE_PREMULTIPLIED_RESIZE', 'Уменьшение с альфой', 'sprites', options=['1', '0'], hint='Убирает magenta bleed по краям при resize RGBA.'),

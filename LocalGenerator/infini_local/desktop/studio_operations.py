@@ -432,6 +432,12 @@ class StudioOperations:
         self._update_applied_config_feedback()
         self.save()
         launch_values = self.collect()
+        # The managed launcher binds Python to the game's already selected image
+        # store. A saved Python-only override must not split this shared root on
+        # the next generator restart. Standalone Studio keeps its editable path.
+        if self.__dict__.get("_managed_by_tmodloader"):
+            from infini_local.core.config_bootstrap import SPRITE_DIR
+            launch_values["INFINI_IMAGE_DIR"] = str(SPRITE_DIR)
         launch_url = self._server_base_url()
         env = os.environ.copy()
         env.update(launch_values)

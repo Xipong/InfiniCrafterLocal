@@ -539,14 +539,10 @@ def sprite_file(handler: Any, path: str) -> None:
     if not name or name in {".", ".."} or "/" in name or "\\" in name:
         handler.send_error(404)
         return
-    root = SPRITE_DIR.resolve()
-    candidate = (root / name).resolve()
-    try:
-        candidate.relative_to(root)
-    except ValueError:
-        handler.send_error(404)
-        return
-    if candidate.is_file() and candidate.suffix.lower() == ".png":
+    candidate = asset_sync_service.find_asset_file(
+        name, sprite_dir=SPRITE_DIR, world_recipes_dir=WORLD_RECIPES_DIR,
+    )
+    if candidate is not None and candidate.suffix.lower() == ".png":
         send_bounded_asset_file(handler, candidate, "image/png", immutable=False)
         return
     handler.send_error(404)

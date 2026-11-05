@@ -41,6 +41,9 @@ internal static partial class EngineRuntimeChecks
         var parent = PlayerDrawLayers.HeldItem;
         var children = (IList)typeof(PlayerDrawLayer).GetProperty("ChildrenAfter", instance)!.GetValue(parent)!;
         var savedChildren = new List<object>(); foreach (object value in children) savedChildren.Add(value);
+        var assetSync = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("AssetSync")!;
+        object? savedSync = assetSync.GetValue(null);
+        InfiniCrafterLocal.Common.Services.GeneratedAssetSyncService? remoteSync = null;
         object? savedCache = sprites.GetValue(null), savedLight = light.GetValue(null);
         var savedMain = Terraria.Main.instance; var savedAssets = TextureAssets.Item;
 
@@ -171,6 +174,13 @@ internal static partial class EngineRuntimeChecks
             Install(generated,data);item.useStyle=ItemUseStyleID.HoldUp;
             textures.Remove(replacement.Visual.SpritePath);
 
+            // A remote peer uses the received/certified asset, never an arbitrary
+            // local absolute-path fixture. GPU allocation remains intercepted.
+            remoteSync = new InfiniCrafterLocal.Common.Services.GeneratedAssetSyncService();
+            CommitAssetOwner(remoteSync, data.Id, System.IO.Path.GetFileName(path), AssetOwnerCanonical);
+            string remotePath = remoteSync.ResolveCertifiedLocalPath(path)!;
+            textures.Add(remotePath, Activator.CreateInstance(record, generatedTexture, 0f, 0L)!);
+            assetSync.SetValue(null, remoteSync);
             // Native remote animation is authoritative; no custom pose packet exists.
             Terraria.Main.player[0]=player;Terraria.Main.myPlayer=1;Terraria.Main.netMode=NetmodeID.MultiplayerClient;
             player.itemAnimation=0;
@@ -194,6 +204,7 @@ internal static partial class EngineRuntimeChecks
             player.controlUseItem=false;item.noUseGraphic=true;
             Equal(false,GeneratedHeldItemPresentation.TryGetHeldSpriteData(Info(item),out _),"native noUseGraphic also owns remote visibility");item.noUseGraphic=false;
             Terraria.Main.myPlayer=0;Terraria.Main.netMode=NetmodeID.SinglePlayer; // Remaining registry hydration controls do not test network transport.
+            assetSync.SetValue(null, savedSync); textures.Remove(remotePath);
             var reference=GeneratedItemData.Placeholder();reference.Id=data.Id;reference.SourceMode="player_save_ref";reference.Visual=data.Visual;
             var registryProperty=typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("GeneratedItems")!;
             object? oldRegistry=registryProperty.GetValue(null);
@@ -240,6 +251,7 @@ internal static partial class EngineRuntimeChecks
             children.Clear(); foreach (object value in savedChildren) children.Add(value);
             typeof(PlayerDrawLayer).GetProperty("Visible", instance)!.SetValue(parent, true);
             textures.Clear(); sprites.SetValue(null, savedCache); light.SetValue(null, savedLight);
+            assetSync.SetValue(null, savedSync); remoteSync?.Dispose();
             TextureAssets.Item = savedAssets; typeof(Terraria.Main).GetField("instance", statics)!.SetValue(null, savedMain);
 
             cache.Dispose();

@@ -274,6 +274,8 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
                 data = step("04_visual_technical_init", attach_visual, data)
                 data = step("05_visual_director", apply_visual_director, data, a, b)
                 step("05_save_visual", progress.accept, "visual", data)
+            # Storage scope is available before the parallel image workers start.
+            data.setdefault("recipeMeta", {}).update(worldId=world_id, worldName=world_name)
             with overlap_visual_images(data) as pending_images:
                 if saved_stage != "vfx":
                     data = step("06_vfx_director", attach_vfx_manifest, data, key, a, b, call_llm_vfx_director if USE_LLM else None)
