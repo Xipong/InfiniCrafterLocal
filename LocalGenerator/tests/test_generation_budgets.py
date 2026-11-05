@@ -206,10 +206,10 @@ def test_explicit_stage_overrides_win_in_both_director_and_repair():
     ]
 
 
-@pytest.mark.parametrize("mode,expected", [("off", None), ("high", "high")])
-def test_explicit_reasoning_keeps_visual_vfx_semantics_and_existing_author_floor(mode, expected):
-    rows = budget_rows(observe({"INFINI_LLM_REASONING_MODE": mode}, stages="all"))
-    assert [row[3] for row in rows] == ["high" if mode == "high" else "medium", expected, expected]
+@pytest.mark.parametrize("mode,expected", [("off", None), ("low", "low"), ("high", "high")])
+def test_explicit_reasoning_is_respected_by_all_stages_and_repairs(mode, expected):
+    rows = budget_rows(observe({"INFINI_LLM_REASONING_MODE": mode}, stages="all", repair="semantic"))
+    assert [row[3] for row in rows] == [expected] * 6
 
 
 def test_local_provider_never_sends_reasoning_fields():

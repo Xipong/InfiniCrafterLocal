@@ -60,7 +60,6 @@ from infini_local.pipelines.transport.client import (
 from infini_local.pipelines.transport.profiles import active_llm_provider
 from infini_local.pipelines.transport.provider_wire import (
     apply_llm_common_options,
-    apply_minimum_reasoning_effort,
     effective_response_format,
     llm_json_response_format,
     llm_reasoning_system_suffix,
@@ -138,7 +137,6 @@ def build_initial_author_request(
     request = apply_llm_common_options(request, model_name=selected_model)
     system += provider_nullable_transport_rule(request.get("response_format"))
     request["messages"][0]["content"] = system
-    request = apply_minimum_reasoning_effort(request, model_name=selected_model, minimum="medium")
     request = with_instruction_segments(request, payload, _AUTHOR_CACHE_PREFIX_KEYS)
     return request, user_content, system
 

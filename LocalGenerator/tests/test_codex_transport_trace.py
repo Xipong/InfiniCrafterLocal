@@ -634,6 +634,60 @@ def test_llm_logical_summary_counts_actual_codex_retry_posts(recording, monkeypa
     assert calls[0] == calls[1]
 
 
+@pytest.mark.parametrize("stage,fault", [
+    ("planner", "503"), ("author_repair", "connection"),
+    ("visual_director", "400"), ("visual_repair", "404"),
+    ("vfx_director", "429"), ("vfx_repair", "malformed"),
+])
+def test_codex_single_attempt_reaches_generation_owner_without_outer_retry(recording, monkeypatch, stage, fault):
+    from email.message import Message
+    from urllib.error import HTTPError, URLError
+    from infini_local.pipelines.transport import client as llm
+    from infini_local.pipelines.transport import http
+
+    monkeypatch.setenv("INFINI_LLM_NETWORK_ATTEMPTS", "1")
+    monkeypatch.setattr(llm_config, "LLM_NETWORK_ATTEMPTS", 1)
+    monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
+    monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "fixture-model")
+    monkeypatch.setattr(http, "http_json", lambda *_a, **_k: pytest.fail("Codex used generic/paid transport"))
+    calls = []
+
+    def opened(req, *, deadline):
+        calls.append((req.full_url, req.data, deadline))
+        if len(calls) == 1:
+            if fault == "connection":
+                raise URLError("fixture reset")
+            if fault != "malformed":
+                raise HTTPError(req.full_url, int(fault), "fixture rejection", Message(),
+                                MemoryResponse(b'{"error":{"message":"fixture rejection"}}'))
+        return MemoryResponse(sse({"type": "response.completed", "response": {
+            "status": "completed", "output": [{"type": "message", "role": "assistant", "content": [
+                {"type": "output_text", "text": "{" if fault == "malformed" else "{}"}]}]}}))
+
+    install_opener(monkeypatch, opened)
+    request = llm_provider_wire.with_llm_stage({"messages": [{"role": "user", "content": "Exact stage fact"}]}, stage)
+    with llm_profiles.llm_item_lease("single-codex-stage") as lease:
+        if fault == "malformed":
+            result = llm.llm_chat_json(request, timeout=3)
+            assert result["choices"][0]["message"]["content"] == "{"
+            debug = result["_debug"]
+        else:
+            with pytest.raises(auth.CodexError) as caught:
+                llm.llm_chat_json(request, timeout=3)
+            debug = caught.value._infini_transport_debug
+        assert lease.call_count == 1 and lease.stages == [stage] and not lease.failovers
+    assert len(calls) == debug["physicalAttemptCount"] == 1
+    assert calls[0][0] == text.RESPONSES_URL
+    assert json.loads(calls[0][1])["input"][0]["content"][0]["text"] == "Exact stage fact"
+    assert debug["physicalAttemptScope"] == "llm_generation_http_post"
+    observed = rows(recording)
+    assert [row["event"] for row in observed].count("request") == 1
+    assert [row["event"] for row in observed].count("post_start") == 1
+    end, = [row for row in observed if row["event"] == "call_end"]
+    assert end["stage"] == stage and end["physicalAttemptCount"] == 1
+    assert end["outcome"] == ("success" if fault == "malformed" else "failure")
+
+
 def test_sse_records_authentic_terminal_before_parser_reconstructs_output(recording, monkeypatch):
     events = [{"type": "response.output_text.delta", "delta": "first Ж"},
               {"type": "response.output_text.delta", "delta": " last"},

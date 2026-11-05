@@ -36,11 +36,10 @@ def _perform_llm_http(url: str, wire: dict[str, Any], timeout: float, context: d
         "physicalAttemptIndex": None, "rateWaitMs": 0.0, "rateWaitReason": "none",
         "connectMs": None, "openMs": 0.0, "readMs": 0.0,
     }
-    if state.get("reasoningPolicy"):
-        log_event("info", "LLM reasoning policy before dispatch", {
-            "stage": state["stage"], "profileId": row["profileId"],
-            **state["reasoningPolicy"], "effectiveReasoning": effective_reasoning,
-        })
+    log_event("info", "LLM reasoning before dispatch", {
+        **{name: state[name] for name in ("stage", "configuredReasoningMode", "requestedReasoning")},
+        "profileId": row["profileId"], "effectiveReasoning": effective_reasoning,
+    })
     token = diagnostics._CURRENT_LLM_ATTEMPT.set(row)
     try:
         return http.http_json(url, wire, timeout=timeout, headers=profiles.llm_headers(context=context))
@@ -345,10 +344,9 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: float, context: d
                 "effectiveResponseFormat": diagnostics._format_diagnostic(codex_wire),
                 "effectiveReasoning": diagnostics._reasoning_diagnostic(codex_wire),
             }
-        if state is not None and state.get("reasoningPolicy"):
-            log_event("info", "LLM reasoning policy before dispatch", {
-                "stage": stage, "profileId": profiles._profile_id(context),
-                **state["reasoningPolicy"], "effectiveReasoning": state["lastAttempt"]["effectiveReasoning"],
+            log_event("info", "LLM reasoning before dispatch", {
+                **{name: state[name] for name in ("stage", "configuredReasoningMode", "requestedReasoning")},
+                "profileId": profiles._profile_id(context), "effectiveReasoning": state["lastAttempt"]["effectiveReasoning"],
             })
         from infini_local.services import codex_auth
         inherited_join, inherited_observer = codex_auth._GENERATION_OBSERVATIONS.get()

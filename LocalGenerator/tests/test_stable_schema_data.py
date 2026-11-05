@@ -52,7 +52,7 @@ def wire_text(row):
     pytest.param("openai_codex", "https://chatgpt.com/backend-api/codex", "responses", "gpt-6.1-sol", "json_schema", "repair", id="subscription-scoped-repair"),
     pytest.param("openrouter", "https://openrouter.ai/api/v1", "chat_completions", "openai/gpt-6.1-sol", "json_object", "visual_repair", id="router-visual-repair"),
     pytest.param("openai_compat", "https://api.openai.com/v1", "responses", "gpt-6.1-sol", "json_schema", "vfx_repair", id="responses-vfx-repair"),
-    pytest.param("openai_compat", "https://api.openai.com/v1", "chat_completions", "gpt-6.1-sol", "off", "format", id="syntax-repair-unformatted"),
+    pytest.param("openai_compat", "https://api.openai.com/v1", "chat_completions", "gpt-6.1-sol", "off", "author", id="platform-author-unformatted"),
     pytest.param("local", "http://127.0.0.1:8085/v1", "chat_completions", "offline/loaded-model", "json_object", "author", id="local-author"),
 ])
 def test_actual_senders_cache_grammar_instructions_and_preserve_author(monkeypatch, provider, base, api, model, mode, stage):
@@ -84,7 +84,7 @@ def test_actual_senders_cache_grammar_instructions_and_preserve_author(monkeypat
         format_value = wires[0].get("response_format") or wires[0]["text"]["format"]
         effective = format_value.get("json_schema", format_value)["schema"]
         assert effective == first["response_format"]["json_schema"]["schema"]
-        assert '"$ref"' not in json.dumps(effective) or stage in {"author", "repair", "format"}
+        assert '"$ref"' not in json.dumps(effective) or stage in {"author", "repair"}
     if base.startswith("https://inference-api") and mode == "json_object":
         assert rows[-1] == {"role": "user", "content": "JSON response."}
         assert rows.count(rows[-1]) == 1

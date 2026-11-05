@@ -93,7 +93,7 @@ def _reasoning_diagnostic(payload: dict[str, Any]) -> dict[str, Any]:
     out = {}
     effort = payload.get("reasoning_effort") or raw.get("effort")
     if effort:
-        out["effort"] = effort if isinstance(effort, str) and effort in wire._REASONING_EFFORT_RANK else "unsupported"
+        out["effort"] = effort if isinstance(effort, str) and effort in {"none", "minimal", "low", "medium", "high", "xhigh", "max"} else "unsupported"
     if type(raw.get("max_tokens")) is int:
         out["max_tokens"] = max(0, min(64000, raw["max_tokens"]))
     for name in ("enabled", "exclude"):
@@ -125,7 +125,7 @@ def _new_llm_diagnostics(payload: dict[str, Any]) -> dict[str, Any]:
         "requestedApiMode": profiles._normalized_api_mode(profiles._primary_llm_context().get("api_mode")),
         "requestedResponseFormat": _format_diagnostic(payload), "requestedReasoning": _reasoning_diagnostic(payload),
         "singleDispatch": int(config.LLM_NETWORK_ATTEMPTS or 2) <= 1, "dispatchCount": 0,
-        "reasoningPolicy": copy.deepcopy(payload.get(wire._REASONING_POLICY_KEY)),
+        "configuredReasoningMode": payload.get(wire._REASONING_MODE_KEY),
         "physicalAttemptCount": 0, "physicalAttemptsDropped": 0, "physicalAttempts": [],
         "lastAttempt": {}, "nextReason": "initial", "rateWaitMsTotal": 0.0, "diagnosticEventCount": 0,
     }
@@ -136,8 +136,7 @@ def _llm_diagnostic_summary(state: dict[str, Any]) -> dict[str, Any]:
     last = state["lastAttempt"]
     return {
         **{name: state[name] for name in ("logicalCallId", "stage", "leaseId", "requestedApiMode",
-           "requestedResponseFormat", "requestedReasoning", "physicalAttemptCount", "physicalAttemptsDropped", "rateWaitMsTotal")},
-        "reasoningPolicy": copy.deepcopy(state["reasoningPolicy"]),
+           "requestedResponseFormat", "configuredReasoningMode", "requestedReasoning", "physicalAttemptCount", "physicalAttemptsDropped", "rateWaitMsTotal")},
         "physicalAttempts": copy.deepcopy(state["physicalAttempts"]),
         "rateWaitReason": last.get("rateWaitReason", "none"),
         "physicalAttemptScope": "llm_generation_http_post" if state["physicalAttemptCount"] is not None else "codex_owner_unobserved",

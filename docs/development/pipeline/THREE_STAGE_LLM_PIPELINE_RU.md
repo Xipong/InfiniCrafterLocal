@@ -51,7 +51,7 @@ Initial Visual/VFX и Repair с нужными invariant nodes включают 
 
 `pipelines/transport/client.py` вычисляет content identity до dynamic USER. Native Codex сохраняет typed DEVELOPER/USER без demotion; Author JSON marker, key и `session-id` affinity byte-identical. Generic Responses сохраняет explicit developer, неизвестные roles отвергает вместо demotion. Только точный Nous Chat endpoint + OpenAI model получает измеренный `prompt_cache_key` и invariant final USER `JSON response.` (один раз); ни retention, ни Platform breakpoints, ни новые affinity headers ему не приписываются. Остальные optional controls остаются endpoint-allowlisted. Marker/key — не доказательство cache hit: это только raw provider cached-token counters на разных fresh tails.
 
-Offline contract: `test_craft_instruction_segments.py` и `test_stable_schema_data.py` проходят все семь builders через реальные senders с остановкой до auth/network: Nous/OpenAI/OpenRouter Chat, native Codex и OpenAI Responses × json_object/json_schema/off. Проверяются roles, полный provider schema, static/key invariance, parent/runtime-enum tail controls, canonical owner revision invalidation, valid/invalid `$defs` validator parity и malformed declaration refusal. Semantic tests читают derived dossier через `prompt_packet_helpers.py`, не подменяя production packets. Live/game/GPU acceptance отдельно.
+Offline contract: `test_craft_instruction_segments.py` и `test_stable_schema_data.py` проходят все шесть builders через реальные senders с остановкой до auth/network: Nous/OpenAI/OpenRouter Chat, native Codex и OpenAI Responses × json_object/json_schema/off. Проверяются roles, полный provider schema, static/key invariance, parent/runtime-enum tail controls, canonical owner revision invalidation, valid/invalid `$defs` validator parity и malformed declaration refusal. Semantic tests читают derived dossier через `prompt_packet_helpers.py`, не подменяя production packets. Live/game/GPU acceptance отдельно.
 
 Transport retries и self-contained requests — [отдельная boundary](../architecture/ARCHITECTURE_RU.md#pipeline), не новые authoring stages. [Provider-aware admission и quota feedback](../providers/LLM_PROVIDER_ADMISSION_RU.md): известный Nous OpenAI route не получает выдуманный char/4 token window; unknown routes сохраняют conservative policy, FIFO/deadline/429 общие. Offline tests: `test_low_level_three_stage_pipeline.py`, `test_pipeline_repair_contract.py` из [test owners](../TESTING_RU.md); green не означает live/game/MP прогон.
 
@@ -61,16 +61,25 @@ Transport retries и self-contained requests — [отдельная boundary](.
 
 `INFINI_LLM_NETWORK_ATTEMPTS=1` допускает не более одного generation dispatch на
 логический вызов, включая schema/protocol negotiation, transient retry и pool failover.
-Общий dispatch guard и deadline действуют на все HTTP-ветки. Уже подтверждённый
-capability cache может выбрать поддерживаемый формат сразу, без второго запроса.
+Generic Chat/Responses используют общий dispatch guard; native Codex идёт напрямую
+в `codex_auth.post_sse -> _generation_request`, где тот же N ограничивает sends
+одного сериализованного запроса без внешнего retry/failover. Общий deadline
+передаётся Codex как оставшееся время. Уже подтверждённый capability cache может
+выбрать поддерживаемый формат сразу, без второго запроса.
 При `N>1` сохранена существующая политика transient attempts выбранного профиля
 и технического согласования/failover; число не переопределено как новый глобальный
 максимум запросов всех профилей. Один deadline охватывает весь логический вызов.
 
 Malformed/length JSON возвращается владельцу стадии без скрытого reroll исходного
-задания и без изменения reasoning intent. Author пока сохраняет прежний floor
-`medium`: диагностика до отправки показывает `configuredMode`, исходный
-`requestedEffort`, `minimumEffort`, `selectedEffort`, `floorApplied` и фактический
-`effectiveReasoning` выбранного provider wire. Для local API поле может отсутствовать.
-Решение «обязательный floor или рекомендуемый default с override» остаётся продуктовым;
-этот фикс меняет видимость, а не policy и не заявляет сравнение качества low/medium.
+задания и без изменения reasoning intent. `medium` остаётся рекомендуемым default;
+явный effort/`off` не повышается ни у Author, ни у Repair. `off` опускает effort,
+а не обещает выключить внутреннее reasoning провайдера; `none` переводится по
+контракту выбранного API. Для Codex Visual/Visual Repair собственный
+`INFINI_CODEX_VISUAL_REASONING` сохраняет приоритет над общим mode.
+
+`apply_llm_common_options` сохраняет только внутренний configured mode, не floor.
+Диагностика до отправки и итоговый transport debug содержат `configuredReasoningMode`,
+`requestedReasoning` и `effectiveReasoning` фактического provider wire. В local
+`effectiveReasoning` пуст; у Codex off нет effort, но сохраняется `summary=auto`.
+Эти поля показывают запрос API, не измеренный внутренний effort модели. Внутренний
+mode не уходит провайдеру. Сравнение качества low/medium не проводилось.
