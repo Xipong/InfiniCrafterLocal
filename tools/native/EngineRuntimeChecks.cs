@@ -563,6 +563,7 @@ internal static partial class EngineRuntimeChecks
             ("craft identity rejects failed defaults", CraftIdentityRejectsFailedDefaults),
             ("parent placement facts reach craft snapshot", ParentPlacementFactsReachCraftSnapshot),
             ("parent native fact envelopes preserve exact shape", ParentNativeFactEnvelopesKeepTheirExactShape),
+            ("parent fingerprint excludes readable source view metadata", ParentFingerprintExcludesReadableSourceViews),
             ("parent ammo facts keep native category and inventory flag", ParentAmmoFactsKeepNativeCategoryAndInventoryFlag),
             ("inventory seeds absent v5 byte and identity compatibility", InventorySeedAbsentDefinitionPreservesBytes),
             ("inventory seeds DTO literal and absence", InventorySeedDtoKeepsLiteralAndAbsence),
