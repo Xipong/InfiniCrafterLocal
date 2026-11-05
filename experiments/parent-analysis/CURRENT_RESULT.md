@@ -12,7 +12,7 @@ Helper extraction дополняет доказанные source calls и one-ho
 
 Для Last Prism доступны полный AI_075 (32044 знака), исходный dispatch guard и style84 body дочернего profile632 (13989 знаков), collision и position integration. Большие или неподдержанные records не подменяются догадками. Model-facing выбор работает по проверенным методам отдельно и сохраняет полные capabilities.
 
-Pinned ILSpy 8.2.0.7535 и MIT notices поставляются внутри `.tmod`. Он читает metadata/IL без запуска исходного поведения, внешней программы или загрузки зависимости во время игры. Существующие native DLL, игровое состояние, source factories и callbacks не исполняются ради этого view.
+Pinned ILSpy 8.2.0.7535 и MIT notices поставляются внутри `.tmod`. Он читает metadata/IL без запуска исходного поведения, внешней программы или загрузки зависимости во время игры. Исследуемые методы, getters, constructors, source factories и callbacks ради этого view не вызываются. Root draw не входит в игровое C# view; исходные draw graphs сохраняются.
 
 Source table union сопоставляет локальные member aliases по точной полной сигнатуре. Существующие baseline rows и их имена сохраняются; строковые константы не переписываются. Неизвестная схема или конфликт дают отказ объединения. Generic member names проверены отдельным regression после обнаружения настоящего ``Nullable`1..ctor`` в Last Prism.
 
@@ -44,11 +44,13 @@ Source table union сопоставляет локальные member aliases п
 | Официальный tML resource packager и `.tmod` reader | PASS 1/1; exact managed DLL, notices, Info loader entry и payload hash |
 | Package/release verifier Python | PASS 61 tests и 5 subtests |
 | Полный native baseline | 400 PASS / 270 FAIL |
-| Полный native integrated coverage до C# source-view фазы | 407 PASS / 270 FAIL; тот же точный набор 270 failures |
+| Финальный полный native прогон: 682 checks | 412 PASS / 270 FAIL; все 270 failed names и полные причины совпали с baseline |
 | Actual Prepare → Author state-condition/profile preservation | PASS в обоих response formats; offline |
 | Стандартный Author admission на восьми свежих capture-парах | Все восемь PASS; Last Prism 287391 < 300000 |
 
 Полный native прогон в этой среде не GREEN: MonoMod не находит загруженный clrjit через numeric process lookup при несовпадении PID namespace и `/proc`. 247 failures прямо связаны с этой инициализацией; ещё 23 возникают в последующем состоянии того же процесса. Полный старый baseline воспроизводит тот же набор failures. Три проверенных отдельно motion/persistence cases проходят в обоих checkout. Это не основание объявлять полноценный release acceptance.
+
+Во время финального прогона все 432 C# inputs и compiled harness оставались неизменными. Новых failures, исчезнувших failures и изменившихся причин нет; 12 добавленных checks проходят. Legacy root/fingerprint comparisons проверяют все native facts независимо от читаемого view: только expected root очищается от распознанной аннотации, actual fingerprint сравнивается без изменения.
 
 Размерная проверка использует настоящий полный capture с восстановленными source effects. Лимит не увеличен; capabilities не удалялись. Итоговый capture после последних исправлений provider имеет те же восемь packet hashes, что и измеренный срез. Model/provider acceptance и качество первого предмета этой offline проверкой не подтверждаются.
 
