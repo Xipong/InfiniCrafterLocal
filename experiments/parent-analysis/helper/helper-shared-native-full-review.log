@@ -1,0 +1,875 @@
+PASS: atlas header visible glyph centering and safe inset
+PASS: atlas packaged skin alpha matches PNG loading
+DETAIL: actual journal Unload on worker -> installed tML queue -> main-thread GPU boundary; partial load, repeated unload, borrowed textures, delayed previous-generation callback; disposal failure isolation=False
+PASS: atlas unload graphics stay on main thread across reload
+DETAIL: actual journal Unload on worker -> installed tML queue -> main-thread GPU boundary; partial load, repeated unload, borrowed textures, delayed previous-generation callback; disposal failure isolation=True
+PASS: atlas unload disposal failures preserve later cleanup
+PASS: atlas recovery legacy sidecar exact read only
+PASS: atlas recovery legacy sidecar negative boundaries
+PASS: atlas recovery legacy sidecar native detail drawing
+PASS: weapon ammo context avoids item defaults catalog traversal
+PASS: weapon ammo context preserves actual ammo parent
+PASS: weapon replacement profiles preserve native mechanics
+PASS: weapon replacement profiles conditional opaque hook evidence
+PASS: weapon replacement profiles deferred cancellation parity
+PASS: parent source projection memo exact output and slice isolation
+PASS: parent source projection memo bounds concurrency and retirement
+PASS: parent source revisits preserve edges without frame waits
+PASS: parent source projection template exact graph indices and character boundary
+PASS: atlas recovery self-bound historical parent cards
+PASS: atlas recovery committed bundled recipes
+PASS: atlas recovery exact historical metadata read only
+PASS: atlas recovery conflicting and foreign evidence
+PASS: atlas recovery prevents later metadata downgrade
+PASS: sustain admission beam cancellation before native events
+PASS: sustain admission composed cancellation before native events
+PASS: sustain admission beam payment before periodic damage
+PASS: sustain admission composed payment before periodic damage
+PASS: sustain admission clock and authority
+PASS: sustain admission uncontrolled event positive
+PASS: parent metadata native item clone
+PASS: parent metadata definition transport
+PASS: parent metadata placed world save
+PASS: parent metadata registry and compact reference hydration
+PASS: studio menu native visibility scale and launch admission
+PASS: projectile angle fresh remote hydration
+PASS: projectile raw impact native pose witness
+PASS: projectile angle boundary native storage and authored forward
+PASS: player effect timed buff actual cooldown hit
+PASS: player effect weapon event actual cooldown
+PASS: player effect equipment pickup and potion hooks
+PASS: player effect typed snapshot roundtrip
+PASS: player effect automatic mana native lifecycle
+PASS: player effect hurt immunity actual slot
+PASS: player effect remote passive state no actions
+PASS: player effect malformed snapshot preserves state
+PASS: existing player stats shared equipment consumers
+PASS: existing buff stats condition before aggregate cap
+PASS: parent source graph unresolved identity alternatives
+PASS: parent source graph native projectile windows
+PASS: parent source graph conditional native buff consumers
+PASS: parent source graph conditions events and reachable helpers
+PASS: parent mod hit hook source statements without execution
+PASS: parent mod buff source data links without execution
+PASS: native parent tooltip hooks
+PASS: client tooltip wire bounds and pending persistence
+PASS: client tooltip server escrow end-to-end
+PASS: client tooltip corrupt save cancellation recovery
+PASS: journal lifecycle without draw
+PASS: parent fixed spawn source native oracle
+PASS: parent ammo context independent of inventory
+PASS: parent environment references conditional fail closed
+PASS: parent banner registry matches native conditional components
+PASS: parent equipment source pieces and conditional sets
+PASS: parent armor set source mixed and incomplete variants
+PASS: parent contact status native item target signature
+PASS: parent attack source certificates match native shooting collision
+PASS: parent quantified snapshots and ammo observation identity
+PASS: parent native item scale penetration and use limit
+PASS: parent analysis worker snapshots and cancellation
+PASS: parent source cancellation cannot poison shared projectile cache
+PASS: parent analysis export cancellation and world retirement
+PASS: runtime dump writer exact UTF8 byte and row bounds
+PASS: parent deferred craft complete synchronous parity
+PASS: parent shared source cache bounds and invalidation
+PASS: runtime dump resolves complete source before publication
+PASS: runtime dump incremental capture main thread bounded queue and publication
+PASS: runtime dump incremental budget cancellation and IO failure
+PASS: parent source graph empty watched fields skip unrelated consumer scan
+PASS: parent source graph export cache preserves source and refusals
+PASS: runtime dump Nebula Rainbow available content roundtrip
+PASS: runtime dump atomic paired manifest and failed publication
+PASS: runtime dump shares complete parent and projectile capture
+PASS: runtime dump preserves capture failures as explicit unavailable rows
+PASS: parent complete projectile attack source reaches live and dump
+PASS: projectile attack source symbolic dependencies and predicates
+PASS: projectile attack shared AI selection before source budgets
+PASS: projectile attack position integration identity selection
+PASS: projectile attack discarded identity alternatives disclosure
+PASS: projectile attack identity specialization receiver and mutation safety
+PASS: projectile attack native dispatch and source sibling controls
+PASS: parent identity window refusal diagnostics
+PASS: parent effect slice clocks predicates and loops
+PASS: parent single hop projectile source references
+PASS: projectile helper spawn native last prism reference
+PASS: projectile helper spawn conditional unknown control flow
+PASS: projectile helper spawn independent budget refusals
+PASS: projectile helper spawn exact source table merge
+PASS: source local COW sharing matches deep copy oracle
+Native helper geometry comparisons: 5875
+PASS: parent native geometry helper semantic equivalence
+PASS: parent native arrow motion source execution oracle
+PASS: parent native position integration execution oracle
+PASS: parent native excluded integration cases execution oracle
+PASS: parent native growing arc motion and cone union oracle
+PASS: parent random status mutually exclusive native outcomes
+PASS: dropped alpha support exact rotated pixels
+PASS: held native owner rejects removed pose controls
+PASS: held contact preserves authored projectile reach
+PASS: journal hotkey trigger lifecycle
+PASS: coincident seek finite motion and exact retirement
+PASS: single-active weapon admission without chat warning
+PASS: composable motion review manual release VFX roundtrip
+PASS: composable motion review automatic completion VFX roundtrip
+PASS: composable motion review authenticated release source fences
+PASS: composable motion review legacy charge server route
+PASS: composable motion review impact event rotation
+PASS: composable motion review impact event hand attachment
+PASS: composable motion review impact periodic rotation
+PASS: composable motion review impact periodic hand attachment
+PASS: composable motion review impact periodic scale rate
+PASS: composable motion review impact periodic hand curve
+PASS: composable motion independent hand pose attachment and reach admission
+PASS: lateral oscillation exact u1 and saved legacy
+PASS: lateral oscillation nonlinear substep matrix
+PASS: lateral oscillation world time windows and angular parity
+PASS: lateral oscillation native trajectory convergence
+PASS: velocity scale late phases and saved legacy
+PASS: velocity scale admission and subupdates
+PASS: composable motion ForcesAndIndependentPresentation
+PASS: composable motion AttachmentPoseAndReach
+PASS: composable motion TimedReturnNoHiddenController
+PASS: composable motion nearest NPC seek publishes owner velocity
+PASS: composable motion FreeBeamAndLashGeometry
+PASS: composable motion PhaseOnlyAttachmentAndReleasedModifiers
+PASS: composable motion OrbitConsumesTilePolicyAndOwnerControl
+PASS: composable motion ProximityWithoutSteering
+PASS: composable motion ChargeReleaseAndHydration
+PASS: composable motion phase-only spin advances every update
+PASS: composable motion tile return retains first relative update
+PASS: composable motion free presentation does not cancel with owner
+PASS: composable motion ExpiryReceiptNativeOrderAndServerOnceOnly
+PASS: composable motion ExpiryReceiptRejectsUnsupportedGeometryAndCause
+PASS: composable motion ExpiryReceiptWaitsForActualDefinition
+PASS: composable motion ExpiryReceiptUsesEventClockWithoutRewindingServer
+PASS: composable motion FirstHydratedServerStillProducesSpawnVfx
+PASS: projectile first hydration preserves native top-left
+PASS: visual scale window local rehydration
+PASS: visual scale native snapshot fresh and late peers
+PASS: visual scale snapshot authority and replay
+PASS: visual scale snapshot strict component ownership and bounds
+PASS: beam axial origin preserves length and shared consumers
+PASS: beam axial origin raycast preserves shifted start and length budget
+PASS: beam axial origin strict admission and historical absence
+PASS: composable motion beam VFX snapshot uses actual line
+PASS: composable motion scale-rate snapshot preserves explicit scale
+PASS: free projectile sprite trail preserves explicit body scale
+PASS: composable motion absolute tile policy requires reachable consumer
+PASS: generated use refusal admission and localization
+PASS: generated use refusal owner throttle and authority
+PASS: UI QoL hotkey input focus and compact journal controls
+PASS: atlas focus ownership overlay resume and world cleanup
+PASS: deferred refund malformed row isolation
+PASS: utility death duration policy and dead snapshot filtering
+PASS: utility death delayed action retirement
+PASS: generated buff long and permanent lifetimes
+PASS: generated buff long and permanent duration presentation
+PASS: UI QoL compact tooltip critical inputs and Shift expansion
+PASS: audit escrow take acknowledgement preserves changed cursor
+PASS: audit sentry original damage selected prefixed base
+PASS: charge presentation actual clock ExtraAI and once-only ready cue
+PASS: charge presentation localized caption and viewport bounds
+PASS: projectile controls independent charge channels and hydration
+PASS: projectile controls signed world orbit and extra updates
+PASS: projectile controls collided-axis bounce retention
+PASS: projectile controls strict DTO and retained absence
+PASS: journal world history favorites and responsive bounds
+PASS: atlas drawing native pixel alpha and text alignment
+PASS: atlas book controls responsive bounds and scaled hit areas
+PASS: atlas discovery search favorites filters and exact ancestry
+PASS: atlas detail lineage navigation restores discovery context
+ATLAS_REFRESH snapshots=100 records=600 layoutRebuilds=0 elapsedMs=11.28 allocatedBytes=484288
+PASS: atlas detail generation uses known ancestry
+PASS: lineage exact identity bounded DAG and routing
+PASS: lineage localization native filename prefix
+PASS: lineage viewport anchored zoom bounded pan and scaled hit targets
+PASS: lineage input overlay release and focus ownership
+PASS: lineage native hover deferred browser handoff ownership
+LINEAGE_CULL candidateSegments=1310
+LINEAGE_STRESS nodes=511 edges=510 pathVertices=66300 elapsedMs=154.3 allocatedBytes=33328952
+PASS: lineage bounded adversarial layout cost
+PASS: lineage native identity exact registered items
+PASS: input-local independent conditions
+PASS: parent hit status facts certified native source
+PASS: parent buff effects source certified and parent local
+AMMO ORACLE weapon=39 ammo=40 pick=1 source=1 actual=[1]
+AMMO ORACLE weapon=39 ammo=41 pick=2 source=2 actual=[2]
+AMMO ORACLE weapon=39 ammo=51 pick=5 source=5 actual=[5]
+AMMO ORACLE weapon=39 ammo=516 pick=91 source=91 actual=[91]
+AMMO ORACLE weapon=120 ammo=40 pick=1 source=2 actual=[2]
+AMMO ORACLE weapon=120 ammo=41 pick=2 source=2 actual=[2]
+AMMO ORACLE weapon=120 ammo=51 pick=5 source=5 actual=[5]
+AMMO ORACLE weapon=120 ammo=516 pick=91 source=91 actual=[91]
+AMMO ORACLE weapon=4381 ammo=40 pick=819 source=819 actual=[819]
+AMMO ORACLE weapon=4381 ammo=41 pick=819 source=819 actual=[819]
+AMMO ORACLE weapon=4381 ammo=51 pick=819 source=819 actual=[819]
+AMMO ORACLE weapon=4381 ammo=516 pick=819 source=819 actual=[819]
+AMMO ORACLE weapon=3052 ammo=40 pick=495 source=495 actual=[495]
+AMMO ORACLE weapon=3052 ammo=41 pick=495 source=495 actual=[495]
+AMMO ORACLE weapon=3052 ammo=51 pick=495 source=495 actual=[495]
+AMMO ORACLE weapon=3052 ammo=516 pick=495 source=495 actual=[495]
+AMMO ORACLE weapon=2223 ammo=40 pick=1 source=357 actual=[357]
+AMMO ORACLE weapon=2223 ammo=41 pick=2 source=357 actual=[357]
+AMMO ORACLE weapon=2223 ammo=51 pick=5 source=357 actual=[357]
+AMMO ORACLE weapon=2223 ammo=516 pick=91 source=357 actual=[357]
+AMMO ORACLE weapon=3019 ammo=40 pick=485 source=485 actual=[485]
+AMMO ORACLE weapon=3019 ammo=41 pick=2 source=2 actual=[2]
+AMMO ORACLE weapon=3019 ammo=51 pick=5 source=5 actual=[5]
+AMMO ORACLE weapon=3019 ammo=516 pick=91 source=91 actual=[91]
+AMMO ORACLE weapon=3029 ammo=40 pick=1 source=1 actual=[1,1,1,1]
+AMMO ORACLE weapon=3029 ammo=41 pick=2 source=2 actual=[2,2,2,2]
+AMMO ORACLE weapon=3029 ammo=51 pick=5 source=5 actual=[5,5]
+AMMO ORACLE weapon=3029 ammo=516 pick=91 source=91 actual=[91,91]
+AMMO ORACLE PASS cases=28 moltenSpecialRetained=2
+PASS: parent ammo source semantics actual Prepare
+PASS: parent ammo mod hook shapes read without execution
+PASS: parent ammo mixed hooks native phase order
+PASS: use input scope strict DTO and legacy roundtrip
+PASS: use input scope delayed provenance and authority
+PASS: use input scope native mana payment
+PASS: native active input serialized owner server remote
+PASS: native fishing readiness witness bounds
+PASS: native active input quick use preserves held intent
+PASS: native active input cursor inventory boundary
+PASS: native active input connection generation reset
+PASS: native active input A B A ordered switching
+PASS: native active input lifecycle and malformed payloads
+PASS: native active input compact hydration and refusals
+PASS: native fishing strict action admission
+PASS: native fishing and weapon ammo selected projections
+PASS: native fishing primary projection and reel costs
+PASS: use input scope preserves prefix and quick-use identity
+PASS: use input scope disjoint static budgets
+PASS: target controller authored motion and firing
+PASS: target controller explicit launch and delayed activation
+PASS: target controller cancelled movement cannot fire
+PASS: target controller free-child serialized composition
+PASS: combat buff lifecycle native stats wire and HUD
+PASS: reactive equipment delayed admission authority and cooldown
+PASS: reaction cooldown presentation functional identity and read-only timers
+PASS: reaction cooldown presentation actual HUD fitted item sprite
+PASS: reactive utility buffs authority aggregation cooldown and exhaustion
+PASS: reactive utility buffs exact DTO group ownership
+PASS: reactive utility buffs localized exact tooltip effects
+PASS: reactive utility buffs canonical server snapshot owner correction
+PASS: equipment periodic gameplay native spawn
+PASS: equipment periodic gameplay authority and delay
+PASS: equipment presentation carrier native frame bounds
+PASS: visible vanity slots cannot illuminate world
+PASS: equipment presentation front back native layer tree
+PASS: equipment presentation native displayed carrier selection
+  equipment native base skin=0 frame=0 draws=25
+  equipment native base skin=0 frame=5 draws=25
+  equipment native base skin=0 frame=10 draws=25
+  equipment native base skin=0 frame=19 draws=25
+  equipment native base skin=4 frame=0 draws=25
+  equipment native base skin=4 frame=5 draws=25
+  equipment native base skin=4 frame=10 draws=25
+  equipment native base skin=4 frame=19 draws=25
+PASS: equipment presentation native clothes hair and source rectangles
+PASS: VFX retired metadata strict refusal
+PASS: persisted v5 historical metadata preserves mechanics
+PASS: persisted v5 executable VFX15 refuses instead of semantic reconstruction
+PASS: persisted v5 empty VFX15 ignores motif and effectColor
+PASS: persisted v5 current VFX16 preserves baked RGB
+PASS: persisted v5 unknown executable fields refuse
+PASS: persisted v5 current exact pass through
+PASS: persisted v5 registry read only world fence
+PASS: OwnerLinkWireAdmission
+PASS: OwnerLinkLiveClientGeometryAndRetirement
+PASS: OwnerLinkFnaMeshControls
+PASS: VFX branch fields exact presence current selectors and impact canvas
+PASS: VFX local RGB strict admission serialization and retirement
+PASS: VFX local RGB actual native simple consumers
+PASS: VFX local RGB textured path native vertices
+PASS: Visual descriptive palette Unicode roundtrip
+PASS: played silver final delivery native RGB and captured material consumers
+PASS: descriptive parent advisory prose Unicode roundtrip
+PASS: descriptive authored name Unicode persistence roundtrip
+PASS: localized generated tooltip width wrapping without content loss
+PASS: descriptive art captions Unicode roundtrip
+PASS: two-body pull independent authority target loss and boss resistance
+PASS: nearby damage deterministic nearest ranking and cap
+PASS: nearby damage tooltip requires explicit cap without fallback
+PASS: composable NPC effect admission
+PASS: composable NPC effect native consumers
+PASS: composable NPC effect owner receipt
+PASS: composable NPC effect strict refusals
+PASS: composable NPC effect lifecycle and peer synchronization
+PASS: composable NPC effect probability single admission
+PASS: composable NPC effect item receipt and delayed fences
+PASS: composable NPC effect compiled wire replay
+PASS: composable NPC effect tooltip generated semantics
+PASS: signed generated buff admission
+PASS: signed generated buff consumers and presentation
+PASS: signed generated buff compiled wire and binary replay
+PASS: signed generated buff order-independent aggregation
+PASS: NPC hit pull preserves projectile origin
+PASS: nearest event damage retains radial native selection and direct-target exclusion
+PASS: target bias saved DTO range and native distance-score discount
+PASS: signed vertical acceleration native DTO active updates and hydration
+PASS: signed vertical acceleration activation delay and update rate
+PASS: sampled launch strict DTO and old saved absence
+PASS: sampled velocity native spawn owner authority
+PASS: sampled velocity delay ExtraAI and hydration
+PASS: late definition retains latest native projectile velocity
+PASS: repeated projectile hydration retains spent penetration
+PASS: hit target delayed native boundary and reservation ownership
+PASS: initial NPC exclusion exact incarnation and counter
+PASS: retirement projectile old ExtraAI refused and current remaining retained
+PASS: retirement movement six reserved without renumbering
+PASS: native DTO retirement controller bag and typed cadence
+PASS: native DTO retirement single buff and current ExtraBuffs
+PASS: native DTO retirement sound absence and native consumers
+PASS: native DTO retirement current utility snapshot and mirror
+PASS: native DTO retirement dead knowledge and advisory summary
+PASS: explicit spawn transform native boundary
+PASS: target emission anchor and repeat policies
+PASS: target emission inclusive range ties and LOS
+PASS: target emission real hit authority stats and reservations
+PASS: target emission ordinary refusal and child collision
+PASS: target emission delayed NPC incarnation and refunds
+PASS: hitbox raw numeric outside domain
+PASS: hitbox curve actual rectangle and world-tick clock
+PASS: hitbox curve explicit visual mirror and hydration
+PASS: modifier unified timing admission and roundtrip
+PASS: modifier unified timing equivalent and intersection
+PASS: modifier unified timing late relative and phase only
+PASS: modifier unified timing NPC consumers
+PASS: motion modifiers actual phase and visual hydration
+PASS: NPC attraction authority falloff and bounds
+PASS: homing modifier owner selection and speed
+PASS: whip gravity actual collision polyline
+PASS: bugfix251 grounded native support
+PASS: VFX sound selector native item projectile consumers
+PASS: VFX sound selector silence and server controls
+PASS: VFX explicit sound owns pitch and preserves native policies
+PASS: quality250 NativeDirectUseStackCostIsLiteralUnderSaving
+PASS: own-stack chance one completed activation
+PASS: quality250 NativeQuickHealStackCostUsesPrimaryUnderSaving
+PASS: RT02 NativeQuickUtilityFreshInventoryAndVoidWitness
+PASS: RT02 NativeQuickUtilityWriterServerRemote
+PASS: RT02 NativeQuickUtilityAuthorityFences
+PASS: quality250 NativeLiteralStackCostKeepsMobilityAndPlacementGates
+PASS: quality250 NativePickAmmoSavingRemainsIndependentOfDirectStackCost
+PASS: quality250 NativeFloat32BuffNearNeutralIdentityAndExpiry
+PASS: persistence PlacementPrefixServerSnapshotSurvivesEscrowSaveAndReturn
+PASS: persistence PlacementReturnFullPoolKeepsDurableOwnerWithoutAllocation
+PASS: persistence PlacementPrefixMalformedIdentityIsDurableAndLegacyIsUnprefixed
+PASS: cancelled craft reconnect resolves only owned journal
+PASS: persistence EscrowSessionTokenRotationAndConcurrentClaimRefused
+PASS: persistence EscrowSessionReconnectCommitAndReload
+PASS: persistence EscrowCommitRejectsFullWorldPoolBeforeAllocation
+PASS: persistence RemoteEscrowMirrorNeverBecomesSinglePlayerMaterial
+PASS: persistence ScopedRemoteEscrowResponseRequiresExactOrigin
+PASS: persistence NativePlacementIntentPrecedesMutationAndRejectsLateClaims
+PASS: persistence PlacementIntentRateReplayExpiryAndBeforeStateControls
+PASS: persistence PlacementClientWaitsForServerBeforeSnapshotAndSpendsOnce
+PASS: persistence LocalPlacementReceiptStillSpendsStackOneExactlyOnce
+PASS: persistence PermanentlyBrokenPlacementReturnSurvivesReload
+PASS: persistence PlacementQuarantineValidatedRequeueIsIdempotent
+PERSISTENCE-CASE PASS: new
+PERSISTENCE-CASE PASS: legacy_empty
+PERSISTENCE-CASE PASS: foreign_empty
+PASS: persistence EmptyLegacyRemoteMarkerDoesNotBrickFreshStationUse
+PERSISTENCE-CASE PASS: dormant origin '' material=False
+PERSISTENCE-CASE PASS: dormant origin '' material=True
+PERSISTENCE-CASE PASS: dormant origin 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' material=False
+PERSISTENCE-CASE PASS: dormant origin 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' material=True
+PERSISTENCE-CASE PASS: dormant origin 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' material=False
+PERSISTENCE-CASE PASS: dormant origin 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' material=True
+PASS: persistence ForeignDormantClaimDoesNotBecomeCurrentAuthorityOrBlockFreshInputs
+PASS: dynamic projectile pierce preserves native maximum and immunity
+PASS: generated tooltips describe exact executable bindings
+PASS: played tooltip speeds display only blocks per second
+PASS: played secondary tooltips exact delivered combat
+PASS: secondary tooltips unreachable events and bounded facts
+PASS: played stats seconds percent native equipment units
+PASS: played mobility cooldown independent read only status
+PASS: EX exhaustion EX01DtoPresenceRawScopeAndIdentity
+PASS: EX exhaustion EX02ConsumerSourceGateAndLegacyControls
+PASS: EX exhaustion EX03FiveLabeledSourcesCopiesAndImmutableCapture
+PASS: EX exhaustion EX04ActiveNativeUseKeepsHealCostAndTiming
+PASS: EX exhaustion EX05HeldSourceAndAlternateCannotBypass
+PASS: EX exhaustion EX06CapacityLifecycleAndActivationAnchor
+PASS: EX exhaustion EX07RealUtilityCodecFiveRowsDiscardAndOwnerCorrection
+PASS: EX exhaustion EX08QuickCommitCanonicalPolicyAnchorAndRefusal
+PASS: EX exhaustion EX09 authoritative snapshot does not echo
+PASS: EX exhaustion EX10 expired quick buff retains independent fatigue
+PASS: EX exhaustion EX11 exhausted quick use cannot revive at Commit
+PASS: EX exhaustion EX12 queued quick attempts preserve confirmed refusal
+PASS: exhaustion presentation five definitions own names and ticks
+PASS: exhaustion presentation exact localized definition tooltips
+PASS: exhaustion presentation actual HUD inventory draw boundary
+PASS: forge QoL authority observation is read only
+PASS: forge QoL readiness reports escrow not missing materials
+PASS: played mechanics alternate recall native mining isolation and restoration
+PASS: played mechanics combined native tool actions retain all powers
+PASS: played mechanics native flail yoyo channel and code19 live aim consumers
+PASS: generated native prefix survives active use
+PASS: generated native prefix placement and ammo independence
+PASS: retirement item old payload refused and current prefix hydration retained
+PASS: generated root combat native lane contexts and query counts
+PASS: generated root combat terminal hold and source fence
+PASS: child combat current wire requires every active choice
+PASS: child combat consumer rejects missing choices before budget admission
+PASS: child combat immediate events inherit exact current values once
+PASS: child combat delayed and charge events capture at admission
+PASS: child combat sentry firing and refused spawn reservations
+PASS: dynamic collision preserves authored choice and return phase
+DETAIL: swarm charge basis named variants=128 zero/fractional/unit/doubled spawn; unchanged/modified live combat inputs; partial/full release; four method roles
+PASS: swarm charge keeps actual combat basis exactly once
+DETAIL: swarm delayed-hook clock named variants=96 delay=0/1/2/600; before/after increment counts and uint wrap; extraUpdates=0/2; four roles
+PASS: swarm delayed hooks honor world clock and wrap
+DETAIL: swarm authority role/event/action variants=120; real immediate/delayed HP/status/pull controls; revoked dispatch=42; strike socket boundaries=0; heal displays=12; other packet boundaries=40; no registered spawn/teleport/socket claim
+PASS: swarm delayed eligibility shares canonical dispatch authority
+PASS: local asset downloads keep generator origin separate from sharing URL
+PASS: asset lifecycle reference world fence
+PASS: asset lifecycle world scoped persistence
+DETAIL: certified inventory instances=60 tick=100 PNG body reads=0
+DETAIL: certified inventory instances=60 tick=101 PNG body reads=0
+DETAIL: certified inventory instances=60 tick=190 PNG body reads=0
+PASS: asset lifecycle certified hydration coalesces
+PASS: asset lifecycle server descriptor replacement
+PASS: asset lifecycle malformed definition packets
+PASS: runtime sprite LRU retains queued borrowers until owner drain
+DETAIL: ownerThread=1 unloadWorker=8 disposedAfterWorkerClear=0 disposedAfterWorkerUnload=0; queuedBorrowers=3
+PASS: runtime sprite worker Clear and Mod.Unload defer borrowed resources
+DETAIL: same-file A->B via inventory/FNA queue; repeated worker invalidation; independent hot asset; deferred owner disposal; GPU boundaries intercepted
+PASS: runtime sprite same filename invalidation reloads inventory without retiring queued texture
+DETAIL: invalidation alias=local-shadow canonical loads=3 failedAttempts=2 negative-key-preserved=1
+DETAIL: invalidation alias=relative-padded canonical loads=3 failedAttempts=2 negative-key-preserved=1
+DETAIL: invalidation alias=environment canonical loads=3 failedAttempts=2 negative-key-preserved=1
+DETAIL: invalidation alias=stale-windows canonical loads=3 failedAttempts=2 negative-key-preserved=1
+DETAIL: invalidation alias=url canonical loads=3 failedAttempts=2 negative-key-preserved=1
+PASS: runtime sprite invalidation aliases use selected owner and backoff key
+DETAIL: repeated generations retire via one owner callback; Clear(false) preserves backoff; Clear/Dispose reclaim retired resources; no post-dispose resurrection
+PASS: runtime sprite invalidation Clear and Dispose fence pending retirement
+DETAIL: actual asset-owner inventory controls=13/13 empty=1; no GPU decoding
+PASS: runtime sprite inventory consumer follows certified asset byte owner
+DETAIL: same-filename conflict add/remove/equal/replacement/validation/commit/disposal through inventory; both registration orders
+PASS: runtime sprite conflicting certificates preserve inventory ownership
+PASS: DOCX image readiness held producer missing and ready
+PASS: DOCX image readiness cursor missing and ready
+PASS: DOCX image readiness VFX producer query alias
+PASS: DOCX image readiness sibling producer status admission
+PASS: DOCX image readiness native producer status admission
+PASS: DOCX image readiness query alias inventory and world
+PASS: DOCX image readiness missing failure and verified recovery
+PASS: DOCX image readiness explicit unavailable fixture controls
+DETAIL: selected owner same-tick attempts=1 expiry retry=1 invalidation retry=1; CPU decode failure boundary
+PASS: runtime sprite selected owner failure backs off and retries
+PASS: individual material projectile owner and transport session reset
+PASS: individual material Item owner and transport session reset
+DETAIL: exact-ready material admission cases=32
+PASS: individual material runtime assets require exact ready domain
+PASS: individual material unresolved Item forwarding retains transport token
+PASS: individual material nonowner live path stays local events await relay
+PASS: individual material dead Item delay keeps world snapshot and source fence
+PASS: individual material runtime motion and independent profiles
+PASS: individual material live source periodic final pose and generation
+PASS: individual material world delay versus source generation fence
+PASS: individual material item attachment uses instance identity
+PASS: individual material item periodic equipment slot transitions
+PASS: modded equipment native overlays visibility and dyes
+PASS: modded equipment source VFX exact live slots
+DETAIL: projectile relay real same-tick hits=2 hit/crit packets=3 live-attachment-chain=1
+PASS: individual material owner hit validated relay remote delivery
+DETAIL: item relay immutable-world=1 real same-tick hits=2 live-attachment-chain=1 stale-token-rejected=1
+PASS: individual material item snapshot relay immutable pose and instance
+PASS: item event occurrences relay simple and mixed
+PASS: item event network rate limit
+PASS: item event waits for authoritative token
+PASS: item token native sync cycles
+PASS: mod accessory item token native sync
+PASS: projectile hit occurrences stay distinct
+PASS: projectile hit VFX admits retired source
+PASS: remote projectile events have one producer
+PASS: first held item event publishes token before claim
+PASS: individual material budgets share legacy active detached costs
+PASS: individual material occurrence identity distinguishes hits and replay
+PASS: texture UV actual FNA full transform matrix
+PASS: texture UV path repeat and immutable snapshot
+PASS: library material source authority and disabled backend
+PASS: library palette readiness isolation and shared draw budget
+PASS: library palette exact resource and immutable snapshot
+PASS: explicit ParticleLibrary readiness count capture and expiry
+PASS: ParticleLibrary world pass scopes foreign water offset
+PASS: spawn damage survives Configure
+PASS: live combat state survives rehydration
+PASS: hitbox sizing preserves spawn center
+PASS: activation delay preserves launch velocity
+PASS: delayed activation runs spawn before native damage
+PASS: weapon ammo activation delay retains native shot and hydration
+PASS: weapon ammo delayed launch is per instance and producer
+PASS: activation respects explicit zero motion
+PASS: activation does not relaunch live state
+PASS: expiry action waits for final update
+PASS: placement ledger restores saved layers
+PASS: accessory defense is applied once
+PASS: generated accessory identity native admission
+PASS: generated accessory identity native controls
+PASS: generated accessory identity native quick equip
+PASS: generated accessory identity native modded quick equip
+PASS: generated accessory identity native lifecycle
+PASS: movement buffs are order independent
+PASS: mining buffs are order independent
+PASS: equipment visibility uses armor slot
+PASS: buff caps and refresh remain intact
+PASS: station key is not consumed
+PASS: projectile light respects client setting
+PASS: item light respects client setting
+PASS: particle setting controls real dust
+PASS: draw setting controls existing budgets
+PASS: explicit trail saved beam lash tips
+PASS: explicit trail world tick capture
+PASS: held history remote pending ordering
+PASS: held history final pose and fences
+PASS: explicit trail strict admission
+PASS: explicit trail geometry and pose
+PASS: VFX spawn strict admission and uniform projection
+PASS: VFX spawn element birth and attached coordinates
+PASS: VFX spawn library actual birth and velocity
+PASS: VFX spawn dust actual birth and velocity
+PASS: VFX expressivity short shapes and rotation frames
+PASS: VFX expressivity large sprites
+PASS: VFX expressivity shape saved parity
+PASS: VFX expressivity orbit orientation and rate
+PASS: VFX expressivity dust distribution parity
+PASS: filled sector mesh precedes sprite batch
+PASS: filled sector strict admission
+PASS: filled sector nonoverlapping geometry
+PASS: filled sector shared budget sprite isolation
+PASS: contour topology and triangulation
+PASS: contour strict admission
+PASS: contour snapshot material lifecycle and budget
+PASS: explicit shape strict admission
+PASS: explicit shape authored geometry
+PASS: explicit shape lifecycle shared budget
+PASS: active primitive slots share budget
+PASS: draw budgets reset without world tick
+PASS: detached VFX state is bounded and cleared
+PASS: legacy detached VFX client cleanup does not require Draw
+PASS: native craft HTTP timeout default override floor and cancellation
+PASS: cache-only flag preserves request
+PASS: generator delivery requires identity
+PASS: parent summary unicode roundtrip
+PASS: generated parent prefix is request-only
+PASS: parent projectile atlas metadata is observed only
+PASS: parent native sprite reference reaches prepared request
+PASS: parent native sprite reference absence is honest
+PASS: generated parent sprite reference never uses native proxy
+PASS: craft identity rejects failed defaults
+PASS: parent placement facts reach craft snapshot
+PASS: parent native fact envelopes preserve exact shape
+PASS: parent ammo facts keep native category and inventory flag
+SEED_ABSENT_COMPAT current_without_seed networkSha256=8bb2874a3274785dccfd4fff727d3c228c91b800a4c9e0c0b2755bbdc2e3736e localSha256=166cdeabc8bc86f6118ddeec5bc052880b65ffd6da58d94ae092c2f4de0e7b5c definitionIdentity=8bb2874a3274785dccfd4fff727d3c228c91b800a4c9e0c0b2755bbdc2e3736e
+SEED_ABSENT_NETWORK_BASE64 current_without_seed eyJydW50aW1lQXBpVmVyc2lvbiI6ImluZmluaS5ydW50aW1lLXByb2dyYW0udjUiLCJpZCI6ImdfMTEyMjMzNDQ1NTY2Nzc4OCIsInJlY2lwZUtleSI6ImludmVudG9yeV9zZWVkX25hdGl2ZV9maXh0dXJlIiwibmFtZSI6IkNhcGFiaWxpdHkgV2l0bmVzcyBjb25maWd1cmVfd2VhcG9uX2FtbW8iLCJwYXJlbnRBIjoiVW5rbm93biIsInBhcmVudEIiOiJVbmtub3duIiwibWVyZ2VNb2RlIjoibGl0ZXJhbCIsImNhdGVnb3J5IjoiZ2VuZXJpYyIsInNvdXJjZU1vZGUiOiJ0ZXN0X2ZpeHR1cmUiLCJ0YWdzIjpbXSwicmVjaXBlTWV0YSI6eyJ1bml2ZXJzYWxSZWNpcGUiOnRydWUsImdlbmVyYXRpb25EZXB0aCI6MCwicGFyZW50R2VuZXJhdGVkRGVwdGhzIjpbXSwicmVjaXBlQ29oZXJlbmNlIjoid2VhayIsImNoYW9zQnVkZ2V0IjowLCJub3ZlbHR5QnVkZ2V0IjowLCJwYXJlbnRJZGVudGl0aWVzIjpbXSwicGFyZW50Q2F0ZWdvcmllcyI6W10sInNhbXBsZWRMYW5lIjoiIiwic2FtcGxlZENhdGVnb3J5IjoiIiwid29ybGRTY29wZWQiOnRydWUsIndvcmxkSWQiOiIiLCJhc3NldFRyYW5zcG9ydCI6Im5hdGl2ZSIsImFzc2V0QmFzZVVybCI6IiIsImFzc2V0RmlsZXMiOltdfSwiZ2VuZXJhdGVkUGFyZW50U3VtbWFyeSI6eyJzY2hlbWEiOiJpbmZpbmkuZ2VuZXJhdGVkLXBhcmVudC1zdW1tYXJ5LnYyIiwibmFtZSI6IiIsImlkZW50aXR5IjoiIiwiZGVzY3JpcHRpb24iOiIiLCJwbGF5ZXJFeHBlcmllbmNlIjoiIn0sImdhbWVwbGF5Ijp7ImtpbmQiOiJnZW5lcmljIiwiZGFtYWdlQ2xhc3MiOiJnZW5lcmljIiwiZGFtYWdlIjoyMCwia25vY2tiYWNrIjozLCJ1c2VUaW1lIjoyMCwidXNlQW5pbWF0aW9uIjoyMCwidXNlU3R5bGVOYW1lIjoic2hvb3QiLCJ1c2VTdHlsZSI6NSwiYXV0b1JldXNlIjpmYWxzZSwiaG9sZG91dE9mZnNldFgiOjAsImhvbGRvdXRPZmZzZXRZIjowLCJoYW5kUG9zZSI6Im9uZV9oYW5kZWQiLCJtYW5hQ29zdCI6MCwicmFyaXR5IjoxLCJ2YWx1ZSI6MTAwMCwibWF4U3RhY2siOjEsImNyYWZ0WWllbGQiOjEsImFtbW9DYXRlZ29yeSI6IiIsImFtbW9Qcm9qZWN0aWxlSWQiOjAsImFtbW9TaG9vdFNwZWVkUHhQZXJUaWNrIjowLCJub3RBbW1vIjpmYWxzZSwid2lkdGgiOjI0LCJoZWlnaHQiOjI0LCJpdGVtU2NhbGUiOjEsInVzZVR1cm4iOnRydWUsImhlYWxMaWZlIjowLCJoZWFsTWFuYSI6MCwicG90aW9uIjpmYWxzZSwiZXh0cmFCdWZmcyI6W10sImdlbmVyYXRlZEJ1ZmYiOnsiZHVyYXRpb25UaWNrcyI6MCwibWluaW5nU3BlZWRNdWx0aXBsaWVyIjoxLCJlbWl0TGlnaHRTdHJlbmd0aCI6MCwibGlnaHRDb2xvck5hbWUiOiIiLCJvcmVTZW5zZVJhZGl1c1RpbGVzIjowLCJvcmVTZW5zZUVuYWJsZWQiOmZhbHNlLCJtb3ZlbWVudFNwZWVkIjowLCJqdW1wQm9vc3QiOjAsIm1hbmFSZWdlbiI6MCwibGlmZVJlZ2VuIjowLCJoYXNBbnlFZmZlY3QiOmZhbHNlfSwicGlja1Bvd2VyIjowLCJheGVQb3dlciI6MCwiaGFtbWVyUG93ZXIiOjAsIm1vYmlsaXR5TW9kZSI6IiIsIm1vYmlsaXR5UmFuZ2VUaWxlcyI6MCwibW9iaWxpdHlDb29sZG93blRpY2tzIjowLCJtb2JpbGl0eVNhZmVUaWxlT25seSI6dHJ1ZSwibWluaW5nU3BlZWRTY2FsZSI6MSwiaG9sZExpZ2h0U3RyZW5ndGgiOjAsImhvbGRMaWdodENvbG9yTmFtZSI6IiIsInVzZUNvbmRpdGlvbk1vZGUiOiIiLCJ1c2VDb25kaXRpb25NaW5MaWZlIjowLCJ1c2VDb25kaXRpb25NaW5NYW5hIjowfSwiYWNjZXNzb3J5Ijp7ImVuYWJsZWQiOmZhbHNlLCJ3aXJlVmlzaW9uIjpmYWxzZSwiaWNlU2thdGUiOmZhbHNlLCJub0tub2NrYmFjayI6ZmFsc2UsImZpcmVXYWxrIjpmYWxzZSwiYWNjUnVuU3BlZWQiOjAsInJvY2tldEJvb3RzIjowLCJkZWZlbnNlIjowLCJtYXhMaWZlIjowLCJtYXhNYW5hIjowLCJsaWZlUmVnZW4iOjAsIm1hbmFSZWdlbiI6MCwibW92ZW1lbnRTcGVlZCI6MCwibWF4UnVuU3BlZWQiOjAsImp1bXBTcGVlZCI6MCwiZ2VuZXJpY0RhbWFnZSI6MCwibWVsZWVEYW1hZ2UiOjAsInJhbmdlZERhbWFnZSI6MCwibWFnaWNEYW1hZ2UiOjAsInN1bW1vbkRhbWFnZSI6MCwiZ2VuZXJpY0NyaXQiOjAsImF0dGFja1NwZWVkIjowLCJrbm9ja2JhY2siOjAsImZhbGxEYW1hZ2VJbW11bmUiOmZhbHNlLCJsYXZhSW1tdW5lIjpmYWxzZSwid2F0ZXJXYWxrIjpmYWxzZSwibWluaW9uU2xvdHMiOjAsInNlbnRyeVNsb3RzIjowLCJtYW5hQ29zdFJlZHVjdGlvbiI6MCwiYW1tb1NhdmVDaGFuY2UiOjAsImFnZ3JvIjowLCJlbmR1cmFuY2UiOjAsImFybW9yUGVuZXRyYXRpb24iOjAsIndoaXBSYW5nZSI6MCwic3VtbW9uVGFnRGFtYWdlIjowLCJsaWdodFN0cmVuZ3RoIjowLCJsaWdodENvbG9yTmFtZSI6IiIsImhhc0FueUVmZmVjdCI6ZmFsc2V9LCJhcm1vciI6eyJlbmFibGVkIjpmYWxzZSwic2xvdCI6IiIsInNldEtleSI6IiIsImRlZmVuc2UiOjAsIm1heExpZmUiOjAsIm1heE1hbmEiOjAsImxpZmVSZWdlbiI6MCwibWFuYVJlZ2VuIjowLCJtb3ZlbWVudFNwZWVkIjowLCJtYXhSdW5TcGVlZCI6MCwianVtcFNwZWVkIjowLCJnZW5lcmljRGFtYWdlIjowLCJtZWxlZURhbWFnZSI6MCwicmFuZ2VkRGFtYWdlIjowLCJtYWdpY0RhbWFnZSI6MCwic3VtbW9uRGFtYWdlIjowLCJnZW5lcmljQ3JpdCI6MCwiYXR0YWNrU3BlZWQiOjAsImtub2NrYmFjayI6MCwiZmFsbERhbWFnZUltbXVuZSI6ZmFsc2UsImxhdmFJbW11bmUiOmZhbHNlLCJ3YXRlcldhbGsiOmZhbHNlLCJtaW5pb25TbG90cyI6MCwic2VudHJ5U2xvdHMiOjAsIm1hbmFDb3N0UmVkdWN0aW9uIjowLCJhbW1vU2F2ZUNoYW5jZSI6MCwiYWdncm8iOjAsImVuZHVyYW5jZSI6MCwiYXJtb3JQZW5ldHJhdGlvbiI6MCwid2hpcFJhbmdlIjowLCJzdW1tb25UYWdEYW1hZ2UiOjAsImxpZ2h0U3RyZW5ndGgiOjAsImxpZ2h0Q29sb3JOYW1lIjoiIiwic2V0Qm9udXNHZW5lcmljRGFtYWdlIjowLCJzZXRCb251c01lbGVlRGFtYWdlIjowLCJzZXRCb251c1JhbmdlZERhbWFnZSI6MCwic2V0Qm9udXNNYWdpY0RhbWFnZSI6MCwic2V0Qm9udXNTdW1tb25EYW1hZ2UiOjAsInNldEJvbnVzR2VuZXJpY0NyaXQiOjAsInNldEJvbnVzTW92ZW1lbnRTcGVlZCI6MCwic2V0Qm9udXNMaWZlUmVnZW4iOjAsInNldEJvbnVzTWFuYVJlZ2VuIjowLCJzZXRCb251c01pbmlvblNsb3RzIjowLCJzZXRCb251c1NlbnRyeVNsb3RzIjowLCJzZXRCb251c01hbmFDb3N0UmVkdWN0aW9uIjowLCJzZXRCb251c0FtbW9TYXZlQ2hhbmNlIjowLCJzZXRCb251c0FnZ3JvIjowLCJzZXRCb251c0VuZHVyYW5jZSI6MCwic2V0Qm9udXNBcm1vclBlbmV0cmF0aW9uIjowLCJoYXNBbnlFZmZlY3QiOmZhbHNlfSwicnVudGltZVByb2dyYW0iOnsiYXBpVmVyc2lvbiI6ImluZmluaS5ydW50aW1lLXByb2dyYW0udjUiLCJzY2hlbWEiOiJpbmZpbmkucnVudGltZS1wcm9ncmFtLndpcmUudjMiLCJpdGVtRW50aXR5SWQiOiJpdGVtIiwicHJpbWFyeUVudGl0eUlkIjoid2l0bmVzc19lbnRpdHkiLCJwcmltYXJ5T3duZXIiOiJwcm9qZWN0aWxlIiwibGltaXRzIjp7Im1heEVudGl0eUNvdW50IjoxMiwibWF4Q2hpbGREZXB0aCI6MywibWF4RXZlbnRTcGF3bnNQZXJBY3RpdmF0aW9uIjozMn0sImVudGl0aWVzIjpbeyJpZCI6Iml0ZW0iLCJraW5kIjoiaXRlbV9ib2R5IiwidmlzdWFsUm9sZSI6ImludmVudG9yeV9pdGVtIiwidmlzdWFsIjp7InJvbGUiOiJpbnZlbnRvcnlfaXRlbSIsImFzc2V0TW9kZSI6Im5vX2Fzc2V0IiwicHJvbXB0IjoiIiwic2lsaG91ZXR0ZSI6IiIsInZpc3VhbElkZW50aXR5IjoiIiwiaW1wYWN0UHJvbXB0IjoiIiwiaW1wYWN0TmVnYXRpdmVQcm9tcHQiOiIiLCJzY2FsZSI6MSwic3ByaXRlUGF0aCI6IiIsInNwcml0ZVVybCI6IiIsInNwcml0ZVN0YXR1cyI6IiIsInNwcml0ZVRlY2huaWNhbFNjb3JlIjowLCJpbXBhY3RTcHJpdGVQYXRoIjoiIiwiaW1wYWN0U3ByaXRlVXJsIjoiIiwiaW1wYWN0U3ByaXRlU3RhdHVzIjoiIiwiaW1wYWN0U3ByaXRlVGVjaG5pY2FsU2NvcmUiOjB9LCJzcGF3biI6eyJlbmFibGVkIjpmYWxzZSwic3BlZWRQeFBlclRpY2siOjAsImNvdW50IjoxLCJzcHJlYWRSYWRpYW5zIjowLCJvZmZzZXRQeCI6MCwiYWltIjoiY3Vyc29yIiwicGxhY2VtZW50IjoiaXRlbV91c2Vfb3JpZ2luIiwib3ZlclRhcmdldCI6eyJoZWlnaHRUaWxlcyI6MCwiZGVsYXlUaWNrcyI6MCwiZW5hYmxlZCI6ZmFsc2V9fSwiZGFtYWdlIjp7ImVuYWJsZWQiOmZhbHNlLCJkYW1hZ2VDbGFzcyI6ImdlbmVyaWMiLCJkYW1hZ2UiOjAsImtub2NrYmFjayI6MCwib3duZXJIaXRDaGVjayI6ZmFsc2V9LCJsaWZldGltZVRpY2tzIjoxLCJoaXRib3giOnsid2lkdGhQeCI6MTQsImhlaWdodFB4IjoxNCwiZHJhd1NjYWxlIjoxLCJoaXRib3hTY2FsZSI6MX0sImNvbGxpc2lvbiI6eyJ0aWxlQ29sbGlkZSI6dHJ1ZSwiaWdub3JlV2F0ZXIiOmZhbHNlLCJib3VuY2VDb3VudCI6MCwicGllcmNlIjoxLCJleHRyYVVwZGF0ZXMiOjAsIm5wY0ltbXVuaXR5TW9kZSI6Im93bmVyIiwibG9jYWxOcGNIaXRDb29sZG93blRpY2tzIjotMX0sIm1vdmVtZW50Ijp7Im5hbWUiOiIiLCJjb2RlIjowLCJwYXJhbXMiOnsicmFuZ2VUaWxlcyI6MCwiaG9taW5nU3RyZW5ndGgiOjAsImdyYXZpdHlQZXJUaWNrIjowLCJ2ZWxvY2l0eVJldGVudGlvbiI6MCwicmV0dXJuQWZ0ZXJUaWNrcyI6MCwicmV0dXJuU3BlZWQiOjAsIndhdmVBbXBsaXR1ZGUiOjAsInBoYXNlU3RyZW5ndGgiOjAsImFjY2VsZXJhdGlvbiI6MCwibWF4U3BlZWQiOjAsInR1cm5SYWRpYW5zUGVyVGljayI6MCwicHVsbFN0cmVuZ3RoIjowLCJwcm94aW1pdHlSYWRpdXNQeCI6MCwic2NhbGVQZXJUaWNrIjowLCJtYXhTY2FsZSI6MCwic2VnbWVudHMiOjAsImR1cmF0aW9uVGlja3MiOjAsIndpZHRoUHgiOjAsIndhcm11cFRpY2tzIjowLCJjaGFyZ2VUaWNrcyI6MCwicG93ZXJNdWx0aXBsaWVyIjowfSwiaXNDb25maWd1cmVkIjpmYWxzZX0sImNvbnRyb2xsZXIiOnsibmFtZSI6IiIsImNvZGUiOjAsInBhcmFtcyI6eyJyYW5nZVRpbGVzIjowLCJob21pbmdTdHJlbmd0aCI6MCwiZ3Jhdml0eVBlclRpY2siOjAsInZlbG9jaXR5UmV0ZW50aW9uIjowLCJyZXR1cm5BZnRlclRpY2tzIjowLCJyZXR1cm5TcGVlZCI6MCwid2F2ZUFtcGxpdHVkZSI6MCwicGhhc2VTdHJlbmd0aCI6MCwiYWNjZWxlcmF0aW9uIjowLCJtYXhTcGVlZCI6MCwidHVyblJhZGlhbnNQZXJUaWNrIjowLCJwdWxsU3RyZW5ndGgiOjAsInByb3hpbWl0eVJhZGl1c1B4IjowLCJzY2FsZVBlclRpY2siOjAsIm1heFNjYWxlIjowLCJzZWdtZW50cyI6MCwiZHVyYXRpb25UaWNrcyI6MCwid2lkdGhQeCI6MCwid2FybXVwVGlja3MiOjAsImNoYXJnZVRpY2tzIjowLCJwb3dlck11bHRpcGxpZXIiOjB9LCJpc0NvbmZpZ3VyZWQiOmZhbHNlfSwidGFyZ2V0aW5nIjp7InNob3RFbnRpdHlJZCI6IiIsImludGVydmFsVGlja3MiOjAsInJhbmdlVGlsZXMiOjAsInNhbWVUYXJnZXRCaWFzIjowfSwibGlnaHQiOnsic3RyZW5ndGgiOjAsImNvbG9yIjoid2hpdGUifSwiZXZlbnRzIjpbXSwiaXNQcm9qZWN0aWxlRW50aXR5IjpmYWxzZSwiaXNPd25lckF0dGFjaGVkIjpmYWxzZSwiaXNTdGF0aW9uYXJ5IjpmYWxzZX0seyJpZCI6IndpdG5lc3NfZW50aXR5Iiwia2luZCI6Im93bmVyX2F0dGFjaGVkX3Byb2plY3RpbGUiLCJ2aXN1YWxSb2xlIjoiaGVsZF9ib2R5IiwidmlzdWFsIjp7InJvbGUiOiJoZWxkX2JvZHkiLCJhc3NldE1vZGUiOiJub19hc3NldCIsInByb21wdCI6IiIsInNpbGhvdWV0dGUiOiIiLCJ2aXN1YWxJZGVudGl0eSI6IiIsImltcGFjdFByb21wdCI6IiIsImltcGFjdE5lZ2F0aXZlUHJvbXB0IjoiIiwic2NhbGUiOjEsInNwcml0ZVBhdGgiOiIiLCJzcHJpdGVVcmwiOiIiLCJzcHJpdGVTdGF0dXMiOiIiLCJzcHJpdGVUZWNobmljYWxTY29yZSI6MCwiaW1wYWN0U3ByaXRlUGF0aCI6IiIsImltcGFjdFNwcml0ZVVybCI6IiIsImltcGFjdFNwcml0ZVN0YXR1cyI6IiIsImltcGFjdFNwcml0ZVRlY2huaWNhbFNjb3JlIjowfSwic3Bhd24iOnsiZW5hYmxlZCI6dHJ1ZSwic3BlZWRQeFBlclRpY2siOjgsImNvdW50IjoxLCJzcHJlYWRSYWRpYW5zIjowLCJvZmZzZXRQeCI6MCwiYWltIjoiY3Vyc29yIiwicGxhY2VtZW50IjoiaXRlbV91c2Vfb3JpZ2luIiwib3ZlclRhcmdldCI6eyJoZWlnaHRUaWxlcyI6MCwiZGVsYXlUaWNrcyI6MCwiZW5hYmxlZCI6ZmFsc2V9fSwiZGFtYWdlIjp7ImVuYWJsZWQiOnRydWUsImRhbWFnZUNsYXNzIjoiZ2VuZXJpYyIsImRhbWFnZSI6MjAsImtub2NrYmFjayI6Mywib3duZXJIaXRDaGVjayI6ZmFsc2V9LCJsaWZldGltZVRpY2tzIjoxMjAsImhpdGJveCI6eyJ3aWR0aFB4IjoxNiwiaGVpZ2h0UHgiOjE2LCJkcmF3U2NhbGUiOjEsImhpdGJveFNjYWxlIjoxfSwiY29sbGlzaW9uIjp7InRpbGVDb2xsaWRlIjp0cnVlLCJpZ25vcmVXYXRlciI6ZmFsc2UsImJvdW5jZUNvdW50IjowLCJib3VuY2VTcGVlZFJldGVudGlvbiI6MSwicGllcmNlIjoxLCJleHRyYVVwZGF0ZXMiOjAsIm5wY0ltbXVuaXR5TW9kZSI6ImxvY2FsIiwibG9jYWxOcGNIaXRDb29sZG93blRpY2tzIjoxMH0sIm1vdmVtZW50Ijp7Im5hbWUiOiJtb3ZlX3N0cmFpZ2h0IiwiY29kZSI6MCwicGFyYW1zIjp7InJhbmdlVGlsZXMiOjAsImhvbWluZ1N0cmVuZ3RoIjowLCJncmF2aXR5UGVyVGljayI6MCwidmVsb2NpdHlSZXRlbnRpb24iOjAsInJldHVybkFmdGVyVGlja3MiOjAsInJldHVyblNwZWVkIjowLCJ3YXZlQW1wbGl0dWRlIjowLCJwaGFzZVN0cmVuZ3RoIjowLCJhY2NlbGVyYXRpb24iOjAsIm1heFNwZWVkIjowLCJ0dXJuUmFkaWFuc1BlclRpY2siOjAsInB1bGxTdHJlbmd0aCI6MCwicHJveGltaXR5UmFkaXVzUHgiOjAsInNjYWxlUGVyVGljayI6MCwibWF4U2NhbGUiOjAuMSwic2VnbWVudHMiOjAsImR1cmF0aW9uVGlja3MiOjAsIndpZHRoUHgiOjAsIndhcm11cFRpY2tzIjowLCJjaGFyZ2VUaWNrcyI6MCwicG93ZXJNdWx0aXBsaWVyIjowfSwiaXNDb25maWd1cmVkIjp0cnVlfSwiY29udHJvbGxlciI6eyJuYW1lIjoiIiwiY29kZSI6MCwicGFyYW1zIjp7InJhbmdlVGlsZXMiOjAsImhvbWluZ1N0cmVuZ3RoIjowLCJncmF2aXR5UGVyVGljayI6MCwidmVsb2NpdHlSZXRlbnRpb24iOjAsInJldHVybkFmdGVyVGlja3MiOjAsInJldHVyblNwZWVkIjowLCJ3YXZlQW1wbGl0dWRlIjowLCJwaGFzZVN0cmVuZ3RoIjowLCJhY2NlbGVyYXRpb24iOjAsIm1heFNwZWVkIjowLCJ0dXJuUmFkaWFuc1BlclRpY2siOjAsInB1bGxTdHJlbmd0aCI6MCwicHJveGltaXR5UmFkaXVzUHgiOjAsInNjYWxlUGVyVGljayI6MCwibWF4U2NhbGUiOjAuMSwic2VnbWVudHMiOjAsImR1cmF0aW9uVGlja3MiOjAsIndpZHRoUHgiOjAsIndhcm11cFRpY2tzIjowLCJjaGFyZ2VUaWNrcyI6MCwicG93ZXJNdWx0aXBsaWVyIjowfSwiaXNDb25maWd1cmVkIjpmYWxzZX0sInRhcmdldGluZyI6eyJzaG90RW50aXR5SWQiOiIiLCJpbnRlcnZhbFRpY2tzIjowLCJyYW5nZVRpbGVzIjowLCJzYW1lVGFyZ2V0QmlhcyI6MH0sImxpZ2h0Ijp7InN0cmVuZ3RoIjowLCJjb2xvciI6IndoaXRlIn0sImV2ZW50cyI6W10sImlzUHJvamVjdGlsZUVudGl0eSI6dHJ1ZSwiaXNPd25lckF0dGFjaGVkIjp0cnVlLCJpc1N0YXRpb25hcnkiOmZhbHNlfV0sImJpbmRpbmdzIjpbeyJpZCI6IndpdG5lc3NfYmluZGluZyIsImlucHV0IjoicHJpbWFyeV91c2UiLCJyb2xlIjoicHJpbWFyeSIsInVzZVBvbGljeSI6eyJhY3Rpb24iOnsia2luZCI6InNwYXduX2VudGl0eSIsInRhcmdldElkIjoid2l0bmVzc19lbnRpdHkifSwic3RhY2tDb3N0IjowLCJjb250YWN0RGFtYWdlIjpmYWxzZX19XSwiaXRlbVVzZSI6eyJjb25maWd1cmVkIjp0cnVlLCJ1c2VTdHlsZSI6InNob290IiwiaGlkZVVzZUdyYXBoaWMiOnRydWUsImRpc2FibGVNZWxlZUhpdGJveCI6dHJ1ZSwiY2hhbm5lbCI6ZmFsc2UsImhhbmRQb3NlIjoib25lX2hhbmRlZCIsImhvbGRvdXRPZmZzZXRYIjowLCJob2xkb3V0T2Zmc2V0WSI6MH0sIml0ZW1Db250YWN0Ijp7ImhpdGJveFNjYWxlIjoxLCJjb250YWN0Rm9yZ2l2ZW5lc3NQeCI6MH0sIndlYXBvbkFtbW8iOnsiYW1tb0NhdGVnb3J5IjoiYXJyb3ciLCJzcGVlZEJhc2lzIjoiYXV0aG9yZWRfc3Bhd24ifSwiaGFzRXhlY3V0YWJsZUJpbmRpbmciOnRydWV9LCJ2aXN1YWwiOnsicGFsZXR0ZSI6W10sImltYWdlUHJvbXB0IjoiIiwiZXF1aXBPdmVybGF5UHJvbXB0IjoiIiwibmVnYXRpdmVQcm9tcHQiOiIiLCJhc3NldE1hbmlmZXN0UGF0aCI6IiIsInNwcml0ZVN0YXR1cyI6InBsYWNlaG9sZGVyIiwic3ByaXRlUGF0aCI6IiIsInNwcml0ZVJhd1BhdGgiOiIiLCJzcHJpdGVVcmwiOiIiLCJlcXVpcE92ZXJsYXlTdGF0dXMiOiIiLCJlcXVpcE92ZXJsYXlQYXRoIjoiIiwiZXF1aXBPdmVybGF5VXJsIjoiIiwiZXF1aXBPdmVybGF5U2NvcmUiOjAsInNwcml0ZVRlY2huaWNhbFNjb3JlIjowLCJwcmVmZXJyZWRDYW52YXNTaXplIjozMiwiaW52ZW50b3J5U2NhbGUiOjEsIndvcmxkU2NhbGUiOjEsImRyYXdPZmZzZXRYIjowLCJkcmF3T2Zmc2V0WSI6MH0sInZmeE1hbmlmZXN0Ijp7InNjaGVtYSI6ImluZmluaS52ZngucnVudGltZS1ldmVudHMudjE2IiwicmVjaXBlSWQiOiIiLCJidWRnZXQiOnsibWF4UGFydGljbGVzUGVyVGljayI6MzIsIm1heFBhcnRpY2xlc1RvdGFsIjoxMDAwLCJtYXhEcmF3Q2FsbHMiOjY0fSwic2xvdHMiOltdfSwiZGVidWciOnt9LCJzY2hlbWFWZXJzaW9uIjo1fQ==
+PASS: inventory seeds absent v5 byte and identity compatibility
+PASS: inventory seeds DTO literal and absence
+PASS: inventory seeds native instance locality
+PASS: inventory seeds actual WorldGen RNG and owner
+PASS: placed alpha pivot final bounds uncropped FNA geometry
+PASS: placed alpha cache one pass selected generation
+PASS: placed alpha DTO optional strict choice
+PASS: placed alpha ledger projection material physics nonmutation
+PLACED_ALPHA_OWNED_IDENTITY definition=53e7a31ac21d26cf6966f8f55fe65c68d24b8af6c838b806d2719dd1db605c1a networkSha256=53e7a31ac21d26cf6966f8f55fe65c68d24b8af6c838b806d2719dd1db605c1a bodySha256=7315a74a9e1ea06f38afca197964c99fac716a1ce0c5a056ee2d64596cb76a8a
+PASS: placed alpha frozen archive refusal and owned absence identity
+PASS: VFUI03 status whole block wrapping
+PASS: VFUI03 native whole cursor block clamp
+PASS: VFUI04 stable countdown and compact numbers
+PASS: VFUI14 captured crystal native mana formula
+PASS: VFUI17 buff order refresh and expiry
+PASS: VFUI18 captured keg invisibility preservation
+PASS: VFUI19 captured input costs and tooltip
+PASS: VFUI20 stack ID recipe identity
+PASS: VFX worker world retirement defers GPU disposal
+PASS: VFX queued disposal preserves next-world generation
+PASS: native equipment wire vision
+PASS: native equipment utility flags
+PASS: native equipment rocket flight
+PASS: native equipment sprint speed
+PASS: run-speed equipment applies after vanilla movement
+CASE PASS: Equipment/accessory/MovementSpeed=-0.9
+CASE PASS: Equipment/accessory/MovementSpeed=-0.7
+CASE PASS: Equipment/accessory/MovementSpeed=0
+CASE PASS: Equipment/accessory/MovementSpeed=2.5
+CASE PASS: Equipment/accessory/MovementSpeed=3
+CASE PASS: Equipment/accessory/LifeRegen=-100
+CASE PASS: Equipment/accessory/LifeRegen=0
+CASE PASS: Equipment/accessory/LifeRegen=150
+CASE PASS: Equipment/accessory/LifeRegen=200
+CASE PASS: Equipment/accessory/ManaRegen=-100
+CASE PASS: Equipment/accessory/ManaRegen=0
+CASE PASS: Equipment/accessory/ManaRegen=150
+CASE PASS: Equipment/accessory/ManaRegen=200
+CASE PASS: Equipment/accessory/SentrySlots=0
+CASE PASS: Equipment/accessory/SentrySlots=15
+CASE PASS: Equipment/accessory/SentrySlots=20
+CASE PASS: Equipment/armor/MovementSpeed=-0.9
+CASE PASS: Equipment/armor/MovementSpeed=-0.7
+CASE PASS: Equipment/armor/MovementSpeed=0
+CASE PASS: Equipment/armor/MovementSpeed=2.5
+CASE PASS: Equipment/armor/MovementSpeed=3
+CASE PASS: Equipment/set/SetBonusMovementSpeed=-0.9
+CASE PASS: Equipment/set/SetBonusMovementSpeed=-0.7
+CASE PASS: Equipment/set/SetBonusMovementSpeed=0
+CASE PASS: Equipment/set/SetBonusMovementSpeed=2.5
+CASE PASS: Equipment/set/SetBonusMovementSpeed=3
+CASE PASS: Equipment/set/SetBonusLifeRegen=-100
+CASE PASS: Equipment/set/SetBonusLifeRegen=0
+CASE PASS: Equipment/set/SetBonusLifeRegen=150
+CASE PASS: Equipment/set/SetBonusLifeRegen=200
+PASS: equipment authored ranges reach player
+PASS: unit boundary charge release preserves authored speed
+PASS: charge release preserves authored flight lifetime
+CASE PASS: Equipment/accessory/GenericDamage=0.15
+CASE PASS: Equipment/accessory/MeleeDamage=0.15
+CASE PASS: Equipment/accessory/RangedDamage=0.15
+CASE PASS: Equipment/accessory/MagicDamage=0.15
+CASE PASS: Equipment/accessory/SummonDamage=0.15
+CASE PASS: Equipment/armor/GenericDamage=0.15
+CASE PASS: Equipment/armor/MeleeDamage=0.15
+CASE PASS: Equipment/armor/RangedDamage=0.15
+CASE PASS: Equipment/armor/MagicDamage=0.15
+CASE PASS: Equipment/armor/SummonDamage=0.15
+CASE PASS: Equipment/set/SetBonusGenericDamage=0.15
+CASE PASS: Equipment/set/SetBonusMeleeDamage=0.15
+CASE PASS: Equipment/set/SetBonusRangedDamage=0.15
+CASE PASS: Equipment/set/SetBonusMagicDamage=0.15
+CASE PASS: Equipment/set/SetBonusSummonDamage=0.15
+PASS: equipment class damage reaches exact DamageClass
+PASS: generated ammo preserves exact projectile on direct use
+PASS: generated ammo preserves exact rocket and solution selection
+PASS: generated ammo leaves unrelated category unchanged
+PASS: weapon ammo native shot selection conservation and stats
+PASS: weapon ammo missing ammo and independent use lanes
+PASS: generated whip applies same-owner summon source bonus
+PASS: generated whip range changes geometry and collision
+PASS: proximity missile expiry VFX matches event lifecycle
+PASS: peer events preserve observed spawn-budget snapshot
+PASS: root binding spawn capacity respects authored count and independent event ledger
+PASS: sentry explicit target policy LOS and hard radius
+PASS: sentry volley native spawn arguments and authority
+PASS: sentry lifecycle native resting spot and turret cap
+PASS: explicit concurrency fences all spawn producers without changing legacy
+PASS: equipment runtime safety bounds apply
+PASS: current authored equipment values reach runtime
+PASS: signed accessory defense reaches player
+PASS: blink feet native rod oracle
+PASS: blink feet surface and blocked destinations
+PASS: blink feet event point stays world centre
+PASS: blink feet range and world edges
+PASS: blink feet owner authority and packet coordinates
+PASS: blink authored range reaches teleport
+PASS: mobility bounds native consumption
+PASS: mobility event bounds and unsafe semantics
+PASS: mobility recall native bed validity
+PASS: mobility consumption pure native outcome
+PASS: mobility consumption mixed native effects once
+PASS: named item effects select native use and quick use
+PASS: named mobility groups share cooldown and consumption outcome
+PASS: named held effects refresh exact owner item and bound snapshots
+PASS: named item effects DTO roundtrip and invalid presence
+PASS: craft cancellation server world unload retires owners without escrow refund
+PASS: integrated QoL remote cancellation acknowledgement
+LOADED /workspace/scratch/a1b4e2e032eb/ifc-magic-audit-20261105/helper-shared-final-native/EngineRuntimeChecks.dll SHA256=fe9e59162f4f48d2eb46dc49ec2344f17530f0815a9acb473e65473fe9bc3d21
+LOADED /workspace/scratch/a1b4e2e032eb/ifc-magic-audit-20261105/helper-shared-final-native/tModLoader.dll SHA256=fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5
+OBSERVED native proxy recovery mode=0 lane=0 type=5456 id=capacity-recovery-0-0 allocations=1 refunds=0
+OBSERVED native proxy recovery mode=0 lane=1 type=5456 id=capacity-recovery-0-1 allocations=1 refunds=0
+OBSERVED native proxy recovery mode=0 lane=2 type=5456 id=capacity-recovery-0-2 allocations=1 refunds=0
+OBSERVED native proxy recovery mode=2 lane=0 type=5456 id=capacity-recovery-2-0 allocations=1 refunds=0
+OBSERVED native proxy recovery mode=2 lane=1 type=5456 id=capacity-recovery-2-1 allocations=1 refunds=0
+OBSERVED native proxy recovery mode=2 lane=2 type=5456 id=capacity-recovery-2-2 allocations=1 refunds=0
+PASS: integrated QoL native proxy capacity recovery
+PASS: integrated QoL station refund capacity recovery
+PASS: craft QoL fatal HTTP material presentation
+PASS: craft QoL full pool refund claim
+PASS: craft QoL partial refund remainder
+PASS: craft QoL unknown metadata projection
+PASS: craft QoL hard owned deadline
+PASS: craft QoL server deadline durable escrow
+PASS: craft QoL exact lane cancel
+PASS: craft QoL remote cancel retained claim
+PASS: craft QoL cancel replay committed outcome
+PASS: craft QoL idle lane return policy
+PASS: craft cancellation interrupts HTTP and recovery
+PASS: craft cancellation preserves live retry and delivery
+PASS: disposed asset download cannot publish
+PASS: pull modes preserve subject and authority
+PASS: owner hit NPC status uses native sync
+PASS: owner projectile hit bridges exact NPC pull
+DETAIL: rt01 owner-client native hook incarnation variants passed=18; no sockets/world/GPU
+PASS: rt01 delayed NPC native hook incarnation fence
+PASS: rt01 delayed NPC real status incarnation fence
+PASS: delayed NPC statuses survive projectile slot reuse
+PASS: item hit cannot turn into next held item effect
+PASS: NPC hit generation survives real Transform
+PASS: delayed actions keep original owner
+DETAIL: event damage scenarios passed=54
+PASS: event damage uses authored source
+PASS: event spawn zero multiplier is not replaced by one
+PASS: player save reference requires version markers
+PASS: neutral item omissions preserve exact Item projection
+PASS: neutral buff omissions reach real player effects
+PASS: small generated buffs reach real item/player hooks
+PASS: generated buff duration survives native hook order
+PASS: reactive buff light survives late native hook
+PASS: generated buff light keeps client server scope
+PASS: parent native tile state matches actual campfire toggle
+PASS: placed vfx exact server mirror late hydration and retirement
+PASS: placed vfx actual Python final delivery native draw
+PASS: placed vfx continuous per-burst budgets
+PASS: placed vfx registration deduplication and viewport delivery
+PASS: placed vfx inactive broad phase preserves retirement
+PASS: placed vfx DTO exact selector admission
+PASS: placed vfx two instances state generation FNA draw
+PASS: placed vfx offscreen lights exact selectors
+PASS: placed vfx library light and held exclusion
+PASS: placed light footprint persistence break unload
+PASS: placed light server mirror exact definition quarantine
+PASS: owned tile exact shape and symbolic identity
+PASS: owned tile authored structural registration
+PASS: owned tile legacy world refusal preserves saves
+PASS: native semantic catalogs dependency-specific admission
+PASS: native chest SP native callback outcome
+PASS: native chest callback fault bounded rollback
+PASS: native chest break native contents removal authority
+PASS: native chest MP authenticated native outcome
+PASS: native chest native save load registered contents open
+CHEST_ANCHOR bottom=11 full=36x38 top=0 left=0 right=0
+PASS: native chest metadata capacity pre-mutation refusal
+PASS: native chest ordinary styles preserve native mod hooks
+PASS: native chest global CanPlace veto stays native
+PASS: native chest support loss malformed contents authority
+PASS: native chest malformed native save preserves inventory
+PASS: native chest callback collision is not provenance
+PASS: native chest native MP inventory open exclusivity
+PASS: native chest raw message34 compensation isolation
+PASS native chest MP refusal scenario: full
+PASS native chest MP refusal scenario: collision
+PASS native chest MP refusal scenario: capacity_race
+PASS native chest MP refusal scenario: callback_fault
+PASS native chest MP refusal scenario: partial_actor_fault
+PASS native chest MP refusal scenario: partial_reused_open_slot
+PASS native chest MP refusal scenario: changed_source
+PASS native chest MP refusal scenario: changed_prefix
+PASS: native chest MP refusal rollback replay matrix
+PASS: native chest receipt exact item player incarnation
+PASS: native chest live actor replacement incarnation
+PASS: native chest exact native return durable pool prefix
+PASS: native chest post-load mine before maintenance exact return
+PASS: native chest untracked player path refused
+PASS: native chest partial native actor allocation abort
+PASS: native chest predictable support refusal before drop
+PASS: native chest authored light VFX actor liveness
+PASS: native chest bounded cached maintenance
+PASS native style lifecycle 21/0
+PASS: native chest single family style zero only
+PASS: generated exact stack and native quick-stack identity
+PASS: generated periodic stable action phase
+NATIVE_CHEST_FAMILY tileId=21 supportedStyle=0
+PASS: native chest admission
+PASS: native chest bare tiles are not storage
+PASS: placed body snapshot bounded packets preserve large ledger
+PASS: placed body ledger selected identity save and network
+PASS: placed body cosmetic decoder cannot erase material
+PASS: placed body restore registry exact conflict refusal
+PERSISTENCE-CASE PASS: placing client real peer identity: selected_tile
+PERSISTENCE-CASE PASS: placing client real peer identity: legacy_tile
+PERSISTENCE-CASE PASS: placing client real peer identity: legacy_wall
+PASS: pb01 actual placing client retains server identity and removal
+PASS: pb02 gameplay transform authority Visual VFX PNG identity fences
+PASS: pb02 same ID restoration conflict refusal
+PASS: native quick use never selects a non-effect binding
+PASS: held proxy replaced only by ready instance PNG
+PASS: cursor death retires generated preview only
+PASS: native effects strict selectors atomic budgets
+PASS: native effects actual stock delayed snapshot
+PASS: native cues functional light renewal
+PASS: native cues strict consumed controls
+PASS: native cues snapshot frame budgets and exact emission
+PASS: explicit body geometry strict admission
+PASS: explicit body geometry authored dimensions and collision path
+PASS textured body scenario: straight-right/entity-axis
+PASS textured body scenario: straight-left/signed-axis
+PASS textured body scenario: thrust-19/held-axis
+PASS textured body scenario: glaive-14/native-spin
+PASS textured body scenario: reuse-root/independent-selector-and-clamp
+PASS textured body scenario: legacy-driver=14/axis=0/facing=-1
+PASS textured body scenario: legacy-driver=14/axis=-90/facing=-1
+PASS textured body scenario: legacy-driver=14/axis=37/facing=-1
+PASS textured body scenario: legacy-driver=14/axis=0/facing=1
+PASS textured body scenario: legacy-driver=14/axis=-90/facing=1
+PASS textured body scenario: legacy-driver=14/axis=37/facing=1
+PASS textured body scenario: legacy-driver=16/axis=0/facing=-1
+PASS textured body scenario: legacy-driver=16/axis=-90/facing=-1
+PASS textured body scenario: legacy-driver=16/axis=37/facing=-1
+PASS textured body scenario: legacy-driver=16/axis=0/facing=1
+PASS textured body scenario: legacy-driver=16/axis=-90/facing=1
+PASS textured body scenario: legacy-driver=16/axis=37/facing=1
+PASS textured body scenario: legacy-driver=17/axis=0/facing=-1
+PASS textured body scenario: legacy-driver=17/axis=-90/facing=-1
+PASS textured body scenario: legacy-driver=17/axis=37/facing=-1
+PASS textured body scenario: legacy-driver=17/axis=0/facing=1
+PASS textured body scenario: legacy-driver=17/axis=-90/facing=1
+PASS textured body scenario: legacy-driver=17/axis=37/facing=1
+PASS textured body scenario: legacy-driver=18/axis=0/facing=-1
+PASS textured body scenario: legacy-driver=18/axis=-90/facing=-1
+PASS textured body scenario: legacy-driver=18/axis=37/facing=-1
+PASS textured body scenario: legacy-driver=18/axis=0/facing=1
+PASS textured body scenario: legacy-driver=18/axis=-90/facing=1
+PASS textured body scenario: legacy-driver=18/axis=37/facing=1
+PASS textured body scenario: explicit-velocity/axis=0/facing=-1/offset=0
+PASS textured body scenario: explicit-velocity/axis=0/facing=-1/offset=1.57
+PASS textured body scenario: explicit-velocity/axis=0/facing=1/offset=0
+PASS textured body scenario: explicit-velocity/axis=0/facing=1/offset=1.57
+PASS textured body scenario: explicit-velocity/axis=-90/facing=-1/offset=0
+PASS textured body scenario: explicit-velocity/axis=-90/facing=-1/offset=1.57
+PASS textured body scenario: explicit-velocity/axis=-90/facing=1/offset=0
+PASS textured body scenario: explicit-velocity/axis=-90/facing=1/offset=1.57
+PASS: textured body uses declared axis and preserves native spin
+PASS: front_hand fresh wire admission
+front_hand facing=1 gravity=1 updates=1 age=1 server=False H={X:310.60754 Y:323.87552} C={X:326.57687 Y:329.70477}
+front_hand facing=1 gravity=1 updates=1 age=6 server=False H={X:331.36502 Y:316.2471} C={X:347.33435 Y:322.07635}
+front_hand facing=1 gravity=1 updates=1 age=12 server=False H={X:327.60754 Y:314.87552} C={X:343.57687 Y:320.70477}
+front_hand facing=1 gravity=1 updates=1 age=14 server=False H={X:327.60754 Y:314.87552} C={X:343.57687 Y:320.70477}
+front_hand facing=-1 gravity=1 updates=6 age=1 server=False H={X:319.1569 Y:327.9291} C={X:304.16998 Y:335.9536}
+front_hand facing=-1 gravity=1 updates=6 age=6 server=False H={X:331.20163 Y:319.0249} C={X:314.82477 Y:323.58542}
+front_hand facing=-1 gravity=1 updates=6 age=12 server=False H={X:335.055 Y:317.95184} C={X:318.67813 Y:322.51236}
+front_hand facing=-1 gravity=1 updates=6 age=14 server=False H={X:335.055 Y:317.95184} C={X:318.67813 Y:322.51236}
+front_hand facing=1 gravity=-1 updates=6 age=1 server=False H={X:305.73212 Y:320.34216} C={X:319.76282 Y:310.74323}
+front_hand facing=1 gravity=-1 updates=6 age=6 server=False H={X:326.03342 Y:309.0836} C={X:340.06412 Y:299.48468}
+front_hand facing=1 gravity=-1 updates=6 age=12 server=False H={X:322.73212 Y:311.34216} C={X:336.76282 Y:301.74323}
+front_hand facing=1 gravity=-1 updates=6 age=14 server=False H={X:322.73212 Y:311.34216} C={X:336.76282 Y:301.74323}
+front_hand facing=-1 gravity=-1 updates=1 age=1 server=True H={X:311.98175 Y:320.42102} C={X:296.61252 Y:313.15558}
+front_hand facing=-1 gravity=-1 updates=1 age=6 server=True H={X:325.95505 Y:307.49637} C={X:312.5418 Y:297.052}
+front_hand facing=-1 gravity=-1 updates=1 age=12 server=True H={X:329.1111 Y:309.9539} C={X:315.69788 Y:299.50952}
+front_hand facing=-1 gravity=-1 updates=1 age=14 server=True H={X:329.1111 Y:309.9539} C={X:315.69788 Y:299.50952}
+PASS: front_hand native pose and contact
+PASS: played umbrella saved hand grip draw size and damage geometry
+PASS: front_hand observer counterproofs
+cursor publication and peer geometry updates=1
+cursor publication and peer geometry updates=6
+PASS: front_hand cursor eventually publishes stationary aim
+PASS: front_hand event direction and delayed snapshot
+stationary owner cursor publication and peer movement beam/updates=1
+stationary owner cursor publication and peer movement beam/updates=6
+PASS: owner cursor stationary beam
+stationary owner cursor publication and peer movement yoyo/updates=1
+stationary owner cursor publication and peer movement yoyo/updates=6
+PASS: owner cursor stationary yoyo
+stationary owner cursor publication and peer movement forward_retract/updates=1
+stationary owner cursor publication and peer movement forward_retract/updates=6
+PASS: owner cursor stationary forward retract
+PASS: front_hand detached exact body scale
+PASS: item VFX preserves world-clock cadence
+PASS: item VFX hit positions relay and event budgets
+PASS: beam live damage and shared body warmup ramps
+PASS: beam native mana cadence and world clock
+PASS: beam failed mana and control loss terminate
+PASS: beam native scan clips collision body and VFX endpoints
+PASS: composable motion every independent component strict admission
+PASS: composable motion phase ownership and cross-component dependencies
+PASS: composable motion absence zero and old opcode identity
+Engine runtime checks: 669 passed, 0 failed

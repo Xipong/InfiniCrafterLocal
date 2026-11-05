@@ -1,0 +1,26 @@
+{
+  "baseWorkspace": "ifc-replacement-profiles-fix-20261105",
+  "resultWorkspace": "ifc-helper-spawn-fix-20261105",
+  "files": [
+    {
+      "path": "ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.ProjectileAttackFacts.cs",
+      "baseSha256": "3739bc24337dd74f864d8d5e5b14e42d083d37db164ee94c5f3cd336eb0c16d0",
+      "resultSha256": "dd01f96c61b7e1de13bc36e4e6c572d8eb6ff89182aaac933d3c278e3fb739ea"
+    },
+    {
+      "path": "ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.ProjectileSpawnFacts.cs",
+      "baseSha256": null,
+      "resultSha256": "6be4e3754356fc83c225069b9a92c369feb024d4570fcaf257a93a6722fc14d7"
+    },
+    {
+      "path": "tools/native/EngineRuntimeChecks.ProjectileHelperSpawns.cs",
+      "baseSha256": null,
+      "resultSha256": "6ad13c9e2299c6bf3d08c429b648b07231e5a8ce6b66dc8425b89733053294c3"
+    },
+    {
+      "path": "tools/native/EngineRuntimeChecks.cs",
+      "baseSha256": "93aab940b66aaa6ab96e62d887ac9a84f0cce128c0369690ec1f8cf0bdf6c1bc",
+      "resultSha256": "6e0b1f3a0d512f35191cb9b8e0055601aaf213ddecce04b554a8d96d8621ca71"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+--- a/ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceMethod.cs
++++ b/ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceMethod.cs
+@@ -321,7 +321,10 @@
+         }
+ 
+         private static Dictionary<int, HashSet<string>> CopyDefinitions(Dictionary<int, HashSet<string>> values)
+-            => values.ToDictionary(pair => pair.Key, pair => new HashSet<string>(pair.Value));
++            // Definition sets are immutable after publication into a state map.
++            // State transfer replaces entries; joins clone only when adding new
++            // alternatives. Do not eagerly clone every unchanged local set.
++            => new(values);
+         private static bool SameDefinitions(Dictionary<int, HashSet<string>> a, Dictionary<int, HashSet<string>> b)
+             => a.Count == b.Count && a.All(pair => b.TryGetValue(pair.Key, out var other) && pair.Value.SetEquals(other));
+ 
+@@ -345,8 +348,13 @@
+                     foreach (Block predecessor in predecessors[block.Start].Where(p => p.Height >= 0))
+                         foreach (var pair in predecessor.Outgoing)
+                         {
+-                            if (!incoming.TryGetValue(pair.Key, out var defs)) incoming[pair.Key] = defs = new HashSet<string>();
+-                            defs.UnionWith(pair.Value);
++                            if (!incoming.TryGetValue(pair.Key, out var defs)) incoming[pair.Key] = pair.Value;
++                            else if (!defs.IsSupersetOf(pair.Value))
++                            {
++                                var merged = new HashSet<string>(defs);
++                                merged.UnionWith(pair.Value);
++                                incoming[pair.Key] = merged;
++                            }
+                         }
+                     var outgoing = CopyDefinitions(incoming);
+                     foreach (AmmoIl i in block.Code)

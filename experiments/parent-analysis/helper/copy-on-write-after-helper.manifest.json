@@ -1,0 +1,21 @@
+{
+  "baseWorkspace": "ifc-helper-spawn-fix-20261105",
+  "resultWorkspace": "ifc-helper-lazy-source-experiment-20261105",
+  "files": [
+    {
+      "path": "ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceMethod.cs",
+      "baseSha256": "41140837c50b8dff589dd359e8209fa1276891f185238d36d4f557a2d84227a3",
+      "resultSha256": "6ddb80f37cf6c9360110aaf09082d3c5a938efff8c2e45107b91bca2075701ac"
+    },
+    {
+      "path": "tools/native/EngineRuntimeChecks.cs",
+      "baseSha256": "6e0b1f3a0d512f35191cb9b8e0055601aaf213ddecce04b554a8d96d8621ca71",
+      "resultSha256": "99a48c3e40771fdc329bcab99c783fb9bcca312382a9ab8f6c3bef616ff53d80"
+    },
+    {
+      "path": "tools/native/EngineRuntimeChecks.SourceLocalSharing.cs",
+      "baseSha256": null,
+      "resultSha256": "d5df070700855db23ef9b53eab0210955bc2109d15cfb1853dc365df37158cd0"
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+[
+  {
+    "path": "helper/helper-spawns.patch",
+    "sha256": "672889d1fdc9637999d4ef500731e53538893ea488294957bb2b79dbef6845d2",
+    "bytes": 36500
+  },
+  {
+    "path": "helper/helper-spawns.manifest.json",
+    "sha256": "021974b6d0445aca833ced0f39c63870806e48216601f60fd1401b439c5161c0",
+    "bytes": 1128
+  },
+  {
+    "path": "helper/copy-on-write-after-helper.patch",
+    "sha256": "7229edd702cf64c1b25e71f16f66aa94ce9c39fd5d1295e2b976798934ff180e",
+    "bytes": 14106
+  },
+  {
+    "path": "helper/copy-on-write-after-helper.manifest.json",
+    "sha256": "8cca83fd6e93cfc6837e35f0879ecd6dfa1bbe1bad003d9b006ee219b46e8415",
+    "bytes": 878
+  },
+  {
+    "path": "helper/copy-on-write-standalone.patch",
+    "sha256": "49ec8e15196efc879d0240577f7c54d1bf03d2a44bac33af6f8d04babbb7d5f5",
+    "bytes": 1943
+  },
+  {
+    "path": "helper/copy-on-write-standalone.manifest.json",
+    "sha256": "a3efb21366d5b837950bfdf5607f8c6c0457bd50b851ba20e2f8b41b5507ef58",
+    "bytes": 444
+  },
+  {
+    "path": "helper/HELPER-SPAWN-CANDIDATE.md",
+    "sha256": "b8d2f3283e1941b5bdbbd8e0bc72c80642532cdae6d8680551c928130660d52e",
+    "bytes": 7024,
+    "source": "ifc-magic-audit-20261105/HELPER-SPAWN-CANDIDATE.md",
+    "sourceSha256": "b8d2f3283e1941b5bdbbd8e0bc72c80642532cdae6d8680551c928130660d52e"
+  },
+  {
+    "path": "helper/HELPER-PROFILE.md",
+    "sha256": "bf512a80e34b0a520641ef02b07078b46fbe6612ddccb4c5a30a2fce6a01d681",
+    "bytes": 3551,
+    "source": "ifc-magic-audit-20261105/HELPER-PROFILE.md",
+    "sourceSha256": "bf512a80e34b0a520641ef02b07078b46fbe6612ddccb4c5a30a2fce6a01d681"
+  },
+  {
+    "path": "helper/HELPER-CONTEXT-AUDIT.md",
+    "sha256": "0b02f7ebf4324e630bad007232ad3a795c4848c0a82ec58bb148c0f1dd637a0c",
+    "bytes": 5725,
+    "source": "ifc-magic-audit-20261105/HELPER-CONTEXT-AUDIT.md",
+    "sourceSha256": "0b02f7ebf4324e630bad007232ad3a795c4848c0a82ec58bb148c0f1dd637a0c"
+  },
+  {
+    "path": "helper/LITERAL-POOL-TRADEOFF.md",
+    "sha256": "32ab2cffdeb5303d893d340228afe0413c5d5cb1e255457f662af2511243f832",
+    "bytes": 5186,
+    "source": "ifc-magic-audit-20261105/LITERAL-POOL-TRADEOFF.md",
+    "sourceSha256": "32ab2cffdeb5303d893d340228afe0413c5d5cb1e255457f662af2511243f832"
+  },
+  {
+    "path": "helper/shared-definitions-packet-comparison.json",
+    "sha256": "2f7fb0cd2422ddb2b78da30d327c68dbe26670f648bc0db95d90f901ffbe9f5e",
+    "bytes": 2319,
+    "source": "ifc-magic-audit-20261105/shared-definitions-packet-comparison.json",
+    "sourceSha256": "2f7fb0cd2422ddb2b78da30d327c68dbe26670f648bc0db95d90f901ffbe9f5e"
+  },
+  {
+    "path": "helper/profile-comparison.json",
+    "sha256": "93d626b3ee377939d52d307271bea7d5cb3e4750b01895c9eb965b2937ef3bb4",
+    "bytes": 27692,
+    "source": "ifc-magic-audit-20261105/profile-comparison.json",
+    "sourceSha256": "93d626b3ee377939d52d307271bea7d5cb3e4750b01895c9eb965b2937ef3bb4"
+  },
+  {
+    "path": "helper/profile-helper_shared.json",
+    "sha256": "a9cc17cbca1c1385acdb3777a8c16897912504b79713548d55f49896cf2d1290",
+    "bytes": 13786,
+    "source": "ifc-magic-audit-20261105/profile-helper_shared.json",
+    "sourceSha256": "a9cc17cbca1c1385acdb3777a8c16897912504b79713548d55f49896cf2d1290"
+  },
+  {
+    "path": "helper/helper-shared-native-full-review.log",
+    "sha256": "7786f5a10a7ccf85337cd81f5415ed8e1e89785cb846e592283fee7fa12a93c3",
+    "bytes": 64681,
+    "source": "ifc-magic-audit-20261105/helper-shared-native-full-review.log",
+    "sourceSha256": "7786f5a10a7ccf85337cd81f5415ed8e1e89785cb846e592283fee7fa12a93c3"
+  },
+  {
+    "path": "helper/helper-shared-local-focused.log",
+    "sha256": "b3b4ee8911b365e5fa7d61eee62107e47312135956ecb7a920da15a561901592",
+    "bytes": 144,
+    "source": "ifc-magic-audit-20261105/helper-shared-local-focused.log",
+    "sourceSha256": "b3b4ee8911b365e5fa7d61eee62107e47312135956ecb7a920da15a561901592"
+  },
+  {
+    "path": "helper/helper-final-focused.log",
+    "sha256": "f9bec3a2c42368d446a437ddccf277dc3c267bbcd9dfa90e89d261f79aca0dbd",
+    "bytes": 322,
+    "source": "ifc-magic-audit-20261105/helper-final-focused.log",
+    "sourceSha256": "f9bec3a2c42368d446a437ddccf277dc3c267bbcd9dfa90e89d261f79aca0dbd"
+  },
+  {
+    "path": "helper/check_last_prism_child_coverage.py",
+    "sha256": "5e3b5d76dc612269c2a36e794700cb169da29ce0481d6074635660ba5ec7bae2",
+    "bytes": 1605,
+    "source": "ifc-magic-audit-20261105/check_last_prism_child_coverage.py",
+    "sourceSha256": "5e3b5d76dc612269c2a36e794700cb169da29ce0481d6074635660ba5ec7bae2"
+  },
+  {
+    "path": "helper/last-prism-coverage-red.json",
+    "sha256": "0bb174e8fac87a8c9b7e49a5b60dfb4a6d195af710bc75ea483693ac14275834",
+    "bytes": 565,
+    "source": "ifc-magic-audit-20261105/last-prism-coverage-red.json",
+    "sourceSha256": "0bb174e8fac87a8c9b7e49a5b60dfb4a6d195af710bc75ea483693ac14275834"
+  }
+]

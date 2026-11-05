@@ -1,0 +1,80 @@
+[
+  {
+    "name": "CrystalStorm.packet.json",
+    "byteIdentical": true,
+    "bytes": 189680,
+    "sha256": "2b6f1308e0760d74f33a4f29a2e4e173047e2abd08febf7251dd119f3a75dbd9"
+  },
+  {
+    "name": "LastPrism.packet.json",
+    "byteIdentical": true,
+    "bytes": 933294,
+    "sha256": "10013c6fe9eff33978e6feed1094a0e63df8039f12dcf248bac3e552940caed3"
+  },
+  {
+    "name": "MagicMissile.packet.json",
+    "byteIdentical": true,
+    "bytes": 349862,
+    "sha256": "eedeb87d4f025389ba3e98d6df56e1a50e05ea045e943474d3f8640c066477f0"
+  },
+  {
+    "name": "MeteorStaff.packet.json",
+    "byteIdentical": true,
+    "bytes": 241590,
+    "sha256": "30143ccd9ca624914abf21b6c2b9c901a320e5de500e53178900d92d02c1172a"
+  },
+  {
+    "name": "NebulaArcanum.packet.json",
+    "byteIdentical": true,
+    "bytes": 487592,
+    "sha256": "4f43e3bcd7d8726de8671548cc4fb29cac0c88cb019fcd939416d1ac14ba737f"
+  },
+  {
+    "name": "RainbowRod.packet.json",
+    "byteIdentical": true,
+    "bytes": 347234,
+    "sha256": "fe323bf4c6d06af61a2c50d60365db3ca9d4ade71714f534065f5c4eda18bc65"
+  },
+  {
+    "name": "RazorbladeTyphoon.packet.json",
+    "byteIdentical": true,
+    "bytes": 301912,
+    "sha256": "2e31937dfbc48c7e2d812e96580523f25a7f478ed8e693f4acc28c351e567f7e"
+  },
+  {
+    "name": "Razorpine.packet.json",
+    "byteIdentical": true,
+    "bytes": 256419,
+    "sha256": "f1b0626f7041ae61832793b63dc8619b144700d01177f9bda8d81c8c85fb486e"
+  },
+  {
+    "name": "SkyFracture.packet.json",
+    "byteIdentical": true,
+    "bytes": 288829,
+    "sha256": "76b5d8583b6b26c94d4de18469ae5b749c93dbcbd29d9ed424ca163964eabad4"
+  },
+  {
+    "name": "StaffofEarth.packet.json",
+    "byteIdentical": true,
+    "bytes": 207355,
+    "sha256": "b9d64440d6f831b7ee2d1e7c5375f9e7f063e552486a01958eb0ca03ba5f0b25"
+  },
+  {
+    "name": "StardustDragonStaff.packet.json",
+    "byteIdentical": true,
+    "bytes": 535406,
+    "sha256": "c9a9a11122f5f57a892fb4666ed71fa5f606acc7e6fcc8e7ae4f35002b988f9a"
+  },
+  {
+    "name": "WandofSparking.packet.json",
+    "byteIdentical": true,
+    "bytes": 177637,
+    "sha256": "c8f61ea52e2f55d1287bafdbe4cba8b236be1d4079af8c94efc49e4eae470eca"
+  },
+  {
+    "name": "WaterBolt.packet.json",
+    "byteIdentical": true,
+    "bytes": 178770,
+    "sha256": "86f9f27469ca97f11833afea8ca3c9aebb7c60ab673497ac80c5d42884698468"
+  }
+]

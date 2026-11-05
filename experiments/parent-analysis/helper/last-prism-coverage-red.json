@@ -1,0 +1,19 @@
+{
+  "case": "actual native LastPrism AI helper emits children",
+  "oracleMethod": "Terraria.Projectile.AI_075",
+  "nativeSpawnCount": 6,
+  "expectedChildProfileTypes": [
+    632
+  ],
+  "capturedChildProfileTypes": [],
+  "missingChildProfileTypes": [
+    632
+  ],
+  "result": "RED",
+  "sourceGraphUnresolved": [
+    "attached_GlobalItem_roster_unavailable",
+    "child_attached_GlobalProjectile_roster_unavailable",
+    "method_character_bound"
+  ],
+  "classification": "preexisting bounded producer coverage gap, not PR330 regression or corrupt numeric defaults"
+}

@@ -1,0 +1,6 @@
+FILTERED RUN: 4/668 canonical checks selected
+PASS: projectile helper spawn native last prism reference
+PASS: projectile helper spawn conditional unknown control flow
+PASS: projectile helper spawn independent budget refusals
+PASS: projectile helper spawn exact source table merge
+Engine runtime checks: 4 passed, 0 failed

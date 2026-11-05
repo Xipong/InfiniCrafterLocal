@@ -1,0 +1,952 @@
+{
+  "scope": "Two sequential fresh processes, fixed13-item roster with three captures/item. Iteration0 is first encounter within shared process, not independent cold process per item. Iterations1/2 are repeated same item. Headless Prepare with native SetDefaults samples; no gameplay loop/GPU/inference. Single pair, no statistical latency claim. Other workload overlap must be stated in report.",
+  "runs": [
+    {
+      "label": "baseline",
+      "startedUtc": "2026-11-05T14:05:18.032105+00:00",
+      "endedUtc": "2026-11-05T14:08:23.575012+00:00",
+      "wholeProcessWallSeconds": 185.54623197399997,
+      "exitCode": 0,
+      "engineSha256": "7422cd87d99299cec315b29b54f6b54243793f52ea57e36c35980318a9caf5c2",
+      "capture": "/workspace/scratch/a1b4e2e032eb/ifc-magic-audit-20261105/profile-baseline.json",
+      "log": "/workspace/scratch/a1b4e2e032eb/ifc-magic-audit-20261105/profile-baseline.log",
+      "nativeModule": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+      "sourceModule": "3344f93e-9b2c-4984-90c6-4c73e754b672",
+      "totalInnerCpuSeconds": 184.64,
+      "totalInnerWallSeconds": 183.4161273,
+      "totalAllocatedBytes": 26937299888,
+      "items": {
+        "WandofSparking": {
+          "first": {
+            "name": "WandofSparking",
+            "itemType": 3069,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 2.3005543,
+            "cpuSeconds": 2.42,
+            "allocatedBytes": 252642712,
+            "utf8Bytes": 177637,
+            "sha256": "c8f61ea52e2f55d1287bafdbe4cba8b236be1d4079af8c94efc49e4eae470eca"
+          },
+          "warmMean": {
+            "wallSeconds": 0.4079773,
+            "cpuSeconds": 0.545,
+            "allocatedBytes": 62249032
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 177637
+        },
+        "WaterBolt": {
+          "first": {
+            "name": "WaterBolt",
+            "itemType": 165,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 1.6103103,
+            "cpuSeconds": 2.4700001,
+            "allocatedBytes": 370180064,
+            "utf8Bytes": 178770,
+            "sha256": "86f9f27469ca97f11833afea8ca3c9aebb7c60ab673497ac80c5d42884698468"
+          },
+          "warmMean": {
+            "wallSeconds": 0.64423255,
+            "cpuSeconds": 0.875,
+            "allocatedBytes": 170450480
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 178770
+        },
+        "CrystalStorm": {
+          "first": {
+            "name": "CrystalStorm",
+            "itemType": 518,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 0.3700464,
+            "cpuSeconds": 0.49,
+            "allocatedBytes": 115559456,
+            "utf8Bytes": 189680,
+            "sha256": "2b6f1308e0760d74f33a4f29a2e4e173047e2abd08febf7251dd119f3a75dbd9"
+          },
+          "warmMean": {
+            "wallSeconds": 0.14289955,
+            "cpuSeconds": 0.23,
+            "allocatedBytes": 45381556
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 189680
+        },
+        "SkyFracture": {
+          "first": {
+            "name": "SkyFracture",
+            "itemType": 3787,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 13.6713989,
+            "cpuSeconds": 16.49,
+            "allocatedBytes": 2923883592,
+            "utf8Bytes": 288829,
+            "sha256": "76b5d8583b6b26c94d4de18469ae5b749c93dbcbd29d9ed424ca163964eabad4"
+          },
+          "warmMean": {
+            "wallSeconds": 9.36911925,
+            "cpuSeconds": 10.739999950000001,
+            "allocatedBytes": 1770261456
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 288829
+        },
+        "Razorpine": {
+          "first": {
+            "name": "Razorpine",
+            "itemType": 1930,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 20.1260485,
+            "cpuSeconds": 20.44,
+            "allocatedBytes": 2867768312,
+            "utf8Bytes": 256419,
+            "sha256": "f1b0626f7041ae61832793b63dc8619b144700d01177f9bda8d81c8c85fb486e"
+          },
+          "warmMean": {
+            "wallSeconds": 10.294317249999999,
+            "cpuSeconds": 11.895,
+            "allocatedBytes": 1766841184
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 256419
+        },
+        "MagicMissile": {
+          "first": {
+            "name": "MagicMissile",
+            "itemType": 113,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 0.8481166,
+            "cpuSeconds": 1.29,
+            "allocatedBytes": 216180080,
+            "utf8Bytes": 349862,
+            "sha256": "eedeb87d4f025389ba3e98d6df56e1a50e05ea045e943474d3f8640c066477f0"
+          },
+          "warmMean": {
+            "wallSeconds": 0.42669219999999997,
+            "cpuSeconds": 0.5800000000000001,
+            "allocatedBytes": 110980920
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 349862
+        },
+        "RainbowRod": {
+          "first": {
+            "name": "RainbowRod",
+            "itemType": 495,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 0.9494603,
+            "cpuSeconds": 1.47,
+            "allocatedBytes": 226383512,
+            "utf8Bytes": 347234,
+            "sha256": "fe323bf4c6d06af61a2c50d60365db3ca9d4ade71714f534065f5c4eda18bc65"
+          },
+          "warmMean": {
+            "wallSeconds": 0.36966964999999996,
+            "cpuSeconds": 0.445,
+            "allocatedBytes": 121443232
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 347234
+        },
+        "LastPrism": {
+          "first": {
+            "name": "LastPrism",
+            "itemType": 3541,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 17.350335,
+            "cpuSeconds": 13.82,
+            "allocatedBytes": 1236617240,
+            "utf8Bytes": 488950,
+            "sha256": "7775e58e4220a7e33fbb3f7802efa8faecf0dd3d6dad450d5cc290b179bfe7bd"
+          },
+          "warmMean": {
+            "wallSeconds": 2.4097944,
+            "cpuSeconds": 2.69,
+            "allocatedBytes": 393620348
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 488950
+        },
+        "NebulaArcanum": {
+          "first": {
+            "name": "NebulaArcanum",
+            "itemType": 3476,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 2.0291069,
+            "cpuSeconds": 2.22,
+            "allocatedBytes": 679117152,
+            "utf8Bytes": 487592,
+            "sha256": "4f43e3bcd7d8726de8671548cc4fb29cac0c88cb019fcd939416d1ac14ba737f"
+          },
+          "warmMean": {
+            "wallSeconds": 0.49049375,
+            "cpuSeconds": 0.585,
+            "allocatedBytes": 182737808
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 487592
+        },
+        "RazorbladeTyphoon": {
+          "first": {
+            "name": "RazorbladeTyphoon",
+            "itemType": 2622,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 1.1269897,
+            "cpuSeconds": 1.27,
+            "allocatedBytes": 417660480,
+            "utf8Bytes": 301912,
+            "sha256": "2e31937dfbc48c7e2d812e96580523f25a7f478ed8e693f4acc28c351e567f7e"
+          },
+          "warmMean": {
+            "wallSeconds": 0.40590230000000005,
+            "cpuSeconds": 0.475,
+            "allocatedBytes": 147004832
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 301912
+        },
+        "MeteorStaff": {
+          "first": {
+            "name": "MeteorStaff",
+            "itemType": 2750,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 10.0487397,
+            "cpuSeconds": 11.14,
+            "allocatedBytes": 2888995872,
+            "utf8Bytes": 241590,
+            "sha256": "30143ccd9ca624914abf21b6c2b9c901a320e5de500e53178900d92d02c1172a"
+          },
+          "warmMean": {
+            "wallSeconds": 12.42014615,
+            "cpuSeconds": 12.74999995,
+            "allocatedBytes": 1749245532
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 241590
+        },
+        "StaffofEarth": {
+          "first": {
+            "name": "StaffofEarth",
+            "itemType": 1296,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 14.1095586,
+            "cpuSeconds": 7.7600001,
+            "allocatedBytes": 213416664,
+            "utf8Bytes": 207355,
+            "sha256": "b9d64440d6f831b7ee2d1e7c5375f9e7f063e552486a01958eb0ca03ba5f0b25"
+          },
+          "warmMean": {
+            "wallSeconds": 6.1079623,
+            "cpuSeconds": 3.3,
+            "allocatedBytes": 95026796
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 207355
+        },
+        "StardustDragonStaff": {
+          "first": {
+            "name": "StardustDragonStaff",
+            "itemType": 3531,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 9.3993622,
+            "cpuSeconds": 10.29,
+            "allocatedBytes": 821631072,
+            "utf8Bytes": 535406,
+            "sha256": "c9a9a11122f5f57a892fb4666ed71fa5f606acc7e6fcc8e7ae4f35002b988f9a"
+          },
+          "warmMean": {
+            "wallSeconds": 1.2488432999999999,
+            "cpuSeconds": 1.425,
+            "allocatedBytes": 238388664
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 535406
+        }
+      }
+    },
+    {
+      "label": "helper_final",
+      "startedUtc": "2026-11-05T14:08:23.668005+00:00",
+      "endedUtc": "2026-11-05T14:10:59.893352+00:00",
+      "wholeProcessWallSeconds": 156.22550834700087,
+      "exitCode": 0,
+      "engineSha256": "22e898a0563ce7c24acfbbb26ba793f42b82ce85499d9f811da463b0810bc1b9",
+      "capture": "/workspace/scratch/a1b4e2e032eb/ifc-magic-audit-20261105/profile-helper_final.json",
+      "log": "/workspace/scratch/a1b4e2e032eb/ifc-magic-audit-20261105/profile-helper_final.log",
+      "nativeModule": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+      "sourceModule": "314738c5-9f4d-4cb8-94e5-26f684f333a0",
+      "totalInnerCpuSeconds": 167.57,
+      "totalInnerWallSeconds": 155.3519704,
+      "totalAllocatedBytes": 28223417224,
+      "items": {
+        "WandofSparking": {
+          "first": {
+            "name": "WandofSparking",
+            "itemType": 3069,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 5.964942,
+            "cpuSeconds": 5.34,
+            "allocatedBytes": 252742904,
+            "utf8Bytes": 177637,
+            "sha256": "c8f61ea52e2f55d1287bafdbe4cba8b236be1d4079af8c94efc49e4eae470eca"
+          },
+          "warmMean": {
+            "wallSeconds": 0.3617668,
+            "cpuSeconds": 0.485,
+            "allocatedBytes": 62304228
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 177637
+        },
+        "WaterBolt": {
+          "first": {
+            "name": "WaterBolt",
+            "itemType": 165,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 2.0185701,
+            "cpuSeconds": 3.15,
+            "allocatedBytes": 370246872,
+            "utf8Bytes": 178770,
+            "sha256": "86f9f27469ca97f11833afea8ca3c9aebb7c60ab673497ac80c5d42884698468"
+          },
+          "warmMean": {
+            "wallSeconds": 0.8299133,
+            "cpuSeconds": 1.225,
+            "allocatedBytes": 170452452
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 178770
+        },
+        "CrystalStorm": {
+          "first": {
+            "name": "CrystalStorm",
+            "itemType": 518,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 0.4945441,
+            "cpuSeconds": 0.62,
+            "allocatedBytes": 115565592,
+            "utf8Bytes": 189680,
+            "sha256": "2b6f1308e0760d74f33a4f29a2e4e173047e2abd08febf7251dd119f3a75dbd9"
+          },
+          "warmMean": {
+            "wallSeconds": 0.1358778,
+            "cpuSeconds": 0.225,
+            "allocatedBytes": 45381092
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 189680
+        },
+        "SkyFracture": {
+          "first": {
+            "name": "SkyFracture",
+            "itemType": 3787,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 31.0201132,
+            "cpuSeconds": 34.4799999,
+            "allocatedBytes": 2923906920,
+            "utf8Bytes": 288829,
+            "sha256": "76b5d8583b6b26c94d4de18469ae5b749c93dbcbd29d9ed424ca163964eabad4"
+          },
+          "warmMean": {
+            "wallSeconds": 17.74632535,
+            "cpuSeconds": 16.98500005,
+            "allocatedBytes": 1771843128
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 288829
+        },
+        "Razorpine": {
+          "first": {
+            "name": "Razorpine",
+            "itemType": 1930,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 10.2204939,
+            "cpuSeconds": 11.64,
+            "allocatedBytes": 2867774968,
+            "utf8Bytes": 256419,
+            "sha256": "f1b0626f7041ae61832793b63dc8619b144700d01177f9bda8d81c8c85fb486e"
+          },
+          "warmMean": {
+            "wallSeconds": 6.0374422,
+            "cpuSeconds": 6.515,
+            "allocatedBytes": 1766843336
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 256419
+        },
+        "MagicMissile": {
+          "first": {
+            "name": "MagicMissile",
+            "itemType": 113,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 0.4387845,
+            "cpuSeconds": 0.67,
+            "allocatedBytes": 216184288,
+            "utf8Bytes": 349862,
+            "sha256": "eedeb87d4f025389ba3e98d6df56e1a50e05ea045e943474d3f8640c066477f0"
+          },
+          "warmMean": {
+            "wallSeconds": 0.27577675,
+            "cpuSeconds": 0.335,
+            "allocatedBytes": 110980488
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 349862
+        },
+        "RainbowRod": {
+          "first": {
+            "name": "RainbowRod",
+            "itemType": 495,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 0.677823,
+            "cpuSeconds": 0.82,
+            "allocatedBytes": 226385488,
+            "utf8Bytes": 347234,
+            "sha256": "fe323bf4c6d06af61a2c50d60365db3ca9d4ade71714f534065f5c4eda18bc65"
+          },
+          "warmMean": {
+            "wallSeconds": 0.27574305,
+            "cpuSeconds": 0.31999999999999995,
+            "allocatedBytes": 121441388
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 347234
+        },
+        "LastPrism": {
+          "first": {
+            "name": "LastPrism",
+            "itemType": 3541,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 6.8491927,
+            "cpuSeconds": 7.64,
+            "allocatedBytes": 2514980576,
+            "utf8Bytes": 933294,
+            "sha256": "10013c6fe9eff33978e6feed1094a0e63df8039f12dcf248bac3e552940caed3"
+          },
+          "warmMean": {
+            "wallSeconds": 1.2087996,
+            "cpuSeconds": 1.315,
+            "allocatedBytes": 397469368
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 933294
+        },
+        "NebulaArcanum": {
+          "first": {
+            "name": "NebulaArcanum",
+            "itemType": 3476,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 1.7970519,
+            "cpuSeconds": 2.01,
+            "allocatedBytes": 679081480,
+            "utf8Bytes": 487592,
+            "sha256": "4f43e3bcd7d8726de8671548cc4fb29cac0c88cb019fcd939416d1ac14ba737f"
+          },
+          "warmMean": {
+            "wallSeconds": 0.46487334999999996,
+            "cpuSeconds": 0.495,
+            "allocatedBytes": 182730832
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 487592
+        },
+        "RazorbladeTyphoon": {
+          "first": {
+            "name": "RazorbladeTyphoon",
+            "itemType": 2622,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 1.2330096,
+            "cpuSeconds": 1.34,
+            "allocatedBytes": 417655648,
+            "utf8Bytes": 301912,
+            "sha256": "2e31937dfbc48c7e2d812e96580523f25a7f478ed8e693f4acc28c351e567f7e"
+          },
+          "warmMean": {
+            "wallSeconds": 0.55163005,
+            "cpuSeconds": 0.6399999999999999,
+            "allocatedBytes": 147005912
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 301912
+        },
+        "MeteorStaff": {
+          "first": {
+            "name": "MeteorStaff",
+            "itemType": 2750,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 12.6930957,
+            "cpuSeconds": 13.85,
+            "allocatedBytes": 2885752400,
+            "utf8Bytes": 241590,
+            "sha256": "30143ccd9ca624914abf21b6c2b9c901a320e5de500e53178900d92d02c1172a"
+          },
+          "warmMean": {
+            "wallSeconds": 9.302937,
+            "cpuSeconds": 10.030000000000001,
+            "allocatedBytes": 1749241828
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 241590
+        },
+        "StaffofEarth": {
+          "first": {
+            "name": "StaffofEarth",
+            "itemType": 1296,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 1.3009072,
+            "cpuSeconds": 1.77,
+            "allocatedBytes": 213409744,
+            "utf8Bytes": 207355,
+            "sha256": "b9d64440d6f831b7ee2d1e7c5375f9e7f063e552486a01958eb0ca03ba5f0b25"
+          },
+          "warmMean": {
+            "wallSeconds": 0.4016428,
+            "cpuSeconds": 0.495,
+            "allocatedBytes": 95026296
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 207355
+        },
+        "StardustDragonStaff": {
+          "first": {
+            "name": "StardustDragonStaff",
+            "itemType": 3531,
+            "iteration": 0,
+            "measurement": "first_encounter_in_fixed_roster",
+            "wallSeconds": 3.5527194,
+            "cpuSeconds": 3.97,
+            "allocatedBytes": 821508576,
+            "utf8Bytes": 535406,
+            "sha256": "c9a9a11122f5f57a892fb4666ed71fa5f606acc7e6fcc8e7ae4f35002b988f9a"
+          },
+          "warmMean": {
+            "wallSeconds": 0.9526334999999999,
+            "cpuSeconds": 1.0699999999999998,
+            "allocatedBytes": 238390536
+          },
+          "packetHashesStable": true,
+          "utf8Bytes": 535406
+        }
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "name": "WandofSparking",
+      "identicalPayload": true,
+      "baselineBytes": 177637,
+      "finalBytes": 177637,
+      "firstCpuSeconds": [
+        2.42,
+        5.34
+      ],
+      "warmMeanCpuSeconds": [
+        0.545,
+        0.485
+      ],
+      "firstAllocatedBytes": [
+        252642712,
+        252742904
+      ],
+      "warmMeanAllocatedBytes": [
+        62249032,
+        62304228
+      ],
+      "firstWallSeconds": [
+        2.3005543,
+        5.964942
+      ],
+      "warmMeanWallSeconds": [
+        0.4079773,
+        0.3617668
+      ]
+    },
+    {
+      "name": "WaterBolt",
+      "identicalPayload": true,
+      "baselineBytes": 178770,
+      "finalBytes": 178770,
+      "firstCpuSeconds": [
+        2.4700001,
+        3.15
+      ],
+      "warmMeanCpuSeconds": [
+        0.875,
+        1.225
+      ],
+      "firstAllocatedBytes": [
+        370180064,
+        370246872
+      ],
+      "warmMeanAllocatedBytes": [
+        170450480,
+        170452452
+      ],
+      "firstWallSeconds": [
+        1.6103103,
+        2.0185701
+      ],
+      "warmMeanWallSeconds": [
+        0.64423255,
+        0.8299133
+      ]
+    },
+    {
+      "name": "CrystalStorm",
+      "identicalPayload": true,
+      "baselineBytes": 189680,
+      "finalBytes": 189680,
+      "firstCpuSeconds": [
+        0.49,
+        0.62
+      ],
+      "warmMeanCpuSeconds": [
+        0.23,
+        0.225
+      ],
+      "firstAllocatedBytes": [
+        115559456,
+        115565592
+      ],
+      "warmMeanAllocatedBytes": [
+        45381556,
+        45381092
+      ],
+      "firstWallSeconds": [
+        0.3700464,
+        0.4945441
+      ],
+      "warmMeanWallSeconds": [
+        0.14289955,
+        0.1358778
+      ]
+    },
+    {
+      "name": "SkyFracture",
+      "identicalPayload": true,
+      "baselineBytes": 288829,
+      "finalBytes": 288829,
+      "firstCpuSeconds": [
+        16.49,
+        34.4799999
+      ],
+      "warmMeanCpuSeconds": [
+        10.739999950000001,
+        16.98500005
+      ],
+      "firstAllocatedBytes": [
+        2923883592,
+        2923906920
+      ],
+      "warmMeanAllocatedBytes": [
+        1770261456,
+        1771843128
+      ],
+      "firstWallSeconds": [
+        13.6713989,
+        31.0201132
+      ],
+      "warmMeanWallSeconds": [
+        9.36911925,
+        17.74632535
+      ]
+    },
+    {
+      "name": "Razorpine",
+      "identicalPayload": true,
+      "baselineBytes": 256419,
+      "finalBytes": 256419,
+      "firstCpuSeconds": [
+        20.44,
+        11.64
+      ],
+      "warmMeanCpuSeconds": [
+        11.895,
+        6.515
+      ],
+      "firstAllocatedBytes": [
+        2867768312,
+        2867774968
+      ],
+      "warmMeanAllocatedBytes": [
+        1766841184,
+        1766843336
+      ],
+      "firstWallSeconds": [
+        20.1260485,
+        10.2204939
+      ],
+      "warmMeanWallSeconds": [
+        10.294317249999999,
+        6.0374422
+      ]
+    },
+    {
+      "name": "MagicMissile",
+      "identicalPayload": true,
+      "baselineBytes": 349862,
+      "finalBytes": 349862,
+      "firstCpuSeconds": [
+        1.29,
+        0.67
+      ],
+      "warmMeanCpuSeconds": [
+        0.5800000000000001,
+        0.335
+      ],
+      "firstAllocatedBytes": [
+        216180080,
+        216184288
+      ],
+      "warmMeanAllocatedBytes": [
+        110980920,
+        110980488
+      ],
+      "firstWallSeconds": [
+        0.8481166,
+        0.4387845
+      ],
+      "warmMeanWallSeconds": [
+        0.42669219999999997,
+        0.27577675
+      ]
+    },
+    {
+      "name": "RainbowRod",
+      "identicalPayload": true,
+      "baselineBytes": 347234,
+      "finalBytes": 347234,
+      "firstCpuSeconds": [
+        1.47,
+        0.82
+      ],
+      "warmMeanCpuSeconds": [
+        0.445,
+        0.31999999999999995
+      ],
+      "firstAllocatedBytes": [
+        226383512,
+        226385488
+      ],
+      "warmMeanAllocatedBytes": [
+        121443232,
+        121441388
+      ],
+      "firstWallSeconds": [
+        0.9494603,
+        0.677823
+      ],
+      "warmMeanWallSeconds": [
+        0.36966964999999996,
+        0.27574305
+      ]
+    },
+    {
+      "name": "LastPrism",
+      "identicalPayload": false,
+      "baselineBytes": 488950,
+      "finalBytes": 933294,
+      "firstCpuSeconds": [
+        13.82,
+        7.64
+      ],
+      "warmMeanCpuSeconds": [
+        2.69,
+        1.315
+      ],
+      "firstAllocatedBytes": [
+        1236617240,
+        2514980576
+      ],
+      "warmMeanAllocatedBytes": [
+        393620348,
+        397469368
+      ],
+      "firstWallSeconds": [
+        17.350335,
+        6.8491927
+      ],
+      "warmMeanWallSeconds": [
+        2.4097944,
+        1.2087996
+      ]
+    },
+    {
+      "name": "NebulaArcanum",
+      "identicalPayload": true,
+      "baselineBytes": 487592,
+      "finalBytes": 487592,
+      "firstCpuSeconds": [
+        2.22,
+        2.01
+      ],
+      "warmMeanCpuSeconds": [
+        0.585,
+        0.495
+      ],
+      "firstAllocatedBytes": [
+        679117152,
+        679081480
+      ],
+      "warmMeanAllocatedBytes": [
+        182737808,
+        182730832
+      ],
+      "firstWallSeconds": [
+        2.0291069,
+        1.7970519
+      ],
+      "warmMeanWallSeconds": [
+        0.49049375,
+        0.46487334999999996
+      ]
+    },
+    {
+      "name": "RazorbladeTyphoon",
+      "identicalPayload": true,
+      "baselineBytes": 301912,
+      "finalBytes": 301912,
+      "firstCpuSeconds": [
+        1.27,
+        1.34
+      ],
+      "warmMeanCpuSeconds": [
+        0.475,
+        0.6399999999999999
+      ],
+      "firstAllocatedBytes": [
+        417660480,
+        417655648
+      ],
+      "warmMeanAllocatedBytes": [
+        147004832,
+        147005912
+      ],
+      "firstWallSeconds": [
+        1.1269897,
+        1.2330096
+      ],
+      "warmMeanWallSeconds": [
+        0.40590230000000005,
+        0.55163005
+      ]
+    },
+    {
+      "name": "MeteorStaff",
+      "identicalPayload": true,
+      "baselineBytes": 241590,
+      "finalBytes": 241590,
+      "firstCpuSeconds": [
+        11.14,
+        13.85
+      ],
+      "warmMeanCpuSeconds": [
+        12.74999995,
+        10.030000000000001
+      ],
+      "firstAllocatedBytes": [
+        2888995872,
+        2885752400
+      ],
+      "warmMeanAllocatedBytes": [
+        1749245532,
+        1749241828
+      ],
+      "firstWallSeconds": [
+        10.0487397,
+        12.6930957
+      ],
+      "warmMeanWallSeconds": [
+        12.42014615,
+        9.302937
+      ]
+    },
+    {
+      "name": "StaffofEarth",
+      "identicalPayload": true,
+      "baselineBytes": 207355,
+      "finalBytes": 207355,
+      "firstCpuSeconds": [
+        7.7600001,
+        1.77
+      ],
+      "warmMeanCpuSeconds": [
+        3.3,
+        0.495
+      ],
+      "firstAllocatedBytes": [
+        213416664,
+        213409744
+      ],
+      "warmMeanAllocatedBytes": [
+        95026796,
+        95026296
+      ],
+      "firstWallSeconds": [
+        14.1095586,
+        1.3009072
+      ],
+      "warmMeanWallSeconds": [
+        6.1079623,
+        0.4016428
+      ]
+    },
+    {
+      "name": "StardustDragonStaff",
+      "identicalPayload": true,
+      "baselineBytes": 535406,
+      "finalBytes": 535406,
+      "firstCpuSeconds": [
+        10.29,
+        3.97
+      ],
+      "warmMeanCpuSeconds": [
+        1.425,
+        1.0699999999999998
+      ],
+      "firstAllocatedBytes": [
+        821631072,
+        821508576
+      ],
+      "warmMeanAllocatedBytes": [
+        238388664,
+        238390536
+      ],
+      "firstWallSeconds": [
+        9.3993622,
+        3.5527194
+      ],
+      "warmMeanWallSeconds": [
+        1.2488432999999999,
+        0.9526334999999999
+      ]
+    }
+  ],
+  "workloadOverlap": "Concurrent restoration-owner integrated native670 acceptance and two parallel Python partitions; changing contention. Wall and CPU cannot establish comparative latency or speed. Allocation volume and packet hashes are the useful observations."
+}

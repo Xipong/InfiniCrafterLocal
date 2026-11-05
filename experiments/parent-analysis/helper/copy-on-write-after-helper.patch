@@ -1,0 +1,225 @@
+--- a/ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceMethod.cs
++++ b/ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceMethod.cs
+@@ -321,7 +321,10 @@
+         }
+ 
+         private static Dictionary<int, HashSet<string>> CopyDefinitions(Dictionary<int, HashSet<string>> values)
+-            => values.ToDictionary(pair => pair.Key, pair => new HashSet<string>(pair.Value));
++            // Definition sets are immutable after publication into a state map.
++            // State transfer replaces entries; joins clone only when adding new
++            // alternatives. Do not eagerly clone every unchanged local set.
++            => new(values);
+         private static bool SameDefinitions(Dictionary<int, HashSet<string>> a, Dictionary<int, HashSet<string>> b)
+             => a.Count == b.Count && a.All(pair => b.TryGetValue(pair.Key, out var other) && pair.Value.SetEquals(other));
+ 
+@@ -345,8 +348,13 @@
+                     foreach (Block predecessor in predecessors[block.Start].Where(p => p.Height >= 0))
+                         foreach (var pair in predecessor.Outgoing)
+                         {
+-                            if (!incoming.TryGetValue(pair.Key, out var defs)) incoming[pair.Key] = defs = new HashSet<string>();
+-                            defs.UnionWith(pair.Value);
++                            if (!incoming.TryGetValue(pair.Key, out var defs)) incoming[pair.Key] = pair.Value;
++                            else if (!defs.IsSupersetOf(pair.Value))
++                            {
++                                var merged = new HashSet<string>(defs);
++                                merged.UnionWith(pair.Value);
++                                incoming[pair.Key] = merged;
++                            }
+                         }
+                     var outgoing = CopyDefinitions(incoming);
+                     foreach (AmmoIl i in block.Code)
+--- a/tools/native/EngineRuntimeChecks.cs
++++ b/tools/native/EngineRuntimeChecks.cs
+@@ -149,6 +149,7 @@
+             ("projectile helper spawn conditional unknown control flow", ProjectileHelperSpawnSlicesKeepUnknownControlFlow),
+             ("projectile helper spawn independent budget refusals", ProjectileHelperSpawnSlicesKeepBudgetRefusals),
+             ("projectile helper spawn exact source table merge", ProjectileHelperSpawnExactMergeIsLossless),
++            ("source local COW sharing matches deep copy oracle", SourceLocalSharingMatchesDeepCopyOracle),
+             ("parent native geometry helper semantic equivalence", ParentNativeGeometryHelperRulesMatchSource),
+             ("parent native arrow motion source execution oracle", ParentNativeArrowMotionMatchesSelectedSource),
+             ("parent native position integration execution oracle", ParentNativePositionIntegrationMatchesLiveGuards),
+--- /dev/null
++++ b/tools/native/EngineRuntimeChecks.SourceLocalSharing.cs
+@@ -0,0 +1,182 @@
++using System;
++using System.Collections;
++using System.Collections.Generic;
++using System.Globalization;
++using System.Linq;
++using System.Reflection;
++using System.Runtime.CompilerServices;
++using InfiniCrafterLocal.Common.Services;
++
++internal static partial class EngineRuntimeChecks
++{
++    // These bodies are decoded, never executed. Keep branch-local stores and
++    // loop-carried definitions observable independently of runtime values.
++    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
++    private static int LocalSharingDiamond(bool choose, bool again, int input)
++    {
++        int value = input, sibling = input + 10;
++        if (choose) { value = input + 1; sibling = value + 2; }
++        else { value = input + 3; }
++        int joined = value + sibling;
++        if (again) value = joined;
++        return value + joined + sibling;
++    }
++    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
++    private static int LocalSharingBackedge(int input)
++    {
++        int value = input, total = 0;
++        do { total += value; value = total + 1; value = value + 2; } while (total < input);
++        return total + value;
++    }
++    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
++    private static int LocalSharingEscaped(bool choose, int input)
++    {
++        int value = input;
++        if (choose) LocalSharingMutate(ref value); else value = input + 1;
++        return value;
++    }
++    private static void LocalSharingMutate(ref int value) { value++; }
++    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
++    private static int LocalSharingManyDefinitions(int selector)
++    {
++        int value;
++        switch (selector)
++        {
++            case 0: value = 10; break; case 1: value = 11; break;
++            case 2: value = 12; break; case 3: value = 13; break;
++            case 4: value = 14; break; case 5: value = 15; break;
++            case 6: value = 16; break; case 7: value = 17; break;
++            case 8: value = 18; break; default: value = 19; break;
++        }
++        return value;
++    }
++
++    private static object LocalSharingMember(object instance, string name)
++    {
++        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
++        return instance.GetType().GetField(name, flags)?.GetValue(instance)
++            ?? instance.GetType().GetProperty(name, flags)?.GetValue(instance)!;
++    }
++    private static Dictionary<int, HashSet<string>> LocalSharingDeepCopy(Dictionary<int, HashSet<string>> source)
++        => source.ToDictionary(p => p.Key, p => new HashSet<string>(p.Value));
++    private static bool LocalSharingSame(Dictionary<int, HashSet<string>> a, Dictionary<int, HashSet<string>> b)
++        => a.Count == b.Count && a.All(p => b.TryGetValue(p.Key, out var values) && p.Value.SetEquals(values));
++
++    private static void SourceLocalSharingMatchesDeepCopyOracle()
++    {
++        var sourceType = typeof(GeneratorClient).GetNestedType("ParentSourceMethod", BindingFlags.NonPublic)!;
++        var constructor = sourceType.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Single();
++        int loads = 0, selectedRuns = 0;
++        bool escapedSeen = false, boundSeen = false, sharedSeen = false;
++        foreach (string name in new[] { nameof(LocalSharingDiamond), nameof(LocalSharingBackedge), nameof(LocalSharingEscaped), nameof(LocalSharingManyDefinitions) })
++        {
++            var method = typeof(EngineRuntimeChecks).GetMethod(name, BindingFlags.Static | BindingFlags.NonPublic)!;
++            object Build(Dictionary<int, int>? selection = null)
++                => constructor.Invoke(new object?[] { method, null, null, selection });
++            var full = Build();
++            Verify(full, method);
++            // Exercise the same solver after pruning a real conditional CFG edge.
++            var branch = ((IDictionary)LocalSharingMember(full, "Blocks")).Values.Cast<object>()
++                .FirstOrDefault(b => ((List<int>)LocalSharingMember(b, "Next")).Distinct().Count() == 2);
++            if (branch is not null)
++                foreach (int successor in ((List<int>)LocalSharingMember(branch, "Next")).Distinct())
++                {
++                    Verify(Build(new Dictionary<int, int> { [(int)LocalSharingMember(branch, "Start")] = successor }), method);
++                    selectedRuns++;
++                }
++        }
++        Equal(true, loads > 10, "oracle covers actual linked local loads");
++        Equal(true, selectedRuns > 0, "oracle covers selected CFG edges");
++        Equal(true, escapedSeen, "address-exposed local fixture exercises conservative handling");
++        Equal(true, boundSeen, "more than eight definitions retains exact refusal counts");
++        Equal(true, sharedSeen, "COW fixture actually shares published sets");
++
++        void Verify(object source, MethodInfo method)
++        {
++            var blocks = ((IDictionary)LocalSharingMember(source, "Blocks")).Values.Cast<object>()
++                .Where(b => (int)LocalSharingMember(b, "Height") >= 0).ToArray();
++            int Start(object b) => (int)LocalSharingMember(b, "Start");
++            var predecessors = (IDictionary)LocalSharingMember(source, "predecessors");
++            var entries = (HashSet<int>)LocalSharingMember(source, "sliceEntries");
++            var escaped = (HashSet<int>)LocalSharingMember(source, "EscapedLocals");
++            var values = (IDictionary)LocalSharingMember(source, "Values");
++            var incoming = blocks.ToDictionary(Start, _ => new Dictionary<int, HashSet<string>>());
++            var outgoing = blocks.ToDictionary(Start, _ => new Dictionary<int, HashSet<string>>());
++            var initial = method.GetMethodBody()!.LocalVariables.ToDictionary(l => l.LocalIndex,
++                l => new HashSet<string> { "local_entry:" + l.LocalIndex });
++            bool changed = true; int passes = 0;
++            // Independent copy of the original eager transfer algorithm. Never
++            // read production Incoming/Outgoing until the oracle has converged.
++            while (changed)
++            {
++                if (++passes > 512) throw new InvalidOperationException("oracle local_dataflow_bound");
++                changed = false;
++                foreach (var block in blocks)
++                {
++                    int start = Start(block);
++                    var entry = entries.Contains(start) ? LocalSharingDeepCopy(initial) : new Dictionary<int, HashSet<string>>();
++                    foreach (var predecessor in ((IEnumerable)predecessors[start]!).Cast<object>()
++                        .Where(b => (int)LocalSharingMember(b, "Height") >= 0))
++                        foreach (var pair in outgoing[Start(predecessor)])
++                        {
++                            if (!entry.TryGetValue(pair.Key, out var set)) entry[pair.Key] = set = new HashSet<string>();
++                            set.UnionWith(pair.Value);
++                        }
++                    var exit = LocalSharingDeepCopy(entry);
++                    foreach (var instruction in ((IEnumerable)LocalSharingMember(block, "Code")).Cast<object>())
++                        if ((string)LocalSharingMember(instruction, "Op") == "stloc")
++                            exit[(int)LocalSharingMember(instruction, "Arg")] = new HashSet<string> {
++                                ((int)LocalSharingMember(instruction, "Offset")).ToString(CultureInfo.InvariantCulture) };
++                    changed |= !LocalSharingSame(exit, outgoing[start]);
++                    incoming[start] = entry; outgoing[start] = exit;
++                }
++            }
++            var expectedUnknown = new List<string>();
++            var published = new List<HashSet<string>>();
++            foreach (var block in blocks)
++            {
++                int start = Start(block);
++                var actualIn = (Dictionary<int, HashSet<string>>)LocalSharingMember(block, "Incoming");
++                var actualOut = (Dictionary<int, HashSet<string>>)LocalSharingMember(block, "Outgoing");
++                Equal(true, LocalSharingSame(incoming[start], actualIn), method.Name + " incoming " + start);
++                Equal(true, LocalSharingSame(outgoing[start], actualOut), method.Name + " outgoing " + start);
++                foreach (var set in actualIn.Values.Concat(actualOut.Values))
++                {
++                    sharedSeen |= published.Any(previous => ReferenceEquals(previous, set));
++                    published.Add(set);
++                }
++                var definitions = LocalSharingDeepCopy(incoming[start]);
++                foreach (var instruction in ((IEnumerable)LocalSharingMember(block, "Code")).Cast<object>())
++                {
++                    string op = (string)LocalSharingMember(instruction, "Op");
++                    string id = ((int)LocalSharingMember(instruction, "Offset")).ToString(CultureInfo.InvariantCulture);
++                    if (op == "ldloc")
++                    {
++                        loads++;
++                        int local = (int)LocalSharingMember(instruction, "Arg");
++                        var value = values[id]!;
++                        string expectedOp = "ldloc"; string[] expectedInputs = Array.Empty<string>();
++                        if (escaped.Contains(local)) { expectedOp = "address_exposed_local"; escapedSeen = true; }
++                        else if (definitions.TryGetValue(local, out var defs))
++                        {
++                            if (defs.Count <= 8) expectedInputs = defs.OrderBy(s => s, StringComparer.Ordinal).ToArray();
++                            else
++                            {
++                                expectedOp = "unresolved_local_definition_bound"; boundSeen = true;
++                                expectedUnknown.Add("local_" + local + "_has_" + defs.Count + "_reaching_definitions");
++                            }
++                        }
++                        Equal(expectedOp, (string)LocalSharingMember(value, "Op"), method.Name + " load op " + id);
++                        Equal(true, expectedInputs.SequenceEqual((List<string>)LocalSharingMember(value, "Inputs")), method.Name + " load definitions " + id);
++                    }
++                    if (op == "stloc") definitions[(int)LocalSharingMember(instruction, "Arg")] = new HashSet<string> { id };
++                }
++            }
++            var actualUnknown = ((List<string>)LocalSharingMember(source, "Unknown"))
++                .Where(s => s.StartsWith("local_", StringComparison.Ordinal) && s.EndsWith("_reaching_definitions", StringComparison.Ordinal));
++            Equal(true, expectedUnknown.SequenceEqual(actualUnknown), method.Name + " exact unknown count/order");
++            foreach (int local in initial.Keys)
++                Equal("unresolved_local_entry", (string)LocalSharingMember(values["local_entry:" + local]!, "Op"), "entry marker retained");
++        }
++    }
++}
