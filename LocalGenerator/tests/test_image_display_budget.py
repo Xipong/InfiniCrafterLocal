@@ -168,10 +168,10 @@ def test_real_retry_compactor_retains_selected_frame_with_long_art_and_png_diagn
         assert notes and notes in retry["prompt"]
         from infini_local.services.sdcpp_backend import server_payload
         for call in (first, retry):
-            payload = server_payload(backend._sdcpp_config(), call["prompt"], "not sent", 512, 512, 42, "a1111", is_zimage=zimage, positive_only=True)
+            payload = server_payload(backend._sdcpp_config(), call["prompt"], "authored negative", 512, 512, 42, "a1111", is_zimage=zimage, positive_only=True)
             wire = json.loads(json.dumps(payload, ensure_ascii=False))
             assert _framing(wire["prompt"]) == _framing(call["prompt"])
-            assert wire["negative_prompt"] == ""
+            assert wire["negative_prompt"] == ("" if zimage else "authored negative")
             assert wire["prompt"].endswith(selected_guidance)
         assert Path(first["raw"]).read_bytes() == first["bytes"]
         assert Path(retry["raw"]).read_bytes() == retry["bytes"]

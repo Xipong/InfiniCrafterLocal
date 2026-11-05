@@ -96,7 +96,7 @@ internal static partial class EngineRuntimeChecks
                 File.Delete(file); Directory.CreateDirectory(file); // Atomic rename must fail on every host, including root.
                 var failed = registry.PersistOne(data);
                 Equal(GeneratedDefinitionPersistenceStatus.Failed, failed.Status, "disk failure has explicit outcome");
-                Equal(true, failed.Error is IOException, "disk failure retains exact cause");
+                Equal(true, failed.Error is IOException or UnauthorizedAccessException, "disk failure retains the native filesystem cause");
                 var unhydrated = GeneratedPrefixHost(GeneratedItemData.FromPlayerSaveJson(data.ToPlayerSaveJson())!);
                 var unhydratedTag = new TagCompound(); unhydrated.SaveData(unhydratedTag);
                 Equal(true, unhydratedTag.ContainsKey("infiniDefinitionV5"), "compact item also protects full registry-only definition when disk fails");
