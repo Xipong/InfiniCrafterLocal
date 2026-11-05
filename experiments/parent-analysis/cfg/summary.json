@@ -1,0 +1,15 @@
+{
+  "changedFiles": 10,
+  "changedNativeRecords": [
+    {
+      "method": "Player.ItemCheck_Shoot",
+      "itemId": 3859
+    },
+    {
+      "method": "Player.ItemCheck_Shoot",
+      "itemId": 4953
+    }
+  ],
+  "nativeBinarySha256": "f09df6fdb9d29026f469ae3041f1591f38b62492cd7a8dfcf14263652a0a390a",
+  "predicateJsonChars": 759
+}

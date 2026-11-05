@@ -1,0 +1,61 @@
+[
+  {
+    "path": "cfg/native-ammo-control-flow.patch",
+    "sha256": "2f8670a27321300db4d3861641774e07fe2a5fe684be7f97e4688a26769f6955",
+    "bytes": 53902
+  },
+  {
+    "path": "cfg/native-ammo-control-flow.manifest.json",
+    "sha256": "6befbd8eeda32866a71e1eaa0b3ba7e1a899e6107827d1fbe2018b6afe7e0d01",
+    "bytes": 2733
+  },
+  {
+    "path": "cfg/REPORT_RU.md",
+    "sha256": "561bd558861fd5789fe0634e318546fd33520c0edee06ef2e5dae03417b0cbc1",
+    "bytes": 6875,
+    "source": "ifc-conversion-analyzer-evidence-20261105/REPORT_RU.md",
+    "sourceSha256": "561bd558861fd5789fe0634e318546fd33520c0edee06ef2e5dae03417b0cbc1"
+  },
+  {
+    "path": "cfg/catalog-semantic-diff.json",
+    "sha256": "30d8bad14207a49af2ff716106582ab3148ad357b0b8f9dad926f31cf0592429",
+    "bytes": 5633,
+    "source": "ifc-conversion-analyzer-evidence-20261105/catalog-semantic-diff.json",
+    "sourceSha256": "30d8bad14207a49af2ff716106582ab3148ad357b0b8f9dad926f31cf0592429"
+  },
+  {
+    "path": "cfg/summary.json",
+    "sha256": "f4bdaf00a9b3df35ccf141fdc998a779339e35115993a2ccc4e4d12b87279b25",
+    "bytes": 330,
+    "source": "ifc-conversion-analyzer-evidence-20261105/summary.json",
+    "sourceSha256": "f4bdaf00a9b3df35ccf141fdc998a779339e35115993a2ccc4e4d12b87279b25"
+  },
+  {
+    "path": "cfg/python-final.log",
+    "sha256": "3bff5b22029748270553e49ce21e2125a520073e0b77b81fe2e445cc3b4801b8",
+    "bytes": 111,
+    "source": "ifc-conversion-analyzer-evidence-20261105/python-final.log",
+    "sourceSha256": "3bff5b22029748270553e49ce21e2125a520073e0b77b81fe2e445cc3b4801b8"
+  },
+  {
+    "path": "cfg/python-neighbors.log",
+    "sha256": "7a66920bf0be0afe4497538f48b9fb01f18c169a411e00a7e5c705a1fafe9499",
+    "bytes": 99,
+    "source": "ifc-conversion-analyzer-evidence-20261105/python-neighbors.log",
+    "sourceSha256": "7a66920bf0be0afe4497538f48b9fb01f18c169a411e00a7e5c705a1fafe9499"
+  },
+  {
+    "path": "cfg/native-green.log",
+    "sha256": "1b38b87552576748b8e3fbccdf3fec831775c4ebf18a3896da092ab4bfc88173",
+    "bytes": 3527,
+    "source": "ifc-conversion-analyzer-evidence-20261105/native-green.log",
+    "sourceSha256": "1b38b87552576748b8e3fbccdf3fec831775c4ebf18a3896da092ab4bfc88173"
+  },
+  {
+    "path": "cfg/native-profiles.log",
+    "sha256": "44b1e16c9847c6a668f4e2e49ce7e441567dc0ebf1bdfda0659967bbf12a2f09",
+    "bytes": 278,
+    "source": "ifc-conversion-analyzer-evidence-20261105/native-profiles.log",
+    "sourceSha256": "44b1e16c9847c6a668f4e2e49ce7e441567dc0ebf1bdfda0659967bbf12a2f09"
+  }
+]

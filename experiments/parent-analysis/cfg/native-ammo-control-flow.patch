@@ -1,0 +1,757 @@
+--- /dev/null
++++ b/tools/generate/native_ammo_control_flow.py
+@@ -0,0 +1,236 @@
++"""Bounded normal-flow source predicates for literal projectile writes.
++
++No IL execution or item routing: slice explicit CFG edges and retain the exact
++observation sites. Refused sites stay with the caller's unknown-write evidence.
++"""
++from __future__ import annotations
++
++from native_attack_fact_analysis import Unrecognized, definition_dominates
++
++
++COMPARISONS = {"beq", "bne", "bgt", "blt", "ble", "bge", "bgt.un", "blt.un", "ble.un", "bge.un"}
++CONDITIONALS = COMPARISONS | {"brtrue", "brfalse"}
++TRANSFERS = {"throw", "rethrow", "jmp", "leave", "endfinally", "endfilter"}
++
++
++def branch_targets(ins):
++    if ins.op == "switch":
++        return ins.arg if isinstance(ins.arg, (list, tuple)) else []
++    return [ins.arg] if ins.op.startswith("b") and isinstance(ins.arg, int) else []
++
++
++def literal_store_predicates(code, guard_offset, block, target):
++    """Certify local literals, relative to reaching the proven item branch.
++
++    The existing recognizer owns contiguous enclosing projectile predicates.
++    This extension refuses enclosing spans and byrefs rather than losing them.
++    Only acyclic explicit normal-flow paths and fully known predicate operands
++    are admitted; unrelated trajectory branches disappear by CFG equivalence.
++    """
++    if target[0] != "local" or not block or len(block) > 1024:
++        return []
++    slot = target[1]
++    if any(i.op == "ldloca" and i.arg == slot for i in block):
++        return []
++    guard_index = next(n for n, i in enumerate(code) if i.offset == guard_offset)
++    item_start = code[guard_index - 3].offset
++    # type_blocks protects the body, not the stack expression of its header.
++    # An entry at the constant/comparison could forge the tested item identity.
++    if any(item_start < destination <= guard_offset for ins in code for destination in branch_targets(ins)):
++        return []
++    # Linear IL spans are not enclosing CFG regions. A jump from a completed
++    # sibling dispatcher arm may span this item's code while neither successor
++    # can ever reach it. Discard only such structurally disconnected spans.
++    offsets = {i.offset for i in code}
++    predecessors = {offset: [] for offset in offsets}
++    for n, ins in enumerate(code):
++        destinations = branch_targets(ins)
++        if any(t not in offsets for t in destinations):
++            return []
++        if ins.op not in {"br", "ret"} and n + 1 < len(code):
++            destinations = [*destinations, code[n + 1].offset]
++        for destination in destinations:
++            predecessors[destination].append(ins.offset)
++    ancestors, pending = {item_start}, [item_start]
++    while pending:
++        for source in predecessors[pending.pop()]:
++            if source not in ancestors:
++                ancestors.add(source)
++                pending.append(source)
++    if any(ins.offset in ancestors and destination > item_start
++           for ins in code[:guard_index - 3] for destination in branch_targets(ins)):
++        return []
++    # The decoder keeps unsupported transfers distinct, including EH metadata
++    # checked by the caller. Unknown call signatures are not CFG branches.
++    if any(i.op in TRANSFERS or (i.op.startswith("b") and i.op not in CONDITIONALS | {"br", "break"}) for i in block):
++        return []
++    positions = {i.offset: n for n, i in enumerate(block)}
++    code_offsets = {i.offset for i in code}
++    if len(positions) != len(block) or any(t not in code_offsets for i in block for t in branch_targets(i)):
++        return []
++    edges = []
++    for n, ins in enumerate(block):
++        next_ = n + 1 if n + 1 < len(block) else None
++        targets = [positions.get(t) for t in branch_targets(ins)]
++        edges.append([] if ins.op == "ret" else targets if ins.op == "br" else
++                     [*targets, next_] if ins.op in CONDITIONALS | {"switch"} else [next_])
++
++    def source_expression(end, budget, trail=()):
++        budget[0] -= 1
++        if end < 0 or budget[0] < 0 or len(trail) > 16:
++            raise Unrecognized("source expression bound")
++        ins = block[end]
++        op, arg = ins.op, ins.arg
++        site = {"sourceIlOffset": ins.offset}
++        if op == "const" and isinstance(arg, int):
++            return {"kind": "constant", "value": arg, **site}, end - 1
++        if op == "ldarg":
++            return {"kind": "argument", "index": arg, **site}, end - 1
++        if op == "ldfld":
++            receiver, before = source_expression(end - 1, budget, trail)
++            return {"kind": "field", "member": arg, "receiver": receiver, **site}, before
++        if op in {"add", "sub", "mul", "div"}:
++            right, before = source_expression(end - 1, budget, trail)
++            left, before = source_expression(before, budget, trail)
++            return {"kind": "binary", "operator": op, "left": left, "right": right, **site}, before
++        if op == "ldloc":
++            stores = [n for n, i in enumerate(block) if i.op == "stloc" and i.arg == arg]
++            if (arg == slot or arg in trail or len(stores) != 1
++                    or any(i.op == "ldloca" and i.arg == arg for i in code)):
++                raise Unrecognized("ambiguous or address-exposed local")
++            store = stores[0]
++            if store >= end or not definition_dominates(block, store, end):
++                raise Unrecognized("local definition does not dominate observation")
++            value, before = source_expression(store - 1, budget, (*trail, arg))
++            no_foreign_expression_entry(before + 1, store)
++            return {"kind": "local_definition", "local": arg, **site,
++                    "sourceStoreIlOffset": block[store].offset, "scope": "value_at_store", "value": value}, end - 1
++        raise Unrecognized("unsupported controlling expression")
++
++    def no_foreign_expression_entry(start, end):
++        low, high = block[start].offset, block[end].offset
++        if any(low < t <= high for ins in code for t in branch_targets(ins)):
++            raise Unrecognized("control-flow entry into expression")
++
++    def branch_predicate(n, taken):
++        ins = block[n]
++        budget = [96]
++        right, before = source_expression(n - 1, budget)
++        node = {"kind": "branch", "opcode": ins.op, "taken": taken,
++                "sourceBranchIlOffset": ins.offset}
++        if ins.op in COMPARISONS:
++            left, before = source_expression(before, budget)
++            node.update(left=left, right=right)
++        else:
++            node["value"] = right
++        no_foreign_expression_entry(before + 1, n)
++        return node
++
++    def validate_formula(formula):
++        # Bound the serialized tree, not only unique CFG nodes: reconvergent
++        # branches can otherwise duplicate large shared suffixes in JSON.
++        pending, size = [formula], 0
++        while pending:
++            node = pending.pop()
++            size += 1
++            if size > 256:
++                raise Unrecognized("source predicate output bound")
++            if isinstance(node, dict):
++                pending.extend(node.values())
++        # A local snapshot has one defining store even at multiple loads. Refuse
++        # contradictory literal equalities on that same snapshot; separate
++        # field-load offsets are intentionally never treated as one observation.
++        def equality(node, outcome):
++            if node.get("kind") != "branch" or node["opcode"] not in {"beq", "bne"}:
++                return None
++            taken = node["taken"] if outcome else not node["taken"]
++            if taken != (node["opcode"] == "beq"):
++                return None
++            left, right = node["left"], node["right"]
++            if right.get("kind") == "local_definition":
++                left, right = right, left
++            if left.get("kind") == "local_definition" and right.get("kind") == "constant":
++                return left["sourceStoreIlOffset"], right["value"]
++            return None
++        paths = [(formula, {})]
++        while paths:
++            node, known = paths.pop()
++            if isinstance(node, bool):
++                continue
++            choices = [(node, True, True)] if node["kind"] == "branch" else [
++                (node["condition"], True, node["then"]), (node["condition"], False, node["else"])]
++            for predicate, outcome, child in choices:
++                if child is False:
++                    continue
++                updated = dict(known)
++                pair = equality(predicate, outcome)
++                if pair:
++                    key, value = pair
++                    if key in updated and updated[key] != value:
++                        raise Unrecognized("contradictory snapshot equalities")
++                    updated[key] = value
++                if child is not True:
++                    paths.append((child, updated))
++
++    rules = []
++    for store, ins in enumerate(block):
++        if (ins.op != "stloc" or ins.arg != slot or store == 0 or block[store - 1].op != "const"
++                or not isinstance(block[store - 1].arg, int) or block[store - 1].arg <= 0):
++            continue
++        try:
++            no_foreign_expression_entry(store - 1, store)
++            # Reverse reachability excludes paths that cannot hit this store.
++            relevant = {store}
++            changed = True
++            while changed:
++                changed = False
++                for n, successors in enumerate(edges):
++                    if n not in relevant and any(s in relevant for s in successors):
++                        relevant.add(n)
++                        changed = True
++            if 0 not in relevant:
++                continue
++            # Explore only the prefix ending at the store. A back-edge there
++            # would require loop semantics, even if its condition later cancels.
++            pending, visited = [0], set()
++            while pending:
++                n = pending.pop()
++                if n in visited or n not in relevant or n == store:
++                    continue
++                visited.add(n)
++                if any(s is not None and s in relevant and s <= n for s in edges[n]):
++                    raise Unrecognized("cyclic controlling path")
++                pending.extend(s for s in edges[n] if s is not None)
++            formulas = {store: True, None: False}
++            for n in sorted(visited, reverse=True):
++                successors = edges[n]
++                values = [formulas.get(s, False) for s in successors]
++                if not values:
++                    result = False
++                elif all(v == values[0] for v in values):
++                    result = values[0]
++                elif block[n].op in CONDITIONALS:
++                    taken, fallthrough = values
++                    if taken is True and fallthrough is False:
++                        result = branch_predicate(n, True)
++                    elif taken is False and fallthrough is True:
++                        result = branch_predicate(n, False)
++                    else:
++                        result = {"kind": "if", "condition": branch_predicate(n, True),
++                                  "then": taken, "else": fallthrough}
++                else:
++                    raise Unrecognized("unsupported controlling transfer")
++                validate_formula(result)
++                formulas[n] = result
++            condition = formulas[0]
++            if condition is False:
++                continue
++            validate_formula(condition)
++            rule = {"outputProjectileId": block[store - 1].arg, "sourceStoreIlOffset": ins.offset,
++                    "sourceScope": "normal_flow_from_item_branch_entry; exact_source_observations_not_final_shot"}
++            if condition is not True:
++                rule["whenSourceCondition"] = condition
++            rules.append(rule)
++        except (Unrecognized, IndexError):
++            continue
++    return rules
+--- a/tools/generate/native_ammo_fact_analysis.py
++++ b/tools/generate/native_ammo_fact_analysis.py
+@@ -1,11 +1,12 @@
+ """Bounded IL source shapes for ammo projectile rewrites; never execute game code.
+ 
+-Only complete literal assignment blocks and equality-guarded literal assignments
+-are certificates. Spawn arguments are source references, not simulated gameplay.
++Complete literal blocks and bounded CFG-certified literal write sites are
++source certificates. Predicates retain source snapshots; no gameplay is simulated.
+ """
+ from __future__ import annotations
+ 
+ from native_attack_fact_analysis import Unrecognized, direct_call_count, straight_line_arguments, type_blocks
++from native_ammo_control_flow import literal_store_predicates
+ 
+ 
+ def adjusted_counted_spawn(block, call_offset):
+@@ -242,6 +243,8 @@
+ 
+ 
+ def ammo_method_facts(instructions, method):
++    if getattr(instructions, "has_exception_handlers", False):
++        raise ValueError("exception handlers are outside ammo control-flow certificates")
+     code = [i for i in instructions if i.op != "nop"]
+     pick = method == "PickAmmo"
+     if pick:
+@@ -274,11 +277,13 @@
+                     "initialYRelativeToMountedCenterPx": -prefix[3].arg,
+                     "scope": "Vector2 constructor Y argument inside this native spawn branch; later origin mutations, X coordinate and final spawn position not modeled"})
+         rules, reason, ownership = item_literal_rewrite(code, guard, block, target)
++        if not rules:
++            rules = literal_store_predicates(code, guard, block, target)
++            certified = {r["sourceStoreIlOffset"] for r in rules}
++            row["unrecognizedProjectileWriteOffsets"].extend(offset for offset in projectile_write_offsets(block, target) if offset not in certified)
+         if rules:
+             row["rules"].extend(dict(r, sourceGuardIlOffset=guard) for r in rules)
+         else:
+-            row["unrecognizedProjectileWriteOffsets"].extend(projectile_write_offsets(block, target))
+-        if not rules:
+             row["unresolvedLiteralWrites"].extend(unresolved_literal_writes(block, target, guard, reason, ownership))
+         for n, call in enumerate(block):
+             if call.op != "call" or call.arg[0] != "Terraria.Projectile.NewProjectile":
+--- a/tools/generate/generate_native_hit_status.py
++++ b/tools/generate/generate_native_hit_status.py
+@@ -128,6 +128,7 @@
+     if body.exception_handlers and not allow_opaque:
+         raise ValueError("exception handlers are outside supported native subset")
+     instructions = DecodedInstructions()
++    instructions.has_exception_handlers = bool(body.exception_handlers)
+     called_methods = {}
+     module_id = str(uuid.UUID(bytes_le=pe.net.mdtables.Module.rows[0].Mvid.value))
+ 
+--- a/LocalGenerator/tests/test_parent_ammo_source_semantics.py
++++ b/LocalGenerator/tests/test_parent_ammo_source_semantics.py
+@@ -278,3 +278,211 @@
+     assert row["rules"] == [{"outputProjectileId": 73, "sourceStoreIlOffset": 8, "sourceGuardIlOffset": 6}]
+     assert row["unrecognizedProjectileWriteOffsets"] == [14]
+     assert row["unresolvedLiteralWrites"] == []
++
++
++def _state_conditioned_ammo_rewrite(*, mutate=(), outer=(), guard_op="bne", entry=None, tail=()):
++    from native_hit_status_analysis import Instruction as I
++    pairs = [("ldarg", 2), ("ldfld", "Terraria.Item.shoot"), ("stloc", 0)]
++    if entry:
++        pairs.append(("br", entry))
++    pairs += list(outer)
++    pairs += [("ldarg", 2), ("ldfld", "Terraria.Item.type"), ("const", 90123), ("bne", "end")]
++    labels = {"body": len(pairs)}
++    pairs += [("ldarg", 0), ("ldfld", "Fixture.Player.maximum"), ("ldarg", 0),
++              ("ldfld", "Fixture.Player.remaining"), ("sub", None), ("const", 3), ("div", None), ("stloc", 7)]
++    labels["defined"] = len(pairs)
++    pairs += list(mutate)
++    labels["test"] = len(pairs)
++    pairs += [("ldloc", 7), ("const", 4), (guard_op, "skip")]
++    labels["literal"] = len(pairs)
++    pairs += [("const", 876), ("stloc", 0)]
++    labels["skip"] = len(pairs)
++    pairs += list(tail)
++    labels["end"] = len(pairs)
++    pairs += [("ret", None)]
++    return [I(n, op, [labels[arg]] if op == "switch" else labels.get(arg, arg) if isinstance(arg, str) else arg) for n, (op, arg) in enumerate(pairs)]
++
++
++def test_native_ammo_cfg_extracts_only_controlling_snapshot_expression():
++    from native_ammo_fact_analysis import ammo_method_facts
++    row, = ammo_method_facts(_state_conditioned_ammo_rewrite(), "ItemCheck_Shoot")
++    rule, = row["rules"]
++    assert rule["outputProjectileId"] == 876
++    condition = rule["whenSourceCondition"]
++    assert condition["kind"] == "branch"
++    assert condition["opcode"] == "bne" and condition["taken"] is False
++    assert condition["right"]["value"] == 4
++    snapshot = condition["left"]
++    assert snapshot["kind"] == "local_definition" and snapshot["local"] == 7
++    assert snapshot["scope"] == "value_at_store"
++    value = snapshot["value"]
++    assert value["operator"] == "div" and value["right"]["value"] == 3
++    assert value["left"]["operator"] == "sub"
++    assert value["left"]["left"]["member"] == "Fixture.Player.maximum"
++    assert value["left"]["right"]["member"] == "Fixture.Player.remaining"
++    assert value["left"]["left"]["sourceIlOffset"] != value["left"]["right"]["sourceIlOffset"]
++    assert row["unrecognizedProjectileWriteOffsets"] == []
++
++
++@pytest.mark.parametrize("mutation", [
++    {"mutate": [("const", 9), ("stloc", 7)]},
++    {"mutate": [("ldloca", 7), ("call", ("Opaque.Mutate", 1, False, False))]},
++    {"mutate": [("ldloca", 0), ("call", ("Opaque.Mutate", 1, False, False))]},
++    {"mutate": [("call", ("Opaque.Check", 0, False, True)), ("brfalse", "skip")]},
++    {"mutate": [("br", "defined")]},
++    {"outer": [("call", ("Opaque.Check", 0, False, True)), ("brfalse", "end")]},
++    {"entry": "literal"},
++    {"entry": "test"},
++    {"guard_op": "switch"},
++])
++def test_native_ammo_cfg_refuses_ambiguous_control_and_values(mutation):
++    from native_ammo_fact_analysis import ammo_method_facts
++    row, = ammo_method_facts(_state_conditioned_ammo_rewrite(**mutation), "ItemCheck_Shoot")
++    assert row["rules"] == []
++    assert row["unrecognizedProjectileWriteOffsets"]
++
++
++def test_native_ammo_cfg_known_store_keeps_later_opaque_write_unknown():
++    from native_ammo_fact_analysis import ammo_method_facts
++    row, = ammo_method_facts(_state_conditioned_ammo_rewrite(tail=[("call", ("Opaque.Compute", 0, False, True)), ("stloc", 0)]), "ItemCheck_Shoot")
++    assert len(row["rules"]) == 1
++    assert len(row["unrecognizedProjectileWriteOffsets"]) == 1
++    assert row["unrecognizedProjectileWriteOffsets"][0] > row["rules"][0]["sourceStoreIlOffset"]
++
++
++def test_exact_native_state_guard_rewrite_extraction():
++    from generate_native_ammo_facts import extract
++    installed = Path(os.environ.get("INFINI_NATIVE_AMMO_ASSEMBLY", "/missing-native-assembly"))
++    if not installed.exists():
++        pytest.skip("exact native source assembly unavailable")
++    sources = extract(installed)
++    rows = {r["itemId"]: r for s in sources if s["method"] == "Player.ItemCheck_Shoot" for r in s["records"]}
++    rule, = rows[4953]["rules"]
++    assert rule["outputProjectileId"] == 932 and rule["sourceStoreIlOffset"] == 10873
++    predicate = rule["whenSourceCondition"]
++    assert predicate["sourceBranchIlOffset"] == 10866
++    assert predicate["opcode"] == "bne" and predicate["taken"] is False
++    value = predicate["left"]["value"]
++    assert predicate["left"]["sourceStoreIlOffset"] == 10599
++    assert value["operator"] == "div" and value["right"]["value"] == 2
++    assert value["left"]["operator"] == "sub"
++    assert value["left"]["left"]["member"] == "Terraria.Player.itemAnimationMax"
++    assert value["left"]["right"]["member"] == "Terraria.Player.itemAnimation"
++    assert rows[4953]["unrecognizedProjectileWriteOffsets"] == []
++    assert rows[3859]["rules"][0]["outputProjectileId"] == 710
++    assert "whenSourceCondition" not in rows[3859]["rules"][0]
++    assert rows[3542]["unrecognizedProjectileWriteOffsets"] == [319]
++    assert rows[1157]["unrecognizedProjectileWriteOffsets"] == [16434]
++
++
++def test_native_ammo_cfg_drops_irrelevant_opaque_diamond_but_not_controlling_call():
++    from native_ammo_fact_analysis import ammo_method_facts
++    row, = ammo_method_facts(_state_conditioned_ammo_rewrite(mutate=[("call", ("Opaque.Check", 0, False, True)), ("brfalse", "test"), ("const", 123), ("stloc", 12)]), "ItemCheck_Shoot")
++    assert len(row["rules"]) == 1
++    assert row["rules"][0]["whenSourceCondition"]["left"]["local"] == 7
++    assert row["unrecognizedProjectileWriteOffsets"] == []
++
++
++@pytest.mark.parametrize("mutate", [
++    [("ldloc", 7), ("const", 5), ("bne", "skip")],
++    [("call", ("Opaque.Check", 0, False, True)), ("brfalse", "test"), ("const", 9), ("stloc", 7)],
++    [("call", ("Opaque.Check", 0, False, True)), ("brtrue", "defined")],
++    [("br", 99999)],
++])
++def test_native_ammo_cfg_rejects_contradiction_competing_definition_loop_and_bad_target(mutate):
++    from native_ammo_fact_analysis import ammo_method_facts
++    row, = ammo_method_facts(_state_conditioned_ammo_rewrite(mutate=mutate), "ItemCheck_Shoot")
++    assert row["rules"] == []
++    assert row["unrecognizedProjectileWriteOffsets"]
++
++
++def test_native_ammo_cfg_exception_handler_metadata_is_not_discarded():
++    from native_ammo_fact_analysis import ammo_method_facts
++    from generate_native_hit_status import DecodedInstructions
++    code = DecodedInstructions(_state_conditioned_ammo_rewrite())
++    code.has_exception_handlers = True
++    with pytest.raises(ValueError, match="exception handlers"):
++        ammo_method_facts(code, "ItemCheck_Shoot")
++
++
++def test_native_ammo_cfg_ignores_only_disconnected_sibling_spans():
++    from native_ammo_fact_analysis import ammo_method_facts
++    from native_hit_status_analysis import Instruction as I
++    original = _state_conditioned_ammo_rewrite()
++    # A sibling arm can jump past our item or return, but cannot reach it.
++    prefix = [I(-7, "ldarg", 2), I(-6, "ldfld", "Terraria.Item.type"), I(-5, "const", 77777), I(-4, "bne", 0),
++              I(-3, "call", ("Opaque.Check", 0, False, True)), I(-2, "brtrue", original[-1].offset), I(-1, "ret", None)]
++    rows = ammo_method_facts(prefix + original, "ItemCheck_Shoot")
++    row = next(row for row in rows if row["itemId"] == 90123)
++    assert len(row["rules"]) == 1 and row["unrecognizedProjectileWriteOffsets"] == []
++    # If that arm can fall through into our item, its spanning guard is real.
++    entering = prefix[:-1] + [I(-1, "nop", None)] + original
++    row = next(row for row in ammo_method_facts(entering, "ItemCheck_Shoot") if row["itemId"] == 90123)
++    assert row["rules"] == [] and row["unrecognizedProjectileWriteOffsets"]
++
++
++@pytest.mark.parametrize("branch", ["blt", "blt.un", "bge", "bge.un"])
++def test_native_ammo_cfg_preserves_signedness_and_source_snapshot(branch):
++    from native_ammo_fact_analysis import ammo_method_facts
++    row, = ammo_method_facts(_state_conditioned_ammo_rewrite(guard_op=branch, mutate=[("ldarg", 0), ("const", 0), ("stfld", "Fixture.Player.remaining")]), "ItemCheck_Shoot")
++    rule, = row["rules"]
++    predicate = rule["whenSourceCondition"]
++    assert predicate["opcode"] == branch and predicate["taken"] is False
++    snapshot = predicate["left"]
++    assert snapshot["scope"] == "value_at_store"
++    assert snapshot["sourceStoreIlOffset"] < snapshot["sourceIlOffset"]
++    assert snapshot["value"]["left"]["right"]["sourceIlOffset"] < snapshot["sourceStoreIlOffset"]
++
++
++def test_native_ammo_cfg_header_reentry_cannot_forge_item_ownership():
++    from native_ammo_fact_analysis import ammo_method_facts
++    from native_hit_status_analysis import Instruction as I
++    code = _state_conditioned_ammo_rewrite()
++    # The later path enters after Item.type was supposed to have been loaded.
++    end = code[-1].offset
++    code = code[:-1] + [I(end, "const", 90123), I(end + 1, "br", 5)]
++    row, = ammo_method_facts(code, "ItemCheck_Shoot")
++    assert row["rules"] == []
++    assert row["unrecognizedProjectileWriteOffsets"]
++
++
++def test_native_ammo_cfg_retains_alternative_paths_and_bounds_formula_output():
++    from native_ammo_fact_analysis import ammo_method_facts
++    row, = ammo_method_facts(_state_conditioned_ammo_rewrite(mutate=[("ldloc", 7), ("const", 5), ("beq", "literal")]), "ItemCheck_Shoot")
++    condition = row["rules"][0]["whenSourceCondition"]
++    assert condition["kind"] == "if" and condition["then"] is True
++    assert condition["condition"]["opcode"] == "beq" and condition["condition"]["right"]["value"] == 5
++    assert condition["else"]["opcode"] == "bne" and condition["else"]["right"]["value"] == 4
++    # Bound the real output tree, not only instruction count.
++    row, = ammo_method_facts(_state_conditioned_ammo_rewrite(mutate=[("ldloc", 7), ("const", 4), ("bne", "skip")] * 20), "ItemCheck_Shoot")
++    assert row["rules"] == [] and row["unrecognizedProjectileWriteOffsets"]
++
++
++@pytest.mark.parametrize("mode", ["json_schema", "json_object"])
++def test_native_state_condition_survives_actual_prepare_author_request(monkeypatch, mode):
++    import json
++    from infini_local.core import llm_config
++    from infini_local.pipelines.author.request import build_initial_author_request
++    from prompt_packet_helpers import request_dossier, expand_native_source_references
++    path = Path(os.environ.get("INFINI_PARENT_STATE_PACKET", "/missing-native-prepare-packet"))
++    if not path.exists():
++        pytest.skip("actual native state-conditioned Prepare packet unavailable")
++    packet = json.loads(path.read_text())
++    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
++    request, _, _ = build_initial_author_request(packet["itemA"], packet["itemB"], "state-source-roundtrip", model_name="offline-test-model")
++    raw = expand_native_source_references(request_dossier(request))["parents"]["A"]["packet"]["raw"]["ammo"]
++    expected = packet["itemA"]["ammoRaw"]
++    assert raw["projectileSemanticsReference"] == expected["projectileSemanticsReference"]
++    # Existing Author projection compacts attack tables and omits unrelated
++    # snapshot fields. This change's exact contract is the two source sites and
++    # their condition, both beside the profile and in the stage reference.
++    profile, = raw["nativeReplacementProjectileRaw"]
++    native, = expected["nativeReplacementProjectileRaw"]
++    assert profile["type"] == native["type"]
++    assert profile["sourceReferences"] == native["sourceReferences"]
++    assert profile["profileScope"] == native["profileScope"]
++    assert (profile["penetrate"], profile["timeLeft"], profile["extraUpdates"]) == (5, 120, 0)
++    source = raw["projectileSemanticsReference"]
++    assert source["ammoProjectileRelation"] == "conditionally_replaced"
++    assert source["stages"][1]["rules"][0]["whenSourceCondition"]["left"]["scope"] == "value_at_store"
++    assert len(raw["nativeReplacementProjectileRaw"][0]["sourceReferences"]) == 2
+--- a/ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.AmmoFacts.cs
++++ b/ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.AmmoFacts.cs
+@@ -89,7 +89,7 @@
+                     stage["unrecognizedProjectileWriteOffsets"] = facts["unrecognizedProjectileWriteOffsets"]!.DeepClone();
+                     foreach (var rule in facts["rules"]!.AsArray().OfType<JsonObject>())
+                     {
+-                        if (rule["whenInputProjectileId"] is null) replaced = true;
++                        if (rule["whenInputProjectileId"] is null && rule["whenSourceCondition"] is null) replaced = true;
+                         else conditional = true;
+                     }
+                     ownDelivery |= facts["spawnSites"]!.AsArray().Count > 0;
+--- a/ModSources/InfiniCrafterLocal/Common/Services/Generation/NativeAmmoFactsCatalog.g.cs
++++ b/ModSources/InfiniCrafterLocal/Common/Services/Generation/NativeAmmoFactsCatalog.g.cs
+@@ -74,7 +74,7 @@
+             [3852] = """{"itemId":3852,"rules":[],"unresolvedLiteralWrites":[],"spawnSites":[{"sourceSpawnIlOffset":25763,"sourceGuardIlOffset":25676,"projectileBasis":"fixed_projectile","nativeItemSpecificDelivery":true,"scope":"Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution","trajectoryReference":{"status":"native_branch_aim_and_spread_not_fully_modeled","scope":"Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"},"projectileId":704},{"sourceSpawnIlOffset":25811,"sourceGuardIlOffset":25676,"projectileBasis":"current_shot_projectile","nativeItemSpecificDelivery":true,"scope":"Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution","trajectoryReference":{"status":"native_branch_aim_and_spread_not_fully_modeled","scope":"Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"}}],"spawnOriginSetups":[],"unrecognizedProjectileWriteOffsets":[]}""",
+             [3854] = """{"itemId":3854,"rules":[],"unresolvedLiteralWrites":[],"spawnSites":[{"sourceSpawnIlOffset":25110,"sourceGuardIlOffset":25063,"projectileBasis":"fixed_projectile","nativeItemSpecificDelivery":true,"scope":"Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution","trajectoryReference":{"status":"native_branch_aim_and_spread_not_fully_modeled","scope":"Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"},"projectileId":705}],"spawnOriginSetups":[],"unrecognizedProjectileWriteOffsets":[]}""",
+             [3858] = """{"itemId":3858,"rules":[],"unresolvedLiteralWrites":[],"spawnSites":[{"sourceSpawnIlOffset":20212,"sourceGuardIlOffset":20065,"projectileBasis":"fixed_projectile","nativeItemSpecificDelivery":true,"scope":"Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution","trajectoryReference":{"status":"native_branch_aim_and_spread_not_fully_modeled","scope":"Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"},"projectileId":708},{"sourceSpawnIlOffset":20250,"sourceGuardIlOffset":20065,"projectileBasis":"current_shot_projectile","nativeItemSpecificDelivery":true,"scope":"Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution","trajectoryReference":{"status":"native_branch_aim_and_spread_not_fully_modeled","scope":"Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"}}],"spawnOriginSetups":[],"unrecognizedProjectileWriteOffsets":[]}""",
+-            [3859] = """{"itemId":3859,"rules":[],"unresolvedLiteralWrites":[],"spawnSites":[],"spawnOriginSetups":[],"unrecognizedProjectileWriteOffsets":[20293]}""",
++            [3859] = """{"itemId":3859,"rules":[{"outputProjectileId":710,"sourceStoreIlOffset":20293,"sourceScope":"normal_flow_from_item_branch_entry; exact_source_observations_not_final_shot","sourceGuardIlOffset":20268}],"unresolvedLiteralWrites":[],"spawnSites":[],"spawnOriginSetups":[],"unrecognizedProjectileWriteOffsets":[]}""",
+             [3930] = """{"itemId":3930,"rules":[],"unresolvedLiteralWrites":[],"spawnSites":[{"sourceSpawnIlOffset":24818,"sourceGuardIlOffset":24760,"projectileBasis":"fixed_projectile","nativeItemSpecificDelivery":true,"scope":"Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution","trajectoryReference":{"status":"native_branch_aim_and_spread_not_fully_modeled","scope":"Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"},"projectileId":714}],"spawnOriginSetups":[],"unrecognizedProjectileWriteOffsets":[]}""",
+             [4262] = """{"itemId":4262,"rules":[],"unresolvedLiteralWrites":[],"spawnSites":[{"sourceSpawnIlOffset":10150,"sourceGuardIlOffset":9596,"projectileBasis":"current_shot_projectile","nativeItemSpecificDelivery":true,"scope":"Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution","trajectoryReference":{"status":"native_branch_aim_and_spread_not_fully_modeled","scope":"Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"}}],"spawnOriginSetups":[],"unrecognizedProjectileWriteOffsets":[]}""",
+             [4270] = """{"itemId":4270,"rules":[],"unresolvedLiteralWrites":[],"spawnSites":[{"sourceSpawnIlOffset":11700,"sourceGuardIlOffset":11506,"projectileBasis":"current_shot_projectile","nativeItemSpecificDelivery":true,"scope":"Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution","trajectoryReference":{"status":"native_branch_aim_and_spread_not_fully_modeled","scope":"Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"}}],"spawnOriginSetups":[],"unrecognizedProjectileWriteOffsets":[]}""",
+@@ -84,7 +84,7 @@
+             [4715] = """{"itemId":4715,"rules":[],"unresolvedLiteralWrites":[],"spawnSites":[{"sourceSpawnIlOffset":12076,"sourceGuardIlOffset":11718,"projectileBasis":"current_shot_projectile","nativeItemSpecificDelivery":true,"scope":"Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution","trajectoryReference":{"status":"native_branch_aim_and_spread_not_fully_modeled","scope":"Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"}}],"spawnOriginSetups":[],"unrecognizedProjectileWriteOffsets":[]}""",
+             [4722] = """{"itemId":4722,"rules":[],"unresolvedLiteralWrites":[],"spawnSites":[{"sourceSpawnIlOffset":12627,"sourceGuardIlOffset":12094,"projectileBasis":"current_shot_projectile","nativeItemSpecificDelivery":true,"scope":"Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution","trajectoryReference":{"status":"native_branch_aim_and_spread_not_fully_modeled","scope":"Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"}}],"spawnOriginSetups":[],"unrecognizedProjectileWriteOffsets":[]}""",
+             [4923] = """{"itemId":4923,"rules":[],"unresolvedLiteralWrites":[],"spawnSites":[{"sourceSpawnIlOffset":26627,"sourceGuardIlOffset":26570,"projectileBasis":"current_shot_projectile","nativeItemSpecificDelivery":true,"scope":"Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution","trajectoryReference":{"status":"native_branch_aim_and_spread_not_fully_modeled","scope":"Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"}}],"spawnOriginSetups":[],"unrecognizedProjectileWriteOffsets":[]}""",
+-            [4953] = """{"itemId":4953,"rules":[],"unresolvedLiteralWrites":[],"spawnSites":[{"sourceSpawnIlOffset":10958,"sourceGuardIlOffset":10517,"projectileBasis":"current_shot_projectile","nativeItemSpecificDelivery":true,"scope":"Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution","trajectoryReference":{"status":"native_branch_aim_and_spread_not_fully_modeled","scope":"Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"}},{"sourceSpawnIlOffset":10992,"sourceGuardIlOffset":10517,"projectileBasis":"current_shot_projectile","nativeItemSpecificDelivery":true,"scope":"Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution","trajectoryReference":{"status":"native_branch_aim_and_spread_not_fully_modeled","scope":"Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"}}],"spawnOriginSetups":[],"unrecognizedProjectileWriteOffsets":[10873]}""",
++            [4953] = """{"itemId":4953,"rules":[{"outputProjectileId":932,"sourceStoreIlOffset":10873,"sourceScope":"normal_flow_from_item_branch_entry; exact_source_observations_not_final_shot","whenSourceCondition":{"kind":"branch","opcode":"bne","taken":false,"sourceBranchIlOffset":10866,"left":{"kind":"local_definition","local":135,"sourceIlOffset":10863,"sourceStoreIlOffset":10599,"scope":"value_at_store","value":{"kind":"binary","operator":"div","left":{"kind":"binary","operator":"sub","left":{"kind":"field","member":"Terraria.Player.itemAnimationMax","receiver":{"kind":"argument","index":0,"sourceIlOffset":10584},"sourceIlOffset":10585},"right":{"kind":"field","member":"Terraria.Player.itemAnimation","receiver":{"kind":"argument","index":0,"sourceIlOffset":10590},"sourceIlOffset":10591},"sourceIlOffset":10596},"right":{"kind":"constant","value":2,"sourceIlOffset":10597},"sourceIlOffset":10598}},"right":{"kind":"constant","value":2,"sourceIlOffset":10865}},"sourceGuardIlOffset":10517}],"unresolvedLiteralWrites":[],"spawnSites":[{"sourceSpawnIlOffset":10958,"sourceGuardIlOffset":10517,"projectileBasis":"current_shot_projectile","nativeItemSpecificDelivery":true,"scope":"Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution","trajectoryReference":{"status":"native_branch_aim_and_spread_not_fully_modeled","scope":"Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"}},{"sourceSpawnIlOffset":10992,"sourceGuardIlOffset":10517,"projectileBasis":"current_shot_projectile","nativeItemSpecificDelivery":true,"scope":"Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution","trajectoryReference":{"status":"native_branch_aim_and_spread_not_fully_modeled","scope":"Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"}}],"spawnOriginSetups":[],"unrecognizedProjectileWriteOffsets":[]}""",
+             [4956] = """{"itemId":4956,"rules":[],"unresolvedLiteralWrites":[],"spawnSites":[{"sourceSpawnIlOffset":19956,"sourceGuardIlOffset":19581,"projectileBasis":"current_shot_projectile","nativeItemSpecificDelivery":true,"scope":"Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution","trajectoryReference":{"status":"native_branch_aim_and_spread_not_fully_modeled","scope":"Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"}}],"spawnOriginSetups":[],"unrecognizedProjectileWriteOffsets":[]}""",
+             [5065] = """{"itemId":5065,"rules":[],"unresolvedLiteralWrites":[],"spawnSites":[{"sourceSpawnIlOffset":8509,"sourceGuardIlOffset":8459,"projectileBasis":"current_shot_projectile","nativeItemSpecificDelivery":true,"scope":"Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution","trajectoryReference":{"status":"native_branch_aim_and_spread_not_fully_modeled","scope":"Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"}}],"spawnOriginSetups":[],"unrecognizedProjectileWriteOffsets":[]}""",
+             [5117] = """{"itemId":5117,"rules":[{"outputProjectileId":968,"sourceStoreIlOffset":644,"sourceGuardIlOffset":637}],"unresolvedLiteralWrites":[],"spawnSites":[{"sourceSpawnIlOffset":6711,"sourceGuardIlOffset":6590,"projectileBasis":"current_shot_projectile","nativeItemSpecificDelivery":true,"scope":"Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution","trajectoryReference":{"status":"native_branch_aim_and_spread_not_fully_modeled","scope":"Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"}}],"spawnOriginSetups":[],"unrecognizedProjectileWriteOffsets":[]}""",
+--- a/contracts/reports/native_ammo_sources.generated.json
++++ b/contracts/reports/native_ammo_sources.generated.json
+@@ -1855,13 +1855,18 @@
+         },
+         {
+           "itemId": 3859,
+-          "rules": [],
++          "rules": [
++            {
++              "outputProjectileId": 710,
++              "sourceStoreIlOffset": 20293,
++              "sourceScope": "normal_flow_from_item_branch_entry; exact_source_observations_not_final_shot",
++              "sourceGuardIlOffset": 20268
++            }
++          ],
+           "unresolvedLiteralWrites": [],
+           "spawnSites": [],
+           "spawnOriginSetups": [],
+-          "unrecognizedProjectileWriteOffsets": [
+-            20293
+-          ]
++          "unrecognizedProjectileWriteOffsets": []
+         },
+         {
+           "itemId": 3930,
+@@ -2063,7 +2068,67 @@
+         },
+         {
+           "itemId": 4953,
+-          "rules": [],
++          "rules": [
++            {
++              "outputProjectileId": 932,
++              "sourceStoreIlOffset": 10873,
++              "sourceScope": "normal_flow_from_item_branch_entry; exact_source_observations_not_final_shot",
++              "whenSourceCondition": {
++                "kind": "branch",
++                "opcode": "bne",
++                "taken": false,
++                "sourceBranchIlOffset": 10866,
++                "left": {
++                  "kind": "local_definition",
++                  "local": 135,
++                  "sourceIlOffset": 10863,
++                  "sourceStoreIlOffset": 10599,
++                  "scope": "value_at_store",
++                  "value": {
++                    "kind": "binary",
++                    "operator": "div",
++                    "left": {
++                      "kind": "binary",
++                      "operator": "sub",
++                      "left": {
++                        "kind": "field",
++                        "member": "Terraria.Player.itemAnimationMax",
++                        "receiver": {
++                          "kind": "argument",
++                          "index": 0,
++                          "sourceIlOffset": 10584
++                        },
++                        "sourceIlOffset": 10585
++                      },
++                      "right": {
++                        "kind": "field",
++                        "member": "Terraria.Player.itemAnimation",
++                        "receiver": {
++                          "kind": "argument",
++                          "index": 0,
++                          "sourceIlOffset": 10590
++                        },
++                        "sourceIlOffset": 10591
++                      },
++                      "sourceIlOffset": 10596
++                    },
++                    "right": {
++                      "kind": "constant",
++                      "value": 2,
++                      "sourceIlOffset": 10597
++                    },
++                    "sourceIlOffset": 10598
++                  }
++                },
++                "right": {
++                  "kind": "constant",
++                  "value": 2,
++                  "sourceIlOffset": 10865
++                }
++              },
++              "sourceGuardIlOffset": 10517
++            }
++          ],
+           "unresolvedLiteralWrites": [],
+           "spawnSites": [
+             {
+@@ -2090,9 +2155,7 @@
+             }
+           ],
+           "spawnOriginSetups": [],
+-          "unrecognizedProjectileWriteOffsets": [
+-            10873
+-          ]
++          "unrecognizedProjectileWriteOffsets": []
+         },
+         {
+           "itemId": 4956,
+--- a/tools/native/EngineRuntimeChecks.ParentAmmoSemantics.cs
++++ b/tools/native/EngineRuntimeChecks.ParentAmmoSemantics.cs
+@@ -29,7 +29,7 @@
+             (ItemID.WoodenBow, "retained_in_default_ammo_path", 0),
+             (ItemID.MoltenFury, "conditionally_replaced", ProjectileID.FireArrow),
+             (4381, "replaced", 819), (3052, "replaced", 495), (2223, "replaced", 357),
+-            (3019, "conditionally_replaced", 485), (4953, "unknown_native_projectile_semantics", 932),
++            (3019, "conditionally_replaced", 485), (4953, "conditionally_replaced", 932),
+             (ItemID.DaedalusStormbow, "retained_with_native_item_delivery", 0) })
+         {
+             var item = new Item(type);
+@@ -66,6 +66,7 @@
+         if (!string.IsNullOrWhiteSpace(export))
+         {
+             System.IO.File.WriteAllText(export, new GeneratorClient().Prepare(new Item(2223), new Item(ItemID.DaedalusStormbow), owner).PayloadJson);
++            System.IO.File.WriteAllText(export + ".state-conditional.json", new GeneratorClient().Prepare(new Item(4953), new Item(ItemID.DirtBlock), owner).PayloadJson);
+             System.IO.File.WriteAllText(export + ".molten.json", new GeneratorClient().Prepare(new Item(ItemID.MoltenFury), new Item(ItemID.WoodenArrow), owner).PayloadJson);
+             System.IO.File.WriteAllText(export + ".hellwing.json", new GeneratorClient().Prepare(new Item(3019), new Item(4381), owner).PayloadJson);
+         }
+@@ -166,7 +167,57 @@
+             Equal(2, moltenSpecialRetentionCases, "Molten Fury Jester and Holy negative conversion cases both execute");
+             Equal(0, mismatches.Count, "actual native ItemCheck spawn requests agree with exact source-stage predicates: " + string.Join("; ", mismatches));
+             Console.WriteLine($"AMMO ORACLE PASS cases={cases} moltenSpecialRetained={moltenSpecialRetentionCases}");
++            int stateCases = 0;
++            foreach (int elapsed in new[] { 0, 2, 4, 5, 6, 8 })
++                foreach (int ammoType in new[] { ItemID.WoodenArrow, ItemID.FlamingArrow, ItemID.JestersArrow, ItemID.HolyArrow })
++                {
++                    var item = new Item(4953); player.inventory[0] = item;
++                    var ammo = new Item(ammoType, 20); player.inventory[54] = ammo;
++                    player.itemAnimationMax = item.useAnimation;
++                    player.itemAnimation = item.useAnimation - elapsed; player.itemTime = 0;
++                    var source = AmmoSemantics(item);
++                    var stage = source["stages"]!.AsArray().OfType<JsonObject>().Single(s => s["method"]!.GetValue<string>() == "Player.ItemCheck_Shoot");
++                    var rule = stage["rules"]!.AsArray().OfType<JsonObject>().Single();
++                    Equal(0, stage["unrecognizedProjectileWriteOffsets"]!.AsArray().Count, "state-conditioned source write is proved");
++                    Equal(true, player.PickAmmo(item, out int picked, out _, out _, out _, out _, dontConsume: true), "state matrix picks actual ammo");
++                    var predicate = rule["whenSourceCondition"]!.AsObject();
++                    Equal("bne", predicate["opcode"]!.GetValue<string>(), "state condition preserves IL comparison");
++                    Equal(false, predicate["taken"]!.GetValue<bool>(), "literal is on equality fallthrough");
++                    bool applies = NativeAmmoConditionValue(predicate["left"]!, player) == NativeAmmoConditionValue(predicate["right"]!, player);
++                    Equal(elapsed / 2 == 2, applies, "source snapshot expression preserves native integer division, including odd elapsed tick");
++                    int expected = applies ? rule["outputProjectileId"]!.GetValue<int>() : picked;
++                    requests.Clear(); Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(91);
++                    nativeShoot.Invoke(player, new object[] { player.whoAmI, item, player.GetWeaponDamage(item) });
++                    Equal(true, requests.Count > 0, "state-conditioned native shoot reaches an actual spawn request");
++                    Equal(true, requests.All(request => request.Type == expected), $"state source agrees with actual native requests: elapsed={elapsed} ammo={ammoType} expected={expected}");
++                    Console.WriteLine($"STATE AMMO ORACLE elapsed={elapsed} ammo={ammoType} pick={picked} source={expected} actual=[{string.Join(",", requests.Select(request => request.Type))}]");
++                    stateCases++;
++                }
++            Equal(24, stateCases, "state-conditioned native matrix covers six states and four ammo identities");
+         });
++    }
++
++    // Test-only evaluation against deliberately fixed player fields. Production
++    // only publishes these source snapshots and never executes a condition.
++    private static int NativeAmmoConditionValue(JsonNode node, Player player)
++    {
++        string kind = node["kind"]!.GetValue<string>();
++        if (kind == "constant") return node["value"]!.GetValue<int>();
++        if (kind == "local_definition") return NativeAmmoConditionValue(node["value"]!, player);
++        if (kind == "field")
++        {
++            string member = node["member"]!.GetValue<string>();
++            Equal("argument", node["receiver"]!["kind"]!.GetValue<string>(), "test field has exact argument receiver");
++            Equal(0, node["receiver"]!["index"]!.GetValue<int>(), "test field belongs to player receiver");
++            return (int)typeof(Player).GetField(member.Substring(member.LastIndexOf('.') + 1))!.GetValue(player)!;
++        }
++        if (kind == "binary")
++        {
++            int left = NativeAmmoConditionValue(node["left"]!, player), right = NativeAmmoConditionValue(node["right"]!, player);
++            return node["operator"]!.GetValue<string>() switch { "sub" => left - right, "div" => left / right,
++                "add" => left + right, "mul" => left * right, _ => throw new InvalidOperationException("unsupported test expression") };
++        }
++        throw new InvalidOperationException("unsupported test condition value");
+     }
+ 
+     private sealed class ConstantAmmoHook : ModItem
+--- a/tools/native/EngineRuntimeChecks.WeaponReplacementProfiles.cs
++++ b/tools/native/EngineRuntimeChecks.WeaponReplacementProfiles.cs
+@@ -71,6 +71,11 @@
+             Equal("source_conditions_not_evaluated", reference["conditionStatus"]!.GetValue<string>(), "profile does not evaluate its branch");
+             if (itemType is ItemID.MoltenFury or 3019 or 4953)
+                 Equal(ProjectileID.WoodenArrowFriendly, reference["sourceFact"]!["whenInputProjectileId"]!.GetValue<int>(), "conditional input predicate survives unresolved");
++            if (itemType == 4953)
++            {
++                Equal(2, profile["sourceReferences"]!.AsArray().Count, "one full profile preserves both input and player-state source sites");
++                Equal(true, profile["sourceReferences"]!.AsArray().OfType<JsonObject>().Any(r => r["sourceFact"]?["whenSourceCondition"] is JsonObject), "state predicate survives into exact profile provenance");
++            }
+             if (itemType == 3930)
+                 Equal("native_fixed_projectile_spawn", reference["kind"]!.GetValue<string>(), "own fixed spawn uses certified source identity, not launcher table");
+             if (itemType == ItemID.MoltenFury)
+--- a/docs/development/pipeline/PARENT_NATIVE_FACTS_RU.md
++++ b/docs/development/pipeline/PARENT_NATIVE_FACTS_RU.md
+@@ -86,6 +86,22 @@
+ item guard. Неизвестная запись имеет приоритет в aggregate summary, но не
+ стирает другие доказанные rules и profiles.
+ 
++Для literal-записи внутри сложного item-блока `native_ammo_control_flow.py`
++строит ограниченный CFG и оставляет только управляющие записью условия.
++Прыжок из завершённой соседней ветки не считается внешним guard: это
++проверяется обратной достижимостью, без таблиц item ID. `whenSourceCondition`
++сохраняет исходный opcode сравнения, taken/fallthrough, offsets чтений и
++единственную dominating локальную дефиницию с `scope=value_at_store`.
++Арифметика остаётся исходными IL-операторами, включая целочисленное деление;
++поля после записи local не подменяют его сохранённое значение. Предел —
++1024 инструкции item-блока и 256 узлов сериализуемого условия. Незнакомый
++управляющий вызов, address escape, competing definitions, relevant cycle,
++вход в середину выражения или EH не получают положительный сертификат.
++Каждый доказанный store удаляется из unknown отдельно; последующая opaque
++запись остаётся unknown. Это normal-flow условие от входа в item-ветку,
++не гарантия достижения ветки, отсутствия исключений или финального выстрела.
++Произвольные mod hooks не получают этот offline vanilla-сертификат.
++
+ Условия замены и literal output IDs остаются source evidence независимо от
+ текущего инвентаря. Для каждого известного literal output сохраняется полный
+ `ProjectileRawSnapshot`: defaults, attack/status/motion/collision references

@@ -1,0 +1,5 @@
+FILTERED RUN: 3/664 canonical checks selected
+PASS: weapon replacement profiles preserve native mechanics
+PASS: weapon replacement profiles conditional opaque hook evidence
+PASS: weapon replacement profiles deferred cancellation parity
+Engine runtime checks: 3 passed, 0 failed

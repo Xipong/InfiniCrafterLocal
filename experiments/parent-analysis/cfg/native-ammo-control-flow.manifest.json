@@ -1,0 +1,56 @@
+{
+  "baseWorkspace": "ifc-replacement-main-integration-20261105",
+  "resultWorkspace": "ifc-conversion-analyzer-20261105",
+  "files": [
+    {
+      "path": "tools/generate/native_ammo_control_flow.py",
+      "baseSha256": null,
+      "resultSha256": "2ee2868796951534c82accd53bff1e29a9cc24175080a681e653b0241d4849bd"
+    },
+    {
+      "path": "tools/generate/native_ammo_fact_analysis.py",
+      "baseSha256": "1a37fb4d8f469b4feac22f44bf39c79a6eacf974c69055e8960dc730a3455600",
+      "resultSha256": "d7138657f48aa1d57327a2e4f50ab770e74278492302b3ce706c218fb281fd4a"
+    },
+    {
+      "path": "tools/generate/generate_native_hit_status.py",
+      "baseSha256": "0aac822a43ed13cfea74054696248e6311d041ed7a67c8adc23a3513145de07b",
+      "resultSha256": "284c6d68e2e234641e05949460f6019ea34bd50f7d6ab7f6d9fed9e8afad1dca"
+    },
+    {
+      "path": "LocalGenerator/tests/test_parent_ammo_source_semantics.py",
+      "baseSha256": "3f35ed56f84487b073fd64ecc06859ee69bdc178210f40fcc091ce6cedfe40c1",
+      "resultSha256": "6240251b0de7f3f2a10dbe51862c8522a89bc5163eb78aec1d4b4cbda1fa1772"
+    },
+    {
+      "path": "ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.AmmoFacts.cs",
+      "baseSha256": "0de3bd78ee92e3a8032ae312ca1379e89315d58c0321c74301d4d3a575599db9",
+      "resultSha256": "5bafff4de783fc675f2881b0e11ffcd5f9b475c235bebcb641336828b70b9a9d"
+    },
+    {
+      "path": "ModSources/InfiniCrafterLocal/Common/Services/Generation/NativeAmmoFactsCatalog.g.cs",
+      "baseSha256": "e54bde71a34c6b8997f09448462b6119de699ba7990916232fc89f6397575f4c",
+      "resultSha256": "969085458da6dfbb9ec2f19c5cfbb991db7828d81ce0fc42dbd359e0da850f12"
+    },
+    {
+      "path": "contracts/reports/native_ammo_sources.generated.json",
+      "baseSha256": "2f7b268118e3cf6e44fad12353b280394a83049ecb5ca8e36526257e5d2ef6da",
+      "resultSha256": "ad46f2b6bc180a8505e1f3efd4fa93414ef2d95e2e58f16da38a12e48a918bc9"
+    },
+    {
+      "path": "tools/native/EngineRuntimeChecks.ParentAmmoSemantics.cs",
+      "baseSha256": "331a7a243a8531d519487f47dd8b0210b07da3b4a28dbe699bd84fbe6d0cb582",
+      "resultSha256": "fbed1985fb58923deb6149f4a389908b8d62ffb06362d6451f5d057c6fb3a191"
+    },
+    {
+      "path": "tools/native/EngineRuntimeChecks.WeaponReplacementProfiles.cs",
+      "baseSha256": "733f0a47e7daa6edc08f6946bdd5b8155c4fadad8aeef2122663e8d8d05108d1",
+      "resultSha256": "b942e730f9260abe09d3c3d39dcc8e46edac429141d470618e754c081fa8e8f6"
+    },
+    {
+      "path": "docs/development/pipeline/PARENT_NATIVE_FACTS_RU.md",
+      "baseSha256": "1ed5cce51ef9ad56ba80bcca585f52503d657a30af20bad935d7651cc095bf4b",
+      "resultSha256": "e12bb385faac148859ace6e2e41aa50a11f6778ff6a9aa293c30a90a72acd6d1"
+    }
+  ]
+}
