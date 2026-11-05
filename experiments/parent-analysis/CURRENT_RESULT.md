@@ -8,7 +8,11 @@
 
 Helper extraction дополняет доказанные source calls и one-hop profiles дочерних снарядов. Inline source capture сохраняет actor field writes, setters и mutable calls в собственном work budget. Отказ отдельного slice остаётся явным и не удаляет прежний baseline program. Source local dataflow обрабатывает используемые slots; независимый dense oracle проверяет сохранение результата.
 
-Для модели определения значений, addressed-local uses/stores, effects и switch находятся в одной последовательности операций с source steps и guards. Alias uncertainty и snapshots остаются явными. Model-facing проекция согласована для прямых и связанных native profiles.
+Модель получает читаемый C# из ILSpy там, где полный проверенный record с необходимыми references меньше compact graph. Это целый метод со всеми его ветвями либо закрытые lexical regions под исходными guards. Проверяются MVID, живые IL bytes и CLR metadata; source locations связывают текст с исходными calls. Все raw graphs остаются в diagnostic packet. Методы без подходящего view сохраняют связанную последовательность definitions, addressed-local uses/stores, effects, guards и switch. Alias uncertainty и snapshots остаются явными.
+
+Для Last Prism доступны полный AI_075 (32044 знака), исходный dispatch guard и style84 body дочернего profile632 (13989 знаков), collision и position integration. Большие или неподдержанные records не подменяются догадками. Model-facing выбор работает по проверенным методам отдельно и сохраняет полные capabilities.
+
+Pinned ILSpy 8.2.0.7535 и MIT notices поставляются внутри `.tmod`. Он читает metadata/IL без запуска исходного поведения, внешней программы или загрузки зависимости во время игры. Существующие native DLL, игровое состояние, source factories и callbacks не исполняются ради этого view.
 
 Source table union сопоставляет локальные member aliases по точной полной сигнатуре. Существующие baseline rows и их имена сохраняются; строковые константы не переписываются. Неизвестная схема или конфликт дают отказ объединения. Generic member names проверены отдельным regression после обнаружения настоящего ``Nullable`1..ctor`` в Last Prism.
 
@@ -21,27 +25,32 @@ Source table union сопоставляет локальные member aliases п
 - Last Prism baseline не содержал дочерних profiles; новая версия содержит profile632 и условный candidate601 с девятью source sites. Candidate601 не объявляется безусловным ребёнком Last Prism.
 - Native inline regression подтверждает сохранение source admission, opacity и LaserScan. Helper checks покрывают неизвестные условия/типы, loops, отдельные budget refusals и nonmutating table conflicts.
 - Независимое сравнение восьми capture-пар сохранило все 226 baseline programs, 1384 observations, 1568 dependencies, 2562 predicates и 2666 symbols без изменений. Новое evidence добавляется отдельно.
-- Четыре полных raw packets — Molten Fury, Daedalus Stormbow, Wooden Arrow и обычные материалы — остались побайтно равны baseline.
+- Перед добавлением C# view четыре полных raw packets — Molten Fury, Daedalus Stormbow, Wooden Arrow и обычные материалы — остались побайтно равны baseline.
+- После добавления C# view все 16 fingerprints по-прежнему равны предыдущему срезу. Удаление только распознанных source views из восьми новых полных packets точно восстанавливает восемь предыдущих packets: native stats, graphs, sourceMethods и nulls сохранены.
 
-Текущий полный raw Prepare для Last Prism занимает 1618661 знак против 483029 в свежем baseline. Это размер native transport packet, а не Author dossier или число токенов. Первый последовательный capture выделил около 1.91 GB managed memory cumulatively против 0.94 GB baseline; это не resident RAM и не независимый cold benchmark. Улучшение скорости или памяти этим экспериментом не объявляется.
+Текущий полный raw Prepare для Last Prism занимает 1929657 знаков против 483029 в свежем baseline. Author dossier с читаемым source view — 287391 при неизменённом лимите 300000. Это разные формы данных; ни одно число не является числом токенов. Первый последовательный capture выделил около 2.98 GB managed memory cumulatively против 0.94 GB baseline; это не resident RAM и не независимый cold benchmark. Извлечение source остаётся дорогим, улучшение скорости или памяти не объявляется.
 
 ## Проверки и admission
 
 | Проверка | Свежий результат |
 |---|---|
-| Linked-source MSBuild с реальными references | PASS; 0 warnings / 0 errors |
+| Tomat SDK mod, linked-source native, workbench production mod и host | Все четыре build paths PASS с реальными references |
 | Native sparse-local dense oracle | PASS 1/1 |
 | Native helper source regressions после alias alignment | PASS 4/4 |
 | Native inline source regressions после alias alignment | PASS 2/2 |
 | Соседние source projection / effect slice | PASS 3/3 и 1/1 |
+| Read-only C# provider: PE/metadata/IL identity, regions и actual Last Prism | PASS 3/3 |
+| Source-view-free fingerprint: immediate и deferred capture | PASS 1/1; дополнительно совпали все 16 настоящих fingerprints |
+| Официальный tML resource packager и `.tmod` reader | PASS 1/1; exact managed DLL, notices, Info loader entry и payload hash |
+| Package/release verifier Python | PASS 61 tests и 5 subtests |
 | Полный native baseline | 400 PASS / 270 FAIL |
-| Полный native integrated coverage до финального alias alignment | 407 PASS / 270 FAIL; тот же точный набор 270 failures |
+| Полный native integrated coverage до C# source-view фазы | 407 PASS / 270 FAIL; тот же точный набор 270 failures |
 | Actual Prepare → Author state-condition/profile preservation | PASS в обоих response formats; offline |
-| Стандартный Author admission на восьми свежих capture-парах | Семь PASS; Last Prism RED: 311563 > 300000 |
+| Стандартный Author admission на восьми свежих capture-парах | Все восемь PASS; Last Prism 287391 < 300000 |
 
 Полный native прогон в этой среде не GREEN: MonoMod не находит загруженный clrjit через numeric process lookup при несовпадении PID namespace и `/proc`. 247 failures прямо связаны с этой инициализацией; ещё 23 возникают в последующем состоянии того же процесса. Полный старый baseline воспроизводит тот же набор failures. Три проверенных отдельно motion/persistence cases проходят в обоих checkout. Это не основание объявлять полноценный release acceptance.
 
-Последний размерный blocker относится к реальному текущему capture с восстановленными source effects, а не к старому неполному input. Увеличение лимита и удаление capabilities в этих результатах не использовались. Следующий критерий — сделать эту же полную проекцию допустимой в стандартном Author budget.
+Размерная проверка использует настоящий полный capture с восстановленными source effects. Лимит не увеличен; capabilities не удалялись. Итоговый capture после последних исправлений provider имеет те же восемь packet hashes, что и измеренный срез. Model/provider acceptance и качество первого предмета этой offline проверкой не подтверждаются.
 
 ## Повторение и границы
 

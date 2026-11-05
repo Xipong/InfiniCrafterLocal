@@ -13,11 +13,14 @@
 | Bounded CFG для native ammo | `tools/generate/native_ammo_control_flow.py` | Включено; сохраняются state-dependent условия |
 | Child-spawn extraction из helpers | `GeneratorClient.ProjectileSpawnFacts.cs` | Включено; source calls, guards и one-hop profiles связаны |
 | Inline actor effects и sparse locals | `GeneratorClient.SourceGraph.cs`, `GeneratorClient.SourceMethod.cs` | Включено; собственные bounds и явные отказы |
-| Последовательность source operations | Python `attack_behavior.py` и stage projections | Включено; определения, alias uses, guards и switch связаны в одном представлении |
+| Читаемый C# исходных методов | `GeneratorClient.NativeCSharpSource.cs`, Python `native_csharp_source.py` | Включено; PE/IL/metadata proof, полные методы или закрытые условные regions |
+| Последовательность source operations | Python `attack_behavior.py` и stage projections | Сохраняет методы без подходящего C# view; definitions, alias uses, guards и switch связаны |
 | Copy-on-write source state | `helper/copy-on-write-*.patch` | Архив альтернатив; автоматически не применяется |
 | Closed-call summaries, relevance и старый inline study | `diagnostics/` | Исследовательские материалы; не являются активным runtime |
 
 Свежие проверки и ограничения находятся в `CURRENT_RESULT.md`. Исторические patches не применяются автоматически; включённые реализации принадлежат обычным source owners репозитория.
+
+ILSpy engine поставляется внутри `.tmod` как обычная managed DLL; отдельная программа, процесс или скачивание при запуске не нужны. Полные graphs остаются в diagnostic packet. Fingerprint исключает только распознанное читаемое source view, поэтому его текст и настройки не меняют идентичность родителя.
 
 ## Граница корректности
 
