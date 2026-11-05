@@ -578,14 +578,17 @@ public sealed partial class GeneratorClient
 
         // A weapon contributes its category and own source mechanics, not a
         // chosen ammo loadout. Do not enumerate defaults or inspect inventory.
+        var semantics = CaptureAmmoProjectileSemantics(item);
         return new
         {
             mode = "weapon_uses_ammo",
             ammoId = item.useAmmo,
             ammoCategoryName = TerrariaRuntimeVocabulary.CanonicalAmmoCategoryToken(item.useAmmo),
-            projectileSemanticsReference = CaptureAmmoProjectileSemantics(item),
-            // This field is the weapon's own declaration; it may be a placeholder.
-            // Conditional/table-driven rewrites remain symbolic in source evidence.
+            projectileSemanticsReference = semantics,
+            nativeReplacementProjectileRaw = CaptureSourceReplacementProjectileProfiles(item, semantics),
+            // The declaration may be a placeholder. Known literal conversions
+            // above have independent profiles; their conditions remain unresolved.
+            // Table-driven selection stays symbolic, without choosing ammunition.
             weaponShootFieldProjectileRaw = item.shoot > ProjectileID.None
                 ? ProjectileRawSnapshot(item.shoot, item.shootSpeed, "weapon_item.shoot_field", item, -1) : null
         };

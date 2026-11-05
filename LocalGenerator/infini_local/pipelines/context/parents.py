@@ -274,6 +274,11 @@ def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool
     if not isinstance(proj, dict) or not proj:
         return {}
     out = _select_raw_keys(proj, LLM_PROJECTILE_RAW_KEYS)
+    # Replacement applicability belongs to the native source observation. Keep
+    # exact rules, hook order/unknowns and their scope; never infer a fired shot.
+    for key in ("sourceReferences", "profileScope", "unresolved"):
+        if key in proj:
+            out[key] = copy.deepcopy(proj[key])
     # Behavior is model context; certificates/instruction offsets remain in the
     # authoritative raw dump. No connected mechanic or branch is truncated.
     if isinstance(proj.get("attackReference"), dict):
@@ -331,6 +336,11 @@ def compact_ammo_profile(item: dict[str, Any]) -> dict[str, Any]:
         out["projectileSemanticsReference"] = copy.deepcopy(ap["projectileSemanticsReference"])
     if isinstance(ap.get("weaponShootFieldProjectileRaw"), dict):
         out["weaponShootFieldProjectileRaw"] = compact_projectile_profile(ap["weaponShootFieldProjectileRaw"])
+    # Producer-declared native references are weapon source facts, not ammo
+    # samples. Legacy rows may lack applicability metadata; do not invent it.
+    if isinstance(ap.get("nativeReplacementProjectileRaw"), list):
+        out["nativeReplacementProjectileRaw"] = [compact_projectile_profile(value)
+            for value in ap["nativeReplacementProjectileRaw"] if isinstance(value, dict)]
     # This projection deliberately excludes concrete ammo examples, including
     # older inventory/fallback packets. An ammo ingredient keeps its own facts.
     if ap.get("mode") == "this_item_is_ammo":

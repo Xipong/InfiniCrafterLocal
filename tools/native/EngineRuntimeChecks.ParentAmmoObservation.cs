@@ -9,7 +9,7 @@ internal static partial class EngineRuntimeChecks
 {
     private static readonly string[] RemovedAmmoCandidateFields = {
         "playerInventoryObservation", "playerInventoryAmmoRaw", "playerInventoryProjectileRaw",
-        "fallbackAmmoRaw", "fallbackProjectileRaw", "candidateProjectileBindings", "nativeReplacementProjectileRaw"
+        "fallbackAmmoRaw", "fallbackProjectileRaw", "candidateProjectileBindings"
     };
 
     private static void AssertWeaponAmmoHasNoCandidates(JsonElement raw)

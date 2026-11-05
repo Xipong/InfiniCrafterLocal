@@ -63,7 +63,7 @@ def test_profile_update_counts_and_zero_are_exact(extra_updates, speed, seconds)
     assert observed['raw.effectiveProjectile.timeLeft']['equivalent']['value'] == 0
 
 
-def test_legacy_ammo_candidates_do_not_gain_derived_motion_context():
+def test_legacy_ammo_candidates_are_excluded_but_native_replacements_keep_motion_context():
     profile = {'source': 'inventory.shoot', 'inventorySlot': 3, 'itemShootSpeed': 2,
                'extraUpdates': 0, 'timeLeft': 600}
     source = {'item': {'shootSpeed': 6, 'useAmmo': 97}, 'ammo': {
@@ -78,7 +78,12 @@ def test_legacy_ammo_candidates_do_not_gain_derived_motion_context():
     before = copy.deepcopy(source)
     result = parent_stat_context(source)
     observed = rows(result)
-    assert not any(path.startswith('raw.ammo.') for path in observed)
+    assert [row for path, row in observed.items() if path.startswith('raw.ammo.')] == [{
+        'sourcePath': 'raw.ammo.nativeReplacementProjectileRaw[0].timeLeft',
+        'nativeMember': 'Terraria.Projectile.timeLeft', 'value': 300, 'units': 'projectile updates',
+        'clock': {'sourcePath': 'raw.ammo.nativeReplacementProjectileRaw[0].extraUpdates', 'updatesPerTick': 1},
+        'equivalent': {'value': 5.0, 'units': 'seconds'},
+    }]
     assert result['ammo'] == before['ammo'] and source == before
 
 
@@ -120,3 +125,23 @@ def test_serialized_requests_carry_ready_native_motion_values_unchanged(monkeypa
     assert raw['item']['shootSpeed'] == 6 and raw['directProjectile']['extraUpdates'] == 1
     assert raw['directProjectile']['tileCollide'] is True
     assert a == before
+
+
+def test_native_replacements_use_each_own_clock_and_preserve_order_and_unknown_clock():
+    source = {'ammo': {'nativeReplacementProjectileRaw': [
+        {'type': 2, 'timeLeft': 1200, 'extraUpdates': 0},
+        {'type': 357, 'timeLeft': 600, 'extraUpdates': 2},
+        {'type': 999, 'timeLeft': 1200},
+        {'type': 2, 'timeLeft': 1200, 'extraUpdates': 0},
+    ]}}
+    before = copy.deepcopy(source)
+    result = parent_stat_context(source)
+    observed = list(rows(result).values())
+    assert [(row['sourcePath'], row['value'], row.get('equivalent')) for row in observed] == [
+        ('raw.ammo.nativeReplacementProjectileRaw[0].timeLeft', 1200, {'value': 20.0, 'units': 'seconds'}),
+        ('raw.ammo.nativeReplacementProjectileRaw[1].timeLeft', 600, {'value': 10 / 3, 'units': 'seconds'}),
+        ('raw.ammo.nativeReplacementProjectileRaw[2].timeLeft', 1200, None),
+        ('raw.ammo.nativeReplacementProjectileRaw[3].timeLeft', 1200, {'value': 20.0, 'units': 'seconds'}),
+    ]
+    assert 'clock' not in observed[2]
+    assert result['ammo'] == before['ammo'] and source == before

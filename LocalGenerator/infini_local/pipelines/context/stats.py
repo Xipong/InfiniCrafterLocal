@@ -113,6 +113,10 @@ def _native_motion_units(raw: dict[str, Any]) -> dict[str, Any]:
             observe(ammo.get("ammoItemRaw"), "raw.ammo.ammoItemRaw")
             observe(ammo.get("projectileRaw"), "raw.ammo.projectileRaw", projectile=True)
         observe(ammo.get("weaponShootFieldProjectileRaw"), "raw.ammo.weaponShootFieldProjectileRaw", projectile=True)
+        replacements = ammo.get("nativeReplacementProjectileRaw")
+        if isinstance(replacements, list):
+            for index, profile in enumerate(replacements):
+                observe(profile, f"raw.ammo.nativeReplacementProjectileRaw[{index}]", projectile=True)
     if not values:
         return {}
     return {

@@ -15,7 +15,7 @@ internal static partial class EngineRuntimeChecks
     {
         using var state = new NativeActorState();
         var first = new Item(ItemID.Boomstick);
-        var second = new Item(ItemID.WoodenBow);
+        var second = new Item(ItemID.MoltenFury);
         var owner = new Player();
         owner.inventory[54] = new Item(ItemID.MusketBall, 99);
         owner.inventory[55] = new Item(ItemID.WoodenArrow, 88);
@@ -26,6 +26,10 @@ internal static partial class EngineRuntimeChecks
         var raw = JsonSerializer.SerializeToElement(capture.Invoke(null, new object?[] { first, owner }));
         Equal(0, calls, "weapon ammo extraction performs no item SetDefaults or catalog traversal");
         AssertWeaponAmmoHasNoCandidates(raw);
+        var replacementRaw = JsonSerializer.SerializeToElement(capture.Invoke(null, new object?[] { second, owner }));
+        Equal(0, calls, "confirmed replacement profile capture does not instantiate any ammo Item");
+        Equal(ProjectileID.FireArrow, replacementRaw.GetProperty("nativeReplacementProjectileRaw")[0].GetProperty("type").GetInt32(),
+            "no-scan regression retains the real Molten Fury replacement profile");
         Equal(first.useAmmo, raw.GetProperty("ammoId").GetInt32(), "native ammo category retained");
         Equal(true, !string.IsNullOrEmpty(raw.GetProperty("ammoCategoryName").GetString()), "canonical category explains ammunition without examples");
         var client = new GeneratorClient();

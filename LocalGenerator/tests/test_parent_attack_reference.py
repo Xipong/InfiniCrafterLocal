@@ -126,7 +126,8 @@ def test_serialized_author_all_projectile_surfaces_keep_exact_observations(monke
         raw = dossier["parents"][side]["packet"]["raw"]
         assert_exact_json(raw["directProjectile"], direct)
         assert_exact_json(raw["effectiveProjectile"], effective)
-        assert_exact_json(raw["ammo"], {"mode": "weapon_uses_ammo", "weaponShootFieldProjectileRaw": effective})
+        assert_exact_json(raw["ammo"], {"mode": "weapon_uses_ammo", "weaponShootFieldProjectileRaw": effective,
+            "nativeReplacementProjectileRaw": [effective, effective]})
     assert not any("attackReference" in row["source"] for row in dossier["sourceWireUnits"]["scopes"])
     assert_exact_json(parent, before)
 

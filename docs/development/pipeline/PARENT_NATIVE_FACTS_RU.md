@@ -29,11 +29,15 @@
   literal tooltip и accepted generated-parent packets остаются inline.
 - **Weapon ammo context:** `mode=weapon_uses_ammo` передаёт `ammoId`,
   `ammoCategoryName`, собственный `weaponShootFieldProjectileRaw` и
-  `projectileSemanticsReference`. Полный каталог предметов и инвентарь не
+  `projectileSemanticsReference`. `nativeReplacementProjectileRaw` сохраняет
+  полные профили известных literal outputs из собственного source оружия,
+  включая условные замены и fixed spawn sites. Это механика оружия, а не
+  выбранные примеры боеприпасов. Полный каталог предметов и инвентарь не
   сканируются; обычные/особые патроны не выбираются как примеры, их damage не
   прибавляется к weapon damage. Один захват проецируется в root и fingerprint.
-  Python также исключает старые inventory/fallback lists, candidate bindings и
-  sample-derived profiles из model-facing контекста сохранённых пакетов.
+  Python также исключает старые inventory/fallback lists и candidate bindings
+  из model-facing контекста сохранённых пакетов, но сохраняет объявленные
+  replacement profiles вместе с их исходным scope, включая старые пакеты.
   При отсутствии собственного `shoot` projectile остаётся неизвестным.
   Если сам родитель является боеприпасом (`this_item_is_ammo`), его собственные
   identity, damage, knockback, projectile и ammo-owned hook facts сохраняются.
@@ -62,17 +66,42 @@ helper сохраняется символическая цепочка: таб�
 certificate убирает это утверждение и оставляет явный unverified status.
 Неизвестный table entry, ammo input и итоговый projectile раскрываются в unknowns.
 
-Регрессии закреплённого binary: Pulse Bow заменяет projectile любого arrow
-input на 357; Hellwing меняет только current projectile 1 на 485, сохраняя
-специальные inputs отдельно; Daedalus сохраняет projectile identity, но имеет
+Регрессии закреплённого tML 1.4.4.9 binary: Pulse Bow заменяет projectile любого
+arrow input на 357; Hellwing меняет только current projectile 1 на 485,
+Molten Fury — только 1 на 2. Это условие на текущий projectile, не на ammo-item
+ID: Flaming/Jester/Holy сохраняют 2/5/91, а другой ammo-item с projectile 1
+может пройти ту же ветку. Для Hellwing сохраняется полный bat profile 485;
+его свойства не приписываются специальным стрелам. Daedalus сохраняет
+projectile identity, но имеет
 собственный aerial delivery с constructor Y `MountedCenter−600` и консервативным
 условным spawn-count range 2–4. Это не полный aim/spread, итоговая скорость,
 вероятности, cadence, guaranteed hits или обещание неизменённых mod hooks.
 
+Extractor проверяет также смежные внешние projectile predicates вокруг
+item-type guard, а не только тело внутренней ветки. Противоречивые условия,
+посторонний вход, изменение проверенного значения или непонятный control flow
+не становятся безусловной заменой. Независимо доказанный literal при
+неизвестной применимости остаётся в `unresolvedLiteralWrites` с причиной и
+границей ownership; полный профиль разрешён только при доказанной связи с
+item guard. Неизвестная запись имеет приоритет в aggregate summary, но не
+стирает другие доказанные rules и profiles.
+
 Условия замены и literal output IDs остаются source evidence независимо от
-текущего инвентаря; derived candidate bindings и replacement profiles от
-конкретных ammo-примеров не передаются. Author сам выбирает преобразование и
-поведение нового предмета. Нет выбора «сильнейшей» стрелы, progression solver,
+текущего инвентаря. Для каждого известного literal output сохраняется полный
+`ProjectileRawSnapshot`: defaults, attack/status/motion/collision references
+при наличии, один переход к `referencedProjectiles` и derived units при
+известном clock. Один профиль обслуживает повторные source sites того же ID;
+`sourceReferences` сохраняет все исходные условия, порядок и сертификаты.
+Условная замена не требует наличия или выбора подходящего ammo в инвентаре.
+Недоступный snapshot или незарегистрированный literal остаётся явно unknown;
+opaque hook не получает выдуманный ID и не стирает независимо известный профиль.
+Профиль не доказывает исполнение ветки, итоговый снаряд, damage или speed:
+dispatch, later rewrites и gameplay gates сохраняют свои границы достоверности.
+Лимит прежней выборки из трёх ammo-примеров не ограничивает source outputs.
+
+Derived candidate bindings и inventory/fallback profiles конкретных
+ammo-примеров не передаются. Author сам выбирает преобразование и поведение
+нового предмета. Нет выбора «сильнейшей» стрелы, progression solver,
 рекомендованного damage corridor или скрытого перебаланса. Самостоятельные
 weapon stats и полноценные stats ammo-родителя остаются разными источниками.
 
