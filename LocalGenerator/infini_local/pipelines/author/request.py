@@ -54,7 +54,8 @@ from infini_local.pipelines.author.prompt import (
     sharp_engine_fn_catalog_for_llm,
     source_wire_units_for_llm,
 )
-from infini_local.pipelines.context.cards import parent_context_for_stage, raw_parent_card_for_llm
+from infini_local.pipelines.context.parent_stage import parent_context_for_stage
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 from infini_local.pipelines.transport.client import (
     llm_chat_json,
     resolve_llm_model,

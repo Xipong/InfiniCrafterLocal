@@ -30,11 +30,8 @@ from infini_local.pipelines.author.item_contract import (
     primary_entity_llm_invariant,
 )
 from infini_local.pipelines.combine_balance import stat_profile_for
-from infini_local.pipelines.context.cards import (
-    NATIVE_SOURCE_REFERENCE_RULE,
-    parent_context_for_stage,
-    raw_parent_card_for_llm,
-)
+from infini_local.pipelines.context.parent_stage import NATIVE_SOURCE_REFERENCE_RULE, parent_context_for_stage
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 from infini_local.pipelines.context.stats import parent_stat_context
 from infini_local.pipelines.pipeline_runtime_constants import LLM_ITEM_RAW_KEYS
 

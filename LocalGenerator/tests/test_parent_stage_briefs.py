@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from infini_local.pipelines.context.cards import parent_context_for_stage, raw_parent_card_for_llm
+from infini_local.pipelines.context.parent_stage import parent_context_for_stage
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 from infini_local.pipelines.context.attack_tables import unpack_attack_tables
 from prompt_packet_helpers import request_dossier, expand_native_source_references, expand_native_identifier_aliases
 

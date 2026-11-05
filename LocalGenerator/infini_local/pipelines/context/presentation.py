@@ -5,7 +5,8 @@ import copy
 from typing import Any
 
 from infini_local.pipelines.context.attack_tables import pack_attack_tables, unpack_attack_tables
-from infini_local.pipelines.context.cards import known_attack_context_schema, raw_parent_card_for_llm
+from infini_local.pipelines.context.parent_stage import known_attack_context_schema
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 
 
 def presentation_attack_reference(reference: dict[str, Any], *, stage: str) -> dict[str, Any]:
@@ -37,7 +38,7 @@ def presentation_parent_card_for_llm(item: dict[str, Any], *, stage: str) -> dic
     """Keep existing literal appearance/scalar facts and project known attack roles."""
     if stage not in {"visual", "vfx"}:
         raise ValueError(f"Unknown presentation stage: {stage}")
-    card = raw_parent_card_for_llm(item, include_visual_reference=True)
+    card = raw_parent_card_for_llm(item, include_visual_reference=True, prefer_readable_source=False)
 
     def visit(value: Any) -> None:
         if isinstance(value, dict):
