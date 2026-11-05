@@ -7,7 +7,7 @@ import pytest
 
 from infini_local.pipelines.context.cards import parent_context_for_stage, raw_parent_card_for_llm
 from infini_local.pipelines.context.attack_tables import unpack_attack_tables
-from prompt_packet_helpers import request_dossier, expand_native_source_references
+from prompt_packet_helpers import request_dossier, expand_native_source_references, expand_native_identifier_aliases
 
 
 def _native():
@@ -167,7 +167,7 @@ def test_dispatch_effect_programs_follow_the_existing_author_and_presentation_co
     before = copy.deepcopy(item)
     request, _, _ = build_initial_author_request(item, {}, "dispatch-effects", model_name="offline")
     dossier = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
-    attack = dossier["parents"]["A"]["packet"]["raw"]["directProjectile"]["attackReference"]
+    attack = unpack_attack_tables(dossier["parents"]["A"]["packet"]["raw"]["directProjectile"]["attackReference"])
     assert "draw" not in attack
     assert attack["motionDispatchEffects"][0] == attack["motion"]["programs"][0]
     assert "operations" in attack["motionDispatchEffects"][0]
@@ -203,9 +203,9 @@ def test_actual_author_projects_root_ammo_replacement_and_child_sources_consiste
     profiles = [direct, raw["effectiveProjectile"], raw["ammo"]["projectileRaw"],
                 raw["ammo"]["weaponShootFieldProjectileRaw"], *raw["ammo"]["nativeReplacementProjectileRaw"],
                 *(row["profile"] for row in direct["referencedProjectiles"]["references"])]
-    expected = profiles[0]["attackReference"]
+    expected = unpack_attack_tables(profiles[0]["attackReference"])
     assert "draw" not in expected and "operations" in expected["motion"]["programs"][0]
-    assert all(profile["attackReference"] == expected for profile in profiles)
+    assert all(unpack_attack_tables(profile["attackReference"]) == expected for profile in profiles)
     assert direct["referencedProjectiles"]["sourceCalls"] == links["sourceCalls"]
     assert len(direct["referencedProjectiles"]["references"]) == 2
     assert len(raw["ammo"]["nativeReplacementProjectileRaw"]) == 2
@@ -259,7 +259,8 @@ def test_real_arrow_selected_motion_and_raw_refusal_reach_actual_author(monkeypa
     request, _, _ = build_initial_author_request({}, arrow, "real-arrow-source", model_name="offline")
     assert request["response_format"]["type"] == mode
     dossier = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
-    reference = unpack_attack_tables(dossier["parents"]["B"]["packet"]["raw"]["directProjectile"]["attackReference"])
+    literal_reference = unpack_attack_tables(dossier["parents"]["B"]["packet"]["raw"]["directProjectile"]["attackReference"])
+    reference = expand_native_identifier_aliases(literal_reference)
     program = reference["motion"]["programs"][0]
     assert program["method"] == "T.Projectile.AI_001"
     assert program["identitySelection"]["fullMethodCapture"] == {"coverage": "unknown", "unresolved": refusal}
@@ -291,7 +292,7 @@ def test_real_arrow_selected_motion_and_raw_refusal_reach_actual_author(monkeypa
     assert predicates["b49461"]["inputs"] == ["(ldflda(Entity.velocity,this)).Vector2.Y", "16"]
     assert len(definitions) == 0
     from infini_local.pipelines.context.attack_behavior import ordered_attack_context
-    assert reference == ordered_attack_context(unpack_attack_tables(raw_parent_card_for_llm(arrow)["raw"]["directProjectile"]["attackReference"]))
+    assert literal_reference == ordered_attack_context(unpack_attack_tables(raw_parent_card_for_llm(arrow)["raw"]["directProjectile"]["attackReference"]))
     assert arrow == before
 
 
@@ -310,7 +311,8 @@ def test_current_native_integration_slice_remains_conditional_in_author_request(
     request, _, _ = build_initial_author_request(*parents, 'current-integration', model_name='offline')
     dossier = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
     for label in ['A', 'B']:
-        reference = dossier['parents'][label]['packet']['raw']['directProjectile']['attackReference']
+        reference = expand_native_identifier_aliases(unpack_attack_tables(
+            dossier['parents'][label]['packet']['raw']['directProjectile']['attackReference']))
         integration = reference['positionIntegration']
         assert integration['identitySelection']['forCapturedIdentity'] is True
         operations = integration['operations']

@@ -35,6 +35,7 @@ def _profile_source_ledger(profile):
     Everything except the representation's reading guide remains in the ledger.
     """
     from infini_local.pipelines.context.attack_tables import unpack_attack_tables
+    from prompt_packet_helpers import expand_native_identifier_aliases
 
     def program(value):
         if isinstance(value, list):
@@ -75,7 +76,7 @@ def _profile_source_ledger(profile):
         return {key: program(child) for key, child in result.items()}
 
     result = copy.deepcopy(profile)
-    result['attackReference'] = program(unpack_attack_tables(result['attackReference']))
+    result['attackReference'] = program(expand_native_identifier_aliases(unpack_attack_tables(result['attackReference'])))
     return json.dumps(result, sort_keys=True)
 
 

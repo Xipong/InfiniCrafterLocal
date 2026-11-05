@@ -126,7 +126,8 @@ def test_native_namespace_aliases_preserve_complete_symbol_signature_and_overloa
     assert shorten_symbol_signature('Native.Name("Projectile",-1E-05)') == 'Native.Name("Projectile",-1E-05)'
 
 
-@pytest.mark.parametrize("source", ["P.type", "Native.E", "Vec.add[this,2]", "opaque<P.type>"])
+@pytest.mark.parametrize("source", ["P.type", "Native.E", "Vec.add[this,2]", "opaque<P.type>",
+                                    "opaque<(this).P.type>", "opaque<@E.field>"])
 def test_preexisting_native_namespace_alias_identifiers_refuse_reinterpretation(source):
     from infini_local.pipelines.context.attack_namespaces import (
         shorten_expression_names, shorten_symbol_name, shorten_symbol_signature,
@@ -134,6 +135,32 @@ def test_preexisting_native_namespace_alias_identifiers_refuse_reinterpretation(
     for shorten in (shorten_expression_names, shorten_symbol_name, shorten_symbol_signature):
         with pytest.raises(ValueError, match='collides'):
             shorten(source)
+
+
+def test_namespace_aliases_are_scoped_to_successful_programs_and_preserve_symbol_links():
+    from infini_local.pipelines.context.attack_behavior import ordered_attack_context
+    from prompt_packet_helpers import expand_native_identifier_aliases
+
+    program = {"method": "T.Projectile.NativeAI", "symbols": {"Projectile.Read": "T.Projectile.Read(Xna.Vector2)"},
+               "dependencies": {}, "predicates": [], "observations": [
+                   {"kind": "call", "call": "Projectile.Read", "expression": '(this).Projectile.ai',
+                    "arguments": {"value": '"P,E,Vec,Projectile"'}, "step": 0, "block": 1, "requiredPredicates": []}]}
+    refused = copy.deepcopy(program)
+    refused["observations"][0]["expression"] = 'Native.Call[P.source,(this).Projectile.ai]'
+    before = copy.deepcopy((program, refused))
+    result = ordered_attack_context({"programs": [program, refused]})
+    accepted, literal = result["programs"]
+    assert accepted["nativeNames"] == 1
+    assert accepted["method"] == 'T.P.NativeAI'
+    assert accepted["operations"][0]["call"] == 'P.Read'
+    assert accepted["symbols"] == {'P.Read': 'T.P.Read(Xna.Vec)'}
+    assert 'nativeNames' not in literal
+    assert literal["operations"][0]["expression"] == refused["observations"][0]["expression"]
+    decoded = expand_native_identifier_aliases(result)
+    assert decoded["programs"][0]["operations"] == program["observations"]
+    assert decoded["programs"][0]["symbols"] == program["symbols"]
+    assert decoded["programs"][1] == literal
+    assert (program, refused) == before
 
 
 def test_unknown_nested_fields_and_literal_tooltips_are_not_interpreted():

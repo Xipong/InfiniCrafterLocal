@@ -36,7 +36,9 @@ def _symbol_tokens(text: str, *, restore: bool) -> str:
             result.append(text[at:end])
             at = end
             continue
-        boundary = at == 0 or not (text[at - 1].isalnum() or text[at - 1] in "_@.#`")
+        # A receiver field starts after '.' and a static field after '@'. A
+        # complete dotted/addressed identifier was already consumed as one token.
+        boundary = at == 0 or not (text[at - 1].isalnum() or text[at - 1] in "_#`")
         token = _NAME.match(text, at) if boundary else None
         if token is not None:
             result.append(_identifier(token[0], restore=restore))
