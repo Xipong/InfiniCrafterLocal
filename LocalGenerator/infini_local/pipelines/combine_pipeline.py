@@ -45,6 +45,7 @@ from infini_local.pipelines.images.stage import maybe_generate_visual_assets, ov
 from infini_local.services import asset_sync_service
 from infini_local.services.combine_endpoint import generation_stage
 from infini_local.storage import craft_progress, world_storage
+from infini_local.storage.recipe_identity_index import RecipeIdentityConflict
 from infini_local.storage.trace_runtime import trace_event
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 from infini_local.core.item_identity_tools import item_identity
@@ -228,6 +229,10 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         key = recipe_key(a, b, world_id, identity_version, profile_id)
         # Recheck inside singleflight: a waiter delivers the committed winner.
         with world_storage.recipe_generation_lock(world_recipe_dir(world_id), key):
+            if recipe_key(a, b, world_id, identity_version, profile_id) != key:
+                # An external archive edit while waiting must not switch the
+                # actual join under another key's generation/checkpoint lock.
+                raise RecipeIdentityConflict("recipe identity changed while waiting; retry the craft")
             cached = cache_get(key, world_id, world_name)
             if isinstance(cached, dict):
                 craft_progress.discard_progress(world_recipe_dir(world_id), key)

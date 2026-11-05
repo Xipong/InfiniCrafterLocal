@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-import hashlib
 from typing import Any, Callable
 
 from infini_local.core.config_bootstrap import APP_VERSION, RECIPE_IDENTITY_VERSION, WORLD_RECIPES_DIR
-from infini_local.core.item_identity_tools import name_of, recipe_key as _world_recipe_key
+from infini_local.core.item_identity_tools import name_of
 from infini_local.storage import world_storage
+from infini_local.storage.recipe_identity_index import resolve_recipe_key
 
 
 # Bind application configuration and parent identity to the storage owner.
@@ -76,14 +76,10 @@ def recipe_key(
     recipe_identity_version: str = RECIPE_IDENTITY_VERSION,
     variant_id: str = "",
 ) -> str:
-    base = _world_recipe_key(a, b, world_id, recipe_identity_version)
-    variant = str(variant_id or "").strip().lower()
-    if not variant:
-        return base
-    # Multi-dev lanes intentionally author independent world-local discoveries for
-    # the same A+B pair. Keep ordinary recipe identity byte-for-byte unchanged and
-    # derive a bounded variant key only when a lane explicitly names its LLM profile.
-    return hashlib.sha256(f"{base}\0multidev\0{variant}".encode("utf-8")).hexdigest()
+    # Resolve accepted discoveries before choosing a generation/checkpoint key.
+    # The pure core hash is only for genuinely new discoveries.
+    return resolve_recipe_key(world_recipe_dir(world_id), a, b, world_id,
+                              recipe_identity_version, variant_id)
 
 
 class WorldScopeMissing(RuntimeError):

@@ -67,14 +67,48 @@ def item_identity(item: dict[str, Any]) -> str:
     return "item:" + source + ":" + str(item.get("id", "")) + ":" + slug(name_of(item))
 
 
+RECIPE_KEY_ALGORITHM = "stable_native_names_v1"
+
+
+def stable_recipe_identity(identity: str) -> str:
+    """Discard only the runtime hint of an explicitly named native parent.
+
+    The persisted lineage string is not changed. Numeric/display-name fallback
+    identities and generated IDs keep their exact historical meaning.
+    """
+    if not identity.startswith("item:") or len(identity) > 1024:
+        return identity
+    name, separator, hint = identity[5:].rpartition(":")
+    if not separator or (hint and not (hint.isascii() and hint.isdecimal())):
+        return identity
+    parts = name.split("/") if "/" in name else name.split(":")
+    # Normalize only unambiguous mod/internal identifiers, never a numeric ID
+    # followed by a numeric display slug (item:Unknown:42:123). Preserve Unicode
+    # spelling and case exactly; malformed/ambiguous names retain the old key.
+    if len(parts) != 2 or not all(part.isidentifier() for part in parts):
+        return identity
+    return "item:" + "/".join(parts)
+
+
+def recipe_key_from_identities(
+    identities: list[str], world_id: Any, recipe_identity_version: str, *,
+    stable_names: bool, variant_id: str = "",
+) -> str:
+    pair = sorted(identities)
+    stable_pair = sorted(stable_recipe_identity(value) for value in identities)
+    parts: list[Any] = [stable_pair if stable_names else pair, "world:" + str(world_id), recipe_identity_version]
+    if stable_names and stable_pair != pair:
+        parts.append(RECIPE_KEY_ALGORITHM)
+    base = "r_" + stable_hash(*parts, length=24)
+    variant = str(variant_id or "").strip().lower()
+    return hashlib.sha256(f"{base}\0multidev\0{variant}".encode("utf-8")).hexdigest() if variant else base
+
+
 def recipe_key(a: dict[str, Any], b: dict[str, Any], world_id: Any, recipe_identity_version: str) -> str:
-    # Commutative and world-local recipe key: A+B equals B+A inside one world.
-    # Do not fall back to a global scope here; /combine validates worldId before
-    # calling this. A missing world id is a gameplay error, not a cache feature.
-    ak = item_identity(a)
-    bk = item_identity(b)
-    pair = sorted([ak, bk])
-    return "r_" + stable_hash(pair, "world:" + str(world_id), recipe_identity_version, length=24)
+    # Commutative and world-local. Runtime type numbers are not the identity of
+    # explicitly named native content; generated IDs and unknown names are exact.
+    return recipe_key_from_identities([item_identity(a), item_identity(b)], world_id,
+                                      recipe_identity_version, stable_names=True)
 
 
 def item_field(item: dict[str, Any], name: str, default: Any = 0) -> Any:
