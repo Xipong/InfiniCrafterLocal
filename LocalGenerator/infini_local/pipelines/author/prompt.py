@@ -70,6 +70,7 @@ def source_interpretation_for_llm() -> dict[str, str]:
         "ammunition": (
             "weapon_item.shoot_field is a native field, not an observed fired shot, even under effectiveProjectile. "
             "Weapon ammo context names the consumed category and source conversion rules, not selected ammunition. "
+            "Replacing projectile identity alone does not remove ammo damage contribution; source hooks may separately change shot stats. "
             "Choose whether the child transforms its projectile. An actual ammo ingredient contributes its own facts; its useTime does not set a launcher's cadence."
         ),
         "inventoryPassives": "dropSeedsIfInInventory is the native inventory passive implemented by collect_seeds.",

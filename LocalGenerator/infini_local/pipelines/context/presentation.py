@@ -23,7 +23,7 @@ def presentation_attack_reference(reference: dict[str, Any], *, stage: str) -> d
         return copy.deepcopy(reference)
     if not known_attack_context_schema(source):
         return copy.deepcopy(reference)
-    for key in ("motionDispatch", "motion", "collision", "positionIntegration"):
+    for key in ("motionDispatch", "motionDispatchEffects", "motion", "collision", "positionIntegration"):
         source.pop(key, None)
     source["presentationScope"] = (
         "Parent appearance reference: native drawing, its equations/conditions and coverage remain. "

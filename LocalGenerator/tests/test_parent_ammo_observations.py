@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import pytest
 
 from infini_local.pipelines.context.parents import compact_ammo_profile
@@ -25,6 +26,57 @@ def _all_stage_packets(parent, captured, other=None):
     return [author['parents']['A']['packet']['raw'], repair['parents']['a']['packet']['raw'],
             visual['parents']['parentA']['packet']['raw'], visual_repair['parentFactsReadOnly']['parentA']['packet']['raw'],
             vfx['parents'][0]['packet']['raw'], vfx_repair['parentFactsReadOnly'][0]['packet']['raw']]
+
+
+def _profile_source_ledger(profile):
+    """Compare frozen source statements independently of tables and local names.
+
+    Source step/block identify each scalar binding in these frozen captures.
+    Everything except the representation's reading guide remains in the ledger.
+    """
+    from infini_local.pipelines.context.attack_tables import unpack_attack_tables
+
+    def program(value):
+        if isinstance(value, list):
+            return [program(child) for child in value]
+        if not isinstance(value, dict):
+            return value
+        if 'operations' not in value and not {'observations', 'dependencies', 'predicates'} <= set(value):
+            return {key: program(child) for key, child in value.items() if key not in {'behaviorView', 'branchTests'}}
+        result = copy.deepcopy(value)
+        if 'operations' in result:
+            operations = result.pop('operations')
+            definitions = {row['bind']: {key: child for key, child in row.items() if key != 'bind'}
+                           for row in operations if 'bind' in row}
+            observations = [row for row in operations if 'bind' not in row and 'id' not in row]
+            predicates = [row for row in operations if 'id' in row]
+            assert len(operations) == len(definitions) + len(observations) + len(predicates)
+        else:
+            definitions = result.pop('dependencies')
+            observations, predicates = result.pop('observations'), result.pop('predicates')
+        positions = [(row['step'], row['block']) for row in definitions.values()]
+        assert len(set(positions)) == len(positions)
+        names = {name: f"valueAt{row['step']}Block{row['block']}" for name, row in definitions.items()}
+
+        def rename(value):
+            if isinstance(value, str):
+                # Quoted literals stay literal, even if they contain a local name.
+                return re.sub(r'"(?:\\.|[^"\\])*"|[A-Za-z_][A-Za-z0-9_]*',
+                              lambda match: names.get(match[0], match[0]), value)
+            if isinstance(value, list):
+                return [rename(child) for child in value]
+            if isinstance(value, dict):
+                return {key: rename(child) for key, child in value.items()}
+            return value
+
+        result['definitions'] = {names[key]: rename(row) for key, row in definitions.items()}
+        result['observations'] = rename(observations)
+        result['predicates'] = rename(predicates)
+        return {key: program(child) for key, child in result.items()}
+
+    result = copy.deepcopy(profile)
+    result['attackReference'] = program(unpack_attack_tables(result['attackReference']))
+    return json.dumps(result, sort_keys=True)
 
 
 @pytest.mark.parametrize('legacy', [False, True])
@@ -169,7 +221,7 @@ def test_captured_molten_fury_replacement_retains_fire_arrow_facts_in_every_stag
         ammo = raw['ammo']
         assert len(ammo['nativeReplacementProjectileRaw']) == 1
         replacement = ammo['nativeReplacementProjectileRaw'][0]
-        assert json.dumps(replacement) == json.dumps(expected['author' if index < 2 else 'presentation'])
+        assert _profile_source_ledger(replacement) == _profile_source_ledger(expected['author' if index < 2 else 'presentation'])
         assert {key: replacement[key] for key in ('type', 'penetrate', 'maxPenetrate', 'timeLeft', 'extraUpdates', 'tileCollide')} == {
             'type': 2, 'penetrate': 1, 'maxPenetrate': 1, 'timeLeft': 1200, 'extraUpdates': 0, 'tileCollide': True}
         assert 'sourceReferences' not in replacement and 'profileScope' not in replacement
@@ -191,10 +243,11 @@ def test_captured_molten_fury_replacement_retains_fire_arrow_facts_in_every_stag
         attack = unpack_attack_tables(replacement['attackReference'])
         if index < 2:
             motion = attack['motion']['programs'][0]
-            assert [row['kind'] for row in motion['observations']] == [
+            observations = [row for row in motion.get('operations', motion.get('observations')) if 'kind' in row]
+            assert [row['kind'] for row in observations] == [
                 'clock_or_ai_write', 'clock_or_ai_write', 'state_write', 'state_write', 'rotation', 'state_write', 'state_write']
-            assert motion['observations'][2]['requiredPredicates'] == ['b47116', 'b47132']
-            assert motion['observations'][3]['requiredPredicates'] == ['b47116', 'b47132']
+            assert observations[2]['requiredPredicates'] == ['b47116', 'b47132']
+            assert observations[3]['requiredPredicates'] == ['b47116', 'b47132']
         assert attack['coverage']['unresolved'] == native['attackReference']['coverage']['unresolved']
         rows = [row for row in raw['sourceMotionUnits']['values'] if 'nativeReplacementProjectileRaw' in row['sourcePath']]
         assert rows == [{'sourcePath': 'raw.ammo.nativeReplacementProjectileRaw[0].timeLeft',
@@ -421,7 +474,7 @@ def test_native_unknown_outer_guard_keeps_profile_without_claiming_applicability
         assert json.dumps(profile['sourceReferences']) == json.dumps(source_profile['sourceReferences'])
         expected = {**baseline['author' if index < 2 else 'presentation'],
             'sourceReferences': source_profile['sourceReferences'], 'profileScope': source_profile['profileScope']}
-        assert json.dumps(profile, sort_keys=True) == json.dumps(expected, sort_keys=True)
+        assert _profile_source_ledger(profile) == _profile_source_ledger(expected)
         assert (profile['penetrate'], profile['timeLeft'], profile['extraUpdates']) == (1, 1200, 0)
         assert not set(ammo).intersection(('candidateProjectileBindings', 'playerInventoryAmmoRaw',
             'playerInventoryProjectileRaw', 'fallbackAmmoRaw', 'fallbackProjectileRaw'))

@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import re
+from collections.abc import Iterator
 from typing import Any
 
 from infini_local.pipelines.context.stats import parent_stat_context
@@ -29,6 +30,7 @@ from infini_local.pipelines.context.parents import (
     effective_projectile_profile_of,
     projectile_profile_of,
     native_item_context_from_dump,
+    known_projectile_references,
 )
 
 # LLM parent packet owner. Extraction lives in parent_context_pipeline; identity
@@ -368,7 +370,7 @@ def known_attack_context_schema(source: Any) -> bool:
     A future sibling could reference a graph that this stage would remove. Keep
     such references literal instead of guessing their dependencies or meaning.
     """
-    fields = {"source", "version", "identityPredicates", "scope", "units", "motionDispatch", "motion",
+    fields = {"source", "version", "identityPredicates", "scope", "units", "motionDispatch", "motionDispatchEffects", "motion",
               "collision", "draw", "positionIntegration", "coverage", "admission", "expressionNotation",
               "behaviorView", "presentationScope"}
     if (not isinstance(source, dict) or not set(source) <= fields
@@ -391,6 +393,10 @@ def known_attack_context_schema(source: Any) -> bool:
                 return False
     for field in ("motionDispatch", "collision", "positionIntegration"):
         if field in source and not _known_context_program(source[field]):
+            return False
+    if "motionDispatchEffects" in source:
+        effects = source["motionDispatchEffects"]
+        if not isinstance(effects, list) or not all(_known_context_program(program) for program in effects):
             return False
     if "motion" in source:
         motion = source["motion"]
@@ -491,6 +497,33 @@ def _draw_character(draw: Any) -> dict[str, Any] | None:
     }
 
 
+def _stage_projectile_profiles(raw: dict[str, Any], *, related: bool) -> Iterator[tuple[str, dict[str, Any]]]:
+    """Visit only declared projectile locations and recognized producer child links."""
+    def profile_rows(profile: Any, path: str) -> Iterator[tuple[str, dict[str, Any]]]:
+        if not isinstance(profile, dict) or profile.get("unavailable") is True or "sameAs" in profile:
+            return
+        yield path, profile
+        if not related:
+            return
+        references = profile.get("referencedProjectiles")
+        if known_projectile_references(references):
+            for index, row in enumerate(references["references"]):
+                yield from profile_rows(row.get("profile"), f"{path}.referencedProjectiles.references[{index}].profile")
+
+    for section in ("directProjectile", "effectiveProjectile"):
+        yield from profile_rows(raw.get(section), section)
+    if not related:
+        return
+    ammo = raw.get("ammo")
+    if isinstance(ammo, dict):
+        for section in ("projectileRaw", "weaponShootFieldProjectileRaw"):
+            yield from profile_rows(ammo.get(section), "ammo." + section)
+        replacements = ammo.get("nativeReplacementProjectileRaw")
+        if isinstance(replacements, list):
+            for index, profile in enumerate(replacements):
+                yield from profile_rows(profile, f"ammo.nativeReplacementProjectileRaw[{index}]")
+
+
 def parent_context_for_stage(parents: dict[str, Any] | list[dict[str, Any]], *, stage: str) -> dict[str, Any]:
     """Same brief layout for every ingredient, followed by technical source facts.
 
@@ -528,9 +561,8 @@ def parent_context_for_stage(parents: dict[str, Any] | list[dict[str, Any]], *, 
                 key: copy.deepcopy(projectile[key]) for key in _BRIEF_PROJECTILE if key in projectile}
             if "light" in projectile:
                 brief["appearance"]["light"] = copy.deepcopy(projectile["light"])
-        for section in ("directProjectile", "effectiveProjectile"):
-            profile = raw.get(section, {})
-            attack = profile.get("attackReference") if isinstance(profile, dict) else None
+        for section, profile in _stage_projectile_profiles(raw, related=stage == "author"):
+            attack = profile.get("attackReference")
             if not isinstance(attack, dict):
                 continue
             try:
@@ -545,7 +577,11 @@ def parent_context_for_stage(parents: dict[str, Any] | list[dict[str, Any]], *, 
             observation_kinds = []
             motion = source.get("motion", {})
             programs = motion.get("programs") if isinstance(motion, dict) else None
-            for program in programs if isinstance(programs, list) else []:
+            programs = list(programs) if isinstance(programs, list) else []
+            effects = source.get("motionDispatchEffects")
+            if isinstance(effects, list):
+                programs.extend(effects)
+            for program in programs:
                 observations = program.get("observations") if isinstance(program, dict) else None
                 for observation in observations if isinstance(observations, list) else []:
                     kind = observation.get("kind") if isinstance(observation, dict) else None

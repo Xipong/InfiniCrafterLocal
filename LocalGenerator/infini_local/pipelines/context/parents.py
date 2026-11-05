@@ -270,6 +270,18 @@ def _generated_placement_fields(item: dict[str, Any]) -> dict[str, Any]:
         ("createTile", "tileId"), ("createWall", "wallId"), ("placeStyle", "placeStyle")
     ) if source in placement and placement[source] is not None}
 
+def known_projectile_references(value: Any) -> bool:
+    """Recognize the producer's one-hop profile links without guessing future fields."""
+    return (isinstance(value, dict)
+            and value.get("source") == "native_single_hop_projectile_references"
+            and type(value.get("version")) is int and value["version"] == 1
+            and set(value) <= {"source", "version", "scope", "profileLimit", "sourceCalls", "references"}
+            and isinstance(value.get("sourceCalls"), list)
+            and isinstance(value.get("references"), list)
+            and all(isinstance(row, dict) and set(row) <= {"type", "sourceCallIndices", "profile", "unresolved"}
+                    for row in value["references"]))
+
+
 def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool = True) -> dict[str, Any]:
     if not isinstance(proj, dict) or not proj:
         return {}
@@ -298,13 +310,7 @@ def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool
         references = copy.deepcopy(proj["referencedProjectiles"])
         # Producer-owned one-hop facts; no catalog lookup, ID inference or new
         # gameplay choice. Unknown/future envelopes stay literal.
-        if (references.get("source") == "native_single_hop_projectile_references"
-                and type(references.get("version")) is int and references["version"] == 1
-                and set(references) <= {"source", "version", "scope", "profileLimit", "sourceCalls", "references"}
-                and isinstance(references.get("sourceCalls"), list)
-                and isinstance(references.get("references"), list)
-                and all(isinstance(row, dict) and set(row) <= {"type", "sourceCallIndices", "profile", "unresolved"}
-                        for row in references["references"])):
+        if known_projectile_references(references):
             for reference in references["references"]:
                 if (isinstance(reference.get("profile"), dict)
                         and reference["profile"].get("unavailable") is not True
