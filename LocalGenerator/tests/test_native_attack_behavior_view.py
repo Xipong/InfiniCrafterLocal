@@ -370,7 +370,14 @@ def test_ordered_context_preserves_steps_guards_snapshots_and_unknown_programs()
     assert projected == original
     # Addressed mutations cannot silently become immutable scalar snapshots.
     addressed = project_attack_behavior(native_reference())
-    assert ordered_attack_context(addressed) == addressed
+    source = addressed['motion']['programs'][0]
+    listed = ordered_attack_context(addressed)['motion']['programs'][0]
+    alias = next(iter(listed['addressedLocals']))
+    assert listed['addressedLocals'][alias] == {'scope': 'address_alias_unknown'}
+    uses = [row for row in listed['operations'] if alias in row.get('localUses', [])]
+    assert [row['step'] for row in uses] == [row['step'] for row in source['dependencies']['d1']['orderedSourceUses']]
+    assert all('bind' not in row for row in uses)
+    assert listed['blockGuards']['20'] == ['b8']
 
 
 @pytest.mark.parametrize('literal', ['-2.5', '-1E-05', '3e+07'])
@@ -395,8 +402,11 @@ def test_ordered_context_future_consumer_and_semantic_name_collision_stay_litera
     program['futureConsumer'] = {'expression': 'd0'}
     assert ordered_attack_context(projected) == projected
     del program['futureConsumer']
-    program['symbols']['targetSnapshot_d0'] = 'opaque.original.symbol'
-    assert ordered_attack_context(projected) == projected
+    program['symbols']['v0'] = 'opaque.original.symbol'
+    listed = ordered_attack_context(projected)['motion']['programs'][0]
+    binding = next(row['bind'] for row in listed['operations'] if 'bind' in row)
+    assert binding != 'v0'
+    assert listed['symbols']['v0'] == 'opaque.original.symbol'
 
 
 @pytest.mark.parametrize('op,successors', [('switch', [20, 20, 21, 22]), ('future_branch', [20, 21]), ('beq', [20])])

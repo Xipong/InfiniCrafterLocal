@@ -598,7 +598,7 @@ def parent_context_for_stage(parents: dict[str, Any] | list[dict[str, Any]], *, 
                         "source presentation motifs are in parentBriefs. Gameplay source is unchanged."
                     profile["attackReference"] = pack_attack_tables(source)
             if stage == "author" and known_attack_context_schema(source):
-                profile["attackReference"] = ordered_attack_context(source)
+                profile["attackReference"] = pack_attack_tables(ordered_attack_context(source))
         if "spriteReference" in raw:
             brief["appearance"]["spriteReference"] = copy.deepcopy(raw["spriteReference"])
         briefs[label] = brief

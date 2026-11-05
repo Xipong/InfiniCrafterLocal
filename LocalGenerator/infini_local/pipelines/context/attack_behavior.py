@@ -7,12 +7,16 @@ The original native capture remains the sole source/audit artifact.
 from __future__ import annotations
 
 import copy
+import json
 import re
 from dataclasses import replace
 from typing import Any
 
 from infini_local.pipelines.context.attack_geometry import project_collision_behavior
 from infini_local.pipelines.context.attack_draw import project_draw_layers
+from infini_local.pipelines.context.attack_namespaces import (
+    NATIVE_NAMESPACE_LEGEND, shorten_expression_names, shorten_symbol_name, shorten_symbol_signature,
+)
 
 from infini_local.pipelines.context.attack_expressions import (
     _Parser, _Term, _render, compact_attack_expressions,
@@ -71,18 +75,40 @@ def _expression_names(text: str, names: dict[str, str], *, rgba_multiply: bool =
     return _render(readable(visit(tree)), compact=True)
 
 
-def _map_expressions(program: dict, names: dict[str, str]) -> None:
+def _map_expressions(program: dict, names: dict[str, str], *, preserve_unbound_opaque: bool = False,
+                     short_namespaces: bool = False) -> bool:
     symbols = program["symbols"]
+    namespace_changed = False
 
     def expression(text: str) -> str:
-        return _expression_names(text, names,
-            rgba_multiply=symbols.get("Color.op_Multiply") == "Xna.Color.op_Multiply(Xna.Color,float)",
-            rgba_white=symbols.get("Color.get_White") == "Xna.Color.get_White()")
+        nonlocal namespace_changed
+        try:
+            rendered = _expression_names(text, names,
+                rgba_multiply=symbols.get("Color.op_Multiply") == "Xna.Color.op_Multiply(Xna.Color,float)",
+                rgba_white=symbols.get("Color.get_White") == "Xna.Color.get_White()")
+        except (ValueError, IndexError, RecursionError):
+            # An opaque expression without any renamed dependency can stay
+            # literal. If it may refer to one, retain the complete namespace.
+            atom = r"A-Za-z0-9_@.#`"
+            if not preserve_unbound_opaque or any(re.search(r"(?<![" + atom + r"])" + re.escape(name) + r"(?![" + atom + r"])", text)
+                   for name in names):
+                raise
+            rendered = text
+        if short_namespaces:
+            shortened = shorten_expression_names(rendered)
+            namespace_changed |= shortened != rendered
+            return shortened
+        return rendered
 
     def row(value: dict) -> None:
+        nonlocal namespace_changed
         for key in ("expression", "receiver"):
             if isinstance(value.get(key), str):
                 value[key] = expression(value[key])
+        if short_namespaces and isinstance(value.get("call"), str):
+            call = shorten_symbol_name(value["call"])
+            namespace_changed |= call != value["call"]
+            value["call"] = call
     for observation in program["observations"]:
         row(observation)
         if isinstance(observation.get("arguments"), dict):
@@ -97,6 +123,16 @@ def _map_expressions(program: dict, names: dict[str, str]) -> None:
         if isinstance(predicate.get("inputs"), list):
             predicate["inputs"] = [expression(value) if isinstance(value, str) else value
                                    for value in predicate["inputs"]]
+    if short_namespaces:
+        shortened = {shorten_symbol_name(name): shorten_symbol_signature(value)
+                     for name, value in symbols.items()}
+        namespace_changed |= shortened != symbols
+        program["symbols"] = shortened
+        if isinstance(program.get("method"), str):
+            method = shorten_symbol_signature(program["method"])
+            namespace_changed |= method != program["method"]
+            program["method"] = method
+    return namespace_changed
 
 
 def _program(value: dict) -> dict:
@@ -383,29 +419,6 @@ def project_attack_behavior(reference: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def _snapshot_source_name(expression: str) -> str | None:
-    """Names expose syntax only: ai slots are not guessed to mean age/direction."""
-    def name(term: _Term) -> str | None:
-        args = term.args or ()
-        if term.name in {"ldelem.r4", "ldelem.ref", "ldelem.i4"} and len(args) == 2:
-            array = name(args[0])
-            index = args[1].name if args[1].args is None else ""
-            return array + index if array and re.fullmatch(r"[0-9]+", index) else array
-        if term.name in {"ldfld", "ldsfld"} and args and args[0].args is None:
-            return args[0].name.rsplit(".", 1)[-1]
-        if term.name == "div" and len(args) == 2:
-            left, right = name(args[0]), name(args[1])
-            return left + "Over" + right if left and right else None
-        if term.opener == "[" and term.name not in {"alternatives", "source_block"}:
-            return term.name.rsplit(".", 1)[-1]
-        return None
-    try:
-        result = name(_Parser(expression, compact=True).parse())
-    except (ValueError, IndexError, RecursionError):
-        return None
-    return result if result and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", result) else None
-
-
 _BRANCH_TESTS = {
     "brfalse": "take branch when input is zero or null; otherwise fall through",
     "brtrue": "take branch when input is nonzero or non-null; otherwise fall through",
@@ -423,17 +436,34 @@ _BRANCH_TESTS = {
 
 
 def ordered_attack_context(reference: dict[str, Any]) -> dict[str, Any]:
-    """Present known scalar source programs in one ordered stream, not three lists.
+    """Present known source programs in one ordered stream with literal links.
 
     This is not CFG reconstruction: branch opcodes, both successors, source blocks
-    and reached-branch guards remain explicit. Addressed/multi-use snapshots stay
-    in their existing representation until a faithful ordering can be supplied.
+    and reached-branch guards remain explicit. Addressed locals retain each source
+    use/store and explicit alias uncertainty, without inferring their values.
     """
     converted = False
     branch_tests: dict[str, str] = {}
+    has_addressed = False
+    has_namespaces = False
+
+    def source_row(row: Any) -> bool:
+        if (not isinstance(row, dict) or not set(row) <= _ROW_FIELDS | {"step"}
+                or type(row.get("step")) is not int or "at" in row or "orderedSourceUses" in row):
+            return False
+        if any(key in row and not isinstance(row[key], str)
+               for key in ("expression", "receiver", "call", "kind", "scope", "id", "op")):
+            return False
+        if "block" in row and type(row["block"]) is not int:
+            return False
+        if any(key in row and (not isinstance(row[key], list) or any(not isinstance(value, str) for value in row[key]))
+               for key in ("requiredPredicates", "inputs")):
+            return False
+        return ("arguments" not in row or isinstance(row["arguments"], dict)
+                and all(isinstance(key, str) and isinstance(value, str) for key, value in row["arguments"].items()))
 
     def visit(value: Any) -> Any:
-        nonlocal converted
+        nonlocal converted, has_addressed, has_namespaces
         if isinstance(value, list):
             return [visit(child) for child in value]
         if not isinstance(value, dict):
@@ -444,54 +474,108 @@ def ordered_attack_context(reference: dict[str, Any]) -> dict[str, Any]:
         if not set(value) <= _PROGRAM_FIELDS | {"identitySelection"}:
             return out
         definitions = value["dependencies"]
-        if (not isinstance(definitions, dict)
-                or any(not isinstance(row, dict) or not isinstance(row.get("expression"), str)
-                       or "orderedSourceUses" in row for row in definitions.values())):
+        if (not isinstance(definitions, dict) or not isinstance(value["observations"], list)
+                or not isinstance(value["predicates"], list) or not isinstance(value["symbols"], dict)
+                or any(not isinstance(name, str) or not isinstance(row, dict) for name, row in definitions.items())):
             return out
-        # A switch has indexed successors (possibly duplicates), not the
-        # conditional [taken,fallthrough] shape. Keep it and unfamiliar opcodes
-        # literal until their ordering/legend is explicitly supported.
+        addressed, scalars = {}, {}
+        for name, row in definitions.items():
+            if "orderedSourceUses" in row:
+                if (set(row) != {"scope", "orderedSourceUses"} or not isinstance(row["scope"], str)
+                        or not isinstance(row["orderedSourceUses"], list)
+                        or any(not source_row(use) or not isinstance(use.get("expression"), str)
+                               for use in row["orderedSourceUses"])):
+                    return out
+                addressed[name] = row
+            elif source_row(row) and isinstance(row.get("expression"), str):
+                scalars[name] = row
+            else:
+                return out
+        # Block.Next is indexed switch targets followed by fallthrough.
         for predicate in value["predicates"]:
             opcode = predicate.get("op", "") if isinstance(predicate, dict) else ""
-            if (not isinstance(opcode, str) or (opcode[:-2] if opcode.endswith(".s") else opcode) not in _BRANCH_TESTS
-                    or not isinstance(predicate.get("successors"), list) or len(predicate["successors"]) != 2):
+            if not isinstance(opcode, str) or not isinstance(predicate.get("successors"), list):
                 return out
-        rows = [*value["observations"], *definitions.values(), *value["predicates"]]
-        if any(not isinstance(row, dict) or not set(row) <= _ROW_FIELDS | {"step"}
-               or type(row.get("step")) is not int or "at" in row for row in rows):
+            base = opcode[:-2] if opcode.endswith(".s") else opcode
+            successors = predicate["successors"]
+            if (any(type(block) is not int for block in successors)
+                    or (base == "switch" and (not successors or not isinstance(predicate.get("inputs"), list)
+                                              or len(predicate["inputs"]) != 1))
+                    or (base != "switch" and (base not in _BRANCH_TESTS or len(successors) != 2))):
+                return out
+        rows = [*value["observations"], *scalars.values(), *value["predicates"]]
+        if any(not source_row(row) for row in rows):
             return out
-        # Names describe proven source use, not inferred gameplay roles.
-        roles: dict[str, set[str]] = {name: set() for name in definitions}
-        for row in value["observations"]:
-            for argument, expression in row.get("arguments", {}).items():
-                if expression in roles:
-                    roles[expression].add(argument)
-            if isinstance(row.get("expression"), str):
-                try:
-                    term = _Parser(row["expression"], compact=True).parse()
-                except (ValueError, IndexError, RecursionError):
-                    continue
-                if term.name == "stfld" and term.args and len(term.args) == 3 and term.args[2].args is None:
-                    if term.args[2].name in roles:
-                        roles[term.args[2].name].add(term.args[0].name.rsplit(".", 1)[-1])
-        names = {}
-        for name, role in roles.items():
-            label = next(iter(role)) if len(role) == 1 else _snapshot_source_name(definitions[name]["expression"])
-            if label and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", label):
-                label = None
-            names[name] = (label + "Snapshot_" if label else "snapshot_") + name
+        # Bind and address roles are explicit fields; local names carry no
+        # inferred gameplay label and remain compact in large methods too.
+        names = {name: ("a" if name in addressed else "v") + str(index)
+                 for index, name in enumerate(definitions)}
         # A producer-owned identifier collision must not acquire our meaning.
-        if any(re.search(r"(?<![A-Za-z0-9_])" + re.escape(name) + r"(?![A-Za-z0-9_])", str(value))
-               for name in names.values()):
+        original_text = str(value)
+        def collides(candidate: dict[str, str]) -> bool:
+            return len(set(candidate.values())) != len(candidate) or any(
+                re.search(r"(?<![A-Za-z0-9_])" + re.escape(name) + r"(?![A-Za-z0-9_])", original_text)
+                for name in candidate.values())
+        if collides(names):
+            for padding in range(1, 17):
+                names = {name: ("a" if name in addressed else "v") + "_" * padding + str(index)
+                         for index, name in enumerate(definitions)}
+                if not collides(names):
+                    break
+        if collides(names):
             return out
         mapped = copy.deepcopy(value)
         try:
-            _map_expressions(mapped, names)
+            names_shortened = _map_expressions(mapped, names, preserve_unbound_opaque=True, short_namespaces=True)
         except (ValueError, IndexError, TypeError, AttributeError, RecursionError):
-            return out
-        operations = [dict(row, bind=names[name]) for name, row in mapped.pop("dependencies").items()]
+            # Ordering never needs expression interpretation. If an opaque
+            # expression might reference a renamed dependency, keep every name.
+            mapped = copy.deepcopy(value)
+            names = {name: name for name in definitions}
+            names_shortened = False
+        if names_shortened:
+            mapped["nativeNames"] = 1
+            has_namespaces = True
+        operations, local_metadata, source_uses = [], {}, {}
+        for name, row in mapped.pop("dependencies").items():
+            if name not in addressed:
+                operations.append(dict(row, bind=names[name]))
+                continue
+            local_metadata[names[name]] = {"scope": row["scope"]}
+            for use in row["orderedSourceUses"]:
+                # Equal instruction records can belong to several locals.
+                # The membership list retains duplicates within each local too.
+                key = json.dumps(use, ensure_ascii=False, separators=(",", ":"))
+                if key not in source_uses:
+                    source_uses[key] = dict(use, localUses=[])
+                source_uses[key]["localUses"].append(names[name])
+        operations.extend(source_uses.values())
         operations.extend(mapped.pop("observations"))
         operations.extend(mapped.pop("predicates"))
+        if local_metadata:
+            mapped["addressedLocals"] = local_metadata
+            has_addressed = True
+            # Hoist only a literal unanimous list from all records of a block.
+            block_guards, conflicting = {}, set()
+            for row in operations:
+                if "block" not in row:
+                    continue
+                block, guards = row["block"], row.get("requiredPredicates")
+                if (type(block) is not int or not isinstance(guards, list)
+                        or any(not isinstance(guard, str) for guard in guards)):
+                    conflicting.add(str(block))
+                    continue
+                key = str(block)
+                if key in block_guards and block_guards[key] != guards:
+                    conflicting.add(key)
+                else:
+                    block_guards[key] = guards
+            block_guards = {key: guards for key, guards in block_guards.items() if key not in conflicting}
+            if block_guards:
+                mapped["blockGuards"] = block_guards
+                for row in operations:
+                    if str(row.get("block")) in block_guards:
+                        row.pop("requiredPredicates", None)
         # Equal steps remain equal: list ordering does not invent an ordering for
         # multiple records of the same source instruction.
         mapped["operations"] = sorted(operations, key=lambda row: row["step"])
@@ -499,7 +583,10 @@ def ordered_attack_context(reference: dict[str, Any]) -> dict[str, Any]:
             if "op" in predicate:
                 opcode = predicate["op"]
                 base = opcode[:-2] if opcode.endswith(".s") else opcode
-                if base in _BRANCH_TESTS:
+                if base == "switch":
+                    branch_tests[opcode] = ("inputs[0] selects zero-based indexed successors; last successor is "
+                                            "fallthrough for any other index; duplicate targets stay literal")
+                elif base in _BRANCH_TESTS:
                     branch_tests[opcode] = _BRANCH_TESTS[base]
         converted = True
         return {key: visit(child) if key != "operations" else child for key, child in mapped.items()}
@@ -507,14 +594,21 @@ def ordered_attack_context(reference: dict[str, Any]) -> dict[str, Any]:
     result = visit(reference)
     if converted:
         reading = (
-            "Read-only connected source, not executed gameplay. Scalar programs use one operations stream; "
-            "addressed/unsupported programs retain observations/dependencies/predicates and their source steps. "
-            "Read operations in step order; equal steps describe the same source instruction. "
+            "Read-only connected source, not executed gameplay. Read operations in step order; equal steps "
+            "describe the same instruction and do not establish execution order. "
             "bind names a value captured at that step, not a live expression. requiredPredicates lists "
             "reached branches, NOT necessarily true conditions. branchTests explains the used opcodes; "
-            "successors are [taken,fallthrough] source blocks. Do not assume all listed operations execute. "
-            "Fields/calls/aliases remain symbolic; alternatives are reaching definitions, not independent rolls."
+            "conditional successors are [taken,fallthrough] source blocks. Do not assume all listed operations execute. "
+            "Fields/calls/aliases remain symbolic; alternatives are reaching definitions, not independent rolls. "
+            "Unknown programs retain their original lists."
         )
+        if has_addressed:
+            reading += (" addressedLocals retains alias uncertainty; localUses links a source use/store to each "
+                        "affected local, including duplicate memberships, without claiming its value. "
+                        "blockGuards[block] supplies the exact reached-branch list for operations of that block; "
+                        "other blocks retain requiredPredicates.")
+        if has_namespaces:
+            reading += " " + NATIVE_NAMESPACE_LEGEND
         if isinstance(result.get("behaviorView"), dict):
             old_scope = result["behaviorView"].get("scope", "")
             result["behaviorView"]["scope"] = reading if old_scope == _GUIDE else old_scope + " " + reading
