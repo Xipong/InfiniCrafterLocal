@@ -42,9 +42,15 @@ dotnet build tools/native/EngineRuntimeChecks.csproj \
   -p:InfiniExternalDepsRoot=/path/to/deps
 
 dotnet tools/native/bin/Debug/net8.0/EngineRuntimeChecks.dll --check-filter parent
+
+# Полные canonical Prepare packets для проверки model-facing проекции и размера.
+dotnet tools/native/bin/Debug/net8.0/EngineRuntimeChecks.dll \
+  --capture-parent-context /path/to/capture-output
 ```
 
 Этот harness не запускает Terraria.Main, мир или графику. CPU-проверка, игровой smoke и проверка качества генерации моделью — разные уровни результата.
+
+Capture сохраняет восемь representative пар и `report.json` с hashes, native pin и scope. Это явная диагностическая команда; она пишет только в переданную output directory и не отправляет запросов модели. Полный native packet не равен Author dossier: размер последнего проверяется через настоящий Python request builder без увеличения лимитов.
 
 ## Как читать исторические материалы
 
