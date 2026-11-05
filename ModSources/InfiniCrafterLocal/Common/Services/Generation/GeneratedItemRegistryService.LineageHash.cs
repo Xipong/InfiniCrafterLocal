@@ -32,7 +32,7 @@ public sealed partial class GeneratedItemRegistryService
             if (item.ModItem is { } modItem) fullName = modItem.FullName;
             else
             {
-                if (item.type <= 0 || item.type >= ItemID.Count) continue;
+                if (item.type <= ItemID.None || item.type >= ItemID.Count) continue;
                 fullName = "Terraria/" + ItemID.Search.GetName(item.type);
             }
             candidates.Add(item.Name, "item:" + fullName + ":" + item.type.ToString(System.Globalization.CultureInfo.InvariantCulture));
