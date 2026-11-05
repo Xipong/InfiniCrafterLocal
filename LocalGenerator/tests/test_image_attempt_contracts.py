@@ -674,3 +674,112 @@ def test_successful_explicit_dev_fallback_keeps_only_one_final_png(offline, monk
     receipt = json.loads((private / 'result.json').read_text())
     assert receipt['attempts'][-1]['attempt'] == 'fallback'
     assert receipt['attempts'][-1]['final'] == result[0]
+
+
+def native_codex_responses(monkeypatch, alpha_values):
+    """Actual Codex adapter, PNG writes and processing; replace only HTTP/auth."""
+    import base64
+    import time
+    from infini_local.services import codex_auth
+
+    monkeypatch.setattr(generation, 'IMAGE_BACKEND', 'openai_codex')
+    monkeypatch.setattr(config, 'IMAGE_BACKEND', 'openai_codex')
+    monkeypatch.setattr(config, 'IMAGE_BACKEND_RAW', 'openai_codex')
+    monkeypatch.setattr(config, 'REMOVE_BG', False)
+    monkeypatch.setattr(config, 'BG_COLOR', 'transparent')
+    credentials = codex_auth.Credentials('offline-access-not-real', 'offline-refresh-not-real', 'offline-account', time.time() + 3600)
+    monkeypatch.setattr(codex_auth, 'get_credentials', lambda: credentials)
+    calls = []
+
+    def respond(url, payload, **kwargs):
+        assert url == 'https://chatgpt.com/backend-api/codex/images/generations'
+        assert payload['background'] == 'transparent'
+        alpha = alpha_values[len(calls)]
+        image = Image.new('RGBA', (64, 64), (235, 235, 235, alpha))
+        ImageDraw.Draw(image).ellipse((8, 8, 55, 55), fill=(130, 180, 50, 255 if alpha == 255 else 144))
+        stream = io.BytesIO()
+        image.save(stream, format='PNG')
+        calls.append({'payload': payload, 'raw': stream.getvalue()})
+        return {'data': [{'b64_json': base64.b64encode(stream.getvalue()).decode()}]}
+
+    monkeypatch.setattr(codex_auth, 'post_json', respond)
+    return calls
+
+
+@pytest.mark.parametrize('background_alpha', [1, 2])
+def test_codex_near_clear_field_delivers_first_attempt_without_quality_retry(offline, monkeypatch, background_alpha):
+    root, _ = offline
+    calls = native_codex_responses(monkeypatch, [background_alpha])
+    monkeypatch.setattr(generation, 'SPRITE_RETRIES', 2)
+    data = _data([])
+    result = invoke('runtime:field', 'soft_field', data)
+    assert result[3] == 'generated' and result[0]
+    assert len(calls) == 1, 'near-clear native alpha spent another image request'
+    attempts = json.loads(data['debug']['runtime:fieldSpriteValidation'])
+    assert len(attempts) == 1 and attempts[0]['validation']['ok']
+    assert Path(attempts[0]['raw']).read_bytes() == calls[0]['raw']
+    assert serve(root, result[0])['raw'] == Path(result[0]).read_bytes()
+    with Image.open(result[0]) as final:
+        assert sum(final.getchannel('A').histogram()[1:255]) > 0
+
+
+@pytest.mark.parametrize('kind,prefix', [('item', 'item'), ('runtime:field', 'runtime:field'), ('vfx_cutout', 'vfx:grain')])
+def test_background_retry_uses_exact_reason_and_clears_current_error_on_success(offline, monkeypatch, kind, prefix):
+    root, _ = offline
+    calls = native_codex_responses(monkeypatch, [255, 0])
+    monkeypatch.setattr(generation, 'SPRITE_RETRIES', 2)
+    error_key = 'spriteError' if kind == 'item' else prefix + 'SpriteError'
+    data = _data([_request('grain')])
+    data['debug'] = {error_key: 'an error from a previous invocation'}
+    result = invoke(kind, 'background_retry', data)
+    assert result[3] == 'generated' and result[0]
+    assert len(calls) == 2
+    attempts = json.loads(data['debug'][prefix + 'SpriteValidation'])
+    assert attempts[0]['phase'] == 'processing'
+    assert attempts[0]['validation']['reasons'] == ['native_alpha_raw_background_opaque']
+    assert Path(attempts[0]['raw']).read_bytes() == calls[0]['raw']
+    assert 'empty transparent space around the authored subject' in calls[1]['payload']['prompt']
+    assert attempts[1]['validation']['ok']
+    assert error_key not in data['debug'], 'a successful retry retained an active SpriteError'
+    assert prefix + 'SpriteFailurePhase' not in data['debug']
+    assert 'RawSpriteBackgroundError' in attempts[0]['error'], 'historical evidence must remain'
+    assert serve(root, result[0])['raw'] == Path(result[0]).read_bytes()
+
+
+def test_visible_background_still_fails_with_bounded_targeted_codex_retry(offline, monkeypatch):
+    root, _ = offline
+    calls = native_codex_responses(monkeypatch, [128, 128])
+    monkeypatch.setattr(generation, 'SPRITE_RETRIES', 1)
+    data = _data([])
+    result = invoke('runtime:field', 'visible_matte', data)
+    assert result[3] == 'failed' and not result[0] and not result[1]
+    assert len(calls) == 2
+    attempts = json.loads(data['debug']['runtime:fieldSpriteValidation'])
+    assert all(row['validation']['reasons'] == ['raw_background_not_removed'] for row in attempts)
+    assert 'empty transparent space around the authored subject' in calls[1]['payload']['prompt']
+    assert 'RawSpriteBackgroundError' in data['debug']['runtime:fieldSpriteError']
+    assert not list(root.glob('infini_asset_png_*.png'))
+
+
+def test_retry_diagnostic_does_not_leak_from_an_older_failed_attempt(offline, monkeypatch):
+    calls = native_codex_responses(monkeypatch, [255, 0, 0])
+    monkeypatch.setattr(generation, 'SPRITE_RETRIES', 2)
+    process = generation.postprocess_sprite
+
+    def second_attempt_error(path, asset_id, *args, **kwargs):
+        if asset_id.endswith('_retry1'):
+            raise RuntimeError('injected processing fault without a provider-content diagnosis')
+        return process(path, asset_id, *args, **kwargs)
+
+    monkeypatch.setattr(generation, 'postprocess_sprite', second_attempt_error)
+    data = _data([])
+    result = invoke('runtime:field', 'distinct_failures', data)
+    assert result[3] == 'generated' and result[0]
+    assert len(calls) == 3
+    assert 'fix these technical issues' in calls[1]['payload']['prompt']
+    assert 'fix these technical issues' not in calls[2]['payload']['prompt']
+    attempts = json.loads(data['debug']['runtime:fieldSpriteValidation'])
+    assert attempts[0]['validation']['reasons'] == ['native_alpha_raw_background_opaque']
+    assert 'validation' not in attempts[1]
+    assert attempts[2]['validation']['ok']
+    assert 'runtime:fieldSpriteError' not in data['debug']
