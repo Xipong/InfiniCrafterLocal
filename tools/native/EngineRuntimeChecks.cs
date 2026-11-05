@@ -25,6 +25,11 @@ internal static partial class EngineRuntimeChecks
             // Supply an isolated directory, never the player's actual saves.
             Terraria.Program.SavePath = sandbox;
             Terraria.Main.dedServ = true;
+            if (args.Length == 2 && args[0] == "--capture-parent-context")
+            {
+                CaptureParentContext(args[1]);
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--profile-parent-analysis")
             {
                 ParentAnalysisFrameProfiling();
@@ -45,7 +50,7 @@ internal static partial class EngineRuntimeChecks
                 return 0;
             }
             if (args.Length != 0)
-                throw new ArgumentException("Expected --check-filter <filter>, --replay-contracts <jsonl-path>, --capture-vfx-preview <json-path>, --profile-parent-analysis or --profile-parent-craft <plain|mixed|ammo>");
+                throw new ArgumentException("Expected --check-filter <filter>, --replay-contracts <jsonl-path>, --capture-vfx-preview <json-path>, --capture-parent-context <output-directory>, --profile-parent-analysis or --profile-parent-craft <plain|mixed|ammo>");
             return RunChecks();
         }
         finally { System.IO.Directory.Delete(sandbox, recursive: true); }
