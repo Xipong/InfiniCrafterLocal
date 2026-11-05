@@ -1,0 +1,272 @@
+{
+  "parent": "b12908dc06dc88da4baa6203f99a6cebd5e9e2a5",
+  "main": "9e21dff12d89a148f2fc14f776c433b56b680846",
+  "files": [
+    {
+      "path": ".github/workflows/workbench-native.yml",
+      "mainGitBlobSha": "9b97dc8c1f2809a3c84d2a0a9a626e9d7b2c485a",
+      "status": "modified",
+      "bytes": 21555,
+      "sha256": "443f586e4f75354e0c197b67050449a77c23456effd98aedbb4bf63cda31a0d7",
+      "gitBlobSha": "9b97dc8c1f2809a3c84d2a0a9a626e9d7b2c485a",
+      "resolution": false
+    },
+    {
+      "path": "ModSources/InfiniCrafterLocal/Common/Models/Presentation/GeneratedItemData.AtlasParents.cs",
+      "mainGitBlobSha": "5d070e297ae1c41d80298baa6fd19c9415f2c913",
+      "status": "added",
+      "bytes": 1346,
+      "sha256": "9ba915a3699ac0e963b17247e622383ea226c30d274386ae0e22f609bbc95c52",
+      "gitBlobSha": "5d070e297ae1c41d80298baa6fd19c9415f2c913",
+      "resolution": false
+    },
+    {
+      "path": "ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratedItemRegistryService.Lineage.cs",
+      "mainGitBlobSha": "c9c38b82a27d1018c63ee30504455dace812a70f",
+      "status": "modified",
+      "bytes": 8922,
+      "sha256": "73967f1db02006e8b53d535b56c5605fc1f0895e09108a0584f6e5280729118d",
+      "gitBlobSha": "c9c38b82a27d1018c63ee30504455dace812a70f",
+      "resolution": false
+    },
+    {
+      "path": "ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratedItemRegistryService.LineageHash.cs",
+      "mainGitBlobSha": "c637b05b5e76b2d134523163314ae4c9522fc1cc",
+      "status": "added",
+      "bytes": 4276,
+      "sha256": "002631c87d5d494c4adb1b677e08586b9190ee7dc439bcbea273106232517cde",
+      "gitBlobSha": "c637b05b5e76b2d134523163314ae4c9522fc1cc",
+      "resolution": false
+    },
+    {
+      "path": "ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratedItemRegistryService.cs",
+      "mainGitBlobSha": "fe29fbcf00731e78e04232dd77c4e7521db46fb5",
+      "status": "modified",
+      "bytes": 38791,
+      "sha256": "45949c2151c295be130beeb4b3d9ab64ce37242ae6a4e9ccf8453b73fd4d36ec",
+      "gitBlobSha": "fe29fbcf00731e78e04232dd77c4e7521db46fb5",
+      "resolution": false
+    },
+    {
+      "path": "ModSources/InfiniCrafterLocal/Common/Services/Generation/RecipeParentIdentityProof.cs",
+      "mainGitBlobSha": "b763ad2db3a91867d5496b009e8d369b35336b52",
+      "status": "added",
+      "bytes": 5595,
+      "sha256": "12df44a17fd68eb0191798824a93cc28ff49688da15299f446bdf5c9b3913b9a",
+      "gitBlobSha": "b763ad2db3a91867d5496b009e8d369b35336b52",
+      "resolution": false
+    },
+    {
+      "path": "ModSources/InfiniCrafterLocal/Common/UI/RecipeJournalUISystem.Lineage.cs",
+      "mainGitBlobSha": "95d54adc2f4f3e1d4e28d9b8f7fc467752ebe259",
+      "status": "modified",
+      "bytes": 21667,
+      "sha256": "b157060b426ad35a514db315f5a803efd321b503d075db308d6a1aaf59cff92d",
+      "gitBlobSha": "95d54adc2f4f3e1d4e28d9b8f7fc467752ebe259",
+      "resolution": false
+    },
+    {
+      "path": "ModSources/InfiniCrafterLocal/Common/UI/RecipeJournalUISystem.cs",
+      "mainGitBlobSha": "e50ece6256493248b5a28da5499d1a7e17a00039",
+      "status": "modified",
+      "bytes": 30439,
+      "sha256": "f2078480286848abbce97fd0bec8af49a1647a9d2b338d9382e00d66f17c7caf",
+      "gitBlobSha": "e50ece6256493248b5a28da5499d1a7e17a00039",
+      "resolution": false
+    },
+    {
+      "path": "ModSources/InfiniCrafterLocal/Common/UI/RecipeJournalView.cs",
+      "mainGitBlobSha": "773f3b1b819a194274b647bb8b00a47209c24464",
+      "status": "modified",
+      "bytes": 7890,
+      "sha256": "a7e41d1eb77d9f86a4437c7524b5b0d6e6db1804b82d9f828cb8b3432ab84324",
+      "gitBlobSha": "773f3b1b819a194274b647bb8b00a47209c24464",
+      "resolution": false
+    },
+    {
+      "path": "ModSources/InfiniCrafterLocal/Common/UI/RecipeLineageGraph.cs",
+      "mainGitBlobSha": "4520a98aa1d19296ca0a1c2feeeb7637a64f0f35",
+      "status": "modified",
+      "bytes": 10156,
+      "sha256": "e02a7ab62581d53a42b6c34a9304fe69d81b7dc91fd35423acf39adf124ea70c",
+      "gitBlobSha": "4520a98aa1d19296ca0a1c2feeeb7637a64f0f35",
+      "resolution": false
+    },
+    {
+      "path": "ModSources/InfiniCrafterLocal/Common/UI/RecipeNativeItemResolver.cs",
+      "mainGitBlobSha": "f0f71ec35495b9060222f4a04c46f6e64cfa0897",
+      "status": "modified",
+      "bytes": 3458,
+      "sha256": "9333e4cfa5b1eb3646d960ed23439f55085a87d348994563dfadea3d4e170cac",
+      "gitBlobSha": "f0f71ec35495b9060222f4a04c46f6e64cfa0897",
+      "resolution": false
+    },
+    {
+      "path": "START_HERE.html",
+      "mainGitBlobSha": "6043f614c1899a25c89a75112cdc528831034719",
+      "status": "modified",
+      "bytes": 5715493,
+      "sha256": "f0e5cae7d75f9e06eab2229cf2398f99329b1cf3f2950716b4f98926485955d0",
+      "gitBlobSha": "65fb3e05e86d3f0175cd4dc244426e2044dbaf79",
+      "resolution": true
+    },
+    {
+      "path": "docs/development/README_RU.md",
+      "mainGitBlobSha": "12910618fe664689d2b203854da5aaadbee9fded",
+      "status": "modified",
+      "bytes": 6455,
+      "sha256": "bd79a635e81e05376e1fb251f2d9d056b51532887831bd79a91d6f585bed4d2f",
+      "gitBlobSha": "12910618fe664689d2b203854da5aaadbee9fded",
+      "resolution": false
+    },
+    {
+      "path": "docs/development/runtime/ATLAS_LINEAGE_RECOVERY_RU.md",
+      "mainGitBlobSha": "d2723ba91a0d76b2c53aa257fbaae9235757b093",
+      "status": "added",
+      "bytes": 5458,
+      "sha256": "2e2852e1d0e76300437796f97ece83349e11ecb04e66cffa271c9e5c3b5c78f8",
+      "gitBlobSha": "d2723ba91a0d76b2c53aa257fbaae9235757b093",
+      "resolution": false
+    },
+    {
+      "path": "tools/item-test-workbench/README.md",
+      "mainGitBlobSha": "46d3c90282a358d0915f569431c657508edde05d",
+      "status": "modified",
+      "bytes": 78639,
+      "sha256": "6899b658e22ef8773b2e479b202b96055fded60d9cd5e1c9958a978cb895ad39",
+      "gitBlobSha": "46d3c90282a358d0915f569431c657508edde05d",
+      "resolution": false
+    },
+    {
+      "path": "tools/item-test-workbench/SUPPORT_MATRIX.md",
+      "mainGitBlobSha": "c0fd19644c41e1baf0958806f53d5c0453be30b3",
+      "status": "modified",
+      "bytes": 14083,
+      "sha256": "a87eb294a58fb1a9e027f408bf101458b80c8d13dfc82613fb808c8405a19fb3",
+      "gitBlobSha": "c0fd19644c41e1baf0958806f53d5c0453be30b3",
+      "resolution": false
+    },
+    {
+      "path": "tools/item-test-workbench/VERIFICATION.md",
+      "mainGitBlobSha": "911601304714dc439e02252ccfd1ae874540f0af",
+      "status": "modified",
+      "bytes": 26596,
+      "sha256": "0d1e1bfbaeda25f664c7c9e0f5d86b83af584ffb712794ecab7b68a82dcd4a92",
+      "gitBlobSha": "911601304714dc439e02252ccfd1ae874540f0af",
+      "resolution": false
+    },
+    {
+      "path": "tools/item-test-workbench/WorkbenchNative.Graphics.cs",
+      "mainGitBlobSha": "d1bd8e874a27b4a8f4d262dc41999175c796461a",
+      "status": "modified",
+      "bytes": 10247,
+      "sha256": "0c5f697b799cc98d98249d23d7e656e047d852929e4eb28d7824c576ae87771a",
+      "gitBlobSha": "d1bd8e874a27b4a8f4d262dc41999175c796461a",
+      "resolution": false
+    },
+    {
+      "path": "tools/item-test-workbench/WorkbenchNative.Loader.cs",
+      "mainGitBlobSha": "ee63cee030841c0adb4d3ed72a2c449e3165a2aa",
+      "status": "modified",
+      "bytes": 27061,
+      "sha256": "3c0df6af49993691143761cd41b885e01bbef666b43f4111bf82721380189531",
+      "gitBlobSha": "ee63cee030841c0adb4d3ed72a2c449e3165a2aa",
+      "resolution": false
+    },
+    {
+      "path": "tools/item-test-workbench/WorkbenchNative.LoaderRender.cs",
+      "mainGitBlobSha": "0e73d57821ebbd14e4d74d26b785284d9bbb726b",
+      "status": "added",
+      "bytes": 16343,
+      "sha256": "5ae01605fc6dcc89e8db75d176d70fbe2882f35cfa1aa097fd9dd920bca00d6f",
+      "gitBlobSha": "0e73d57821ebbd14e4d74d26b785284d9bbb726b",
+      "resolution": false
+    },
+    {
+      "path": "tools/item-test-workbench/WorkbenchNative.LoaderScene.cs",
+      "mainGitBlobSha": "68755bff812e57c46d14203fad65cac23a341327",
+      "status": "modified",
+      "bytes": 25816,
+      "sha256": "242e79a4b18ee7f15d5b0ad2123b731a92baf2d3014e69b38cadad01178cf459",
+      "gitBlobSha": "68755bff812e57c46d14203fad65cac23a341327",
+      "resolution": false
+    },
+    {
+      "path": "tools/item-test-workbench/WorkbenchProgram.cs",
+      "mainGitBlobSha": "0afbb82ee369ad1878259b1e9dc7d0582e4b074d",
+      "status": "modified",
+      "bytes": 7631,
+      "sha256": "901fbf4b9d45e2dbfbf8faf064d59a83a197de933a201e2b5ec0ec1ddd4e36dc",
+      "gitBlobSha": "0afbb82ee369ad1878259b1e9dc7d0582e4b074d",
+      "resolution": false
+    },
+    {
+      "path": "tools/item-test-workbench/fixtures/WorkbenchObserverFixture/RenderProbe.cs",
+      "mainGitBlobSha": "bdee75dd3f4a70a01999b8eaf29b5be092b13179",
+      "status": "added",
+      "bytes": 2928,
+      "sha256": "194dbeaffedbe4a6b028811d0ed787ad812ed29843c3b02a25ba0b4427959960",
+      "gitBlobSha": "bdee75dd3f4a70a01999b8eaf29b5be092b13179",
+      "resolution": false
+    },
+    {
+      "path": "tools/item-test-workbench/scenarios/loader-native-grounded.json",
+      "mainGitBlobSha": "a76e2d13fab3fe067939524688dce641cb87e7a7",
+      "status": "added",
+      "bytes": 610,
+      "sha256": "85d7f1840a22780ef5deb0abd45ffcbee1256763d6546d4871c0e11c11373be9",
+      "gitBlobSha": "a76e2d13fab3fe067939524688dce641cb87e7a7",
+      "resolution": false
+    },
+    {
+      "path": "tools/item-test-workbench/test_workbench.py",
+      "mainGitBlobSha": "88084fe74bd152a3679040a67900dc777891e552",
+      "status": "modified",
+      "bytes": 32553,
+      "sha256": "7d55001688345eabd6f4b1ecac7acf6617540b69cacad5b06b99feabce273164",
+      "gitBlobSha": "88084fe74bd152a3679040a67900dc777891e552",
+      "resolution": false
+    },
+    {
+      "path": "tools/item-test-workbench/verify_loader_render.py",
+      "mainGitBlobSha": "45d9b6387d3d9a4c6ffca5e67225486b5309c60b",
+      "status": "added",
+      "bytes": 6724,
+      "sha256": "3ad2d7d1fd20359906173180cdf4b12d06c212dc512c54b2060f550de3164535",
+      "gitBlobSha": "45d9b6387d3d9a4c6ffca5e67225486b5309c60b",
+      "resolution": false
+    },
+    {
+      "path": "tools/item-test-workbench/workbench.py",
+      "mainGitBlobSha": "a1c2f4fb306764243156c674b1d1b97ccb92394c",
+      "status": "modified",
+      "bytes": 69748,
+      "sha256": "d7c36ab8be7b4b66368e6854a03264e832da316537d83f8ebba77c044151365d",
+      "gitBlobSha": "a1c2f4fb306764243156c674b1d1b97ccb92394c",
+      "resolution": false
+    },
+    {
+      "path": "tools/native/EngineRuntimeChecks.LineageHashProof.cs",
+      "mainGitBlobSha": "c3dd7283ad85eb86a589523e3cbec9066f7d07c5",
+      "status": "added",
+      "bytes": 19341,
+      "sha256": "ba18e241c2da70d0da40d10f872aaca5aebeb477ce04921be0dd48a21b334e27",
+      "gitBlobSha": "c3dd7283ad85eb86a589523e3cbec9066f7d07c5",
+      "resolution": false
+    },
+    {
+      "path": "tools/native/EngineRuntimeChecks.cs",
+      "mainGitBlobSha": "821d428a76fad967da8fe5b1fee01cf0bec0675f",
+      "status": "modified",
+      "bytes": 94955,
+      "sha256": "5a00cc71a4841b17fb3d68392cb66340ceca4133596f6fa1046ac1f049d50692",
+      "gitBlobSha": "4f9880af3b1d5166cdd4df55f1faf39b44356b87",
+      "resolution": true
+    }
+  ],
+  "nativeSourceFiles": 423,
+  "nativeSourceHashMismatches": [],
+  "nativePassed": 670,
+  "nativeFailed": 0,
+  "nativeSeconds": 733
+}

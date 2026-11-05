@@ -1,0 +1,7 @@
+**/__pycache__/
+**/cache/
+**/home/
+**/results/*
+**/guard-results/*
+!**/results/original-summary.json
+!**/guard-results/original-summary.json

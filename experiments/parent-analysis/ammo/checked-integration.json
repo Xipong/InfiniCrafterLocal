@@ -1,0 +1,49 @@
+{
+  "scope": "Local integration of checked PR330 checkpoint with existing main #328/#331; not remote CI",
+  "parents": [
+    "b12908dc06dc88da4baa6203f99a6cebd5e9e2a5",
+    "9e21dff12d89a148f2fc14f776c433b56b680846"
+  ],
+  "sourceRevision": null,
+  "pythonPassed": 9156,
+  "pythonSkipped": 30,
+  "shardsPassed": 6,
+  "expectedFiles": 282,
+  "executedFiles": 282,
+  "missingFiles": [],
+  "duplicateFiles": [],
+  "sourceUnchangedDuringRun": true,
+  "nativePassed": 670,
+  "nativeFailed": 0,
+  "nativeCompiledFiles": 423,
+  "nativeSourceHashMismatches": [],
+  "buildMethod": "direct Roslyn; not MSBuild",
+  "staticPassed": 17,
+  "workbenchPythonPassed": 34,
+  "skipReasons": [
+    "SKIPPED [4] tests/test_web_studio_workflows_browser.py:48: could not import 'playwright.sync_api': No module named 'playwright'",
+    "SKIPPED [2] tests/test_web_studio_workflows_browser.py:95: could not import 'playwright.sync_api': No module named 'playwright'",
+    "SKIPPED [2] tests/test_web_studio_workflows_browser.py:153: could not import 'playwright.sync_api': No module named 'playwright'",
+    "SKIPPED [1] tests/test_web_studio_workflows_browser.py:214: could not import 'playwright.sync_api': No module named 'playwright'",
+    "SKIPPED [1] tests/test_web_studio_workflows_browser.py:253: could not import 'playwright.sync_api': No module named 'playwright'",
+    "SKIPPED [1] tests/test_web_studio_workflows_browser.py:287: could not import 'playwright.sync_api': No module named 'playwright'",
+    "SKIPPED [1] tests/test_web_studio_workflows_browser.py:311: could not import 'playwright.sync_api': No module named 'playwright'",
+    "SKIPPED [2] tests/test_web_studio_workflows_browser.py:367: could not import 'playwright.sync_api': No module named 'playwright'",
+    "SKIPPED [1] tests/test_web_studio_workflows_browser.py:412: could not import 'playwright.sync_api': No module named 'playwright'",
+    "SKIPPED [2] tests/test_web_studio_workflows_browser.py:464: could not import 'playwright.sync_api': No module named 'playwright'",
+    "SKIPPED [4] tests/test_web_studio_workflows_browser.py:544: could not import 'playwright.sync_api': No module named 'playwright'",
+    "SKIPPED [2] tests/test_web_studio_workflows_browser.py:584: could not import 'playwright.sync_api': No module named 'playwright'",
+    "SKIPPED [2] tests/test_web_studio_workflows_browser.py:616: could not import 'playwright.sync_api': No module named 'playwright'",
+    "SKIPPED [1] tests/test_documentation_site.py:180: could not import 'playwright.sync_api': No module named 'playwright'",
+    "SKIPPED [1] tests/test_asset_transport_linked_source.py:23: .NET SDK unavailable; asset transport execution is notRun",
+    "SKIPPED [1] tests/test_web_studio_browser.py:17: could not import 'playwright.sync_api': No module named 'playwright'",
+    "SKIPPED [1] tests/test_web_studio_browser.py:117: could not import 'playwright.sync_api': No module named 'playwright'",
+    "SKIPPED [1] tests/test_web_studio_browser.py:269: could not import 'playwright.sync_api': No module named 'playwright'"
+  ],
+  "limits": [
+    "No local MSBuild/.tmod build: NuGet-Migrations named mutex blocks SDK CLI",
+    "29 Playwright tests and 1 linked-source AssetTransport check not executed",
+    "No live game, GPU, Calamity or live model inference",
+    "Three local recovery notes are excluded from Git publication and are not handbook inputs"
+  ]
+}

@@ -1,0 +1,30 @@
+[
+  {
+    "path": "ammo/checked-integration.json",
+    "sha256": "188caa0bfa836568ee23da2957cca9765538d4ae9c906544ffc39e3048435904",
+    "bytes": 3407,
+    "source": "ifc-replacement-integration-evidence-20261105/verified-summary.json",
+    "sourceSha256": "188caa0bfa836568ee23da2957cca9765538d4ae9c906544ffc39e3048435904"
+  },
+  {
+    "path": "ammo/main-integration-files.json",
+    "sha256": "13aecf1183563e373428c17a80bf8fecd49969a8bed9f9bfdfa264391e2917a6",
+    "bytes": 11241,
+    "source": "ifc-replacement-integration-evidence-20261105/integration-manifest.json",
+    "sourceSha256": "13aecf1183563e373428c17a80bf8fecd49969a8bed9f9bfdfa264391e2917a6"
+  },
+  {
+    "path": "ammo/ORIGINAL_REPORT_RU.md",
+    "sha256": "605ec27c58f9ee93255118a79edb5585788bf38696a23d778094c1f15b10b2b2",
+    "bytes": 11496,
+    "source": "ifc-replacement-profiles-evidence-20261105/REPORT_RU.md",
+    "sourceSha256": "605ec27c58f9ee93255118a79edb5585788bf38696a23d778094c1f15b10b2b2"
+  },
+  {
+    "path": "ammo/OUTER_GUARD_REPORT.md",
+    "sha256": "5379c526b7322f77c630a0f5e089ca6b644b07afc70b1f1af34a0ef3b30a8a8d",
+    "bytes": 3768,
+    "source": "ifc-replacement-profiles-evidence-20261105/OUTER_GUARD_REPORT.md",
+    "sourceSha256": "5379c526b7322f77c630a0f5e089ca6b644b07afc70b1f1af34a0ef3b30a8a8d"
+  }
+]
