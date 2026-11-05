@@ -108,6 +108,7 @@ public sealed partial class GeneratorClient
     {
         lock (AttackProgramCacheGate)
         { AttackSourcePrograms.Clear(); countedAttackPrograms.Clear(); attackProgramCharacters = 0; AttackSourceCode.Clear(); }
+        ClearNativeCSharpSourceCache();
     }
 
     private static JsonArray ProjectileSpawnReferences(Projectile projectile)
@@ -311,6 +312,7 @@ public sealed partial class GeneratorClient
         result["sourceMethods"] = certificates;
         result["coverage"] = new JsonObject { ["proved"] = "bounded_native_source_observations_only", ["unresolved"] = gaps,
             ["boundaries"] = "ProjectileLoader.Colliding/ShouldUpdatePosition and all other hooks remain unevaluated; no source fact is absence of a mechanic; damage may stop before visual lifetime; held-item draw is separate and not inferred from noMelee" };
+        AttachNativeCSharpSource(result, certified, spawnReferences, type, style);
         return new ProjectileAttackCapture(result.ToJsonString(), spawnReferences.ToJsonString());
     }
 

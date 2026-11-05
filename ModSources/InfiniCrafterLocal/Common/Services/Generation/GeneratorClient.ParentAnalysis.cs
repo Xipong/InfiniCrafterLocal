@@ -136,6 +136,7 @@ public sealed partial class GeneratorClient
         }
 
         internal void ThrowIfCancelled() => lifetime.Token.ThrowIfCancellationRequested();
+        internal CancellationToken Cancellation => lifetime.Token;
 
         internal void RequireWorker()
         {
