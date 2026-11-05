@@ -44,14 +44,13 @@ def _projection(record: dict[str, Any] | None) -> tuple[str | None, str]:
     meta, debug = record.get("recipeMeta"), record.get("debug", {})
     if not isinstance(meta, dict) or not isinstance(debug, dict):
         return None, "{}"
-    parents = meta.get("parentIdentities")
-    if not isinstance(parents, list) or len(parents) != 2 or not all(isinstance(p, str) and p for p in parents):
-        return None, "{}"
+    parents = meta.get("parentIdentities", [])
     fields = {"parents": parents, "key": record.get("recipeKey"), "world": meta.get("worldId")}
     for name in ("recipeIdentityVersion", "multiDevProfileId"):
         if name in debug:
             fields[name] = debug[name]
-    return _pair(parents), json.dumps(fields, ensure_ascii=False)
+    pair = _pair(parents) if isinstance(parents, list) and len(parents) == 2 and all(isinstance(p, str) and p for p in parents) else None
+    return pair, json.dumps(fields, ensure_ascii=False)
 
 
 def _refresh(connection: sqlite3.Connection, root: Path) -> None:
@@ -133,6 +132,20 @@ def resolve_recipe_key(
             ):
                 raise RecipeIdentityConflict("stored recipe contradicts the requested stable key: " + new_key)
             matches = []
+            # Exact current legacy hashing remains proof when old optional
+            # lineage is absent. Do not lose a same-ID discovery just because
+            # its body predates parentIdentities; no numeric search or inference.
+            old_key = recipe_key_from_identities(parents, world_id, recipe_identity_version,
+                                                 stable_names=False, variant_id=profile)
+            old = connection.execute("SELECT file, witness, pair, identity FROM recipes WHERE file = ?",
+                                     (old_key + ".json",)).fetchone()
+            if old and old[2] is None:
+                fields = json.loads(old[3])
+                if fields.get("parents") == [] and _proves({**fields, "parents": parents}, old[0],
+                                                          str(world_id), recipe_identity_version, profile):
+                    if _witness(root / "recipes" / old[0]) != old[1]:
+                        raise OSError("recipe changed during identity lookup")
+                    matches.append(old_key)
             for filename, witness, raw in connection.execute(
                 "SELECT file, witness, identity FROM recipes WHERE pair = ?", (requested_pair,),
             ):

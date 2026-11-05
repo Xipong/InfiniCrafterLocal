@@ -85,6 +85,22 @@ def test_exact_old_recipe_reused_after_number_change_without_rewriting(tmp_path)
     assert (tmp_path / "recipe_identity.sqlite3").is_file()
 
 
+@pytest.mark.parametrize("lineage", [None, []])
+def test_exact_old_key_without_lineage_still_returns_same_discovery(tmp_path, lineage):
+    old_key, path = stored_record(tmp_path)
+    record = json.loads(path.read_text())
+    if lineage is None:
+        record["recipeMeta"].pop("parentIdentities")
+    else:
+        record["recipeMeta"]["parentIdentities"] = lineage
+    path.write_text(json.dumps(record))
+    before = path.read_bytes()
+    # With unchanged numeric hints the literal old key is exact evidence even
+    # when older metadata lacks the pair. Never create a second stable recipe.
+    assert resolve(tmp_path, a=parent()) == old_key
+    assert path.read_bytes() == before
+
+
 def test_index_reused_without_rereading_unchanged_recipe_bodies(tmp_path, monkeypatch):
     old, _ = stored_record(tmp_path)
     assert resolve(tmp_path) == old
@@ -345,6 +361,20 @@ def test_changed_runtime_id_returns_exact_accepted_definition_through_cache_and_
     assert used_locks == discarded == [key]
     assert path.read_bytes() == before and list(path.parent.iterdir()) == [path]
     assert not (path.parent.parent / "invalid").exists()
+
+
+def test_endpoint_preserves_old_discovery_without_optional_lineage(accepted_record, monkeypatch):
+    from infini_local.pipelines import combine_pipeline as pipeline
+    from infini_local.storage import world_storage
+    _, request, key, path, data = accepted_record
+    request["itemA"]["id"] -= 10000
+    data["recipeMeta"].pop("parentIdentities")
+    world_storage.atomic_write_json(path, data)
+    before = path.read_bytes()
+    monkeypatch.setattr(pipeline, "try_llm_plan", lambda *_: pytest.fail("same exact old key must not reroll Author"))
+    code, result = _endpoint(request)
+    assert code == 200 and result["id"] == data["id"] and result["recipeKey"] == key
+    assert path.read_bytes() == before
 
 
 def test_missing_png_on_resolved_old_recipe_preserves_definition_and_returns_409(accepted_record, monkeypatch):
