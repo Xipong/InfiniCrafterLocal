@@ -12,6 +12,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using System.Threading;
+using System.Threading.Tasks;
 using ICSharpCode.Decompiler;
 using ICSharpCode.Decompiler.CSharp;
 using ICSharpCode.Decompiler.CSharp.OutputVisitor;
@@ -47,7 +48,7 @@ public sealed partial class GeneratorClient
     private const int NativeCSharpNodeLimit = 200000, NativeCSharpRecordLimit = 120000;
     private static readonly object nativeCSharpGate = new();
     private static readonly Dictionary<string, NativeCSharpDocument> nativeCSharpDocuments = new(StringComparer.Ordinal);
-    private static readonly Queue<string> nativeCSharpOrder = new();
+    private static readonly LinkedList<string> nativeCSharpOrder = new();
     private static NativeCSharpModule? nativeCSharpModule;
     private static int nativeCSharpNodes, nativeCSharpCharacters;
 
@@ -58,6 +59,34 @@ public sealed partial class GeneratorClient
         internal readonly Guid Mvid;
         private readonly MemoryStream stream;
         internal readonly PEReader Reader;
+        private PEFile? file;
+        private NativeCSharpResolver? resolver;
+        private DecompilerTypeSystem? typeSystem;
+        private bool disposed;
+
+        // Initialized under nativeCSharpGate, and owned by the module rather
+        // than its evictable documents. ILSpy's type system has no cancellation
+        // overload; the resolver observes the request between dependency reads.
+        internal DecompilerTypeSystem GetTypeSystem(CancellationToken cancellation)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            cancellation.ThrowIfCancellationRequested();
+            if (typeSystem is not null) return typeSystem;
+            _ = nativeCSharpDecompilerVerified.Value;
+            var createdResolver = new NativeCSharpResolver(Path, cancellation);
+            PEFile? createdFile = null;
+            try
+            {
+                createdFile = new PEFile(Path, new MemoryStream(Bytes, writable: false), PEStreamOptions.PrefetchEntireImage);
+                var created = new DecompilerTypeSystem(createdFile, createdResolver,
+                    new DecompilerSettings { ThrowOnAssemblyResolveErrors = true });
+                cancellation.ThrowIfCancellationRequested();
+                file = createdFile; resolver = createdResolver; typeSystem = created;
+                return created;
+            }
+            catch { createdFile?.Dispose(); createdResolver.Dispose(); throw; }
+            finally { createdResolver.Cancellation = CancellationToken.None; }
+        }
 
         internal NativeCSharpModule(string path, byte[] bytes, Guid expected)
         {
@@ -120,47 +149,90 @@ public sealed partial class GeneratorClient
             }
         }
 
-        public void Dispose() { Reader.Dispose(); stream.Dispose(); }
+        public void Dispose()
+        {
+            if (disposed) return;
+            disposed = true;
+            typeSystem = null;
+            file?.Dispose(); file = null;
+            resolver?.Dispose(); resolver = null;
+            Reader.Dispose(); stream.Dispose();
+        }
+    }
+
+    // UniversalAssemblyResolver and DecompilerTypeSystem are not IDisposable
+    // in the pinned ILSpy build. Own every resolved PE explicitly, including
+    // files opened before a failed/cancelled type-system initialization.
+    private sealed class NativeCSharpResolver : IAssemblyResolver, IDisposable
+    {
+        private readonly UniversalAssemblyResolver resolver;
+        private readonly HashSet<PEFile> files = new();
+        internal CancellationToken Cancellation;
+
+        internal NativeCSharpResolver(string path, CancellationToken cancellation)
+        {
+            Cancellation = cancellation;
+            resolver = new UniversalAssemblyResolver(path, false, ".NETCoreApp,Version=v8.0");
+            resolver.AddSearchDirectory(System.IO.Path.GetDirectoryName(path));
+            resolver.AddSearchDirectory(RuntimeEnvironment.GetRuntimeDirectory());
+        }
+
+        private PEFile? ResolveFile(Func<PEFile?> resolve)
+        {
+            Cancellation.ThrowIfCancellationRequested();
+            var result = resolve();
+            if (result is not null) files.Add(result);
+            Cancellation.ThrowIfCancellationRequested();
+            return result;
+        }
+
+        public PEFile? Resolve(IAssemblyReference reference) => ResolveFile(() => resolver.Resolve(reference));
+        public PEFile? ResolveModule(PEFile mainModule, string name) => ResolveFile(() => resolver.ResolveModule(mainModule, name));
+        public Task<PEFile?> ResolveAsync(IAssemblyReference reference) => Task.FromResult(Resolve(reference));
+        public Task<PEFile?> ResolveModuleAsync(PEFile mainModule, string name) => Task.FromResult(ResolveModule(mainModule, name));
+        public void Dispose() { foreach (var resolved in files) resolved.Dispose(); files.Clear(); }
     }
 
     private sealed class NativeCSharpDocument : IDisposable
     {
         internal readonly MethodInfo Method;
         internal readonly NativeCSharpModule Module;
-        internal readonly PEFile File;
         internal readonly CSharpDecompiler Decompiler;
         internal readonly SyntaxTree Tree;
         internal readonly MethodDeclaration Declaration;
         internal readonly int Nodes, Characters;
+        internal readonly CSharpRendered Original;
 
         internal NativeCSharpDocument(MethodInfo method, NativeCSharpModule module, CancellationToken cancellation)
+            : this(method, module, cancellation, methodAlreadyVerified: false) { }
+
+        internal NativeCSharpDocument(MethodInfo method, NativeCSharpModule module, CancellationToken cancellation, bool methodAlreadyVerified)
         {
-            _ = nativeCSharpDecompilerVerified.Value;
-            module.Verify(method);
+            cancellation.ThrowIfCancellationRequested();
+            // Direct construction still verifies. The cache owner has already
+            // verified every input, including hits, before taking this path.
+            if (!methodAlreadyVerified) module.Verify(method);
             if (method.ContainsGenericParameters) throw new NotSupportedException("csharp_open_generic_method_unsupported");
             Method = method; Module = module;
-            File = new PEFile(module.Path, new MemoryStream(module.Bytes, writable: false), PEStreamOptions.PrefetchEntireImage);
-            try
-            {
-                var resolver = new UniversalAssemblyResolver(module.Path, false, ".NETCoreApp,Version=v8.0");
-                resolver.AddSearchDirectory(System.IO.Path.GetDirectoryName(module.Path));
-                resolver.AddSearchDirectory(RuntimeEnvironment.GetRuntimeDirectory());
-                var settings = new DecompilerSettings { ThrowOnAssemblyResolveErrors = true };
-                Decompiler = new CSharpDecompiler(File, resolver, settings) { CancellationToken = cancellation };
-                Tree = Decompiler.Decompile((MethodDefinitionHandle)MetadataTokens.Handle(method.MetadataToken));
-                cancellation.ThrowIfCancellationRequested();
-                Nodes = Tree.DescendantsAndSelf.Take(NativeCSharpNodeLimit + 1).Count();
-                if (Nodes > NativeCSharpNodeLimit) throw new NotSupportedException("csharp_ast_node_bound");
-                Declaration = Tree.Descendants.OfType<MethodDeclaration>().Single();
-                if (Tree.DescendantsAndSelf.SelectMany(node => node.Annotations.OfType<ILFunction>()).Distinct().Any(function => function.Warnings.Count > 0))
-                    throw new NotSupportedException("csharp_decompiler_warnings");
-                Characters = RenderCSharp(Tree).Code.Length;
-                if (Characters > NativeCSharpCodeLimit) throw new NotSupportedException("csharp_method_character_bound");
-            }
-            catch { File.Dispose(); throw; }
+            var settings = new DecompilerSettings { ThrowOnAssemblyResolveErrors = true };
+            // Transform state and cancellation belong to this document only.
+            Decompiler = new CSharpDecompiler(module.GetTypeSystem(cancellation), settings) { CancellationToken = cancellation };
+            Tree = Decompiler.Decompile((MethodDefinitionHandle)MetadataTokens.Handle(method.MetadataToken));
+            cancellation.ThrowIfCancellationRequested();
+            Nodes = Tree.DescendantsAndSelf.Take(NativeCSharpNodeLimit + 1).Count();
+            if (Nodes > NativeCSharpNodeLimit) throw new NotSupportedException("csharp_ast_node_bound");
+            Declaration = Tree.Descendants.OfType<MethodDeclaration>().Single();
+            if (Tree.DescendantsAndSelf.SelectMany(node => node.Annotations.OfType<ILFunction>()).Distinct().Any(function => function.Warnings.Count > 0))
+                throw new NotSupportedException("csharp_decompiler_warnings");
+            Original = RenderCSharp(Tree);
+            Characters = Original.Code.Length;
+            if (Characters > NativeCSharpCodeLimit) throw new NotSupportedException("csharp_method_character_bound");
+            cancellation.ThrowIfCancellationRequested();
         }
 
-        public void Dispose() => File.Dispose();
+        // All unmanaged readers belong to Module. Eviction must not dispose
+        // them while another locked document borrower still uses that module.
+        public void Dispose() { }
     }
 
     private sealed record CSharpLocation(int Start, int End, int StartLine, int EndLine);
@@ -170,15 +242,17 @@ public sealed partial class GeneratorClient
 
     private static string CSharpHash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
-    private static CSharpRendered RenderCSharp(AstNode source)
+    private static CSharpRendered RenderCSharp(AstNode source, bool includeLocations = true)
     {
-        // Work on a clone: output coordinates are per record, not mutable cache
-        // state shared by concurrent captures. TokenWriter assigns official AST
-        // locations while an empty indentation string avoids whitespace bloat.
-        var node = source.Clone();
+        // Only location assignment needs a clone; the plain writer is read-only.
+        // Coordinates are per record, never mutable cached AST state. The empty
+        // indentation string avoids whitespace bloat in both identical outputs.
+        var node = includeLocations ? source.Clone() : source;
         using var output = new StringWriter(CultureInfo.InvariantCulture) { NewLine = "\n" };
         var writer = new TextWriterTokenWriter(output) { IndentationString = "" };
-        node.AcceptVisitor(new CSharpOutputVisitor(TokenWriter.WrapInWriterThatSetsLocationsInAST(writer), new DecompilerSettings().CSharpFormattingOptions));
+        node.AcceptVisitor(new CSharpOutputVisitor(includeLocations ? TokenWriter.WrapInWriterThatSetsLocationsInAST(writer) : writer,
+            new DecompilerSettings().CSharpFormattingOptions));
+        if (!includeLocations) return new(output.ToString(), Array.Empty<CSharpLocation>());
         var locations = new List<CSharpLocation>();
         foreach (var part in node.DescendantsAndSelf.Where(part => part is not (SyntaxTree or MethodDeclaration or BlockStatement)))
         {
@@ -195,6 +269,7 @@ public sealed partial class GeneratorClient
         // The immutable module snapshot is tied to the actual loaded Module and
         // MVID. Every requested method separately matches reflection IL, local
         // signature, initialization/stack header and EH, even on a cache hit.
+        cancellation.ThrowIfCancellationRequested();
         if (method.Module != typeof(Projectile).Module) throw new NotSupportedException("csharp_non_native_module");
         if (nativeCSharpModule is null)
         {
@@ -207,19 +282,26 @@ public sealed partial class GeneratorClient
         }
         nativeCSharpModule.Verify(method);
         string key = method.Module.ModuleVersionId + ":" + method.MetadataToken + ":" + CSharpHash(method.GetMethodBody()!.GetILAsByteArray()!);
-        if (nativeCSharpDocuments.TryGetValue(key, out var retained)) return retained;
-        var created = new NativeCSharpDocument(method, nativeCSharpModule, cancellation);
+        cancellation.ThrowIfCancellationRequested();
+        if (nativeCSharpDocuments.TryGetValue(key, out var retained))
+        {
+            var position = nativeCSharpOrder.Find(key)!;
+            nativeCSharpOrder.Remove(position); nativeCSharpOrder.AddLast(position);
+            return retained;
+        }
+        var created = new NativeCSharpDocument(method, nativeCSharpModule, cancellation, methodAlreadyVerified: true);
         try { cancellation.ThrowIfCancellationRequested(); }
         catch { created.Dispose(); throw; }
         while (nativeCSharpOrder.Count > 0 && (nativeCSharpDocuments.Count >= 8
             || nativeCSharpNodes + created.Nodes > NativeCSharpNodeLimit
             || nativeCSharpCharacters + created.Characters > 2 * NativeCSharpCodeLimit))
         {
-            string oldest = nativeCSharpOrder.Dequeue();
+            string oldest = nativeCSharpOrder.First!.Value;
+            nativeCSharpOrder.RemoveFirst();
             if (!nativeCSharpDocuments.Remove(oldest, out var discarded)) continue;
             nativeCSharpNodes -= discarded.Nodes; nativeCSharpCharacters -= discarded.Characters; discarded.Dispose();
         }
-        nativeCSharpDocuments.Add(key, created); nativeCSharpOrder.Enqueue(key);
+        nativeCSharpDocuments.Add(key, created); nativeCSharpOrder.AddLast(key);
         nativeCSharpNodes += created.Nodes; nativeCSharpCharacters += created.Characters;
         return created;
     }
@@ -269,7 +351,7 @@ public sealed partial class GeneratorClient
 
     private static Dictionary<int, int> CSharpConditionalEnds(MethodInfo method)
     {
-        var code = ReadAmmoIl(method, preserveStructure: true, sourceGraph: true);
+        var code = AttackCode(method);
         return code.Zip(code.Skip(1), (instruction, next) => (instruction, next.Offset))
             .Where(pair => pair.instruction.Op.StartsWith('b') && pair.instruction.Op is not ("br" or "br.s" or "break"))
             .ToDictionary(pair => pair.instruction.Offset, pair => pair.Offset);
@@ -376,14 +458,14 @@ public sealed partial class GeneratorClient
         {
             if (method.GetMethodBody()!.ExceptionHandlingClauses.Count > 0)
                 throw new NotSupportedException("csharp_whole_method_exception_flow_unsupported");
-            rendered.Add(RenderCSharp(document.Tree)); coverage = "whole_method";
+            rendered.Add(document.Original); coverage = "whole_method";
         }
         string header = "";
         if (coverage == "conditional_ast_regions")
         {
             var signature = (MethodDeclaration)document.Declaration.Clone(); signature.Body = BlockStatement.Null;
-            header = string.Concat(document.Tree.Children.Where(node => node is UsingDeclaration or UsingAliasDeclaration).Select(node => RenderCSharp(node).Code));
-            header += "// Source method on " + method.DeclaringType!.FullName + ": " + RenderCSharp(signature).Code.Trim().Replace("\r", "").Replace("\n", " ") + "\n";
+            header = string.Concat(document.Tree.Children.Where(node => node is UsingDeclaration or UsingAliasDeclaration).Select(node => RenderCSharp(node, includeLocations: false).Code));
+            header += "// Source method on " + method.DeclaringType!.FullName + ": " + RenderCSharp(signature, includeLocations: false).Code.Trim().Replace("\r", "").Replace("\n", " ") + "\n";
         }
         string code = header + string.Join("\n", rendered.Select(row => row.Code));
         if (code.Length > NativeCSharpRecordLimit) throw new NotSupportedException("csharp_record_character_bound");
