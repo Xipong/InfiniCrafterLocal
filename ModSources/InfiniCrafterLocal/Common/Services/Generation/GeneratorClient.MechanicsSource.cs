@@ -340,7 +340,7 @@ public sealed partial class GeneratorClient
 
     private static JsonObject? CaptureProjectileMechanicsSource(Projectile projectile)
     {
-        if (projectile.ModProjectile is not null || projectile.type <= 0 || projectile.type >= Terraria.ID.ProjectileID.Count) return null;
+        if (projectile.ModProjectile is not null || projectile.type <= Terraria.ID.ProjectileID.None || projectile.type >= Terraria.ID.ProjectileID.Count) return null;
         int type = projectile.type, style = projectile.aiStyle;
         JsonObject Analyze() => JsonNode.Parse(ProjectileAttackSource(type, style).Source)!["mechanicsSource"]?.DeepClone().AsObject()
             ?? new JsonObject { ["source"] = "native_mechanics_source", ["version"] = 1, ["identity"] = new JsonObject { ["type"] = type, ["aiStyle"] = style }, ["approximation"] = MechanicsIdentityAssumption, ["records"] = new JsonArray(), ["unresolved"] = new JsonArray("mechanics_source_unavailable") };
