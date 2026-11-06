@@ -135,23 +135,66 @@ public sealed partial class GeneratorClient
         return null;
     }
 
-    private static HashSet<int> MechanicsCallOffsets(IEnumerable<InvocationExpression> invocations, MethodInfo method, JsonArray unknowns, bool includeAmbiguous = false)
+    // One index per source projection, shared by removed/retained calls and
+    // spawn candidates. Keep the exact old token/type/name predicate: a name or
+    // enclosing IL span alone cannot establish a call (especially an overload).
+    private sealed class NativeSourceCallIndex
     {
-        var code = AttackCode(method); var offsets = new HashSet<int>();
+        private readonly Dictionary<(int Token, string? Type, string Name), List<AmmoIl>> calls = new();
+
+        internal NativeSourceCallIndex(MethodInfo method)
+        {
+            foreach (var instruction in AttackCode(method))
+            {
+                if (instruction.Op is not ("call" or "callvirt") || instruction.Arg is not MethodBase called) continue;
+                var key = (called.MetadataToken, called.DeclaringType?.FullName, called.Name);
+                if (!calls.TryGetValue(key, out var offsets)) calls.Add(key, offsets = new());
+                offsets.Add(instruction);
+            }
+            foreach (var offsets in calls.Values) offsets.Sort((left, right) => left.Offset.CompareTo(right.Offset));
+        }
+
+        internal HashSet<int> Match(InvocationExpression invocation, IMethod symbol, bool lifecycleSpawn = false)
+        {
+            var matches = new HashSet<int>();
+            if (!calls.TryGetValue((MetadataTokens.GetToken(symbol.MetadataToken), symbol.DeclaringType.FullName, symbol.Name), out var offsets))
+                return matches;
+            foreach (var range in invocation.DescendantsAndSelf.SelectMany(node => node.Annotations.OfType<ILInstruction>())
+                .SelectMany(instruction => instruction.ILRanges).Where(range => range.End > range.Start))
+            {
+                int first = 0, last = offsets.Count;
+                while (first < last)
+                {
+                    int middle = first + (last - first) / 2;
+                    if (offsets[middle].Offset < range.Start) first = middle + 1;
+                    else last = middle;
+                }
+                // Search each real half-open range, never the enclosing span:
+                // holes must not admit calls; overlapping annotations count once.
+                for (int i = first; i < offsets.Count && offsets[i].Offset < range.End; i++)
+                {
+                    // Lifecycle has a stronger native signature proof than the
+                    // mechanics view. Apply it only to exact indexed candidates.
+                    if (lifecycleSpawn && (offsets[i].Arg is not MethodInfo called || called.DeclaringType != typeof(Projectile)
+                        || called.GetParameters().Length != symbol.Parameters.Count)) continue;
+                    matches.Add(offsets[i].Offset);
+                }
+            }
+            return matches;
+        }
+    }
+
+    private static HashSet<int> MechanicsCallOffsets(IEnumerable<InvocationExpression> invocations, NativeSourceCallIndex index, JsonArray unknowns, bool includeAmbiguous = false)
+    {
+        var offsets = new HashSet<int>();
         foreach (var invocation in invocations)
         {
             if (invocation.GetSymbol() is not IMethod symbol) continue;
-            int token = MetadataTokens.GetToken(symbol.MetadataToken);
-            var ranges = invocation.DescendantsAndSelf.SelectMany(node => node.Annotations.OfType<ILInstruction>())
-                .SelectMany(instruction => instruction.ILRanges).Where(range => range.End > range.Start).ToArray();
-            var matches = code.Where(instruction => instruction.Op is "call" or "callvirt"
-                && instruction.Arg is MethodBase called && called.MetadataToken == token
-                && called.DeclaringType?.FullName == symbol.DeclaringType.FullName && called.Name == symbol.Name
-                && ranges.Any(range => range.Start <= instruction.Offset && instruction.Offset < range.End)).ToArray();
-            if (matches.Length == 1) offsets.Add(matches[0].Offset);
+            var matches = index.Match(invocation, symbol);
+            if (matches.Count == 1) offsets.Add(matches.Single());
             else if (!unknowns.Any(value => value?.GetValue<string>() == "some_call_offsets_not_uniquely_mapped"))
                 unknowns.Add("some_call_offsets_not_uniquely_mapped");
-            if (includeAmbiguous) foreach (var match in matches) offsets.Add(match.Offset);
+            if (includeAmbiguous) offsets.UnionWith(matches);
         }
         return offsets;
     }
@@ -160,7 +203,7 @@ public sealed partial class GeneratorClient
     // surviving write to a bound local must be an integer literal. Include even
     // overwritten/later writes: extra candidates are safe; a missing one is not.
     // Only full methods admitted by the identity/control checks can use this.
-    private static JsonArray MechanicsSpawnTypeCandidates(SyntaxTree tree, MethodInfo method, JsonArray gaps)
+    private static JsonArray MechanicsSpawnTypeCandidates(SyntaxTree tree, NativeSourceCallIndex callIndex, JsonArray gaps)
     {
         int[]? Candidates(Expression expression)
         {
@@ -196,7 +239,7 @@ public sealed partial class GeneratorClient
                 || invocation.Arguments.Any(argument => argument is NamedArgumentExpression)) continue;
             var candidates = Candidates(invocation.Arguments.ElementAt(index));
             if (candidates is null) continue;
-            var offsets = MechanicsCallOffsets(new[] { invocation }, method, gaps);
+            var offsets = MechanicsCallOffsets(new[] { invocation }, callIndex, gaps);
             if (offsets.Count != 1) continue;
             result.Add(new JsonObject { ["at"] = offsets.Single(),
                 ["projectileTypes"] = new JsonArray(candidates.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
@@ -314,12 +357,13 @@ public sealed partial class GeneratorClient
             }
         }
         else gaps.Add(refusal);
-        var removedCalls = MechanicsCallOffsets(removedInvocations, document.Method, gaps);
-        var remainingCalls = MechanicsCallOffsets(tree.Descendants.OfType<InvocationExpression>(), document.Method, gaps, includeAmbiguous: true);
+        var callIndex = new NativeSourceCallIndex(document.Method);
+        var removedCalls = MechanicsCallOffsets(removedInvocations, callIndex, gaps);
+        var remainingCalls = MechanicsCallOffsets(tree.Descendants.OfType<InvocationExpression>(), callIndex, gaps, includeAmbiguous: true);
         removedCalls.ExceptWith(remainingCalls);
         var spawnTypes = refusal is null && conditionalRecord is null
-            ? MechanicsSpawnTypeCandidates(tree, document.Method, gaps) : new JsonArray();
-        var rendered = RenderCSharp(tree);
+            ? MechanicsSpawnTypeCandidates(tree, callIndex, gaps) : new JsonArray();
+        var rendered = RenderCSharp(tree, includeLocations: false);
         if (rendered.Code.Length > NativeCSharpRecordLimit) throw new NotSupportedException("mechanics_source_character_bound; strict_source_retained");
         var record = MethodSourceIdentity(document.Method);
         record["coverage"] = retainedGuards.Count > 0 ? "approximate_identity_ast_regions" : removed + removedSections + removedUnreachable > 0 ? "approximate_identity_ast_method" : "unpruned_method";
