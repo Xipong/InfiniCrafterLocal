@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 using InfiniCrafterLocal.Common.Models;
@@ -67,22 +68,25 @@ internal static partial class EngineRuntimeChecks
     {
         using var actors=new NativeActorState();
         using var jumps=new NativeAirJumpScope();
+        using var registry=new FrontHandRepairScope();
         WithPlayer((player,owner)=>{
             player.active=true;player.whoAmI=0;Terraria.Main.player[0]=player;
             var source=AirJumpSource("jump_vfx_source");
             source.Gameplay.GeneratedBuff=new GeneratedBuffSpec{DurationTicks=60,
                 PlayerEffect=new PlayerEffectSpec{AirJump=source.Accessory.PlayerEffect!.AirJump!}};
             source.VfxManifest=LightManifest(source.RuntimeProgram.ItemEntityId,RuntimeEventKind.OnJump);
-            source.Normalize();
-            owner.RegisterAirJumpGrant(source,source.Accessory.PlayerEffect!.AirJump!,11);
+            source.Normalize(); registry.Register(source);
+            var host=ReviewItem(source); player.armor[3]=host.Item;
+            long equipmentGeneration=host.PresentationToken;
+            owner.RegisterAirJumpGrant(source,source.Accessory.PlayerEffect!.AirJump!,equipmentGeneration);
             MethodInfo read=typeof(InfiniItemVfxRuntime).GetMethod("ReadAirJumpEvent",BindingFlags.Static|BindingFlags.NonPublic)!;
             MethodInfo resolve=typeof(InfiniItemVfxRuntime).GetMethod("TryResolveAirJumpEvent",BindingFlags.Static|BindingFlags.NonPublic)!;
-            object Claim(long generation=11,string? definition=null,string? entity=null)
+            object Claim(long? generation=null,string? definition=null,string? entity=null)
             {
                 using var stream=new MemoryStream();
                 using(var writer=new BinaryWriter(stream,Encoding.UTF8,true))
                 {
-                    writer.Write((byte)0);writer.Write(generation);writer.Write((ulong)1);
+                    writer.Write((byte)0);writer.Write(generation??equipmentGeneration);writer.Write((ulong)1);
                     writer.Write(source.Id);writer.Write(definition??GeneratedItemRegistryService.DefinitionIdentity(source));
                     writer.Write(entity??source.RuntimeProgram.ItemEntityId);
                     foreach(var vector in new[]{Vector2.Zero,Vector2.Zero,Vector2.Zero,Vector2.UnitX,new Vector2(0,-9.25f)})
@@ -94,22 +98,26 @@ internal static partial class EngineRuntimeChecks
                 =>(bool)resolve.Invoke(null,new object?[]{claim,player,null})!;
             object valid=Claim();
             Equal(true,Admitted(valid),"exact current authored jump grant admits its source event");
-            Equal(false,Admitted(Claim(generation:12)),"different physical/buff lifetime cannot borrow a grant");
+            Equal(false,Admitted(Claim(generation:equipmentGeneration+1)),"different physical/buff lifetime cannot borrow a grant");
             Equal(false,Admitted(Claim(definition:new string('b',64))),"same item id cannot borrow a different definition");
             Equal(false,Admitted(Claim(entity:"other_entity")),"jump grant owns exactly its item-body VFX entity");
-            owner.RegisterAirJumpGrant(source,source.Accessory.PlayerEffect.AirJump!,-22,"buff");
-            Equal(true,Admitted(Claim(generation:-22)),"second same-item component resolves its exact active lifetime");
+            Equal(true,owner.ApplyGeneratedUtilityBuff(source.Gameplay.GeneratedBuff,source:source),"actual same-item buff admitted");
+            owner.PostUpdateEquips();
+            long buffGeneration=AirJumpBuffRows(owner).Single().Generation;
+            Equal(true,Admitted(Claim(generation:buffGeneration)),"second same-item component resolves its exact active lifetime");
             Equal(true,Admitted(valid),"first same-item component stays independently active");
-            var secondBinding=VfxSourceBinding.CaptureAirJump(player,source.Id,-22);
+            var secondBinding=VfxSourceBinding.CaptureAirJump(player,source.Id,buffGeneration);
             Equal(true,secondBinding.IsLive,"attached VFX resolve the requested same-item component");
-            owner.ResetAirJumpGrants();
+            owner.ClearGeneratedUtilityState(); player.armor[3]=new Item();
             Equal(false,Admitted(valid),"retired source cannot emit a delayed claim");
-            owner.RegisterAirJumpGrant(source,source.Accessory.PlayerEffect.AirJump!,12);
+            var replacement=ReviewItem(source); player.armor[3]=replacement.Item;
+            long renewedGeneration=replacement.PresentationToken;
+            owner.RegisterAirJumpGrant(source,source.Accessory.PlayerEffect.AirJump!,renewedGeneration);
             Equal(false,Admitted(valid),"same definition renewed with new lifetime rejects old claim");
-            Equal(true,Admitted(Claim(generation:12)),"renewed current source accepts its own lifetime");
+            Equal(true,Admitted(Claim(generation:renewedGeneration)),"renewed current source accepts its own lifetime");
             Equal(false,secondBinding.IsLive,"other component cannot inherit a renewed same-item grant");
             player.dead=true;
-            Equal(false,Admitted(Claim(generation:12)),"dead owner cannot revive presentation");
+            Equal(false,Admitted(Claim(generation:renewedGeneration)),"dead owner cannot revive presentation");
         });
     }
 }

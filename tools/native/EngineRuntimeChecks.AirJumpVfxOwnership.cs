@@ -34,7 +34,8 @@ internal static partial class EngineRuntimeChecks
             var source = AirJumpSource("airjump_vfx_owner");
             source.VfxManifest = LightManifest(source.RuntimeProgram.ItemEntityId, RuntimeEventKind.OnJump);
             source.Normalize(); peers.Register(source);
-            owner.RegisterAirJumpGrant(source, source.Accessory.PlayerEffect!.AirJump!, 11);
+            var host = ReviewItem(source); player.armor[3] = host.Item;
+            owner.RegisterAirJumpGrant(source, source.Accessory.PlayerEffect!.AirJump!, host.PresentationToken);
             void Start()
             {
                 player.RefreshExtraJumps();

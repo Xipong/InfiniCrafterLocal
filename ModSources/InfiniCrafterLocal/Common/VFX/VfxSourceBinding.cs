@@ -91,18 +91,35 @@ internal abstract class VfxSourceBinding
         private readonly string itemId;
         private readonly long generation;
         private readonly object ownerLifetime;
+        private readonly object? sourceLifetime;
+        private readonly string definition;
+        private bool retired;
         private readonly object fence=new();
         internal AirJumpBinding(Player player,string id,long lifetime)
         {
             owner=player;ownerSlot=player.whoAmI;itemId=id;generation=lifetime;
-            ownerLifetime=player.GetModPlayer<global::InfiniCrafterLocal.Common.Players.InfiniCraftPlayer>().AirJumpLifetime;
+            var effects=player.GetModPlayer<global::InfiniCrafterLocal.Common.Players.InfiniCraftPlayer>();
+            ownerLifetime=effects.AirJumpLifetime;
+            if(effects.TryResolveAirJumpSource(id,out var source,out _,out var sourceFence,lifetime)) {
+                sourceLifetime=sourceFence;
+                definition=global::InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.DefinitionIdentity(source);
+            } else definition="";
         }
         internal override object Generation=>fence;
-        internal override bool IsLive=>owner.active&&!owner.dead&&ownerSlot>=0&&ownerSlot<Main.player.Length
-            &&ReferenceEquals(Main.player[ownerSlot],owner)
-            &&ReferenceEquals(ownerLifetime,owner.GetModPlayer<global::InfiniCrafterLocal.Common.Players.InfiniCraftPlayer>().AirJumpLifetime)
-            &&owner.GetModPlayer<global::InfiniCrafterLocal.Common.Players.InfiniCraftPlayer>()
-                .TryGetLiveAirJumpSource(itemId,out _,out long current,generation)&&current==generation;
+        internal override bool IsLive {
+            get {
+                if(retired)return false;
+                bool live=sourceLifetime is not null&&owner.active&&!owner.dead&&ownerSlot>=0&&ownerSlot<Main.player.Length
+                    &&ReferenceEquals(Main.player[ownerSlot],owner)
+                    &&owner.TryGetModPlayer<global::InfiniCrafterLocal.Common.Players.InfiniCraftPlayer>(out var effects)
+                    &&ReferenceEquals(ownerLifetime,effects.AirJumpLifetime)
+                    &&effects.TryResolveAirJumpSource(itemId,out var source,out _,out var current,generation)
+                    &&ReferenceEquals(sourceLifetime,current)
+                    &&global::InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.DefinitionIdentity(source)==definition;
+                if(!live)retired=true;
+                return live;
+            }
+        }
         internal override bool TryFrame(string anchor,out VfxSourceFrame frame)
         {
             frame=default;

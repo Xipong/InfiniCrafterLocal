@@ -555,6 +555,15 @@ public sealed partial class InfiniCraftPlayer
         _generatedJumpBoost = jump; _generatedManaRegen = mana; _generatedLifeRegen = life;
         _generatedMobilityCooldownTicks = mobility;
         ClampGeneratedBuffState();
+        foreach (var buff in buffs)
+        {
+            var previous = _activeGeneratedUtilityBuffs.FirstOrDefault(active => active.Ticks > 0
+                && active.SourceGeneration != 0 && active.SourceGeneration == buff.SourceGeneration
+                && active.SourceItemId == buff.SourceItemId && active.SourceDefinitionIdentity == buff.SourceDefinitionIdentity
+                && active.SourceComponent == buff.SourceComponent && active.InitialDurationTicks == buff.InitialDurationTicks
+                && active.SameEffect(buff));
+            if (previous is not null) buff.SourceLifetime = previous.SourceLifetime;
+        }
         _activeGeneratedUtilityBuffs.Clear(); _activeGeneratedUtilityBuffs.AddRange(buffs);
         foreach (var buff in buffs) _nextGeneratedBuffSourceGeneration = Math.Min(_nextGeneratedBuffSourceGeneration, buff.SourceGeneration);
         RebuildGeneratedUtilityBuffAggregate();

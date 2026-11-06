@@ -141,30 +141,34 @@ internal static partial class EngineRuntimeChecks
             player.active = true; player.whoAmI = 0; Terraria.Main.player[0] = player;
             var source = AirJumpSource("airjump-lifetime");
             var movement = source.Accessory.PlayerEffect!.AirJump!;
-            ResetNativeAirJumpTick(player, owner); owner.RegisterAirJumpGrant(source, movement, 11);
-            var binding = VfxSourceBinding.CaptureAirJump(player, source.Id, 11)!;
+            var host = ReviewItem(source); player.armor[3] = host.Item;
+            long firstGeneration = host.PresentationToken;
+            ResetNativeAirJumpTick(player, owner); owner.RegisterAirJumpGrant(source, movement, firstGeneration);
+            var binding = VfxSourceBinding.CaptureAirJump(player, source.Id, firstGeneration)!;
             Equal(true, binding.IsLive, "active source has a live VFX binding before charge consumption");
             player.RefreshExtraJumps(); ExtraJumpLoader.ProcessJumps(player); ExtraJumpLoader.ProcessJumps(player);
             Equal(true, binding.IsLive, "spending all charges does not retire a still-equipped source");
             Equal(true, binding.TryFrame("self", out _), "source binding resolves owner motion");
-            ResetNativeAirJumpTick(player, owner);
+            player.armor[3] = new Item(); ResetNativeAirJumpTick(player, owner);
             Equal(false, binding.IsLive, "equipment or buff expiry retires its source binding");
-            owner.RegisterAirJumpGrant(source, movement, 12);
+            var replacement = ReviewItem(source); player.armor[3] = replacement.Item;
+            long renewedGeneration = replacement.PresentationToken;
+            owner.RegisterAirJumpGrant(source, movement, renewedGeneration);
             Equal(false, binding.IsLive, "same definition with a new lifetime cannot revive detached VFX");
-            var renewed = VfxSourceBinding.CaptureAirJump(player, source.Id, 12)!;
+            var renewed = VfxSourceBinding.CaptureAirJump(player, source.Id, renewedGeneration)!;
             Equal(true, renewed.IsLive, "renewed source gets its own valid binding");
             player.RefreshExtraJumps(); ExtraJumpLoader.ProcessJumps(player);
             Equal(true, player.GetJumpState(scope.Jump).Available, "death fixture has an unused charge");
             player.dead = true; owner.UpdateDead();
             Equal(false, renewed.IsLive, "death clears grants and presentation lifetime");
             player.dead = false; ResetNativeAirJumpTick(player, owner);
-            owner.RegisterAirJumpGrant(source, movement, 12);
+            owner.RegisterAirJumpGrant(source, movement, renewedGeneration);
             Equal(false, scope.Jump.CanStart(player), "actual UpdateDead retires the ledger before an airborne respawn");
             Equal(false, renewed.IsLive, "same physical source after respawn cannot revive a dead-life VFX binding");
-            var respawned = VfxSourceBinding.CaptureAirJump(player, source.Id, 12);
+            var respawned = VfxSourceBinding.CaptureAirJump(player, source.Id, renewedGeneration);
             Equal(true, respawned.IsLive, "new life can create a new presentation binding");
             new GeneratedAirJumpLifecycleSystem().OnWorldUnload();
-            owner.RegisterAirJumpGrant(source, movement, 12);
+            owner.RegisterAirJumpGrant(source, movement, renewedGeneration);
             Equal(false, respawned.IsLive, "world retirement fences old bindings even when the source token returns");
         });
     }
@@ -259,6 +263,7 @@ internal static partial class EngineRuntimeChecks
     {
         using var actors = new NativeActorState();
         using var scope = new NativeAirJumpScope();
+        using var registry = new FrontHandRepairScope();
         WithPlayer((player, owner) => {
             player.active = true; player.whoAmI = 0; player.gravDir = 1; Terraria.Main.player[0] = player;
             var source = NamedItemEffectsFixture();
@@ -266,23 +271,29 @@ internal static partial class EngineRuntimeChecks
             GeneratedItemRegistryService.StampCurrentWorld(source);
             var first = new PlayerAirJumpSpec { Count = 1, LaunchSpeedPxPerTick = 7f, HoldDurationTicks = 4 };
             var second = first with { Count = 2, LaunchSpeedPxPerTick = 12f };
-            source.RuntimeProgram.EffectGroups![0].GeneratedBuff = new GeneratedBuffSpec { DurationTicks = 60,
+            source.RuntimeProgram.EffectGroups![0].GeneratedBuff = new GeneratedBuffSpec { DurationTicks = 2,
                 PlayerEffect = new PlayerEffectSpec { AirJump = first } };
-            source.RuntimeProgram.EffectGroups[1].GeneratedBuff = new GeneratedBuffSpec { DurationTicks = 90,
+            source.RuntimeProgram.EffectGroups[1].GeneratedBuff = new GeneratedBuffSpec { DurationTicks = 4,
                 PlayerEffect = new PlayerEffectSpec { AirJump = second } };
             source = GeneratedItemData.FromJson(source.ToNetworkJson())
                 ?? throw new InvalidOperationException("same-item jump component fixture rejected");
+            registry.Register(source);
             ResetNativeAirJumpTick(player, owner);
             owner.RegisterAirJumpGrant(source, first with { LaunchSpeedPxPerTick = 8 }, -1, "group:primary_effects");
             owner.RegisterAirJumpGrant(source, first, -1, "group:missing");
+            Equal(false, owner.CanStartGeneratedAirJump(), "different movement or a missing component cannot grant native movement");
             Equal(false, owner.TryGetLiveAirJumpSource(source.Id, out _, out _),
-                "source definition cannot authorize different movement or a missing component");
-            owner.RegisterAirJumpGrant(source, first, -1, "group:primary_effects");
-            owner.RegisterAirJumpGrant(source, second, -2, "group:alternate_effects");
-            var equipped = VfxSourceBinding.CaptureAirJump(player, source.Id, -1)!;
-            var buff = VfxSourceBinding.CaptureAirJump(player, source.Id, -2)!;
-            Equal(true, equipped.IsLive, "first named group source lifetime is independently live");
-            Equal(true, buff.IsLive, "second same-item named buff lifetime is independently live");
+                "a fabricated grant is not a live presentation source");
+            var firstBuff = source.RuntimeProgram.EffectGroups![0].GeneratedBuff!;
+            var secondBuff = source.RuntimeProgram.EffectGroups[1].GeneratedBuff!;
+            Equal(true, owner.ApplyGeneratedUtilityBuff(firstBuff, source: source), "first exact named buff admitted");
+            Equal(true, owner.ApplyGeneratedUtilityBuff(secondBuff, source: source), "second exact named buff admitted");
+            ResetNativeAirJumpTick(player, owner); owner.PostUpdateEquips();
+            var rows = AirJumpBuffRows(owner);
+            var firstBinding = VfxSourceBinding.CaptureAirJump(player, source.Id, rows[0].Generation);
+            var secondBinding = VfxSourceBinding.CaptureAirJump(player, source.Id, rows[1].Generation);
+            Equal(true, firstBinding.IsLive, "first named group source lifetime is independently live");
+            Equal(true, secondBinding.IsLive, "second same-item named buff lifetime is independently live");
             player.RefreshExtraJumps(); ExtraJumpLoader.ProcessJumps(player);
             Equal(-7f, player.velocity.Y, "first authored component supplies its own charge and motion");
             ExtraJumpLoader.ProcessJumps(player);
@@ -290,14 +301,15 @@ internal static partial class EngineRuntimeChecks
             Equal(true, player.GetJumpState(scope.Jump).Available, "second component has an independent remaining charge");
             ExtraJumpLoader.ProcessJumps(player);
             Equal(false, player.GetJumpState(scope.Jump).Available, "all component counts are consumed exactly");
-            ResetNativeAirJumpTick(player, owner);
-            owner.RegisterAirJumpGrant(source, first, -3, "group:primary_effects");
-            owner.RegisterAirJumpGrant(source, second, -4, "group:alternate_effects");
-            Equal(false, scope.Jump.CanStart(player), "renewing either lifetime cannot refill its component ledger airborne");
-            ResetNativeAirJumpTick(player, owner);
-            owner.RegisterAirJumpGrant(source, second, -2, "group:alternate_effects");
-            Equal(false, equipped.IsLive, "retired component cannot retain VFX through another same-item buff");
-            Equal(true, buff.IsLive, "the exact remaining component lifetime keeps its VFX");
+            ResetNativeAirJumpTick(player, owner); owner.PostUpdateEquips();
+            Equal(false, firstBinding.IsLive, "expired component cannot retain VFX through another same-item buff");
+            Equal(true, secondBinding.IsLive, "the exact remaining component lifetime keeps its VFX");
+            Equal(true, owner.ApplyGeneratedUtilityBuff(firstBuff, source: source), "expired component starts a new actual lifetime");
+            Equal(true, owner.ApplyGeneratedUtilityBuff(secondBuff, source: source), "still-live component refresh keeps its actual lifetime");
+            ResetNativeAirJumpTick(player, owner); owner.PostUpdateEquips();
+            Equal(false, scope.Jump.CanStart(player), "renewing or refreshing either lifetime cannot refill its component ledger airborne");
+            Equal(false, firstBinding.IsLive, "a new same-component lifetime cannot revive its retired binding");
+            Equal(true, secondBinding.IsLive, "refresh of the uninterrupted component retains its binding");
         });
     }
 

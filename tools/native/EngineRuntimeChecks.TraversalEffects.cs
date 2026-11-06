@@ -12,6 +12,7 @@ internal static partial class EngineRuntimeChecks
             using var hooks = new NativeUtilityPlayerHooks(effects);
             var item = NativeUtilityItem("\"playerEffect\":{\"autoJump\":true,\"gravityControl\":true,\"gravityMultiplier\":0.5,\"maxFallSpeedPxPerTick\":4,\"safeFallDistanceBlocks\":9,\"waterBreathing\":true,\"swimJump\":true,\"waterBuoyancy\":true,\"wallSlideAndJump\":true,\"wallCling\":true,\"breathCapacityBonus\":60}");
             player.ResetEffects(); item.UpdateAccessory(player, true);
+            Terraria.ModLoader.PlayerLoader.PostUpdateEquips(player);
             player.gravity = .4f; player.maxFallSpeed = 10;
             effects.PostUpdateRunSpeeds();
             Equal(true, player.autoJump, "native repeated jump input enabled");
@@ -26,6 +27,7 @@ internal static partial class EngineRuntimeChecks
             Equal(2, player.spikedBoots, "strongest explicit wall contact mechanic wins");
             Equal(260, player.breathMax, "breath capacity is independent from breathing mode");
             player.ResetEffects(); item.UpdateAccessory(player, true);
+            Terraria.ModLoader.PlayerLoader.PostUpdateEquips(player);
             Equal(260, player.breathMax, "native reset prevents breath bonus accumulating each tick");
             player.ResetEffects();
             Equal(200, player.breathMax, "removing source restores native breath capacity");

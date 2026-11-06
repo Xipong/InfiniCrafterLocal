@@ -39,6 +39,9 @@ public sealed partial class InfiniCraftPlayer
         public string SourceDefinitionIdentity = "";
         public long SourceGeneration;
         public string SourceComponent = "";
+        // Local attachment identity, retained only across snapshots of a still
+        // live exact row. Reappearing wire tokens cannot revive expired VFX.
+        public object SourceLifetime = new();
 
         public GeneratedItemData? ResolveSource()
             => InfiniCrafterLocalMod.GeneratedItems is { } registry
@@ -417,6 +420,20 @@ public sealed partial class InfiniCraftPlayer
     }
 
 
+    private bool IsContinuouslyHeldAirJumpBuff(ActiveGeneratedUtilityBuff active)
+    {
+        if (active.Ticks <= 0 || active.SourceGeneration >= 0 || active.PlayerEffect?.AirJump is null
+            || Player is not { active: true, dead: false }
+            || Player.HeldItem is not { IsAir: false, ModItem: GeneratedItem held }
+            || !ValidAirJumpSource(held.Data) || held.Data.Id != active.SourceItemId
+            || GeneratedItemRegistryService.DefinitionIdentity(held.Data) != active.SourceDefinitionIdentity
+            || active.SourceComponent != "group:" + held.Data.RuntimeProgram.HeldEffectGroupId
+            || held.Data.RuntimeProgram.TryGetEffectGroup(held.Data.RuntimeProgram.HeldEffectGroupId)?.GeneratedBuff is not { } buff
+            || buff.DurationTicks != active.InitialDurationTicks || buff.ExhaustionTicks is > 0
+            || HasGeneratedItemExhaustion(held.Data)) return false;
+        return PlayerEffectSpec.SameEffect(active.PlayerEffect, buff.PlayerEffect);
+    }
+
     private void TickGeneratedUtilityBuff()
     {
         if (_activeGeneratedUtilityBuffs.Count > 0)
@@ -426,7 +443,13 @@ public sealed partial class InfiniCraftPlayer
                 var active = _activeGeneratedUtilityBuffs[index];
                 if (active.InitialDurationTicks == GeneratedBuffSpec.PermanentDurationTicks)
                     continue;
-                active.Ticks--;
+                // HoldItem runs later than this phase; duration=1 must not expire
+                // and mint a new generation each tick. Remote peers may continue
+                // an admitted row, but must never activate a buff from held data.
+                if (IsContinuouslyHeldAirJumpBuff(active))
+                    active.Ticks = active.InitialDurationTicks;
+                else
+                    active.Ticks--;
                 if (active.Ticks <= 0)
                     _activeGeneratedUtilityBuffs.RemoveAt(index);
             }

@@ -14,8 +14,8 @@ namespace InfiniCrafterLocal.Common.VFX;
 
 public static partial class InfiniItemVfxRuntime
 {
-    // A buff can outlive the item that granted it. Its exact active grant, never
-    // the currently held item, witnesses this presentation-only occurrence.
+    // A buff can outlive its item. Its synchronized live row (or real functional
+    // equipment), never a previous-tick grant, witnesses this cosmetic event.
     private const byte AirJumpPacketVersion=6;
     private sealed record AirJumpEvent(int Owner,long Generation,ulong Occurrence,string ItemId,
         string Definition,string EntityId,Vector2 Point,InfiniItemVfxSnapshot Snapshot);
@@ -81,7 +81,8 @@ public static partial class InfiniItemVfxRuntime
     private static void HandleAirJumpEvent(BinaryReader reader,int sender)
     {
         AirJumpEvent p;try{p=ReadAirJumpEvent(reader);}catch{return;}
-        if(p.Owner>=Main.player.Length)return;
+        if(p.Owner>=Main.player.Length
+            ||Main.netMode==NetmodeID.MultiplayerClient&&sender!=256)return;
         Player player=Main.player[p.Owner];
         if(!TryResolveAirJumpEvent(p,player,out var data))return;
         if(Main.netMode==NetmodeID.Server)

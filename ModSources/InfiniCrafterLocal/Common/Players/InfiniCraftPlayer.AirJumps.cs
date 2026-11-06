@@ -4,8 +4,10 @@ using System.Collections.Generic;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Services;
 using InfiniCrafterLocal.Common.VFX;
+using InfiniCrafterLocal.Content.Items;
 using Terraria;
 using Terraria.ModLoader;
+using Terraria.ModLoader.Default;
 
 namespace InfiniCrafterLocal.Common.Players;
 
@@ -25,7 +27,10 @@ public sealed partial class InfiniCraftPlayer
 
     internal void ResetAirJumpGrants()
     {
-        if (!Player.active || Player.dead || _airJumpWorld != GeneratedItemRegistryService.CurrentWorldIdString())
+        // A source snapshot/event can arrive before the first equipment pass.
+        // Initializing the world marker must not retire that new attachment.
+        if (!Player.active || Player.dead || (_airJumpWorld.Length > 0
+            && _airJumpWorld != GeneratedItemRegistryService.CurrentWorldIdString()))
             ClearAirJumpState();
         else
             _airJumpGrants.Clear();
@@ -69,14 +74,57 @@ public sealed partial class InfiniCraftPlayer
     }
 
     internal bool TryGetLiveAirJumpSource(string itemId, out GeneratedItemData data, out long generation, long? expectedGeneration = null)
+        => TryResolveAirJumpSource(itemId, out data, out generation, out _, expectedGeneration);
+
+    // Presentation reads the synchronized source, not the last equipment pass.
+    // This query never enables ExtraJump, applies a buff or refills its ledger.
+    internal bool TryResolveAirJumpSource(string itemId, out GeneratedItemData data, out long generation,
+        out object lifetime, long? expectedGeneration = null)
     {
-        foreach (var grant in _airJumpGrants)
-            if (grant.Source.Id == itemId && (!expectedGeneration.HasValue || grant.Generation == expectedGeneration.Value)
-                && ValidAirJumpSource(grant.Source))
-            {
-                data = grant.Source; generation = grant.Generation; return true;
-            }
-        data = null!; generation = 0; return false;
+        data = null!; generation = 0; lifetime = null!;
+        if (!Player.active || Player.dead) return false;
+        foreach (var active in _activeGeneratedUtilityBuffs)
+        {
+            if (active.Ticks <= 0 || active.SourceGeneration >= 0 || active.SourceItemId != itemId
+                || expectedGeneration.HasValue && active.SourceGeneration != expectedGeneration.Value
+                || active.ResolveSource() is not { } source || !ValidAirJumpSource(source)
+                || AuthoredAirJumpComponent(source, active.SourceComponent) is not { AirJump: not null } authored
+                || !PlayerEffectSpec.SameEffect(authored, active.PlayerEffect) || !authored.IsActive(Player)) continue;
+            data = source; generation = active.SourceGeneration; lifetime = active.SourceLifetime; return true;
+        }
+        if (expectedGeneration is <= 0) return false;
+        foreach (var (item, component) in FunctionalAirJumpEquipment())
+        {
+            if (item is not { IsAir: false, ModItem: GeneratedItem generated }
+                || generated.Data.Id != itemId || !ValidAirJumpSource(generated.Data)
+                || generated.ExistingPresentationToken <= 0
+                || expectedGeneration.HasValue && generated.ExistingPresentationToken != expectedGeneration.Value
+                || AuthoredAirJumpComponent(generated.Data, component) is not { AirJump: not null } authored
+                || !authored.IsActive(Player)) continue;
+            data = generated.Data; generation = generated.ExistingPresentationToken;
+            lifetime = generated.PresentationGeneration; return true;
+        }
+        return false;
+    }
+
+    private IEnumerable<(Item Item, string Component)> FunctionalAirJumpEquipment()
+    {
+        for (int slot = 0; slot < Math.Min(10, Player.armor.Length); slot++)
+            if (slot < 3 || Player.IsItemSlotUnlockedAndUsable(slot))
+                yield return (Player.armor[slot], slot < 3 ? "armor" : "accessory");
+        foreach (ModAccessorySlot slot in ModContent.GetContent<ModAccessorySlot>())
+            if (FunctionalAirJumpAccessory(slot) is { } item)
+                yield return (item, "accessory");
+    }
+
+    private Item? FunctionalAirJumpAccessory(ModAccessorySlot slot)
+    {
+        // CurrentPlayerOverride is a ref struct and cannot cross an iterator
+        // boundary. Resolve the slot under the scope, return only its Item.
+        using var current = new Main.CurrentPlayerOverride(Player);
+        return slot.Type >= 0 && slot.Type < Player.GetModPlayer<ModAccessorySlotPlayer>().LoadedSlotCount
+            && LoaderManager.Get<AccessorySlotLoader>().ModdedIsSpecificItemSlotUnlockedAndUsable(slot.Type, Player, false)
+                ? slot.FunctionalItem : null;
     }
 
     internal bool IsLiveAirJumpSource(GeneratedItemData source)
@@ -182,8 +230,7 @@ public sealed partial class InfiniCraftPlayer
     {
         // A retained short buff or the same equipped item can return after
         // death/world exit. Its old presentation binding must not revive.
-        if (_airJumpGrants.Count > 0 || _airJumpRemaining.Count > 0 || _activeAirJump is not null)
-            AirJumpLifetime = new();
+        AirJumpLifetime = new();
         _airJumpGrants.Clear();
         _airJumpRemaining.Clear();
         if (ModContent.GetInstance<GeneratedAirJump>() is { } jump && jump.Type < Player.ExtraJumps.Length)

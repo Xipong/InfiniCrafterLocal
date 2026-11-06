@@ -17,6 +17,8 @@ public sealed partial class InfiniCraftPlayer
     private double _extraCrateChance;
     private double _traversalGravityMultiplier = 1d;
     private float _traversalFallSpeedCap;
+    private int _traversalWallModeFloor;
+    private bool _traversalWaterBuoyancy;
 
     private void ResetPlayerEffects()
     {
@@ -26,6 +28,7 @@ public sealed partial class InfiniCraftPlayer
         _potionReductionOnHit = 0;
         ResetAirJumpGrants();
         _traversalGravityMultiplier = 1f; _traversalFallSpeedCap = 0;
+        _traversalWallModeFloor = 0; _traversalWaterBuoyancy = false;
     }
 
     internal void ApplyPlayerEffect(PlayerEffectSpec effect, GeneratedItemData? source = null, long sourceGeneration = 0, string sourceComponent = "accessory")
@@ -38,9 +41,9 @@ public sealed partial class InfiniCraftPlayer
         if (effect.GravityControl == true) Player.gravControl = true;
         if (effect.WaterBreathing == true) Player.gills = true;
         if (effect.SwimJump == true) Player.accFlipper = true;
-        if (effect.WaterBuoyancy == true) Player.canFloatInWater = true;
-        if (effect.WallSlideAndJump == true) Player.spikedBoots = Math.Max(Player.spikedBoots, 1);
-        if (effect.WallCling == true) Player.spikedBoots = Math.Max(Player.spikedBoots, 2);
+        if (effect.WaterBuoyancy == true) _traversalWaterBuoyancy = true;
+        if (effect.WallSlideAndJump == true) _traversalWallModeFloor = Math.Max(_traversalWallModeFloor, 1);
+        if (effect.WallCling == true) _traversalWallModeFloor = Math.Max(_traversalWallModeFloor, 2);
         Player.extraFall += effect.SafeFallDistanceBlocks ?? 0;
         Player.breathMax += effect.BreathCapacityBonus ?? 0;
         _traversalGravityMultiplier *= effect.GravityMultiplier ?? 1f;
@@ -76,6 +79,18 @@ public sealed partial class InfiniCraftPlayer
     {
         if (enabled && PlayerEffectSpec.IsConditionActive(condition ?? "always", Player))
             Player.findTreasure = true;
+    }
+
+    private void ApplyGeneratedTraversalEquipment()
+    {
+        // Native climbing accessories increment spikedBoots. Compose the generated
+        // floor only after all of them and the generated buff have been sampled.
+        if (_traversalWallModeFloor > 0)
+            Player.spikedBoots = Math.Max(Player.spikedBoots, _traversalWallModeFloor);
+        // UpdateEquips promotes native buoyancy to accFlipper while wet. Generated
+        // buoyancy is independent of swimJump, so grant it after that native tail.
+        // Never clear accFlipper: explicit swimJump and native flippers still own it.
+        if (_traversalWaterBuoyancy) Player.canFloatInWater = true;
     }
 
     private void ApplyGeneratedTraversalMovement()
