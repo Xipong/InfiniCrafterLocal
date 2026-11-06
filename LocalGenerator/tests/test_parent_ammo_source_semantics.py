@@ -484,6 +484,27 @@ def test_unknown_prior_write_withholds_identity_binding_but_retains_source(prefi
     assert all(v['inputBinding'] is None for v in variants)
 
 
+@pytest.mark.parametrize('exposed_local', [0, 4])
+def test_arithmetic_saved_byref_before_initialization_withholds_only_aliased_binding(exposed_local):
+    # The alias outlives the Item.shoot initialization. The later stind is an
+    # explicit source write, not a hypothetical callback or post-shot hook.
+    alias = [('const', 0), ('stloc', exposed_local), ('ldloca', exposed_local), ('stloc', 30)]
+    code = _arithmetic_variant_fixture(
+        prefix=[('ldloc', 30), ('const', 99), ('stind.i4', None)],
+        mutation=lambda ops: alias + ops)
+    variants = _arithmetic_variant_row(code)['conditionalArithmeticVariants']
+    a, b = variants
+    assert [v['projectileOffset'] for v in variants] == [2, 0]
+    assert [v['conditionalProbability']['numerator'] for v in variants] == [7, 24]
+    assert a['localUpdates'][0]['basis'] == 'local_value_at_branch_entry'
+    assert a['localUpdates'][0]['operand'] == 2
+    assert b['localUpdates'][0]['operator'] == 'sub'
+    if exposed_local == 0:
+        assert all(v['inputBinding'] is None for v in variants)
+    else:
+        assert all(v['inputBinding']['basis'] == 'item_shoot_snapshot' for v in variants)
+
+
 @pytest.mark.parametrize('mutation',[
     lambda ops:[(op,('Other.Random',1,True,True)) if op=='call' and arg[0].endswith('.Next') else (op,arg) for op,arg in ops],
     lambda ops:[('add.ovf',arg) if op=='add' else (op,arg) for op,arg in ops],
@@ -543,10 +564,10 @@ def test_arithmetic_local_initialization_is_not_current_value():
     assert 'does not equate' in provenance['scope']
 
 
-def _spawn_argument_fixture(*, item=81235, factor=3, threshold=7, mutate=(), entry=None):
+def _spawn_argument_fixture(*, item=81235, factor=3, threshold=7, mutate=(), prefix=(), entry=None):
     """Arbitrary source identities and locals; branch-entry values stay unknown."""
     from native_hit_status_analysis import Instruction as I
-    ops = [('ldarg', 2), ('ldfld', 'Terraria.Item.shoot'), ('stloc', 0)]
+    ops = [('ldarg', 2), ('ldfld', 'Terraria.Item.shoot'), ('stloc', 0), *prefix]
     if entry:
         ops += [('br', entry)]
     ops += [('ldarg', 2), ('ldfld', 'Terraria.Item.type'), ('const', item), ('bne', 'end'),
@@ -669,6 +690,37 @@ def test_spawn_argument_later_store_supersedes_only_prior_local_value():
     assert not any(node.get('operator') == 'mul' for node in _source_nodes(damage))
 
 
+@pytest.mark.parametrize('exposed_local', [14, 15])
+def test_spawn_argument_saved_byref_before_guard_refuses_only_aliased_value(exposed_local):
+    code = _spawn_argument_fixture(
+        prefix=[('const', 0), ('stloc', exposed_local), ('ldloca', exposed_local), ('stloc', 30)],
+        mutate=[('const', 41), ('stloc', 14), ('ldloc', 30), ('const', 99), ('stind.i4', None)])
+    row, = ammo_method_facts(code, 'ItemCheck_Shoot')
+    spawn, = row['spawnSites']
+    damage = spawn['spawnInputs']['damage']
+    if exposed_local == 14:
+        assert damage['kind'] == 'unknown'
+        assert damage['reason'] == 'address_exposed_local'
+        assert damage['sourceAddressIlOffsets'] == [5]
+        # The direct store remains useful source syntax, not the value at load.
+        assert damage['sourceDefinition']['value']['value'] == 41
+        assert spawn['spawnInputCoverage']['fields']['damage']['status'] == 'unknown'
+        issues = spawn['spawnInputCoverage']['fields']['damage']['unresolved']
+        assert issues[0]['reason'] == 'address_exposed_local'
+        assert all('sourceDefinition' not in issue for issue in issues)
+        from infini_local.pipelines.context.mechanics_expression import MechanicsRenderer
+        renderer = MechanicsRenderer()
+        assert renderer.render(damage) == damage
+        assert 'address_exposed_local' in renderer.finish()['unknowns']
+    else:
+        assert damage['kind'] == 'local_definition' and damage['value']['value'] == 41
+        assert spawn['spawnInputCoverage']['fields']['damage'] == {'status': 'source_expression', 'unresolved': []}
+    assert spawn['spawnInputs']['owner']['kind'] == 'argument'
+    assert spawn['spawnInputs']['ai0']['value'] == 0.0
+    assert any(n.get('operator') == 'rem' for n in _source_nodes(spawn['spawnInputs']['ai1']))
+    assert any(n.get('member') == 'Fixture.Player.GetPhase' for n in _source_nodes(spawn['spawnInputs']['ai1']))
+
+
 def test_spawn_argument_condition_reads_keep_original_field_snapshots():
     row, = ammo_method_facts(_spawn_argument_fixture(mutate=[
         ('ldarg', 0), ('const', 0), ('stfld', 'Fixture.Player.remaining')]), 'ItemCheck_Shoot')
@@ -685,8 +737,9 @@ def test_spawn_argument_prior_hook_reference_does_not_restore_item_defaults():
     prefix = [I(-3, 'ldloca', 14), I(-2, 'call', ('Opaque.PriorHook', 1, False, False)), I(-1, 'nop', None)]
     row, = ammo_method_facts(prefix + code, 'ItemCheck_Shoot')
     nodes = list(_source_nodes(row['spawnSites'][0]['spawnInputs']['damage']))
+    assert any(n.get('reason') == 'address_exposed_local' and n.get('local') == 14 for n in nodes)
     assert any(n.get('operator') == 'mul' for n in nodes)
-    assert any(n.get('reason') == 'branch_entry_value_unknown' and n.get('local') == 14 for n in nodes)
+    assert row['spawnSites'][0]['spawnInputs']['damage']['sourceAddressIlOffsets'] == [-3]
     assert not any(n.get('member') == 'Terraria.Item.damage' for n in nodes)
 
 

@@ -34,6 +34,13 @@ internal static partial class EngineRuntimeChecks
             if (aiStyle == 123) rotation++;
             if (type == 888) { try { damage++; } finally { friendly = true; } }
         }
+        public int ExceptionDescriptors(int value)
+        {
+            try { if (value < 0) throw new ArgumentException(); return value + Executions; }
+            catch (ArgumentException) when (value == -1) { return -1; }
+            catch (InvalidOperationException) { return -2; }
+            finally { Executions++; }
+        }
     }
 
     private const BindingFlags CSharpFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
@@ -127,6 +134,107 @@ internal static partial class EngineRuntimeChecks
         CSharpSourceRefuses(() => CSharpFixtureRecord(method, false, bytes), "csharp_pe_il_mismatch");
         using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
         CSharpSourceRefuses(() => CSharpFixtureRecord(method, false, cancellation: cancelled.Token), "canceled");
+    }
+
+    // Exercise the actual module verifier independently of decompilation/region
+    // admission: a later decompiler failure must not hide a false PE match.
+    private static void VerifyCSharpFixtureBytes(MethodInfo method, byte[] bytes)
+    {
+        var type = CSharpOwner.GetNestedType("NativeCSharpModule", CSharpFlags)!;
+        using var module = (IDisposable)Activator.CreateInstance(type, CSharpFlags, null,
+            new object[] { method.Module.FullyQualifiedName, bytes, method.Module.ModuleVersionId }, null)!;
+        type.GetMethod("Verify", CSharpFlags)!.Invoke(module, new object[] { method });
+    }
+
+    private static int CSharpFixtureBodyOffset(PEReader pe, MethodInfo method)
+    {
+        var definition = pe.GetMetadataReader().GetMethodDefinition((MethodDefinitionHandle)MetadataTokens.Handle(method.MetadataToken));
+        var section = pe.PEHeaders.SectionHeaders[pe.PEHeaders.GetContainingSectionIndex(definition.RelativeVirtualAddress)];
+        return section.PointerToRawData + definition.RelativeVirtualAddress - section.VirtualAddress;
+    }
+
+    private static void CSharpBodyMutationRefuses(MethodInfo method, byte[] original, byte[] changed, string reason)
+    {
+        using var baseline = new PEReader(new MemoryStream(original, writable: false));
+        using var altered = new PEReader(new MemoryStream(changed, writable: false));
+        Equal(true, baseline.GetMetadata().GetContent().SequenceEqual(altered.GetMetadata().GetContent()), "tamper leaves metadata/MVID intact");
+        int rva = baseline.GetMetadataReader().GetMethodDefinition((MethodDefinitionHandle)MetadataTokens.Handle(method.MetadataToken)).RelativeVirtualAddress;
+        Equal(true, baseline.GetMethodBody(rva).GetILBytes()!.SequenceEqual(altered.GetMethodBody(rva).GetILBytes()!), "tamper leaves IL intact");
+        CSharpSourceRefuses(() => VerifyCSharpFixtureBytes(method, changed), reason);
+    }
+
+    private static void NativeCSharpSourceVerifiesMethodHeader()
+    {
+        var method = typeof(CSharpSourceFixture).GetMethod(nameof(CSharpSourceFixture.Closed))!;
+        byte[] bytes = File.ReadAllBytes(method.Module.FullyQualifiedName);
+        CSharpSourceFixture.Executions = 0;
+        VerifyCSharpFixtureBytes(method, bytes);
+        // A tiny body has no explicit local-signature token or InitLocals bit.
+        var tiny = typeof(CSharpSourceFixture).GetMethod(nameof(CSharpSourceFixture.LiteralSource))!;
+        VerifyCSharpFixtureBytes(tiny, bytes);
+        using var pe = new PEReader(new MemoryStream(bytes, writable: false));
+        int start = CSharpFixtureBodyOffset(pe, method);
+        Equal(3, bytes[start] & 3, "local fixture has a fat method header");
+        Equal(2, bytes[CSharpFixtureBodyOffset(pe, tiny)] & 3, "literal fixture has a tiny method header");
+        var metadata = pe.GetMetadataReader();
+        int otherSignature = Enumerable.Range(1, metadata.GetTableRowCount(TableIndex.StandAloneSig))
+            .Select(MetadataTokens.StandaloneSignatureHandle)
+            .Where(handle => MetadataTokens.GetToken(handle) != method.GetMethodBody()!.LocalSignatureMetadataToken
+                && metadata.GetBlobReader(metadata.GetStandaloneSignature(handle).Signature).ReadSignatureHeader().Kind == SignatureKind.LocalVariables)
+            .Select(handle => MetadataTokens.GetToken(handle)).First();
+        var locals = (byte[])bytes.Clone(); BitConverter.GetBytes(otherSignature).CopyTo(locals, start + 8);
+        CSharpBodyMutationRefuses(method, bytes, locals, "csharp_pe_local_signature_mismatch");
+        var init = (byte[])bytes.Clone(); init[start] ^= 0x10;
+        CSharpBodyMutationRefuses(method, bytes, init, "csharp_pe_init_locals_mismatch");
+        var stack = (byte[])bytes.Clone(); stack[start + 2] ^= 1;
+        CSharpBodyMutationRefuses(method, bytes, stack, "csharp_pe_max_stack_mismatch");
+        VerifyCSharpFixtureBytes(method, bytes);
+        Equal(0, CSharpSourceFixture.Executions, "header verification never executes fixture source");
+    }
+
+    private static void NativeCSharpSourceVerifiesExceptionRegions()
+    {
+        var method = typeof(CSharpSourceFixture).GetMethod(nameof(CSharpSourceFixture.ExceptionDescriptors))!;
+        byte[] bytes = File.ReadAllBytes(method.Module.FullyQualifiedName);
+        CSharpSourceFixture.Executions = 0;
+        VerifyCSharpFixtureBytes(method, bytes);
+        using var pe = new PEReader(new MemoryStream(bytes, writable: false));
+        int start = CSharpFixtureBodyOffset(pe, method);
+        int header = (BitConverter.ToUInt16(bytes, start) >> 12) * 4;
+        int section = (start + header + BitConverter.ToInt32(bytes, start + 4) + 3) & ~3;
+        Equal(1, bytes[section] & 0x3f, "fixture extra section is EH");
+        bool fat = (bytes[section] & 0x40) != 0;
+        int size = fat ? 24 : 12;
+        var clauses = method.GetMethodBody()!.ExceptionHandlingClauses;
+        int catchIndex = Enumerable.Range(0, clauses.Count).Single(index => clauses[index].Flags == ExceptionHandlingClauseOptions.Clause);
+        int filterIndex = Enumerable.Range(0, clauses.Count).Single(index => clauses[index].Flags == ExceptionHandlingClauseOptions.Filter);
+        Equal(true, clauses.Any(clause => clause.Flags == ExceptionHandlingClauseOptions.Finally), "positive EH includes finally");
+        // Each descriptor component must be checked; all mutations are isolated
+        // byte-array copies of this harness, never an installed DLL/file write.
+        foreach (var field in new[] { ("kind", 0), ("try offset", fat ? 4 : 2), ("try length", fat ? 8 : 4),
+            ("handler offset", fat ? 12 : 5), ("handler length", fat ? 16 : 7) })
+        {
+            var changed = (byte[])bytes.Clone();
+            changed[section + 4 + catchIndex * size + field.Item2] ^= field.Item1 == "kind" ? (byte)2 : (byte)1;
+            CSharpBodyMutationRefuses(method, bytes, changed, "csharp_pe_exception_regions_mismatch");
+        }
+        var metadata = pe.GetMetadataReader();
+        int argumentException = MetadataTokens.GetToken(metadata.TypeReferences.Single(handle =>
+            metadata.GetString(metadata.GetTypeReference(handle).Namespace) == "System"
+            && metadata.GetString(metadata.GetTypeReference(handle).Name) == nameof(ArgumentException)));
+        var catchType = (byte[])bytes.Clone();
+        BitConverter.GetBytes(argumentException).CopyTo(catchType, section + 4 + catchIndex * size + (fat ? 20 : 8));
+        CSharpBodyMutationRefuses(method, bytes, catchType, "csharp_pe_exception_regions_mismatch");
+        var filter = (byte[])bytes.Clone(); filter[section + 4 + filterIndex * size + (fat ? 20 : 8)] ^= 1;
+        CSharpBodyMutationRefuses(method, bytes, filter, "csharp_pe_exception_regions_mismatch");
+        var missing = (byte[])bytes.Clone(); missing[start] &= 0xf7; // Clear MoreSects, not IL or metadata.
+        CSharpBodyMutationRefuses(method, bytes, missing, "csharp_pe_exception_regions_mismatch");
+        var reordered = (byte[])bytes.Clone();
+        Array.Copy(bytes, section + 4, reordered, section + 4 + size, size);
+        Array.Copy(bytes, section + 4 + size, reordered, section + 4, size);
+        CSharpBodyMutationRefuses(method, bytes, reordered, "csharp_pe_exception_regions_mismatch");
+        VerifyCSharpFixtureBytes(method, bytes);
+        Equal(0, CSharpSourceFixture.Executions, "EH verification never executes fixture source");
     }
 
     private static void NativeCSharpRegionsKeepAllWindowsAndRefuseNonlocalDependencies()

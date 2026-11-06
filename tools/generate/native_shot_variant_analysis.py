@@ -21,6 +21,11 @@ def _snapshot_input(code, guard, target, item_id):
     if len(definitions) != 1 or not definition_dominates(code, definitions[0], end):
         return None
     start = definitions[0]
+    # Initializing the value does not invalidate a previously saved managed
+    # pointer. Without an alias-lifetime proof, a pre-initialization exposure
+    # prevents binding this local to Item.shoot even if later writes are indirect.
+    if any(ins.op == "ldloca" and ins.arg == target for ins in code[:start]):
+        return None
     all_targets = {t for ins in code for t in branch_targets(ins)}
     if any(code[start-2].offset < t <= code[start].offset for t in all_targets):
         return None

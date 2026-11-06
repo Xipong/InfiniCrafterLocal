@@ -80,6 +80,8 @@ internal static partial class EngineRuntimeChecks
             ("weapon replacement profiles deferred cancellation parity", WeaponReplacementProfilesMatchDeferredAndCancelledCapture),
             ("parent source sparse locals match dense oracle", ParentSourceSparseLocalsMatchDenseOracle),
             ("native CSharp source exact PE identity and no execution", NativeCSharpSourceVerifiesExactPeWithoutExecution),
+            ("native CSharp source semantic method header verification", NativeCSharpSourceVerifiesMethodHeader),
+            ("native CSharp source complete exception descriptor verification", NativeCSharpSourceVerifiesExceptionRegions),
             ("native CSharp source closed regions and all windows", NativeCSharpRegionsKeepAllWindowsAndRefuseNonlocalDependencies),
             ("native CSharp source actual Last Prism helper inline and links", NativeCSharpLastPrismRetainsReadableHelperAndInlineEffects),
             ("projectile inline mutable effects source and work bounds", ProjectileInlineEffectsRetainMutableSource),

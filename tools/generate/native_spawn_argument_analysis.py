@@ -40,7 +40,9 @@ def _coverage(value, path):
         node, location = pending.pop()
         if isinstance(node, dict):
             if node.get("kind") == "unknown":
-                unresolved.append({"path": location, **{k: v for k, v in node.items() if k != "kind"}})
+                # Definitions stay in the input tree, not copied again into
+                # each diagnostic; their own unknown leaves are visited below.
+                unresolved.append({"path": location, **{k: v for k, v in node.items() if k not in {"kind", "sourceDefinition"}}})
             elif node.get("kind") == "call":
                 unresolved.append({"path": location, "reason": "helper_output_not_evaluated",
                                    "member": node["member"], "sourceIlOffset": node["sourceIlOffset"]})
@@ -207,9 +209,26 @@ class _SourceSlice:
 
     def local(self, local, use):
         site = {"local": local, "sourceIlOffset": self.block[use].offset}
-        addresses = [ins.offset for ins in self.block if ins.op == "ldloca" and ins.arg == local]
+        # A managed pointer captured before the item region can survive any
+        # later stloc and write through an alias inside it. This slice does not
+        # prove alias lifetimes, so inspect the whole method, not just the block.
+        addresses = [ins.offset for ins in self.code if ins.op == "ldloca" and ins.arg == local]
+        try:
+            definition = self.local_definitions(local, use)
+        except Unrecognized as error:
+            if not addresses:
+                raise
+            definition = _unknown(str(error), **site)
         if addresses:
-            return _unknown("address_exposed_local", **site, sourceAddressIlOffsets=addresses)
+            # Keep the source arithmetic, but do not substitute a stloc snapshot
+            # for the load: an indirect write may follow that very store.
+            return _unknown("address_exposed_local", **site, sourceAddressIlOffsets=addresses,
+                            sourceDefinition=definition,
+                            scope="sourceDefinition describes direct stores only; aliases may change the value at this read")
+        return definition
+
+    def local_definitions(self, local: int, use: int):
+        site = {"local": local, "sourceIlOffset": self.block[use].offset}
         if (local, use) in self.active:
             raise Unrecognized("cyclic_local_definition")
         if len(self.active) >= _LIMITS["localDefinitionDepth"]:

@@ -88,9 +88,36 @@ public sealed partial class GeneratorClient
             if (handle.Kind != HandleKind.MethodDefinition) throw new NotSupportedException("csharp_not_method_definition");
             var definition = metadata.GetMethodDefinition((MethodDefinitionHandle)handle);
             if (metadata.GetString(definition.Name) != method.Name) throw new NotSupportedException("csharp_pe_method_identity_mismatch");
-            byte[] live = method.GetMethodBody()?.GetILAsByteArray() ?? throw new NotSupportedException("csharp_method_body_unavailable");
-            if (definition.RelativeVirtualAddress == 0 || !live.AsSpan().SequenceEqual(Reader.GetMethodBody(definition.RelativeVirtualAddress).GetILBytes()))
+            var liveBody = method.GetMethodBody() ?? throw new NotSupportedException("csharp_method_body_unavailable");
+            byte[] live = liveBody.GetILAsByteArray() ?? throw new NotSupportedException("csharp_method_body_unavailable");
+            if (definition.RelativeVirtualAddress == 0) throw new NotSupportedException("csharp_pe_il_mismatch");
+            var peBody = Reader.GetMethodBody(definition.RelativeVirtualAddress);
+            if (!live.AsSpan().SequenceEqual(peBody.GetILBytes()))
                 throw new NotSupportedException("csharp_pe_il_mismatch");
+            // Method headers and EH sections live outside both the metadata
+            // blob and IL stream. The decompiler and reflection must agree on
+            // these semantic inputs too, including on document-cache hits.
+            int localSignature = peBody.LocalSignature.IsNil ? 0 : MetadataTokens.GetToken(peBody.LocalSignature);
+            if (liveBody.LocalSignatureMetadataToken != localSignature)
+                throw new NotSupportedException("csharp_pe_local_signature_mismatch");
+            if (liveBody.InitLocals != peBody.LocalVariablesInitialized)
+                throw new NotSupportedException("csharp_pe_init_locals_mismatch");
+            if (liveBody.MaxStackSize != peBody.MaxStack)
+                throw new NotSupportedException("csharp_pe_max_stack_mismatch");
+            var clauses = liveBody.ExceptionHandlingClauses;
+            if (clauses.Count != peBody.ExceptionRegions.Length)
+                throw new NotSupportedException("csharp_pe_exception_regions_mismatch");
+            for (int index = 0; index < clauses.Count; index++)
+            {
+                var clause = clauses[index]; var region = peBody.ExceptionRegions[index];
+                if ((int)clause.Flags != (int)region.Kind || clause.TryOffset != region.TryOffset
+                    || clause.TryLength != region.TryLength || clause.HandlerOffset != region.HandlerOffset
+                    || clause.HandlerLength != region.HandlerLength
+                    || region.Kind == ExceptionRegionKind.Filter && clause.FilterOffset != region.FilterOffset
+                    || region.Kind == ExceptionRegionKind.Catch && clause.CatchType != method.Module.ResolveType(
+                        MetadataTokens.GetToken(region.CatchType), method.DeclaringType?.GetGenericArguments(), method.GetGenericArguments()))
+                    throw new NotSupportedException("csharp_pe_exception_regions_mismatch");
+            }
         }
 
         public void Dispose() { Reader.Dispose(); stream.Dispose(); }
@@ -166,8 +193,8 @@ public sealed partial class GeneratorClient
     private static NativeCSharpDocument GetNativeCSharpDocument(MethodInfo method, CancellationToken cancellation)
     {
         // The immutable module snapshot is tied to the actual loaded Module and
-        // MVID. Every requested method is separately compared byte-for-byte with
-        // reflection IL, including on a document-cache hit.
+        // MVID. Every requested method separately matches reflection IL, local
+        // signature, initialization/stack header and EH, even on a cache hit.
         if (method.Module != typeof(Projectile).Module) throw new NotSupportedException("csharp_non_native_module");
         if (nativeCSharpModule is null)
         {
