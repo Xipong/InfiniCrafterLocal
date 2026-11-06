@@ -58,13 +58,22 @@ _ACCEPTED_GAMEPLAY_CONTEXT_RULE = (
 
 
 _AIR_JUMP_RULE = (
-    "on_jump is emitted once when an authored air jump starts, by its granting equipment or active generated buff, "
-    "never by ground or vanilla extra jumps. Read exact airJump mechanics from acceptedPlayerEffectsReadOnly, "
-    "acceptedGameplayReadOnly.generatedBuff or acceptedRuntimeProgramReadOnly.effectGroups: speed is pixels per "
-    "world tick and hold duration is world ticks (60/s). self/owner/field anchor to the player; hitPoint is the "
-    "captured jump-start center; velocity uses the source motion axis. Compose visual and sound independently "
-    "from ordinary renderer primitives. Source-attached elements retire with that exact grant; world-attached "
-    "elements finish their bounded lifetime. Read-only mechanics never open Repair permissions."
+    "on_jump is emitted once at the native ExtraJump start of an authored airJump, by its granting equipment or "
+    "active generated buff, never for ground jumps, landings or vanilla extra jumps. Read exact airJump mechanics "
+    "from acceptedPlayerEffectsReadOnly, acceptedGameplayReadOnly.generatedBuff or "
+    "acceptedRuntimeProgramReadOnly.effectGroups: speed is pixels per world tick and hold duration is world ticks (60/s). "
+    "Jump frame: origin=player.Center, not feet; hitPoint captures that jump-start center. "
+    "forward=(0,-player.gravDir), opposite gravity; normal=(-forward.Y,forward.X), so positive side is "
+    "normal gravity +X, inverted gravity -X. self/owner/field/hitPoint use this frame, independent of "
+    "facing, itemRotation and itemLocation. velocity instead uses actual captured/live player velocity, normalized; "
+    "zero velocity falls back to jump forward, with the same perpendicular normal rule. "
+    "For attached primitives, world attachment freezes the event-time frame, including delayed emissions; "
+    "source attachment follows the exact live grant and current gravity, retiring with that source. "
+    "Offsets and rotations remain authored. In the gravity-relative jump frame, negative forward offsets point toward the feet; source-relative "
+    "rotations use jump forward (or the explicitly selected velocity axis). Explicit world rotation frames remain "
+    "world-relative. No automatic foot offset or image-axis correction; tip/tipHistory are forbidden. "
+    "Compose visual and sound independently from ordinary renderer primitives; world-attached elements finish "
+    "their bounded lifetime. Read-only mechanics never open Repair permissions."
 )
 
 

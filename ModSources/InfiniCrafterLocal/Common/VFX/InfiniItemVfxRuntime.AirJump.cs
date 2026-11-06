@@ -28,13 +28,14 @@ public static partial class InfiniItemVfxRuntime
             ||!live.HasAirJumpProducer||!HasExactSlot(live,live.RuntimeProgram.ItemEntityId,RuntimeEventKind.OnJump)
             ||GeneratedItemRegistryService.DefinitionIdentity(live)!=GeneratedItemRegistryService.DefinitionIdentity(source))return;
         string entityId=live.RuntimeProgram.ItemEntityId;
+        var snapshot=InfiniItemVfxSnapshot.CaptureAirJump(player);
+        if(!snapshot.Valid)return;
         EmitLocal(player,live,entityId,RuntimeEventKind.OnJump,eventPosition:point,
-            sourceBinding:VfxSourceBinding.CaptureAirJump(player,live.Id,generation));
+            sourceBinding:VfxSourceBinding.CaptureAirJump(player,live.Id,generation),capturedSnapshot:snapshot);
         if(player.whoAmI!=Main.myPlayer||Main.netMode!=NetmodeID.MultiplayerClient
             ||InfiniCrafterLocalMod.Instance is null)return;
         var payload=new AirJumpEvent(player.whoAmI,generation,MaterialItemEventStream.NewOwnerOccurrence(),
-            live.Id,GeneratedItemRegistryService.DefinitionIdentity(live),entityId,point,InfiniItemVfxSnapshot.Capture(player));
-        if(!payload.Snapshot.Valid)return;
+            live.Id,GeneratedItemRegistryService.DefinitionIdentity(live),entityId,point,snapshot);
         var packet=InfiniCrafterLocalMod.Instance.GetPacket();
         packet.Write(Common.InfiniNetPacketIds.SyncGeneratedItemVfxEvent);WriteAirJumpEvent(packet,payload);packet.Send();
     }
@@ -99,6 +100,6 @@ public static partial class InfiniItemVfxRuntime
         EmitMaterialItemSnapshot(data,new MaterialItemEvent(p.Owner,p.Generation,p.Occurrence,p.ItemId,p.EntityId,
             RuntimeEventKind.OnJump,p.Point,p.Snapshot),binding,allowance);
         EmitLocal(player,data,p.EntityId,RuntimeEventKind.OnJump,eventPosition:p.Point,includeMaterials:false,
-            sharedAllowance:allowance,sourceBinding:binding);
+            sharedAllowance:allowance,sourceBinding:binding,capturedSnapshot:p.Snapshot);
     }
 }

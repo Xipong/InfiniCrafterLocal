@@ -124,7 +124,7 @@ internal abstract class VfxSourceBinding
         {
             frame=default;
             if(!IsLive||anchor is "hitPoint" or "tip" or "tipHistory")return false;
-            frame=ItemFrame(owner,anchor);
+            frame=InfiniItemVfxSnapshot.CaptureAirJump(owner).Frame(anchor,owner.Center);
             return frame.Valid;
         }
     }

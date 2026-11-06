@@ -230,7 +230,7 @@ public static partial class InfiniItemVfxRuntime
         return false;
     }
 
-    private static void EmitLocal(Player player, GeneratedItemData data, string entityId, string eventName, bool cadence = false, Vector2? eventPosition = null,bool includeMaterials=true,MaterialEventAllowance? sharedAllowance=null, bool allowLightCue=true, VfxSourceBinding? sourceBinding=null)
+    private static void EmitLocal(Player player, GeneratedItemData data, string entityId, string eventName, bool cadence = false, Vector2? eventPosition = null,bool includeMaterials=true,MaterialEventAllowance? sharedAllowance=null, bool allowLightCue=true, VfxSourceBinding? sourceBinding=null, InfiniItemVfxSnapshot? capturedSnapshot=null)
     {
         if (Main.dedServ) return;
         // One synchronous event call owns its total across matching slots. Periodic
@@ -240,9 +240,11 @@ public static partial class InfiniItemVfxRuntime
         {
             if (slot.PlacementBindingId is not null || !string.Equals(slot.EntityId, entityId, StringComparison.Ordinal) || !string.Equals(slot.Event, eventName, StringComparison.Ordinal)) continue;
             if(slot.Trail is not null)continue; // exact-use history is drawn with the native held body
+            VfxSourceFrame? eventFrame=capturedSnapshot is {} snapshot
+                ?snapshot.Frame(slot.Anchor,eventPosition??snapshot.Center):null;
             if(InfiniDetachedVfxSystem.HasSnapshotVfx(slot)) {
                 if(!cadence&&includeMaterials)InfiniDetachedVfxSystem.EnqueueSnapshotVfx(data,entityId,slot,$"item:{player.whoAmI}:{data.Id}:{entityId}",
-                    VfxSourceBinding.ItemFrame(player,slot.Anchor,eventPosition),sourceBinding??VfxSourceBinding.Capture(player,EventSourceItem(player,data.Id,eventName)?.Item,data),itemBudget:true,allowance:eventAllowance);
+                    eventFrame??VfxSourceBinding.ItemFrame(player,slot.Anchor,eventPosition),sourceBinding??VfxSourceBinding.Capture(player,EventSourceItem(player,data.Id,eventName)?.Item,data),itemBudget:true,allowance:eventAllowance);
                 continue;
             }
             int repeat = cadence && slot.RepeatEvery!.Value > 0 ? slot.RepeatEvery!.Value : 10;
@@ -250,8 +252,8 @@ public static partial class InfiniItemVfxRuntime
             // Item periodic cadence uses the world clock, not an invented item age.
             if (cadence && (Main.GameUpdateCount + (ulong)Math.Abs((long)slot.SlotSeed)) % (ulong)Math.Max(1, repeat) != 0) continue;
             if (slot.Anchor == "hitPoint" && !eventPosition.HasValue) continue;
-            Vector2 center = slot.Anchor == "hitPoint" ? eventPosition!.Value
-                : slot.Anchor is "tip" or "tipHistory" ? player.itemLocation : player.Center;
+            Vector2 center = eventFrame?.Position ?? (slot.Anchor == "hitPoint" ? eventPosition!.Value
+                : slot.Anchor is "tip" or "tipHistory" ? player.itemLocation : player.Center);
             if (!Finite(center)) continue;
             InfiniVfxRendererKind kind = VfxRendererRegistry.Resolve(slot);
             // Cosmetic/vanity passes must not emit light or consume the
@@ -273,7 +275,7 @@ public static partial class InfiniItemVfxRuntime
             {
                 // Concurrent events/slots from this owner's item share one draw
                 // allowance, including sprites that outlive the use/contact hook.
-                InfiniVfxRuntime.EmitImpactSprite(data, entityId, center, player.velocity,
+                InfiniVfxRuntime.EmitImpactSprite(data, entityId, center, eventFrame?.Velocity??player.velocity,
                     slot, data.VfxManifest, sourceKey);
                 continue;
             }
@@ -284,10 +286,10 @@ public static partial class InfiniItemVfxRuntime
                     Lighting.AddLight(center, color.ToVector3() * strength);
                 continue;
             }
-            // Item-location effects follow the weapon-facing axis; velocity is an
-            // explicit alternate anchor, not an implicit replacement for that aim.
-            Vector2 forward = player.itemRotation.ToRotationVector2() * player.direction;
-            if (slot.Anchor == "velocity") forward = player.velocity.SafeNormalize(forward);
+            // Movement events carry their own captured basis, including on peers.
+            // Ordinary item-location effects retain their weapon-facing axis.
+            Vector2 forward = eventFrame?.Forward ?? player.itemRotation.ToRotationVector2() * player.direction;
+            if (eventFrame is null && slot.Anchor == "velocity") forward = player.velocity.SafeNormalize(forward);
             InfiniVfxRuntime.EmitPrimitive(data, center, forward, slot, data.VfxManifest, sourceKey);
             InfiniVfxRuntime.EmitEventSprite(data, entityId, center, forward, slot, data.VfxManifest, sourceKey);
             // Authored particles accompany the shape/snapshot; none disables only this lane.
