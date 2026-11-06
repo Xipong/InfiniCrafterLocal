@@ -88,7 +88,7 @@ internal static partial class EngineRuntimeChecks
             Equal(nativeParent ? 2 : 0, sourceGraphCaptures, label + " source graph captured once per native A/B parent, never for a generated proxy");
             string ExpectedKeys(string keys) => string.Join(",", keys.Split(',')
                 .Concat(new[] { "armorPenetration", "itemScale", "useLimitPerAnimation" })
-                .Concat(nativeParent ? new[] { "parentSourceGraph" } : Array.Empty<string>()).OrderBy(key => key, StringComparer.Ordinal));
+                .Concat(nativeParent ? new[] { "parentSourceGraph", "nativeItemDispatchReference" } : Array.Empty<string>()).OrderBy(key => key, StringComparer.Ordinal));
             JsonElement root = request.RootElement.GetProperty("itemA");
             JsonElement facts = root.GetProperty("runtimeFacts");
             JsonElement fingerprint = root.GetProperty("fingerprint");
@@ -117,10 +117,16 @@ internal static partial class EngineRuntimeChecks
             foreach (JsonElement view in new[] { root, facts, fingerprint })
             {
                 Equal(nativeParent, view.TryGetProperty("parentSourceGraph", out JsonElement graph), label + " explicit graph presence by parent provenance");
+                Equal(nativeParent, view.TryGetProperty("nativeItemDispatchReference", out JsonElement dispatch), label + " dispatcher source never borrowed by a generated proxy");
                 if (nativeParent)
                 {
                     Equal("parent_reachable_compiled_source_graph", graph.GetProperty("source").GetString()!, label + " source graph provenance");
                     Equal(CanonicalParentFactJson(facts.GetProperty("parentSourceGraph")), CanonicalParentFactJson(graph), label + " exact graph across native fact envelopes");
+                    Equal("conditional_native_item_dispatch_csharp", dispatch.GetProperty("source").GetString()!, label + " conditional dispatcher provenance");
+                    Equal(facts.GetProperty("type").GetInt32(), dispatch.GetProperty("relevanceItemType").GetInt32(), label + " dispatcher relevance retains native identity");
+                    Equal(CanonicalParentFactJson(facts.GetProperty("nativeItemDispatchReference")), CanonicalParentFactJson(dispatch), label + " exact dispatcher across native fact envelopes");
+                    foreach (string unknown in new[] { "dispatcher_coverage_partial; absence_not_proved", "source_receiver_identity_and_runtime_entry_not_proved" })
+                        Equal(true, dispatch.GetProperty("unknowns").EnumerateArray().Any(value => value.GetString() == unknown), label + " dispatcher uncertainty retained: " + unknown);
                 }
             }
             Equal(root.GetProperty("id").GetInt32(), facts.GetProperty("type").GetInt32(), label + " root id retains native type");
