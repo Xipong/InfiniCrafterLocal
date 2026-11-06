@@ -178,9 +178,11 @@ jobs:
             --scenario tools/item-test-workbench/scenarios/client-vfx-captured.json \
             --review native --gif --out artifacts/workbench-ci/luminance-hit
           python - <<'PY'
-          import json
+          import sys
           from pathlib import Path
-          trace = json.loads(Path('artifacts/workbench-ci/luminance-hit/native.json').read_text())
+          sys.path.insert(0, 'tools/item-test-workbench')
+          import workbench as w
+          trace = w.read_native_json(Path('artifacts/workbench-ci/luminance-hit/native.json'))
           render = trace['nativeRender']
           hashes = render.get('luminanceResources', {}).get('selectedTextureSha256', {})
           key = 'Luminance/Assets/GreyscaleTextures/ShineFlare'
@@ -236,6 +238,9 @@ jobs:
           import json
           from pathlib import Path
           from PIL import Image
+          import sys
+          sys.path.insert(0, 'tools/item-test-workbench')
+          import workbench as w
           root = Path('artifacts/workbench-ci/lunar-probe')
           result = json.loads((root / 'probe-result.json').read_text())
           if result.get('passed') is not True or len(result['cases']) != 1:
@@ -253,7 +258,7 @@ jobs:
           with Image.open(close_gif) as image:
               if getattr(image, 'n_frames', 1) < 2:
                   raise SystemExit('Lunar close GIF does not contain an animation')
-          trace = json.loads((root / 'runs' / case['run'] / 'native.json').read_text())
+          trace = w.read_native_json(root / 'runs' / case['run'] / 'native.json')
           render = trace['nativeRender']
           if trace.get('status') != 'passed' or len(render.get('frames', [])) != 160:
               raise SystemExit('Lunar trace is incomplete or failed')
@@ -312,15 +317,19 @@ jobs:
             test "$status" -eq 2 || { echo "Expected native error exit 2; got $status" >&2; exit 1; }
           fi
           python - <<'PY'
-          import json
+          import hashlib, json, os, struct, sys
           from pathlib import Path
+          sys.path.insert(0, 'tools/item-test-workbench')
+          import workbench as w
+          from fetch_performance_assets import draw_entries, verify_asset
+          from fetch_vfx_assets import destination
           root = Path('artifacts/workbench-ci')
           for label in ('vanilla-bullet', 'vanilla-excalibur'):
               result = json.loads((root / label / 'probe-result.json').read_text())
               case = result['cases'][0]
               if not result['passed'] or not Path(case.get('gif', '')).is_file():
                   raise SystemExit(f'{label}: native capture or GIF failed')
-              trace = json.loads((root / label / 'runs' / case['run'] / 'native.json').read_text())
+              trace = w.read_native_json(root / label / 'runs' / case['run'] / 'native.json')
               frames = trace['nativeRender']['frames']
               if not any(f.get('heldItemDrawCount', 0) > 0 for f in frames):
                   raise SystemExit(f'{label}: native item was not actually drawn')
@@ -332,14 +341,33 @@ jobs:
                   if not any(e.get('kind') == 'spawn' and e.get('ammoItemIdUsed') == 97 for e in events):
                       raise SystemExit('Native musket ball source was not observed')
           legacy = json.loads((root / 'vanilla-legacy-bullet/probe-result.json').read_text())
-          refused = json.loads((root / 'vanilla-legacy-excalibur-run/native.json').read_text())
+          refused = w.read_native_json(root / 'vanilla-legacy-excalibur-run/native.json')
           complete_case = json.loads((root / 'vanilla-excalibur/probe-result.json').read_text())['cases'][0]
-          complete = json.loads((root / 'vanilla-excalibur/runs' / complete_case['run'] / 'native.json').read_text())
+          complete = w.read_native_json(root / 'vanilla-excalibur/runs' / complete_case['run'] / 'native.json')
           def assets(trace):
               return trace['nativeRender']['vanillaProjectileAssets']['textures']
-          def loaded_projectile(rows, native_type):
-              return any(row.get('nativeType') == native_type and row.get('state') == 'Loaded'
-                         and row.get('sha256') and row.get('sha256') == row.get('loadedBytesSha256') for row in rows)
+          index = w.read_json(w.HERE / 'vanilla-draw-assets.json')
+          def loaded_asset(rows, name, asset_root):
+              matches = [row for row in rows if row.get('asset') == name]
+              if len(matches) != 1:
+                  return False
+              row = matches[0]
+              entry = draw_entries(None, None, [name], index)[0]
+              path = destination(asset_root.absolute(), entry['path'])
+              if Path(row.get('path', '')).absolute() != path:
+                  return False
+              with path.open('rb') as stream:
+                  data = stream.read(entry['bytes'] + 1)
+              verify_asset(data, entry, str(path))
+              # sha256 is computed from the same byte[] passed to the decoder;
+              # Loaded is recorded only after immediate native texture loading.
+              return (row.get('state') == 'Loaded' and row.get('sha256') == hashlib.sha256(data).hexdigest()
+                      and row.get('gitBlobSha1') == entry['gitBlobSha1'] and row.get('bytes') == len(data)
+                      and (row.get('width'), row.get('height')) == struct.unpack('>II', data[16:24])
+                      and row.get('communityCommit') == index['communityCommit']
+                      and row.get('sourceTreeSha') == index['sourceTreeSha'])
+          asset_root = Path(os.environ['RUNNER_TEMP']) / 'vanilla-assets'
+          legacy_root = Path(os.environ['RUNNER_TEMP']) / 'vanilla-legacy-assets'
           full_assets, missing_assets = assets(complete), assets(refused)
           error_lines = refused.get('error', '').splitlines()
           error_class = error_lines[0].partition(':')[0] if error_lines else ''
@@ -347,10 +375,10 @@ jobs:
           if (not legacy['passed'] or refused['status'] != 'error'
                   or error_class != 'System.IO.FileNotFoundException'
                   or error_site != 'at WNativeVanillaProjectileAssets.RequireReady'
-                  or not loaded_projectile(full_assets, 982)
-                  or not any(row.get('asset') == 'Extra_98' and row.get('state') == 'Loaded' for row in full_assets)
-                  or not loaded_projectile(missing_assets, 14)
-                  or any(row.get('nativeType') == 982 or row.get('asset') == 'Extra_98' for row in missing_assets)):
+                  or not loaded_asset(full_assets, 'Projectile_982.png', asset_root)
+                  or not loaded_asset(full_assets, 'Extra_98.png', asset_root)
+                  or not loaded_asset(missing_assets, 'Projectile_14.png', legacy_root)
+                  or any(row.get('asset') in ('Projectile_982.png', 'Extra_98.png') for row in missing_assets)):
               raise SystemExit('Legacy asset control did not prove loaded bullet resources and refusal of the missing native texture pair')
           PY
       - name: Upload native evidence and diagnostics

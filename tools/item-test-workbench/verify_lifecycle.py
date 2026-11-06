@@ -48,7 +48,7 @@ def main():
     for name,item,scenario,expected,failures in cases:
         folder=out/name;folder.mkdir();sp=folder/'scenario.json';sp.write_text(json.dumps(scenario,indent=2));dest=folder/'native.json'
         with (folder/'process.log').open('w') as log:r=subprocess.run([dotnet,str(dll),'--item',str(fixtures/item),'--scenario',str(sp),'--output',str(dest)],cwd=w.ROOT,stdout=log,stderr=log,timeout=180)
-        trace=json.loads(dest.read_text()) if dest.exists() else {};actual=[a['name'] for a in trace.get('assertions',[]) if a.get('status')=='failed']
+        trace=w.read_native_json(dest) if dest.exists() else {};actual=[a['name'] for a in trace.get('assertions',[]) if a.get('status')=='failed']
         ok=digest(dll)==initial_hash and r.returncode==expected and trace.get('status')=={0:'passed',1:'failed',2:'error'}[expected] and sorted(actual)==sorted(failures)
         if expected==2:ok=ok and ('existing projectile entityId' if name=='invalid-entity' else 'ticks must be') in trace.get('error','')
         rows.append(dict(name=name,passed=ok,exitCode=r.returncode,status=trace.get('status'),failedAssertions=actual));print(rows[-1],flush=True)

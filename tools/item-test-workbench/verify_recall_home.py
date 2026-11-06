@@ -42,7 +42,7 @@ def main():
         (directory/'scenario.json').write_text(json.dumps(s))
         proc=subprocess.run([os.environ.get('DOTNET','dotnet'),str(dll),'--item',str(out/'item.json'),'--scenario',str(directory/'scenario.json'),'--output',str(directory/'native.json')],cwd=w.ROOT,capture_output=True,text=True,timeout=180)
         (directory/'process.log').write_text(proc.stdout+proc.stderr)
-        trace=w.read_json(directory/'native.json') if (directory/'native.json').exists() else {};snapshots=trace.get('snapshots',[])
+        trace=w.read_native_json(directory/'native.json') if (directory/'native.json').exists() else {};snapshots=trace.get('snapshots',[])
         events=[e for f in snapshots for e in f.get('events',[]) if e.get('kind')=='native_teleport']
         passed=proc.returncode==expected and trace.get('status')==('passed' if expected==0 else 'error')
         if coords and snapshots:

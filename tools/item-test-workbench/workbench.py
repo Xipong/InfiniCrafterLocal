@@ -426,6 +426,7 @@ def source_fingerprint():
                     HERE/"vanilla-item-assets.json", HERE/"vanilla-draw-assets.json",
                     *ROOT.glob("ModSources/InfiniCrafterLocal/Assets/**/*.*"),
                     *ROOT.glob("ModSources/InfiniCrafterLocal/Localization/**/*.*"),
+                    *ROOT.glob("ModSources/InfiniCrafterLocal/lib/**/*.*"),
                     ROOT/"ModSources/InfiniCrafterLocal/build.txt"])
     hasher = hashlib.sha256()
     for path in files:

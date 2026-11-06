@@ -55,7 +55,7 @@ def main():
                                     '--output',str(directory/'native.json')],cwd=w.ROOT,env=env,
                             capture_output=True,text=True,timeout=180)
         (directory/'process.log').write_text(proc.stdout+proc.stderr)
-        trace=w.read_json(directory/'native.json');traces[name]=trace
+        trace=w.read_native_json(directory/'native.json');traces[name]=trace
         passed=proc.returncode==expected and trace['status']==('passed' if expected==0 else 'error')
         if error:passed=passed and error in trace.get('error','') and not trace.get('nativeRender',{}).get('frames')
         checks.append(dict(name=name,passed=passed,exitCode=proc.returncode))

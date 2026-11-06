@@ -121,7 +121,7 @@ def main():
         proc = subprocess.run(command, cwd=w.ROOT, capture_output=True, text=True, timeout=240)
         (out/(name+'.log')).write_text(proc.stdout+'\n'+proc.stderr)
         trace_path = out/name/'native.json'
-        trace = w.read_json(trace_path) if trace_path.exists() else {}; traces[name] = trace
+        trace = w.read_native_json(trace_path) if trace_path.exists() else {}; traces[name] = trace
         frames = trace.get('nativeRender', {}).get('frames', [])
         submissions = sum(d['submittedSegments'] for f in frames for d in f.get('activeProjectileVfx', {}).get('heldHistoryDraws', []))
         passed = proc.returncode == 0 and trace.get('status') == 'passed' and bool(frames)
@@ -152,7 +152,7 @@ def main():
         proc = subprocess.run([sys.executable, str(w.HERE/'workbench.py'), 'run', '--no-build', '--item', str(ip),
             '--scenario', str(sp), '--out', str(out/name)], cwd=w.ROOT, capture_output=True, text=True, timeout=240)
         (out/(name+'.log')).write_text(proc.stdout+'\n'+proc.stderr)
-        path = out/name/'native.json'; trace = w.read_json(path) if path.exists() else {}
+        path = out/name/'native.json'; trace = w.read_native_json(path) if path.exists() else {}
         reason = {'missing_body_png':'Missing explicit artwork', 'missing_native_player':'historyTrail requires drawPlayer',
                   'wrong_layer':'held item history requires', 'hidden_source':'held item history requires'}[name]
         passed = proc.returncode == 2 and trace.get('status') == 'error' and reason in trace.get('error', '')

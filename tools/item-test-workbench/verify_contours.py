@@ -57,7 +57,7 @@ def main():
         environment=None if name!='missing-white-pixel' else dict(os.environ,INFINI_PARTICLE_ASSET_DIR=str(missing))
         proc=subprocess.run(command+['--item',str(directory/'item.json'),'--scenario',str(directory/'scenario.json'),'--output',str(directory/'native.json')],cwd=w.ROOT,capture_output=True,text=True,timeout=180,env=environment)
         (directory/'process.log').write_text(proc.stdout+proc.stderr)
-        trace=w.read_json(directory/'native.json') if (directory/'native.json').exists() else {};traces[name]=trace
+        trace=w.read_native_json(directory/'native.json') if (directory/'native.json').exists() else {};traces[name]=trace
         passed=proc.returncode==expected and trace.get('status')==('passed' if expected==0 else 'error')
         if expected:passed=passed and bool(trace.get('error'))
         if name=='missing-white-pixel':passed=passed and ('WhitePixel' in trace.get('error','') or 'library texture' in trace.get('error',''))

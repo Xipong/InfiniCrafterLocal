@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import workbench as w
 import tempfile
 
 
@@ -45,7 +46,7 @@ def main():
         output = root / "trace.json"
         scenario_path.write_text(json.dumps(scenario))
         result = run(dll, "--item", item_path, "--scenario", scenario_path, "--output", output)
-        trace = json.loads(output.read_text())
+        trace = w.read_native_json(output)
         assert result.returncode == 0 and trace.get("status") == "passed", (result.stderr, trace.get("error"))
         events = [(frame["tick"], event) for frame in trace["snapshots"] for event in frame["events"]]
         spawns = [(tick, event["projectileId"]) for tick, event in events if event["kind"] == "spawn"]
@@ -57,7 +58,7 @@ def main():
         scenario["playerUpdate"] = "item_check"
         scenario_path.write_text(json.dumps(scenario))
         result = run(dll, "--item", item_path, "--scenario", scenario_path, "--output", output)
-        trace = json.loads(output.read_text())
+        trace = w.read_native_json(output)
         assert result.returncode == 2 and "Native sentry ownership/count maintenance" in trace.get("error", ""), trace
     print("Sentry full-player replacement and item-check refusal: PASS")
 

@@ -53,7 +53,7 @@ def main():
     for label,s,expected,reason in [('placed-render',scene,0,''),('negative-draw-count',wrong,1,''),('missing-png',missing,2,'Missing explicit artwork file'),('retired-native-body',scene,2,'Item rejected')]:
         folder=out/label;folder.mkdir();sp=folder/'scenario.json';sp.write_text(json.dumps(s,indent=2))
         result=subprocess.run(command+['--item',str(retired_path if label=='retired-native-body' else path),'--scenario',str(sp),'--output',str(folder/'native.json')],cwd=w.ROOT,capture_output=True,text=True,timeout=180)
-        (folder/'process.log').write_text(result.stdout+result.stderr);trace=w.read_json(folder/'native.json')
+        (folder/'process.log').write_text(result.stdout+result.stderr);trace=w.read_native_json(folder/'native.json')
         failed=[a['name'] for a in trace.get('assertions',[]) if a['status']=='failed']
         ok=w.digest(dll)==binary and result.returncode==expected and trace['status']=={0:'passed',1:'failed',2:'error'}[expected] and reason in trace.get('error','')
         if expected==1:ok=ok and failed==['placed_body_draw_count_at_least']

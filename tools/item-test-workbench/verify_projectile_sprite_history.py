@@ -39,7 +39,7 @@ def main():
         ip=out/(name+'-item.json');sp=out/(name+'-scene.json');ip.write_text(json.dumps(d));sp.write_text(json.dumps(s))
         cmd=[sys.executable,str(w.HERE/'workbench.py'),'run','--item',str(ip),'--scenario',str(sp),'--out',str(out/name),'--no-build','--review','none']
         r=subprocess.run(cmd,cwd=w.ROOT,capture_output=True,text=True,timeout=180);(out/(name+'.log')).write_text(r.stdout+r.stderr)
-        t=w.read_json(out/name/'native.json');traces[name]=t
+        t=w.read_native_json(out/name/'native.json');traces[name]=t
         rows.append(dict(name=name,passed=r.returncode==code and t['status']=={0:'passed',2:'error'}[code] and reason in t.get('error',''),exitCode=r.returncode,error=t.get('error')))
     def draws(t):return [d for s in t.get('nativeRender',{}).get('snapshots',[]) for d in s.get('activeProjectileVfx',{}).get('historyTrailDraws',[])]
     def check(n,v):rows.append(dict(name=n,passed=bool(v)))

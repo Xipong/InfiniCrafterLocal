@@ -77,7 +77,7 @@ def main():
         process = subprocess.run(command + ['--item',str(directory/'item.json'),'--scenario',str(directory/'scenario.json'),
                                           '--output',str(directory/'native.json')], cwd=w.ROOT, capture_output=True,text=True,timeout=180)
         (directory/'process.log').write_text(process.stdout+process.stderr)
-        trace = w.read_json(directory/'native.json'); traces[name] = trace
+        trace = w.read_native_json(directory/'native.json'); traces[name] = trace
         passed = process.returncode == expected and trace['status'] == ('passed' if expected==0 else 'error')
         if expected: passed = passed and 'shape currently requires' in trace.get('error','')
         checks.append(dict(name=name,passed=passed,exitCode=process.returncode))

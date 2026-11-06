@@ -61,7 +61,7 @@ def main():
         command=[os.environ.get('DOTNET','dotnet'),str(dll)]+(['--vanilla-item','2289'] if vanilla else ['--item',str(directory/'item.json')])+['--scenario',str(directory/'scenario.json'),'--output',str(directory/'native.json')]
         proc=subprocess.run(command,cwd=w.ROOT,capture_output=True,text=True,timeout=180)
         (directory/'process.log').write_text(proc.stdout+proc.stderr)
-        trace=w.read_json(directory/'native.json') if (directory/'native.json').exists() else {}
+        trace=w.read_native_json(directory/'native.json') if (directory/'native.json').exists() else {}
         facts=inspect(trace);positive=name in ('vanilla','generated','bait_debit')
         passed=proc.returncode==0 and trace.get('status')=='passed' and bool(facts['caught'])==positive and facts['bite']==positive
         if positive:passed=passed and facts['wet'] and facts['spawned'] and all(i['stack']>0 and i['type'] in facts['nativeCatchIds'] for i in facts['caught'])

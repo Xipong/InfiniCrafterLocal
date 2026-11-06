@@ -63,7 +63,7 @@ def main():
         scenario_path=out/(name+'.json');scenario_path.write_text(json.dumps(scenario,indent=2))
         command=([os.environ.get('DOTNET','dotnet'),str(dll),'--item',str(item),'--scenario',str(scenario_path),'--output',str(out/name/'native.json')] if dll else [sys.executable,str(w.HERE/'workbench.py'),'run','--item',str(item),'--scenario',str(scenario_path),'--out',str(out/name),'--review','none','--no-build'])
         result=subprocess.run(command,cwd=w.ROOT,capture_output=True,text=True,timeout=180)
-        path=out/name/'native.json';trace=w.read_json(path) if path.exists() else {}
+        path=out/name/'native.json';trace=w.read_native_json(path) if path.exists() else {}
         failed=[a['name'] for a in trace.get('assertions',[]) if a['status']=='failed']
         passed=(dll is None or digest(dll)==initial_hash) and result.returncode==exit_code and trace.get('status')=={0:'passed',1:'failed',2:'error'}[exit_code]
         if failures is not None:passed=passed and sorted(failed)==sorted(failures)

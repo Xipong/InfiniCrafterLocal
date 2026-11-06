@@ -40,7 +40,7 @@ def main():
     for name,data,s,expected in cases:
         ip=out/(name+'-item.json');ip.write_text(json.dumps(data,indent=2));sp=out/(name+'-scenario.json');sp.write_text(json.dumps(s,indent=2))
         r=subprocess.run([sys.executable,str(w.HERE/'workbench.py'),'run','--item',str(ip),'--scenario',str(sp),'--out',str(out/name),'--no-build'],cwd=w.ROOT,capture_output=True,text=True,timeout=240)
-        tp=out/name/'native.json';t=w.read_json(tp) if tp.exists() else {};traces[name]=t
+        tp=out/name/'native.json';t=w.read_native_json(tp) if tp.exists() else {};traces[name]=t
         ok=r.returncode==expected and t.get('status')=={0:'passed',1:'failed',2:'error'}[expected]
         rows.append({'name':name,'passed':ok,'expectedExitCode':expected,'actualExitCode':r.returncode,'nativeStatus':t.get('status'),'trace':str(tp),'runnerStdout':r.stdout,'runnerStderr':r.stderr});print(name+': '+('PASS' if ok else 'FAIL'),flush=True)
     def events(name,kind=None):return [(s['tick'],i,e) for s in traces[name].get('snapshots',[]) for i,e in enumerate(s.get('events',[])) if kind is None or e.get('kind')==kind]

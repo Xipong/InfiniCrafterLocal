@@ -61,7 +61,7 @@ def main():
             result = subprocess.run(command, cwd=w.ROOT, capture_output=True, text=True, timeout=180)
             (directory / 'stdout.log').write_text(result.stdout)
             (directory / 'stderr.log').write_text(result.stderr)
-            trace = json.loads((directory / 'native.json').read_text()) if (directory / 'native.json').exists() else {}
+            trace = w.read_native_json(directory / 'native.json') if (directory / 'native.json').exists() else {}
             callbacks = [e for frame in trace.get('snapshots', []) for e in frame.get('events', []) if e.get('kind') == 'native_equipment_kill_callback']
             rows.append({'name': name, 'expectedStatus': expected, 'status': trace.get('status'),
                          'passed': trace.get('status') == expected and result.returncode == (0 if expected == 'passed' else 1)

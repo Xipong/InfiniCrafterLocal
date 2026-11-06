@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import workbench as w
 import shutil
 
 
@@ -52,7 +53,7 @@ def main():
                                   *itemargs, '--scenario', str(scenario), '--output', str(tracepath)],
                                  capture_output=True, text=True, timeout=180)
         (folder / 'process.log').write_text(process.stdout + process.stderr)
-        trace = json.loads(tracepath.read_text())
+        trace = w.read_native_json(tracepath)
         snapshots = trace.get('snapshots', [])
         events = [e for s in snapshots for e in s.get('events', [])]
         spawns = [e for e in events if e['kind'] == 'spawn']
@@ -99,7 +100,7 @@ def main():
                                       '--vanilla-item', 'Clentaminator', '--scenario', str(scenario),
                                       '--output', str(tracepath)], capture_output=True, text=True, timeout=180)
             (folder / 'process.log').write_text(process.stdout + process.stderr)
-            trace = json.loads(tracepath.read_text())
+            trace = w.read_native_json(tracepath)
             checks = dict(expectedRefusal=process.returncode == 2 and error in trace.get('error', ''))
             result = dict(name=name, passed=all(checks.values()), checks=checks)
             results.append(result)

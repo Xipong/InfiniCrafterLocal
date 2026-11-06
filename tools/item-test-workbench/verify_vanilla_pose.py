@@ -24,7 +24,7 @@ def main():
                 assertions=[dict(kind='no_nonfinite')],nativeRender=dict(width=512,height=384,cameraX=565,cameraY=540,zoom=2,capture=True,drawArtwork=True,drawPlayer=True,drawNativeDust=True,lightingMode='viewport_fill',artworkFiles=[]))
             sp=folder/'scenario.json';sp.write_text(json.dumps(scene,indent=2));tp=folder/'native.json'
             process=subprocess.run([os.environ.get('DOTNET','dotnet'),str(dll),'--vanilla-item',name,'--scenario',str(sp),'--output',str(tp)],cwd=w.ROOT,capture_output=True,text=True,timeout=180)
-            (folder/'process.log').write_text(process.stdout+process.stderr);trace=w.read_json(tp);frames=trace.get('nativeRender',{}).get('frames',[])
+            (folder/'process.log').write_text(process.stdout+process.stderr);trace=w.read_native_json(tp);frames=trace.get('nativeRender',{}).get('frames',[])
             geometry=[r for f in frames for r in f.get('heldGeometry',[])]
             checks=dict(nativePassed=process.returncode==0 and trace['status']=='passed',
                 exactFacing=len(frames)==45 and all(f['visualReview']['direction']==direction for f in frames),

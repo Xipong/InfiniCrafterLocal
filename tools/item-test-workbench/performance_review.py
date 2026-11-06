@@ -269,7 +269,7 @@ def run(args):
                 result = subprocess.run(command, cwd=w.ROOT, env=env, capture_output=True, text=True, timeout=args.timeout)
                 (directory/'stdout.log').write_text(result.stdout); (directory/'stderr.log').write_text(result.stderr)
                 row['exitCode'] = result.returncode
-                trace = w.read_json(directory/'native.json')
+                trace = w.read_native_json(directory/'native.json')
                 row['traceSha256'] = sha(directory/'native.json')
                 row.update(measure(trace))
                 if result.returncode != {'passed': 0, 'failed': 1, 'error': 2}.get(trace['status']):

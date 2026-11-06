@@ -134,7 +134,7 @@ def main():
         if args.native_dll:
             command=[os.environ.get('DOTNET','dotnet'),str(dll)]+(['--vanilla-item',str(item)] if isinstance(item,int) else ['--item',str(fixtures/item)])+['--scenario',str(scenario_path),'--output',str(out/name/'native.json')]
         proc=subprocess.run(command,cwd=w.ROOT,capture_output=True,text=True,timeout=240)
-        trace_path=out/name/'native.json';trace=w.read_json(trace_path) if trace_path.exists() else {}
+        trace_path=out/name/'native.json';trace=w.read_native_json(trace_path) if trace_path.exists() else {}
         passed=binaries_unchanged() and proc.returncode==expected and trace.get('status')=={0:'passed',1:'failed',2:'error'}[expected]
         if name=='negative-held-buff':
             passed=passed and 'NotSupportedException' in trace.get('error','') and 'held' in trace.get('error','').lower()
@@ -144,7 +144,7 @@ def main():
         print(name+': '+('PASS' if passed else 'FAIL'),flush=True)
     def recorded(name):
         path=out/name/'native.json'
-        return w.read_json(path) if path.exists() else {}
+        return w.read_native_json(path) if path.exists() else {}
     def binding_spawns(name):
         return [(f['tick'],e.get('entityId')) for f in recorded(name).get('snapshots',[]) for e in f.get('events',[]) if e.get('kind')=='entity_configured']
     for suffix in ('','-full'):

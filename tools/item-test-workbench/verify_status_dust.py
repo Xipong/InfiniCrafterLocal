@@ -33,7 +33,7 @@ def main():
     for name,value,sc in cases:
         d=out/name;d.mkdir();(d/'item.json').write_text(json.dumps(value));(d/'scenario.json').write_text(json.dumps(sc))
         r=subprocess.run(cmd+['--item',str(d/'item.json'),'--scenario',str(d/'scenario.json'),'--output',str(d/'native.json')],cwd=w.ROOT,capture_output=True,text=True,timeout=180)
-        (d/'process.log').write_text(r.stdout+r.stderr);t=w.read_json(d/'native.json');traces[name]=t
+        (d/'process.log').write_text(r.stdout+r.stderr);t=w.read_native_json(d/'native.json');traces[name]=t
         checks.append(dict(name=name,passed=r.returncode==0 and t['status']=='passed'))
     actual=traces['status'];render=lambda t:t.get('nativeRender',{}).get('snapshots',[])
     frames=lambda t:t.get('nativeRender',{}).get('frames',[])

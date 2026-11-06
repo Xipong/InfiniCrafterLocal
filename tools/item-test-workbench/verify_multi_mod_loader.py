@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import workbench as w
 import tempfile
 
 
@@ -62,7 +63,7 @@ def main():
             result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=240)
             if not trace_path.is_file():
                 raise AssertionError(f'{name}: missing terminal trace; exit={result.returncode}; {result.stderr[-3000:]}')
-            trace = json.loads(trace_path.read_text(encoding='utf-8'))
+            trace = w.read_native_json(trace_path)
             observed = json.loads(observer.read_text(encoding='utf-8')) if observer.is_file() else None
             return result, trace, observed
 

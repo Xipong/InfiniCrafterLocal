@@ -35,7 +35,7 @@ def main():
     for name,d,s,expected in cases:
         ip=out/(name+'-item.json');ip.write_text(json.dumps(d,indent=2));sp=out/(name+'-scenario.json');sp.write_text(json.dumps(s,indent=2))
         r=subprocess.run([sys.executable,str(w.HERE/'workbench.py'),'run','--item',str(ip),'--scenario',str(sp),'--out',str(out/name),'--no-build'],cwd=w.ROOT,capture_output=True,text=True,timeout=180)
-        tp=out/name/'native.json';t=w.read_json(tp) if tp.exists() else {};traces[name]=t
+        tp=out/name/'native.json';t=w.read_native_json(tp) if tp.exists() else {};traces[name]=t
         rows.append({'name':name,'passed':r.returncode==expected and t.get('status')=={0:'passed',2:'error'}[expected],'exit':r.returncode,'error':t.get('error'),'trace':str(tp),'stderr':r.stderr});print(name,rows[-1]['passed'],t.get('error',''),flush=True)
     def snaps(name):return traces[name].get('snapshots',[])
     def hits(name):return [(s['tick'],e) for s in snaps(name) for e in s.get('events',[]) if e['kind'] in ('hit','item_hit')]

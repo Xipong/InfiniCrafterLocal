@@ -111,7 +111,7 @@ def main():
     for name,ip,s,expected,env in cases:
         sp=out/(name+'-scenario.json');sp.write_text(json.dumps(s,indent=2))
         r=subprocess.run([sys.executable,str(w.HERE/'workbench.py'),'run','--item',str(ip),'--scenario',str(sp),'--out',str(out/name),'--no-build'],cwd=w.ROOT,env={**os.environ,**env},capture_output=True,text=True,timeout=240)
-        tp=out/name/'native.json';t=w.read_json(tp) if tp.exists() else {};traces[name]=t
+        tp=out/name/'native.json';t=w.read_native_json(tp) if tp.exists() else {};traces[name]=t
         rows.append({'name':name,'passed':r.returncode==expected and t.get('status')=={0:'passed',1:'failed',2:'error'}[expected] and (expected!=2 or expected_refusal(name,t)),'expectedRefusalCause':REFUSAL_CAUSES.get(name),'expectedExitCode':expected,'actualExitCode':r.returncode,'nativeStatus':t.get('status'),'trace':str(tp),'runnerStdout':r.stdout,'runnerStderr':r.stderr});print(name+': '+('PASS' if rows[-1]['passed'] else 'FAIL'),flush=True)
         if t.get('nativeRender',{}).get('frames'):
             try:native_frames(t,tp);valid=True

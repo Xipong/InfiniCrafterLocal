@@ -54,7 +54,7 @@ def main():
                             '--scenario', str(sp), '--output', str(directory / 'native.json')],
                            cwd=w.ROOT, capture_output=True, text=True, timeout=120)
         (directory / 'stderr.log').write_text(r.stderr)
-        t = json.loads((directory / 'native.json').read_text())
+        t = w.read_native_json(directory / 'native.json')
         checks = {'nativeStatus': t.get('status') == expected, 'exitCode': r.returncode == (0 if expected == 'passed' else 2)}
         if expected == 'passed':
             frames = {f['tick']: f['player'] for f in t['snapshots'] if 'phase' not in f}

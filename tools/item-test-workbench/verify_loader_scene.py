@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import workbench as w
 import tempfile
 
 
@@ -48,7 +49,7 @@ def main():
                 env.pop('IFC_WORKBENCH_OBSERVER_OUTPUT', None)
             proc = subprocess.run(command, env=env, capture_output=True, text=True, timeout=180)
             if not trace_path.exists(): raise AssertionError((name, proc.returncode, proc.stderr))
-            trace = json.loads(trace_path.read_text(encoding='utf-8'))
+            trace = w.read_native_json(trace_path)
             observer = json.loads(observer_path.read_text(encoding='utf-8')) if observer_path.exists() else {}
             return proc, trace, observer
 

@@ -36,7 +36,7 @@ def main():
     scene['actions'] += [dict(tick=2,kind='controls',left=True,right=False,jump=False),dict(tick=45,kind='controls',left=False,right=False,jump=False)]
     sp=out/'scenario.json';sp.write_text(json.dumps(scene))
     result=subprocess.run([os.environ.get('DOTNET','dotnet'),str(dll),'--item',str(ip),'--scenario',str(sp),'--output',str(out/'native.json')],cwd=w.ROOT,capture_output=True,text=True,timeout=240)
-    (out/'process.log').write_text(result.stdout+result.stderr);trace=w.read_json(out/'native.json')
+    (out/'process.log').write_text(result.stdout+result.stderr);trace=w.read_native_json(out/'native.json')
     rows=[row for frame in trace.get('nativeRender',{}).get('placedBodyRendering',{}).get('frames',[]) for body in frame['draws'] for row in body['geometry']]
     drops=[drop for frame in trace.get('nativeRender',{}).get('frames',[]) for drop in frame.get('droppedItems',[])]
     world_items=[s['world']['returnedItems'][0] for s in trace.get('snapshots',[]) if s.get('world',{}).get('returnedItems') and s.get('phase') is None]

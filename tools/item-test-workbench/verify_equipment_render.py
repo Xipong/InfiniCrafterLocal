@@ -69,7 +69,7 @@ def main():
                                  '--item-boundary', args.item_boundary], cwd=w.ROOT, capture_output=True, text=True, timeout=240)
         (directory / 'stdout.log').write_text(result.stdout)
         (directory / 'stderr.log').write_text(result.stderr)
-        trace = json.loads((directory / 'native.json').read_text()) if (directory / 'native.json').exists() else {}
+        trace = w.read_native_json(directory / 'native.json') if (directory / 'native.json').exists() else {}
         if name == 'missing-overlay':
             rows.append({'name': name, 'passed': result.returncode == 2 and trace.get('status') == 'error'
                          and 'Missing explicit artwork file' in trace.get('error', '') and not trace.get('nativeRender', {}).get('frames')})

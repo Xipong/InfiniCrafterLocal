@@ -44,7 +44,7 @@ def main():
     for name,value,scenario,expected in cases:
         d=out/name;d.mkdir();(d/'item.json').write_text(json.dumps(value));(d/'scenario.json').write_text(json.dumps(scenario))
         process=subprocess.run(cmd+['--item',str(d/'item.json'),'--scenario',str(d/'scenario.json'),'--output',str(d/'native.json')],cwd=w.ROOT,capture_output=True,text=True,timeout=180)
-        (d/'process.log').write_text(process.stdout+process.stderr);trace=w.read_json(d/'native.json');traces[name]=trace
+        (d/'process.log').write_text(process.stdout+process.stderr);trace=w.read_native_json(d/'native.json');traces[name]=trace
         good=process.returncode==expected and trace['status']==('passed' if expected==0 else 'error')
         if expected:good &= 'nativeLight requires' in trace.get('error','') and not trace.get('nativeRender',{}).get('frames')
         checks.append(dict(name=name,passed=bool(good)))

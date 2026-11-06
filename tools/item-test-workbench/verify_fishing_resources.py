@@ -4,11 +4,22 @@ import argparse
 import copy
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
 import workbench as w
 from verify_native_fishing import scene
+
+
+def resource_refusal(name, error):
+    # Exception class and resource identity are the contract, not display prose.
+    first = error.splitlines()[0] if error else ''
+    exception, _, message = first.partition(': ')
+    if name in ('missing', 'corrupt'):
+        expected = 'System.IO.' + ('FileNotFoundException' if name == 'missing' else 'InvalidDataException')
+        return exception == expected and re.search(r'(?<![\w.])Item_2290\.png(?![\w.])', message) is not None
+    return exception == 'System.ArgumentException' and message.startswith('vanillaItemTextures')
 
 
 def main():
@@ -36,7 +47,7 @@ def main():
         (directory/'scenario.json').write_text(json.dumps(s))
         p=subprocess.run([os.environ.get('DOTNET','dotnet'),str(dll),'--vanilla-item','2289','--scenario',str(directory/'scenario.json'),'--output',str(directory/'native.json')],cwd=w.ROOT,capture_output=True,text=True,timeout=120)
         (directory/'process.log').write_text(p.stdout+p.stderr)
-        trace=w.read_json(directory/'native.json') if (directory/'native.json').exists() else {}
+        trace=w.read_native_json(directory/'native.json') if (directory/'native.json').exists() else {}
         frames=trace.get('nativeRender',{}).get('frames',[])
         if name=='loaded':
             resources=trace.get('nativeRender',{}).get('vanillaProjectileAssets',{}).get('textures',[])
@@ -45,8 +56,7 @@ def main():
             passed=passed and not any(i['type']==2290 for state in trace.get('fishing',{}).get('observations',[]) for i in state.get('inventory',[]))
         else:
             error=trace.get('error',p.stderr)
-            cause={'missing':'FileNotFoundException: Missing native item PNG','corrupt':'InvalidDataException: Vanilla item PNG size differs from pinned source'}.get(name,'ArgumentException: vanillaItemTextures')
-            passed=p.returncode==2 and not frames and cause in error
+            passed=p.returncode==2 and trace.get('status')=='error' and not frames and resource_refusal(name, error)
         checks.append(dict(name=name,passed=passed,exit=p.returncode,frames=len(frames)));print(name,passed,flush=True)
     unchanged=w.native_binaries_state(dll)==before
     summary=dict(passed=unchanged and all(c['passed'] for c in checks),checks=checks,binaryUnchanged=unchanged,nativeDllSha256=w.digest(dll))

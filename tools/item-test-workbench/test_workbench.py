@@ -290,12 +290,17 @@ class WorkbenchTests(unittest.TestCase):
                 root/'ModSources/InfiniCrafterLocal/Assets/item.png':b'asset',
                 root/'ModSources/InfiniCrafterLocal/Localization/en-US.hjson':b'Name: item',
                 root/'ModSources/InfiniCrafterLocal/build.txt':b'version=1',
+                root/'ModSources/InfiniCrafterLocal/lib/ICSharpCode.Decompiler.dll':b'synthetic decompiler source',
+                root/'ModSources/InfiniCrafterLocal/lib/ICSharpCode.Decompiler.LICENSE.txt':b'synthetic license',
+                root/'ModSources/InfiniCrafterLocal/lib/README.md':b'synthetic notice',
             }
             for path,raw in sources.items():
                 path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(raw)
             dll=here/'bin/Release/net8.0/ItemTestWorkbench.dll'
             dll.parent.mkdir(parents=True);dll.write_bytes(b'host')
             (dll.parent/'InfiniCrafterLocal.dll').write_bytes(b'production mod')
+            copied=dll.parent/'ICSharpCode.Decompiler.dll'
+            copied.write_bytes(b'synthetic decompiler source')
             with patch.object(w,'ROOT',root),patch.object(w,'HERE',here),patch.object(w,'doctor',return_value={'ready':True}):
                 (dll.parent/'build-provenance.json').write_text(json.dumps(w.build_state(dll)))
                 self.assertEqual(w.native_executable(no_build=True)[0],dll)
@@ -306,6 +311,17 @@ class WorkbenchTests(unittest.TestCase):
                             w.native_executable(no_build=True)
                         path.write_bytes(raw)
                         self.assertEqual(w.native_executable(no_build=True)[0],dll)
+                        if path.parent.name == 'lib':
+                            # The public entry must refuse source-only removal even
+                            # while the built DLLs and stored receipt are untouched.
+                            path.unlink()
+                            with patch.object(sys, 'argv', ['workbench', 'fixtures', '--no-build', '--out', str(root/'unused')]), \
+                                 patch.object(w.subprocess, 'run') as process:
+                                self.assertEqual(w.main(), 2)
+                                process.assert_not_called()
+                            self.assertFalse((root/'unused').exists())
+                            path.write_bytes(raw)
+                            self.assertEqual(w.native_executable(no_build=True)[0],dll)
 
     def test_shared_build_gate_refuses_missing_or_malformed_readiness(self):
         from unittest.mock import patch

@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import workbench as w
 
 from workbench import validate_loader_render
 
@@ -46,7 +47,7 @@ def main():
         (case / 'stderr.log').write_text(proc.stderr, encoding='utf-8')
         if not report_path.is_file():
             raise AssertionError((name, proc.returncode, proc.stderr))
-        report = json.loads(report_path.read_text(encoding='utf-8'))
+        report = w.read_native_json(report_path)
         observations = json.loads(observer.read_text(encoding='utf-8')) if observer.is_file() else {}
         return proc.returncode, report, observations
 

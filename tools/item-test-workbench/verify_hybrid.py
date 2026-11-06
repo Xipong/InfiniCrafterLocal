@@ -48,7 +48,7 @@ def main():
         if not isinstance(data,Path):ip.write_text(json.dumps(data,ensure_ascii=False,indent=2))
         sp=out/(name+'-scenario.json');sp.write_text(json.dumps(s,indent=2))
         p=subprocess.run([sys.executable,str(w.HERE/'workbench.py'),'run','--item',str(ip),'--scenario',str(sp),'--out',str(out/name),'--no-build'],cwd=w.ROOT,capture_output=True,text=True,timeout=240)
-        tp=out/name/'native.json';trace=w.read_json(tp) if tp.exists() else {};traces[name]=trace
+        tp=out/name/'native.json';trace=w.read_native_json(tp) if tp.exists() else {};traces[name]=trace
         ok=p.returncode==expected and trace.get('status')=={0:'passed',1:'failed',2:'error'}[expected]
         if expected!=2:ok=ok and trace.get('execution',{}).get('clientGraphics',{}).get('phaseFlags',{}).get('Projectile.Update.dedServ') is False
         rows.append({'name':name,'passed':ok,'expectedExitCode':expected,'actualExitCode':p.returncode,'nativeStatus':trace.get('status'),'inputProvenance':'unchanged offline repository fixture, not authentic capture' if isinstance(data,Path) else 'explicit synthetic/test fixture','trace':str(tp),'runnerStdout':p.stdout,'runnerStderr':p.stderr});print(name+': '+('PASS' if ok else 'FAIL'),flush=True)

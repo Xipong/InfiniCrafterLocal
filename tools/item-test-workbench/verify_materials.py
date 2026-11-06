@@ -87,7 +87,7 @@ def main():
         selected_item = control_path if name == 'material-off-control' else item_path
         result = subprocess.run(command + ['--item',str(selected_item),'--scenario',str(scenario_path),'--output',str(directory/'native.json')],cwd=w.ROOT,capture_output=True,text=True,timeout=240)
         (directory/'process.log').write_text(result.stdout+result.stderr)
-        trace = w.read_json(directory/'native.json'); traces[name] = trace
+        trace = w.read_native_json(directory/'native.json'); traces[name] = trace
         rows.append({'name':name,'passed':w.digest(dll)==binary_hash and result.returncode==expected and trace['status']==('passed' if expected==0 else 'error') and reason in trace.get('error',''),'exitCode':result.returncode})
     trace = traces['material-path']; render = trace.get('nativeRender',{}); snapshots = render.get('snapshots',[])
     control = traces['material-off-control']

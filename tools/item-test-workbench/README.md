@@ -452,6 +452,8 @@ python tools/item-test-workbench/workbench.py inspect artifacts/straight-run/nat
 
 Use a **new output directory** for each run. `--no-build` requires matching recorded
 build provenance; it is not permission to execute a stale binary after source edits.
+The source pin includes bundled `lib/` DLLs and notices, independently of copied
+runtime DLL hashes; changing or removing either source or output invalidates the build.
 To test your own item, replace `--item` and choose assertions appropriate to its
 contract. Saved cache JSON uses `--item-boundary local_cache`, which invokes the
 production cache reader and records its normalization receipt. It does not rewrite
@@ -1187,8 +1189,10 @@ an explicit omitted-row count. This limit affects diagnostic metadata only, not
 native drawing, gameplay updates or captured pixels. A passing scenario is not
 an aesthetic judgment or complete world-render parity. The row cap is applied
 after capture and is not a runtime allocation limit. Native trace readers admit
-at most 256 MiB, while item/scenario inputs retain the 64 MiB limit; this is a
-post-run read bound, not a native output or memory budget.
+at most 256 MiB across run/loader-run, agent report/contact sheet, replay, quality
+and performance review, CI and native verifiers. Item/scenario inputs and wrapper
+receipts retain the separate 64 MiB limit. This is a post-run read bound, not a
+native output or memory budget.
 
 The verifier builds once, runs Daedalus with wooden arrows, Pulse Bow and Hellwing
 Bow with wooden/Holy arrows, and a bullet control. It retains native assertion,

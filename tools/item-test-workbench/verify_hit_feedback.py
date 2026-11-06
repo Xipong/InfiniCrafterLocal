@@ -84,7 +84,7 @@ def main():
         if not result.get('passed') or len(result.get('cases', [])) != 1:
             raise RuntimeError(name + ' has no passing native probe result')
         run = case / 'runs' / result['cases'][0]['run']
-        traces[name] = (w.read_json(run / 'native.json'), run)
+        traces[name] = (w.read_native_json(run / 'native.json'), run)
 
     # Original player textures are available but the optional zombie PNG is not.
     # Refuse the scene instead of substituting an invented sprite.
@@ -103,7 +103,7 @@ def main():
     missing_traces = list(missing_case.glob('runs/*/native.json'))
     if proc.returncode == 0 or len(missing_traces) != 1:
         raise RuntimeError('Missing zombie texture was not explicitly refused')
-    missing = w.read_json(missing_traces[0])
+    missing = w.read_native_json(missing_traces[0])
     if missing.get('status') != 'error' or 'NPC_3.png' not in missing.get('error', '') or list(missing_case.rglob('*.gif')):
         raise RuntimeError('Missing zombie texture did not produce the expected no-fallback error')
 
@@ -118,7 +118,7 @@ def main():
     wrong_traces = list(wrong_target.glob('runs/*/native.json'))
     if proc.returncode == 0 or len(wrong_traces) != 1:
         raise RuntimeError('Zombie rendering on a different NPC was not refused')
-    wrong = w.read_json(wrong_traces[0])
+    wrong = w.read_native_json(wrong_traces[0])
     if wrong.get('status') != 'error' or 'drawZombie requires' not in wrong.get('error', '') or list(wrong_target.rglob('*.gif')):
         raise RuntimeError('Wrong target did not produce the expected no-fallback error')
 

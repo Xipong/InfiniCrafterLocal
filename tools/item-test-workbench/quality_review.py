@@ -69,7 +69,7 @@ def summarize(trace):
 
 
 def report(trace_path, out, terrain=False):
-    trace_path = Path(trace_path).resolve();trace = w.read_json(trace_path)
+    trace_path = Path(trace_path).resolve();trace = w.read_native_json(trace_path)
     out = Path(out).resolve();out.mkdir(parents=True, exist_ok=True)
     render = trace.get('nativeRender', {});frames = render.get('frames', [])
     placed = {f['tick']: f['draws'] for f in render.get('placedBodyRendering', {}).get('frames', [])}

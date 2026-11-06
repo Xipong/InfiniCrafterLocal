@@ -144,7 +144,7 @@ def main():
         command=[sys.executable,str(w.HERE/'workbench.py'),'run','--item',str(source),'--scenario',str(path),
                  '--out',str(out/name),'--no-build','--review','none']
         result=subprocess.run(command,cwd=w.ROOT,env={**os.environ,**env},capture_output=True,text=True,timeout=240)
-        trace=w.read_json(out/name/'native.json');traces[name]=trace
+        trace=w.read_native_json(out/name/'native.json');traces[name]=trace
         rows.append(dict(name=name,passed=result.returncode==expected and trace['status']=={0:'passed',2:'error'}[expected]
                          and reason in trace.get('error',''),exitCode=result.returncode,error=trace.get('error')))
         (out/(name+'.process.log')).write_text(result.stdout+result.stderr)

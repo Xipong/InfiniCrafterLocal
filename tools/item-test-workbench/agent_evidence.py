@@ -107,7 +107,7 @@ def recorded_frames(trace, path):
 
 def report(value):
     path = trace_path(value)
-    trace = w.validate_trace(w.read_json(path))
+    trace = w.validate_trace(w.read_native_json(path))
     counts = Counter(e["kind"] for s in trace["snapshots"] for e in s.get("events", []))
     first = {}
     for index, state in enumerate(trace["snapshots"]):
@@ -184,7 +184,7 @@ def export_contact_sheet(value, output):
     from PIL import Image, ImageDraw
     from native_review import native_frames, observed_bookmarks
     path = trace_path(value)
-    trace = w.validate_trace(w.read_json(path))
+    trace = w.validate_trace(w.read_native_json(path))
     frames = native_frames(trace, path)
     by_tick = {f["tick"]: i for i, (f, _) in enumerate(frames)}
     # Start/end, earliest instance of each native event, actual state transitions.

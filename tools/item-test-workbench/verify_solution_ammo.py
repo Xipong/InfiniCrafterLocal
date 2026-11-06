@@ -57,7 +57,7 @@ def main():
         directory=out/name;directory.mkdir();(directory/'item.json').write_text(json.dumps(item));(directory/'scenario.json').write_text(json.dumps(s))
         proc=subprocess.run(command+['--item',str(directory/'item.json'),'--scenario',str(directory/'scenario.json'),'--output',str(directory/'native.json')],cwd=w.ROOT,capture_output=True,text=True,timeout=180)
         (directory/'process.log').write_text(proc.stdout+proc.stderr)
-        trace=w.read_json(directory/'native.json') if (directory/'native.json').exists() else {}
+        trace=w.read_native_json(directory/'native.json') if (directory/'native.json').exists() else {}
         passed=proc.returncode==expected and trace.get('status')=={0:'passed',1:'failed',2:'error'}[expected]
         if expected==2:passed=passed and 'inventory entries are admitted' in trace.get('error','')
         rows.append(dict(name=name,passed=passed,exit=proc.returncode,status=trace.get('status')))

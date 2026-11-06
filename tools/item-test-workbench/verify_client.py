@@ -46,7 +46,7 @@ def main():
         ip=out/(name+'-item.json');ip.write_text(json.dumps(item,indent=2))
         sp=out/(name+'-scenario.json');sp.write_text(json.dumps(scenario,indent=2))
         proc=subprocess.run([sys.executable,str(w.HERE/'workbench.py'),'run','--item',str(ip),'--scenario',str(sp),'--out',str(out/name),'--no-build'],cwd=w.ROOT,capture_output=True,text=True,timeout=240)
-        p=out/name/'native.json';trace=w.read_json(p) if p.exists() else {};traces[name]=trace
+        p=out/name/'native.json';trace=w.read_native_json(p) if p.exists() else {};traces[name]=trace
         passed=proc.returncode==expected and trace.get('status')=={0:'passed',1:'failed',2:'error'}[expected]
         passed=passed and (expected==2 or trace.get('execution',{}).get('clientGraphics',{}).get('nativeClientBranch') is True)
         rows.append({'name':name,'passed':passed,'expectedExitCode':expected,'actualExitCode':proc.returncode,'nativeStatus':trace.get('status'),'trace':str(p),'runnerStdout':proc.stdout,'runnerStderr':proc.stderr})
