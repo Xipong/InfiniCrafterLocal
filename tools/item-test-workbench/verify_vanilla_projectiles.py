@@ -2,6 +2,7 @@
 """Native bow/projectile pixels, ammo and refusal controls; no gameplay simulation."""
 import argparse
 import copy
+from collections import Counter
 import json
 import os
 from pathlib import Path
@@ -49,7 +50,7 @@ def scenes(asset_root):
     unsupported['inventory'][0]['itemId'] = 41  # Flaming Arrow, native projectile2.
     unsupported['ticks'] = 4
     unsupported['actions'] = unsupported['actions'][:2]
-    rows.append(('unsupported-projectile', 'DaedalusStormbow', unsupported, 2, 'Native projectile draw type not admitted'))
+    rows.append(('unsupported-projectile', 'DaedalusStormbow', unsupported, 2, 'Native projectile draw requires pinned Projectile_2.png'))
     wrong = copy.deepcopy(base)
     wrong['nativeRender']['drawPlayer'] = False
     rows.append(('wrong-mode', 'DaedalusStormbow', wrong, 2, 'drawVanillaProjectiles requires'))
@@ -60,6 +61,53 @@ def scenes(asset_root):
     return rows
 
 
+COMPLEX = [
+    ('nebula', 'NebulaBlaze', None, [634, 635], 240, 180),
+    ('prism', 'LastPrism', None, [633, 632], 240, 180),
+    ('prism-mana', 'LastPrism', None, [633, 632], 300, 240),
+    ('eventide', 'FairyQueenRangedItem', 40, [932], 180, 120),
+    ('charged', 'ChargedBlasterCannon', None, [460, 461, 459], 420, 360),
+    ('heat-ray', 'HeatRay', None, [260], 180, 120),
+    ('flaming-arrow', 'WoodenBow', 41, [2], 180, 120),
+]
+
+
+def complex_scenes(asset_root):
+    """Test inputs only; production Terraria supplies every weapon mechanic."""
+    base = w.read_json(w.HERE/'scenarios/daedalus-stormbow.json')
+    rows = []
+    for name, item, ammo, projectiles, ticks, hold in COMPLEX:
+        scene = copy.deepcopy(base)
+        scene['vanillaAssetRoot'] = str(asset_root)
+        scene['ticks'] = ticks
+        scene['player']['x'] = 600
+        scene['actions'][-1]['tick'] = hold
+        scene['inventory'] = [] if ammo is None else [dict(slot=54, itemId=ammo, stack=999)]
+        if name == 'prism-mana':
+            scene['inventory'] = [dict(slot=1, itemId=189, stack=2)]
+            scene['actions'].append(dict(kind='quick_mana', tick=140))
+        scene['assertions'] = [dict(kind='native_projectile_seen', id=p) for p in projectiles]
+        scene['assertions'] += [dict(kind='hit_count_at_least', minimum=1), dict(kind='no_nonfinite')]
+        scene['nativeRender'].update(width=960, height=640, cameraX=350, cameraY=1830)
+        # Native LaserScan needs room beyond the held beam; tiny worlds clamp it.
+        if name in ('prism', 'prism-mana', 'heat-ray'):
+            scene['worldWidthTiles'] = 400
+            scene['tiles'][0]['width'] = 397
+            scene['player']['x'] = 800
+            scene['nativeRender']['cameraX'] = 500
+        if name == 'flaming-arrow':
+            # The ordinary bow arc reaches a nearer target before the real floor.
+            scene['player']['x'] = 800
+        if name == 'heat-ray':
+            # 100 native extraUpdates cross a nearby target before the first render.
+            # Keep real speed/lifetime and place the target beyond one frame's travel.
+            scene['dummy']['tileX'] = 175
+            scene['actions'][0]['x'] = 2816
+            scene['nativeRender'].update(width=1024, cameraX=1300, cameraY=1700, zoom=0.4)
+        rows.append((name, item, scene, 0, ''))
+    return rows
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--vanilla-assets', type=Path, required=True)
@@ -67,12 +115,14 @@ def main():
     p.add_argument('--native-dll', type=Path, help='Independently built executable; retain its source/reference receipt')
     p.add_argument('--no-build', action='store_true')
     p.add_argument('--gif', action='store_true', help='Export each passing bow as native PNG review/GIF')
+    p.add_argument('--complex', action='store_true', help='Include channelled/beam/conditional vanilla cases; requires their explicit pinned PNGs')
     p.add_argument('--case', action='append', help='Run only named cases; no full-matrix acceptance claim')
     a = p.parse_args()
     if a.native_dll and not a.no_build: p.error('--native-dll requires --no-build')
     out = a.out.resolve()
     if out.exists() and any(out.iterdir()): p.error('Use a fresh evidence directory')
     rows = scenes(a.vanilla_assets.resolve())
+    if a.complex: rows += complex_scenes(a.vanilla_assets.resolve())
     if a.case:
         unknown = set(a.case) - {r[0] for r in rows}
         if unknown: p.error('Unknown cases: ' + ', '.join(sorted(unknown)))
@@ -90,18 +140,30 @@ def main():
                          'Projectile_982.png', 'Extra_98.png'):
                 if name == 'missing-texture' and file == 'Projectile_1.png': continue
                 shutil.copyfile(a.vanilla_assets.resolve()/'Images'/file, root/file)
+            ripples = a.vanilla_assets.resolve()/'Images/Misc/Ripples.png'
+            if ripples.exists():
+                (root/'Misc').mkdir(exist_ok=True)
+                shutil.copyfile(ripples, root/'Misc/Ripples.png')
             if name == 'tampered-texture':
                 path = root/'Projectile_485.png'; path.write_bytes(path.read_bytes() + b'corrupt')
             scene = copy.deepcopy(rows[0][2]); scene['vanillaAssetRoot'] = str(root.parent)
-            rows.append((name, 'DaedalusStormbow', scene, 2, 'vanilla projectile PNG'))
+            rows.append((name, 'DaedalusStormbow', scene, 2, 'Native projectile draw requires pinned Projectile_1.png' if name == 'missing-texture' else 'Vanilla asset PNG'))
     results = []; traces = {}
     for name, bow, scene, expected, reason in rows:
         directory = out/name; directory.mkdir(exist_ok=True)
+        if name == 'unsupported-projectile':
+            private = directory/'missing-projectile-assets'/'Images'; private.mkdir(parents=True)
+            for source in (a.vanilla_assets.resolve()/'Images').rglob('*.png'):
+                if source.name != 'Projectile_2.png':
+                    destination = private/source.relative_to(a.vanilla_assets.resolve()/'Images')
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(source, destination)
+            scene['vanillaAssetRoot'] = str(private.parent)
         sp = directory/'scenario.json'; sp.write_text(json.dumps(scene, indent=2))
         process = subprocess.run(command + ['--vanilla-item', bow, '--scenario', str(sp), '--output', str(directory/'native.json')],
                                  cwd=w.ROOT, capture_output=True, text=True, timeout=240)
         (directory/'process.log').write_text(process.stdout + process.stderr)
-        trace = w.validate_trace(w.read_json(directory/'native.json')); traces[name] = trace
+        trace = w.validate_trace(w.read_native_json(directory/'native.json')); traces[name] = trace
         events = [e for s in trace['snapshots'] for e in s.get('events', [])]
         failed = sorted(c['name'] for c in trace['assertions'] if c['status'] == 'failed')
         checks = dict(nativeOutcome=process.returncode==expected and trace['status']=={0:'passed', 1:'failed', 2:'error'}[expected],
@@ -112,9 +174,11 @@ def main():
         if expected != 2:
             checks['completeTimeline'] = trace['timeline']['complete'] and trace['timeline']['completedTicks']==scene['ticks']
         if frames: checks['pngIntegrity'] = len(native_frames(trace, directory/'native.json'))==scene['ticks']
-        if name in {r[0] for r in BOWS} or name=='bullet':
+        if name in {r[0] for r in BOWS + COMPLEX} or name=='bullet':
             checks['nativeSpriteSubmitted'] = any(f['projectileDrawCount']>0 and f['projectileGeometry'] for f in frames)
-            checks['ammoSource'] = any(e['kind']=='spawn' and e.get('ammoItemIdUsed')==scene['inventory'][0]['itemId'] for e in events)
+            ammo_rows = [row for row in scene['inventory'] if row['slot'] >= 54]
+            if ammo_rows:
+                checks['ammoSource'] = any(e['kind']=='spawn' and e.get('ammoItemIdUsed')==ammo_rows[0]['itemId'] for e in events)
             checks['noGeneratedReplacement'] = all(f['nativeProxyVetoCount']==0 and f.get('nativeGeneratedHeldDrawDataCount',0)==0 for f in frames)
             checks['viewportBeforeGameplay'] = trace['nativeRender'].get('viewportAppliedBeforeGameplay') is True
             checks['worldAimPreserved'] = all(abs(s['player']['aimX']-scene['actions'][0]['x'])<1 and abs(s['player']['aimY']-scene['actions'][0]['y'])<1 for s in trace['snapshots'] if s['tick']>=0)
@@ -122,8 +186,37 @@ def main():
                 checks['nativePulseReplacement'] = {e['nativeType'] for e in events if e['kind']=='spawn'}=={357}
                 checks['nativeDustVisible'] = any(s.get('nativeDustAfterDraw') for s in trace['nativeRender']['snapshots'])
             if name=='hellwing-holy': checks['nativeChildStar'] = any(e['kind']=='spawn' and e['nativeType']==92 for e in events)
-            if a.gif and name in {r[0] for r in BOWS}:
-                export_native_review(trace, directory/'native.json', directory/'review', True, 2)
+            if a.gif and name in {r[0] for r in BOWS + COMPLEX}:
+                export_native_review(trace, directory/'native.json', directory/'review', True, max(2, (scene['ticks'] + 79)//80))
+        if expected != 2 and scene.get('nativeRender', {}).get('drawVanillaProjectiles'):
+            water = trace.get('nativeRender', {}).get('waterDistortion', {})
+            checks['genuineWaterShaderLifecycle'] = (
+                water.get('shaderType') == 'Terraria.GameContent.Shaders.WaterShaderData'
+                and water.get('constructor') == 'WaterShaderData(FilterWaterDistortion)'
+                and water.get('aiImplementationReplaced') is False
+                and water.get('worldWaterPostprocessing') == 'notRun'
+                and water.get('eventHandlersDetached') == 3
+                and water.get('cleanup') == 'complete')
+        if name in {r[0] for r in COMPLEX}:
+            expected_types = next(r[3] for r in COMPLEX if r[0] == name)
+            visible_types = {v['nativeType'] for f in frames for v in f.get('nativeVanillaDrawVisits', []) if v.get('spriteDrawCount', 0) > 0}
+            checks['requiredNativeSpritesObserved'] = set(expected_types) <= visible_types
+            checks['nativeDrawOwnershipNoDuplicates'] = all(
+                max(Counter((v['nativeSlot'], v['nativeIdentity']) for v in f.get('nativeVanillaDrawVisits', [])).values(), default=0) <= 1
+                for f in frames)
+            if name == 'prism-mana':
+                quick = [e for e in events if e['kind'] == 'input' and e.get('input') == 'quick_mana']
+                checks['quickManaNativeEvent'] = (len(quick) == 1 and quick[0].get('nativeMethod') == 'Player.QuickMana'
+                                                and quick[0].get('manaSicknessPresent') is True
+                                                and quick[0].get('selectedSlotBefore') == quick[0].get('selectedSlotAfter'))
+                final_inventory = trace['snapshots'][-1]['player']['inventory']
+                checks['onePotionConsumed'] = any(i['slot'] == 1 and i['nativeType'] == 189 and i['stack'] == 1 for i in final_inventory)
+                checks['fullChargeBeamObserved'] = any(
+                    p['nativeType'] == 632 and p['active'] and p['damage'] > 200
+                    for snapshot in trace['snapshots'] for p in snapshot.get('projectiles', []))
+            if name == 'charged':
+                checks['hiddenBeamDrawnByNativeOwner'] = any(
+                    h['nativeType'] == 461 and h.get('visitedByNativeOwner') for f in frames for h in f.get('hiddenNativeProjectiles', []))
         if name=='no-ammo': checks['noInventedShots'] = not any(e['kind'] in ('spawn','hit','native_ammo_consumption') for e in events)
         if name=='legacy-pose': checks['legacyOmissionPreserved'] = any(f['unrenderedVanillaProjectiles'] for f in frames) and not any(f['projectileDrawCount'] for f in frames)
         if name=='offscreen':

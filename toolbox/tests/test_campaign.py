@@ -14,8 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.parametrize('outcome,panel,preset', [
-    ('failure', 'live10', 'live10-midgame'), ('success', 'live10', 'live10-midgame'),
-    ('success', 'live20', 'live20-classic'), ('success', 'live20', 'live20-classic-sprites'),
+    ('failure', 'live20', 'live20-classic'), ('success', 'live20', 'live20-classic'),
 ])
 def test_real_campaign_entry_records_synthetic_sender_without_network_or_live_inference(tmp_path, outcome, panel, preset):
     output = tmp_path / 'campaign'

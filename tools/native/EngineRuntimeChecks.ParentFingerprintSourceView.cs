@@ -15,8 +15,18 @@ internal static partial class EngineRuntimeChecks
         static bool Version(JsonElement value, int? exact) => value.ValueKind == JsonValueKind.Object
             && value.TryGetProperty("version", out var version) && version.ValueKind == JsonValueKind.Number
             && version.TryGetInt32(out int number) && (exact.HasValue ? number == exact.Value : number > 0);
-        return property.Name == "nativeCSharpSource" && Named(owner, "source", "read_only_native_attack_source")
-            && Version(owner, 1) && Named(property.Value, "source", "verified_decompiled_native_csharp") && Version(property.Value, null);
+        if (!Named(owner, "source", "read_only_native_attack_source") || !Version(owner, 1) || !Version(property.Value, null)) return false;
+        if (property.Name == "nativeCSharpSource" && Named(property.Value, "source", "verified_decompiled_native_csharp")) return true;
+        if (property.Name != "lifecycle" || !Version(property.Value, 1) || !Named(property.Value, "source", "verified_conditional_native_lifecycle_csharp")
+            || !property.Value.TryGetProperty("rootCertificate", out var certificate)
+            || !owner.TryGetProperty("sourceMethods", out var methods) || methods.ValueKind != JsonValueKind.Array) return false;
+        if (certificate.ValueKind != JsonValueKind.Object || System.Linq.Enumerable.Count(certificate.EnumerateObject()) != 3 || !Named(certificate, "method", "Terraria.Projectile.Kill")
+            || !certificate.TryGetProperty("sourceModuleVersionId", out var module) || module.ValueKind != JsonValueKind.String || !Guid.TryParse(module.GetString(), out _)
+            || !certificate.TryGetProperty("sourceMethodSha256", out var hash) || hash.ValueKind != JsonValueKind.String
+            || hash.GetString() is not { Length: 64 } text || System.Linq.Enumerable.Any(text, character => !Uri.IsHexDigit(character))) return false;
+        foreach (var method in methods.EnumerateArray())
+            if (CanonicalParentFactJson(method) == CanonicalParentFactJson(certificate)) return true;
+        return false;
     }
 
     // Independent test observer: copy every JSON token through a streaming writer,

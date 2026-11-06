@@ -23,19 +23,24 @@ def test_panels_command_lists_readable_case_packages():
     assert panels['live20-classic']['caseCount'] == 20
     assert panels['live20-classic']['command'] == 'live20'
     assert panels['live20-classic']['casesFile'].endswith('live20-classic.json')
-    assert panels['live10-starter']['caseCount'] == 10
-    assert panels['live10-starter']['historical'] is False
+    assert set(panels) == {'live10-midgame', 'live20-classic', 'live40-diverse'}
+    assert panels['live40-diverse']['caseCount'] == 40
+    assert panels['live40-diverse']['requiresRuntimeDump'] is True
+    assert panels['live40-diverse']['runtimeDump'] is None
 
 
 @pytest.mark.parametrize('command,preset,count', [
-    ('live10', 'live10-starter', 10),
     ('live10', 'live10-midgame', 10),
     ('live20', 'live20-classic', 20),
-    ('live20', 'live20-classic-sprites', 20),
+    ('live40', 'live40-diverse', 40),
 ])
-def test_explicit_preset_loads_its_versioned_cases_and_parent_fixture(command, preset, count):
+def test_explicit_preset_loads_its_versioned_cases_and_parent_fixture(tmp_path, command, preset, count):
+    package = json.loads((ROOT / 'toolbox/fixtures/panels' / (preset + '.json')).read_text())
+    names = sorted({row[k] for row in package['cases'] for k in ('itemA', 'itemB')})
+    dump = tmp_path / 'synthetic-selection-only.jsonl'
+    dump.write_text('\n'.join(json.dumps({'internalName': n, 'testOnly': True}) for n in names))
     result = subprocess.run(
-        [sys.executable, '-m', 'toolbox', command, '--preset', preset], cwd=ROOT,
+        [sys.executable, '-m', 'toolbox', command, '--preset', preset, '--runtime-dump', str(dump)], cwd=ROOT,
         text=True, capture_output=True,
     )
     assert result.returncode == 0, result.stderr
@@ -43,20 +48,14 @@ def test_explicit_preset_loads_its_versioned_cases_and_parent_fixture(command, p
     source = ROOT / 'toolbox/fixtures/panels' / (preset + '.json')
     packaged = json.loads(source.read_text())
     assert report['caseCount'] == count
-    assert report['cases'] == packaged['cases']
+    assert report['cases'] == [{k: row[k] for k in ('case', 'itemA', 'itemB')} for row in packaged['cases']]
     assert report['preset'] == preset
     assert report['panelProvenance'] == packaged['provenance']
     assert report['preflightOnly'] is True
 
 
-def test_default_live10_is_exact_historical_midgame_order_not_a_starter_subset():
-    result = subprocess.run(
-        [sys.executable, '-m', 'toolbox', 'live10'], cwd=ROOT,
-        text=True, capture_output=True,
-    )
-    assert result.returncode == 0, result.stderr
-    report = json.loads(result.stdout)
-    assert report['preset'] == 'live10-midgame'
+def test_revised_midgame_preserves_first_nine_routes():
+    report = json.loads((ROOT / 'toolbox/fixtures/panels/live10-midgame.json').read_text())
     expected = [
         ('night_missile', 'NightsEdge', 'MagicMissile'),
         ('crystal_repeater', 'AdamantiteRepeater', 'CrystalShard'),
@@ -67,16 +66,15 @@ def test_default_live10_is_exact_historical_midgame_order_not_a_starter_subset()
         ('precision_titanium', 'TitaniumPickaxe', 'MechanicalLens'),
         ('frost_obsidian_guard', 'FrostsparkBoots', 'ObsidianShield'),
         ('radiant_forge', 'OrichalcumAnvil', 'SoulofLight'),
-        ('meteor_star_cannon', 'StarCannon', 'MeteorStaff'),
+        ('nebula_prism', 'NebulaBlaze', 'LastPrism'),
     ]
     assert [(row['case'], row['itemA'], row['itemB']) for row in report['cases']] == expected
-    assert report['historicalPreset'] is True and report['fullPreset'] is True
+    assert report['historical'] is False
+    assert report['requiresRuntimeDump'] is True
 
 
 @pytest.mark.parametrize('filename,count,original_sha', [
-    ('parents/live10-midgame.jsonl', 20, 'addb002f3bd6ace73daf250aad2307c010257528836ce3638dc2b17f7015075b'),
     ('items.jsonl', 39, '62b64ac70eaad27004e4d4e006c1bfb6ba44775b98a216ad2aaa4afaebb20e06'),
-    ('parents/live20-classic-sprites.jsonl', 39, 'ea85bb4a86dbe5795c7fea41b40040688b0b1d3ce309f10bc79a239454543d40'),
 ])
 def test_historical_parent_rows_preserve_original_source_bytes(filename, count, original_sha):
     import hashlib
@@ -88,34 +86,46 @@ def test_historical_parent_rows_preserve_original_source_bytes(filename, count, 
         assert {row['sourceMod'] for row in rows} == {'Terraria'}
 
 
-def test_panel_specific_parent_context_is_not_merged_by_internal_name():
-    from toolbox.live.options import build_parser
-    from toolbox.live.panels import load_selection
-    selected = {}
-    for command in ('live10', 'live20'):
-        args = build_parser().parse_args([])
-        args.panel = command
-        _, _, cases, _, _, _ = load_selection(args)
-        selected[command] = {parent['internalName']: parent for _, a, b in cases for parent in (a, b)}
-    assert set(selected['live10']) & set(selected['live20']) == {'QueenSpiderStaff'}
-    assert selected['live10']['QueenSpiderStaff'] != selected['live20']['QueenSpiderStaff']
-
-
-def test_original_sprite_request_variant_changes_only_sprite_reference():
-    fixture = ROOT / 'toolbox/fixtures'
-    plain = {row['internalName']: row for row in map(json.loads, (fixture / 'items.jsonl').read_bytes().splitlines())}
-    sprites = {row['internalName']: row for row in map(json.loads, (fixture / 'parents/live20-classic-sprites.jsonl').read_bytes().splitlines())}
-    assert plain.keys() == sprites.keys()
-    for name, enriched in sprites.items():
-        assert 'spriteReferenceRaw' in enriched
-        assert plain[name] == {key: value for key, value in enriched.items() if key != 'spriteReferenceRaw'}
-
-
 @pytest.mark.parametrize('flags,fragment', [
     (['--preset', 'live20-classic'], 'different live command'),
+    (['--preset', 'live10-starter'], 'unknown built-in preset'),
+    (['--preset', 'live20-classic-sprites'], 'unknown built-in preset'),
     (['--preset', '../live10-midgame'], 'invalid built-in preset'),
     (['--preset', 'live10-midgame', '--cases-file', 'unused.json'], 'mutually exclusive'),
 ])
 def test_invalid_preset_selection_is_refused_before_running(flags, fragment):
     result = subprocess.run([sys.executable, '-m', 'toolbox', 'live10', *flags], cwd=ROOT, text=True, capture_output=True)
     assert result.returncode == 2 and fragment in result.stderr
+
+
+@pytest.mark.parametrize('command', ['live10', 'live40'])
+def test_current_panels_require_external_dump(command):
+    result = subprocess.run([sys.executable, '-m', 'toolbox', command], cwd=ROOT, text=True, capture_output=True)
+    assert result.returncode == 2
+    assert 'requires an explicit current --runtime-dump' in result.stderr
+    assert 'Traceback' not in result.stderr
+
+
+def test_live40_keeps_original_order_orientation_and_control_pairs():
+    rows = json.loads((ROOT / 'toolbox/fixtures/panels/live40-diverse.json').read_text())['cases']
+    assert len(rows) == len({r['case'] for r in rows}) == 40
+    for index, row in enumerate(rows, 1):
+        assert row['sourceCase'] == f"{index:02d}-{row['itemA']}-{row['itemB']}"
+        assert row['case'] == row['sourceCase'].lower().replace('-', '_')
+    assert (rows[1]['itemA'], rows[1]['itemB']) == ('LastPrism', 'NebulaBlaze')
+    assert (rows[39]['itemA'], rows[39]['itemB']) == ('NebulaBlaze', 'LastPrism')
+    assert rows[38]['itemA'] == rows[38]['itemB'] == 'WoodenBow'
+
+
+def test_live40_complete_ordered_roster_is_frozen():
+    import hashlib
+    rows = json.loads((ROOT / 'toolbox/fixtures/panels/live40-diverse.json').read_text())['cases']
+    routes = [(r['case'], r['itemA'], r['itemB']) for r in rows]
+    assert hashlib.sha256(json.dumps(routes, separators=(',', ':')).encode()).hexdigest() == 'bcc27d81a0aa9194f484cb04d4e612435d6700fe098dd51db6385563faa6ee98'
+
+
+def test_live40_missing_parent_refuses_without_fixture_fallback(tmp_path):
+    dump = tmp_path / 'partial.jsonl'
+    dump.write_text('{"internalName":"LastPrism"}\n')
+    result = subprocess.run([sys.executable, '-m', 'toolbox', 'live40', '--cases', '40_nebulablaze_lastprism', '--runtime-dump', str(dump)], cwd=ROOT, text=True, capture_output=True)
+    assert result.returncode == 2 and 'NebulaBlaze' in result.stderr

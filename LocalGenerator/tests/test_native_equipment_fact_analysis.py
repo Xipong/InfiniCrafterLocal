@@ -107,8 +107,8 @@ def test_full_set_keeps_all_slots_and_mixed_variants_not_item_ids():
     assert armor_set_facts(program(broken)) == []
 
 
-@pytest.mark.parametrize("key", ["nativeEquipmentReference", "nativeEnvironmentReference"])
-@pytest.mark.parametrize("envelope", ["root", "runtimeFacts", "fingerprint"])
+@pytest.mark.parametrize("key", ["nativeEquipmentReference", "nativeEnvironmentReference", "nativeItemDispatchReference"])
+@pytest.mark.parametrize("envelope", ["root", "runtimeFacts", "fingerprint", "fingerprint_runtimeFacts"])
 def test_compact_packet_keeps_complete_conditional_proof_and_independent_copy(key, envelope):
     ref = {
         "effects": [{"value": 0}],
@@ -116,22 +116,24 @@ def test_compact_packet_keeps_complete_conditional_proof_and_independent_copy(ke
         "certificate": "exact",
         "unsupported": [],
     }
-    item_ = {key: ref} if envelope == "root" else {envelope: {key: ref}}
+    item_ = ({key: ref} if envelope == "root" else {"fingerprint": {"runtimeFacts": {key: ref}}}
+             if envelope == "fingerprint_runtimeFacts" else {envelope: {key: ref}})
     compact = compact_item_raw_for_llm(item_)
     assert compact[key] == ref
     compact[key]["condition"]["vanitySatisfies"] = True
     assert ref["condition"]["vanitySatisfies"] is False
 
 
-def test_packet_root_precedence_and_generated_parent_host_exclusion():
+@pytest.mark.parametrize("key", ["nativeEquipmentReference", "nativeEnvironmentReference", "nativeItemDispatchReference"])
+def test_packet_root_precedence_and_generated_parent_host_exclusion(key):
     item_ = {
-        "nativeEquipmentReference": {"value": 0},
-        "runtimeFacts": {"nativeEquipmentReference": {"value": 1}},
-        "fingerprint": {"nativeEquipmentReference": {"value": 2}},
+        key: {"value": 0},
+        "runtimeFacts": {key: {"value": 1}},
+        "fingerprint": {key: {"value": 2}},
     }
-    assert compact_item_raw_for_llm(item_)["nativeEquipmentReference"] == {"value": 0}
+    assert compact_item_raw_for_llm(item_)[key] == {"value": 0}
     item_["generatedData"] = {"id": "g_test", "name": "authored"}
-    assert "nativeEquipmentReference" not in compact_item_raw_for_llm(item_)
+    assert key not in compact_item_raw_for_llm(item_)
 
 
 def test_generated_catalog_is_exact_report_projection():

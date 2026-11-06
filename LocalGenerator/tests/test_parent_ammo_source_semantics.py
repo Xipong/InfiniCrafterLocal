@@ -541,3 +541,243 @@ def test_arithmetic_local_initialization_is_not_current_value():
     assert provenance['source']=={'kind':'argument_field','argument':2,'field':'Terraria.Item.shootSpeed'}
     assert len(provenance['interveningWriteOrAddressOffsets'])==1
     assert 'does not equate' in provenance['scope']
+
+
+def _spawn_argument_fixture(*, item=81235, factor=3, threshold=7, mutate=(), entry=None):
+    """Arbitrary source identities and locals; branch-entry values stay unknown."""
+    from native_hit_status_analysis import Instruction as I
+    ops = [('ldarg', 2), ('ldfld', 'Terraria.Item.shoot'), ('stloc', 0)]
+    if entry:
+        ops += [('br', entry)]
+    ops += [('ldarg', 2), ('ldfld', 'Terraria.Item.type'), ('const', item), ('bne', 'end'),
+            ('ldarg', 0), ('ldfld', 'Fixture.Player.maximum'), ('ldarg', 0),
+            ('ldfld', 'Fixture.Player.remaining'), ('sub', None), ('const', 2), ('div', None), ('stloc', 23),
+            ('label', 'state'), ('ldloc', 23), ('const', threshold), ('bne', 'join'),
+            ('ldloc', 14), ('const', factor), ('mul', None), ('stloc', 14),
+            ('label', 'join'), *mutate,
+            ('ldarg', 0), ('call', ('Fixture.Player.GetPhase', 0, True, True)), ('const', 12.0),
+            ('mul', None), ('const', 1.0), ('rem', None), ('stloc', 25),
+            ('label', 'arguments'), ('ldloc', 7), ('ldloc', 8), ('ldloc', 9), ('ldloc', 0),
+            ('label', 'damage'), ('ldloc', 14), ('ldloc', 15), ('ldarg', 1), ('const', 0.0),
+            ('ldloc', 25), ('const', 0.0), ('call', ('Terraria.Projectile.NewProjectile', 10, False, True)),
+            ('pop', None), ('label', 'end'), ('ret', None)]
+    labels, n = {}, 0
+    for op, arg in ops:
+        if op == 'label': labels[arg] = n
+        else: n += 1
+    return [I(n, op, labels.get(arg, arg) if isinstance(arg, str) else arg)
+            for n, (op, arg) in enumerate(pair for pair in ops if pair[0] != 'label')]
+
+
+def _source_nodes(value):
+    if isinstance(value, dict):
+        yield value
+        for child in value.values():
+            yield from _source_nodes(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _source_nodes(child)
+
+
+@pytest.mark.parametrize('item,factor,threshold', [(81235, 3, 7), (91236, 5, 11)])
+def test_spawn_arguments_keep_guarded_updates_and_source_snapshots(item, factor, threshold):
+    row, = ammo_method_facts(_spawn_argument_fixture(item=item, factor=factor, threshold=threshold), 'ItemCheck_Shoot')
+    spawn, = row['spawnSites']
+    inputs = spawn['spawnInputs']
+    assert inputs['owner']['kind'] == 'argument' and inputs['owner']['index'] == 1
+    damage_nodes = list(_source_nodes(inputs['damage']))
+    assert any(n.get('operator') == 'mul' and n['right'].get('value') == factor for n in damage_nodes)
+    assert any(n.get('kind') == 'unknown' and n.get('local') == 14 and n.get('reason') == 'branch_entry_value_unknown' for n in damage_nodes)
+    assert any(n.get('kind') == 'branch' and n.get('right', {}).get('value') == threshold for n in damage_nodes)
+    assert any(n.get('member') == 'Fixture.Player.maximum' for n in damage_nodes)
+    assert any(n.get('kind') == 'local_definition' and n.get('scope') == 'value_at_store' for n in damage_nodes)
+    ai = list(_source_nodes(inputs['ai1']))
+    assert any(n.get('operator') == 'rem' and n['right'].get('value') == 1.0 for n in ai)
+    assert any(n.get('member') == 'Fixture.Player.GetPhase' and n.get('evaluation') == 'unresolved_helper_or_hook_output' for n in ai)
+    assert spawn['spawnInputCoverage']['fields']['damage']['status'] == 'partial_source_expression'
+    assert spawn['spawnInputCoverage']['fields']['owner']['status'] == 'source_expression'
+
+
+@pytest.mark.parametrize('mutation,reason', [
+    ([('ldloca', 14), ('call', ('Opaque.Mutate', 1, False, False))], 'address_exposed_local'),
+    ([('ldarg', 0), ('ldfld', 'Fixture.Player.loop'), ('brtrue', 'state')], 'cyclic_source_path'),
+    ([('const', 4), ('neg', None), ('stloc', 14)], None),
+    ([('const', 4), ('not', None), ('stloc', 14)], 'unsupported_stack_operation'),
+])
+def test_spawn_arguments_refuse_unproved_values_with_field_diagnostics(mutation, reason):
+    row, = ammo_method_facts(_spawn_argument_fixture(mutate=mutation), 'ItemCheck_Shoot')
+    spawn, = row['spawnSites']
+    field = spawn['spawnInputCoverage']['fields']['damage']
+    if reason:
+        assert any(issue['reason'] == reason for issue in field['unresolved'])
+        assert field['status'] in ('partial_source_expression', 'unknown')
+    else:
+        assert any(n.get('operator') == 'neg' for n in _source_nodes(spawn['spawnInputs']['damage']))
+
+
+def test_exact_native_spawn_argument_source_fields():
+    from generate_native_ammo_facts import extract
+    installed = Path(os.environ.get('INFINI_NATIVE_AMMO_ASSEMBLY', '/missing-native-assembly'))
+    if not installed.exists():
+        pytest.skip('exact native source assembly unavailable')
+    sources = extract(installed)
+    rows = {r['itemId']: r for s in sources if s['method'] == 'Player.ItemCheck_Shoot' for r in s['records']}
+    a, b = rows[4953]['spawnSites']
+    assert (a['sourceSpawnIlOffset'], b['sourceSpawnIlOffset']) == (10958, 10992)
+    nodes = list(_source_nodes(a['spawnInputs']['damage']))
+    assert any(n.get('operator') == 'mul' and n['right'].get('value') == 2 for n in nodes)
+    assert any(n.get('sourceBranchIlOffset') == 10866 for n in nodes)
+    assert any(n.get('member') == 'Terraria.Player.itemAnimationMax' for n in nodes)
+    velocity = list(_source_nodes(a['spawnInputs']['velocity']))
+    assert any(n.get('operator') == 'mul' and n['right'].get('value') == 2.0 for n in velocity)
+    assert any(n.get('sourceStoreIlOffset') == 10932 for n in velocity)
+    assert any(n.get('sourceBranchIlOffset') == 10886 for n in _source_nodes(a['whenSourceCondition']))
+    ai = list(_source_nodes(a['spawnInputs']['ai1']))
+    assert any(n.get('operator') == 'rem' for n in ai)
+    assert any(n.get('member') == 'Terraria.Player.get_miscCounterNormalized' for n in ai)
+    assert b['spawnInputs']['ai1']['value'] == 0.0
+    for item in (757, 3029):
+        assert all('spawnInputs' in s and 'spawnInputCoverage' in s for s in rows[item]['spawnSites'])
+    companion, direct = rows[757]['spawnSites']
+    assert companion['spawnInputs']['type']['value'] == 984
+    velocity = direct['spawnInputs']['velocity']
+    assert velocity['member'] == 'Microsoft.Xna.Framework.Vector2.op_Multiply'
+    assert velocity['arguments'][1]['value'] == 5.0
+    assert direct['spawnInputs']['ai1']['value'] == 18.0
+    rain, = rows[3029]['spawnSites']
+    assert (rain['spawnCountBounds']['minimum'], rain['spawnCountBounds']['maximum']) == (2, 4)
+    assert rain['spawnInputCoverage']['fields']['velocityX']['unresolved'][0]['reason'] == 'cyclic_source_path'
+    assert rain['spawnInputs']['owner']['index'] == 1
+
+
+def test_spawn_argument_header_entry_cannot_certify_ownership():
+    code = _spawn_argument_fixture()
+    from native_hit_status_analysis import Instruction as I
+    # Existing site discovery admits this header; the additive source reader
+    # must refuse its ownership instead of interpreting the forged Item.type.
+    code.insert(0, I(-1, 'br', 5))
+    row, = ammo_method_facts(code, 'ItemCheck_Shoot')
+    spawn, = row['spawnSites']
+    assert all(field['status'] == 'unknown' for field in spawn['spawnInputCoverage']['fields'].values())
+    assert spawn['spawnInputs']['damage']['reason'] == 'foreign_entry_into_item_header'
+
+
+def test_spawn_argument_later_store_supersedes_only_prior_local_value():
+    row, = ammo_method_facts(_spawn_argument_fixture(mutate=[('const', 41), ('stloc', 14)]), 'ItemCheck_Shoot')
+    damage = row['spawnSites'][0]['spawnInputs']['damage']
+    assert damage['kind'] == 'local_definition' and damage['value']['value'] == 41
+    assert not any(node.get('operator') == 'mul' for node in _source_nodes(damage))
+
+
+def test_spawn_argument_condition_reads_keep_original_field_snapshots():
+    row, = ammo_method_facts(_spawn_argument_fixture(mutate=[
+        ('ldarg', 0), ('const', 0), ('stfld', 'Fixture.Player.remaining')]), 'ItemCheck_Shoot')
+    nodes = list(_source_nodes(row['spawnSites'][0]['spawnInputs']['damage']))
+    old_read = next(n for n in nodes if n.get('member') == 'Fixture.Player.remaining')
+    definition = next(n for n in nodes if n.get('kind') == 'local_definition' and n.get('local') == 23)
+    assert old_read['sourceIlOffset'] < definition['sourceStoreIlOffset'] < definition['sourceIlOffset']
+    assert definition['scope'] == 'value_at_store'
+
+
+def test_spawn_argument_prior_hook_reference_does_not_restore_item_defaults():
+    from native_hit_status_analysis import Instruction as I
+    code = _spawn_argument_fixture()
+    prefix = [I(-3, 'ldloca', 14), I(-2, 'call', ('Opaque.PriorHook', 1, False, False)), I(-1, 'nop', None)]
+    row, = ammo_method_facts(prefix + code, 'ItemCheck_Shoot')
+    nodes = list(_source_nodes(row['spawnSites'][0]['spawnInputs']['damage']))
+    assert any(n.get('operator') == 'mul' for n in nodes)
+    assert any(n.get('reason') == 'branch_entry_value_unknown' and n.get('local') == 14 for n in nodes)
+    assert not any(n.get('member') == 'Terraria.Item.damage' for n in nodes)
+
+
+@pytest.mark.parametrize('mode', ['json_schema', 'json_object'])
+def test_native_spawn_arguments_survive_actual_prepare_author_request(monkeypatch, mode):
+    import json
+    from infini_local.core import llm_config
+    from infini_local.pipelines.author.request import build_initial_author_request
+    from prompt_packet_helpers import request_dossier, expand_native_source_references
+    directory = Path(os.environ.get('INFINI_PARENT_SPAWN_PACKET_DIR', '/missing-native-spawn-packets'))
+    if not directory.exists():
+        pytest.skip('actual native spawn Prepare packets unavailable')
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
+    for name in ('eventide', 'terra', 'daedalus'):
+        packet = json.loads((directory / (name + '.packet.json')).read_text())
+        before = copy.deepcopy(packet)
+        request, _, _ = build_initial_author_request(packet['itemA'], packet['itemB'], 'spawn-source-roundtrip', model_name='offline-test-model')
+        raw = expand_native_source_references(request_dossier(request))['parents']['A']['packet']['raw']['ammo']
+        assert raw['projectileSemanticsReference'] == packet['itemA']['ammoRaw']['projectileSemanticsReference']
+        sites = raw['projectileSemanticsReference']['stages'][1]['spawnSites']
+        assert sites and all('spawnInputs' in s and 'spawnInputCoverage' in s for s in sites)
+        if name == 'eventide':
+            assert any(n.get('operator') == 'mul' and n['right'].get('value') == 2 for n in _source_nodes(sites[0]['spawnInputs']['damage']))
+            assert any(n.get('sourceBranchIlOffset') == 10866 for n in _source_nodes(sites[0]['spawnInputs']['damage']))
+            assert any(n.get('operator') == 'rem' for n in _source_nodes(sites[0]['spawnInputs']['ai1']))
+        if name != 'terra':
+            assert [r['inventorySlot'] for r in raw['playerInventoryAmmoRaw']] == [0, 54, 55]
+            assert all(r['inventorySlot'] == -1 for r in raw['fallbackAmmoRaw'])
+            fingerprint = packet['itemA']['fingerprint']['ammoRaw']
+            assert fingerprint['playerInventoryObservation']['reason'] == 'no_player'
+            assert fingerprint['playerInventoryAmmoRaw'] is None
+        assert packet == before
+
+
+def test_spawn_argument_additions_leave_existing_catalog_facts_unchanged():
+    import json
+    from generate_native_ammo_facts import extract
+    assembly = Path(os.environ.get('INFINI_NATIVE_AMMO_ASSEMBLY', '/missing-native-assembly'))
+    baseline = Path(os.environ.get('INFINI_AMMO_BASELINE_REPORT', '/missing-baseline-report'))
+    if not assembly.exists() or not baseline.exists():
+        pytest.skip('exact assembly and pre-extension catalog report unavailable')
+    actual = json.loads(json.dumps(extract(assembly)))
+    for source in actual:
+        for row in source['records']:
+            for spawn in row['spawnSites']:
+                for key in ('spawnInputs', 'whenSourceCondition', 'spawnInputCoverage'):
+                    spawn.pop(key)
+    assert actual == json.loads(baseline.read_text())['sources']
+
+
+@pytest.mark.parametrize('branches', range(1, 7))
+def test_spawn_argument_last_definition_matches_all_source_path_choices(branches):
+    from itertools import product
+    from native_hit_status_analysis import Instruction as I
+    ops = [('ldarg', 2), ('ldfld', 'Terraria.Item.shoot'), ('stloc', 0),
+           ('ldarg', 2), ('ldfld', 'Terraria.Item.type'), ('const', 98643), ('bne', None)]
+    for b in range(branches):
+        start = len(ops)
+        ops += [('ldarg', 0), ('ldfld', 'Fixture.flag' + str(b)), ('brfalse', start + 5),
+                ('const', b + 10), ('stloc', 20)]
+    ops += [('ldloc', 7), ('ldloc', 8), ('ldloc', 9), ('ldloc', 0), ('ldloc', 20),
+            ('ldloc', 5), ('ldarg', 1), ('const', 0.0), ('const', 0.0), ('const', 0.0),
+            ('call', ('Terraria.Projectile.NewProjectile', 10, False, True)), ('pop', None), ('ret', None)]
+    ops[6] = ('bne', len(ops) - 1)
+    row, = ammo_method_facts([I(n, op, arg) for n, (op, arg) in enumerate(ops)], 'ItemCheck_Shoot')
+    value = row['spawnSites'][0]['spawnInputs']['damage']
+    alternatives = value.get('alternatives', [{'whenSourceCondition': True, 'value': value}])
+
+    def evaluate(condition, states):
+        if type(condition) is bool:
+            return condition
+        if condition['kind'] == 'branch':
+            flag = int(condition['value']['member'].removeprefix('Fixture.flag'))
+            return (not states[flag]) == condition['taken']
+        return evaluate(condition['then'] if evaluate(condition['condition'], states) else condition['else'], states)
+
+    for states in product([False, True], repeat=branches):
+        selected = [a['value'].get('value', {}).get('value') for a in alternatives if evaluate(a['whenSourceCondition'], states)]
+        expected = next((b + 10 for b in range(branches - 1, -1, -1) if states[b]), None)
+        assert selected == [expected]
+
+
+def test_spawn_argument_local_depth_bound_does_not_discard_other_fields():
+    mutations = [('const', 1), ('stloc', 40)]
+    for local in range(41, 80):
+        mutations += [('ldloc', local - 1), ('stloc', local)]
+    mutations += [('ldloc', 79), ('stloc', 14)]
+    row, = ammo_method_facts(_spawn_argument_fixture(mutate=mutations), 'ItemCheck_Shoot')
+    spawn, = row['spawnSites']
+    damage = spawn['spawnInputCoverage']['fields']['damage']
+    assert any(issue['reason'] in {'source_local_definition_depth_bound', 'source_expression_depth_bound'} for issue in damage['unresolved'])
+    assert spawn['spawnInputs']['owner']['kind'] == 'argument'
+    assert spawn['spawnInputs']['ai0']['value'] == 0.0
+    assert spawn['spawnInputs']['type']['reason'] == 'branch_entry_value_unknown'

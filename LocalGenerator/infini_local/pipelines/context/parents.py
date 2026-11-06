@@ -14,6 +14,7 @@ from infini_local.pipelines.context.attack_behavior import project_attack_behavi
 from infini_local.pipelines.context.attack_tables import pack_attack_tables
 from infini_local.pipelines.context.native_references import known_projectile_references
 from infini_local.pipelines.context.native_csharp_source import native_csharp_source_for_llm
+from infini_local.pipelines.context.csharp_source_view import _records as _verified_csharp_records
 from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_AMMO_ITEM_KEYS,
     LLM_INCLUDE_AISTYLE_RAW,
@@ -41,7 +42,7 @@ def _observed_parent_field(item: dict[str, Any], name: str) -> tuple[bool, Any]:
     fingerprint = item.get("fingerprint")
     projectile_alias = name in ("directProjectileRaw", "effectiveProjectileRaw")
     runtime_alias = projectile_alias or name in (
-        "nativeEquipmentReference", "nativeEnvironmentReference", "parentSourceGraph")
+        "nativeEquipmentReference", "nativeEnvironmentReference", "nativeItemDispatchReference", "parentSourceGraph")
     sources = [(item, projectile_alias), (fingerprint, projectile_alias),
                (dict_get_ci(item, "runtimeFacts"), runtime_alias)]
     if isinstance(fingerprint, dict):
@@ -60,7 +61,7 @@ def _observed_parent_field(item: dict[str, Any], name: str) -> tuple[bool, Any]:
 # effective/ammo snapshots, fingerprints, generated data, tags or inferred design.
 _DUMP_ITEM_OBSERVATIONS = (
     "nativeShootReference", "nativeContactHitStatusReference", "nativeEquipmentReference",
-    "nativeEnvironmentReference", "nativeBuffEffectReference",
+    "nativeEnvironmentReference", "nativeBuffEffectReference", "nativeItemDispatchReference",
     "parentSourceGraph", "directProjectileRaw", "spriteReferenceRaw",
 )
 
@@ -233,12 +234,13 @@ def compact_item_raw_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     # Literal source text/provenance is one observation: preserve line order,
     # whitespace, empty lines and source-bound refusal without compacting it.
     for key in ("tooltipLines", "tooltipSource", "nativeShootReference", "nativeContactHitStatusReference",
-                "nativeEquipmentReference", "nativeEnvironmentReference", "nativeBuffEffectReference", "parentSourceGraph"):
+                "nativeEquipmentReference", "nativeEnvironmentReference", "nativeBuffEffectReference",
+                "nativeItemDispatchReference", "parentSourceGraph"):
         observed, value = _observed_parent_field(item, key)
         if observed and value is not None:
             out[key] = copy.deepcopy(value)
     if generated_data_of(item):
-        for key in ("nativeEquipmentReference", "nativeEnvironmentReference", "parentSourceGraph"):
+        for key in ("nativeEquipmentReference", "nativeEnvironmentReference", "nativeItemDispatchReference", "parentSourceGraph"):
             out.pop(key, None)
         for key in ("createTile", "createWall", "placeStyle"):
             out.pop(key, None)
@@ -277,7 +279,7 @@ def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool
     if not isinstance(proj, dict) or not proj:
         return {}
     out = _select_raw_keys(proj, LLM_PROJECTILE_RAW_KEYS)
-    for key in ("sourceReferences", "profileScope", "unresolved"):
+    for key in ("sourceReferences", "profileScope", "unresolved", "mechanicsSource"):
         if key in proj:
             out[key] = copy.deepcopy(proj[key])
     # Behavior is model context; certificates/instruction offsets remain in the
@@ -285,6 +287,17 @@ def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool
     linked_calls = None
     if isinstance(proj.get("attackReference"), dict):
         reference = proj["attackReference"]
+        mechanics = out.get("mechanicsSource")
+        if (isinstance(mechanics, dict) and mechanics.get("source") == "native_mechanics_source"
+                and type(mechanics.get("version")) is int and mechanics["version"] == 1):
+            # A partial approximate view must not lose a certified dispatcher
+            # region just because the legacy size selector prefers its IL graph.
+            mechanics.pop("verifiedSourceRecords", None)
+            verified = _verified_csharp_records(reference)
+            if verified:
+                represented = {row.get("method") for row in mechanics.get("records", []) if isinstance(row, dict)}
+                mechanics["verifiedSourceRecords"] = [copy.deepcopy(row) for row in verified.values()
+                                                       if row.get("method") not in represented]
         references = proj.get("referencedProjectiles")
         if "nativeCSharpSource" in reference and (references is None or known_projectile_references(references)):
             reference, linked_calls = native_csharp_source_for_llm(reference,
@@ -405,7 +418,7 @@ def compact_vanilla_flags_for_llm(item: dict[str, Any]) -> dict[str, Any]:
         if n > 0 or k in {"createTile", "createWall", "placeStyle"}:
             out[k] = n
     if generated_data_of(item):
-        for key in ("nativeEquipmentReference", "nativeEnvironmentReference", "parentSourceGraph"):
+        for key in ("nativeEquipmentReference", "nativeEnvironmentReference", "nativeItemDispatchReference", "parentSourceGraph"):
             out.pop(key, None)
         for key in ("createTile", "createWall", "placeStyle"):
             out.pop(key, None)

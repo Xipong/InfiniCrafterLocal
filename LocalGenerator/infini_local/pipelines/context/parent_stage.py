@@ -343,9 +343,10 @@ def _stage_projectile_profiles(raw: dict[str, Any], *, related: bool) -> Iterato
 def parent_context_for_stage(parents: dict[str, Any] | list[dict[str, Any]], *, stage: str) -> dict[str, Any]:
     """Same brief layout for every ingredient, followed by technical source facts.
 
-    No name/category routing or chosen inheritance roles. Author omits only the
-    recognized presentation-only render-layer graph, retaining native gameplay
-    graphs, conditions, admission and extraction gaps. Other stages retain it.
+    No name/category routing or chosen inheritance roles. New native mechanics
+    producer packets use an explicit approximate Author view; full graphs remain
+    diagnostic. Legacy packets retain their existing source presentation. Visual,
+    VFX and accepted generated packets keep their own contracts unchanged.
     This is model-context presentation, never a mutation of captured parents.
     """
     if stage not in {"author", "visual", "vfx"}:
@@ -418,6 +419,12 @@ def parent_context_for_stage(parents: dict[str, Any] | list[dict[str, Any]], *, 
                 profile["attackReference"] = pack_attack_tables(ordered_attack_context(source))
         if "spriteReference" in raw:
             brief["appearance"]["spriteReference"] = copy.deepcopy(raw["spriteReference"])
+        if stage == "author":
+            from infini_local.pipelines.context.mechanics_context import mechanics_context
+            mechanics = mechanics_context(raw)
+            if mechanics is not None:
+                packet["raw"] = mechanics
+                brief["behavior"] = {"reading": "Selected mechanics and explicit uncertainty are in packet.raw.mechanics."}
         briefs[label] = brief
     # Author already has the shared-fact transport contract. Presentation stages
     # keep their existing literal wire rather than acquiring another decoding seam.

@@ -14,13 +14,14 @@ from infini_local.pipelines.context.attack_behavior import _PROGRAM_FIELDS, _ROW
 
 SOURCE_READING = (
     "Read-only decompiled C# source, never executable Author code or an imported behavior. "
-    "A matching method uses C# only when its complete source record and references are smaller than "
-    "the compact captured graph; other methods retain their graph. Unused source records stay diagnostic. "
+    "A certified whole-method C# record takes priority over a partial captured graph, regardless of size. "
+    "Its proved identity specialization may replace it when smaller. Conditional region records compete "
+    "with their matching graphs by size only after exact coverage checks. Unused source records stay diagnostic. "
     "nativeCSharpSourceRef resolves to nativeCSharpSource.records.id in this same parent reference. "
     "A whole_method record retains all its source branches; identity_specialized_method retains the producer-proven identity paths with explicit identitySpecialization limits; conditional_ast_regions retains only the "
     "producer-certified closed regions and their explicit entry/coverage limits. Source calls/hooks and "
     "enclosing flow are not evaluated. Record coverage, entry limits and unresolveds remain here; "
-    "graph extraction limits and proof receipts remain in raw diagnostics. The view does not prove "
+    "graphCapture failures stay unknown; other limits and proof receipts remain in raw diagnostics. The view does not prove "
     "effects of unshown callees/property accessors, behavior under native detours/global aliases, or "
     "caller identity preservation. sourceLocation binds requiredPredicates IDs to certified IL/source "
     "locations; unavailable mappings remain unknown, never true conditions or guaranteed spawns."
@@ -28,13 +29,109 @@ SOURCE_READING = (
 _CERT = ("method", "sourceModuleVersionId", "sourceMethodSha256")
 _REFERENCE_FIELDS = {"source", "version", "identityPredicates", "scope", "units", "motionDispatch",
     "motionDispatchEffects", "motion", "collision", "draw", "positionIntegration", "sourceMethods", "coverage",
-    "admission", "nativeCSharpSource"}
+    "admission", "nativeCSharpSource", "lifecycle"}
 _RECORD_FIELDS = {"id", *_CERT, "metadataToken", "assemblySha256", "decompiler", "coverage", "graphPaths",
     "code", "codeSha256", "locations", "unresolved", "entryGuards", "coveredWindows"}
-_CAPTURE_FIELDS = _PROGRAM_FIELDS | {"identitySelected", "identitySelection"}
+_CAPTURE_FIELDS = _PROGRAM_FIELDS | {"identitySelected", "identitySelection", "identitySelectionUnavailable"}
 _MODEL_SOURCE = "read_only_native_csharp_view"
 _MODEL_SCOPE = ("Gameplay source view: code, entry conditions, coverage and unresolveds retain the selected certified representation. "
     "PE/IL/decompiler certificates, hashes and graph-proof paths remain in the raw diagnostic capture.")
+_LIFECYCLE_SCOPE = ("Conditional source regions only. The original guard must be reached; enclosing flow, hooks, captured-entry identity preservation and all other Kill regions remain unknown. Live type/owner/state predicates are not evaluated. No source record proves execution or absence of other effects.")
+_LIFECYCLE_CALL_SCOPE = ("conditional_lifecycle_source_candidate; full_guards_and_arguments_in_source_region; enclosing_flow_hooks_and_entry_identity_unknown; not_an_executed_spawn")
+
+
+def project_lifecycle_source(reference: dict[str, Any]) -> dict[str, Any]:
+    """Project the separate direct-source contract, never a tiny replacement graph.
+
+    A malformed/new record is literal passthrough. Complete region code, live
+    guards, call anchors, and all refusals survive independently of graph sizes.
+    """
+    out = copy.deepcopy(reference)
+    if (reference.get("source") != "read_only_native_attack_source"
+            or type(reference.get("version")) is not int or reference["version"] != 1
+            or not set(reference) <= _REFERENCE_FIELDS):
+        return out
+    value = reference.get("lifecycle")
+    fields = {"source", "version", "root", "relevanceIdentity", "scope", "records", "unresolved", "rootCertificate"}
+    if (not isinstance(value, dict) or set(value) != fields
+            or value["source"] != "verified_conditional_native_lifecycle_csharp"
+            or type(value["version"]) is not int or value["version"] != 1 or value["root"] != "Kill"
+            or not _identity(value["relevanceIdentity"]) or value["relevanceIdentity"] != reference.get("identityPredicates")
+            or value["scope"] != _LIFECYCLE_SCOPE
+            or not isinstance(value["unresolved"], list) or any(not isinstance(row, str) for row in value["unresolved"])
+            or not isinstance(value["records"], list)):
+        return out
+    cert = _certificate(value["rootCertificate"])
+    if (cert is None or set(value["rootCertificate"]) != set(_CERT) or cert[0] != "Terraria.Projectile.Kill"
+            or not _sha(cert[2])):
+        return out
+    record_fields = {*_CERT, "id", "metadataToken", "assemblySha256", "decompiler", "coverage", "code",
+                     "codeSha256", "entryCondition", "identityWitnesses", "spawnSites", "locations"}
+    call_fields = {*_CERT, "at", "projectileTypes", "requiredPredicates", "unresolved"}
+    projected, ids, sites = [], set(), set()
+    for record in value["records"]:
+        if (not isinstance(record, dict) or set(record) != record_fields or _certificate(record) != cert
+                or not _integer(record["metadataToken"]) or not _sha(record["assemblySha256"])
+                or not isinstance(record["code"], str) or not record["code"].strip()
+                or not _sha(record["codeSha256"])
+                or hashlib.sha256(record["code"].encode("utf-8")).hexdigest() != record["codeSha256"]
+                or record["coverage"] != "conditional_closed_lexical_region"
+                or not isinstance(record["entryCondition"], str) or not record["entryCondition"]
+                or not record["code"].startswith("if (" + record["entryCondition"] + ")")
+                or record["id"] != f'lifecycle:{cert[1]}:{record["metadataToken"]}:{record["codeSha256"]}'
+                or record["id"] in ids):
+            return out
+        ids.add(record["id"])
+        engine = record["decompiler"]
+        if (not isinstance(engine, dict) or engine != {"name": "ICSharpCode.Decompiler", "version": "8.2.0.7535",
+                "assemblySha256": "d174072a16aa758a39d160f70ce924103898fae2b8506b48f70d6909e25a1fd0",
+                "settings": "csharp_default_no_indentation_v1"}):
+            return out
+        witnesses = record["identityWitnesses"]
+        if not isinstance(witnesses, list) or not witnesses:
+            return out
+        for witness in witnesses:
+            if (not isinstance(witness, dict) or set(witness) != {"field", "literal"}
+                    or not isinstance(witness["field"], str) or witness["field"] not in {"Terraria.Projectile.type", "Terraria.Projectile.aiStyle"}
+                    or type(witness["literal"]) is not int
+                    or witness["literal"] != value["relevanceIdentity"][witness["field"].removeprefix("Terraria.")]):
+                return out
+        locations = record["locations"]
+        if not isinstance(locations, list):
+            return out
+        anchors = set()
+        for location in locations:
+            if not isinstance(location, dict) or not _integer(location.get("ilOffset")) or location["ilOffset"] in anchors:
+                return out
+            anchors.add(location["ilOffset"])
+            if set(location) == {"ilOffset", "unresolved"}:
+                if location["unresolved"] != "decompiler_source_location_unavailable":
+                    return out
+            elif (set(location) != {"ilOffset", "startLine", "endLine"}
+                    or not _integer(location["startLine"]) or not _integer(location["endLine"])
+                    or not 1 <= location["startLine"] <= location["endLine"] <= len(record["code"].split("\n"))):
+                return out
+        if not isinstance(record["spawnSites"], list) or not record["spawnSites"]:
+            return out
+        calls = []
+        for call in record["spawnSites"]:
+            if (not isinstance(call, dict) or set(call) != call_fields or _certificate(call) != cert
+                    or not _integer(call["at"]) or call["at"] not in anchors or call["at"] in sites
+                    or not isinstance(call["projectileTypes"], list) or len(call["projectileTypes"]) > 1
+                    or any(type(item) is not int for item in call["projectileTypes"])
+                    or not isinstance(call["requiredPredicates"], list)
+                    or any(not isinstance(item, str) or not re.fullmatch(r"b\d+", item)
+                           or int(item[1:]) not in anchors for item in call["requiredPredicates"])
+                    or len(call["requiredPredicates"]) != len(set(call["requiredPredicates"]))
+                    or call["unresolved"] != _LIFECYCLE_CALL_SCOPE + ("; spawn_type_requires_runtime_expression" if not call["projectileTypes"] else "")):
+                return out
+            sites.add(call["at"])
+            calls.append({key: copy.deepcopy(child) for key, child in call.items() if key not in _CERT})
+        projected.append({"id": f"l{len(projected)}", **{key: copy.deepcopy(record[key]) for key in (
+            "method", "coverage", "code", "entryCondition", "identityWitnesses", "locations")}, "spawnSites": calls})
+    out["lifecycle"] = {key: copy.deepcopy(value[key]) for key in ("version", "root", "relevanceIdentity", "scope", "unresolved")}
+    out["lifecycle"].update(source="read_only_conditional_native_lifecycle_csharp", records=projected)
+    return out
 
 
 def _model_records(reference: dict[str, Any]) -> dict[str, dict[str, Any]] | None:
@@ -83,7 +180,9 @@ def _compact_model_view(reference: dict[str, Any], calls: list[dict[str, Any]] |
 
     def visit(value: Any) -> Any:
         if known_native_csharp_program(value):
-            return {"nativeCSharpSourceRef": ids[value["nativeCSharpSourceRef"]]}
+            diagnostic = _identity_failure_capture(value.get("graphCapture", {}))
+            return {"nativeCSharpSourceRef": ids[value["nativeCSharpSourceRef"]],
+                    **({"graphCapture": diagnostic} if diagnostic else {})}
         if isinstance(value, dict):
             return {key: visit(child) for key, child in value.items() if key != "nativeCSharpSource"}
         return [visit(child) for child in value] if isinstance(value, list) else value
@@ -205,6 +304,9 @@ def _known_row(row: Any) -> bool:
 def _known_graph(program: Any) -> bool:
     if not isinstance(program, dict) or not set(program) <= _CAPTURE_FIELDS or _certificate(program) is None:
         return False
+    if "identitySelectionUnavailable" in program and (
+            not isinstance(program["identitySelectionUnavailable"], str) or not program["identitySelectionUnavailable"]):
+        return False
     if "identityWindows" in program:
         windows = program["identityWindows"]
         if not isinstance(windows, list) or any(not isinstance(window, dict)
@@ -258,10 +360,29 @@ def _capture_metadata(program: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _identity_failure_capture(capture: dict[str, Any]) -> dict[str, Any]:
+    """Keep the producer's failure literal at the graph that reported it.
+
+    This is capture diagnostics, not an identity proof or a callee-effect fact.
+    """
+    result = {}
+    failure = capture.get("identitySelectionUnavailable")
+    if isinstance(failure, str) and failure:
+        result["identitySelectionUnavailable"] = failure
+    if isinstance(capture.get("selectedCapture"), dict):
+        selected = _identity_failure_capture(capture["selectedCapture"])
+        if selected:
+            result["selectedCapture"] = selected
+    return result
+
+
 def known_native_csharp_program(program: Any) -> bool:
     if not isinstance(program, dict) or not isinstance(program.get("nativeCSharpSourceRef"), str):
         return False
     return set(program) == {"nativeCSharpSourceRef"} or (
+        set(program) == {"nativeCSharpSourceRef", "graphCapture"} and isinstance(program["graphCapture"], dict)
+        and bool(program["graphCapture"]) and _identity_failure_capture(program["graphCapture"]) == program["graphCapture"]
+    ) or (
         set(program) == {*_CERT, "nativeCSharpSourceRef", "graphCapture"} and _certificate(program) is not None
         and isinstance(program["graphCapture"], dict))
 
@@ -279,7 +400,8 @@ def known_native_csharp_context(reference: dict[str, Any]) -> bool:
             if isinstance(value, dict):
                 if "nativeCSharpSourceRef" in value:
                     identity = value["nativeCSharpSourceRef"]
-                    if set(value) != {"nativeCSharpSourceRef"} or not isinstance(identity, str) or identity not in records:
+                    if (not set(value) <= {"nativeCSharpSourceRef", "graphCapture"}
+                            or not known_native_csharp_program(value) or identity not in records):
                         return False
                     used.add(identity)
                 return all(bound(child) for key, child in value.items() if key != "nativeCSharpSource")
@@ -330,7 +452,7 @@ def prune_native_csharp_records(reference: dict[str, Any]) -> dict[str, Any]:
 
         def collect(value: Any) -> None:
             if isinstance(value, dict):
-                if set(value) == {"nativeCSharpSourceRef"} and isinstance(value["nativeCSharpSourceRef"], str):
+                if set(value) <= {"nativeCSharpSourceRef", "graphCapture"} and known_native_csharp_program(value):
                     used.add(value["nativeCSharpSourceRef"])
                 for key, child in value.items():
                     if key != "nativeCSharpSource": collect(child)

@@ -8,7 +8,7 @@ from typing import Any
 
 FIXTURES = Path(__file__).resolve().parents[1] / 'fixtures'
 PANELS = FIXTURES / 'panels'
-DEFAULT_PRESETS = {'live10': 'live10-midgame', 'live20': 'live20-classic'}
+DEFAULT_PRESETS = {'live10': 'live10-midgame', 'live20': 'live20-classic', 'live40': 'live40-diverse'}
 
 
 def load_panel(name: str) -> dict[str, Any]:
@@ -23,6 +23,10 @@ def load_panel(name: str) -> dict[str, Any]:
     if not isinstance(payload.get('cases'), list) or not payload['cases']:
         raise ValueError(f'empty built-in panel: {name}')
     dump_name = payload.get('runtimeDump')
+    if payload.get('requiresRuntimeDump') is True:
+        if dump_name is not None:
+            raise ValueError(f'external-input panel must not ship a default dump: {name}')
+        return {**payload, 'sourcePath': source, 'runtimeDumpPath': None}
     if not isinstance(dump_name, str) or not dump_name:
         raise ValueError(f'missing parent fixture for panel: {name}')
     dump = (source.parent / dump_name).resolve()
@@ -40,7 +44,8 @@ def panel_catalog() -> list[dict[str, Any]]:
             'id': panel['id'], 'command': panel['command'], 'title': panel['title'],
             'caseCount': len(panel['cases']), 'historical': panel['historical'],
             'casesFile': panel['sourcePath'].relative_to(root).as_posix(),
-            'runtimeDump': panel['runtimeDumpPath'].relative_to(root).as_posix(),
+            'runtimeDump': panel['runtimeDumpPath'].relative_to(root).as_posix() if panel['runtimeDumpPath'] else None,
+            'requiresRuntimeDump': panel.get('requiresRuntimeDump', False),
             'provenance': panel['provenance'], 'notes': panel.get('notes', ''),
             'cases': panel['cases'],
         })

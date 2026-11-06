@@ -1,0 +1,339 @@
+{
+  "schema": "infini.toolbox-panel.v1",
+  "id": "live40-diverse",
+  "command": "live40",
+  "title": "Live40: diverse native-context coverage",
+  "historical": false,
+  "runtimeDump": null,
+  "requiresRuntimeDump": true,
+  "provenance": "New 2026-11-06 diverse panel, not the historical forty-item GIF gallery. Ordered pairs and A/B orientation preserved from the native Prepare audit manifest.",
+  "notes": "Current external runtime dump required; private native packets and game source are not shipped. Inventory and coverageIntent document audit scenarios, not executed gameplay or applied generator inventory.",
+  "sources": {
+    "roster": {
+      "path": "ifc-pr333-panel40-20261106/manifest.json",
+      "sha256": "95ae1db134f685325fd9efe3d7dc7cb11efd1f518b5b1ad5d23dc111e503f116"
+    }
+  },
+  "cases": [
+    {
+      "case": "01_nebulablaze_wood",
+      "itemA": "NebulaBlaze",
+      "itemB": "Wood",
+      "coverageIntent": "magic conditional alternate",
+      "inventory": "mixed_ammo",
+      "sourceCase": "01-NebulaBlaze-Wood"
+    },
+    {
+      "case": "02_lastprism_nebulablaze",
+      "itemA": "LastPrism",
+      "itemB": "NebulaBlaze",
+      "coverageIntent": "shared AI beam vs alternate",
+      "inventory": "mixed_ammo",
+      "sourceCase": "02-LastPrism-NebulaBlaze"
+    },
+    {
+      "case": "03_wood_lastprism",
+      "itemA": "Wood",
+      "itemB": "LastPrism",
+      "coverageIntent": "reversed material/beam",
+      "inventory": "mixed_ammo",
+      "sourceCase": "03-Wood-LastPrism"
+    },
+    {
+      "case": "04_terrablade_woodensword",
+      "itemA": "TerraBlade",
+      "itemB": "WoodenSword",
+      "coverageIntent": "melee source spawn",
+      "inventory": "mixed_ammo",
+      "sourceCase": "04-TerraBlade-WoodenSword"
+    },
+    {
+      "case": "05_fairyqueenrangeditem_dirtblock",
+      "itemA": "FairyQueenRangedItem",
+      "itemB": "DirtBlock",
+      "coverageIntent": "conditional state bow",
+      "inventory": "mixed_ammo",
+      "sourceCase": "05-FairyQueenRangedItem-DirtBlock"
+    },
+    {
+      "case": "06_daedalusstormbow_moltenfury",
+      "itemA": "DaedalusStormbow",
+      "itemB": "MoltenFury",
+      "coverageIntent": "rain and ammo replacement",
+      "inventory": "mixed_ammo",
+      "sourceCase": "06-DaedalusStormbow-MoltenFury"
+    },
+    {
+      "case": "07_moltenfury_woodenbow",
+      "itemA": "MoltenFury",
+      "itemB": "WoodenBow",
+      "coverageIntent": "ammo replacement vs retention",
+      "inventory": "mixed_ammo",
+      "sourceCase": "07-MoltenFury-WoodenBow"
+    },
+    {
+      "case": "08_hellwingbow_woodenbow",
+      "itemA": "HellwingBow",
+      "itemB": "WoodenBow",
+      "coverageIntent": "conditional ammo replacement",
+      "inventory": "mixed_ammo",
+      "sourceCase": "08-HellwingBow-WoodenBow"
+    },
+    {
+      "case": "09_phantasm_tsunami",
+      "itemA": "Phantasm",
+      "itemB": "Tsunami",
+      "coverageIntent": "multi projectile bows",
+      "inventory": "mixed_ammo",
+      "sourceCase": "09-Phantasm-Tsunami"
+    },
+    {
+      "case": "10_pulsebow_marrow",
+      "itemA": "PulseBow",
+      "itemB": "Marrow",
+      "coverageIntent": "fixed projectile bows",
+      "inventory": "mixed_ammo",
+      "sourceCase": "10-PulseBow-Marrow"
+    },
+    {
+      "case": "11_spacegun_laserrifle",
+      "itemA": "SpaceGun",
+      "itemB": "LaserRifle",
+      "coverageIntent": "piercing magic",
+      "inventory": "mixed_ammo",
+      "sourceCase": "11-SpaceGun-LaserRifle"
+    },
+    {
+      "case": "12_waterbolt_demonscythe",
+      "itemA": "WaterBolt",
+      "itemB": "DemonScythe",
+      "coverageIntent": "bouncing vs acceleration",
+      "inventory": "mixed_ammo",
+      "sourceCase": "12-WaterBolt-DemonScythe"
+    },
+    {
+      "case": "13_bookofskulls_razorbladetyphoon",
+      "itemA": "BookofSkulls",
+      "itemB": "RazorbladeTyphoon",
+      "coverageIntent": "homing magic",
+      "inventory": "mixed_ammo",
+      "sourceCase": "13-BookofSkulls-RazorbladeTyphoon"
+    },
+    {
+      "case": "14_rainbowrod_magicmissile",
+      "itemA": "RainbowRod",
+      "itemB": "MagicMissile",
+      "coverageIntent": "controlled magic",
+      "inventory": "mixed_ammo",
+      "sourceCase": "14-RainbowRod-MagicMissile"
+    },
+    {
+      "case": "15_flamelash_vilethorn",
+      "itemA": "Flamelash",
+      "itemB": "Vilethorn",
+      "coverageIntent": "controlled vs segmented",
+      "inventory": "mixed_ammo",
+      "sourceCase": "15-Flamelash-Vilethorn"
+    },
+    {
+      "case": "16_lunarflarebook_meteorstaff",
+      "itemA": "LunarFlareBook",
+      "itemB": "MeteorStaff",
+      "coverageIntent": "rain magic",
+      "inventory": "mixed_ammo",
+      "sourceCase": "16-LunarFlareBook-MeteorStaff"
+    },
+    {
+      "case": "17_crystalserpent_skyfracture",
+      "itemA": "CrystalSerpent",
+      "itemB": "SkyFracture",
+      "coverageIntent": "secondary vs multi spawn",
+      "inventory": "mixed_ammo",
+      "sourceCase": "17-CrystalSerpent-SkyFracture"
+    },
+    {
+      "case": "18_goldenshower_cursedflames",
+      "itemA": "GoldenShower",
+      "itemB": "CursedFlames",
+      "coverageIntent": "debuff magic",
+      "inventory": "mixed_ammo",
+      "sourceCase": "18-GoldenShower-CursedFlames"
+    },
+    {
+      "case": "19_beegun_waspgun",
+      "itemA": "BeeGun",
+      "itemB": "WaspGun",
+      "coverageIntent": "swarm homing",
+      "inventory": "mixed_ammo",
+      "sourceCase": "19-BeeGun-WaspGun"
+    },
+    {
+      "case": "20_chargedblastercannon_heatray",
+      "itemA": "ChargedBlasterCannon",
+      "itemB": "HeatRay",
+      "coverageIntent": "charge vs beam",
+      "inventory": "mixed_ammo",
+      "sourceCase": "20-ChargedBlasterCannon-HeatRay"
+    },
+    {
+      "case": "21_starwrath_meowmere",
+      "itemA": "StarWrath",
+      "itemB": "Meowmere",
+      "coverageIntent": "melee child projectiles",
+      "inventory": "mixed_ammo",
+      "sourceCase": "21-StarWrath-Meowmere"
+    },
+    {
+      "case": "22_starfury_enchantedsword",
+      "itemA": "Starfury",
+      "itemB": "EnchantedSword",
+      "coverageIntent": "melee rain vs beam",
+      "inventory": "mixed_ammo",
+      "sourceCase": "22-Starfury-EnchantedSword"
+    },
+    {
+      "case": "23_flairon_flowerpow",
+      "itemA": "Flairon",
+      "itemB": "FlowerPow",
+      "coverageIntent": "flail children",
+      "inventory": "mixed_ammo",
+      "sourceCase": "23-Flairon-FlowerPow"
+    },
+    {
+      "case": "24_theeyeofcthulhu_amarok",
+      "itemA": "TheEyeOfCthulhu",
+      "itemB": "Amarok",
+      "coverageIntent": "yoyo lifecycle",
+      "inventory": "mixed_ammo",
+      "sourceCase": "24-TheEyeOfCthulhu-Amarok"
+    },
+    {
+      "case": "25_possessedhatchet_paladinshammer",
+      "itemA": "PossessedHatchet",
+      "itemB": "PaladinsHammer",
+      "coverageIntent": "returning weapons",
+      "inventory": "mixed_ammo",
+      "sourceCase": "25-PossessedHatchet-PaladinsHammer"
+    },
+    {
+      "case": "26_vampireknives_scourgeofthecorruptor",
+      "itemA": "VampireKnives",
+      "itemB": "ScourgeoftheCorruptor",
+      "coverageIntent": "spread and split",
+      "inventory": "mixed_ammo",
+      "sourceCase": "26-VampireKnives-ScourgeoftheCorruptor"
+    },
+    {
+      "case": "27_megashark_onyxblaster",
+      "itemA": "Megashark",
+      "itemB": "OnyxBlaster",
+      "coverageIntent": "bullet source alternatives",
+      "inventory": "mixed_ammo",
+      "sourceCase": "27-Megashark-OnyxBlaster"
+    },
+    {
+      "case": "28_shotgun_sniperrifle",
+      "itemA": "Shotgun",
+      "itemB": "SniperRifle",
+      "coverageIntent": "spread vs single",
+      "inventory": "mixed_ammo",
+      "sourceCase": "28-Shotgun-SniperRifle"
+    },
+    {
+      "case": "29_grenadelauncher_rocketlauncher",
+      "itemA": "GrenadeLauncher",
+      "itemB": "RocketLauncher",
+      "coverageIntent": "explosive collision",
+      "inventory": "mixed_ammo",
+      "sourceCase": "29-GrenadeLauncher-RocketLauncher"
+    },
+    {
+      "case": "30_snowmancannon_celeb2",
+      "itemA": "SnowmanCannon",
+      "itemB": "Celeb2",
+      "coverageIntent": "homing and multiple rockets",
+      "inventory": "mixed_ammo",
+      "sourceCase": "30-SnowmanCannon-Celeb2"
+    },
+    {
+      "case": "31_stardustdragonstaff_stardustcellstaff",
+      "itemA": "StardustDragonStaff",
+      "itemB": "StardustCellStaff",
+      "coverageIntent": "summon segmentation vs shots",
+      "inventory": "mixed_ammo",
+      "sourceCase": "31-StardustDragonStaff-StardustCellStaff"
+    },
+    {
+      "case": "32_pygmystaff_ravenstaff",
+      "itemA": "PygmyStaff",
+      "itemB": "RavenStaff",
+      "coverageIntent": "minion delivery",
+      "inventory": "mixed_ammo",
+      "sourceCase": "32-PygmyStaff-RavenStaff"
+    },
+    {
+      "case": "33_queenspiderstaff_staffofthefrosthydra",
+      "itemA": "QueenSpiderStaff",
+      "itemB": "StaffoftheFrostHydra",
+      "coverageIntent": "sentry attacks",
+      "inventory": "mixed_ammo",
+      "sourceCase": "33-QueenSpiderStaff-StaffoftheFrostHydra"
+    },
+    {
+      "case": "34_firewhip_coolwhip",
+      "itemA": "FireWhip",
+      "itemB": "CoolWhip",
+      "coverageIntent": "whip hit effects",
+      "inventory": "mixed_ammo",
+      "sourceCase": "34-FireWhip-CoolWhip"
+    },
+    {
+      "case": "35_coppershortsword_woodensword",
+      "itemA": "CopperShortsword",
+      "itemB": "WoodenSword",
+      "coverageIntent": "simple melee negative control",
+      "inventory": "empty",
+      "sourceCase": "35-CopperShortsword-WoodenSword"
+    },
+    {
+      "case": "36_wood_stoneblock",
+      "itemA": "Wood",
+      "itemB": "StoneBlock",
+      "coverageIntent": "materials negative control",
+      "inventory": "empty",
+      "sourceCase": "36-Wood-StoneBlock"
+    },
+    {
+      "case": "37_woodenarrow_flamingarrow",
+      "itemA": "WoodenArrow",
+      "itemB": "FlamingArrow",
+      "coverageIntent": "ammo item parents",
+      "inventory": "empty",
+      "sourceCase": "37-WoodenArrow-FlamingArrow"
+    },
+    {
+      "case": "38_musketball_rocketi",
+      "itemA": "MusketBall",
+      "itemB": "RocketI",
+      "coverageIntent": "ammo category controls",
+      "inventory": "empty",
+      "sourceCase": "38-MusketBall-RocketI"
+    },
+    {
+      "case": "39_woodenbow_woodenbow",
+      "itemA": "WoodenBow",
+      "itemB": "WoodenBow",
+      "coverageIntent": "same parent deduplication",
+      "inventory": "empty",
+      "sourceCase": "39-WoodenBow-WoodenBow"
+    },
+    {
+      "case": "40_nebulablaze_lastprism",
+      "itemA": "NebulaBlaze",
+      "itemB": "LastPrism",
+      "coverageIntent": "reverse heavy pair",
+      "inventory": "mixed_ammo",
+      "sourceCase": "40-NebulaBlaze-LastPrism"
+    }
+  ]
+}

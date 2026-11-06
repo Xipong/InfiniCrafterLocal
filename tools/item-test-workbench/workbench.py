@@ -16,15 +16,31 @@ import sys
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 LIMIT = 64 * 1024 * 1024
+NATIVE_TRACE_LIMIT = 256 * 1024 * 1024
 HISTORY_FRAME_COUNT = 120
 
 
-def read_json(path: Path):
-    if path.stat().st_size > LIMIT:
-        raise ValueError(f"Input exceeds {LIMIT} bytes: {path}")
+def read_json(path: Path, *, max_bytes=None):
+    bound = LIMIT if max_bytes is None else max_bytes
+    if path.stat().st_size > bound:
+        raise ValueError(f"Input exceeds {bound} bytes: {path}")
     def reject(value):
         raise ValueError(f"Non-finite JSON number: {value}")
-    return json.loads(path.read_text(encoding="utf-8"), parse_constant=reject)
+    def finite_float(value):
+        number = float(value)
+        if not math.isfinite(number):
+            reject(value)
+        return number
+    with path.open("rb") as stream:
+        raw = stream.read(bound + 1)
+    if len(raw) > bound:
+        raise ValueError(f"Input exceeds {bound} bytes: {path}")
+    return json.loads(raw.decode("utf-8"), parse_constant=reject, parse_float=finite_float)
+
+
+def read_native_json(path: Path):
+    """Full native dust/frame telemetry has a separate, still finite output bound."""
+    return read_json(path, max_bytes=NATIVE_TRACE_LIMIT)
 
 
 def digest(path):
@@ -291,7 +307,7 @@ def render(trace_path: Path, output: Path, png=False, gif=False, camera="action"
             import cairosvg
         except ImportError as exc:
             raise RuntimeError("PNG export requires optional cairosvg; SVG/HTML need only Python stdlib") from exc
-    trace = validate_trace(read_json(trace_path))
+    trace = validate_trace(read_native_json(trace_path))
     if not trace["snapshots"]:
         raise ValueError("No snapshots: native run did not establish replayable execution")
     output.mkdir(parents=True, exist_ok=True)
@@ -407,7 +423,7 @@ def source_fingerprint():
     files = sorted([*ROOT.glob("ModSources/InfiniCrafterLocal/**/*.cs"),
                     *ROOT.glob("tools/native/EngineRuntimeChecks*.cs"),
                     *HERE.glob("*.cs"), *HERE.glob("*.csproj"), *HERE.glob("production-mod/*.csproj"),
-                    HERE/"vanilla-item-assets.json",
+                    HERE/"vanilla-item-assets.json", HERE/"vanilla-draw-assets.json",
                     *ROOT.glob("ModSources/InfiniCrafterLocal/Assets/**/*.*"),
                     *ROOT.glob("ModSources/InfiniCrafterLocal/Localization/**/*.*"),
                     ROOT/"ModSources/InfiniCrafterLocal/build.txt"])
@@ -592,7 +608,7 @@ def execute_loader_run(args):
     (output / "receipt.json").write_text(json.dumps(receipt, indent=2), encoding="utf-8")
     if not unchanged:
         raise RuntimeError("Native loader inputs or binaries changed during execution")
-    trace = read_json(output / "native.json")
+    trace = read_native_json(output / "native.json")
     status = trace.get("status")
     expected = {"passed": 0, "failed": 1, "error": 2}.get(status)
     if expected is None or proc.returncode != expected:
@@ -691,7 +707,7 @@ def execute_run(args):
         errors.append("Native inputs/build evidence unavailable after execution: " + str(exc))
     native = None
     try:
-        native = validate_trace(read_json(trace_path))
+        native = validate_trace(read_native_json(trace_path))
         receipt["traceSha256"] = digest(trace_path)
         receipt["nativeStatus"] = native["status"]
         if proc.returncode != NATIVE_EXIT[native["status"]]:
@@ -812,7 +828,7 @@ def main():
             data=plan_suite(args.manifest) if args.plan else run_suite(args.manifest,args.out,args.no_build)
             print(json.dumps(data,indent=2,allow_nan=False));return 0 if args.plan or data["passed"] else 1
         if args.command=="inspect":
-            native=validate_trace(read_json(args.trace))
+            native=validate_trace(read_native_json(args.trace))
             selected=[s for s in native["snapshots"] if args.tick is None or s["tick"]==args.tick]
             if args.tick is not None and not selected:raise ValueError("Requested tick has no recorded snapshot")
             if args.summary:
@@ -825,10 +841,10 @@ def main():
             print(json.dumps(result,indent=2,allow_nan=False));return 0
         if args.command=="native-review":
             from native_review import export_native_review
-            native=validate_trace(read_json(args.trace))
+            native=validate_trace(read_native_json(args.trace))
             print(json.dumps(export_native_review(native,args.trace,args.out,args.gif,args.gif_stride),indent=2));return 0
         if args.command=="timeline":
-            svg=timeline_svg(read_json(args.trace))
+            svg=timeline_svg(read_native_json(args.trace))
             if args.out.resolve()==args.trace.resolve():raise ValueError("Cannot overwrite native trace")
             if args.out.suffix.lower() not in (".svg",".png"):raise ValueError("Timeline output must be .svg or .png")
             args.out.parent.mkdir(parents=True,exist_ok=True)
@@ -839,7 +855,7 @@ def main():
             else:args.out.write_text(svg,encoding="utf-8")
             print(json.dumps({"output":str(args.out),"sourceSha256":digest(args.trace),"kind":"recorded-native-clock-plot"}));return 0
         if args.command=="frame":
-            native=validate_trace(read_json(args.trace))
+            native=validate_trace(read_native_json(args.trace))
             indices=[i for i,s in enumerate(native["snapshots"]) if s["tick"]==args.tick and s.get("phase")!="after_input_before_update"]
             if not indices:raise ValueError("No completed/update-failure snapshot at requested tick")
             index=indices[-1];svg=frame_svg(native,index,args.camera)

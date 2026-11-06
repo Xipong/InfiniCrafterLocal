@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from infini_local.core import llm_config
 from infini_local.pipelines.vfx import request as vfx_transport
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import request_dossier, dossier_text, expand_native_source_references
 
 import copy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -74,7 +75,7 @@ def _source_packets(parent, captured):
     for repair in (False, True):
         with pytest.raises(_CapturedRequest):
             visual_request._request_visual_kit(data, parent, {}, **({"repair_errors": [], "previous": {}, "repair_scope": {}} if repair else {}))
-    a, r, vd, vr = [request_dossier(row) for row in captured]
+    a, r, vd, vr = [expand_native_source_references(request_dossier(json.loads(json.dumps(row)))) for row in captured]
     return [a["parents"]["A"]["packet"]["raw"], r["parents"]["a"]["packet"]["raw"],
             vd["parents"]["parentA"]["packet"]["raw"], vr["parentFactsReadOnly"]["parentA"]["packet"]["raw"]]
 
@@ -288,4 +289,36 @@ def test_equipment_environment_conditions_survive_every_serialized_stage(offline
     for raw in _source_packets(parent, captured):
         assert raw["item"]["nativeEquipmentReference"] == equipment
         assert raw["item"]["nativeEnvironmentReference"] == environment
+    assert parent == before
+
+
+@pytest.mark.parametrize("source_available", [True, False])
+def test_item_dispatch_guarded_source_survives_every_serialized_stage(offline_packets, source_available):
+    captured, _ = offline_packets
+    certificate = {"method": "Terraria.Player.ApplyEquipFunctional", "sourceModuleMvid": "fixture-module",
+                   "sourceMethodToken": 100663301, "sourceMethodSha256": "a" * 64}
+    code = "if (item.type == 90101 && functional && !hidden)\n{\n    player.moveSpeed += 0.05f;\n}\n"
+    record = {**certificate, "coverage": "conditional_source_region_with_unresolved_inputs",
+              "entryCondition": "item.type == 90101 && functional && !hidden", "code": code,
+              "codeSha256": hashlib.sha256(code.encode()).hexdigest(), "assemblySha256": "b" * 64,
+              "enclosingConditions": [{"condition": "player.dead", "requiredArm": "false"}],
+              "sourceIlOffsets": [0, 71, 105],
+              "unknowns": ["caller_reach_unknown", "native_hooks_unknown"]}
+    reference = {"source": "conditional_native_item_dispatch_csharp", "version": 1,
+        "relevanceItemType": 90101,
+        "roots": [{"root": "ApplyEquipFunctional", "rootCertificate": certificate,
+            "records": [record, copy.deepcopy(record)] if source_available else [],
+            "unknowns": ["other_source_regions_unknown"] if source_available else ["dispatcher_region_character_bound; entire_region_omitted", "absence_not_proved"]},
+            {"root": "ItemCheck_Inner", "rootCertificate": {**certificate, "method": "Terraria.Player.ItemCheck_Inner"},
+             "records": [], "unknowns": ["no_admitted_Item_type_equality_region; absence_not_proved"]}],
+        "unknowns": ["dispatcher_coverage_partial; absence_not_proved"],
+        "limits": {"regionsPerRoot": 16, "charactersPerRegion": 24000, "charactersPerRoot": 64000},
+        "scope": "Conditional native source only; neither executed nor complete Item behavior.",
+        "futureProducerEvidence": {"empty": [], "null": None, "false": False, "zero": 0}}
+    parent = {"name": "Generic source item", "nativeItemDispatchReference": reference}
+    before = copy.deepcopy(parent)
+    for raw in _source_packets(parent, captured):
+        delivered = raw["item"]["nativeItemDispatchReference"]
+        assert json.dumps(delivered, sort_keys=True) == json.dumps(reference, sort_keys=True)
+        assert len(delivered["roots"][0]["records"]) == (2 if source_available else 0)
     assert parent == before

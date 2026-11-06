@@ -167,6 +167,31 @@ internal static partial class EngineRuntimeChecks
         if (projectile.type == 982) projectile.scale = 1.25f;
         else projectile.scale = 2.5f;
     }
+    private static class IdentityScalarHelpers
+    {
+        internal static void Write(Projectile projectile) { projectile.alpha = 123; }
+        internal static void NestedWrite(Projectile projectile) => Write(projectile);
+        internal static void MixedWrite(Projectile projectile)
+        { projectile.alpha = 123; projectile.type = 983; }
+    }
+    private static void AttackIdentityScalarWriteHelper(Projectile projectile)
+    {
+        IdentityScalarHelpers.NestedWrite(projectile);
+        if (projectile.type == 982) projectile.scale = 1.25f;
+        else projectile.scale = 2.5f;
+    }
+    private static void AttackIdentityOpacitySetter(Projectile projectile)
+    {
+        projectile.Opacity = 0.5f;
+        if (projectile.type == 982) projectile.scale = 1.25f;
+        else projectile.scale = 2.5f;
+    }
+    private static void AttackIdentityMixedWriteHelper(Projectile projectile)
+    {
+        IdentityScalarHelpers.MixedWrite(projectile);
+        if (projectile.type == 982) projectile.scale = 1.25f;
+        else projectile.scale = 2.5f;
+    }
     private static void AttackIdentityTerminatingHook(Projectile projectile)
     {
         if (projectile.ai[0] > 0f) { projectile.Kill(); return; }
@@ -228,8 +253,54 @@ internal static partial class EngineRuntimeChecks
         il.MarkLabel(end); il.Emit(OpCodes.Ret);
         return type.CreateType()!.GetMethod("Source")!;
     }
+    private static void AttackIdentityDisjointWindows(Projectile projectile)
+    {
+        if (projectile.type == 404) projectile.ai[1] = 0f;
+        if (projectile.damage < 0) projectile.rotation = 0.25f;
+        if (projectile.aiStyle == 69) projectile.velocity.X = 7.25f;
+    }
+
+    private static void ProjectileAttackDisconnectedBindingRefusesLocally()
+    {
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("DisconnectedBindingFixture"), AssemblyBuilderAccess.Run);
+        var type = assembly.DefineDynamicModule("fixture").DefineType("Source", TypeAttributes.Public);
+        var helper = type.DefineMethod("Helper", MethodAttributes.Public | MethodAttributes.Static, typeof(void), new[] { typeof(Projectile) });
+        var h = helper.GetILGenerator();
+        h.Emit(OpCodes.Ldarg_0); h.Emit(OpCodes.Ldc_R4, 3.5f); h.Emit(OpCodes.Stfld, typeof(Projectile).GetField("scale")!); h.Emit(OpCodes.Ret);
+        var caller = type.DefineMethod("Caller", MethodAttributes.Public | MethodAttributes.Static, typeof(void), new[] { typeof(Projectile) });
+        var c = caller.GetILGenerator();
+        c.Emit(OpCodes.Ldarg_0); c.Emit(OpCodes.Call, helper); c.Emit(OpCodes.Ret);
+        // Deliberately unreachable IL is still a second call-prefix component;
+        // the binding analysis must refuse locally, not abort helper capture.
+        c.Emit(OpCodes.Ldarg_0); c.Emit(OpCodes.Call, helper); c.Emit(OpCodes.Ret);
+        var fixture = type.CreateType()!;
+        var helperMethod = fixture.GetMethod("Helper")!;
+        Equal(false, GeneratorClient.InspectProjectileAttackCallBinding(fixture.GetMethod("Caller")!, helperMethod),
+            "disconnected binding analysis returns unbound without escaping");
+        Equal(true, GeneratorClient.InspectProjectileAttackSource(helperMethod, "motion").ToJsonString().Contains("3.5", StringComparison.Ordinal),
+            "unbound helper source remains inspectable after local refusal");
+    }
+
+    private static void ProjectileAttackDisjointWindowsPreserveLaterRoot()
+    {
+        var fixture = GeneratorClient.InspectProjectileAttackIdentityWindows(
+            typeof(EngineRuntimeChecks).GetMethod(nameof(AttackIdentityDisjointWindows), BindingFlags.NonPublic | BindingFlags.Static)!, 404, 69);
+        Equal(2, fixture["windowCount"]!.GetValue<int>(), "fixture has separated type and aiStyle windows");
+        var exposed = fixture["identitySelected"] ?? fixture;
+        Equal(true, exposed.ToJsonString().Contains("7.25", StringComparison.Ordinal), "later disconnected window survives identity presentation");
+        var projectile = new Projectile(); projectile.SetDefaults(ProjectileID.Flairon);
+        var actual = GeneratorClient.CaptureProjectileAttackReference(projectile);
+        var dispatch = actual["motionDispatch"]!.AsObject();
+        var actualExposed = dispatch["identitySelected"] ?? dispatch;
+        Equal(true, actualExposed.ToJsonString().Contains("Projectile.NewProjectile", StringComparison.Ordinal), "actual Flairon retains native bubble spawn in later window");
+        Equal(true, actualExposed.ToJsonString().Contains("1500", StringComparison.Ordinal), "actual Flairon retains distant return kill condition");
+        Equal(true, dispatch["identitySelectionUnavailable"] is JsonValue, "disconnected source selection explicitly refuses rather than claiming unreachable");
+    }
+
     private static void ProjectileAttackIdentitySelectionKeepsUnknownConditions()
     {
+        ProjectileAttackDisconnectedBindingRefusesLocally();
+        ProjectileAttackDisjointWindowsPreserveLaterRoot();
         JsonObject Inspect(string name) => GeneratorClient.InspectProjectileAttackIdentitySource(
             typeof(EngineRuntimeChecks).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!, 982, 190);
         MethodInfo Method(string name) => typeof(EngineRuntimeChecks).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!;
@@ -244,6 +315,8 @@ internal static partial class EngineRuntimeChecks
             (nameof(AttackIdentityMutable), "direct_identity_write"),
             (nameof(AttackIdentityEscape), "identity_address_exposed"),
             (nameof(AttackIdentityCallEscape), "actor_passing_call_uncertified"),
+            (nameof(AttackIdentityMixedWriteHelper), "actor_passing_call_uncertified"),
+            (nameof(AttackIdentityOpacitySetter), "actor_passing_call_uncertified"),
             (nameof(AttackIdentityConditionalEscape), "actor_passing_call_uncertified"),
             (nameof(AttackIdentityLocalAddressEscape), "actor_passing_call_uncertified"),
             (nameof(AttackIdentityContinuingHook), "actor_passing_call_uncertified"),
@@ -274,7 +347,7 @@ internal static partial class EngineRuntimeChecks
         foreach (string caller in new[] { nameof(AttackIdentityChangedBeforeCall), nameof(AttackIdentityEscapedBeforeCall), nameof(AttackIdentityExceptionBeforeCall) })
             Equal(false, GeneratorClient.InspectProjectileAttackCallBinding(Method(caller), Method(nameof(AttackIdentitySource))), "caller must preserve actor identity before helper: " + caller);
         Equal(true, GeneratorClient.InspectProjectileAttackCallBinding(Method(nameof(AttackIdentityExceptionAfterCall)), Method(nameof(AttackIdentitySource))), "unrelated later exception arm does not hide complete call prefix");
-        foreach (string name in new[] { nameof(AttackIdentityReadOnlyNative), nameof(AttackIdentityTerminatingHook) })
+        foreach (string name in new[] { nameof(AttackIdentityReadOnlyNative), nameof(AttackIdentityTerminatingHook), nameof(AttackIdentityScalarWriteHelper) })
         {
             var proof = Inspect(name);
             Equal(true, proof["identitySelection"]!["selectedEdges"]!.AsArray().Count > 0, "read-only or terminating effects preserve continuation identity: " + name);

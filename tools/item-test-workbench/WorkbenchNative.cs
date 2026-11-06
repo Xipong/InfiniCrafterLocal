@@ -102,6 +102,8 @@ internal static partial class EngineRuntimeChecks
                 ("assertions",s=>s["assertions"]=new JsonArray(),"At least one explicit assertion"),
                 ("fishing",s=>s["fishing"]=new JsonObject{["reelInput"]="unknown"},"Fishing reelInput"),
                 ("mode",s=>s["playerUpdate"]="unknown","playerUpdate must be"),
+                ("quick_mana_mode",s=> {s["playerUpdate"]="item_check";s["actions"]=new JsonArray(new JsonObject{["kind"]="quick_mana",["tick"]=0});},"quick_mana requires full player"),
+                ("quick_mana_fields",s=>s["actions"]=new JsonArray(new JsonObject{["kind"]="quick_mana",["tick"]=0,["amount"]=100}),"Unknown quick mana action field"),
             };
             foreach(var test in cases) {
                 var scene=(JsonObject)baseline.DeepClone();test.Change(scene);
@@ -112,7 +114,7 @@ internal static partial class EngineRuntimeChecks
                 if(!refused)throw new Exception("Missing pre-bootstrap input refusal: "+test.Name);
                 if(File.Exists(Path.Combine(directory,"native-proxy-preview.png")))throw new Exception("Graphics bootstrapped before scene admission");
             }
-            Console.WriteLine("PASS: 9 actual scene input refusals before graphics/world bootstrap (not gameplay)");
+            Console.WriteLine($"PASS: {cases.Length} actual scene input refusals before graphics/world bootstrap (not gameplay)");
         }
         finally { Directory.Delete(directory,true); }
     }
@@ -198,6 +200,7 @@ internal static partial class EngineRuntimeChecks
             else if(kind=="select_slot") { WKeys(action,"slot action","kind","tick","slot"); if(!fullPlayer || WInt(action,"slot",-1) is < 0 or > 1) throw new ArgumentException("select_slot requires full player and slot0 or1"); }
             else if(kind is "equip" or "unequip" or "vanity") { WKeys(action,"equipment action","kind","tick"); if(!fullPlayer || data is not null && ((!data.Accessory.Enabled && !data.Armor.Enabled) || data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped)?.UsePolicy.Action.Kind!=RuntimeBindingAction.EquipPassive)) throw new NotSupportedException("Equipment commands require full player and generated passive accessory or armor"); }
             else if(kind is "tile_target" or "break_tile") WValidateWorldAction(action!,scenario);
+            else if(kind=="quick_mana") { WKeys(action,"quick mana action","kind","tick"); if(!fullPlayer) throw new ArgumentException("quick_mana requires full player update"); }
             else if(kind=="controls") WValidateControls(action!,fullPlayer);
             else if(WReactionAction(kind)) WValidateReactionAction(action!,fullPlayer,clientPlayer,drawPlayer && (scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false));
             else if(kind is "primary" or "alt" or "release") WKeys(action,"input action","kind","tick");
@@ -500,6 +503,8 @@ internal static partial class EngineRuntimeChecks
                 using var activeVfx=(drawProjectileVfx||(historyRibbon||historyTrail)&&drawPlayer)?new WNativeActiveVfx(artwork is not null):null;
                 if(activeVfx is not null)nativeRenderer!.SetActiveVfx(activeVfx,drawProjectileVfx);
                 using var vanillaProjectileAssets=drawVanillaProjectiles?new WNativeVanillaProjectileAssets(graphics!,scenario["vanillaAssetRoot"]?.GetValue<string>()??throw new ArgumentException("Native projectile rendering requires explicit vanillaAssetRoot"),nativeItemTextures):null;
+                using var waterDistortion=drawVanillaProjectiles?new WNativeWaterShader(graphics!,scenario["vanillaAssetRoot"]!.GetValue<string>()):null;
+                if(waterDistortion is not null)nativeRenderer!.Report["waterDistortion"]=waterDistortion.Report;
                 using var placedBodies=drawPlacedBodies?new WNativePlacedBodies():null;
                 if(placedBodies is not null)nativeRenderer!.SetPlacedBodies(placedBodies);
                 if(nativeRenderer!=null) {
@@ -542,6 +547,7 @@ internal static partial class EngineRuntimeChecks
                             string kind = action!["kind"]!.GetValue<string>();
                             if (kind == "aim") { Terraria.Main.mouseX = (int)(WFloat(action,"x",owner.Center.X+200)-Terraria.Main.screenPosition.X); Terraria.Main.mouseY=(int)(WFloat(action,"y",owner.Center.Y)-Terraria.Main.screenPosition.Y); events.Add(new JsonObject { ["kind"]="input",["input"]="aim" }); }
                             else if (kind is "equip" or "unequip" or "vanity") { WPlaceEquipment(owner,item,kind); events.Add(new JsonObject { ["kind"]="input",["input"]=kind,["instanceConserved"]=true }); }
+                            else if (kind == "quick_mana") WQuickMana(owner,events);
                             else if (kind == "select_slot") { owner.selectedItem=WInt(action,"slot",0); events.Add(new JsonObject { ["kind"]="input",["input"]="select_slot",["slot"]=owner.selectedItem }); }
                             else if (kind is "tile_target" or "break_tile") {worldScene!.Action(kind,action!,events);}
                             else if (kind == "controls") { WApplyControls(owner,action); events.Add(new JsonObject{["kind"]="input",["input"]="controls",["nativeControls"]=WControls(owner)}); }

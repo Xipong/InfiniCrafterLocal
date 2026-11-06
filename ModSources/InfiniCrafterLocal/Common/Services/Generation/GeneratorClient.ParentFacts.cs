@@ -392,6 +392,24 @@ public sealed partial class GeneratorClient
                     && family == "verified_decompiled_native_csharp"
                     && view["version"] is JsonValue viewVersion && viewVersion.TryGetValue<int>(out int version) && version > 0)
                     value.Remove("nativeCSharpSource");
+                // Lifecycle code is a separate readable source family, not a
+                // fake graph replacement. Remove only its display envelope and
+                // only when its complete method certificate survives outside
+                // it. Source calls, child profiles and predicates remain facts.
+                if (value["source"]?.GetValueKind() == JsonValueKind.String
+                    && value["source"]!.GetValue<string>() == "read_only_native_attack_source"
+                    && value["version"] is JsonValue lifecycleOwnerVersion && lifecycleOwnerVersion.TryGetValue<int>(out int ownerVersion) && ownerVersion == 1
+                    && value["lifecycle"] is JsonObject lifecycle
+                    && lifecycle["source"] is JsonValue lifecycleSource && lifecycleSource.TryGetValue<string>(out string? lifecycleFamily)
+                    && lifecycleFamily == "verified_conditional_native_lifecycle_csharp"
+                    && lifecycle["version"] is JsonValue lifecycleVersion && lifecycleVersion.TryGetValue<int>(out int formatVersion) && formatVersion == 1
+                    && lifecycle["rootCertificate"] is JsonObject { Count: 3 } rootCertificate
+                    && rootCertificate["method"] is JsonValue rootMethod && rootMethod.TryGetValue<string>(out string? methodName) && methodName == "Terraria.Projectile.Kill"
+                    && rootCertificate["sourceModuleVersionId"] is JsonValue rootModule && rootModule.TryGetValue<string>(out string? moduleId) && Guid.TryParse(moduleId, out _)
+                    && rootCertificate["sourceMethodSha256"] is JsonValue rootHash && rootHash.TryGetValue<string>(out string? methodHash)
+                    && methodHash is { Length: 64 } && methodHash.All(Uri.IsHexDigit)
+                    && value["sourceMethods"] is JsonArray methods && methods.Any(method => JsonNode.DeepEquals(method, rootCertificate)))
+                    value.Remove("lifecycle");
                 foreach (var property in value) Visit(property.Value);
             }
             else if (node is JsonArray array)
@@ -489,6 +507,7 @@ public sealed partial class GeneratorClient
             facts["nativeShootReference"] = shootReference;
         if (existing is null)
         {
+            facts["nativeItemDispatchReference"] = CaptureNativeItemDispatchReference(item.type);
             JsonObject graph = CaptureParentSourceGraph(item, facts);
             string Coverage(string key, bool applicable, bool certified, bool? catalogRecord = null) => !applicable ? "mod_host; see_source_graph"
                 : !certified ? "native_binary_or_method_certificate_unavailable"
@@ -920,6 +939,7 @@ public sealed partial class GeneratorClient
                 framesRaw = SafeProjFrames(projectileType),
                 setsRaw = ProjectileSetsRaw(projectileType),
                 attackReference = CaptureProjectileAttackReference(p),
+                mechanicsSource = CaptureProjectileMechanicsSource(p),
                 motionReference = VerifiedSourceMotionReference(p),
                 onHitStatusReference = CaptureNativeHitStatusReference(p)
             };

@@ -20,26 +20,50 @@ public sealed partial class GeneratorClient
 
     private static bool AttackCallBindsCapturedActor(ParentSourceMethod caller, IEnumerable<ParentSourceMethod.Value> calls, MethodBase callee)
     {
-        int parentActor = AttackActorArgument(caller.Method), childActor = AttackActorArgument(callee);
-        if (parentActor < 0 || childActor < 0 || caller.WrittenArguments.Contains(parentActor)) return false;
-        var sites = calls.Where(v => Equals(v.Operand, callee)).ToArray();
-        // A matching signature is insufficient: the call must actually pass the
-        // captured actor, not another projectile from a field/local/array.
-        if (caller.Code.Count != AttackCode(caller.Method).Count && !sites.All(site => caller.CompleteCallPrefixes.Contains(site.At))) return false;
-        var stability = new AttackIdentitySelection(caller, 0, 0, selectIdentityBranches: false);
-        return sites.Length > 0 && sites.All(v => stability.Unmodified(v) && childActor < v.Inputs.Count
-            && caller.Values.TryGetValue(v.Inputs[childActor], out var argument)
-            && argument.Op == "ldarg" && argument.Operand is int slot && slot == parentActor);
+        try
+        {
+            int parentActor = AttackActorArgument(caller.Method), childActor = AttackActorArgument(callee);
+            if (parentActor < 0 || childActor < 0 || caller.WrittenArguments.Contains(parentActor)) return false;
+            var sites = calls.Where(v => Equals(v.Operand, callee)).ToArray();
+            // A matching signature is insufficient: the call must actually pass the
+            // captured actor, not another projectile from a field/local/array.
+            if (caller.Code.Count != AttackCode(caller.Method).Count && !sites.All(site => caller.CompleteCallPrefixes.Contains(site.At))) return false;
+            var stability = new AttackIdentitySelection(caller, 0, 0, selectIdentityBranches: false);
+            return sites.Length > 0 && sites.All(v => stability.Unmodified(v) && childActor < v.Inputs.Count
+                && caller.Values.TryGetValue(v.Inputs[childActor], out var argument)
+                && argument.Op == "ldarg" && argument.Operand is int slot && slot == parentActor);
+        }
+        // Binding is a proof attempt, not admission of the callee source. Any
+        // unsupported prefix/stability analysis leaves this helper unbound;
+        // the caller can still retain its unspecialized source and unknowns.
+        catch (NotSupportedException) { return false; }
     }
 
     internal static bool InspectProjectileAttackCallBinding(MethodInfo caller, MethodInfo callee)
     {
+        ParentSourceMethod body;
+        try { body = ParentSourceMethod.ForCallPrefixes(caller, AttackCode(caller), new[] { callee }); }
+        catch (NotSupportedException) { return false; }
+        return AttackCallBindsCapturedActor(body, body.Statements, callee);
+    }
+
+    internal static JsonObject InspectProjectileAttackIdentityWindows(MethodInfo method, int type, int style)
+    {
+        var full = AttackCode(method);
+        var windows = ProjectileIdentityWindows(full, type, style, _ => { }).ToArray();
+        var slice = windows.SelectMany(w => w.Code).GroupBy(i => i.Offset).Select(g => g.First()).OrderBy(i => i.Offset).ToList();
+        var next = full.Zip(full.Skip(1), (a, b) => (a.Offset, b.Offset)).ToDictionary(p => p.Item1, p => p.Item2);
+        var body = new ParentSourceMethod(method, slice, next);
+        var result = new AttackSourceObservation(body, "dispatch").Finish();
+        result["windowCount"] = windows.Length;
         try
         {
-            var body = ParentSourceMethod.ForCallPrefixes(caller, AttackCode(caller), new[] { callee });
-            return AttackCallBindsCapturedActor(body, body.Statements, callee);
+            var selection = new AttackIdentitySelection(body, type, style);
+            var selected = new ParentSourceMethod(method, slice, next, selectedSuccessors: selection.Selected);
+            result["identitySelected"] = new AttackSourceObservation(selected, "dispatch", selection: selection).Finish();
         }
-        catch (NotSupportedException) { return false; }
+        catch (NotSupportedException error) { result["identitySelectionUnavailable"] = error.Message; }
+        return result;
     }
 
     // A source specialization, not execution: only the captured actor's identity
@@ -56,15 +80,16 @@ public sealed partial class GeneratorClient
         private readonly Dictionary<string, string> hazardReasons = new();
         private readonly ParentSourceMethod.Value[] hazards;
         private int analysisWork;
-        private readonly Dictionary<MethodBase, bool> readOnlyEffects = new();
+        private readonly Dictionary<MethodBase, bool> identityPreservingEffects = new();
 
         // A sufficient (not necessary) native body proof. No naming conventions:
-        // every reachable or unreachable instruction must be read-only, and each
+        // every instruction must preserve actor identity and avoid reference escape;
+        // scalar writes to other native Projectile fields are allowed. Each
         // nested call must have a closed nonvirtual body. Unknown instructions,
         // native implementations, recursive closures and budgets fail closed.
-        private bool ReadOnlyEffect(MethodBase method, HashSet<MethodBase>? active = null)
+        private bool IdentityPreservingEffect(MethodBase method, HashSet<MethodBase>? active = null)
         {
-            if (readOnlyEffects.TryGetValue(method, out bool cached)) return cached;
+            if (identityPreservingEffects.TryGetValue(method, out bool cached)) return cached;
             active ??= new();
             if (active.Count >= 16 || !active.Add(method)) return false;
             bool safe = false;
@@ -82,7 +107,7 @@ public sealed partial class GeneratorClient
                 // method does not trigger its declaring type initializer. Static
                 // calls, value-type instance calls and static field loads can.
                 bool Initialized(Type? owner) => owner?.TypeInitializer is not MethodBase initializer
-                    || ReadOnlyEffect(initializer, active);
+                    || IdentityPreservingEffect(initializer, active);
                 if ((method.IsStatic || method.DeclaringType?.IsValueType == true) && !Initialized(method.DeclaringType)) return false;
                 var code = AttackCode(method);
                 if (code.Count == 0 || code.Count > 2048) return false;
@@ -92,7 +117,22 @@ public sealed partial class GeneratorClient
                     string op = instruction.Op;
                     if (op is "call" or "callvirt")
                     {
-                        if (instruction.Arg is not MethodBase called || !ReadOnlyEffect(called, active)) return false;
+                        if (instruction.Arg is not MethodBase called || !IdentityPreservingEffect(called, active)) return false;
+                        continue;
+                    }
+                    if (op == "stfld")
+                    {
+                        // A direct scalar store cannot carry an actor reference
+                        // or overlap its identity fields. Keep this proof tied to
+                        // metadata, not setter names or captured projectile IDs.
+                        // Struct/reference/pointer stores and explicit-layout
+                        // owners require alias analysis and remain uncertified.
+                        if (instruction.Arg is not FieldInfo written
+                            || written.DeclaringType != typeof(Projectile)
+                            || written.DeclaringType.IsExplicitLayout
+                            || written.Name is "type" or "aiStyle"
+                            || !written.FieldType.IsPrimitive
+                            || written.FieldType == typeof(IntPtr) || written.FieldType == typeof(UIntPtr)) return false;
                         continue;
                     }
                     if (op == "ldsfld")
@@ -124,7 +164,7 @@ public sealed partial class GeneratorClient
                 return true;
             }
             catch (NotSupportedException) { return false; }
-            finally { active.Remove(method); readOnlyEffects[method] = safe; }
+            finally { active.Remove(method); identityPreservingEffects[method] = safe; }
         }
 
         private void Work()
@@ -149,6 +189,15 @@ public sealed partial class GeneratorClient
         internal AttackIdentitySelection(ParentSourceMethod body, int type, int style, bool selectIdentityBranches = true)
         {
             this.body = body; this.type = type; this.style = style;
+            // A slice may combine independent identity windows. Its first
+            // instruction is not the method entry, and external exit stubs do
+            // not prove that later components are unreachable. Refuse the
+            // specialization rather than silently discard those components or
+            // assume identity survived omitted code between their entries.
+            if (body.Unknown.Contains("source_slice_entry_and_external_CFG_targets_unresolved")
+                && body.Blocks.Values.Any(block => block.Code.Count > 0
+                    && !CurrentReach(body.Code[0].Offset).Contains(block.Start)))
+                throw new NotSupportedException("identity_selection_disconnected_source_components");
             targetArgument = AttackActorArgument(body.Method);
             var foundHazards = new List<ParentSourceMethod.Value>();
             foreach (var value in body.Values.Values)
@@ -278,7 +327,7 @@ public sealed partial class GeneratorClient
                 && statement.Inputs.Count > 0 && MayTarget(statement.Inputs[0], new()))
                 return statement.Op == "stfld" ? "direct_identity_write" : "identity_address_exposed";
             if (!statement.Inputs.Skip(statement.Op == "stfld" ? 1 : 0).Any(i => MayTarget(i, new()))) return null;
-            if (statement.Operand is MethodBase call && !BaseEntityValueAccessor(call) && !ReadOnlyEffect(call))
+            if (statement.Operand is MethodBase call && !BaseEntityValueAccessor(call) && !IdentityPreservingEffect(call))
                 return "actor_passing_call_uncertified";
             if (statement.Op is "stsfld" or "stfld" or "stobj"
                 || statement.Op.StartsWith("stelem", StringComparison.Ordinal) || statement.Op.StartsWith("stind", StringComparison.Ordinal))

@@ -24,11 +24,26 @@ internal static partial class EngineRuntimeChecks
     {
         foreach(var row in scenario["inventory"]?.AsArray() ?? new JsonArray()) {
             var ammo=new Item(WInt(row,"itemId",0));
-            if(ammo.bait<=0 && ammo.ammo!=AmmoID.Arrow && ammo.ammo!=AmmoID.Bullet && ammo.ammo!=AmmoID.Flare && ammo.ammo!=AmmoID.FallenStar && ammo.ammo!=AmmoID.Solution) throw new NotSupportedException("Only vanilla arrow/bullet/flare/fallen-star/solution or native bait inventory entries are admitted");
+            int slot=WInt(row,"slot",-1);
+            bool manaConsumable=ammo.healMana>0 && ammo.consumable;
+            if(manaConsumable && slot is not (>=1 and <=49)) throw new ArgumentException("Native mana consumables require ordinary inventory slots1..49");
+            if(!manaConsumable && ammo.bait<=0 && ammo.ammo!=AmmoID.Arrow && ammo.ammo!=AmmoID.Bullet && ammo.ammo!=AmmoID.Flare && ammo.ammo!=AmmoID.FallenStar && ammo.ammo!=AmmoID.Solution) throw new NotSupportedException("Only vanilla arrow/bullet/flare/fallen-star/solution or native bait / consumable healMana inventory entries are admitted");
             int count=WInt(row,"stack",0);
             if(count>ammo.maxStack) throw new ArgumentException("Inventory stack exceeds native item maxStack");
-            ammo.stack=count; owner.inventory[WInt(row,"slot",-1)]=ammo;
+            ammo.stack=count; owner.inventory[slot]=ammo;
         }
+    }
+    private static void WQuickMana(Player owner,JsonArray events)
+    {
+        int before=owner.statMana,selected=owner.selectedItem;
+        var inventoryBefore=WInventory(owner.inventory,false);
+        owner.QuickMana(); // Original native selection, permission hooks, healing, sickness and consumption.
+        int sicknessSlot=Array.IndexOf(owner.buffType,BuffID.ManaSickness);
+        events.Add(new JsonObject { ["kind"]="input",["input"]="quick_mana",["nativeMethod"]="Player.QuickMana",
+            ["manaBefore"]=before,["manaAfter"]=owner.statMana,["selectedSlotBefore"]=selected,["selectedSlotAfter"]=owner.selectedItem,
+            ["inventoryBefore"]=inventoryBefore,["inventoryAfter"]=WInventory(owner.inventory,false),
+            ["manaSicknessTicks"]=sicknessSlot>=0 ? owner.buffTime[sicknessSlot] : 0,
+            ["manaSicknessPresent"]=owner.HasBuff(BuffID.ManaSickness) });
     }
     private static Hook WObserveAmmoConsumption(Player owner,Action<JsonObject> record)
     {

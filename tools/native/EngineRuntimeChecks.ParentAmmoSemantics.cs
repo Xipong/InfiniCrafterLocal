@@ -121,6 +121,7 @@ internal static partial class EngineRuntimeChecks
                 }
             }
         }
+        AssertSpawnArgumentSourcesReachPrepare();
         AssertAmmoSourceAgainstNativeShotRequests();
         AssertRocketTableSelection();
         Equal(23, owner.inventory[54].stack, "capture never selects/consumes ammo");
@@ -130,6 +131,81 @@ internal static partial class EngineRuntimeChecks
             System.IO.File.WriteAllText(export, new GeneratorClient().Prepare(new Item(2223), new Item(ItemID.DaedalusStormbow), owner).PayloadJson);
             System.IO.File.WriteAllText(export + ".hellwing.json", new GeneratorClient().Prepare(new Item(3019), new Item(4381), owner).PayloadJson);
         }
+    }
+
+    private static void AssertSpawnArgumentSourcesReachPrepare()
+    {
+        var owner = new Player();
+        owner.inventory[0] = new Item(ItemID.WoodenArrow, 17);
+        owner.inventory[54] = new Item(ItemID.FlamingArrow, 9);
+        owner.inventory[55] = new Item(ItemID.HolyArrow, 5);
+        foreach (var (name, type) in new[] { ("eventide", 4953), ("terra", ItemID.TerraBlade), ("daedalus", ItemID.DaedalusStormbow) })
+        {
+            string json = new GeneratorClient().Prepare(new Item(type), new Item(ItemID.DirtBlock), owner).PayloadJson;
+            using var packet = JsonDocument.Parse(json);
+            var parent = packet.RootElement.GetProperty("itemA");
+            var raw = parent.GetProperty("ammoRaw");
+            var reference = raw.GetProperty("projectileSemanticsReference");
+            var stage = reference.GetProperty("stages")[1];
+            Equal(true, stage.TryGetProperty("sourceVerification", out _), "spawn source requires exact native certificate");
+            var sites = stage.GetProperty("spawnSites").EnumerateArray().ToArray();
+            Equal(true, sites.Length > 0, "actual source contains native item spawn sites");
+            foreach (var site in sites)
+            {
+                Equal(true, site.TryGetProperty("spawnInputs", out var inputs), "certified argument expressions survive native Prepare");
+                Equal(true, inputs.TryGetProperty("owner", out var own), "owner argument remains an explicit source input");
+                Equal("argument", own.GetProperty("kind").GetString(), "native owner argument is not player state evaluation");
+                Equal(1, own.GetProperty("index").GetInt32(), "native owner keeps ItemCheck argument identity");
+                Equal(true, site.GetProperty("spawnInputCoverage").GetProperty("fields").TryGetProperty("damage", out _), "damage extraction coverage is explicit");
+                Equal(true, site.TryGetProperty("whenSourceCondition", out _), "native call reachability stays attached");
+            }
+            Equal("unknown_without_gameplay_execution", reference.GetProperty("finalShotOutcome").GetString(), "argument source is not a final shot");
+            Equal(CanonicalParentFactJson(reference), CanonicalParentFactJson(parent.GetProperty("fingerprint").GetProperty("ammoRaw").GetProperty("projectileSemanticsReference")), "player-free fingerprint preserves the same unevaluated source");
+            if (type == 4953)
+            {
+                var source = sites.Single(site => site.GetProperty("sourceSpawnIlOffset").GetInt32() == 10958);
+                var damage = SpawnSourceNodes(source.GetProperty("spawnInputs").GetProperty("damage")).ToArray();
+                Equal(true, damage.Any(node => node.TryGetProperty("operator", out var op) && op.GetString() == "mul"
+                    && node.GetProperty("right").TryGetProperty("value", out var value) && value.GetDouble() == 2), "conditional current-damage multiplication is retained");
+                Equal(true, damage.Any(node => node.TryGetProperty("sourceBranchIlOffset", out var offset) && offset.GetInt32() == 10866), "damage state predicate is retained");
+                Equal(true, damage.Any(node => node.TryGetProperty("reason", out var reason) && reason.GetString() == "branch_entry_value_unknown"), "hook-modified branch-entry damage is never item base damage");
+                Equal(true, SpawnSourceNodes(source.GetProperty("spawnInputs").GetProperty("velocity")).Any(node =>
+                    node.TryGetProperty("sourceStoreIlOffset", out var offset) && offset.GetInt32() == 10932), "source velocity reassignment survives");
+                Equal(true, SpawnSourceNodes(source.GetProperty("spawnInputs").GetProperty("ai1")).Any(node =>
+                    node.TryGetProperty("operator", out var op) && op.GetString() == "rem"), "source AI remainder expression survives");
+                Equal(true, SpawnSourceNodes(source.GetProperty("whenSourceCondition")).Any(node =>
+                    node.TryGetProperty("sourceBranchIlOffset", out var offset) && offset.GetInt32() == 10886), "projectile-state spawn condition survives");
+            }
+            if (type != ItemID.TerraBlade)
+            {
+                Equal("0,54,55", string.Join(",", raw.GetProperty("playerInventoryAmmoRaw").EnumerateArray().Select(row => row.GetProperty("inventorySlot").GetInt32())), "main/ammo inventory candidate multiplicity and order remain unchanged");
+                Equal(true, raw.GetProperty("fallbackAmmoRaw").EnumerateArray().All(row => row.GetProperty("inventorySlot").GetInt32() == -1), "fallback source stays separate from observed inventory");
+                var fingerprint = parent.GetProperty("fingerprint").GetProperty("ammoRaw");
+                Equal("no_player", fingerprint.GetProperty("playerInventoryObservation").GetProperty("reason").GetString(), "fingerprint cannot borrow a live player's inventory");
+                Equal(JsonValueKind.Null, fingerprint.GetProperty("playerInventoryAmmoRaw").ValueKind, "no-player is not observed-empty inventory");
+            }
+            string? export = Environment.GetEnvironmentVariable("INFINI_PARENT_SPAWN_PACKET_DIR");
+            if (!string.IsNullOrWhiteSpace(export))
+            {
+                System.IO.Directory.CreateDirectory(export);
+                System.IO.File.WriteAllText(System.IO.Path.Combine(export, name + ".packet.json"), json);
+            }
+        }
+        Equal(17, owner.inventory[0].stack, "source capture never consumes main inventory ammo");
+        Equal(9, owner.inventory[54].stack, "source capture never consumes ammo-slot stack");
+    }
+
+    private static System.Collections.Generic.IEnumerable<JsonElement> SpawnSourceNodes(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            yield return value;
+            foreach (var property in value.EnumerateObject())
+                foreach (var node in SpawnSourceNodes(property.Value)) yield return node;
+        }
+        else if (value.ValueKind == JsonValueKind.Array)
+            foreach (var child in value.EnumerateArray())
+                foreach (var node in SpawnSourceNodes(child)) yield return node;
     }
 
     private static void AssertRocketTableSelection()

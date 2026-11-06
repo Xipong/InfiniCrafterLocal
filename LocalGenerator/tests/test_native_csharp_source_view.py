@@ -100,14 +100,16 @@ def test_source_record_does_not_replace_another_graph_path_with_the_same_method_
     assert projected["motion"]["programs"][1] == uncovered
 
 
-def test_large_whole_method_source_does_not_displace_a_small_bounded_graph():
+def test_large_whole_method_source_takes_priority_over_a_small_bounded_graph():
     reference, calls = _parts(_parent())
     reference["motion"]["programs"][0]["observations"] = reference["motion"]["programs"][0]["observations"][:1]
+    before = copy.deepcopy((reference, calls))
     projected, linked = native_csharp_source_for_llm(reference, calls)
-    assert projected["motion"] == reference["motion"]
-    assert "nativeCSharpSource" not in projected
-    assert linked == calls
-    assert "nativeCSharpSourceReading" not in projected
+    assert projected["motion"]["programs"] == [{"nativeCSharpSourceRef": "s0"}]
+    assert projected["nativeCSharpSource"]["records"][0]["code"] == reference["nativeCSharpSource"]["records"][0]["code"]
+    assert linked[0]["sourceLocation"]["sourceRecord"] == "s0"
+    assert known_native_csharp_context(projected)
+    assert (reference, calls) == before
 
 
 @pytest.mark.parametrize("mutation", ["module", "method", "method_hash", "code_hash", "record_future", "envelope_future",
@@ -203,10 +205,15 @@ def test_unused_source_records_are_pruned_after_an_explicit_stage_omission():
     assert source == before
 
 
-def test_source_choice_accounts_for_exact_sharing_of_duplicate_graphs():
+def test_conditional_source_choice_accounts_for_exact_sharing_of_duplicate_graphs():
     reference, calls = _parts(_parent())
+    window = {"field": "type", "literal": 1, "guardOffset": 3}
+    reference["motion"]["programs"][0]["identityWindows"] = [window]
     reference["motion"]["programs"].append(copy.deepcopy(reference["motion"]["programs"][0]))
     record = reference["nativeCSharpSource"]["records"][0]
+    record.update(coverage="conditional_ast_regions", coveredWindows=[window], entryGuards=[{
+        "field": "Terraria.Projectile.type", "operator": "==", "literal": 1, "ilOffset": 3,
+        "scope": "only_if_original_guard_is_reached; enclosing_dispatch_unknown"}])
     record["graphPaths"].append(["motion", "programs", 1])
     record["code"] += "/*" + "read-only padding " * 1000 + "*/"
     record["codeSha256"] = hashlib.sha256(record["code"].encode()).hexdigest()
@@ -346,3 +353,126 @@ def test_main_ammo_observations_keep_readable_source_and_profile_links(section, 
     assert delivered["referencedProjectiles"]["references"] == profile["referencedProjectiles"]["references"]
     assert "ammo." + section + "[0]" in dossier["parentBriefs"]["A"]["behavior"]
     assert parent == before
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("route", ["direct", "child", "ammo"])
+def test_actual_author_keeps_fuller_source_before_size_with_opaque_runtime_unknowns(monkeypatch, mode, route):
+    from infini_local.core import llm_config
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
+    parent = _parent()
+    reference, _ = _parts(parent)
+    record = reference["nativeCSharpSource"]["records"][0]
+    graph = reference["motion"]["programs"][0]
+    for key in ("observations", "dependencies", "predicates", "symbols"):
+        graph.pop(key)
+    graph.update(coverage="unknown", unresolved="connected_source_dependency_count_bound:197>192")
+    # The larger method is more complete source, not proof of opaque callees.
+    record["code"] += "\nvoid StillOpaque() { External.UncapturedHelper(); }\n"
+    record["codeSha256"] = hashlib.sha256(record["code"].encode()).hexdigest()
+    record["unresolved"] = ["External.UncapturedHelper body unavailable"]
+    reference["coverage"]["unresolved"].append("external helper effects unknown")
+    profile = parent["directProjectileRaw"]
+    if route == "child":
+        parent = _parent()
+        # A captured child profile is single-hop, not another reference tree.
+        parent["directProjectileRaw"]["referencedProjectiles"]["references"][0]["profile"] = {
+            "type": 2, "attackReference": reference}
+    elif route == "ammo":
+        parent = {"name": "Ammo source", "ammoRaw": {"mode": "weapon_uses_ammo", "ammoId": 981,
+            "playerInventoryObservation": {"available": True, "observedSlots": [3]},
+            "nativeReplacementProjectileRaw": [profile]}}
+    before = copy.deepcopy(parent)
+    request, _, _ = build_initial_author_request(parent, {}, "coverage-first", model_name="offline-test-model")
+    assert request["response_format"]["type"] == mode
+    dossier = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
+    raw = dossier["parents"]["A"]["packet"]["raw"]
+    delivered = (raw["ammo"]["nativeReplacementProjectileRaw"][0] if route == "ammo"
+        else raw["directProjectile"]["referencedProjectiles"]["references"][0]["profile"] if route == "child"
+        else raw["directProjectile"])
+    source = unpack_attack_tables(delivered["attackReference"])
+    selected = source["nativeCSharpSource"]["records"][0]
+    assert (selected["coverage"], selected["code"], selected["unresolved"]) == ("whole_method", record["code"], record["unresolved"])
+    assert source["coverage"] == reference["coverage"]
+    assert source["motion"]["programs"] == [{"nativeCSharpSourceRef": selected["id"]}]
+    assert known_native_csharp_context(source)
+    assert parent == before
+
+
+@pytest.mark.parametrize("valid_specialization", [True, False])
+def test_full_method_coverage_precedes_size_and_only_proved_specialization_can_shrink_it(valid_specialization):
+    reference, calls, record = _specialized_fixture()
+    graph = reference["motion"]["programs"][0]
+    graph["observations"] = graph["observations"][:1]
+    graph["identitySelected"]["observations"] = graph["identitySelected"]["observations"][:1]
+    record["code"] += "/*" + "full source padding " * 1500 + "*/"
+    record["codeSha256"] = hashlib.sha256(record["code"].encode()).hexdigest()
+    specialized = record["identitySpecialized"]
+    specialized["proof"]["originalCodeSha256"] = record["codeSha256"]
+    specialized["code"] += "/*" + "specialized source padding " * 500 + "*/"
+    specialized["codeSha256"] = hashlib.sha256(specialized["code"].encode()).hexdigest()
+    specialized["id"] = f'csharp-specialized:{record["id"]}:{specialized["codeSha256"]}:1:1'
+    if not valid_specialization:
+        specialized["proof"]["identityPredicates"] = {"Projectile.type": 817, "Projectile.aiStyle": 29}
+    before = copy.deepcopy((reference, calls))
+    projected, _ = native_csharp_source_for_llm(reference, calls)
+    selected = projected["nativeCSharpSource"]["records"][0]
+    expected = specialized if valid_specialization else record
+    assert (selected["coverage"], selected["code"]) == (expected["coverage"], expected["code"])
+    assert (reference, calls) == before
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_graph_selection_failures_keep_their_owner_when_full_source_replaces_slices(monkeypatch, mode):
+    from infini_local.core import llm_config
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
+    parent = _parent()
+    reference, _ = _parts(parent)
+    graph = reference["motion"]["programs"][0]
+    graph["identitySelectionUnavailable"] = 'source work bound: 257 > 192; "unknown" Ω'
+    graph["identitySelected"] = copy.deepcopy(graph)
+    graph["identitySelected"]["identitySelectionUnavailable"] = "nested selection remains unknown"
+    reference["motion"]["programs"].append(copy.deepcopy(graph))
+    reference["nativeCSharpSource"]["records"][0]["graphPaths"].append(["motion", "programs", 1])
+    before = copy.deepcopy(parent)
+    request, _, _ = build_initial_author_request(parent, {}, "selection-diagnostic", model_name="offline-test-model")
+    dossier = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
+    source = unpack_attack_tables(dossier["parents"]["A"]["packet"]["raw"]["directProjectile"]["attackReference"])
+    record = source["nativeCSharpSource"]["records"][0]
+    expected = {"nativeCSharpSourceRef": record["id"], "graphCapture": {
+        "identitySelectionUnavailable": graph["identitySelectionUnavailable"],
+        "selectedCapture": {"identitySelectionUnavailable": graph["identitySelected"]["identitySelectionUnavailable"]}}}
+    assert source["motion"]["programs"] == [expected, expected]
+    assert prune_native_csharp_records(source) == source
+    assert record["coverage"] == "whole_method"
+    assert record["code"] == reference["nativeCSharpSource"]["records"][0]["code"]
+    assert known_native_csharp_context(source)
+    assert parent == before
+
+
+@pytest.mark.parametrize("diagnostic", [None, False, 81, {}, [], ""])
+def test_unfamiliar_graph_selection_failure_shape_keeps_original_namespace(diagnostic):
+    reference, calls = _parts(_parent())
+    reference["motion"]["programs"][0]["identitySelectionUnavailable"] = diagnostic
+    before = copy.deepcopy((reference, calls))
+    assert native_csharp_source_for_llm(reference, calls) == before
+
+
+def test_graph_selection_failure_does_not_authorize_invalid_identity_specialization():
+    reference, calls, record = _specialized_fixture()
+    reference["motion"]["programs"][0]["identitySelectionUnavailable"] = "identity selection work bound"
+    record["identitySpecialized"]["proof"]["version"] = 999
+    projected, _ = native_csharp_source_for_llm(reference, calls)
+    assert projected["nativeCSharpSource"]["records"][0]["code"] == record["code"]
+    assert projected["motion"]["programs"][0]["graphCapture"] == {
+        "identitySelectionUnavailable": "identity selection work bound"}
+    assert known_native_csharp_context(projected)
+
+
+@pytest.mark.parametrize("capture", [{"identitySelectionUnavailable": None}, {"identitySelectionUnavailable": ""},
+    {"identitySelectionUnavailable": "unknown", "futureProof": True}, {"selectedCapture": {"futureProof": True}}])
+def test_compact_selection_diagnostics_do_not_admit_unknown_shapes(capture):
+    reference, calls = _parts(_parent())
+    projected, _ = native_csharp_source_for_llm(reference, calls)
+    projected["motion"]["programs"][0]["graphCapture"] = capture
+    assert not known_native_csharp_context(projected)

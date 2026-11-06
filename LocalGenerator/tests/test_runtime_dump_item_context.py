@@ -27,6 +27,9 @@ def saved_row(tmp_path, monkeypatch):
         "tooltipLines": ["Literal source tooltip", ""], "tooltipSource": {"source": "fixture", "status": "partial"},
         "nativeShootReference": {"source": "fixture", "children": [{"type": 42}], "scope": "conditional source only"},
         "nativeEquipmentReference": {"source": "fixture", "unknown": True},
+        "nativeItemDispatchReference": {"source": "conditional_native_item_dispatch_csharp", "version": 1,
+            "roots": [{"method": "Terraria.Player.ApplyEquipFunctional"}], "records": [],
+            "unknowns": ["source_region_character_bound", "absence_not_proved"]},
         "parentSourceGraph": {"source": "fixture", "completeness": "partial_source_graph", "unresolved": ["opaque_hook"]},
         "spriteReferenceRaw": {"source": "TextureAssets.Item", "textureWidthPx": 34, "textureHeightPx": 32,
                                "currentFrame": {"source": "texture_bounds", "xPx": 0, "yPx": 0, "widthPx": 34, "heightPx": 32}},
@@ -56,6 +59,7 @@ def test_sparse_author_and_visual_cards_receive_available_whole_observations(sav
     dossier = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
     raw = dossier["parents"]["A"]["packet"]["raw"]
     assert raw["item"]["nativeShootReference"] == saved_row["nativeShootReference"]
+    assert raw["item"]["nativeItemDispatchReference"] == saved_row["nativeItemDispatchReference"]
     assert raw["item"]["parentSourceGraph"] == saved_row["parentSourceGraph"]
     assert raw["item"]["tooltipLines"] == saved_row["tooltipLines"]
     assert raw["item"]["damage"] == 7 and raw["item"]["manaCost"] == raw["item"]["useTime"] == 0
@@ -67,6 +71,7 @@ def test_sparse_author_and_visual_cards_receive_available_whole_observations(sav
     assert provenance["status"] == "verified_snapshot"
     assert provenance["compatibility"] == "matched_available_identity"
     assert "nativeShootReference" in provenance["fields"] and "damage" not in provenance["fields"]
+    assert "nativeItemDispatchReference" in provenance["fields"]
     visual = cards.raw_parent_card_for_llm(item, include_visual_reference=True)["raw"]
     assert visual["spriteReference"]["textureWidthPx"] == 34
     assert visual["spriteReference"]["currentFrame"] == saved_row["spriteReferenceRaw"]["currentFrame"]
@@ -83,6 +88,7 @@ def test_sparse_author_and_visual_cards_receive_available_whole_observations(sav
 def test_present_projectile_unknown_or_partial_is_not_filled(saved_row, container, value):
     item = sparse_item()
     observations = {"directProjectileRaw": copy.deepcopy(value), "nativeShootReference": None,
+                    "nativeItemDispatchReference": copy.deepcopy(value),
                     "parentSourceGraph": {"unresolved": ["live_unknown"]}}
     if container == "root":
         item.update(observations)
@@ -96,6 +102,10 @@ def test_present_projectile_unknown_or_partial_is_not_filled(saved_row, containe
     raw = cards.raw_parent_card_for_llm(item)["raw"]
     assert raw["item"]["parentSourceGraph"] == {"unresolved": ["live_unknown"]}
     assert "nativeShootReference" not in raw["item"]
+    if value is None:
+        assert "nativeItemDispatchReference" not in raw["item"]
+    else:
+        assert raw["item"]["nativeItemDispatchReference"] == value
     if value:
         assert raw["directProjectile"] == value
     else:
@@ -199,11 +209,13 @@ def test_existing_case_insensitive_projectile_presence_is_preserved(saved_row, k
 def test_exact_case_key_and_root_runtime_presence_win(saved_row):
     item = {**sparse_item(), "directProjectileRaw": None, "DirectProjectileRaw": {"type": 900},
             "EffectiveProjectileRaw": None,
-            "RuntimeFacts": {"NativeEquipmentReference": None, "ParentSourceGraph": {"unresolved": ["live"]}},
+            "RuntimeFacts": {"NativeEquipmentReference": None, "NativeItemDispatchReference": None,
+                             "ParentSourceGraph": {"unresolved": ["live"]}},
             "fingerprint": {"directProjectileRaw": saved_row["directProjectileRaw"]}}
     raw = cards.raw_parent_card_for_llm(item)["raw"]
     assert "directProjectile" not in raw and "effectiveProjectile" not in raw
     assert "nativeEquipmentReference" not in raw["item"]
+    assert "nativeItemDispatchReference" not in raw["item"]
     assert raw["item"]["parentSourceGraph"] == {"unresolved": ["live"]}
 
 

@@ -8,20 +8,21 @@ import subprocess
 
 from toolbox.infini_toolbox import BASE_ROOT
 
-from toolbox.live.options import build_parser
-from toolbox.live.preflight import prepare
 
 
 def main(argv: list[str] | None = None) -> int:
     values = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(
         description='Утилиты QA: безопасный offline-вход; live только с --run.',
-        epilog='live10/live20: versioned inputs, preflight или явная text/image-кампания; panels: каталог запросов; summary: saved ledgers; doctor: read-only prerequisites; replay: saved wire; verify: canonical affected checks; workbench: native item tests and recorded frames.',
+        epilog='live10/live20/live40: versioned inputs, preflight или явная text/image-кампания; live40 --offline: raw native Prepare capture; panels: каталог запросов; summary: saved ledgers; doctor: read-only prerequisites; replay: saved wire; verify: canonical affected checks; workbench: native item tests and recorded frames.',
     )
-    parser.add_argument('command', choices=('live10', 'live20', 'panels', 'summary', 'doctor', 'verify', 'replay', 'workbench'))
+    parser.add_argument('command', choices=('live10', 'live20', 'live40', 'panels', 'summary', 'doctor', 'verify', 'replay', 'workbench'))
     if not values or values[0] in ('-h', '--help'):
         parser.print_help()
         return 0
+    if values[0] == 'live40' and '--offline' in values[1:]:
+        from toolbox.testing.capture_panel import main as capture_panel
+        return capture_panel(values[1:])
     if values[0] == 'workbench':
         # Keep caller-relative item/scenario/output paths and stream semantics.
         # The existing owner alone parses arguments and decides whether to execute.
@@ -78,6 +79,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0 if report['ok'] else 1
     command = parser.parse_args(values[:1]).command
+    from toolbox.live.options import build_parser
+    from toolbox.live.preflight import prepare
     options = build_parser()
     args = options.parse_args(values[1:])
     args.panel = command

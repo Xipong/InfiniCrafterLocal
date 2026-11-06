@@ -285,6 +285,7 @@ class WorkbenchTests(unittest.TestCase):
             root=Path(d);here=root/'tools/item-test-workbench'
             sources={
                 here/'vanilla-item-assets.json':b'{"items":{}}',
+                here/'vanilla-draw-assets.json':b'{"entries":{}}',
                 here/'production-mod/InfiniCrafterWorkbenchMod.csproj':b'<Project />',
                 root/'ModSources/InfiniCrafterLocal/Assets/item.png':b'asset',
                 root/'ModSources/InfiniCrafterLocal/Localization/en-US.hjson':b'Name: item',

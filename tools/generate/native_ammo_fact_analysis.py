@@ -8,6 +8,7 @@ from __future__ import annotations
 from native_attack_fact_analysis import Unrecognized, direct_call_count, straight_line_arguments, type_blocks
 from native_ammo_control_flow import literal_store_predicates
 from native_shot_variant_analysis import conditional_arithmetic_variants
+from native_spawn_argument_analysis import spawn_argument_facts
 
 
 def adjusted_counted_spawn(block, call_offset):
@@ -310,6 +311,7 @@ def ammo_method_facts(instructions, method):
                                                 "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"}
                 if basis == "fixed_projectile":
                     spawn["projectileId"] = projectile[1]
+                spawn.update(spawn_argument_facts(code, guard, block, n, getattr(instructions, "method_provenance", None)))
                 row["spawnSites"].append(spawn)
             except (Unrecognized, IndexError):
                 continue

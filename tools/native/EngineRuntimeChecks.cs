@@ -27,6 +27,11 @@ internal static partial class EngineRuntimeChecks
             typeof(Terraria.Program).GetProperty("SavePathShared", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!
                 .SetValue(null, sandbox);
             Terraria.Main.dedServ = true;
+            if (args.Length == 3 && args[0] == "--capture-parent-panel")
+            {
+                CaptureParentPanel(args[1], args[2]);
+                return 0;
+            }
             if (args.Length == 2 && args[0] == "--capture-parent-context")
             {
                 CaptureParentContext(args[1]);
@@ -61,6 +66,14 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("mechanics source preserves effects and unknowns", MechanicsSourcePreservesEffectsAndUnknowns),
+            ("mechanics source binds explicit native roots", MechanicsSourceBindsExplicitNativeRoots),
+            ("parent capture panel validates offline inputs", ParentCapturePanelValidation),
+            ("parent item dispatcher source actual Prepare", ParentItemDispatcherSourceReachesPrepare),
+            ("parent item dispatcher source guards bounds and cancellation", ParentItemDispatcherBoundsStayUnknown),
+            ("projectile lifecycle conditional native source", ProjectileLifecycleKeepsConditionalNativeSource),
+            ("projectile lifecycle closed regions and unknown boundaries", ProjectileLifecycleRefusesIncompleteRegions),
+            ("projectile lifecycle fingerprint preserves source identity", ProjectileLifecycleFingerprintKeepsNativeIdentity),
             ("bundled decompiler exact binary and official resource packaging", BundledDecompilerUsesOfficialResourcePackaging),
             ("weapon replacement profiles preserve native mechanics", WeaponReplacementProfilesPreserveNativeMechanics),
             ("weapon replacement profiles conditional opaque hook evidence", WeaponReplacementProfilesKeepConditionalAndOpaqueHookEvidence),

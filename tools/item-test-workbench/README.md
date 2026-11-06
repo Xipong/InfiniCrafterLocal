@@ -260,8 +260,10 @@ A world-scoped item with a nonnumeric world ID cannot match Terraria's integer
 world ID. For a deliberate isolated test, `--test-world-id 12` saves the original
 input beside a test copy and changes only that copy's `recipeMeta.worldId`; the
 plan records old and new values. This is not required for normal numeric world IDs.
-Vanilla GIFs use pinned assets, including only the seven admitted vanilla projectile
-types; unsupported assets or projectile types fail explicitly. Excalibur is ItemID 368.
+Vanilla GIFs use the complete pinned Projectile/Extra source index. Provision the
+actual textures needed by the native draw path; missing or changed resources fail,
+and hidden bodies are drawn only through their observed native held-owner calls.
+Other hidden/world passes remain unimplemented. Excalibur is ItemID 368.
 
 `doctor` shows dependency and graphics readiness and selected paths. It can discover
 standard Steam/tML paths and `artifacts/dependencies` assets; explicit environment
@@ -1118,11 +1120,17 @@ remains pinned community extraction, not official byte certification.
 Opt in with `nativeRender.drawVanillaProjectiles: true` alongside `drawArtwork`
 and `drawPlayer`. Gameplay continues through original `Player.Update` / ItemCheck,
 `Projectile.Update` and native hit hooks; the sprite pass calls original
-`Main.DrawProj`. This admits only the pinned wooden arrow (1), ordinary bullet
-(14), Holy Arrow (91), Hallow Star (92), Pulse Bolt (357), Hellwing (485), and
-Excalibur's sword effect (982, using its native `Extra_98` texture).
-Other active types, hidden/special draw passes, missing PNGs and hash mismatches
-refuse; no generated projectile or schematic sprite substitutes for them.
+`Main.DrawProj`. Resource loading uses the complete pinned Projectile/Extra
+source index (including Glow and BackPack resources) rather than a weapon or projectile allowlist. Every supplied indexed
+PNG is checked for its exact Git blob, byte size and bounded geometry before GPU
+loading. Missing active-projectile PNGs and hash mismatches refuse; missing
+companion resources can also fail in the original draw path. Hidden native bodies
+are skipped in the ordinary pass and may be drawn recursively by their real held
+owner. Each original `Main.DrawProjDirect` visit and sprite count is recorded, so
+these bodies are not drawn twice. Hidden bodies without an observed owner call
+are explicitly listed; other hidden/world draw passes are not implemented. Resource availability is not a guarantee that every
+vanilla draw path is implemented by this controlled scene. No generated projectile
+or schematic sprite substitutes for an absent native texture.
 The default vanilla pose mode still omits projectile sprites explicitly.
 
 ```sh
@@ -1136,6 +1144,51 @@ python tools/item-test-workbench/verify_vanilla_projectiles.py \
   --vanilla-assets artifacts/dependencies/vanilla-assets \
   --out artifacts/vanilla-projectiles --gif
 ```
+
+For the channelled/conditional weapon matrix, provision the exact resources and
+select `--complex` (the ordinary control matrix remains available):
+
+```sh
+python tools/item-test-workbench/fetch_performance_assets.py \
+  --out artifacts/dependencies/vanilla-assets --include-projectiles \
+  --items 3542 3541 4953 2882 1295 39 \
+  --projectiles 634 635 633 632 932 460 461 459 260 2 \
+  --glow 102 --backpacks 3
+python tools/item-test-workbench/verify_vanilla_projectiles.py \
+  --vanilla-assets artifacts/dependencies/vanilla-assets \
+  --out artifacts/complex-vanilla --complex --gif \
+  --case nebula --case prism --case prism-mana --case eventide \
+  --case charged --case heat-ray --case flaming-arrow
+```
+
+The genuine native `WaterShaderData` constructor and ripple queue require the
+pinned `Misc/Ripples.png`, included by `--include-projectiles`. This is not full
+water/world postprocessing: wave stepping, screen distortion and audio are not
+certified. Its receipt reports the actual type, resource and cleanup of native
+event subscriptions. No generic shader or texture stand-in is used for this path.
+
+`quick_mana` is an explicit full-player input action that calls the original
+`Player.QuickMana()`. Provision native mana-restoring consumables in ordinary
+inventory slots 1–49; ammo slots reject potions. Native selection, consumption,
+healing and mana sickness remain unchanged and are recorded. The unbuffed Prism
+case can exhaust its 200 mana before full charge. `prism-mana` adds one explicit
+quick-mana input at tick 140 with two Mana Potions in slot 1, then verifies one
+consumed potion, sickness and a charged beam. It does not refill mana artificially.
+
+The Prism fixtures use a 400-tile world so native laser scanning has room beyond
+the held beam. Heat Ray uses a distant target: its 100 native extra updates can
+hit and kill the projectile before the first render in a short scene. Its pinned
+projectile sprite is transparent; the visible ray is original native dust.
+These are scene inputs, not changes to weapon speed, collision or lifetime.
+
+All original PNG frames and exact sprite-submission counts are preserved. To keep
+serialized geometry bounded, at most 32 sprite-geometry rows per frame are retained, with
+an explicit omitted-row count. This limit affects diagnostic metadata only, not
+native drawing, gameplay updates or captured pixels. A passing scenario is not
+an aesthetic judgment or complete world-render parity. The row cap is applied
+after capture and is not a runtime allocation limit. Native trace readers admit
+at most 256 MiB, while item/scenario inputs retain the 64 MiB limit; this is a
+post-run read bound, not a native output or memory budget.
 
 The verifier builds once, runs Daedalus with wooden arrows, Pulse Bow and Hellwing
 Bow with wooden/Holy arrows, and a bullet control. It retains native assertion,
@@ -1277,3 +1330,39 @@ python tools/item-test-workbench/verify_utility_emission.py \
 Add `--player-assets /path/to/player-assets --vanilla-assets /path/to/vanilla-assets`
 to that regression command to also execute real native refusals for missing,
 corrupt and unsupported backpack assets. These tests alter only private copies.
+
+### Pinned generic native draw resources
+
+`vanilla-draw-assets.json` indexes every matching source PNG in the pinned community
+Git tree: 1,020 `Projectile_*.png`, 266 `Extra_*.png`, 353 `Glow_*.png`, nine `BackPack_*.png`,
+`FishingLine.png`, and the exact nested `Misc/Ripples.png` water texture.
+These are available resources, not a declaration that every native draw path works.
+The downloader accepts arbitrary IDs present in that index; it does not choose
+textures from an item family or substitute missing resources:
+
+```sh
+python tools/item-test-workbench/fetch_performance_assets.py \
+  --out /private/vanilla-assets --items 3542 3541 4953 \
+  --projectiles 634 635 633 632 932 --extras 98 --glow 102 --backpacks 3 \
+  --draw-assets FishingLine.png Misc/Ripples.png
+```
+
+`--include-projectiles` provisions the original small manifest-backed control bundle
+plus the pinned `Misc/Ripples.png` required by genuine native WaterShaderData for
+every vanilla projectile pass. Explicitly also requesting Ripples does not fetch it twice.
+Use the explicit selectors for other textures. Duplicate/unknown selectors,
+unsafe paths, corrupt existing files, mismatched pinned Git blobs and oversized
+PNG dimensions are rejected. Existing files are verified before reuse; downloads
+never overwrite a corrupt file. `index_vanilla_draw_assets.py --out PATH` regenerates
+the complete index from the pinned commit and its non-truncated source tree.
+
+**Provenance and rights:** the source is the public community extraction
+[sullerandras/terraria-hd-textures](https://github.com/sullerandras/terraria-hd-textures/tree/c835594415e31ed88734dc778661014b48ffb648/source-pngs),
+commit `c835594415e31ed88734dc778661014b48ffb648`, not an official Re-Logic asset
+release. The pinned repository root has no LICENSE file, and its README does not
+grant redistribution rights for Terraria images. A matching Git blob establishes
+integrity against that source, not copyright permission or official-byte identity.
+No game PNGs are bundled here. Keep downloaded assets private; obtain any needed
+rights separately. An official tModLoader binary does not certify the provenance
+of independently obtained PNGs. Content from a user's legitimate Terraria install
+is a separate source and requires its own extraction/identity workflow.

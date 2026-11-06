@@ -9,7 +9,7 @@ from infini_local.pipelines.context.attack_behavior import project_attack_behavi
 from infini_local.pipelines.context.attack_tables import pack_attack_tables
 from infini_local.pipelines.context.csharp_source_view import (
     SOURCE_READING, _CERT, _REFERENCE_FIELDS, _at_path, _capture_metadata, _certificate,
-    _compact_model_view, _integer, _known_graph, _linked_calls, _records, _windows, _specialized_record,
+    _compact_model_view, _integer, _known_graph, _linked_calls, _records, _windows, _specialized_record, project_lifecycle_source,
 )
 from infini_local.pipelines.context.parent_stage import parent_context_for_stage
 
@@ -17,6 +17,7 @@ from infini_local.pipelines.context.parent_stage import parent_context_for_stage
 def native_csharp_source_for_llm(reference: dict[str, Any], source_calls: list[dict[str, Any]] | None = None
                                 ) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
     """Prefer only explicit matching source records; all refusals preserve input facts."""
+    reference = project_lifecycle_source(reference)
     original, calls = copy.deepcopy(reference), copy.deepcopy(source_calls)
     records = _records(reference)
     if (records is None or not records or not set(reference) <= _REFERENCE_FIELDS
@@ -93,6 +94,12 @@ def native_csharp_source_for_llm(reference: dict[str, Any], source_calls: list[d
             selection = {**chosen, record["id"]: alternative}
             proposed = candidate(selection)
             size = view_size(proposed, selection)
-            if size < best_size:
+            # The graph contract captures connected slices, not the complete
+            # method. A certified whole body (or its proved identity variant)
+            # therefore takes priority even when a partial graph is smaller.
+            # Compare size only within that coverage: never drop the body to
+            # satisfy a context budget, or treat opaque callee effects as proved.
+            fuller_source = record["coverage"] == "whole_method" and record["id"] not in chosen
+            if fuller_source or size < best_size:
                 chosen, original, best_size = selection, proposed, size
     return _compact_model_view(original, _linked_calls(calls, chosen, predicates), chosen)

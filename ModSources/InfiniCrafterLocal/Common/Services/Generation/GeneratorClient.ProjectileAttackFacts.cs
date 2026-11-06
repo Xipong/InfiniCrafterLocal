@@ -37,6 +37,7 @@ public sealed partial class GeneratorClient
         JsonObject Analyze()
         {
             JsonObject result = JsonNode.Parse(ProjectileAttackSource(type, style).Source)!.AsObject();
+            result.Remove("mechanicsSource"); // Separate approximate profile view, never part of the strict reference.
             result["admission"] = admission.DeepClone();
             return result;
         }
@@ -125,6 +126,8 @@ public sealed partial class GeneratorClient
             ["units"] = "position/cone length: native world pixels (16 per Terraria block); rotation: radians; localAI/ai timing: AI invocations, not seconds; texture Frame: image coordinates; scale: dimensionless" };
         var certificates = new JsonArray(); var gaps = new JsonArray();
         var certified = new HashSet<MethodBase>();
+        var mechanicsBoundReceivers = new HashSet<MethodBase>();
+        var mechanicsUnboundReceivers = new HashSet<MethodBase>();
         void Certify(MethodBase method)
         {
             if (certified.Add(method)) certificates.Add(MethodSourceIdentity(method));
@@ -132,6 +135,8 @@ public sealed partial class GeneratorClient
         JsonObject Observe(MethodBase method, string role, List<AmmoIl>? slice = null, bool boundActor = false, List<JsonObject>? helperSpawns = null, List<JsonObject>? sourceEffects = null)
         {
             Certify(method);
+            if (boundActor) mechanicsBoundReceivers.Add(method);
+            else mechanicsUnboundReceivers.Add(method);
             try
             {
                 var next = slice is null ? null : AttackCode(method).Zip(AttackCode(method).Skip(1), (a, b) => (a.Offset, b.Offset))
@@ -218,7 +223,7 @@ public sealed partial class GeneratorClient
                 if (windows.Length == 0) { if (!windowRefused) gaps.Add(root + "_identity_dispatch_outside_supported_source_shape"); continue; }
                 var slice = windows.SelectMany(w => w.Code).GroupBy(i => i.Offset).Select(g => g.First()).OrderBy(i => i.Offset).ToList();
                 var inlineEffects = new List<JsonObject>();
-                var dispatch = Observe(method, root == "VanillaAI" ? "dispatch" : "collision", slice, boundActor: root == "VanillaAI", sourceEffects: inlineEffects);
+                var dispatch = Observe(method, root == "VanillaAI" ? "dispatch" : "collision", slice, boundActor: !method.IsStatic && method.DeclaringType == typeof(Projectile), sourceEffects: inlineEffects);
                 if (inlineEffects.Count > 0) result["motionDispatchEffects"] = new JsonArray(inlineEffects.Select(p => (JsonNode?)p).ToArray());
                 dispatch["identityWindows"] = new JsonArray(windows.Select(w => (JsonNode?)new JsonObject
                     { ["field"] = w.Field, ["literal"] = w.Literal, ["guardOffset"] = w.Guard }).ToArray());
@@ -309,10 +314,14 @@ public sealed partial class GeneratorClient
             }
             result["positionIntegration"] = program;
         }
+        result["lifecycle"] = CaptureProjectileLifecycleSource(type, style, spawnReferences);
+        // Keep method identity as a native fact outside the optional readable
+        // view, including when every conditional region was refused.
+        if (Native(typeof(Projectile), "Kill") is { } lifecycleRoot) Certify(lifecycleRoot);
         result["sourceMethods"] = certificates;
         result["coverage"] = new JsonObject { ["proved"] = "bounded_native_source_observations_only", ["unresolved"] = gaps,
             ["boundaries"] = "ProjectileLoader.Colliding/ShouldUpdatePosition and all other hooks remain unevaluated; no source fact is absence of a mechanic; damage may stop before visual lifetime; held-item draw is separate and not inferred from noMelee" };
-        AttachNativeCSharpSource(result, certified, spawnReferences, type, style);
+        AttachNativeCSharpSource(result, certified, spawnReferences, type, style, mechanicsBoundReceivers.Except(mechanicsUnboundReceivers).ToHashSet());
         return new ProjectileAttackCapture(result.ToJsonString(), spawnReferences.ToJsonString());
     }
 

@@ -225,7 +225,7 @@ public sealed partial class GeneratorClient
                 // Author derives draw motifs from the established graph before
                 // omitting draw. Presentation stages also consume that graph;
                 // this gameplay source view must never take ownership of it.
-                if (path.Length == 0 && pair.Key == "draw") continue;
+                if (path.Length == 0 && pair.Key is "draw" or "lifecycle") continue;
                 if (pair.Key is "sourceMethods" or "nativeCSharpSource" || program && pair.Key == "identitySelected") continue;
                 foreach (var child in CSharpPrograms(pair.Value, path.Append((object)pair.Key).ToArray())) yield return child;
             }
@@ -478,9 +478,10 @@ public sealed partial class GeneratorClient
         };
     }
 
-    private static void AttachNativeCSharpSource(JsonObject attack, IEnumerable<MethodBase> methods, JsonArray calls, int type, int style)
+    private static void AttachNativeCSharpSource(JsonObject attack, IEnumerable<MethodBase> methods, JsonArray calls, int type, int style, ISet<MethodBase> mechanicsBoundReceivers)
     {
         var records = new JsonArray(); var refusals = new JsonArray();
+        var mechanics = new JsonArray(); var mechanicsRefusals = new JsonArray();
         var programs = CSharpPrograms(attack, Array.Empty<object>()).ToArray();
         foreach (var method in methods.OfType<MethodInfo>().Distinct())
         {
@@ -495,11 +496,33 @@ public sealed partial class GeneratorClient
                 try
                 {
                     var document = GetNativeCSharpDocument(method, timeout.Token);
-                    var record = BuildNativeCSharpRecord(document, owned, calls, type, style, timeout.Token);
-                    // A refused optional proof must not erase the full source.
-                    try { AttachIdentitySpecializedCSharp(record, document, type, style, timeout.Token); }
-                    catch (NotSupportedException) { }
-                    records.Add(record);
+                    JsonObject? strictRecord = null;
+                    try
+                    {
+                        var record = BuildNativeCSharpRecord(document, owned, calls, type, style, timeout.Token);
+                        // A refused optional proof must not erase the full source.
+                        try { AttachIdentitySpecializedCSharp(record, document, type, style, timeout.Token); }
+                        catch (NotSupportedException) { }
+                        records.Add(record); strictRecord = record;
+                    }
+                    catch (NotSupportedException error)
+                    { refusals.Add(new JsonObject { ["method"] = SourceMember(method), ["unresolved"] = error.Message }); }
+                    try
+                    {
+                        JsonObject mechanicsRecord;
+                        try { mechanicsRecord = BuildMechanicsSourceRecord(document, type, style, timeout.Token, mechanicsBoundReceivers.Contains(method)); }
+                        catch (NotSupportedException error) when (error.Message == "mechanics_source_character_bound; strict_source_retained"
+                            && strictRecord?["coverage"]?.GetValue<string>() == "conditional_ast_regions")
+                        {
+                            mechanicsRecord = BuildMechanicsSourceView(document, type, style, timeout.Token, mechanicsBoundReceivers.Contains(method), strictRecord);
+                        }
+                        mechanicsRecord["graphPaths"] = new JsonArray(owned.Select(program => (JsonNode?)new JsonArray(program.Path
+                            .Select(part => part is string key ? (JsonNode?)JsonValue.Create(key) : JsonValue.Create((int)part)).ToArray())).ToArray());
+                        mechanics.Add(mechanicsRecord);
+                    }
+                    catch (Exception error) when (error is not OutOfMemoryException && error is not OperationCanceledException)
+                    { mechanicsRefusals.Add(new JsonObject { ["method"] = SourceMember(method), ["unresolved"] = error is NotSupportedException ? error.Message : error.GetType().Name }); }
+
                 }
                 finally { Monitor.Exit(nativeCSharpGate); }
             }
@@ -513,6 +536,9 @@ public sealed partial class GeneratorClient
                 refusals.Add(new JsonObject { ["method"] = SourceMember(method), ["unresolved"] = error is NotSupportedException ? error.Message : error.GetType().Name });
             }
         }
+        attack["mechanicsSource"] = new JsonObject { ["source"] = "native_mechanics_source", ["version"] = 1,
+            ["identity"] = new JsonObject { ["type"] = type, ["aiStyle"] = style }, ["records"] = mechanics,
+            ["unresolved"] = mechanicsRefusals, ["strictSourceRefusals"] = refusals.DeepClone(), ["approximation"] = MechanicsIdentityAssumption };
         attack["nativeCSharpSource"] = new JsonObject { ["source"] = "verified_decompiled_native_csharp", ["version"] = 1,
             ["records"] = records, ["unresolved"] = refusals,
             ["scope"] = "Read-only C# reconstructed from MVID/IL-matched native PE bytes. Whole methods retain all branches; region code retains complete closed lexical bodies under original guards. No code, getters, constructors or hooks ran. Runtime detours, callbacks and called implementations remain unknown. This input is never generated-item executable code." };

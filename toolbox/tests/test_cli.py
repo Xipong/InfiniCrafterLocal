@@ -20,7 +20,7 @@ def cli(monkeypatch, capsys, *args):
     return exc.value.code, capsys.readouterr()
 
 
-@pytest.mark.parametrize('panel,count', [('live10', 10), ('live20', 20)])
+@pytest.mark.parametrize('panel,count', [('live20', 20)])
 def test_default_cli_preflight_selects_real_parents_without_bootstrap(monkeypatch, capsys, tmp_path, panel, count):
     before = set(tmp_path.rglob('*'))
     import builtins
@@ -48,13 +48,13 @@ def test_default_cli_preflight_selects_real_parents_without_bootstrap(monkeypatc
     (['--parallel-crafts', '0'], 'parallel-crafts'),
     (['--transport-retries', '-1'], 'transport-retries'),
     (['--transport-retry-delay-seconds', '1'], 'transport-retry-delay'),
-    (['--min-first-author', '11'], 'min-first-author'),
+    (['--min-first-author', '21'], 'min-first-author'),
     (['--expected-head', '0' * 40], 'HEAD'),
     (['--run'], 'requires'),
     (['--run', '--preflight-only'], 'mutually exclusive'),
 ])
 def test_cli_refuses_invalid_boundaries_before_bootstrap(monkeypatch, capsys, flags, fragment):
-    code, captured = cli(monkeypatch, capsys, 'live10', *flags)
+    code, captured = cli(monkeypatch, capsys, 'live20', *flags)
     assert code == 2
     assert fragment in captured.err
 
@@ -63,7 +63,7 @@ def test_cli_refuses_invalid_boundaries_before_bootstrap(monkeypatch, capsys, fl
 def test_retired_config_is_refused_without_secret_values(monkeypatch, capsys, tmp_path, key):
     config = tmp_path / 'private.env'
     config.write_text(f'# infini-config-format: json-string-v1\n{key}=SECRET-OLD-VALUE\n')
-    code, captured = cli(monkeypatch, capsys, 'live10', '--config', config)
+    code, captured = cli(monkeypatch, capsys, 'live20', '--config', config)
     assert code == 2
     assert key in captured.err
     assert 'SECRET-OLD-VALUE' not in captured.out + captured.err
@@ -73,11 +73,11 @@ def test_retired_config_is_refused_without_secret_values(monkeypatch, capsys, tm
 def test_private_config_is_checked_not_printed(monkeypatch, capsys, tmp_path):
     config = tmp_path / 'private.env'
     config.write_text(('# infini-config-format: json-string-v1\nINFINI_LLM_PROVIDER=openai_compat\nINFINI_OPENAI_COMPAT_MODEL=qa-model\nINFINI_OPENAI_COMPAT_API_KEY=TOP-SECRET\nINFINI_OPENAI_COMPAT_BASE_URL=https://example.invalid/v1/\n'))
-    code, captured = cli(monkeypatch, capsys, 'live10', '--config', config, '--expected-model', 'wrong')
+    code, captured = cli(monkeypatch, capsys, 'live20', '--config', config, '--expected-model', 'wrong')
     assert code == 2
     assert 'model' in captured.err.lower()
     assert 'TOP-SECRET' not in captured.out + captured.err
-    code, captured = cli(monkeypatch, capsys, 'live10', '--config', config, '--expected-model', 'qa-model')
+    code, captured = cli(monkeypatch, capsys, 'live20', '--config', config, '--expected-model', 'qa-model')
     assert code == 0
     assert json.loads(captured.out)['configured']['model'] == 'qa-model'
     assert 'TOP-SECRET' not in captured.out + captured.err
@@ -90,16 +90,17 @@ def test_clean_head_binding_rejects_dirty_source(monkeypatch, capsys, tmp_path):
     subprocess.run(['git', 'init', '-q', str(project)], check=True)
     subprocess.run(['git', '-C', str(project), '-c', 'user.name=QA', '-c', 'user.email=qa@example.invalid', 'commit', '--allow-empty', '-qm', 'fixture'], check=True)
     head = subprocess.check_output(['git', '-C', str(project), 'rev-parse', 'HEAD'], text=True).strip()
-    code, _ = cli(monkeypatch, capsys, 'live10', '--project', project, '--expected-head', head)
+    code, _ = cli(monkeypatch, capsys, 'live20', '--project', project, '--expected-head', head)
     assert code == 0
     (project / 'dirty.txt').write_text('changed input')
-    code, captured = cli(monkeypatch, capsys, 'live10', '--project', project, '--expected-head', head)
+    code, captured = cli(monkeypatch, capsys, 'live20', '--project', project, '--expected-head', head)
     assert code == 2
     assert 'clean' in captured.err
 
 
+@pytest.mark.parametrize('panel', ['live10', 'live20', 'live40'])
 @pytest.mark.parametrize('output_kind', ['absolute', 'existing_tilde', 'relative'])
-def test_deliberate_run_dispatches_canonical_harness_and_propagates_status(monkeypatch, capsys, tmp_path, output_kind):
+def test_deliberate_run_dispatches_canonical_harness_and_propagates_status(monkeypatch, capsys, tmp_path, output_kind, panel):
     import subprocess
     project = tmp_path / 'source'
     (project / 'LocalGenerator/infini_local').mkdir(parents=True)
@@ -128,13 +129,18 @@ def test_deliberate_run_dispatches_canonical_harness_and_propagates_status(monke
         project = Path('source')
         config = Path('private.env')
         output_arg = Path('out')
-    flags = ['--run', '--project', project, '--config', config, '--output', output_arg,
+    from toolbox.live.catalog import DEFAULT_PRESETS, load_panel
+    routes = load_panel(DEFAULT_PRESETS[panel])['cases']
+    dump = tmp_path / 'synthetic-selection-only.jsonl'
+    names = sorted({r[k] for r in routes for k in ('itemA', 'itemB')})
+    dump.write_text('\n'.join(json.dumps({'internalName': n, 'testOnly': True}) for n in names))
+    flags = ['--runtime-dump', dump, '--run', '--project', project, '--config', config, '--output', output_arg,
              '--expected-head', head, '--expected-provider', 'openai_compat', '--expected-model', 'qa-model',
              '--expected-base-url', 'https://example.invalid/v1', '--expected-api-mode', 'chat_completions',
              '--expected-response-format', 'json_object', '--expected-temperature', '0.5',
              '--expected-vfx-temperature', '0.34', '--expected-repair-temperature', '0.12',
              '--expected-max-tokens', '18000', '--expected-visual-max-tokens', '18000', '--expected-vfx-max-tokens', '18000']
-    code, output = cli(monkeypatch, capsys, 'live10', *flags)
+    code, output = cli(monkeypatch, capsys, panel, *flags)
     if output_kind == 'existing_tilde':
         assert code == 2
         assert 'new or empty' in output.err
@@ -151,12 +157,12 @@ def test_deliberate_run_dispatches_canonical_harness_and_propagates_status(monke
         assert forwarded.config == tmp_path / 'private.env'
         assert forwarded.output == tmp_path / 'out'
     assert command[:3] == [sys.executable, '-m', 'toolbox.live.runner']
-    assert command[3:5] == ['--panel', 'live10']
+    assert command[3:5] == ['--panel', panel]
     assert '--run' in command
     assert kwargs['cwd'] == ROOT
     assert not (tmp_path / 'out').exists()
     config.write_text(config.read_text().replace('INFINI_USE_LLM=1', 'INFINI_USE_LLM=0'))
-    code, output = cli(monkeypatch, capsys, 'live10', *flags)
+    code, output = cli(monkeypatch, capsys, panel, *flags)
     assert code == 2
     assert 'INFINI_USE_LLM' in output.err
     assert len(calls) == 1
@@ -173,7 +179,7 @@ def test_custom_cases_validate_real_fixture(monkeypatch, capsys, tmp_path, kind,
         cases[0]['case'] = '../unsafe'
     file = tmp_path / 'cases.json'
     file.write_text(json.dumps(cases))
-    code, captured = cli(monkeypatch, capsys, 'live10', '--cases-file', file)
+    code, captured = cli(monkeypatch, capsys, 'live20', '--cases-file', file)
     assert code == 2
     assert fragment in captured.err
 
@@ -182,13 +188,13 @@ def test_custom_cases_validate_real_fixture(monkeypatch, capsys, tmp_path, kind,
 def test_credentials_in_endpoint_are_refused_without_echo(monkeypatch, capsys, tmp_path, endpoint):
     config = tmp_path / 'private.env'
     config.write_text(('# infini-config-format: json-string-v1\nINFINI_OPENAI_COMPAT_BASE_URL=' + endpoint))
-    code, captured = cli(monkeypatch, capsys, 'live10', '--config', config)
+    code, captured = cli(monkeypatch, capsys, 'live20', '--config', config)
     assert code == 2
     assert 'secret' not in captured.out + captured.err
 
 
 def test_explicit_missing_private_config_is_not_silently_ignored(monkeypatch, capsys, tmp_path):
-    code, output = cli(monkeypatch, capsys, 'live10', '--config', tmp_path / 'missing.env')
+    code, output = cli(monkeypatch, capsys, 'live20', '--config', tmp_path / 'missing.env')
     assert code == 2
     assert 'config' in output.err
 
@@ -197,7 +203,7 @@ def test_duplicate_parent_snapshot_identity_is_refused(monkeypatch, capsys, tmp_
     dump = tmp_path / 'duplicate.jsonl'
     fixture = (ROOT / 'toolbox/fixtures/items.jsonl').read_text(encoding='utf-8-sig')
     dump.write_text(fixture + '\n' + fixture.splitlines()[0] + '\n')
-    code, output = cli(monkeypatch, capsys, 'live10', '--runtime-dump', dump)
+    code, output = cli(monkeypatch, capsys, 'live20', '--runtime-dump', dump)
     assert code == 2
     assert 'duplicate parent' in output.err
 
@@ -208,10 +214,10 @@ def test_skip_config_does_not_read_operator_profile_unless_explicit(monkeypatch,
     config = project / 'LocalGenerator/config.env'
     config.write_text(('# infini-config-format: json-string-v1\nINFINI_OPENAI_COMPAT_MODEL=private-model\n'))
     monkeypatch.setenv('INFINI_SKIP_CONFIG_FILE', '1')
-    code, output = cli(monkeypatch, capsys, 'live10', '--project', project)
+    code, output = cli(monkeypatch, capsys, 'live20', '--project', project)
     assert code == 0
     assert json.loads(output.out)['configured']['model'] == ''
-    code, output = cli(monkeypatch, capsys, 'live10', '--project', project, '--config', config)
+    code, output = cli(monkeypatch, capsys, 'live20', '--project', project, '--config', config)
     assert code == 0
     assert json.loads(output.out)['configured']['model'] == 'private-model'
 
@@ -225,21 +231,22 @@ def test_named_panel_is_not_silently_reduced_by_legacy_environment(monkeypatch, 
 
 @pytest.mark.parametrize('selection', ['', 'woodwork_blade,woodwork_blade'])
 def test_explicit_empty_or_duplicate_selection_is_refused(monkeypatch, capsys, selection):
-    code, output = cli(monkeypatch, capsys, 'live10', '--cases', selection)
+    code, output = cli(monkeypatch, capsys, 'live20', '--cases', selection)
     assert code == 2
     assert '--cases' in output.err
 
 
 def test_public_panel_name_cannot_be_overridden(monkeypatch, capsys):
-    code, output = cli(monkeypatch, capsys, 'live10', '--panel', 'live20')
+    code, output = cli(monkeypatch, capsys, 'live20', '--panel', 'live20')
     assert code == 2
     assert 'unrecognized' in output.err
 
 
-def test_unshipped_live40_shortcut_refuses_without_traceback(monkeypatch, capsys):
+def test_live40_requires_explicit_current_dump_without_traceback(monkeypatch, capsys):
     code, captured = cli(monkeypatch, capsys, 'live40')
     assert code == 2
     assert not captured.out
+    assert 'requires an explicit current --runtime-dump' in captured.err
     assert 'Traceback' not in captured.err
 
 

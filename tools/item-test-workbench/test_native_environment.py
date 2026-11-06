@@ -94,6 +94,7 @@ class WorkbenchDiscoveryIntegrationTests(unittest.TestCase):
             root = Path(tmp); here = root / 'tools/item-test-workbench'
             here.mkdir(parents=True)
             (here / 'vanilla-item-assets.json').write_text('{}')
+            (here / 'vanilla-draw-assets.json').write_text('{}')
             mod = root / 'ModSources/InfiniCrafterLocal'
             (mod / 'obj').mkdir(parents=True)
             (mod / 'build.txt').write_text('version=1')
