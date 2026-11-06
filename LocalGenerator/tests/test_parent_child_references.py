@@ -2,7 +2,8 @@
 import copy
 import pytest
 from infini_local.pipelines.context.parents import compact_projectile_profile
-from infini_local.pipelines.context.cards import raw_parent_card_for_llm, parent_context_for_stage
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
+from infini_local.pipelines.context.parent_stage import parent_context_for_stage
 from prompt_packet_helpers import expand_native_source_references
 
 

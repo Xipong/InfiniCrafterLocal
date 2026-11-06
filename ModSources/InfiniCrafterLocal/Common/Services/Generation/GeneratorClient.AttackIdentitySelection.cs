@@ -55,6 +55,76 @@ public sealed partial class GeneratorClient
         private readonly Dictionary<int, bool> unmodifiedReads = new();
         private readonly ParentSourceMethod.Value[] hazards;
         private int analysisWork;
+        private readonly Dictionary<MethodBase, bool> readOnlyEffects = new();
+
+        // A sufficient (not necessary) native body proof. No naming conventions:
+        // every reachable or unreachable instruction must be read-only, and each
+        // nested call must have a closed nonvirtual body. Unknown instructions,
+        // native implementations, recursive closures and budgets fail closed.
+        private bool ReadOnlyEffect(MethodBase method, HashSet<MethodBase>? active = null)
+        {
+            if (readOnlyEffects.TryGetValue(method, out bool cached)) return cached;
+            active ??= new();
+            if (active.Count >= 16 || !active.Add(method)) return false;
+            bool safe = false;
+            try
+            {
+                Work();
+                var native = method.GetMethodBody();
+                if (method.IsVirtual || method.ContainsGenericParameters || native is null
+                    || native.ExceptionHandlingClauses.Count != 0
+                    || method.GetParameters().Any(p => p.ParameterType.IsByRef || p.ParameterType.IsPointer)
+                    || method is MethodInfo result && (result.ReturnType.IsByRef || result.ReturnType.IsPointer
+                        || result.ReturnType.IsFunctionPointer || result.ReturnType == typeof(IntPtr)
+                        || result.ReturnType == typeof(UIntPtr))) return false;
+                // A reference-type instance already exists; calling its instance
+                // method does not trigger its declaring type initializer. Static
+                // calls, value-type instance calls and static field loads can.
+                bool Initialized(Type? owner) => owner?.TypeInitializer is not MethodBase initializer
+                    || ReadOnlyEffect(initializer, active);
+                if ((method.IsStatic || method.DeclaringType?.IsValueType == true) && !Initialized(method.DeclaringType)) return false;
+                var code = AttackCode(method);
+                if (code.Count == 0 || code.Count > 2048) return false;
+                foreach (var instruction in code)
+                {
+                    Work();
+                    string op = instruction.Op;
+                    if (op is "call" or "callvirt")
+                    {
+                        if (instruction.Arg is not MethodBase called || !ReadOnlyEffect(called, active)) return false;
+                        continue;
+                    }
+                    if (op == "ldsfld")
+                    {
+                        if (instruction.Arg is not FieldInfo field || !Initialized(field.DeclaringType)) return false;
+                        continue;
+                    }
+                    if (op is "nop" or "ldarg" or "ldloc" or "stloc" or "const" or "ldnull" or "ldstr"
+                        or "ldfld" or "ldlen" or "dup" or "pop" or "ret" or "castclass" or "isinst"
+                        or "add" or "sub" or "mul" or "div" or "div.un" or "rem" or "rem.un"
+                        or "and" or "or" or "xor" or "not" or "neg" or "shl" or "shr" or "shr.un"
+                        or "ceq" or "cgt" or "cgt.un" or "clt" or "clt.un" or "switch"
+                        or "br" or "br.s" or "brtrue" or "brtrue.s" or "brfalse" or "brfalse.s"
+                        or "beq" or "beq.s" or "bne.un" or "bne.un.s"
+                        or "bge" or "bge.s" or "bge.un" or "bge.un.s"
+                        or "bgt" or "bgt.s" or "bgt.un" or "bgt.un.s"
+                        or "ble" or "ble.s" or "ble.un" or "ble.un.s"
+                        or "blt" or "blt.s" or "blt.un" or "blt.un.s") continue;
+                    // Native-sized conversions can carry an actor address out
+                    // through an otherwise numeric return. This proof does not
+                    // track pointer provenance, so never certify that boundary.
+                    if (op is "conv.i" or "conv.u" or "conv.ovf.i" or "conv.ovf.u"
+                        or "conv.ovf.i.un" or "conv.ovf.u.un") return false;
+                    if (op.StartsWith("conv.", StringComparison.Ordinal)
+                        || op.StartsWith("ldelem", StringComparison.Ordinal) && op != "ldelema") continue;
+                    return false;
+                }
+                safe = true;
+                return true;
+            }
+            catch (NotSupportedException) { return false; }
+            finally { active.Remove(method); readOnlyEffects[method] = safe; }
+        }
 
         private void Work()
         {
@@ -174,8 +244,10 @@ public sealed partial class GeneratorClient
             bool hazard = statement.Operand is FieldInfo field && field.DeclaringType == typeof(Projectile)
                 && field.Name is "type" or "aiStyle" && statement.Op is "stfld" or "ldflda"
                 && statement.Inputs.Count > 0 && MayTarget(statement.Inputs[0], new());
-            hazard |= (statement.Operand is MethodBase call && !BaseEntityValueAccessor(call) || statement.Op is "stsfld" or "stfld" or "stobj" || statement.Op.StartsWith("stelem", StringComparison.Ordinal) || statement.Op.StartsWith("stind", StringComparison.Ordinal))
-                && statement.Inputs.Skip(statement.Op == "stfld" ? 1 : 0).Any(i => MayTarget(i, new()));
+            hazard |= statement.Inputs.Skip(statement.Op == "stfld" ? 1 : 0).Any(i => MayTarget(i, new()))
+                && (statement.Operand is MethodBase call && !BaseEntityValueAccessor(call) && !ReadOnlyEffect(call)
+                    || statement.Op is "stsfld" or "stfld" or "stobj"
+                    || statement.Op.StartsWith("stelem", StringComparison.Ordinal) || statement.Op.StartsWith("stind", StringComparison.Ordinal));
             return hazard;
         }
 

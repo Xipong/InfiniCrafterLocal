@@ -108,8 +108,19 @@ def verify(path: Path, source: Path, assembly: Path, expected_tml: str, *, studi
         raise ValueError('Package name/version/tML version differs from source/build')
     info = read_info(files['Info'])
     refs = [ref.strip() for ref in manifest.get('modReferences', '').split(',') if ref.strip()]
-    if info.get('version') != version or info.get('modReferences', []) != refs:
+    dll_refs = [ref.strip() for ref in manifest.get('dllReferences', '').split(',') if ref.strip()]
+    if info.get('version') != version or info.get('modReferences', []) != refs or info.get('dllReferences', []) != dll_refs:
         raise ValueError('Embedded manifest version/dependencies mismatch')
+    for dependency in dll_refs:
+        if not dependency or Path(dependency).name != dependency or '/' in dependency or '\\' in dependency:
+            raise ValueError('Unsafe managed dependency name')
+        key = f'lib/{dependency}.dll'
+        if files.get(key) != (source / key).read_bytes():
+            raise ValueError(f'Bundled managed dependency missing or changed: {key}')
+    for notice in source.joinpath('lib').glob('*.LICENSE.txt'):
+        key = 'lib/' + notice.name
+        if files.get(key) != notice.read_bytes():
+            raise ValueError(f'Bundled managed dependency notice missing or changed: {key}')
     if files[f'{name}.dll'] != assembly.read_bytes() or not files[f'{name}.dll'].startswith(b'MZ'):
         raise ValueError('Packaged assembly differs from the Release build')
     for resource in source.rglob('*'):
@@ -129,7 +140,7 @@ def verify(path: Path, source: Path, assembly: Path, expected_tml: str, *, studi
     studio = verify_resources(files.__getitem__, source_root=studio_source_root)
     return {'status': 'passed', 'name': name, 'version': version, 'tmlVersion': tml,
             'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data),
-            'fileCount': len(files), 'modReferences': refs, 'files': sorted(files),
+            'fileCount': len(files), 'modReferences': refs, 'dllReferences': dll_refs, 'files': sorted(files),
             'studio': studio,
             'runtimeSmoke': 'notRun: container validation is not an in-game test'}
 

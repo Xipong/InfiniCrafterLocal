@@ -108,6 +108,7 @@ public sealed partial class GeneratorClient
     {
         lock (AttackProgramCacheGate)
         { AttackSourcePrograms.Clear(); countedAttackPrograms.Clear(); attackProgramCharacters = 0; AttackSourceCode.Clear(); }
+        ClearNativeCSharpSourceCache();
     }
 
     private static JsonArray ProjectileSpawnReferences(Projectile projectile)
@@ -128,7 +129,7 @@ public sealed partial class GeneratorClient
         {
             if (certified.Add(method)) certificates.Add(MethodSourceIdentity(method));
         }
-        JsonObject Observe(MethodBase method, string role, List<AmmoIl>? slice = null, bool boundActor = false)
+        JsonObject Observe(MethodBase method, string role, List<AmmoIl>? slice = null, bool boundActor = false, List<JsonObject>? helperSpawns = null, List<JsonObject>? sourceEffects = null)
         {
             Certify(method);
             try
@@ -138,6 +139,8 @@ public sealed partial class GeneratorClient
                 var body = slice is null ? ReadCompleteSourceMethod(method) : new ParentSourceMethod(method, slice, next);
                 JsonObject? specialized = null;
                 AttackSourceObservation? selectedObservation = null;
+                ParentSourceMethod? selectedBody = null;
+                AttackIdentitySelection? identity = null;
                 string? selectionFailure = null;
                 // Select the captured actor before traversing/serializing every
                 // sibling's equations. Raw audit capture has an independent work
@@ -149,7 +152,9 @@ public sealed partial class GeneratorClient
                         var selection = new AttackIdentitySelection(body, type, style);
                         if (selection.Selected.Count > 0)
                         {
-                            selectedObservation = new AttackSourceObservation(new ParentSourceMethod(method, slice ?? AttackCode(method), next, selectedSuccessors: selection.Selected), role, selection: selection);
+                            selectedBody = new ParentSourceMethod(method, slice ?? AttackCode(method), next, selectedSuccessors: selection.Selected);
+                            identity = selection;
+                            selectedObservation = new AttackSourceObservation(selectedBody, role, selection: selection);
                             specialized = selectedObservation.Finish();
                             specialized["identitySelection"] = selection.Receipt;
                         }
@@ -168,6 +173,26 @@ public sealed partial class GeneratorClient
                 }
                 if (specialized is not null) program["identitySelected"] = specialized;
                 if (selectionFailure is not null) program["identitySelectionUnavailable"] = selectionFailure;
+                // AI helpers use the motion view, but their projectile effects are
+                // independent roots. Capture each connected sink separately so a
+                // large unrelated motion expression cannot erase its spawn facts.
+                if (helperSpawns is not null)
+                {
+                    var effects = CaptureProjectileSpawnSlices(selectedBody ?? body, identity);
+                    foreach (var effect in effects.Programs)
+                        if (!TryMergeProjectileSourcePrograms(program, effect)) helperSpawns.Add(effect);
+                    foreach (var reference in effects.References) spawnReferences.Add(reference!.DeepClone());
+                    foreach (var called in effects.Methods.Where(m => m.Module == typeof(Projectile).Module && m.GetMethodBody() is not null)) Certify(called);
+                }
+                if (sourceEffects is not null && role is "motion" or "dispatch")
+                {
+                    // Keep the established motion/dispatch slice even when an
+                    // additional connected effect exceeds its own work budget.
+                    var effects = CaptureProjectileAdditionalEffectSlices(selectedBody ?? body, identity, role);
+                    foreach (var effect in effects.Programs)
+                        if (!TryMergeProjectileSourcePrograms(program, effect)) sourceEffects.Add(effect);
+                    foreach (var called in effects.Methods.Where(m => m.Module == typeof(Projectile).Module && m.GetMethodBody() is not null)) Certify(called);
+                }
                 var exposed = specialized ?? program;
                 if (exposed["observations"] is JsonArray)
                     foreach (var reference in (specialized is not null ? selectedObservation! : observation).LiteralProjectileSpawns(exposed))
@@ -192,7 +217,9 @@ public sealed partial class GeneratorClient
                 var windows = ProjectileIdentityWindows(code, type, style, reason => { windowRefused = true; gaps.Add(root + "_" + reason); }, meaningfulBudget: root == "VanillaAI").ToArray();
                 if (windows.Length == 0) { if (!windowRefused) gaps.Add(root + "_identity_dispatch_outside_supported_source_shape"); continue; }
                 var slice = windows.SelectMany(w => w.Code).GroupBy(i => i.Offset).Select(g => g.First()).OrderBy(i => i.Offset).ToList();
-                var dispatch = Observe(method, root == "VanillaAI" ? "dispatch" : "collision", slice, boundActor: root == "VanillaAI");
+                var inlineEffects = new List<JsonObject>();
+                var dispatch = Observe(method, root == "VanillaAI" ? "dispatch" : "collision", slice, boundActor: root == "VanillaAI", sourceEffects: inlineEffects);
+                if (inlineEffects.Count > 0) result["motionDispatchEffects"] = new JsonArray(inlineEffects.Select(p => (JsonNode?)p).ToArray());
                 dispatch["identityWindows"] = new JsonArray(windows.Select(w => (JsonNode?)new JsonObject
                     { ["field"] = w.Field, ["literal"] = w.Literal, ["guardOffset"] = w.Guard }).ToArray());
                 if (root == "Colliding")
@@ -224,7 +251,9 @@ public sealed partial class GeneratorClient
                     try { caller = ParentSourceMethod.ForCallPrefixes(method, AttackCode(method), helpers); }
                     catch (Exception error) when (error is not OutOfMemoryException)
                     { callerFailure = error is NotSupportedException ? error.Message : error.GetType().Name; }
-                    var programs = helpers.Select(m => Observe(m, "motion", boundActor: caller is not null && AttackCallBindsCapturedActor(caller, caller.Statements, m))).ToArray();
+                    var helperSpawns = new List<JsonObject>();
+                    var motionPrograms = helpers.Select(m => Observe(m, "motion", boundActor: caller is not null && AttackCallBindsCapturedActor(caller, caller.Statements, m), helperSpawns: helperSpawns, sourceEffects: helperSpawns)).ToArray();
+                    var programs = motionPrograms.Concat(helperSpawns).ToArray();
                     if (callerFailure is not null)
                         foreach (var program in programs) program["identitySelectionUnavailable"] = "caller_prefix:" + callerFailure;
                     if (programs.Length > 0)
@@ -283,6 +312,7 @@ public sealed partial class GeneratorClient
         result["sourceMethods"] = certificates;
         result["coverage"] = new JsonObject { ["proved"] = "bounded_native_source_observations_only", ["unresolved"] = gaps,
             ["boundaries"] = "ProjectileLoader.Colliding/ShouldUpdatePosition and all other hooks remain unevaluated; no source fact is absence of a mechanic; damage may stop before visual lifetime; held-item draw is separate and not inferred from noMelee" };
+        AttachNativeCSharpSource(result, certified, spawnReferences, type, style);
         return new ProjectileAttackCapture(result.ToJsonString(), spawnReferences.ToJsonString());
     }
 
@@ -323,7 +353,17 @@ public sealed partial class GeneratorClient
     }
 
     internal static JsonObject InspectProjectileAttackSource(MethodInfo method, string role)
-        => new AttackSourceObservation(new ParentSourceMethod(method), role).Finish();
+    {
+        var body = new ParentSourceMethod(method);
+        var result = new AttackSourceObservation(body, role).Finish();
+        if (role is "motion" or "dispatch")
+        {
+            var effects = CaptureProjectileAdditionalEffectSlices(body, null, role);
+            var separate = effects.Programs.Where(program => !TryMergeProjectileSourcePrograms(result, program)).ToArray();
+            if (separate.Length > 0) result["effectSources"] = new JsonArray(separate.Select(p => (JsonNode?)p).ToArray());
+        }
+        return result;
+    }
 
     internal static JsonObject InspectProjectileAttackIdentitySource(MethodInfo method, int type, int style)
     {
@@ -355,6 +395,8 @@ public sealed partial class GeneratorClient
         private readonly JsonArray predicates = new();
         private readonly HashSet<string> visiting = new(), predicateIds = new();
         private int expressionCount;
+        internal Action? AdditionalExpressionWork;
+        internal int ExpressionLimit = 12000;
         internal AttackSourceObservation(ParentSourceMethod body, string role, IEnumerable<ParentSourceMethod.Value>? selected = null, AttackIdentitySelection? selection = null)
         {
             this.body = body; this.role = role; this.selection = selection; explicitRoots = selected is not null;
@@ -362,7 +404,7 @@ public sealed partial class GeneratorClient
             branches = body.Statements.Where(v => (selection is null || selection.Reachable.Contains(v.Block) && !selection.Selected.ContainsKey(v.Block)) && body.Blocks[v.Block].Next.Distinct().Count() > 1
                 && (v.Op == "switch" || v.Op.StartsWith("b", StringComparison.Ordinal))).ToArray();
         }
-        private bool IsRoot(ParentSourceMethod.Value value)
+        internal bool IsRoot(ParentSourceMethod.Value value)
         {
             if (role is "collision" or "predicate") return value.Op == "ret" || value.Operand is MethodInfo m && m.ReturnType == typeof(bool);
             if (role == "dispatch" && value.Op == "ret") return true;
@@ -461,7 +503,8 @@ public sealed partial class GeneratorClient
 
         private string Expression(string id)
         {
-            if (++expressionCount > 12000) throw new NotSupportedException("connected_source_expression_work_bound:" + expressionCount + ">12000");
+            AdditionalExpressionWork?.Invoke();
+            if (++expressionCount > ExpressionLimit) throw new NotSupportedException("connected_source_expression_work_bound:" + expressionCount + ">" + ExpressionLimit);
             if (dependencies.Count > 192) throw new NotSupportedException("connected_source_dependency_count_bound:" + dependencies.Count + ">192");
             if (!body.Values.TryGetValue(id, out var value)) return "unresolved(" + id + ")";
             if (value.Op is "ldloca" or "address_exposed_local") return AddressLocal(value);

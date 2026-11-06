@@ -327,9 +327,16 @@ public sealed partial class GeneratorClient
 
         private void LinkLocals()
         {
-            var entryDefinitions = Method.GetMethodBody()!.LocalVariables.ToDictionary(local => local.LocalIndex,
+            // A dispatcher slice keeps the original method's local metadata,
+            // often thousands of slots which never occur in this source region.
+            // Those slots cannot feed a decoded value or a local transfer. Keep
+            // the exact reaching-definition solver over the referenced domain.
+            var referenced = Code.Where(i => i.Op is "ldloc" or "stloc" or "ldloca")
+                .Select(i => i.Arg).OfType<int>().ToHashSet();
+            var locals = Method.GetMethodBody()!.LocalVariables.Where(local => referenced.Contains(local.LocalIndex)).ToArray();
+            var entryDefinitions = locals.ToDictionary(local => local.LocalIndex,
                 local => new HashSet<string> { "local_entry:" + local.LocalIndex });
-            foreach (var local in Method.GetMethodBody()!.LocalVariables)
+            foreach (var local in locals)
                 Values["local_entry:" + local.LocalIndex] = new Value { Id = "local_entry:" + local.LocalIndex,
                     Op = "unresolved_local_entry", Operand = local.LocalType, At = 0, Block = 0 };
             bool changed = true;

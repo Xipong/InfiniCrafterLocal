@@ -20,6 +20,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Reference Include="ICSharpCode.Decompiler" HintPath="lib/ICSharpCode.Decompiler.dll" Private="true" />
+    <Content Include="lib/ICSharpCode.Decompiler.LICENSE.txt" Link="ICSharpCode.Decompiler.LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
     <Reference Include="ParticleLibrary" HintPath="$(InfiniParticleLibraryDll)" Condition="'$(InfiniParticleLibraryDll)' != '' and Exists('$(InfiniParticleLibraryDll)')" Private="false" />
     <Reference Include="Luminance" HintPath="$(InfiniLuminanceDll)" Condition="'$(InfiniLuminanceDll)' != '' and Exists('$(InfiniLuminanceDll)')" Private="false" />
   </ItemGroup>

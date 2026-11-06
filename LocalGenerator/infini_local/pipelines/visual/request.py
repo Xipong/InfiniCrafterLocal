@@ -30,7 +30,7 @@ from infini_local.core.provider_schema import (
     project_provider_nullable_optionals_to_local,
     provider_nullable_transport_rule,
 )
-from infini_local.pipelines.context.cards import parent_context_for_stage
+from infini_local.pipelines.context.parent_stage import parent_context_for_stage
 from infini_local.pipelines.context.presentation import presentation_parent_card_for_llm
 from infini_local.pipelines.visual.assets import equipment_overlay_requirement
 from infini_local.pipelines.images.prompts import visual_background_transport_rule

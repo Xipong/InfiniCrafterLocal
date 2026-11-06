@@ -5,6 +5,7 @@ import ipaddress
 import socket
 import time
 import traceback
+import zlib
 from http.server import BaseHTTPRequestHandler
 from typing import Any
 from urllib.parse import urlparse
@@ -30,6 +31,9 @@ class _InvalidJsonRequest(ValueError):
 
 
 MAX_JSON_BODY_BYTES = 2 * 1024 * 1024
+# The on-wire cap remains unchanged. Native parent source graphs are losslessly
+# gzip-encoded; their decoded size is bounded independently before JSON parsing.
+MAX_COMBINE_DECODED_BODY_BYTES = 32 * 1024 * 1024
 JSON_BODY_READ_TIMEOUT_SECONDS = 10
 _GET_LOOPBACK_REQUIRED_EXACT_ROUTES = {
     "/shutdown",
@@ -231,7 +235,16 @@ class Handler(BaseHTTPRequestHandler):
         return length
 
     def _read_json_payload(self, length: int) -> dict[str, Any]:
-        if length <= 0:
+        encodings = (self.headers.get_all("Content-Encoding", []) if hasattr(self.headers, "get_all")
+                     else [self.headers["Content-Encoding"]] if "Content-Encoding" in self.headers else [])
+        if len(encodings) > 1:
+            raise _InvalidJsonRequest("multiple Content-Encoding headers")
+        encoding = encodings[0].strip().lower() if encodings else "identity"
+        if encoding not in {"identity", "gzip"} or (
+            encoding == "gzip" and urlparse(self.path).path != "/combine"
+        ):
+            raise _InvalidJsonRequest("unsupported Content-Encoding for this endpoint")
+        if length <= 0 and encoding == "identity":
             return {}
 
         connection = getattr(self, "connection", None)
@@ -259,6 +272,19 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             if connection is not None and hasattr(connection, "settimeout"):
                 connection.settimeout(previous_timeout)
+
+        if encoding == "gzip":
+            try:
+                decoder = zlib.decompressobj(wbits=16 + zlib.MAX_WBITS)
+                body = decoder.decompress(body, MAX_COMBINE_DECODED_BODY_BYTES + 1)
+            except zlib.error as e:
+                raise _InvalidJsonRequest("invalid gzip body") from e
+            if len(body) > MAX_COMBINE_DECODED_BODY_BYTES:
+                raise OverflowError("decoded combine body exceeds size limit")
+            # One complete gzip member is the wire contract. Do not ignore a
+            # truncated checksum, second member, or arbitrary trailing bytes.
+            if not decoder.eof or decoder.unused_data or decoder.unconsumed_tail:
+                raise _InvalidJsonRequest("incomplete or trailing gzip body")
 
         try:
             return strict_json.loads_object(body)

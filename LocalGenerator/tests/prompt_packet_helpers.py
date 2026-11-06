@@ -1,6 +1,7 @@
 """Read the derived dossier view in semantic tests; authority tests inspect rows."""
 import copy
 import json
+import re
 from typing import Any
 
 
@@ -82,3 +83,39 @@ def expand_native_source_references(dossier: dict[str, Any]) -> dict[str, Any]:
             return [expand(child, active) for child in value]
         return copy.deepcopy(value)
     return expand(dossier)
+
+
+def expand_native_identifier_aliases(value: Any) -> Any:
+    """Independent observer for marked, already table-decoded source programs."""
+    aliases = {"P": "Projectile", "E": "Entity", "Vec": "Vector2"}
+
+    def names(text: str) -> str:
+        def token(match):
+            atom = match[0]
+            return atom if atom.startswith('"') else '.'.join(aliases.get(part, part) for part in atom.split('.'))
+        return re.sub(r'"(?:\\.|[^"\\])*"|(?<![A-Za-z0-9_#`])[A-Za-z_][A-Za-z0-9_@.#`]*', token, text)
+
+    def expand(node):
+        if isinstance(node, list):
+            return [expand(child) for child in node]
+        if not isinstance(node, dict):
+            return copy.deepcopy(node)
+        result = {key: expand(child) for key, child in node.items()}
+        if type(result.get('nativeNames')) is not int or result['nativeNames'] != 1:
+            return result
+        result.pop('nativeNames')
+        if isinstance(result.get('method'), str):
+            result['method'] = names(result['method'])
+        if isinstance(result.get('symbols'), dict):
+            result['symbols'] = {names(key): names(child) for key, child in result['symbols'].items()}
+        for row in result.get('operations', []):
+            for key in ('expression', 'receiver', 'call'):
+                if isinstance(row.get(key), str):
+                    row[key] = names(row[key])
+            if isinstance(row.get('arguments'), dict):
+                row['arguments'] = {key: names(child) for key, child in row['arguments'].items()}
+            if isinstance(row.get('inputs'), list):
+                row['inputs'] = [names(child) for child in row['inputs']]
+        return result
+
+    return expand(value)

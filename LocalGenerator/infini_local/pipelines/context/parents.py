@@ -12,6 +12,8 @@ from infini_local.core.item_identity_tools import (
 )
 from infini_local.pipelines.context.attack_behavior import project_attack_behavior
 from infini_local.pipelines.context.attack_tables import pack_attack_tables
+from infini_local.pipelines.context.native_references import known_projectile_references
+from infini_local.pipelines.context.native_csharp_source import native_csharp_source_for_llm
 from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_AMMO_ITEM_KEYS,
     LLM_INCLUDE_AISTYLE_RAW,
@@ -270,14 +272,29 @@ def _generated_placement_fields(item: dict[str, Any]) -> dict[str, Any]:
         ("createTile", "tileId"), ("createWall", "wallId"), ("placeStyle", "placeStyle")
     ) if source in placement and placement[source] is not None}
 
-def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool = True) -> dict[str, Any]:
+def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool = True,
+                               prefer_readable_source: bool = True) -> dict[str, Any]:
     if not isinstance(proj, dict) or not proj:
         return {}
     out = _select_raw_keys(proj, LLM_PROJECTILE_RAW_KEYS)
+    for key in ("sourceReferences", "profileScope", "unresolved"):
+        if key in proj:
+            out[key] = copy.deepcopy(proj[key])
     # Behavior is model context; certificates/instruction offsets remain in the
     # authoritative raw dump. No connected mechanic or branch is truncated.
+    linked_calls = None
     if isinstance(proj.get("attackReference"), dict):
-        source = project_attack_behavior(proj["attackReference"])
+        reference = proj["attackReference"]
+        references = proj.get("referencedProjectiles")
+        if "nativeCSharpSource" in reference and (references is None or known_projectile_references(references)):
+            reference, linked_calls = native_csharp_source_for_llm(reference,
+                references["sourceCalls"] if isinstance(references, dict) else None)
+            if (not prefer_readable_source and "nativeCSharpSourceReading" in reference
+                    and "nativeCSharpSourceReading" not in proj["attackReference"]):
+                reference = copy.deepcopy(proj["attackReference"])
+                reference.pop("nativeCSharpSource")
+                linked_calls = None
+        source = project_attack_behavior(reference)
         out["attackReference"] = pack_attack_tables(source)
     # The native producer owns verification and scope. Never infer a trajectory
     # from names/aiStyle or clip this optional read-only observation.
@@ -291,20 +308,17 @@ def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool
         out["collisionReference"] = copy.deepcopy(proj["collisionReference"])
     if include_references and isinstance(proj.get("referencedProjectiles"), dict):
         references = copy.deepcopy(proj["referencedProjectiles"])
+        if linked_calls is not None:
+            references["sourceCalls"] = linked_calls
         # Producer-owned one-hop facts; no catalog lookup, ID inference or new
         # gameplay choice. Unknown/future envelopes stay literal.
-        if (references.get("source") == "native_single_hop_projectile_references"
-                and type(references.get("version")) is int and references["version"] == 1
-                and set(references) <= {"source", "version", "scope", "profileLimit", "sourceCalls", "references"}
-                and isinstance(references.get("sourceCalls"), list)
-                and isinstance(references.get("references"), list)
-                and all(isinstance(row, dict) and set(row) <= {"type", "sourceCallIndices", "profile", "unresolved"}
-                        for row in references["references"])):
+        if known_projectile_references(references):
             for reference in references["references"]:
                 if (isinstance(reference.get("profile"), dict)
                         and reference["profile"].get("unavailable") is not True
                         and "referencedProjectiles" not in reference["profile"]):
-                    reference["profile"] = compact_projectile_profile(reference["profile"], include_references=False)
+                    reference["profile"] = compact_projectile_profile(reference["profile"], include_references=False,
+                        prefer_readable_source=prefer_readable_source)
         out["referencedProjectiles"] = references
     if LLM_INCLUDE_AISTYLE_RAW and _compact_keep(proj.get("aiStyle")):
         out["aiStyle"] = _compact_raw_value(proj.get("aiStyle"))
@@ -317,7 +331,7 @@ def _compact_ammo_item_source(value: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def compact_ammo_profile(item: dict[str, Any]) -> dict[str, Any]:
+def compact_ammo_profile(item: dict[str, Any], *, prefer_readable_source: bool = True) -> dict[str, Any]:
     ap = ammo_profile_of(item)
     if not isinstance(ap, dict) or not ap:
         return {}
@@ -326,6 +340,8 @@ def compact_ammo_profile(item: dict[str, Any]) -> dict[str, Any]:
         out["mode"] = ap["mode"]
     if _compact_keep(ap.get("ammoId")):
         out["ammoId"] = ap["ammoId"]
+    if _compact_keep(ap.get("ammoCategoryName")):
+        out["ammoCategoryName"] = ap["ammoCategoryName"]
     if isinstance(ap.get("projectileSemanticsReference"), dict):
         # Native source proof and its unresolved hook scope are inseparable.
         # Ammo candidates remain inputs, not observed outgoing shots.
@@ -338,7 +354,7 @@ def compact_ammo_profile(item: dict[str, Any]) -> dict[str, Any]:
         out["ammoItemRaw"] = _compact_ammo_item_source(ap["ammoItemRaw"])
     for key in ("projectileRaw", "weaponShootFieldProjectileRaw"):
         if isinstance(ap.get(key), dict):
-            out[key] = compact_projectile_profile(ap[key])
+            out[key] = compact_projectile_profile(ap[key], prefer_readable_source=prefer_readable_source)
     # These are already bounded observations from the native producer, not a
     # selected/best ammo or a replacement for the weapon's own shoot identity.
     # Keep order and multiplicity, and keep an observed empty inventory distinct
@@ -349,7 +365,7 @@ def compact_ammo_profile(item: dict[str, Any]) -> dict[str, Any]:
                         for value in ap[key] if isinstance(value, dict)]
     for key in ("playerInventoryProjectileRaw", "fallbackProjectileRaw", "nativeReplacementProjectileRaw"):
         if isinstance(ap.get(key), list):
-            out[key] = [compact_projectile_profile(value)
+            out[key] = [compact_projectile_profile(value, prefer_readable_source=prefer_readable_source)
                         for value in ap[key] if isinstance(value, dict)]
     return out
 

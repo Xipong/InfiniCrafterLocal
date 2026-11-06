@@ -37,7 +37,7 @@ public sealed partial class GeneratorClient
     {
         var stages = new JsonArray();
         var unknowns = new JsonArray("Ammo choice/admission, player equipment, later native projectile-set rewrites and ModPlayer hooks are not evaluated.");
-        bool replaced = false, conditional = false, ownDelivery = false, unknownWrite = false;
+        bool replaced = false, conditional = false, ownDelivery = false, unknownWrite = false, unresolvedNativeWrite = false;
         foreach (var (method, certificate) in new[] { ("Player.PickAmmo", AmmoPickCertificate.Value), ("Player.ItemCheck_Shoot", ShootFactCertificate.Value) })
         {
             var stage = new JsonObject { ["method"] = method, ["rules"] = new JsonArray(), ["spawnSites"] = new JsonArray() };
@@ -52,6 +52,17 @@ public sealed partial class GeneratorClient
                 stage["sourceStageCallSites"] = baseline["sourceStageCallSites"]!.DeepClone();
                 if (method == "Player.PickAmmo")
                 {
+                    // The table's entries are deliberately not inspected, but
+                    // the helper implementing its symbolic lookup must still
+                    // match the certified source before its chain is published.
+                    if (AuditedNativeCertificate(AmmoSpecificMatchCertificate.Value, "ammo")
+                        != baseline["defaultProjectileSelection"]?["specificMatchLookupCertificate"]?.GetValue<string>())
+                    {
+                        stage["defaultProjectileSelection"] = null;
+                        stage["defaultProjectileSelectionStatus"] = "unverified_specific_match_helper";
+                        unknowns.Add("Current specific-ammo lookup helper is unverified; its default selection chain is withheld.");
+                        unknownWrite = true;
+                    }
                     var dispatch = baseline["hookDispatchTrace"]!.AsArray();
                     bool verified = dispatch.OfType<JsonObject>().All(row => {
                         string name = row["method"]!.GetValue<string>();
@@ -72,16 +83,19 @@ public sealed partial class GeneratorClient
                 {
                     var facts = JsonNode.Parse(json)!.AsObject();
                     stage["rules"] = facts["rules"]!.DeepClone();
+                    stage["conditionalArithmeticVariants"] = facts["conditionalArithmeticVariants"]?.DeepClone() ?? new JsonArray();
+                    stage["unresolvedLiteralWrites"] = facts["unresolvedLiteralWrites"]?.DeepClone() ?? new JsonArray();
                     stage["spawnSites"] = facts["spawnSites"]!.DeepClone();
                     stage["spawnOriginSetups"] = facts["spawnOriginSetups"]!.DeepClone();
                     stage["unrecognizedProjectileWriteOffsets"] = facts["unrecognizedProjectileWriteOffsets"]!.DeepClone();
                     foreach (var rule in facts["rules"]!.AsArray().OfType<JsonObject>())
                     {
-                        if (rule["whenInputProjectileId"] is null) replaced = true;
+                        if (rule["whenInputProjectileId"] is null && rule["whenSourceCondition"] is null) replaced = true;
                         else conditional = true;
                     }
                     ownDelivery |= facts["spawnSites"]!.AsArray().Count > 0;
                     unknownWrite |= facts["unrecognizedProjectileWriteOffsets"]!.AsArray().Count > 0;
+                    unresolvedNativeWrite |= stage["unresolvedLiteralWrites"]!.AsArray().Count > 0;
                 }
             }
             else
@@ -119,16 +133,21 @@ public sealed partial class GeneratorClient
             stage["defaultProjectileSelection"]?["categoryOffsetSelectors"] is JsonArray selectors
             && selectors.OfType<JsonObject>().Any(selector => selector["ammoCategoryId"]!.GetValue<int>() == item.useAmmo));
         string relation = opaqueHook ? "unknown_hook_projectile_semantics"
+            : unresolvedNativeWrite || unknownWrite ? "unknown_native_projectile_semantics"
             : hookOwn ? "ignored_replaced_by_hook_projectiles"
             : hookSuppress ? "suppressed_default_shot"
             : hookConditional ? "conditionally_replaced_by_inspected_hook"
             : hookReplace ? "replaced_by_inspected_hook"
             : replaced ? "replaced" : conditional ? "conditionally_replaced"
-            : unknownWrite ? "unknown_native_projectile_semantics"
             : offsetSelection ? "native_ammo_table_or_offset_selection"
             : ownDelivery ? "retained_with_native_item_delivery" : "retained_in_default_ammo_path";
+        if (unresolvedNativeWrite)
+            unknowns.Add("Literal native write sites have unresolved applicability or item ownership; their source-only identities do not establish an unconditional or conditional projectile mapping, including when other certified rules are present.");
+        if (unknownWrite)
+            unknowns.Add("Native projectile writes or item branches remain unproved; known literal rules do not establish the complete projectile mapping.");
         unknowns.Add("Known literal item rules do not certify absence of other native rewrites or a final shot. Native item-specific spawn sites may change origin, count and trajectory even when their projectile argument is retained.");
         unknowns.Add("CanShoot, ammo availability, player hooks and other gameplay gates may change or suppress shooting; source inspection does not execute them.");
+        unknowns.Add("Source-only alternatives do not select ammunition or evaluate its PickAmmo overrides. Current specific launcher/ammo match table entries are not resolved; the table-first selection chain remains symbolic. No final projectile is asserted.");
         if (offsetSelection)
             unknowns.Add("Verified complete selection chain reads the current specific-match table first, then category offsets or the positive-ammo/default arm. This does not certify later rewrites or a final shot.");
         return new JsonObject {
@@ -138,16 +157,157 @@ public sealed partial class GeneratorClient
             ["scope"] = "Read-only parent source evidence, never required child mechanics. Retained projectile identity is not a claim of normal direct-arrow delivery. Inventory ammo entries are candidate inputs, not observed fired behavior. Ammo-item damage, speed and knockback remain separate native inputs when projectile identity is replaced; no universal additive final-damage formula is asserted. Author explicitly chooses generated behavior." };
     }
 
+    // A literal output is a fact about this weapon's source even when its
+    // input/branch is unresolved. It does not need a representative ammo item.
+    // Keep one complete shared profile per identity and every exact source site;
+    // neither this collector nor its hook inspection executes shooting hooks.
+    private static JsonArray CaptureSourceReplacementProjectileProfiles(Item weapon, JsonObject semantics)
+    {
+        var identities = new Dictionary<int, JsonArray>();
+        void Add(int type, JsonObject reference, JsonObject sourceFact)
+        {
+            // Invalid literals remain visible in the source reference, but must
+            // never enter SetDefaults or turn into a fabricated native profile.
+            if (type <= ProjectileID.None || type >= ProjectileLoader.ProjectileCount)
+            {
+                sourceFact["projectileProfileUnresolved"] = "projectile_identity_not_registered";
+                return;
+            }
+            if (!identities.TryGetValue(type, out var references)) identities[type] = references = new JsonArray();
+            references.Add(reference);
+        }
+
+        var stages = semantics["stages"]!.AsArray();
+        for (int stageIndex = 0; stageIndex < stages.Count; stageIndex++)
+        {
+            var stage = stages[stageIndex]!.AsObject();
+            if (stage["sourceVerification"] is null || stage["sourceMethodSha256"] is null || stage["sourceModuleVersionId"] is null) continue;
+            // These identities are conditional source alternatives, never effective
+            // final shots or child spawns. The offline certificate binds the
+            // input local only under explicit item-field snapshot assumptions.
+            if (stage["conditionalArithmeticVariants"] is JsonArray variants)
+            {
+                for (int variantIndex = 0; variantIndex < variants.Count; variantIndex++)
+                {
+                    var variant = variants[variantIndex]!.AsObject();
+                    if (variant["inputBinding"] is not JsonObject binding
+                        || binding["basis"]?.GetValue<string>() != "item_shoot_snapshot"
+                        || binding["requiredUseAmmoMaximum"] is not JsonValue maximumValue
+                        || !maximumValue.TryGetValue<int>(out int maximumAmmo) || weapon.useAmmo > maximumAmmo
+                        || variant["projectileOffset"] is not JsonValue offsetValue || !offsetValue.TryGetValue<int>(out int offset)
+                        || variant["conditionalProbability"]?["numerator"]?.GetValue<int>() <= 0) continue;
+                    long output = (long)weapon.shoot + offset;
+                    // IL add/sub is signed int32; do not project a wrapped result.
+                    if (output <= ProjectileID.None || output > int.MaxValue || output >= ProjectileLoader.ProjectileCount)
+                    {
+                        variant["projectileProfileUnresolved"] = "projectile_arithmetic_out_of_registered_range";
+                        continue;
+                    }
+                    Add((int)output, new JsonObject {
+                        ["kind"] = "native_conditional_arithmetic_alternative",
+                        ["sourcePath"] = $"projectileSemanticsReference.stages[{stageIndex}].conditionalArithmeticVariants[{variantIndex}]",
+                        ["method"] = stage["method"]!.DeepClone(),
+                        ["sourceMethodSha256"] = stage["sourceMethodSha256"]!.DeepClone(),
+                        ["sourceModuleVersionId"] = stage["sourceModuleVersionId"]!.DeepClone(),
+                        ["sourceVerification"] = stage["sourceVerification"]!.DeepClone(),
+                        ["observedInputProjectileId"] = weapon.shoot,
+                        ["sourceFact"] = variant.DeepClone(),
+                        ["conditionStatus"] = "conditional_on_source_item_field_snapshots_and_branch",
+                        ["dispatchStatus"] = "stage_alternative_only_later_native_writes_ModifyShootStats_and_Shoot_may_change_or_suppress"
+                    }, variant);
+                }
+            }
+            foreach (string collection in new[] { "rules", "unresolvedLiteralWrites", "spawnSites" })
+            {
+                if (stage[collection] is not JsonArray sites) continue;
+                for (int siteIndex = 0; siteIndex < sites.Count; siteIndex++)
+                {
+                    var site = sites[siteIndex]!.AsObject();
+                    bool rule = collection == "rules", unresolved = collection == "unresolvedLiteralWrites";
+                    if (unresolved && site["ownershipStatus"]?.GetValue<string>() != "proved_item_guard") continue;
+                    if (!rule && !unresolved && site["projectileBasis"]?.GetValue<string>() != "fixed_projectile") continue;
+                    if (site[rule || unresolved ? "outputProjectileId" : "projectileId"] is not JsonValue literal || !literal.TryGetValue<int>(out int type)) continue;
+                    Add(type, new JsonObject {
+                        ["kind"] = unresolved ? "native_literal_write_unresolved_applicability" : rule ? "native_projectile_replacement" : "native_fixed_projectile_spawn",
+                        ["sourcePath"] = $"projectileSemanticsReference.stages[{stageIndex}].{collection}[{siteIndex}]",
+                        ["method"] = stage["method"]!.DeepClone(),
+                        ["sourceMethodSha256"] = stage["sourceMethodSha256"]!.DeepClone(),
+                        ["sourceModuleVersionId"] = stage["sourceModuleVersionId"]!.DeepClone(),
+                        ["sourceVerification"] = stage["sourceVerification"]!.DeepClone(),
+                        ["sourceFact"] = site.DeepClone(),
+                        ["conditionStatus"] = unresolved ? "source_applicability_unresolved" : "source_conditions_not_evaluated",
+                        ["dispatchStatus"] = "source_site_only_not_guaranteed_execution"
+                    }, site);
+                }
+            }
+        }
+
+        var hooks = semantics["hooks"]!.AsArray();
+        int dispatchStageIndex = Enumerable.Range(0, stages.Count)
+            .FirstOrDefault(index => stages[index]?["hookDispatchTrace"] is JsonArray, -1);
+        bool certifiedDispatch = dispatchStageIndex >= 0;
+        var suppressors = hooks.OfType<JsonObject>().Select((hook, index) => (hook, index)).Where(pair =>
+            pair.hook["ownerKind"]?.GetValue<string>() == "GlobalItem" && pair.hook["phase"]?.GetValue<string>() == "Shoot"
+            && pair.hook["shape"]?.GetValue<string>() is "suppresses_default_shot" or "fixed_projectile_spawn_suppresses_default")
+            .Select(pair => pair.index).ToArray();
+        for (int hookIndex = 0; hookIndex < hooks.Count; hookIndex++)
+        {
+            var hook = hooks[hookIndex]!.AsObject();
+            string? shape = hook["shape"]?.GetValue<string>();
+            bool replacement = shape is "literal_projectile_replacement" or "conditional_literal_projectile_replacement";
+            bool ownSpawn = shape == "fixed_projectile_spawn_suppresses_default";
+            if ((!replacement && !ownSpawn) || hook["sourceMethodSha256"] is null || hook["sourceModuleVersionId"] is null) continue;
+            if (hook[ownSpawn ? "projectileId" : "outputProjectileId"] is not JsonValue literal || !literal.TryGetValue<int>(out int type)) continue;
+            bool blocked = certifiedDispatch && suppressors.Length > 0
+                && hook["ownerKind"]?.GetValue<string>() == "ModItem" && hook["phase"]?.GetValue<string>() == "Shoot";
+            var reference = new JsonObject {
+                ["kind"] = ownSpawn ? "inspected_hook_fixed_projectile_spawn" : "inspected_hook_projectile_replacement",
+                ["sourcePath"] = $"projectileSemanticsReference.hooks[{hookIndex}]",
+                ["sourceFact"] = hook.DeepClone(),
+                ["conditionStatus"] = "source_conditions_not_evaluated",
+                ["dispatchStatus"] = blocked ? "blocked_by_inspected_global_shoot_suppression"
+                    : certifiedDispatch ? "certified_dispatch_order_gameplay_admission_unknown" : "dispatch_order_unverified",
+                ["dispatchSourcePath"] = certifiedDispatch ? $"projectileSemanticsReference.stages[{dispatchStageIndex}].hookDispatchTrace" : null
+            };
+            if (blocked) reference["blockingHookIndices"] = new JsonArray(suppressors.Select(index => JsonValue.Create(index)).ToArray());
+            Add(type, reference, hook);
+        }
+
+        var profiles = new JsonArray();
+        foreach (var (type, references) in identities)
+        {
+            currentParentAnalysis?.ThrowIfCancelled();
+            var raw = System.Text.Json.JsonSerializer.SerializeToNode(ProjectileRawSnapshot(type, weapon.shootSpeed,
+                "source_inspected_replacement_projectile_identity_not_final_shot", weapon, -1), WireJsonOptions)!.AsObject();
+            // Weapon defaults are provenance, not selected ammo or actual spawn
+            // damage/speed. No effective speed or arithmetic is inferred here.
+            raw.Remove("itemShootSpeed");
+            if (raw["unavailable"]?.GetValue<bool>() == true)
+                raw["unresolved"] = "projectile_defaults_snapshot_unavailable";
+            raw["sourceReferences"] = references;
+            raw["profileScope"] = "Source-referenced projectile defaults and mechanics, independent of ammunition selection. Conditions, dispatch admission and later rewrites are unresolved; not a final fired projectile, damage or speed. Author chooses generated behavior.";
+            profiles.Add(raw);
+        }
+        return profiles;
+    }
+
     private static JsonObject BindAmmoCandidateProjectile(Item weapon, AmmoCandidate candidate, JsonObject semantics)
     {
         int input = candidate.Item.shoot, current = input;
-        bool changed = false, suppressed = false, opaque = false, known = true;
+        bool changed = false, suppressed = false, opaque = false, known = true, unresolvedSourceCondition = false;
         var ownSpawns = new HashSet<int>();
         var proofs = new JsonArray();
         void Apply(JsonObject rule, string method)
         {
             if (rule["whenInputProjectileId"] is JsonNode condition && (!known || condition.GetValue<int>() != current)) return;
             if (rule["outputProjectileId"] is not JsonNode output) return;
+            if (rule["whenSourceCondition"] is not null)
+            {
+                // Inventory identity cannot decide a player/source predicate.
+                // Retain input context when alternatives differ.
+                unresolvedSourceCondition |= !known || current != output.GetValue<int>();
+                return;
+            }
             current = output.GetValue<int>(); changed = true; known = true;
             proofs.Add(new JsonObject { ["method"] = method, ["rule"] = rule.DeepClone() });
         }
@@ -231,7 +391,8 @@ public sealed partial class GeneratorClient
         if (ownSpawns.Count == 1) { current = ownSpawns.Single(); suppressed = false; known = true; }
         string relation = semantics["ammoProjectileRelation"]!.GetValue<string>();
         bool unconditional = relation is "replaced" or "replaced_by_inspected_hook" or "ignored_replaced_by_hook_projectiles";
-        bool retainInput = known && !suppressed && !opaque && !unconditional && current == input;
+        if (unresolvedSourceCondition) known = false;
+        bool retainInput = unresolvedSourceCondition || (known && !suppressed && !opaque && !unconditional && current == input);
         var binding = new JsonObject {
             ["candidateSource"] = candidate.Source, ["inventorySlot"] = candidate.InventorySlot,
             ["inputProjectileId"] = input, ["sourceRuleOutputProjectileId"] = suppressed || opaque || !known ? null : current,
@@ -272,7 +433,7 @@ public sealed partial class GeneratorClient
         catch { rosterAvailable = false; }
         return hooks.Count == 0 ? null : new JsonObject {
             ["hooks"] = hooks, ["attachedGlobalRosterObserved"] = rosterAvailable,
-            ["scope"] = "ItemLoader.PickAmmo calls the selected ammo.ModItem then its GlobalItems, not the weapon's ModItem. Candidate-only source inspection; not native ammo selection or a guaranteed final projectile." };
+            ["scope"] = "ItemLoader.PickAmmo calls the selected ammo.ModItem then its GlobalItems, not the weapon's ModItem. Ammo-parent source inspection; not native ammo selection or a guaranteed final projectile." };
     }
 
     private sealed record AmmoIl(int Offset, string Op, object? Arg);
@@ -381,10 +542,17 @@ public sealed partial class GeneratorClient
                 }
                 if (code.Count == start + 4 && Is(start, "ldarg", typeArg) && Is(start + 1, "const") && Is(start + 2, "stind.i4") && Is(start + 3, "ret"))
                 {
-                    result["shape"] = input is null ? "literal_projectile_replacement" : "conditional_literal_projectile_replacement";
-                    result["outputProjectileId"] = (int)code[start + 1].Arg!;
+                    int output = (int)code[start + 1].Arg!;
                     if (input is not null) result["whenInputProjectileId"] = input.Value;
                     result["sourceStoreIlOffset"] = code[start + 2].Offset;
+                    if (output <= ProjectileID.None || output >= ProjectileLoader.ProjectileCount)
+                    {
+                        result["outputProjectileLiteral"] = output;
+                        result["unresolved"] = "replacement_projectile_identity_not_registered";
+                        return result;
+                    }
+                    result["shape"] = input is null ? "literal_projectile_replacement" : "conditional_literal_projectile_replacement";
+                    result["outputProjectileId"] = output;
                 }
                 return result;
             }
@@ -415,7 +583,11 @@ public sealed partial class GeneratorClient
         result["sourceSpawnIlOffset"] = code[call].Offset;
         result["defaultShotReturnLiteral"] = false;
         // Numeric call arguments are source facts, not SetDefaults or spawn success.
-        if (projectile <= ProjectileID.None || projectile >= ProjectileLoader.ProjectileCount) return;
+        if (projectile <= ProjectileID.None || projectile >= ProjectileLoader.ProjectileCount)
+        {
+            result["unresolved"] = "spawn_projectile_identity_not_registered";
+            return;
+        }
         result["shape"] = "fixed_projectile_spawn_suppresses_default";
         result["projectileId"] = projectile;
     }

@@ -231,3 +231,313 @@ def test_native_ammo_byref_mutation_does_not_inherit_outer_input(gap):
     row, = ammo_method_facts(_nested_ammo_rewrite(pick=True, outer=[17], gap=gap), "PickAmmo")
     assert row["rules"] == []
     assert row["unrecognizedProjectileWriteOffsets"]
+
+
+from native_ammo_fact_analysis import ammo_method_facts
+from native_hit_status_analysis import Instruction as VariantInstruction
+
+
+def _state_conditioned_ammo_rewrite(*, mutate=(), outer=(), guard_op="bne", entry=None, tail=()):
+    from native_hit_status_analysis import Instruction as I
+    pairs = [("ldarg", 2), ("ldfld", "Terraria.Item.shoot"), ("stloc", 0)]
+    if entry:
+        pairs.append(("br", entry))
+    pairs += list(outer)
+    pairs += [("ldarg", 2), ("ldfld", "Terraria.Item.type"), ("const", 90123), ("bne", "end")]
+    labels = {"body": len(pairs)}
+    pairs += [("ldarg", 0), ("ldfld", "Fixture.Player.maximum"), ("ldarg", 0),
+              ("ldfld", "Fixture.Player.remaining"), ("sub", None), ("const", 3), ("div", None), ("stloc", 7)]
+    labels["defined"] = len(pairs)
+    pairs += list(mutate)
+    labels["test"] = len(pairs)
+    pairs += [("ldloc", 7), ("const", 4), (guard_op, "skip")]
+    labels["literal"] = len(pairs)
+    pairs += [("const", 876), ("stloc", 0)]
+    labels["skip"] = len(pairs)
+    pairs += list(tail)
+    labels["end"] = len(pairs)
+    pairs += [("ret", None)]
+    return [I(n, op, [labels[arg]] if op == "switch" else labels.get(arg, arg) if isinstance(arg, str) else arg) for n, (op, arg) in enumerate(pairs)]
+
+
+def test_native_ammo_cfg_extracts_only_controlling_snapshot_expression():
+    from native_ammo_fact_analysis import ammo_method_facts
+    row, = ammo_method_facts(_state_conditioned_ammo_rewrite(), "ItemCheck_Shoot")
+    rule, = row["rules"]
+    assert rule["outputProjectileId"] == 876
+    condition = rule["whenSourceCondition"]
+    assert condition["kind"] == "branch"
+    assert condition["opcode"] == "bne" and condition["taken"] is False
+    assert condition["right"]["value"] == 4
+    snapshot = condition["left"]
+    assert snapshot["kind"] == "local_definition" and snapshot["local"] == 7
+    assert snapshot["scope"] == "value_at_store"
+    value = snapshot["value"]
+    assert value["operator"] == "div" and value["right"]["value"] == 3
+    assert value["left"]["operator"] == "sub"
+    assert value["left"]["left"]["member"] == "Fixture.Player.maximum"
+    assert value["left"]["right"]["member"] == "Fixture.Player.remaining"
+    assert value["left"]["left"]["sourceIlOffset"] != value["left"]["right"]["sourceIlOffset"]
+    assert row["unrecognizedProjectileWriteOffsets"] == []
+
+
+@pytest.mark.parametrize("mutation", [
+    {"mutate": [("const", 9), ("stloc", 7)]},
+    {"mutate": [("ldloca", 7), ("call", ("Opaque.Mutate", 1, False, False))]},
+    {"mutate": [("ldloca", 0), ("call", ("Opaque.Mutate", 1, False, False))]},
+    {"mutate": [("call", ("Opaque.Check", 0, False, True)), ("brfalse", "skip")]},
+    {"mutate": [("br", "defined")]},
+    {"outer": [("call", ("Opaque.Check", 0, False, True)), ("brfalse", "end")]},
+    {"entry": "literal"},
+    {"entry": "test"},
+    {"guard_op": "switch"},
+])
+def test_native_ammo_cfg_refuses_ambiguous_control_and_values(mutation):
+    from native_ammo_fact_analysis import ammo_method_facts
+    row, = ammo_method_facts(_state_conditioned_ammo_rewrite(**mutation), "ItemCheck_Shoot")
+    assert row["rules"] == []
+    assert row["unrecognizedProjectileWriteOffsets"]
+
+
+def test_native_ammo_cfg_known_store_keeps_later_opaque_write_unknown():
+    from native_ammo_fact_analysis import ammo_method_facts
+    row, = ammo_method_facts(_state_conditioned_ammo_rewrite(tail=[("call", ("Opaque.Compute", 0, False, True)), ("stloc", 0)]), "ItemCheck_Shoot")
+    assert len(row["rules"]) == 1
+    assert len(row["unrecognizedProjectileWriteOffsets"]) == 1
+    assert row["unrecognizedProjectileWriteOffsets"][0] > row["rules"][0]["sourceStoreIlOffset"]
+
+
+def test_exact_native_state_guard_rewrite_extraction():
+    from generate_native_ammo_facts import extract
+    installed = Path(os.environ.get("INFINI_NATIVE_AMMO_ASSEMBLY", "/missing-native-assembly"))
+    if not installed.exists():
+        pytest.skip("exact native source assembly unavailable")
+    sources = extract(installed)
+    rows = {r["itemId"]: r for s in sources if s["method"] == "Player.ItemCheck_Shoot" for r in s["records"]}
+    rule, = rows[4953]["rules"]
+    assert rule["outputProjectileId"] == 932 and rule["sourceStoreIlOffset"] == 10873
+    predicate = rule["whenSourceCondition"]
+    assert predicate["sourceBranchIlOffset"] == 10866
+    assert predicate["opcode"] == "bne" and predicate["taken"] is False
+    value = predicate["left"]["value"]
+    assert predicate["left"]["sourceStoreIlOffset"] == 10599
+    assert value["operator"] == "div" and value["right"]["value"] == 2
+    assert value["left"]["operator"] == "sub"
+    assert value["left"]["left"]["member"] == "Terraria.Player.itemAnimationMax"
+    assert value["left"]["right"]["member"] == "Terraria.Player.itemAnimation"
+    assert rows[4953]["unrecognizedProjectileWriteOffsets"] == []
+    assert rows[3859]["rules"][0]["outputProjectileId"] == 710
+    assert "whenSourceCondition" not in rows[3859]["rules"][0]
+    assert rows[3542]["unrecognizedProjectileWriteOffsets"] == [319]
+    assert rows[1157]["unrecognizedProjectileWriteOffsets"] == [16434]
+
+
+def test_native_ammo_cfg_drops_irrelevant_opaque_diamond_but_not_controlling_call():
+    from native_ammo_fact_analysis import ammo_method_facts
+    row, = ammo_method_facts(_state_conditioned_ammo_rewrite(mutate=[("call", ("Opaque.Check", 0, False, True)), ("brfalse", "test"), ("const", 123), ("stloc", 12)]), "ItemCheck_Shoot")
+    assert len(row["rules"]) == 1
+    assert row["rules"][0]["whenSourceCondition"]["left"]["local"] == 7
+    assert row["unrecognizedProjectileWriteOffsets"] == []
+
+
+@pytest.mark.parametrize("mutate", [
+    [("ldloc", 7), ("const", 5), ("bne", "skip")],
+    [("call", ("Opaque.Check", 0, False, True)), ("brfalse", "test"), ("const", 9), ("stloc", 7)],
+    [("call", ("Opaque.Check", 0, False, True)), ("brtrue", "defined")],
+    [("br", 99999)],
+])
+def test_native_ammo_cfg_rejects_contradiction_competing_definition_loop_and_bad_target(mutate):
+    from native_ammo_fact_analysis import ammo_method_facts
+    row, = ammo_method_facts(_state_conditioned_ammo_rewrite(mutate=mutate), "ItemCheck_Shoot")
+    assert row["rules"] == []
+    assert row["unrecognizedProjectileWriteOffsets"]
+
+
+def test_native_ammo_cfg_exception_handler_metadata_is_not_discarded():
+    from native_ammo_fact_analysis import ammo_method_facts
+    from generate_native_hit_status import DecodedInstructions
+    code = DecodedInstructions(_state_conditioned_ammo_rewrite())
+    code.has_exception_handlers = True
+    with pytest.raises(ValueError, match="exception handlers"):
+        ammo_method_facts(code, "ItemCheck_Shoot")
+
+
+def test_native_ammo_cfg_ignores_only_disconnected_sibling_spans():
+    from native_ammo_fact_analysis import ammo_method_facts
+    from native_hit_status_analysis import Instruction as I
+    original = _state_conditioned_ammo_rewrite()
+    # A sibling arm can jump past our item or return, but cannot reach it.
+    prefix = [I(-7, "ldarg", 2), I(-6, "ldfld", "Terraria.Item.type"), I(-5, "const", 77777), I(-4, "bne", 0),
+              I(-3, "call", ("Opaque.Check", 0, False, True)), I(-2, "brtrue", original[-1].offset), I(-1, "ret", None)]
+    rows = ammo_method_facts(prefix + original, "ItemCheck_Shoot")
+    row = next(row for row in rows if row["itemId"] == 90123)
+    assert len(row["rules"]) == 1 and row["unrecognizedProjectileWriteOffsets"] == []
+    # If that arm can fall through into our item, its spanning guard is real.
+    entering = prefix[:-1] + [I(-1, "nop", None)] + original
+    row = next(row for row in ammo_method_facts(entering, "ItemCheck_Shoot") if row["itemId"] == 90123)
+    assert row["rules"] == [] and row["unrecognizedProjectileWriteOffsets"]
+
+
+@pytest.mark.parametrize("branch", ["blt", "blt.un", "bge", "bge.un"])
+def test_native_ammo_cfg_preserves_signedness_and_source_snapshot(branch):
+    from native_ammo_fact_analysis import ammo_method_facts
+    row, = ammo_method_facts(_state_conditioned_ammo_rewrite(guard_op=branch, mutate=[("ldarg", 0), ("const", 0), ("stfld", "Fixture.Player.remaining")]), "ItemCheck_Shoot")
+    rule, = row["rules"]
+    predicate = rule["whenSourceCondition"]
+    assert predicate["opcode"] == branch and predicate["taken"] is False
+    snapshot = predicate["left"]
+    assert snapshot["scope"] == "value_at_store"
+    assert snapshot["sourceStoreIlOffset"] < snapshot["sourceIlOffset"]
+    assert snapshot["value"]["left"]["right"]["sourceIlOffset"] < snapshot["sourceStoreIlOffset"]
+
+
+def test_native_ammo_cfg_header_reentry_cannot_forge_item_ownership():
+    from native_ammo_fact_analysis import ammo_method_facts
+    from native_hit_status_analysis import Instruction as I
+    code = _state_conditioned_ammo_rewrite()
+    # The later path enters after Item.type was supposed to have been loaded.
+    end = code[-1].offset
+    code = code[:-1] + [I(end, "const", 90123), I(end + 1, "br", 5)]
+    row, = ammo_method_facts(code, "ItemCheck_Shoot")
+    assert row["rules"] == []
+    assert row["unrecognizedProjectileWriteOffsets"]
+
+
+def test_native_ammo_cfg_retains_alternative_paths_and_bounds_formula_output():
+    from native_ammo_fact_analysis import ammo_method_facts
+    row, = ammo_method_facts(_state_conditioned_ammo_rewrite(mutate=[("ldloc", 7), ("const", 5), ("beq", "literal")]), "ItemCheck_Shoot")
+    condition = row["rules"][0]["whenSourceCondition"]
+    assert condition["kind"] == "if" and condition["then"] is True
+    assert condition["condition"]["opcode"] == "beq" and condition["condition"]["right"]["value"] == 5
+    assert condition["else"]["opcode"] == "bne" and condition["else"]["right"]["value"] == 4
+    # Bound the real output tree, not only instruction count.
+    row, = ammo_method_facts(_state_conditioned_ammo_rewrite(mutate=[("ldloc", 7), ("const", 4), ("bne", "skip")] * 20), "ItemCheck_Shoot")
+    assert row["rules"] == [] and row["unrecognizedProjectileWriteOffsets"]
+
+
+@pytest.mark.parametrize("mode", ["json_schema", "json_object"])
+def test_native_state_condition_survives_actual_prepare_author_request(monkeypatch, mode):
+    import json
+    from infini_local.core import llm_config
+    from infini_local.pipelines.author.request import build_initial_author_request
+    from prompt_packet_helpers import request_dossier, expand_native_source_references
+    path = Path(os.environ.get("INFINI_PARENT_STATE_PACKET", "/missing-native-prepare-packet"))
+    if not path.exists():
+        pytest.skip("actual native state-conditioned Prepare packet unavailable")
+    packet = json.loads(path.read_text())
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
+    request, _, _ = build_initial_author_request(packet["itemA"], packet["itemB"], "state-source-roundtrip", model_name="offline-test-model")
+    raw = expand_native_source_references(request_dossier(request))["parents"]["A"]["packet"]["raw"]["ammo"]
+    expected = packet["itemA"]["ammoRaw"]
+    assert raw["projectileSemanticsReference"] == expected["projectileSemanticsReference"]
+    # Existing Author projection compacts attack tables and omits unrelated
+    # snapshot fields. This change's exact contract is the two source sites and
+    # their condition, both beside the profile and in the stage reference.
+    profile, = raw["nativeReplacementProjectileRaw"]
+    native, = expected["nativeReplacementProjectileRaw"]
+    assert profile["type"] == native["type"]
+    assert profile["sourceReferences"] == native["sourceReferences"]
+    assert profile["profileScope"] == native["profileScope"]
+    assert (profile["penetrate"], profile["timeLeft"], profile["extraUpdates"]) == (5, 120, 0)
+    source = raw["projectileSemanticsReference"]
+    assert source["ammoProjectileRelation"] == "conditionally_replaced"
+    assert source["stages"][1]["rules"][0]["whenSourceCondition"]["left"]["scope"] == "value_at_store"
+    assert len(raw["nativeReplacementProjectileRaw"][0]["sourceReferences"]) == 2
+
+
+def _arithmetic_variant_fixture(*, item=81234, step=2, threshold=7, maximum=31, prefix=(), mutation=None):
+    ops=[('ldarg',2),('ldfld','Terraria.Item.shoot'),('stloc',0),*prefix,
+         ('ldarg',2),('ldfld','Terraria.Item.type'),('const',item),('bne','end'),
+         ('call',('Terraria.Main.get_rand',0,False,True)),('const',maximum),
+         ('call',('Terraria.Utilities.UnifiedRandom.Next',1,True,True)),('const',threshold),('bge','else'),
+         ('ldloc',0),('const',step),('add',None),('stloc',0),
+         ('ldloc',4),('const',5),('mul',None),('stloc',4),('br','end'),
+         ('label','else'),('ldloc',1),('const',2.5),('sub',None),('stloc',1),('label','end'),('ret',None)]
+    if mutation: ops=mutation(ops)
+    labels={}; n=0
+    for op,arg in ops:
+        if op=='label': labels[arg]=n
+        else:n+=1
+    return [VariantInstruction(n,op,labels.get(arg,arg) if isinstance(arg,str) else arg) for n,(op,arg) in enumerate((o for o in ops if o[0]!='label'))]
+
+
+def _arithmetic_variant_row(code):
+    return next(r for r in ammo_method_facts(code,'ItemCheck_Shoot') if r['itemId']==81234)
+
+
+def test_arbitrary_ids_values_not_weapon_template():
+    result=_arithmetic_variant_row(_arithmetic_variant_fixture())
+    a,b=result['conditionalArithmeticVariants']
+    assert a['projectileOffset']==2 and b['projectileOffset']==0
+    assert a['conditionalProbability']['numerator']==7
+    assert a['conditionalProbability']['denominator']==31
+    assert a['localUpdates'][1]['operand']==5
+    assert a['inputBinding']['basis']=='item_shoot_snapshot'
+    assert result['unrecognizedProjectileWriteOffsets']
+
+
+@pytest.mark.parametrize('prefix',[
+    [('const',123),('stloc',0)], [('ldloca',0),('call',('Opaque.Write',1,False,False))],
+])
+def test_unknown_prior_write_withholds_identity_binding_but_retains_source(prefix):
+    variants=_arithmetic_variant_row(_arithmetic_variant_fixture(prefix=prefix))['conditionalArithmeticVariants']
+    assert all(v['inputBinding'] is None for v in variants)
+
+
+@pytest.mark.parametrize('mutation',[
+    lambda ops:[(op,('Other.Random',1,True,True)) if op=='call' and arg[0].endswith('.Next') else (op,arg) for op,arg in ops],
+    lambda ops:[('add.ovf',arg) if op=='add' else (op,arg) for op,arg in ops],
+    lambda ops:[('bge.un',arg) if op=='bge' else (op,arg) for op,arg in ops],
+    lambda ops:[(op,('Terraria.Utilities.UnifiedRandom.Next',2,True,True)) if op=='call' and arg[0].endswith('.Next') else (op,arg) for op,arg in ops],
+])
+def test_unknown_shape_refuses_variant(mutation):
+    assert 'conditionalArithmeticVariants' not in _arithmetic_variant_row(_arithmetic_variant_fixture(mutation=mutation))
+
+
+@pytest.mark.parametrize('threshold,maximum',[(-1,100),(101,100),(0,0)])
+def test_invalid_rng_bounds_refuse(threshold,maximum):
+    assert 'conditionalArithmeticVariants' not in _arithmetic_variant_row(_arithmetic_variant_fixture(threshold=threshold,maximum=maximum))
+
+
+def test_header_bypass_refuses():
+    code=_arithmetic_variant_fixture()
+    code.insert(0,VariantInstruction(-1,'br',5))
+    assert 'conditionalArithmeticVariants' not in _arithmetic_variant_row(code)
+
+
+def test_foreign_arm_entry_refuses():
+    code=_arithmetic_variant_fixture()
+    code.insert(0,VariantInstruction(-1,'br',16))
+    assert 'conditionalArithmeticVariants' not in _arithmetic_variant_row(code)
+
+
+def test_arithmetic_binding_prunes_only_explicit_snapshot_guards():
+    prefix = [('ldarg',2),('ldfld','Terraria.Item.useAmmo'),('const',0),('ble','noammo'),
+              ('ldloca',0),('call',('Opaque.PickAmmo',1,False,False)),('label','noammo'),
+              ('ldarg',2),('ldfld','Terraria.Item.type'),('const',91234),('bne','other'),
+              ('const',14),('stloc',0),('label','other')]
+    variants = _arithmetic_variant_row(_arithmetic_variant_fixture(prefix=prefix))['conditionalArithmeticVariants']
+    assert all(v['inputBinding']['requiredUseAmmoMaximum']==0 for v in variants)
+    same_item = [(op,81234 if arg==91234 else arg) for op,arg in prefix]
+    assert all(v['inputBinding'] is None for v in _arithmetic_variant_row(_arithmetic_variant_fixture(prefix=same_item))['conditionalArithmeticVariants'])
+
+
+def test_arithmetic_initializer_foreign_entry_withholds_binding():
+    code = _arithmetic_variant_fixture()
+    code.insert(0, VariantInstruction(-1,'br',2))
+    assert all(v['inputBinding'] is None for v in _arithmetic_variant_row(code)['conditionalArithmeticVariants'])
+
+
+def test_arithmetic_unreachable_guard_withholds_binding():
+    variants = _arithmetic_variant_row(_arithmetic_variant_fixture(prefix=[('ret',None)]))['conditionalArithmeticVariants']
+    assert all(v['inputBinding'] is None for v in variants)
+
+
+def test_arithmetic_local_initialization_is_not_current_value():
+    prefix = [('ldarg',2),('ldfld','Terraria.Item.shootSpeed'),('stloc',1),
+              ('ldloc',1),('const',7.0),('mul',None),('stloc',1)]
+    variants = _arithmetic_variant_row(_arithmetic_variant_fixture(prefix=prefix))['conditionalArithmeticVariants']
+    provenance = variants[1]['localUpdates'][0]['initializationProvenance']
+    assert provenance['source']=={'kind':'argument_field','argument':2,'field':'Terraria.Item.shootSpeed'}
+    assert len(provenance['interveningWriteOrAddressOffsets'])==1
+    assert 'does not equate' in provenance['scope']

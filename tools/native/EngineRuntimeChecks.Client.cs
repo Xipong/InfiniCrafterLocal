@@ -624,6 +624,56 @@ internal static partial class EngineRuntimeChecks
         finally { Environment.SetEnvironmentVariable(timeoutKey, oldTimeout); }
     }
 
+    private static async System.Threading.Tasks.Task CraftGzipTransportPreservesRequestAsync()
+    {
+        const int oldBodyLimit = 2 * 1024 * 1024;
+        foreach (int byteLength in new[] { 64 * 1024, oldBodyLimit - 1, oldBodyLimit, oldBodyLimit + 1 })
+        {
+            string json = "{\"x\":\"" + new string('x', byteLength - 8) + "\"}";
+            using var content = GeneratorClient.CreateCraftHttpContent(json);
+            Equal(byteLength > oldBodyLimit, content.Headers.ContentEncoding.Contains("gzip"), "all previously admissible requests remain plain JSON");
+            if (byteLength <= oldBodyLimit)
+                Equal(json, await content.ReadAsStringAsync(), "legacy server sees original plain bytes");
+        }
+        using (var unicode = GeneratorClient.CreateCraftHttpContent("{\"x\":\"" + new string('Ж', oldBodyLimit / 2) + "\"}"))
+            Equal(true, unicode.Headers.ContentEncoding.Contains("gzip"), "threshold measures UTF-8 bytes, not UTF-16 characters");
+        string large = new string('x', 3 * 1024 * 1024);
+        foreach (string json in new[] { "{\"text\":\"Тест\"}", JsonSerializer.Serialize(new {
+            worldId = 7,
+            itemA = new { directProjectileRaw = new { source = large, value = (int?)null },
+                          effectiveProjectileRaw = new { source = large, value = 0 },
+                          fingerprint = new { directProjectileRaw = new { source = large, value = false } } },
+            itemB = new { ordered = new object?[] { null, 0, false, 0, null } },
+        }) })
+        {
+            using var content = GeneratorClient.CreateCraftHttpContent(json);
+            byte[] wire = await content.ReadAsByteArrayAsync();
+            bool compressed = content.Headers.ContentEncoding.Contains("gzip");
+            Equal(System.Text.Encoding.UTF8.GetByteCount(json) > oldBodyLimit, compressed, "large requests use declared gzip");
+            Equal("application/json", content.Headers.ContentType!.MediaType!, "JSON media type retained");
+            Equal(true, wire.Length < 2 * 1024 * 1024, "large repeated source fits ingress cap");
+            using var raw = new System.IO.MemoryStream(wire);
+            using var decoded = compressed ? new System.IO.Compression.GZipStream(raw, System.IO.Compression.CompressionMode.Decompress) : (System.IO.Stream)raw;
+            using var reader = new System.IO.StreamReader(decoded, System.Text.Encoding.UTF8);
+            Equal(json, await reader.ReadToEndAsync(), "gzip restores original UTF-8 JSON exactly");
+
+            await using var server = new CraftHttpFixture(0) { FatalGeneration = true };
+            var client = new GeneratorClient { Endpoint = server.Endpoint };
+            var request = new GeneratorClient.PreparedGenerationRequest { PayloadJson = json };
+            _ = await System.Threading.Tasks.Task.Run(() => client.GeneratePreparedBlocking(request)).WaitAsync(TimeSpan.FromSeconds(15));
+            Equal(422, request.FailureStatusCode, "request reaches expected terminal response");
+            Equal("cache,generate", string.Join(",", server.Requests), "both send paths retained");
+            Equal(compressed ? "gzip,gzip" : "identity,identity", string.Join(",", server.ContentEncodings), "both paths declare actual body coding");
+            string[] received = server.Payloads.ToArray();
+            var cache = System.Text.Json.Nodes.JsonNode.Parse(received[0])!.AsObject();
+            Equal(true, cache["cacheOnly"]!.GetValue<bool>(), "cache-only flag decoded before consumer");
+            cache.Remove("cacheOnly");
+            Equal(true, System.Text.Json.Nodes.JsonNode.DeepEquals(System.Text.Json.Nodes.JsonNode.Parse(json), cache), "cache lookup sees all original fields");
+            Equal(json, received[1], "generation receives exact original JSON bytes");
+            Equal(json, request.PayloadJson, "prepared payload is not rewritten");
+        }
+    }
+
     private static void CacheOnlyFlagPreservesRequest()
     {
         var method = typeof(GeneratorClient).GetMethod("WithCacheOnlyFlag", BindingFlags.Static | BindingFlags.NonPublic)!;

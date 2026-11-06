@@ -24,7 +24,14 @@ internal static partial class EngineRuntimeChecks
             // Main's static world/player path fields require Program.SavePath.
             // Supply an isolated directory, never the player's actual saves.
             Terraria.Program.SavePath = sandbox;
+            typeof(Terraria.Program).GetProperty("SavePathShared", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!
+                .SetValue(null, sandbox);
             Terraria.Main.dedServ = true;
+            if (args.Length == 2 && args[0] == "--capture-parent-context")
+            {
+                CaptureParentContext(args[1]);
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--profile-parent-analysis")
             {
                 ParentAnalysisFrameProfiling();
@@ -54,6 +61,23 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("bundled decompiler exact binary and official resource packaging", BundledDecompilerUsesOfficialResourcePackaging),
+            ("weapon replacement profiles preserve native mechanics", WeaponReplacementProfilesPreserveNativeMechanics),
+            ("weapon replacement profiles conditional opaque hook evidence", WeaponReplacementProfilesKeepConditionalAndOpaqueHookEvidence),
+            ("weapon replacement profiles deferred cancellation parity", WeaponReplacementProfilesMatchDeferredAndCancelledCapture),
+            ("parent source sparse locals match dense oracle", ParentSourceSparseLocalsMatchDenseOracle),
+            ("native CSharp source exact PE identity and no execution", NativeCSharpSourceVerifiesExactPeWithoutExecution),
+            ("native CSharp source closed regions and all windows", NativeCSharpRegionsKeepAllWindowsAndRefuseNonlocalDependencies),
+            ("native CSharp source actual Last Prism helper inline and links", NativeCSharpLastPrismRetainsReadableHelperAndInlineEffects),
+            ("projectile inline mutable effects source and work bounds", ProjectileInlineEffectsRetainMutableSource),
+            ("projectile inline last prism admission scan and opacity", ProjectileInlineLastPrismSourceRetainsAdmissionAndScan),
+            ("projectile helper spawn native last prism reference", ProjectileHelperSpawnLastPrismReference),
+            ("projectile helper spawn conditional unknown control flow", ProjectileHelperSpawnSlicesKeepUnknownControlFlow),
+            ("projectile helper spawn independent budget refusals", ProjectileHelperSpawnSlicesKeepBudgetRefusals),
+            ("projectile helper spawn exact source table merge", ProjectileHelperSpawnExactMergeIsLossless),
+            ("parent conditional shot alternatives source only", ParentConditionalShotAlternativesRemainSourceOnly),
+            ("craft gzip transport preserves cache and generation payloads", () => CraftGzipTransportPreservesRequestAsync().GetAwaiter().GetResult()),
+            ("parent fingerprint excludes readable source view metadata", ParentFingerprintExcludesReadableSourceViews),
             ("audit native pure definition projections", AuditProjectionsDoNotNormalizeSource),
             ("audit native failed network copy refusal", AuditNetworkCopyFailureNeverAliasesOriginal),
             ("audit native atlas All early return", AuditAtlasAllSkipsEffectTraversal),

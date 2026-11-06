@@ -366,6 +366,38 @@ public sealed partial class GeneratorClient
         fingerprint["runtimeFacts"] = native.RuntimeFacts.DeepClone();
         fingerprint["autoFeatures"] = JsonSerializer.SerializeToNode(autoFeatures, WireJsonOptions);
         fingerprint["nameTokens"] = JsonSerializer.SerializeToNode(nameTokens, WireJsonOptions);
+        // Source jobs are unresolved markers during capture. Project this owned
+        // fingerprint only after resolving them; the request's root observations
+        // and the shared source-program cache keep their complete source views.
+        return currentParentAnalysis is { } analysis
+            ? analysis.Defer(() => FingerprintSourceFacts(analysis.Resolve(fingerprint)!.AsObject()))
+            : FingerprintSourceFacts(fingerprint);
+    }
+
+    private static JsonObject FingerprintSourceFacts(JsonObject fingerprint)
+    {
+        void Visit(JsonNode? node)
+        {
+            if (node is JsonObject value)
+            {
+                // This declared family is a display supplement, including its
+                // future display-format versions. Native graphs, certificates,
+                // unknown source families and meaningful nulls remain identity
+                // facts; only this recognized optional view is excluded.
+                if (value["source"] is JsonValue source && source.TryGetValue<string>(out string? owner)
+                    && owner == "read_only_native_attack_source"
+                    && value["version"] is JsonValue attackVersion && attackVersion.TryGetValue<int>(out int nativeVersion) && nativeVersion == 1
+                    && value["nativeCSharpSource"] is JsonObject view
+                    && view["source"] is JsonValue viewSource && viewSource.TryGetValue<string>(out string? family)
+                    && family == "verified_decompiled_native_csharp"
+                    && view["version"] is JsonValue viewVersion && viewVersion.TryGetValue<int>(out int version) && version > 0)
+                    value.Remove("nativeCSharpSource");
+                foreach (var property in value) Visit(property.Value);
+            }
+            else if (node is JsonArray array)
+                foreach (var child in array) Visit(child);
+        }
+        Visit(fingerprint);
         return fingerprint;
     }
 
@@ -583,7 +615,22 @@ public sealed partial class GeneratorClient
         }
 
         if (item.useAmmo <= AmmoID.None)
-            return null;
+        {
+            if (item.shoot <= ProjectileID.None) return null;
+            var shotSemantics = CaptureAmmoProjectileSemantics(item);
+            bool hasArithmetic = shotSemantics["stages"]!.AsArray().OfType<JsonObject>().Any(stage =>
+                stage["conditionalArithmeticVariants"] is JsonArray alternatives && alternatives.Count > 0);
+            if (!hasArithmetic) return null;
+            // Source-derived alternatives also belong to weapons that do not
+            // consume ammunition. Reuse the existing source-profile transport;
+            // this mode does not invent an ammo category or final shot outcome.
+            return new
+            {
+                mode = "weapon_without_ammo_source_alternatives",
+                projectileSemanticsReference = shotSemantics,
+                nativeReplacementProjectileRaw = CaptureSourceReplacementProjectileProfiles(item, shotSemantics)
+            };
+        }
 
         var inventory = FindPlayerAmmoCandidates(item.useAmmo, player, 3, out string inventoryStatus);
         var fallback = FindRepresentativeAmmoCandidates(item.useAmmo, 3);
@@ -593,13 +640,19 @@ public sealed partial class GeneratorClient
         bool KeepInputProfile(AmmoCandidate candidate) => bindings[candidate]["includeInputProjectileProfile"]!.GetValue<bool>();
         var replacementTypes = bindings.Values.Where(binding => binding["includeReplacementProjectileProfile"]!.GetValue<bool>())
             .Select(binding => binding["sourceRuleOutputProjectileId"]!.GetValue<int>()).Distinct().Take(3).ToArray();
+        var replacementProfiles = CaptureSourceReplacementProjectileProfiles(item, semantics);
+        var sourceProfileTypes = replacementProfiles.OfType<JsonObject>()
+            .Select(profile => profile["type"]!.GetValue<int>()).ToHashSet();
+        foreach (int type in replacementTypes)
+            if (!sourceProfileTypes.Contains(type))
+                replacementProfiles.Add(JsonSerializer.SerializeToNode(SourceReplacementProjectileRaw(type, item), WireJsonOptions));
         return new
         {
             mode = "weapon_uses_ammo",
             ammoId = item.useAmmo,
             projectileSemanticsReference = semantics,
             candidateProjectileBindings = bindings.Values.ToArray(),
-            nativeReplacementProjectileRaw = replacementTypes.Select(type => SourceReplacementProjectileRaw(type, item)).ToArray(),
+            nativeReplacementProjectileRaw = replacementProfiles,
             playerInventoryObservation = new
             {
                 source = "Player.inventory",

@@ -5,9 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from infini_local.pipelines.context.cards import parent_context_for_stage, raw_parent_card_for_llm
+from infini_local.pipelines.context.parent_stage import parent_context_for_stage
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 from infini_local.pipelines.context.attack_tables import unpack_attack_tables
-from prompt_packet_helpers import request_dossier, expand_native_source_references
+from prompt_packet_helpers import request_dossier, expand_native_source_references, expand_native_identifier_aliases
 
 
 def _native():
@@ -107,7 +108,8 @@ def test_unknown_draw_kept_and_parent_names_do_not_select_projection(stage, as_l
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("mutation", ["future_outer", "null_programs", "null_observations",
-                                     "future_program", "future_row", "future_coverage", "future_admission"])
+                                     "future_program", "future_row", "future_coverage", "future_admission",
+                                     "null_effects", "future_effect_program"])
 def test_unknown_native_source_remains_literal_through_actual_author(monkeypatch, mode, mutation):
     from infini_local.core import llm_config
     from infini_local.pipelines.author.request import build_initial_author_request
@@ -122,6 +124,11 @@ def test_unknown_native_source_remains_literal_through_actual_author(monkeypatch
         source["motion"]["programs"] = None
     elif mutation == "null_observations":
         source["motion"]["programs"][0]["observations"] = None
+    elif mutation == "null_effects":
+        source["motionDispatchEffects"] = None
+    elif mutation == "future_effect_program":
+        source["motionDispatchEffects"] = [{**copy.deepcopy(source["motion"]["programs"][0]),
+                                           "futureBinding": {"sourceRef": "draw.programs"}}]
     else:
         container = {"future_program": source["motion"]["programs"][0],
                      "future_row": source["motion"]["programs"][0]["observations"][0],
@@ -149,6 +156,93 @@ def test_visual_vfx_keep_complete_drawing_but_briefs_never_claim_final_palette()
         assert appearance["sourceColorWrites"][0]["expression"] == "writeRGB(tint1,180,160,60)"
 
 
+def test_dispatch_effect_programs_follow_the_existing_author_and_presentation_contracts():
+    from infini_local.pipelines.author.request import build_initial_author_request
+    from infini_local.pipelines.context.presentation import presentation_parent_card_for_llm
+
+    item = _native()
+    source = unpack_attack_tables(raw_parent_card_for_llm(item)["raw"]["directProjectile"]["attackReference"])
+    source["motionDispatchEffects"] = [copy.deepcopy(source["motion"]["programs"][0]),
+        {"method": "T.Projectile.RefusedSource", "coverage": "unknown", "unresolved": "source_work_bound"}]
+    item["directProjectileRaw"]["attackReference"] = source
+    before = copy.deepcopy(item)
+    request, _, _ = build_initial_author_request(item, {}, "dispatch-effects", model_name="offline")
+    dossier = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
+    attack = unpack_attack_tables(dossier["parents"]["A"]["packet"]["raw"]["directProjectile"]["attackReference"])
+    assert "draw" not in attack
+    assert attack["motionDispatchEffects"][0] == attack["motion"]["programs"][0]
+    assert "operations" in attack["motionDispatchEffects"][0]
+    assert attack["motionDispatchEffects"][1] == source["motionDispatchEffects"][1]
+    for stage in ("visual", "vfx"):
+        profile = presentation_parent_card_for_llm(item, stage=stage)["raw"]["directProjectile"]
+        presentation = unpack_attack_tables(profile["attackReference"])
+        assert "draw" in presentation and "motionDispatchEffects" not in presentation
+    assert item == before
+
+
+def test_actual_author_projects_root_ammo_replacement_and_child_sources_consistently():
+    """The profile's source location must not change its delivered gameplay view."""
+    from infini_local.pipelines.author.request import build_initial_author_request
+
+    item = _native()
+    child = copy.deepcopy(item["directProjectileRaw"])
+    child["light"] = 0.25
+    links = {"source": "native_single_hop_projectile_references", "version": 1,
+             "scope": "Source profile links, not observed spawned projectiles", "sourceCalls": [],
+             "references": [{"type": child["type"], "sourceCallIndices": [], "profile": child},
+                            {"type": child["type"], "sourceCallIndices": [], "profile": copy.deepcopy(child)}]}
+    item["directProjectileRaw"]["referencedProjectiles"] = links
+    item["effectiveProjectileRaw"] = copy.deepcopy(child)
+    item["ammoRaw"] = {"mode": "this_item_is_ammo", "projectileRaw": copy.deepcopy(child),
+                       "weaponShootFieldProjectileRaw": copy.deepcopy(child),
+                       "nativeReplacementProjectileRaw": [copy.deepcopy(child), copy.deepcopy(child)]}
+    before = copy.deepcopy(item)
+    request, _, _ = build_initial_author_request(item, {}, "all-source-locations", model_name="offline")
+    dossier = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
+    raw = dossier["parents"]["A"]["packet"]["raw"]
+    direct = raw["directProjectile"]
+    profiles = [direct, raw["effectiveProjectile"], raw["ammo"]["projectileRaw"],
+                raw["ammo"]["weaponShootFieldProjectileRaw"], *raw["ammo"]["nativeReplacementProjectileRaw"],
+                *(row["profile"] for row in direct["referencedProjectiles"]["references"])]
+    expected = unpack_attack_tables(profiles[0]["attackReference"])
+    assert "draw" not in expected and "operations" in expected["motion"]["programs"][0]
+    assert all(unpack_attack_tables(profile["attackReference"]) == expected for profile in profiles)
+    assert direct["referencedProjectiles"]["sourceCalls"] == links["sourceCalls"]
+    assert len(direct["referencedProjectiles"]["references"]) == 2
+    assert len(raw["ammo"]["nativeReplacementProjectileRaw"]) == 2
+    appearance = dossier["parentBriefs"]["A"]["appearance"]
+    for path in ("effectiveProjectile", "ammo.projectileRaw", "ammo.weaponShootFieldProjectileRaw",
+                 "ammo.nativeReplacementProjectileRaw[0]", "ammo.nativeReplacementProjectileRaw[1]",
+                 "directProjectile.referencedProjectiles.references[0].profile",
+                 "directProjectile.referencedProjectiles.references[1].profile"):
+        assert appearance[path] == appearance["directProjectile"]
+    assert item == before
+
+
+@pytest.mark.parametrize("mutation", ["future_version", "future_envelope_field", "future_reference_field"])
+def test_actual_author_keeps_unfamiliar_child_reference_envelopes_literal(mutation):
+    from infini_local.pipelines.author.request import build_initial_author_request
+
+    item = _native()
+    links = {"source": "native_single_hop_projectile_references", "version": 1, "sourceCalls": [],
+             "references": [{"type": 7, "sourceCallIndices": [], "profile": copy.deepcopy(item["directProjectileRaw"])}]}
+    if mutation == "future_version":
+        links["version"] = 2
+    elif mutation == "future_envelope_field":
+        links["futureBinding"] = {"sourcePath": "references[0].profile.attackReference.draw"}
+    else:
+        links["references"][0]["futureBinding"] = {"sourcePath": "profile.attackReference.draw"}
+    item["directProjectileRaw"]["referencedProjectiles"] = links
+    before = copy.deepcopy(item)
+    expected = raw_parent_card_for_llm(item)["raw"]["directProjectile"]["referencedProjectiles"]
+    request, _, _ = build_initial_author_request(item, {}, "future-child-source", model_name="offline")
+    dossier = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
+    actual = dossier["parents"]["A"]["packet"]["raw"]["directProjectile"]["referencedProjectiles"]
+    assert actual == expected
+    assert "draw" in actual["references"][0]["profile"]["attackReference"]
+    assert item == before
+
+
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_real_arrow_selected_motion_and_raw_refusal_reach_actual_author(monkeypatch, mode):
     from infini_local.core import llm_config
@@ -166,7 +260,8 @@ def test_real_arrow_selected_motion_and_raw_refusal_reach_actual_author(monkeypa
     request, _, _ = build_initial_author_request({}, arrow, "real-arrow-source", model_name="offline")
     assert request["response_format"]["type"] == mode
     dossier = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
-    reference = unpack_attack_tables(dossier["parents"]["B"]["packet"]["raw"]["directProjectile"]["attackReference"])
+    literal_reference = unpack_attack_tables(dossier["parents"]["B"]["packet"]["raw"]["directProjectile"]["attackReference"])
+    reference = expand_native_identifier_aliases(literal_reference)
     program = reference["motion"]["programs"][0]
     assert program["method"] == "T.Projectile.AI_001"
     assert program["identitySelection"]["fullMethodCapture"] == {"coverage": "unknown", "unresolved": refusal}
@@ -198,7 +293,7 @@ def test_real_arrow_selected_motion_and_raw_refusal_reach_actual_author(monkeypa
     assert predicates["b49461"]["inputs"] == ["(ldflda(Entity.velocity,this)).Vector2.Y", "16"]
     assert len(definitions) == 0
     from infini_local.pipelines.context.attack_behavior import ordered_attack_context
-    assert reference == ordered_attack_context(unpack_attack_tables(raw_parent_card_for_llm(arrow)["raw"]["directProjectile"]["attackReference"]))
+    assert literal_reference == ordered_attack_context(unpack_attack_tables(raw_parent_card_for_llm(arrow)["raw"]["directProjectile"]["attackReference"]))
     assert arrow == before
 
 
@@ -217,7 +312,8 @@ def test_current_native_integration_slice_remains_conditional_in_author_request(
     request, _, _ = build_initial_author_request(*parents, 'current-integration', model_name='offline')
     dossier = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
     for label in ['A', 'B']:
-        reference = dossier['parents'][label]['packet']['raw']['directProjectile']['attackReference']
+        reference = expand_native_identifier_aliases(unpack_attack_tables(
+            dossier['parents'][label]['packet']['raw']['directProjectile']['attackReference']))
         integration = reference['positionIntegration']
         assert integration['identitySelection']['forCapturedIdentity'] is True
         operations = integration['operations']

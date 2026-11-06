@@ -113,7 +113,7 @@ internal static partial class EngineRuntimeChecks
                 + "rarityDetails,reuseDelay,shoot,shootProjectileFullName,shootSpeed,type,useAmmo,useAmmoCategoryName,useAnimation,useStyle,"
                 + "useStyleName,useTime,useTurn,value"),
                 string.Join(",", facts.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal)), label + " exact facts keys");
-            Equal(CanonicalParentFactJson(facts), CanonicalParentFactJson(fingerprint.GetProperty("runtimeFacts")), label + " same nested native facts");
+            AssertParentFingerprintNativeFacts(facts, fingerprint.GetProperty("runtimeFacts"), label + " nested native facts");
             foreach (JsonElement view in new[] { root, facts, fingerprint })
             {
                 Equal(nativeParent, view.TryGetProperty("parentSourceGraph", out JsonElement graph), label + " explicit graph presence by parent provenance");
@@ -134,7 +134,7 @@ internal static partial class EngineRuntimeChecks
                 if (root.TryGetProperty(property.Name, out JsonElement direct))
                     Equal(CanonicalParentFactJson(property.Value), CanonicalParentFactJson(direct), label + " root fact " + property.Name);
                 if (fingerprint.TryGetProperty(property.Name, out JsonElement repeated))
-                    Equal(CanonicalParentFactJson(property.Value), CanonicalParentFactJson(repeated), label + " fingerprint fact " + property.Name);
+                    AssertParentFingerprintNativeFacts(property.Value, repeated, label + " fingerprint fact " + property.Name);
             }
             if (label == "generated")
                 foreach (string key in new[] { "createTile", "createWall", "placeStyle" })

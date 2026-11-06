@@ -52,7 +52,8 @@ from infini_local.pipelines.author.prompt import (
     sharp_engine_fn_catalog_for_llm,
     source_wire_units_for_llm,
 )
-from infini_local.pipelines.context.cards import parent_context_for_stage, raw_parent_card_for_llm
+from infini_local.pipelines.context.parent_stage import parent_context_for_stage
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 from infini_local.pipelines.transport.client import (
     llm_chat_json,
     resolve_llm_model,
@@ -65,8 +66,11 @@ from infini_local.pipelines.transport.provider_wire import (
     llm_reasoning_system_suffix,
     with_llm_stage,
 )
-from infini_local.storage.trace_runtime import trace_event, trace_stage_request
+from infini_local.storage.trace_runtime import log_event, trace_event, trace_stage_request
 from infini_local.storage.trace_tools import trace_message_summary
+
+# Diagnostic threshold only; never an admission limit or a truncation target.
+AUTHOR_CONTEXT_WARN_CHARS = 350_000
 
 _AUTHOR_CACHE_PREFIX_KEYS = (
     "priorityHeader", "runtimeProgramInvariants",
@@ -120,6 +124,11 @@ def build_initial_author_request(
     selected_model = model_name or resolve_llm_model()
     system = _AUTHOR_SYSTEM + _item_language_instruction() + llm_reasoning_system_suffix(selected_model)
     user_content = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    if len(user_content) >= AUTHOR_CONTEXT_WARN_CHARS:
+        log_event("warn", f"Author context is {len(user_content)} characters (warning threshold {AUTHOR_CONTEXT_WARN_CHARS}); continuing without truncation", {
+            "stage": "author", "contextChars": len(user_content),
+            "warningThresholdChars": AUTHOR_CONTEXT_WARN_CHARS,
+        })
     request = {
         "model": selected_model,
         "messages": [

@@ -82,8 +82,25 @@ public sealed partial class GeneratorClient
             var window = code.Skip(n).Take(4).Concat(code.Skip(start).TakeWhile(i => i.Offset < end)).Take(rawLimit + 1).ToArray();
             if (window.Length > rawLimit)
             { gap?.Invoke("identity_window_raw_instruction_bound"); continue; }
-            if (meaningfulBudget && window.Count(i => i.Op != "nop") > 1024)
-            { gap?.Invoke("identity_window_meaningful_instruction_bound"); continue; }
+            if (meaningfulBudget)
+            {
+                // Inline AI regions need not be split into a parameterless helper.
+                // Bound actual CFG work within the existing raw window limit,
+                // rather than refusing a long straight-line source by its length.
+                // Branch targets count even when repeated or outside the slice;
+                // none are discarded to make a region fit the admission budget.
+                var targets = new HashSet<int>();
+                int flowWork = window.Count(i => i.Op != "nop");
+                foreach (var instruction in window)
+                {
+                    if (instruction.Op == "switch" && instruction.Arg is int[] arms)
+                    { flowWork += 8 + arms.Length; targets.UnionWith(arms); }
+                    else if (instruction.Arg is int target && (instruction.Op.StartsWith("b", StringComparison.Ordinal) || instruction.Op.StartsWith("leave", StringComparison.Ordinal)))
+                    { flowWork += 8; targets.Add(target); }
+                }
+                if (targets.Count > 256 || flowWork > 4096)
+                { gap?.Invoke("identity_window_control_flow_work_bound"); continue; }
+            }
             yield return (field.Name, literal, code[n + 3].Offset, window);
         }
     }

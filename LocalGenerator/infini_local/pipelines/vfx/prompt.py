@@ -12,7 +12,7 @@ from infini_local.core.vfx.repair import (
 )
 from infini_local.core.vfx.schema import _director_schema
 from infini_local.core.vfx.surface import vfx_director_surface
-from infini_local.pipelines.context.cards import parent_context_for_stage
+from infini_local.pipelines.context.parent_stage import parent_context_for_stage
 from infini_local.pipelines.context.presentation import presentation_parent_card_for_llm
 
 # Project invariant vocabulary from the canonical surface, never a second catalog.

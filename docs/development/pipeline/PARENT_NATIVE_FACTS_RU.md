@@ -339,3 +339,8 @@ SHA всего tModLoader — диагностическая идентично�
 В provenance различаются исходная проверенная экстракция (audited certificate и сохранённые данные экстракции) и текущая наблюдаемая сборка (`observed*`); старые signature tokens не объявляются токенами новой сборки. Existing registry values остаются текущими наблюдениями, а не константами из прошлого DLL.
 
 Карта сертификатов генерируется metadata-only инструментом `tools/generate/native_source_certificates/NativeSourceCertificates.csproj` из официального DLL и существующих `contracts/reports/native_*_sources.generated.json`; общий `NativeSourceFingerprint` используется и генератором, и runtime. Аргументы: `<assembly> <reports directory> <output NativeSourceCertificates.g.cs> [--check]`, MSBuild property `InfiniTmlReferenceDir` указывает существующие tML reference assemblies. Неразрешённый или неоднозначный обязательный source key прерывает генерацию, а не создаёт частичный сертификат.
+
+
+## Source analysis и compact Author view
+
+[Контракт source analysis, сжатия, warning и транспорта](PARENT_SOURCE_ANALYSIS_RU.md). Сохраняются main inventory/fallback ammo observations, отдельные root/fingerprint envelopes и source-only cache isolation.

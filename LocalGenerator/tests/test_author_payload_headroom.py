@@ -1,7 +1,7 @@
 
 from prompt_packet_helpers import expand_catalog_targets, request_dossier
 
-"""Real builder admission, no provider calls or synthetic responses."""
+"""Author size metrics and lossless delivery to offline provider boundaries."""
 import copy
 import json
 from typing import Any
@@ -13,6 +13,7 @@ from infini_local.pipelines.author.prompt import PLANNER_PROMPT_LIMIT_CHARS, PLA
 from infini_local.pipelines.author.request import build_initial_author_request
 from test_author_request_compaction import _expand_constraint_references
 from test_source_unit_guidance import _serialized_chat_request
+from test_provider_transport_contract import loopback_transport
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
@@ -259,7 +260,7 @@ def test_retired_loaded_status_vocabulary_never_reaches_author_or_changes_litera
     assert source == before
 
 
-def test_author_budget_is_the_authorized_300k_for_complete_attack_source_context():
+def test_author_development_size_target_remains_300k():
     assert PLANNER_PROMPT_LIMIT_CHARS == 300_000
 
 
@@ -275,20 +276,104 @@ def test_shared_target_kind_sets_preserve_every_exact_capability_domain():
         assert ("targets" in card) != ("targetsRef" in card)
 
 
-@pytest.mark.parametrize("extra_room", [None, 31], ids=["declared-limit", "changed-limit"])
-def test_decimal_character_guard_accepts_exact_boundary_and_rejects_next_unicode_character(monkeypatch, extra_room):
+@pytest.mark.parametrize("target_chars", [300_000, 300_001, 349_999, 350_000, 400_000, 400_001])
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("api_mode", ["chat_completions", "responses"])
+def test_author_above_development_target_reaches_http_without_clipping(
+        monkeypatch, loopback_transport, target_chars, mode, api_mode):
     from infini_local.pipelines.author import prompt
+    from infini_local.pipelines.transport import client as transport
+    from infini_local.pipelines.author import request as author_request
 
-    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
-    _, initial, _ = build_initial_author_request({}, {}, "", model_name="offline")
-    if extra_room is not None:
-        monkeypatch.setattr(prompt, "PLANNER_PROMPT_LIMIT_CHARS", len(initial) + extra_room)
-    limit = prompt.PLANNER_PROMPT_LIMIT_CHARS
-    key = "Ж" * (limit - len(initial))
-    before = copy.deepcopy(key)
-    request, text, _ = build_initial_author_request({}, {}, key, model_name="offline")
-    assert len(text) == limit
-    assert len(text.encode("utf-8")) > limit
-    assert request_dossier(request)["recipeKey"] == key == before
-    with pytest.raises(ValueError):
-        build_initial_author_request({}, {}, key + "Ж", model_name="offline")
+    warnings = []
+    monkeypatch.setattr(author_request, "log_event", lambda *args: warnings.append(args))
+
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
+    from test_parent_attack_reference import source_defined_attack_fixture
+    from prompt_packet_helpers import expand_native_source_references
+
+    observation = source_defined_attack_fixture()
+    observation["sourceText"] = ""
+    parent = {"directProjectileRaw": {"type": 42, "attackReference": observation}}
+    _, initial, _ = build_initial_author_request(parent, {}, "size-probe", model_name="offline")
+    observation["sourceText"] = "Ж" * (target_chars - len(initial))
+    parent_before = copy.deepcopy(parent)
+    request, text, _ = build_initial_author_request(parent, {}, "size-probe", model_name="offline")
+    before = copy.deepcopy(request)
+    assert len(text) == target_chars
+    expected_warnings = [] if target_chars < 350_000 else [(
+        "warn", f"Author context is {target_chars} characters (warning threshold 350000); continuing without truncation",
+        {"stage": "author", "contextChars": target_chars, "warningThresholdChars": 350_000},
+    )]
+    assert warnings == expected_warnings  # No recipe key, parent data, or prompt content.
+    report = prompt.planner_prompt_usability_report(parent, {}, "size-probe")
+    assert report["chars"] == target_chars
+    assert report["ok"] is (target_chars <= 300_000)
+    assert report["headroom"] == 300_000 - target_chars
+    endpoint, _ = loopback_transport
+    base, observed = endpoint()
+    from infini_local.pipelines.transport import http as transport_http
+    raw_requests = []
+    real_open = transport_http.urlopen_no_redirect
+
+    def record_and_open(http_request, **kwargs):
+        raw_requests.append(http_request.data)
+        return real_open(http_request, **kwargs)
+
+    monkeypatch.setattr(transport_http, "urlopen_no_redirect", record_and_open)
+    result = transport._llm_json_single_context(request, 10, {
+        "provider": "openai_compat", "base_url": base, "model": "offline",
+        "api_mode": api_mode, "api_key": "", "profile_id": "offline-large-author",
+    })
+    assert result["choices"][0]["message"]["content"] == "{}"
+    assert len(observed) == 1
+    method, path, body, _ = observed[0]
+    assert len(raw_requests) == 1 and json.loads(raw_requests[0]) == body
+    assert method == "POST"
+    assert path.endswith("/responses" if api_mode == "responses" else "/chat/completions")
+    if api_mode == "chat_completions":
+        assert body["messages"] == request["messages"]
+    else:
+        assert body["instructions"] == request["messages"][0]["content"]
+        assert body["input"] == [{"role": row["role"], "content": row["content"]}
+                                 for row in request["messages"][1:]]
+    assert request_dossier(request) == json.loads(text)
+    dossier = expand_native_source_references(request_dossier(request))
+    assert dossier["parents"]["A"]["packet"]["raw"]["directProjectile"]["attackReference"] == observation
+    assert parent == parent_before
+    assert request == before
+    print(json.dumps({"apiMode": api_mode, "format": mode, "dossierChars": len(text),
+                      "requestUtf8Bytes": len(raw_requests[0])}))
+
+
+@pytest.mark.parametrize("target_chars", [349_999, 350_000, 400_001])
+def test_author_size_warning_written_without_context_content(monkeypatch, tmp_path, target_chars):
+    from infini_local.storage import trace_runtime
+    from test_parent_attack_reference import source_defined_attack_fixture
+
+    monkeypatch.setattr(trace_runtime, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(trace_runtime, "TRACE_PROMPTS_ENABLED", True)
+    monkeypatch.setattr(trace_runtime, "CONSOLE_EVENT_LEVELS", ())
+    observation = source_defined_attack_fixture()
+    observation["sourceText"] = ""
+    parent = {"directProjectileRaw": {"type": 42, "attackReference": observation}}
+    _, initial, _ = build_initial_author_request(parent, {}, "private-recipe", model_name="offline")
+    observation["sourceText"] = "Ж" * (target_chars - len(initial))
+    _, text, _ = build_initial_author_request(parent, {}, "private-recipe", model_name="offline")
+    assert len(text) == target_chars
+    path = tmp_path / "events.ndjson"
+    if target_chars < 350_000:
+        assert not path.exists()
+    else:
+        lines = path.read_text().splitlines()
+        assert len(lines) == 1
+        event = json.loads(lines[0])
+        assert event["level"] == "warn"
+        assert event["payload"] == {
+            "stage": "author", "contextChars": target_chars, "warningThresholdChars": 350_000,
+        }
+        assert event["message"] == (
+            f"Author context is {target_chars} characters (warning threshold 350000); continuing without truncation"
+        )
+        assert "private-recipe" not in lines[0]
+        assert "sourceText" not in lines[0] and "Ж" not in lines[0]

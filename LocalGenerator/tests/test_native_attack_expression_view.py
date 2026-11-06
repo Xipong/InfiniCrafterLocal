@@ -95,6 +95,74 @@ def test_full_qualified_symbol_metadata_has_reversible_readable_type_aliases():
     assert json.dumps(expand_attack_expressions(result)) == json.dumps(source)
 
 
+@pytest.mark.parametrize("source,expected", [
+    ("(this).Projectile.ai", "(this).P.ai"),
+    ("ldflda(Entity.velocity,this)", "ldflda(E.velocity,this)"),
+    ("Vector2.add[(this).Entity.position,Vector2.mul[(this).Entity.velocity,45]]",
+     "Vec.add[(this).E.position,Vec.mul[(this).E.velocity,45]]"),
+    ("set((this).Projectile.scale,(1+(l1@130*0.6)))", "set((this).P.scale,(1+(l1@130*0.6)))"),
+    ('Native.Call["Projectile,Entity,Vector2,P,E,Vec",-1E-05,-0.0]',
+     'Native.Call["Projectile,Entity,Vector2,P,E,Vec",-1E-05,-0.0]'),
+    ('Native.Call[{"Projectile":"Entity","P":"Vec"},["Vector2",0,false]]',
+     'Native.Call[{"Projectile":"Entity","P":"Vec"},["Vector2",0,false]]'),
+    ("SomeProjectile.Call[(other).EntityProxy.value]", "SomeProjectile.Call[(other).EntityProxy.value]"),
+    ("stfld(Projectile.rotation,this,add(Utils.ToRotation[ldfld(Entity.velocity,this)],unresolved_local_definition_bound(;1)))",
+     "stfld(Projectile.rotation,this,add(Utils.ToRotation[ldfld(Entity.velocity,this)],unresolved_local_definition_bound(;1)))"),
+])
+def test_native_namespace_aliases_preserve_expression_structure_and_opaque_literals(source, expected):
+    from infini_local.pipelines.context.attack_namespaces import shorten_expression_names
+    assert shorten_expression_names(source) == expected
+
+
+def test_native_namespace_aliases_preserve_complete_symbol_signature_and_overload_identity():
+    from infini_local.pipelines.context.attack_namespaces import shorten_symbol_name, shorten_symbol_signature
+    symbol = 'Projectile.NewProjectile#2'
+    signature = ('T.Projectile.NewProjectile(T.DataStructures.IEntitySource,Xna.Vector2,Xna.Vector2,int,float,'
+                 'ref T.Entity[],System.Nullable<Xna.Vector2>)')
+    assert shorten_symbol_name(symbol) == 'P.NewProjectile#2'
+    assert shorten_symbol_signature(signature) == (
+        'T.P.NewProjectile(T.DataStructures.IEntitySource,Xna.Vec,Xna.Vec,int,float,'
+        'ref T.E[],System.Nullable<Xna.Vec>)')
+    assert shorten_symbol_signature('Native.Name("Projectile",-1E-05)') == 'Native.Name("Projectile",-1E-05)'
+
+
+@pytest.mark.parametrize("source", ["P.type", "Native.E", "Vec.add[this,2]", "opaque<P.type>",
+                                    "opaque<(this).P.type>", "opaque<@E.field>"])
+def test_preexisting_native_namespace_alias_identifiers_refuse_reinterpretation(source):
+    from infini_local.pipelines.context.attack_namespaces import (
+        shorten_expression_names, shorten_symbol_name, shorten_symbol_signature,
+    )
+    for shorten in (shorten_expression_names, shorten_symbol_name, shorten_symbol_signature):
+        with pytest.raises(ValueError, match='collides'):
+            shorten(source)
+
+
+def test_namespace_aliases_are_scoped_to_successful_programs_and_preserve_symbol_links():
+    from infini_local.pipelines.context.attack_behavior import ordered_attack_context
+    from prompt_packet_helpers import expand_native_identifier_aliases
+
+    program = {"method": "T.Projectile.NativeAI", "symbols": {"Projectile.Read": "T.Projectile.Read(Xna.Vector2)"},
+               "dependencies": {}, "predicates": [], "observations": [
+                   {"kind": "call", "call": "Projectile.Read", "expression": '(this).Projectile.ai',
+                    "arguments": {"value": '"P,E,Vec,Projectile"'}, "step": 0, "block": 1, "requiredPredicates": []}]}
+    refused = copy.deepcopy(program)
+    refused["observations"][0]["expression"] = 'Native.Call[P.source,(this).Projectile.ai]'
+    before = copy.deepcopy((program, refused))
+    result = ordered_attack_context({"programs": [program, refused]})
+    accepted, literal = result["programs"]
+    assert accepted["nativeNames"] == 1
+    assert accepted["method"] == 'T.P.NativeAI'
+    assert accepted["operations"][0]["call"] == 'P.Read'
+    assert accepted["symbols"] == {'P.Read': 'T.P.Read(Xna.Vec)'}
+    assert 'nativeNames' not in literal
+    assert literal["operations"][0]["expression"] == refused["observations"][0]["expression"]
+    decoded = expand_native_identifier_aliases(result)
+    assert decoded["programs"][0]["operations"] == program["observations"]
+    assert decoded["programs"][0]["symbols"] == program["symbols"]
+    assert decoded["programs"][1] == literal
+    assert (program, refused) == before
+
+
 def test_unknown_nested_fields_and_literal_tooltips_are_not_interpreted():
     source = attack_fixture()
     source["future"] = {"expression": "mul(1,2)", "tooltipLines": ["add(1,2)"]}

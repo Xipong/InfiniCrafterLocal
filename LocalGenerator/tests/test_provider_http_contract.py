@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from email.message import Message
+import gzip
 import io
 import json
 from pathlib import Path
@@ -196,6 +197,109 @@ def test_post_body_validation_has_bounded_exact_failure(monkeypatch, body, lengt
     assert stream.read_calls == reads
     if timeout:
         assert handler.connection.set_calls == [JSON_BODY_READ_TIMEOUT_SECONDS, None]
+
+
+@pytest.mark.parametrize("cache_only", [False, True])
+@pytest.mark.parametrize("cache_hit", [False, True])
+def test_gzip_combine_preserves_entire_payload_before_cache_and_generation(monkeypatch, cache_only, cache_hit):
+    from infini_local.services import combine_endpoint
+    from infini_local.storage.world_recipe_runtime import recipe_key
+
+    # Repeated source is intentionally unequal between direct/effective and
+    # fingerprint projections. No alias assumption may erase either observation.
+    source = "const string text = \"Тест { }\";\n" * 30000
+    payload = {"worldId": 7, "cacheOnly": cache_only,
+               "itemA": {"type": 1, "name": "Тест", "directProjectileRaw": {"source": source, "value": None},
+                         "effectiveProjectileRaw": {"source": source, "value": 0},
+                         "fingerprint": {"directProjectileRaw": {"source": source, "value": False}}},
+               "itemB": {"type": 2, "name": "B", "values": [None, 0, False, 0, None]}}
+    original = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
+    encoded = gzip.compress(original, compresslevel=1)
+    assert len(original) > MAX_JSON_BODY_BYTES > len(encoded)
+    handler, capture = boundary_handler(monkeypatch, body=encoded)
+    handler.headers["Content-Encoding"] = "gzip"
+    # Keep the real endpoint owner and verify the decoded object reaches both
+    # consumers, including cache-only requests that must never start generation.
+    monkeypatch.setattr(server_handler, "combine_endpoint", combine_endpoint)
+    seen = []
+    expected_key = recipe_key(payload["itemA"], payload["itemB"], "7")
+
+    def lookup(value):
+        assert json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode() == original
+        assert recipe_key(value["itemA"], value["itemB"], "7") == expected_key
+        seen.append("cache")
+        return expected_key, {"id": "cached-result"} if cache_hit else None
+
+    def generate(value):
+        assert json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode() == original
+        seen.append("generate")
+        return {"id": "test-result"}
+
+    monkeypatch.setattr(server_handler.combine_pipeline, "combine_cache_lookup", lookup)
+    monkeypatch.setattr(server_handler.combine_pipeline, "combine", generate)
+    monkeypatch.setattr(server_handler, "sanitize_recipe_for_delivery", lambda value: value)
+    monkeypatch.setattr(server_handler, "trace_event", lambda *_a, **_kw: None)
+    monkeypatch.setattr(server_handler.generation_debug, "clear_combine_failure", lambda *_: None)
+    handler.do_POST()
+    assert capture.code == (404 if cache_only and not cache_hit else 200)
+    assert seen == (["cache"] if cache_only or cache_hit else ["cache", "generate"])
+
+
+@pytest.mark.parametrize("case", ["truncated", "checksum", "trailing", "second-member", "empty",
+                                  "duplicate-json-key", "non-object", "non-finite", "invalid-utf8"])
+def test_gzip_combine_rejects_invalid_stream_and_strict_json(monkeypatch, case):
+    body = gzip.compress(b"{}")
+    if case == "truncated":
+        body = body[:-1]
+    elif case == "checksum":
+        body = body[:-8] + bytes([body[-8] ^ 1]) + body[-7:]
+    elif case == "trailing":
+        body += b"trailing"
+    elif case == "second-member":
+        body += gzip.compress(b"{}")
+    elif case == "empty":
+        body = b""
+    else:
+        body = gzip.compress({"duplicate-json-key": b'{"x":1,"x":2}', "non-object": b"[]",
+                              "non-finite": b'{"x":NaN}', "invalid-utf8": b'{"x":"\xff"}'}[case])
+    handler, capture = boundary_handler(monkeypatch, body=body)
+    handler.headers["Content-Encoding"] = "gzip"
+    handler.do_POST()
+    assert capture.code == 400 and capture.payload["error"] == "invalid_json"
+
+
+def test_gzip_combine_keeps_compressed_wire_size_bound_before_read(monkeypatch):
+    body = ReadProbe(b"", forbidden=True)
+    handler, capture = boundary_handler(monkeypatch, body=body, length=MAX_JSON_BODY_BYTES + 1)
+    handler.headers["Content-Encoding"] = "gzip"
+    handler.do_POST()
+    assert capture.code == 413 and body.read_calls == 0
+
+
+@pytest.mark.parametrize("extra", [0, 1])
+def test_gzip_combine_has_independent_exact_decoded_size_bound(monkeypatch, extra):
+    monkeypatch.setattr(server_handler, "MAX_COMBINE_DECODED_BODY_BYTES", 1024)
+    body = gzip.compress(b'{"x":"' + b"a" * (1016 + extra) + b'"}')
+    handler, capture = boundary_handler(monkeypatch, body=body)
+    handler.headers["Content-Encoding"] = "gzip"
+    handler.do_POST()
+    assert capture.code == (413 if extra else 200)
+
+
+@pytest.mark.parametrize("path,encodings", [
+    ("/combine", ["br"]), ("/combine", ["gzip, identity"]), ("/combine", [""]),
+    ("/combine", ["gzip", "gzip"]), ("/shutdown", ["gzip"]), ("/debug/vfx", ["gzip"]),
+])
+def test_unsupported_request_codings_are_rejected_before_read(monkeypatch, path, encodings):
+    body = ReadProbe(b"{}", forbidden=True)
+    handler, capture = boundary_handler(monkeypatch, path=path, body=body, length=2)
+    handler.headers = Message()
+    handler.headers["Host"] = "127.0.0.1:5055"
+    handler.headers["Content-Length"] = "2"
+    for coding in encodings:
+        handler.headers["Content-Encoding"] = coding
+    handler.do_POST()
+    assert capture.code == 400 and body.read_calls == 0
 
 
 @pytest.mark.parametrize("owner,method,path,accepted", [

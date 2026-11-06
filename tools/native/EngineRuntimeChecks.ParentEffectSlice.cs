@@ -51,9 +51,10 @@ internal static partial class EngineRuntimeChecks
     private static void ParentEffectSliceKeepsConditionsClocksAndLoops()
     {
         Equal(1,ReadParentWindows(ParentWindowFixture(1024,100),123,meaningfulBudget:true).Windows.Count,"narrow effect observation admits nop padding within semantic work budget");
-        var overflow=ReadParentWindows(ParentWindowFixture(1026,0),123,meaningfulBudget:true);
-        Equal(0,overflow.Windows.Count,"semantic work overflow remains refused");
-        Equal(true,overflow.Gaps.Contains("identity_window_meaningful_instruction_bound"),"semantic refusal explicit");
+        Equal(1,ReadParentWindows(ParentWindowFixture(2048,0),123,meaningfulBudget:true).Windows.Count,"bounded straight-line inline effects do not require helper extraction");
+        var overflow=ReadParentWindows(ParentWindowFixture(4096,0),123,meaningfulBudget:true);
+        Equal(0,overflow.Windows.Count,"combined instruction and branch work overflow remains refused");
+        Equal(true,overflow.Gaps.Contains("identity_window_control_flow_work_bound"),"control flow work refusal explicit");
         Equal(0,ReadParentWindows(ParentWindowFixture(4,4093),123,meaningfulBudget:true).Windows.Count,"raw nop-flood cap retained");
         EffectSliceExecuted=0;
         var facts=GeneratorClient.InspectProjectileAttackSource(typeof(EngineRuntimeChecks).GetMethod(nameof(EffectSliceFixture),BindingFlags.NonPublic|BindingFlags.Static)!,"dispatch");

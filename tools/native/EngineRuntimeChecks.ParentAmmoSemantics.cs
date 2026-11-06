@@ -19,6 +19,37 @@ internal static partial class EngineRuntimeChecks
         return (JsonObject)capture!.Invoke(null, new object[] { item })!;
     }
 
+    private static void ParentConditionalShotAlternativesRemainSourceOnly()
+    {
+        using var state = new NativeActorState();
+        var item = new Item(ItemID.NebulaBlaze);
+        var semantics = AmmoSemantics(item);
+        var variants = semantics["stages"]!.AsArray().OfType<JsonObject>()
+            .SelectMany(stage => (stage["conditionalArithmeticVariants"] as JsonArray ?? new JsonArray()).OfType<JsonObject>()).ToArray();
+        Equal(2, variants.Length, "both source arithmetic arms retained");
+        Equal(20, variants[0]["conditionalProbability"]!["numerator"]!.GetValue<int>(), "source numerator");
+        Equal(100, variants[0]["conditionalProbability"]!["denominator"]!.GetValue<int>(), "source denominator");
+        Equal(1, variants[0]["projectileOffset"]!.GetValue<int>(), "source projectile arithmetic");
+        var speedOrigin = variants[1]["localUpdates"]![0]!["initializationProvenance"]!;
+        Equal("Terraria.Item.shootSpeed", speedOrigin["source"]!["field"]!.GetValue<string>(), "speed local has source initializer provenance");
+        Equal(true, speedOrigin["interveningWriteOrAddressOffsets"]!.AsArray().Count > 0, "speed initializer is not treated as current speed");
+        Equal("unknown_without_gameplay_execution", semantics["finalShotOutcome"]!.GetValue<string>(), "arithmetic is not gameplay execution");
+        var capture = typeof(GeneratorClient).GetMethod("CaptureSourceReplacementProjectileProfiles", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var profiles = (JsonArray)capture.Invoke(null, new object[] { item, semantics })!;
+        Equal(true, profiles.OfType<JsonObject>().Any(p => p["type"]!.GetValue<int>() == ProjectileID.NebulaBlaze2), "conditional alternate profile is present");
+        string evidence = profiles.ToJsonString();
+        Equal(true, evidence.Contains("conditional_on_source_item_field_snapshots_and_branch"), "input assumptions remain attached");
+        Equal(true, evidence.Contains("ModifyShootStats_and_Shoot_may_change_or_suppress"), "later hooks remain uncertain");
+        var rawCapture = typeof(GeneratorClient).GetMethod("AmmoRawFromItem", BindingFlags.Static | BindingFlags.NonPublic)!;
+        string transported = JsonSerializer.Serialize(rawCapture.Invoke(null, new object?[] { item, null }));
+        Equal(true, transported.Contains("weapon_without_ammo_source_alternatives"), "non-ammo source capture gate retains alternatives");
+        Equal(true, transported.Contains("conditionalArithmeticVariants"), "source arithmetic survives capture transport");
+        item.useAmmo = 1;
+        Equal(0, ((JsonArray)capture.Invoke(null, new object[] { item, semantics })!).Count, "unknown ammo input cannot produce projected alternatives");
+        item.useAmmo = 0; item.shoot = int.MaxValue;
+        Equal(0, ((JsonArray)capture.Invoke(null, new object[] { item, semantics })!).Count, "overflow or unregistered output cannot produce profiles");
+    }
+
     private static void ParentAmmoSourceSemanticsReachPrepare()
     {
         using var state = new NativeActorState();
@@ -53,7 +84,22 @@ internal static partial class EngineRuntimeChecks
             {
                 var bindings = raw.GetProperty("candidateProjectileBindings").EnumerateArray().Where(x => x.GetProperty("candidateSource").GetString()!.Contains("player_inventory")).ToArray();
                 Equal(projectile, bindings[0].GetProperty("sourceRuleOutputProjectileId").GetInt32(), "wooden input maps to native replacement");
-                Equal(ProjectileID.FireArrow, bindings[1].GetProperty("sourceRuleOutputProjectileId").GetInt32(), "special ammo bypasses conditional rewrite");
+                bool hasStateCondition = reference.GetProperty("stages").EnumerateArray()
+                    .SelectMany(stage => stage.GetProperty("rules").EnumerateArray())
+                    .Any(rule => rule.TryGetProperty("whenSourceCondition", out _));
+                if (hasStateCondition)
+                {
+                    Equal(JsonValueKind.Null, bindings[1].GetProperty("sourceRuleOutputProjectileId").ValueKind,
+                        "inventory identity cannot decide a source player-state condition");
+                    Equal(true, bindings[1].GetProperty("includeInputProjectileProfile").GetBoolean(),
+                        "unresolved alternative preserves the original candidate mechanics");
+                    Equal(true, raw.GetProperty("nativeReplacementProjectileRaw").EnumerateArray().Any(profile =>
+                        profile.GetProperty("sourceReferences").EnumerateArray().Any(source =>
+                            source.GetProperty("sourceFact").TryGetProperty("whenSourceCondition", out _))),
+                        "state-conditioned alternative retains its own profile and exact source predicate");
+                }
+                else
+                    Equal(ProjectileID.FireArrow, bindings[1].GetProperty("sourceRuleOutputProjectileId").GetInt32(), "special ammo bypasses conditional rewrite");
                 Equal(1, raw.GetProperty("playerInventoryProjectileRaw").GetArrayLength(), "only retained special input keeps its projectile profile");
                 Equal(ProjectileID.FireArrow, raw.GetProperty("playerInventoryProjectileRaw")[0].GetProperty("type").GetInt32(), "retained special profile is not discarded");
             }
