@@ -84,6 +84,23 @@ internal static partial class EngineRuntimeChecks
             (string)CSharpFixtureMember(SourcePerformanceRender(literalTree, false), "Code"), "code-only rendering preserves escaped CRLF literals");
         CSharpSourceRefuses(() => SourcePerformanceCreate("NativeCSharpDocument", literal, module, cancelled.Token), "canceled");
         Equal(true, ReferenceEquals(shared, CSharpFixtureMember(module, "typeSystem")), "cancelled document cannot retire shared state");
+
+        var conditionalEnds = CSharpOwner.GetMethod("CSharpConditionalEnds", CSharpFlags)!;
+        var ends = (IDictionary)conditionalEnds.Invoke(null, new object[] { method })!;
+        var raw = ((IEnumerable)CSharpOwner.GetMethod("ReadAmmoIl", CSharpFlags)!.Invoke(null,
+            new object[] { method, true, true })!).Cast<object>().ToArray();
+        var expectedEnds = raw.Zip(raw.Skip(1), (instruction, next) => (instruction, next))
+            .Where(pair => ((string)CSharpFixtureMember(pair.instruction, "Op")).StartsWith('b')
+                && (string)CSharpFixtureMember(pair.instruction, "Op") is not ("br" or "br.s" or "break"))
+            .ToDictionary(pair => (int)CSharpFixtureMember(pair.instruction, "Offset"), pair => (int)CSharpFixtureMember(pair.next, "Offset"));
+        Equal(true, expectedEnds.Count > 0, "conditional index oracle includes real branch instructions");
+        Equal(expectedEnds.Count, ends.Count, "conditional index preserves the old complete next-offset scan");
+        foreach (var pair in expectedEnds) Equal(pair.Value, (int)ends[pair.Key]!, "conditional branch end remains exact");
+        Equal(true, ReferenceEquals(ends, conditionalEnds.Invoke(null, new object[] { method })), "same IL decode reuses conditional index");
+        CSharpOwner.GetMethod("ClearProjectileAttackCaches", CSharpFlags)!.Invoke(null, null);
+        var rebuiltEnds = (IDictionary)conditionalEnds.Invoke(null, new object[] { method })!;
+        Equal(false, ReferenceEquals(ends, rebuiltEnds), "source invalidation cannot reuse the retired decode index");
+        foreach (var pair in expectedEnds) Equal(pair.Value, (int)rebuiltEnds[pair.Key]!, "rebuilt conditional index retains source offsets");
     }
 
     private static object SourcePerformanceGetDocument(MethodInfo method, CancellationToken cancellation = default)

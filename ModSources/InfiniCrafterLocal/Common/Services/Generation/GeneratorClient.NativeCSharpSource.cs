@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
@@ -364,13 +365,14 @@ public sealed partial class GeneratorClient
             && row["sourceModuleVersionId"] is JsonValue module && module.TryGetValue<string>(out var mvid) && mvid == method.Module.ModuleVersionId.ToString()
             && row["sourceMethodSha256"] is JsonValue hash && hash.TryGetValue<string>(out var sha) && sha == CSharpHash(method.GetMethodBody()!.GetILAsByteArray()!);
 
+    // Derived indexes follow the existing immutable IL decode, rather than
+    // retaining old methods after source-cache invalidation.
+    private static readonly ConditionalWeakTable<List<AmmoIl>, Dictionary<int, int>> csharpConditionalEnds = new();
     private static Dictionary<int, int> CSharpConditionalEnds(MethodInfo method)
-    {
-        var code = AttackCode(method);
-        return code.Zip(code.Skip(1), (instruction, next) => (instruction, next.Offset))
-            .Where(pair => pair.instruction.Op.StartsWith('b') && pair.instruction.Op is not ("br" or "br.s" or "break"))
-            .ToDictionary(pair => pair.instruction.Offset, pair => pair.Offset);
-    }
+        => csharpConditionalEnds.GetValue(AttackCode(method), static code =>
+            code.Zip(code.Skip(1), (instruction, next) => (instruction, next.Offset))
+                .Where(pair => pair.instruction.Op.StartsWith('b') && pair.instruction.Op is not ("br" or "br.s" or "break"))
+                .ToDictionary(pair => pair.instruction.Offset, pair => pair.Offset));
 
     private static bool ExactCSharpConditional(ILInstruction instruction, int offset, Dictionary<int, int> ends)
         => ends.TryGetValue(offset, out int end) && instruction.ILRanges.Any(range => range.Start == offset && range.End == end);

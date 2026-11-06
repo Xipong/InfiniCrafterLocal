@@ -342,7 +342,7 @@ public sealed partial class GeneratorClient
     {
         if (projectile.ModProjectile is not null || projectile.type <= Terraria.ID.ProjectileID.None || projectile.type >= Terraria.ID.ProjectileID.Count) return null;
         int type = projectile.type, style = projectile.aiStyle;
-        JsonObject Analyze() => JsonNode.Parse(ProjectileAttackSource(type, style).Source)!["mechanicsSource"]?.DeepClone().AsObject()
+        JsonObject Analyze() => ProjectileAttackSource(type, style).CloneMechanics()
             ?? new JsonObject { ["source"] = "native_mechanics_source", ["version"] = 1, ["identity"] = new JsonObject { ["type"] = type, ["aiStyle"] = style }, ["approximation"] = MechanicsIdentityAssumption, ["records"] = new JsonArray(), ["unresolved"] = new JsonArray("mechanics_source_unavailable") };
         return currentParentAnalysis is { } analysis ? analysis.Defer(Analyze) : Analyze();
     }
