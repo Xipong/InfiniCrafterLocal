@@ -278,8 +278,7 @@ public sealed class InfiniCraftStationUISystem : ModSystem
         DrawRect(spriteBatch, new Rectangle(rect.X, rect.Bottom - 2, rect.Width, 2), new Color(20, 30, 40, 220));
         Vector2 measured = FontAssets.MouseText.Value.MeasureString(text);
         float scale = FitTextScale(measured.X, rect.Width - 12, 0.75f);
-        Vector2 size = measured * scale;
-        Utils.DrawBorderString(spriteBatch, text, new Vector2(rect.Center.X - size.X / 2f, rect.Center.Y - size.Y / 2f), enabled ? Color.White : Color.Gray, scale);
+        Utils.DrawBorderString(spriteBatch, text, UiTextAlignment.CenteredPosition(FontAssets.MouseText.Value, text, rect, scale), enabled ? Color.White : Color.Gray, scale);
     }
 
     private static float FitTextScale(float measuredWidth, float availableWidth, float maximumScale)
