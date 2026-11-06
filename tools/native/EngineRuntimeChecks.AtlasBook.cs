@@ -7,7 +7,7 @@ using Microsoft.Xna.Framework;
 
 internal static partial class EngineRuntimeChecks
 {
-    private static void AtlasDrawingUsesBoundedPixelsAndCenteredText()
+    private static void AtlasDrawingUsesBoundedPremultipliedPixels()
     {
         // Terraria's MagicPixel asset is 1x1000. A full-texture source would
         // produce a 1000-pixel strip even with a Y scale of one.
@@ -22,13 +22,6 @@ internal static partial class EngineRuntimeChecks
             Equal(true, converted.R <= alpha && converted.G <= alpha && converted.B <= alpha,
                 "AlphaBlend never receives additive straight-alpha paper colors");
         }
-        foreach (var bounds in new[] { new Rectangle(10, 20, 118, 26), new Rectangle(30, 40, 80, 28), new Rectangle(0, 0, 44, 44) })
-        foreach (var size in new[] { new Vector2(20, 12), new Vector2(60, 18), new Vector2(38, 24) })
-        {
-            var at = RecipeJournalUISystem.CenteredTextPosition(bounds, size);
-            Equal((float)bounds.Center.X, at.X + size.X / 2, "caption horizontal center");
-            Equal((float)bounds.Center.Y, at.Y + size.Y / 2, "caption vertical center");
-        }
     }
 
     private static void AtlasBookControlsStayReachableAcrossUiScales()
@@ -39,8 +32,14 @@ internal static partial class EngineRuntimeChecks
         {
             int width = (int)(screenWidth / uiScale), height = (int)(screenHeight / uiScale);
             var layout = RecipeJournalView.Bounds(width, height);
+            Equal(Rectangle.Empty, RecipeJournalView.DiscoverySlotBounds(layout, -1), "negative slot is absent");
+            Equal(Rectangle.Empty, RecipeJournalView.DiscoverySlotBounds(layout, layout.Rows * layout.Columns), "slot beyond full page is absent");
             Equal(true, new Rectangle(0, 0, width, height).Contains(layout.Book), "book respects scaled input/draw viewport");
             if (layout.Book.Width < 260 || layout.Book.Height < 240 || layout.Rows == 0 || layout.Columns == 0) continue;
+            var firstSlot = RecipeJournalView.DiscoverySlotBounds(layout, 0);
+            var lastSlot = RecipeJournalView.DiscoverySlotBounds(layout, layout.Columns - 1);
+            Equal(true, Math.Abs((firstSlot.Left - layout.List.Left) - (layout.List.Right - lastSlot.Right)) <= 1,
+                "full grid stays centered through viewport/UI-scale changes");
             var controls = RecipeJournalView.BookControls(layout);
             var rectangles = new[] { controls.Search, controls.Favorites, controls.Filter, controls.ClearIngredient,
                 controls.Previous, controls.Page, controls.Next, controls.Close };
@@ -57,7 +56,7 @@ internal static partial class EngineRuntimeChecks
             for (int col = 0; col < layout.Columns; col++)
             {
                 // Native inventory-cell pitch is unchanged by this skin; test every rendered slot.
-                var slot = new Rectangle(layout.List.X + col * 52, layout.List.Y + row * 52, 48, 48);
+                var slot = RecipeJournalView.DiscoverySlotBounds(layout, row * layout.Columns + col);
                 Equal(true, layout.List.Contains(slot), "no partial discovery slot leaks into detail or pagination");
             }
             if (layout.Detail.Width >= 60 && layout.Detail.Height >= 40)

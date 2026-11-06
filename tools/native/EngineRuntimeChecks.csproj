@@ -13,6 +13,7 @@
     <Compile Include="$(InfiniModSourceRoot)/**/*.cs" Exclude="$(InfiniModSourceRoot)/obj/**;$(InfiniModSourceRoot)/bin/**" />
     <!-- Source discovery is automatic; RunChecks still explicitly registers execution. -->
     <Compile Include="EngineRuntimeChecks*.cs" />
+    <EmbeddedResource Include="fixtures/AtlasMouseTextMetrics.json" />
     <Reference Include="$(InfiniTmlReferenceDir)/*.dll" />
     <Reference Include="$(InfiniExternalDepsRoot)/ParticleLibrary/ParticleLibrary.dll" />
     <Reference Include="$(InfiniExternalDepsRoot)/Luminance/bin/Debug/net8.0/Luminance.dll" />
