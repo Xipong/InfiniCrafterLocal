@@ -41,22 +41,30 @@ class MechanicsRenderer:
         return {"snapshots": copy.deepcopy(self._snapshots),
                 "unknowns": sorted(self._unknowns)}
 
-    def render(self, value: Any) -> Any:
+    def render(self, value: Any, *, source_path: str = "$") -> Any:
+        return self._render(value, None, source_path)
+
+    def _render(self, value: Any, owner: dict[str, Any] | None, path: str) -> Any:
         if isinstance(value, list):
-            return [self.render(child) for child in value]
+            return [self._render(child, owner, f"{path}[{index}]") for index, child in enumerate(value)]
         if not isinstance(value, dict):
             return copy.deepcopy(value)
         if {"fields", "localValues", "controlFlow"} <= value.keys():
             summary = self._spawn_coverage(value)
             return summary if summary is not None else copy.deepcopy(value)
         if "kind" in value:
-            result = self._expression(value)
+            result = self._expression(value, owner)
             if result is not None:
                 return result
             self._collect_unknowns(value)
             # No recursive reinterpretation of an unfamiliar expression shape.
             return copy.deepcopy(value)
-        return {key: self.render(child) for key, child in value.items()
+        if isinstance(value.get("method"), str):
+            # Capture location namespaces even uncertified/same-named methods;
+            # a nested callee's certificate must not become its caller's owner.
+            owner = {"sourcePath": path, **{key: value[key] for key in
+                     ("method", "sourceMethodSha256", "sourceModuleVersionId") if key in value}}
+        return {key: self._render(child, owner, path + "." + key) for key, child in value.items()
                 if key not in _RECEIPTS}
 
     def _spawn_coverage(self, value: dict[str, Any]) -> dict[str, Any] | None:
@@ -114,15 +122,16 @@ class MechanicsRenderer:
             for child in value:
                 self._collect_unknowns(child)
 
-    def _text(self, value: Any) -> str:
-        rendered = self.render(value)
+    def _text(self, value: Any, owner: dict[str, Any] | None) -> str:
+        rendered = self._render(value, owner, owner["sourcePath"] if owner else "$")
         return rendered if isinstance(rendered, str) else _json(rendered)
 
-    def _expression(self, value: dict[str, Any]) -> str | None:
+    def _expression(self, value: dict[str, Any], owner: dict[str, Any] | None) -> str | None:
         clean = {key: child for key, child in value.items() if key not in _RECEIPTS}
         keys = set(clean)
         kind = clean.get("kind")
-        text = self._text
+        def text(child: Any) -> str:
+            return self._text(child, owner)
         if kind == "constant" and keys == {"kind", "value"}:
             if clean["value"] is None or type(clean["value"]) in (bool, int, float, str):
                 return _json(clean["value"])
@@ -160,14 +169,19 @@ class MechanicsRenderer:
                 if kind == "data_constructor" and isinstance(clean["signature"], str):
                     return "construct " + clean["member"] + "[" + clean["signature"] + "](" + ", ".join(text(x) for x in clean["arguments"]) + ")"
         if kind == "local_definition" and keys == {"kind", "local", "scope", "value"}:
-            if _index(clean["local"]) and clean["scope"] == "value_at_store":
-                # Do not merge distinct stores merely because their printed values match.
-                key = _json(value)
+            if (_index(clean["local"]) and clean["scope"] == "value_at_store"
+                    and owner is not None and _index(value.get("sourceStoreIlOffset"))):
+                # A load's IL offset is not the store identity. Retain the
+                # method/capture owner and store anchor; conflicting definitions
+                # stay distinct rather than merging on their printed values.
+                key = _json([owner, {k: v for k, v in value.items() if k != "sourceIlOffset"}])
                 if key not in self._aliases:
                     name = "snapshot" + str(len(self._aliases) + 1)
                     self._aliases[key] = name
                     self._snapshots[name] = {"local": clean["local"], "scope": "value_at_store",
-                                             "value": self.render(clean["value"])}
+                        "method": owner["method"], "sourcePath": owner["sourcePath"],
+                        "sourceStoreIlOffset": value["sourceStoreIlOffset"],
+                        "value": self._render(clean["value"], owner, owner["sourcePath"])}
                 return self._aliases[key]
         if kind == "branch" and type(clean.get("taken")) is bool:
             op = clean.get("opcode")

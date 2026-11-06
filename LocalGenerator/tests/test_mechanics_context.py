@@ -2,6 +2,8 @@
 import copy
 import json
 
+import pytest
+
 from infini_local.pipelines.context.mechanics_context import mechanics_context
 from infini_local.pipelines.context.parent_stage import parent_context_for_stage
 from infini_local.pipelines.context.parents import compact_projectile_profile
@@ -461,3 +463,180 @@ def test_capture_speed_alias_resolution_preserves_unknown_and_explicit_values():
     assert "ammo.nativeReplacementProjectileRaw[4]" in aliases
     assert "ammo.nativeReplacementProjectileRaw[3]" in aliases
     assert raw == before
+
+
+def _caller_parent(role="collision"):
+    profile = _profile()
+    profile["mechanicsSource"]["records"] = [{"method": "Terraria.Utils.ConeHelper",
+        "code": "bool ConeHelper(float length) { return opaque; }", "coverage": "approximate_identity_view"}]
+    graph = {"method": "Terraria.Projectile.Colliding", "sourceModuleVersionId": "module",
+        "sourceMethodSha256": "a" * 64,
+        "observations": [{"kind": "collision_call", "call": "Utils.ConeHelper", "arguments": {"length": "l7@10"},
+                          "at": 12, "block": 4, "requiredPredicates": ["b3"]}],
+        "dependencies": {"l7@10": {"expression": "mul(90,ldfld(Projectile.scale,this))",
+                                   "at": 10, "block": 4, "requiredPredicates": ["b3"]}},
+        "predicates": [{"id": "b3", "at": 3, "block": 0, "op": "brfalse",
+                        "inputs": ["ldfld(Projectile.wet,this)"], "successors": [20, 4]}],
+        "symbols": {"Utils.ConeHelper": "T.Utils.ConeHelper(float)"}, "unresolved": ["opaque runtime predicate"]}
+    profile["attackReference"] = {"source": "read_only_native_attack_source", "version": 1,
+        "identityPredicates": {"Projectile.type": 31, "Projectile.aiStyle": 5},
+        role: {"programs": [graph]} if role == "motion" else [graph] if role == "motionDispatchEffects" else graph,
+        "coverage": {"proved": [], "unresolved": [], "boundaries": []}}
+    return {"name": "source-only caller", "directProjectileRaw": profile}
+
+
+def _request_parent_views(monkeypatch, parent, mode):
+    """Both production requests; Repair also executes its frozen transaction."""
+    from infini_local.core import llm_config
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
+    from infini_local.pipelines.author.request import build_initial_author_request, build_gameplay_repair_dossier
+    from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+    from prompt_packet_helpers import expand_native_source_references, request_dossier
+    from repair_test_helpers import repair_with_response, assert_delivery
+
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
+    before = copy.deepcopy(parent)
+    request, _, _ = build_initial_author_request(parent, {}, "offline", model_name="offline")
+    assert request["response_format"]["type"] == mode
+    author = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
+    doc = build_runtime_fixture("workbench_blade")
+    stats = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "item_stats")
+    stats["params"].pop("manaCost")  # Accepted absence must remain frozen too.
+    good = copy.deepcopy(doc)
+    incoming = copy.deepcopy(stats)
+    incoming["params"]["knockback"] = 5.0  # Schema-valid, but out-of-scope.
+    stats["params"]["damage"] = -1
+    broken = copy.deepcopy(doc)
+    report = validate_runtime_program(doc)
+    assert not report["ok"]
+    baseline = build_gameplay_repair_dossier(doc, {}, {}, failure_report=report)
+    repaired, request = repair_with_response(monkeypatch, doc,
+        {"note": "correct only invalid damage", "callsUpsert": [incoming]}, mode, parents=(parent, {}))
+    repair = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
+    assert repair["repairScope"] == baseline["repairScope"]
+    assert repair["acceptedItemContext"]["runtimeProgram"] == broken["runtimeProgram"]
+    assert repaired["runtimeProgram"] == good["runtimeProgram"]
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    assert validate_runtime_program(repaired)["ok"]
+    assert_delivery(repaired)
+    assert doc == broken and parent == before
+    return [author["parents"]["A"]["packet"]["raw"], repair["parents"]["a"]["packet"]["raw"]]
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("role", ["collision", "motion", "motionDispatch", "motionDispatchEffects", "positionIntegration"])
+def test_production_requests_keep_ordered_caller_arguments_and_control_flow(monkeypatch, mode, role):
+    for raw in _request_parent_views(monkeypatch, _caller_parent(role), mode):
+        row, = raw["mechanics"]["sourceSlices"]
+        assert row["role"] == role
+        program = row["program"]
+        assert program["method"] == "Terraria.P.Colliding" and program["nativeNames"] == 1
+        assert "P=Projectile" in row["behaviorView"]["scope"]
+        branch, definition, call = program["operations"]
+        assert "Projectile.wet" in branch["inputs"][0]
+        assert branch["successors"] == [20, 4]
+        assert branch["step"] < definition["step"] < call["step"]
+        assert "90" in definition["expression"] and "Projectile.scale" in definition["expression"]
+        assert call["arguments"]["length"] == definition["bind"]
+        assert call["requiredPredicates"] == definition["requiredPredicates"] == [branch["id"]]
+        assert "ConeHelper" in call["call"] and "ConeHelper" in json.dumps(program["symbols"])
+        assert program["unresolved"] == ["opaque runtime predicate"]
+        assert row["branchTests"]["brfalse"]
+        assert "sourceFacts" not in raw["mechanics"]["uncertainty"]
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("variant", ["child_refusal", "graph_refusal", "unknown_attack", "unknown_record", "record_collision"])
+def test_production_requests_keep_owned_refusals_and_unfamiliar_conditions(monkeypatch, mode, variant):
+    parent = _caller_parent()
+    profile = parent["directProjectileRaw"]
+    marker = "source_condition_not_established"
+    if variant == "child_refusal":
+        marker = "single_hop_profile_count_bound"
+        profile["referencedProjectiles"] = {"source": "native_single_hop_projectile_references", "version": 1,
+            "sourceCalls": [], "references": [{"type": 32, "sourceCallIndices": [], "unresolved": marker}]}
+    elif variant == "graph_refusal":
+        from test_native_csharp_source_view import _parent
+        parent = _parent()
+        profile = parent["directProjectileRaw"]
+        profile["mechanicsSource"] = _profile(1)["mechanicsSource"]
+        marker = "UNIQUE_SELECTION_WORK_BOUND:257>192"
+        profile["attackReference"]["motion"]["programs"][0]["identitySelectionUnavailable"] = marker
+    elif variant == "unknown_attack":
+        profile["attackReference"]["futureMovementGate"] = {"unresolved": marker, "dependsOn": "b3"}
+    elif variant == "unknown_record":
+        profile["mechanicsSource"]["records"][0]["futureEntryConstraint"] = {"unresolved": marker, "enabled": False}
+    else:
+        profile["mechanicsSource"]["records"][0]["projectiles"] = {"unresolved": marker, "sourceFields": [False, 0, None]}
+    for raw in _request_parent_views(monkeypatch, parent, mode):
+        mechanics = raw["mechanics"]
+        if variant == "unknown_record":
+            assert mechanics["source"][0]["sourceFields"]["futureEntryConstraint"] == {"unresolved": marker, "enabled": False}
+        elif variant == "record_collision":
+            assert mechanics["source"][0]["projectiles"] == [31]
+            assert mechanics["source"][0]["sourceFields"]["projectiles"] == {"unresolved": marker, "sourceFields": [False, 0, None]}
+        else:
+            facts = mechanics["uncertainty"]["sourceFacts"]
+            owned = [row for row in facts if marker in json.dumps(row["value"])]
+            assert len(owned) == 1
+            assert owned[0]["sourcePath"].startswith("directProjectile.")
+            if variant == "child_refusal":
+                assert owned[0]["sourcePath"] == "directProjectile.referencedProjectiles.references[0]"
+                assert owned[0]["value"] == profile["referencedProjectiles"]["references"][0]
+            elif variant == "graph_refusal":
+                assert owned[0]["sourcePath"] == "directProjectile.attackReference.motion.programs[0].graphCapture"
+                assert owned[0]["value"]["identitySelectionUnavailable"] == marker
+            else:
+                # Unknown conditions can refer to the original graph namespace.
+                assert owned[0]["value"]["futureMovementGate"]["dependsOn"] == "b3"
+                assert owned[0]["value"]["collision"]["predicates"][0]["id"] == "b3"
+                program = mechanics["sourceSlices"][0]["program"]
+                assert "operations" not in program
+                assert program["observations"][0]["arguments"]["length"] in program["dependencies"]
+                assert program["observations"][0]["requiredPredicates"] == [program["predicates"][0]["id"]]
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_production_requests_correlate_reads_but_not_distinct_method_stores(monkeypatch, mode):
+    parent = _caller_parent()
+    value = {"kind": "local_definition", "local": 326, "sourceIlOffset": 23689,
+        "sourceStoreIlOffset": 23627, "scope": "value_at_store", "value": {"kind": "call",
+        "member": "Terraria.Player.GetAdjustedItemScale", "arguments": [{"kind": "argument", "index": 0}],
+        "evaluation": "unresolved_helper_or_hook_output", "sourceIlOffset": 23622}}
+    parent["ammoRaw"] = {"projectileSemanticsReference": {"stages": [
+        {"method": method, "sourceMethodSha256": "a" * 64, "sourceModuleVersionId": "module",
+         "spawnSites": [{"spawnInputs": {"ai2": value}},
+                        {"spawnInputs": {"ai2": {**value, "sourceIlOffset": 23753}}}]}
+        for method in ("Player.ItemCheck_Shoot", "Other.ItemCheck_Shoot")]}}
+    for raw in _request_parent_views(monkeypatch, parent, mode):
+        mechanics = raw["mechanics"]
+        first, second = mechanics["ammoInputs"]["projectileSemanticsReference"]["stages"]
+        aliases = [row["spawnInputs"]["ai2"] for row in first["spawnSites"]]
+        other = [row["spawnInputs"]["ai2"] for row in second["spawnSites"]]
+        assert aliases[0] == aliases[1]
+        assert other[0] == other[1] and other[0] != aliases[0]
+        snapshots = mechanics["expressions"]["snapshots"]
+        assert len(snapshots) == 2
+        assert snapshots[aliases[0]]["value"] == snapshots[other[0]]["value"]
+        assert "unexecuted Terraria.Player.GetAdjustedItemScale" in snapshots[aliases[0]]["value"]
+
+
+@pytest.mark.parametrize("variant", ["absent", "version", "identity", "readable_caller"])
+def test_production_requests_keep_legacy_and_readable_caller_controls(monkeypatch, variant):
+    parent = _caller_parent()
+    profile = parent["directProjectileRaw"]
+    if variant == "absent":
+        profile.pop("mechanicsSource")
+    elif variant == "version":
+        profile["mechanicsSource"]["version"] = 2
+    elif variant == "identity":
+        profile["mechanicsSource"]["identity"]["type"] = 999
+    else:
+        profile["mechanicsSource"]["records"].append({"method": "Terraria.Projectile.Colliding",
+            "code": "bool Colliding() { return wet && ConeHelper(90 * scale); }"})
+    for raw in _request_parent_views(monkeypatch, parent, "json_object"):
+        if variant == "readable_caller":
+            assert "sourceSlices" not in raw["mechanics"]
+        else:
+            assert "mechanics" not in raw
+        assert "ConeHelper" in json.dumps(raw)

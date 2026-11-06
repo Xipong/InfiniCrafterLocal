@@ -14,14 +14,16 @@ def test_shared_card_namespace_preserves_distinct_store_values_and_multiplicity(
     first = {"kind": "local_definition", "local": 3, "scope": "value_at_store",
              "sourceStoreIlOffset": 10, "value": const(5)}
     second = {**first, "sourceStoreIlOffset": 20, "value": const(7)}
-    source = {"shot": [first, first], "root": second}
+    source = {"method": "Fixture.Shoot", "shot": [first, first], "root": second}
     before = copy.deepcopy(source)
     result = renderer.render(source)
-    assert result == {"shot": ["snapshot1", "snapshot1"], "root": "snapshot2"}
+    assert result == {"method": "Fixture.Shoot", "shot": ["snapshot1", "snapshot1"], "root": "snapshot2"}
     metadata = renderer.finish()
     assert metadata["snapshots"] == {
-        "snapshot1": {"local": 3, "scope": "value_at_store", "value": "5"},
-        "snapshot2": {"local": 3, "scope": "value_at_store", "value": "7"},
+        "snapshot1": {"local": 3, "scope": "value_at_store", "value": "5",
+                      "method": "Fixture.Shoot", "sourcePath": "$", "sourceStoreIlOffset": 10},
+        "snapshot2": {"local": 3, "scope": "value_at_store", "value": "7",
+                      "method": "Fixture.Shoot", "sourcePath": "$", "sourceStoreIlOffset": 20},
     }
     metadata["snapshots"].clear()
     assert len(renderer.finish()["snapshots"]) == 2
@@ -31,7 +33,40 @@ def test_shared_card_namespace_preserves_distinct_store_values_and_multiplicity(
 def test_equal_values_in_distinct_stores_are_not_merged():
     renderer = MechanicsRenderer()
     store = {"kind": "local_definition", "local": 0, "scope": "value_at_store", "value": const(5)}
-    assert renderer.render({**store, "sourceStoreIlOffset": 1}) != renderer.render({**store, "sourceStoreIlOffset": 2})
+    result = renderer.render({"method": "Fixture.Shoot", "values": [
+        {**store, "sourceStoreIlOffset": 1}, {**store, "sourceStoreIlOffset": 2}]})
+    assert result["values"][0] != result["values"][1]
+    assert len(renderer.finish()["snapshots"]) == 2
+
+
+@pytest.mark.parametrize("variant", ["no_method", "no_store", "boolean_store"])
+def test_unbound_store_identity_stays_literal_instead_of_claiming_correlation(variant):
+    renderer = MechanicsRenderer()
+    store = {"kind": "local_definition", "local": 0, "scope": "value_at_store", "value": const(5),
+             "sourceStoreIlOffset": 1, "sourceIlOffset": 10}
+    if variant == "no_store":
+        store.pop("sourceStoreIlOffset")
+    elif variant == "boolean_store":
+        store["sourceStoreIlOffset"] = True
+    source = {"values": [store, store], **({"method": "Fixture.Shoot"} if variant != "no_method" else {})}
+    assert renderer.render(source) == source
+    assert renderer.finish()["snapshots"] == {}
+
+
+@pytest.mark.parametrize("changed", ["method", "sourceMethodSha256", "sourceModuleVersionId", "sourcePath"])
+def test_store_namespace_includes_owner_and_capture_not_the_read_offset(changed):
+    renderer = MechanicsRenderer()
+    value = {"kind": "local_definition", "local": 0, "scope": "value_at_store", "value": const(5),
+             "sourceStoreIlOffset": 1, "sourceIlOffset": 10}
+    source = {"method": "Fixture.Shoot", "sourceMethodSha256": "a" * 64, "sourceModuleVersionId": "module",
+              "values": [value, {**value, "sourceIlOffset": 20}]}
+    first = renderer.render(source, source_path="ammo.stage0")["values"]
+    assert first[0] == first[1]
+    other = copy.deepcopy(source)
+    if changed != "sourcePath":
+        other[changed] = "other"
+    second = renderer.render(other, source_path="ammo.stage1" if changed == "sourcePath" else "ammo.stage0")["values"]
+    assert second[0] == second[1] and second[0] != first[0]
 
 
 @pytest.mark.parametrize("opcode", ["ble.un", "bne.un", "bgt", "beq"])

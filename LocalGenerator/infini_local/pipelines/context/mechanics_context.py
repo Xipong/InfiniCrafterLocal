@@ -13,6 +13,8 @@ from typing import Any
 
 from infini_local.pipelines.context.mechanics_expression import MechanicsRenderer
 from infini_local.pipelines.context.attack_tables import unpack_attack_tables
+from infini_local.pipelines.context.csharp_source_view import _REFERENCE_FIELDS
+from infini_local.pipelines.context.attack_namespaces import _identifier
 
 _ROOTS = ("nativeShootReference", "nativeContactHitStatusReference", "nativeEquipmentReference",
           "nativeEnvironmentReference", "nativeBuffEffectReference", "nativeItemDispatchReference")
@@ -21,6 +23,14 @@ _AMMO_PROFILES = ("projectileRaw", "weaponShootFieldProjectileRaw", "nativeRepla
                   "playerInventoryProjectileRaw", "fallbackProjectileRaw")
 _DIAGNOSTICS = {"attackReference", "referencedProjectiles", "mechanicsSource", "sourceReferences",
                 "runtimeDumpProvenance", "spriteReference", "engineMetrics", "textureMetrics"}
+_SOURCE_RECEIPTS = {
+    "id", "sourceMethodSha256", "sourceModuleVersionId", "metadataToken", "assemblySha256",
+    "decompiler", "codeSha256", "graphPaths", "locations", "coveredWindows", "excludedCallOffsets",
+    "spawnTypeCandidates", "removedConditionalCount", "removedEmptyStatementCount",
+    "removedSwitchSectionCount", "removedUnreachableStatementCount",
+}
+_SOURCE_FIELDS = {"method", "code", "coverage", "entryGuards", "entryCondition", "entryScope", "unresolved",
+                  "approximation", "receiverBinding", "identitySpecialization", "identityWitnesses", "spawnSites"}
 _READING = (
     "Selected native mechanics, not executed gameplay or a complete specification. "
     "Identity pruning assumes captured type/aiStyle remain stable across opaque calls. "
@@ -30,10 +40,13 @@ _READING = (
     "locations, mapped by projectiles.captures. Each capture retains its itemShootSpeed observation; "
     "it is not a shared projectile default or final shot velocity. Exact profile aliases copy a resolvable speed observation; "
     "dangling or cyclic aliases do not supply a speed. Draw is omitted; position integration "
-    "source retains movement gates and exceptions. Expression opcodes retain native arithmetic types; snapshots are values at stores, "
+    "source retains movement gates and exceptions. Expression opcodes retain native arithmetic types; snapshots identify values at stores "
+    "within a captured method, not execution counts or independent evaluations, "
     "and path_value alternatives follow source paths, not independent random rolls. "
     "sourceSlices retain connected symbolic caller facts when readable methods are unavailable, not full execution proofs. "
     "mechanicsSourceIndex is a zero-based index into source; unresolvedNativeCSharpSourceRef preserves an unbound capture-local reference. "
+    "uncertainty.sourceFacts retains literal refusals or unprojected source subtrees at their original sourcePath. "
+    "sourceFields retains unfamiliar literal fields belonging to its source record. "
     "Full source graphs and provenance remain in diagnostic captures; no consumer size truncation."
 )
 
@@ -117,6 +130,7 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
     item = raw.get("item", {})
     item = item if isinstance(item, dict) else {}
     gaps: set[str] = set()
+    source_facts: list[dict[str, Any]] = []
     code: list[dict[str, Any]] = []
     slices: list[dict[str, Any]] = []
     profiles: list[dict[str, Any]] = []
@@ -124,9 +138,31 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
     seen_code: dict[str, dict[str, Any]] = {}
     seen_slices: dict[str, dict[str, Any]] = {}
 
+    def retain_source(path: str, value: Any) -> None:
+        source_facts.append({"sourcePath": path, "value": copy.deepcopy(value)})
+
+    def retain_refusals(path: str, value: Any) -> None:
+        # A readable method does not discharge a graph extraction refusal.
+        # Keep the original path, including nested selected captures/programs.
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key in {"graphCapture", "identitySelectionUnavailable"} and child:
+                    retain_source(path + "." + key, child)
+                elif key not in {"draw", "nativeCSharpSource", "lifecycle"}:
+                    retain_refusals(path + "." + key, child)
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                retain_refusals(f"{path}[{index}]", child)
+
     def add_code(record: dict[str, Any], identity: Any) -> None:
-        row = {key: record[key] for key in
-               ("method", "code", "coverage", "entryGuards", "entryCondition", "entryScope", "unresolved") if key in record}
+        # Only declared receipts are lossy. New entry constraints and current
+        # receiver/identity assumptions must travel with the body they qualify.
+        row = {key: value for key, value in record.items() if key in _SOURCE_FIELDS}
+        extra = {key: value for key, value in record.items() if key not in _SOURCE_FIELDS | _SOURCE_RECEIPTS}
+        if extra:
+            # Keep unfamiliar fields literal without letting a new producer key
+            # collide with the emitted projectiles/record presentation namespace.
+            row["sourceFields"] = extra
         key = json.dumps(row, ensure_ascii=False, sort_keys=True)
         if key not in seen_code:
             stored = {"projectiles": [], **copy.deepcopy(row)}
@@ -162,9 +198,14 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
             # Capture aliases are renamed and point to the sourcePath rows below,
             # not to deleted raw sections in the mechanics view.
             defaults["sameDefaultsAsSourcePath"] = str(defaults.pop("sameAs")).removeprefix("raw.")
-        profiles.append({"sourcePath": path, "defaults": {key: renderer.render(value) for key, value in defaults.items()}})
+        profiles.append({"sourcePath": path, "defaults": {
+            key: renderer.render(value, source_path=path + "." + key) for key, value in defaults.items()}})
         source = _source(profile)
         if source is not None:
+            extra = {key: value for key, value in source.items() if key not in {
+                "source", "version", "identity", "records", "unresolved", "strictSourceRefusals", "verifiedSourceRecords"}}
+            if extra:
+                retain_source(path + ".mechanicsSource", extra)
             if not source["records"]:
                 gaps.add("approximate_method_records_unavailable:" + path)
             for record in _rows(source["records"]):
@@ -181,6 +222,8 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
                         gaps.add(str(gap))
         elif "sameAs" not in profile:
             gaps.add("mechanics_source_unavailable:" + path)
+            if "mechanicsSource" in profile:
+                retain_source(path + ".mechanicsSource", profile["mechanicsSource"])
         # Approximate full-method extraction can refuse a large dispatcher while
         # its verified closed region is available. Never lose that source merely
         # because another method in this profile has a mechanics record.
@@ -188,7 +231,16 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
         try:
             reference = unpack_attack_tables(reference) if isinstance(reference, dict) else {}
         except (TypeError, ValueError):
+            retain_source(path + ".attackReference", profile["attackReference"])
             reference = {}
+        if set(reference) - (_REFERENCE_FIELDS | {
+                "expressionNotation", "behaviorView", "presentationScope", "nativeCSharpSourceReading",
+                "branchTests", "operationReading"}):
+            # An unknown sibling can refer to any graph namespace. Retain the
+            # whole subtree, not just its leaf after rewriting/removing targets.
+            retain_source(path + ".attackReference", reference)
+        else:
+            retain_refusals(path + ".attackReference", reference)
         coverage = reference.get("coverage")
         if isinstance(coverage, dict) and isinstance(coverage.get("unresolved"), list):
             gaps.update(str(gap) for gap in coverage["unresolved"])
@@ -240,7 +292,9 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
         # A readable helper is not a replacement for its missing caller. Keep
         # connected symbolic programs when that method has no readable record;
         # do not infer the caller's arguments, branch choice or final outcome.
-        def method_name(value: Any) -> Any:
+        def method_name(value: Any, native_names: bool = False) -> Any:
+            if native_names and isinstance(value, str):
+                value = _identifier(value, restore=True)
             return "Terraria." + value[2:] if isinstance(value, str) and value.startswith("T.") else value
 
         available_methods = {method_name(row.get("method")) for row in code
@@ -278,12 +332,13 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
             programs += [("motion", row) for row in _rows(motion.get("programs"))]
         for role, program in programs:
             if (not isinstance(program, dict) or not isinstance(program.get("method"), str)
-                    or method_name(program["method"]) in available_methods
-                    or not any(key in program for key in ("observations", "dependencies", "predicates"))):
+                    or method_name(program["method"], program.get("nativeNames") == 1) in available_methods
+                    or not any(key in program for key in ("observations", "dependencies", "predicates", "operations"))):
                 continue
             row = {"role": role, "program": bind_source_refs(program),
                    **{key: copy.deepcopy(reference[key]) for key in
-                      ("scope", "units", "expressionNotation", "behaviorView", "identityPredicates", "admission")
+                      ("scope", "units", "expressionNotation", "behaviorView", "identityPredicates", "admission",
+                       "branchTests", "operationReading")
                       if key in reference}}
             key = json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
             if key not in seen_slices:
@@ -302,6 +357,10 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
                 continue
             indices = child.get("sourceCallIndices")
             child_path = f"{path}.referencedProjectiles.references[{index}].profile"
+            if not isinstance(child.get("profile"), dict):
+                retain_source(child_path.removesuffix(".profile"), child)
+            elif set(child) - {"type", "sourceCallIndices", "profile"}:
+                retain_source(child_path.removesuffix(".profile"), {k: v for k, v in child.items() if k != "profile"})
             alias_target = any(target == child_path or target.startswith(child_path + ".") for target in alias_targets)
             if (not alias_target and source is not None and isinstance(calls, list) and isinstance(indices, list) and indices
                     and all(type(i) is int and 0 <= i < len(calls) and isinstance(calls[i], dict)
@@ -348,16 +407,18 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
     profiles = grouped
     ammo = raw.get("ammo")
     ammo = {k: v for k, v in ammo.items() if k not in _AMMO_PROFILES} if isinstance(ammo, dict) else {}
-    mechanical_roots = {key: renderer.render(item[key]) for key in _ROOTS if key in item}
+    mechanical_roots = {key: renderer.render(item[key], source_path="item." + key) for key in _ROOTS if key in item}
     result = {
         "item": copy.deepcopy({key: value for key, value in item.items() if key not in {*_ROOTS, "parentSourceGraph"}}),
         "mechanics": {"reading": _READING, "projectiles": profiles, "source": code,
-                      "itemRules": mechanical_roots, "ammoInputs": renderer.render(ammo),
+                      "itemRules": mechanical_roots, "ammoInputs": renderer.render(ammo, source_path="ammo"),
                       "uncertainty": {**_source_gaps(gaps),
                                       "excludedChildProfiles": omitted}},
     }
     if slices:
         result["mechanics"]["sourceSlices"] = slices
+    if source_facts:
+        result["mechanics"]["uncertainty"]["sourceFacts"] = source_facts
     metadata = renderer.finish()
     if metadata:
         result["mechanics"]["expressions"] = metadata
