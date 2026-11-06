@@ -302,6 +302,32 @@ def known_identity_alternatives(value: Any) -> bool:
     return True
 
 
+def _known_identity_receipt_fields(receipt: Any) -> bool:
+    if not isinstance(receipt, dict):
+        return False
+    required = {"source", "version", "identityPredicates", "scope", "selectedEdges"}
+    if set(receipt) == required:
+        return True
+    if set(receipt) != required | {"blockedIdentityReads", "blockedIdentityReadsOmitted"}:
+        return False
+    # Optional native refusal evidence is dump-only metadata, not authority to
+    # choose an edge. Admit its exact bounded schema; future data stays literal.
+    rows, omitted = receipt["blockedIdentityReads"], receipt["blockedIdentityReadsOmitted"]
+    if (not isinstance(rows, list) or len(rows) > 32 or type(omitted) is not int or omitted < 0):
+        return False
+    for row in rows:
+        if (not isinstance(row, dict)
+                or set(row) != {"branchAt", "readAt", "field", "hazardAt", "hazardOp", "hazardMember", "hazardReason"}
+                or any(type(row[key]) is not int or row[key] < 0 for key in ("branchAt", "readAt", "hazardAt"))
+                or not isinstance(row["field"], str) or row["field"] not in {"Projectile.type", "Projectile.aiStyle"}
+                or any(not isinstance(row[key], str) or not row[key] for key in ("hazardOp", "hazardMember"))
+                or not isinstance(row["hazardReason"], str)
+                or row["hazardReason"] not in {"direct_identity_write", "identity_address_exposed",
+                    "actor_passing_call_uncertified", "actor_reference_stored"}):
+            return False
+    return True
+
+
 def _selected_program(value: dict, identity: Any) -> dict:
     """Consume only the native producer's same-method, same-identity CFG slice.
 
@@ -312,7 +338,7 @@ def _selected_program(value: dict, identity: Any) -> dict:
     if not isinstance(selected, dict) or not set(value) <= _PROGRAM_FIELDS | {"identitySelected"}:
         return value
     receipt = selected.get("identitySelection")
-    if (not isinstance(receipt, dict) or set(receipt) != {"source", "version", "identityPredicates", "scope", "selectedEdges"}
+    if (not _known_identity_receipt_fields(receipt)
             or receipt["source"] != "certified_receiver_identity_cfg"
             or type(receipt["version"]) is not int or receipt["version"] != 1
             or not isinstance(identity, dict) or set(identity) != {"Projectile.type", "Projectile.aiStyle"}

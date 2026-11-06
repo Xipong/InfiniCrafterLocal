@@ -52,7 +52,8 @@ public sealed partial class GeneratorClient
         private readonly ParentSourceMethod body;
         private readonly int type, style, targetArgument;
         private readonly Dictionary<int, HashSet<int>> selectedReach = new();
-        private readonly Dictionary<int, bool> unmodifiedReads = new();
+        private readonly Dictionary<int, ParentSourceMethod.Value?> readHazards = new();
+        private readonly Dictionary<string, string> hazardReasons = new();
         private readonly ParentSourceMethod.Value[] hazards;
         private int analysisWork;
         private readonly Dictionary<MethodBase, bool> readOnlyEffects = new();
@@ -149,11 +150,21 @@ public sealed partial class GeneratorClient
         {
             this.body = body; this.type = type; this.style = style;
             targetArgument = AttackActorArgument(body.Method);
-            hazards = body.Values.Values.Where(IdentityHazard).ToArray();
+            var foundHazards = new List<ParentSourceMethod.Value>();
+            foreach (var value in body.Values.Values)
+                if (IdentityHazardReason(value) is string reason)
+                {
+                    foundHazards.Add(value);
+                    hazardReasons[value.Id] = reason;
+                }
+            hazards = foundHazards.ToArray();
             Receipt = new JsonObject { ["source"] = "certified_receiver_identity_cfg", ["version"] = 1,
                 ["identityPredicates"] = new JsonObject { ["Projectile.type"] = type, ["Projectile.aiStyle"] = style },
                 ["scope"] = "Source-only identity specialization; unknown runtime conditions retain all paths. Direct target identity writes/address escapes and uncertified target-passing calls before a read prevent selection. Native detours/global aliases remain outside capture coverage." };
             var edges = new JsonArray();
+            const int refusalLimit = 32;
+            var refusals = new List<(ParentSourceMethod.Value Branch, ParentSourceMethod.Value Read, ParentSourceMethod.Value Hazard)>();
+            int omittedRefusals = 0;
             // Earlier proven selectors can exclude a mutating foreign-identity
             // arm. Recompute reachability before proving subsequent selectors;
             // unknown runtime arms and any still-reachable hazards remain live.
@@ -161,13 +172,25 @@ public sealed partial class GeneratorClient
             do
             {
                 changed = false;
-                selectedReach.Clear(); unmodifiedReads.Clear();
+                selectedReach.Clear(); readHazards.Clear();
+                // Only the fixed point is reported: an earlier round can still
+                // exclude a foreign-identity arm containing the apparent hazard.
+                refusals.Clear(); omittedRefusals = 0;
                 Reachable.Clear(); Reachable.UnionWith(CurrentReach(body.Code[0].Offset));
                 var additions = new Dictionary<int, int>();
                 if (selectIdentityBranches && targetArgument >= 0 && !body.WrittenArguments.Contains(targetArgument))
                 foreach (var branch in body.Statements.Where(v => Reachable.Contains(v.Block) && !Selected.ContainsKey(v.Block) && body.Blocks[v.Block].Next.Count > 1))
                 {
-                    var values = branch.Inputs.Select(i => Literal(i, new HashSet<string>())).ToArray();
+                    var blockedReads = new Dictionary<int, (ParentSourceMethod.Value Read, ParentSourceMethod.Value Hazard)>();
+                    var values = branch.Inputs.Select(i => Literal(i, new HashSet<string>(), blockedReads)).ToArray();
+                    // Statements such as stores/calls also belong to a block
+                    // with two successors, but are not identity selectors.
+                    if (branch.Op == "switch" || branch.Op.StartsWith("b", StringComparison.Ordinal) && branch.Operand is int)
+                        foreach (var blocked in blockedReads.Values)
+                            if (refusals.Count < refusalLimit) refusals.Add((branch, blocked.Read, blocked.Hazard));
+                            else omittedRefusals++;
+                    // The diagnostic budget never changes selection or source
+                    // capture. A witness proves uncertainty, not runtime mutation.
                     if (!values.Any(v => v.Identity) || values.Any(v => v.Number is null)) continue;
                     var next = body.Blocks[branch.Block].Next;
                     int? target = null;
@@ -197,6 +220,15 @@ public sealed partial class GeneratorClient
                 foreach (var edge in additions) { Selected[edge.Key] = edge.Value; changed = true; }
             } while (changed);
             Receipt["selectedEdges"] = edges;
+            Receipt["blockedIdentityReads"] = new JsonArray(refusals.Select(refusal => (JsonNode?)new JsonObject
+            {
+                ["branchAt"] = refusal.Branch.At, ["readAt"] = refusal.Read.At,
+                ["field"] = "Projectile." + ((FieldInfo)refusal.Read.Operand!).Name,
+                ["hazardAt"] = refusal.Hazard.At, ["hazardOp"] = refusal.Hazard.Op,
+                ["hazardMember"] = refusal.Hazard.Operand is MemberInfo member ? SourceMember(member) : refusal.Hazard.Op,
+                ["hazardReason"] = hazardReasons[refusal.Hazard.Id],
+            }).ToArray());
+            Receipt["blockedIdentityReadsOmitted"] = omittedRefusals;
         }
 
         private bool Target(string id, HashSet<string> seen)
@@ -239,21 +271,26 @@ public sealed partial class GeneratorClient
                     || !call.IsStatic && call.DeclaringType?.IsValueType != true)));
         }
 
-        private bool IdentityHazard(ParentSourceMethod.Value statement)
+        private string? IdentityHazardReason(ParentSourceMethod.Value statement)
         {
-            bool hazard = statement.Operand is FieldInfo field && field.DeclaringType == typeof(Projectile)
+            if (statement.Operand is FieldInfo field && field.DeclaringType == typeof(Projectile)
                 && field.Name is "type" or "aiStyle" && statement.Op is "stfld" or "ldflda"
-                && statement.Inputs.Count > 0 && MayTarget(statement.Inputs[0], new());
-            hazard |= statement.Inputs.Skip(statement.Op == "stfld" ? 1 : 0).Any(i => MayTarget(i, new()))
-                && (statement.Operand is MethodBase call && !BaseEntityValueAccessor(call) && !ReadOnlyEffect(call)
-                    || statement.Op is "stsfld" or "stfld" or "stobj"
-                    || statement.Op.StartsWith("stelem", StringComparison.Ordinal) || statement.Op.StartsWith("stind", StringComparison.Ordinal));
-            return hazard;
+                && statement.Inputs.Count > 0 && MayTarget(statement.Inputs[0], new()))
+                return statement.Op == "stfld" ? "direct_identity_write" : "identity_address_exposed";
+            if (!statement.Inputs.Skip(statement.Op == "stfld" ? 1 : 0).Any(i => MayTarget(i, new()))) return null;
+            if (statement.Operand is MethodBase call && !BaseEntityValueAccessor(call) && !ReadOnlyEffect(call))
+                return "actor_passing_call_uncertified";
+            if (statement.Op is "stsfld" or "stfld" or "stobj"
+                || statement.Op.StartsWith("stelem", StringComparison.Ordinal) || statement.Op.StartsWith("stind", StringComparison.Ordinal))
+                return "actor_reference_stored";
+            return null;
         }
 
-        internal bool Unmodified(ParentSourceMethod.Value read)
+        internal bool Unmodified(ParentSourceMethod.Value read) => BlockingHazard(read) is null;
+
+        private ParentSourceMethod.Value? BlockingHazard(ParentSourceMethod.Value read)
         {
-            if (unmodifiedReads.TryGetValue(read.At, out bool cached)) return cached;
+            if (readHazards.TryGetValue(read.At, out var cached)) return cached;
             foreach (var statement in hazards)
             {
                 Work();
@@ -261,24 +298,30 @@ public sealed partial class GeneratorClient
                 if (statement.Block == read.Block && statement.At < read.At
                     || statement.Block != read.Block && CurrentReach(statement.Block).Contains(read.Block)
                     || statement.Block == read.Block && body.Blocks[statement.Block].Next.Any(n => CurrentReach(n).Contains(read.Block)))
-                    return unmodifiedReads[read.At] = false;
+                    return readHazards[read.At] = statement;
             }
-            return unmodifiedReads[read.At] = true;
+            return readHazards[read.At] = null;
         }
 
-        private (int? Number, bool Identity) Literal(string id, HashSet<string> seen)
+        private (int? Number, bool Identity) Literal(string id, HashSet<string> seen,
+            Dictionary<int, (ParentSourceMethod.Value Read, ParentSourceMethod.Value Hazard)> blockedReads)
         {
             Work();
             if (seen.Count > 64 || !seen.Add(id) || !body.Values.TryGetValue(id, out var value)) return (null, false);
             if (value.Op == "const" && value.Operand is int number) return (number, false);
             if (value.Op == "ldfld" && value.Operand is FieldInfo field && field.DeclaringType == typeof(Projectile)
-                && field.Name is "type" or "aiStyle" && value.Inputs.Count == 1 && Target(value.Inputs[0], new()) && Unmodified(value))
-                return (field.Name == "type" ? type : style, true);
-            if (value.Op is "ldloc" or "stloc" && value.Inputs.Count == 1) return Literal(value.Inputs[0], seen);
-            if (value.Op is "conv.i4" or "conv.u4" && value.Inputs.Count == 1) return Literal(value.Inputs[0], seen);
+                && field.Name is "type" or "aiStyle" && value.Inputs.Count == 1 && Target(value.Inputs[0], new()))
+            {
+                var hazard = BlockingHazard(value);
+                if (hazard is null) return (field.Name == "type" ? type : style, true);
+                blockedReads.TryAdd(value.At, (value, hazard));
+                return (null, false);
+            }
+            if (value.Op is "ldloc" or "stloc" && value.Inputs.Count == 1) return Literal(value.Inputs[0], seen, blockedReads);
+            if (value.Op is "conv.i4" or "conv.u4" && value.Inputs.Count == 1) return Literal(value.Inputs[0], seen, blockedReads);
             if (value.Op is "sub" or "ceq" or "clt" or "clt.un" or "cgt" or "cgt.un" && value.Inputs.Count == 2)
             {
-                var left = Literal(value.Inputs[0], new(seen)); var right = Literal(value.Inputs[1], new(seen));
+                var left = Literal(value.Inputs[0], new(seen), blockedReads); var right = Literal(value.Inputs[1], new(seen), blockedReads);
                 if (left.Number is not int a || right.Number is not int b) return (null, false);
                 long first = value.Op.EndsWith(".un", StringComparison.Ordinal) ? unchecked((uint)a) : a;
                 long second = value.Op.EndsWith(".un", StringComparison.Ordinal) ? unchecked((uint)b) : b;

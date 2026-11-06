@@ -201,6 +201,55 @@ def identity_selection_reference():
     return source
 
 
+def identity_refusal_diagnostics():
+    return {"blockedIdentityReads": [{"branchAt": 36, "readAt": 29, "field": "Projectile.type",
+        "hazardAt": 25, "hazardOp": "call", "hazardMember": "Terraria.Projectile.Kill()",
+        "hazardReason": "actor_passing_call_uncertified"}], "blockedIdentityReadsOmitted": 0}
+
+
+def test_identity_refusal_diagnostics_preserve_selected_model_graph_and_remain_raw_only():
+    source = identity_selection_reference()
+    expected = project_attack_behavior(source)
+    receipt = source["motion"]["programs"][0]["identitySelected"]["identitySelection"]
+    receipt.update(identity_refusal_diagnostics())
+    before = copy.deepcopy(source)
+    assert project_attack_behavior(source) == expected
+    assert source == before
+
+
+@pytest.mark.parametrize("mutation", ["missing_count", "missing_reads", "bool_count", "negative_count", "too_many", "unknown_field", "bad_offset", "bad_field", "unhashable_field", "bad_reason", "unhashable_reason", "empty_member"])
+def test_unrecognized_identity_refusal_diagnostics_preserve_complete_raw_source(mutation):
+    source = identity_selection_reference()
+    receipt = source["motion"]["programs"][0]["identitySelected"]["identitySelection"]
+    receipt.update(identity_refusal_diagnostics())
+    row = receipt["blockedIdentityReads"][0]
+    if mutation == "missing_count":
+        receipt.pop("blockedIdentityReadsOmitted")
+    elif mutation == "missing_reads":
+        receipt.pop("blockedIdentityReads")
+    elif mutation == "bool_count":
+        receipt["blockedIdentityReadsOmitted"] = True
+    elif mutation == "negative_count":
+        receipt["blockedIdentityReadsOmitted"] = -1
+    elif mutation == "too_many":
+        receipt["blockedIdentityReads"] *= 33
+    elif mutation == "unknown_field":
+        row["future"] = "unknown"
+    elif mutation == "bad_offset":
+        row["hazardAt"] = True
+    elif mutation == "bad_field":
+        row["field"] = "Projectile.damage"
+    elif mutation == "unhashable_field":
+        row["field"] = []
+    elif mutation == "bad_reason":
+        row["hazardReason"] = "future_reason"
+    elif mutation == "unhashable_reason":
+        row["hazardReason"] = {}
+    else:
+        row["hazardMember"] = ""
+    assert project_attack_behavior(source) == source
+
+
 def test_certified_same_identity_selection_supplies_behavior_not_the_full_other_identity_graph():
     source = identity_selection_reference()
     before = copy.deepcopy(source)

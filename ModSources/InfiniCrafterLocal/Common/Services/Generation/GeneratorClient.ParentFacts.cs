@@ -618,12 +618,14 @@ public sealed partial class GeneratorClient
         {
             if (item.shoot <= ProjectileID.None) return null;
             var shotSemantics = CaptureAmmoProjectileSemantics(item);
-            bool hasArithmetic = shotSemantics["stages"]!.AsArray().OfType<JsonObject>().Any(stage =>
-                stage["conditionalArithmeticVariants"] is JsonArray alternatives && alternatives.Count > 0);
-            if (!hasArithmetic) return null;
-            // Source-derived alternatives also belong to weapons that do not
-            // consume ammunition. Reuse the existing source-profile transport;
-            // this mode does not invent an ammo category or final shot outcome.
+            bool hasItemSourceFacts = shotSemantics["stages"]!.AsArray().OfType<JsonObject>().Any(stage =>
+                new[] { "conditionalArithmeticVariants", "rules", "unresolvedLiteralWrites", "spawnSites" }
+                    .Any(key => stage[key] is JsonArray facts && facts.Count > 0));
+            if (!hasItemSourceFacts) return null;
+            // Retain already inspected item-specific source facts, including
+            // fixed companion spawns without arithmetic projectile variants.
+            // Generic selection metadata/unknowns do not establish an alternative.
+            // Reuse the source-only transport without inventing ammo or a final shot.
             return new
             {
                 mode = "weapon_without_ammo_source_alternatives",

@@ -179,6 +179,33 @@ internal static partial class EngineRuntimeChecks
         if (projectile.type == 982) projectile.scale = 1.25f;
         else projectile.scale = 2.5f;
     }
+    private static void AttackIdentityReadWithoutSelector(Projectile projectile)
+    {
+        AttackMutateActor(projectile);
+        int copiedType = projectile.type;
+        projectile.damage = projectile.type;
+        AttackConsumeNumber(projectile.type);
+        if (projectile.ai[0] > 0f) projectile.scale = copiedType;
+    }
+    private static void AttackConsumeNumber(int value) { }
+    private static MethodInfo AttackIdentityManyRefusalsFixture()
+    {
+        // Analyze these numeric field reads/writes without invoking the fixture.
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("IdentityRefusals" + Guid.NewGuid().ToString("N")), AssemblyBuilderAccess.Run);
+        var type = assembly.DefineDynamicModule("fixture").DefineType("Refusals", TypeAttributes.Public);
+        var source = type.DefineMethod("Source", MethodAttributes.Public | MethodAttributes.Static, typeof(void), new[] { typeof(Projectile) });
+        var il = source.GetILGenerator(); var matched = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4, 983); il.Emit(OpCodes.Stfld, typeof(Projectile).GetField("type")!);
+        for (int i = 0; i < 33; i++)
+        {
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, typeof(Projectile).GetField("type")!);
+            il.Emit(OpCodes.Ldc_I4, i); il.Emit(OpCodes.Beq, matched);
+        }
+        il.Emit(OpCodes.Ret); il.MarkLabel(matched);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_R4, 1.25f); il.Emit(OpCodes.Stfld, typeof(Projectile).GetField("scale")!);
+        il.Emit(OpCodes.Ret);
+        return type.CreateType()!.GetMethod("Source")!;
+    }
     private static MethodInfo AttackIdentityNativeConversionFixture(OpCode conversion, Type returnType)
     {
         // Safe synthetic numeric conversion only. Neither generated method is
@@ -206,6 +233,42 @@ internal static partial class EngineRuntimeChecks
         JsonObject Inspect(string name) => GeneratorClient.InspectProjectileAttackIdentitySource(
             typeof(EngineRuntimeChecks).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!, 982, 190);
         MethodInfo Method(string name) => typeof(EngineRuntimeChecks).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!;
+        Equal(true, Inspect(nameof(AttackIdentityCallEscape))["identitySelection"]!.AsObject().ContainsKey("blockedIdentityReads"),
+            "identity proof must report why a captured-actor read cannot specialize");
+        // Refusal diagnostics describe a real reachable barrier, never evidence
+        // that the retained alternative is reachable at runtime or may be pruned.
+        foreach (string name in new[] { nameof(AttackIdentitySource), nameof(AttackIdentityReadOnlyNative), nameof(AttackIdentityTerminatingHook), nameof(AttackIdentityUnreachableMutation), nameof(AttackIdentityWrongReceiver), nameof(AttackIdentityReadWithoutSelector) })
+            Equal(0, Inspect(name)["identitySelection"]!["blockedIdentityReads"]!.AsArray().Count,
+                "final proof reports no stale or foreign-receiver barrier: " + name);
+        foreach (var (name, reason) in new[] {
+            (nameof(AttackIdentityMutable), "direct_identity_write"),
+            (nameof(AttackIdentityEscape), "identity_address_exposed"),
+            (nameof(AttackIdentityCallEscape), "actor_passing_call_uncertified"),
+            (nameof(AttackIdentityConditionalEscape), "actor_passing_call_uncertified"),
+            (nameof(AttackIdentityLocalAddressEscape), "actor_passing_call_uncertified"),
+            (nameof(AttackIdentityContinuingHook), "actor_passing_call_uncertified"),
+            (nameof(AttackIdentityUnknownMutation), "actor_passing_call_uncertified"),
+            (nameof(AttackIdentityIndirectStore), "actor_reference_stored") })
+        {
+            var receipt = Inspect(name)["identitySelection"]!;
+            var reads = receipt["blockedIdentityReads"]!.AsArray();
+            Equal(true, reads.Count > 0, "uncertified actor read has an exact refusal: " + name);
+            Equal(0, receipt["blockedIdentityReadsOmitted"]!.GetValue<int>(), "small fixture has no diagnostic truncation: " + name);
+            foreach (var read in reads)
+            {
+                Equal("Projectile.type", read!["field"]!.GetValue<string>(), "refused captured identity field: " + name);
+                Equal(reason, read["hazardReason"]!.GetValue<string>(), "exact identity hazard category: " + name);
+                Equal(true, read["branchAt"]!.GetValue<int>() > read["readAt"]!.GetValue<int>(), "refused branch links its earlier identity read: " + name);
+                Equal(true, read["hazardAt"]!.GetValue<int>() >= 0, "refusal retains exact hazard offset: " + name);
+                Equal(true, !string.IsNullOrWhiteSpace(read["hazardOp"]!.GetValue<string>()), "refusal retains hazard operation: " + name);
+                Equal(true, !string.IsNullOrWhiteSpace(read["hazardMember"]!.GetValue<string>()), "refusal retains member or store operation: " + name);
+            }
+        }
+        var bounded = GeneratorClient.InspectProjectileAttackIdentitySource(AttackIdentityManyRefusalsFixture(), 982, 190);
+        Equal(32, bounded["identitySelection"]!["blockedIdentityReads"]!.AsArray().Count, "refusal witnesses have an independent reporting bound");
+        Equal(1, bounded["identitySelection"]!["blockedIdentityReadsOmitted"]!.GetValue<int>(), "every omitted refusal witness is counted");
+        Equal(0, bounded["identitySelection"]!["selectedEdges"]!.AsArray().Count, "diagnostic bound cannot select unknown identity branches");
+        Equal(true, bounded.ToJsonString().Contains("1.25", StringComparison.Ordinal), "diagnostic bound cannot discard retained source");
         Equal(true, GeneratorClient.InspectProjectileAttackCallBinding(Method(nameof(AttackIdentityDirectCall)), Method(nameof(AttackIdentitySource))), "direct helper receives the captured actor");
         Equal(false, GeneratorClient.InspectProjectileAttackCallBinding(Method(nameof(AttackIdentityForeignCall)), Method(nameof(AttackIdentitySource))), "foreign helper actor cannot borrow captured identity");
         foreach (string caller in new[] { nameof(AttackIdentityChangedBeforeCall), nameof(AttackIdentityEscapedBeforeCall), nameof(AttackIdentityExceptionBeforeCall) })

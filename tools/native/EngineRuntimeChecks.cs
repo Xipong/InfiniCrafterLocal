@@ -76,6 +76,7 @@ internal static partial class EngineRuntimeChecks
             ("projectile helper spawn independent budget refusals", ProjectileHelperSpawnSlicesKeepBudgetRefusals),
             ("projectile helper spawn exact source table merge", ProjectileHelperSpawnExactMergeIsLossless),
             ("parent conditional shot alternatives source only", ParentConditionalShotAlternativesRemainSourceOnly),
+            ("parent non-ammo item-specific source facts survive capture", ParentNonAmmoSourceFactsArePreserved),
             ("craft gzip transport preserves cache and generation payloads", () => CraftGzipTransportPreservesRequestAsync().GetAwaiter().GetResult()),
             ("parent fingerprint excludes readable source view metadata", ParentFingerprintExcludesReadableSourceViews),
             ("audit native pure definition projections", AuditProjectionsDoNotNormalizeSource),

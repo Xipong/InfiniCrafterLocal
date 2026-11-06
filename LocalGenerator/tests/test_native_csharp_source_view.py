@@ -251,6 +251,20 @@ def _specialized_fixture():
     return reference, calls, record
 
 
+def test_identity_refusal_diagnostics_do_not_change_certified_csharp_selection():
+    from test_native_attack_behavior_view import identity_refusal_diagnostics
+    reference, calls, record = _specialized_fixture()
+    expected = native_csharp_source_for_llm(reference, calls)
+    receipt = reference["motion"]["programs"][0]["identitySelected"]["identitySelection"]
+    receipt.update(identity_refusal_diagnostics())
+    before = copy.deepcopy(reference)
+    projected, linked = native_csharp_source_for_llm(reference, calls)
+    assert (projected, linked) == expected
+    assert known_native_csharp_context(projected)
+    assert projected["nativeCSharpSource"]["records"][0]["code"] == record["identitySpecialized"]["code"]
+    assert reference == before
+
+
 def test_specialized_source_remaps_locations_and_preserves_identity():
     reference, calls, record = _specialized_fixture()
     before = copy.deepcopy(reference)
