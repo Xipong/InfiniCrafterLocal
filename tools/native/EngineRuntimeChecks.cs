@@ -262,6 +262,7 @@ internal static partial class EngineRuntimeChecks
             ("parent hit status facts certified native source", ParentHitStatusFactsAreCertifiedAndMatchNativeRequests),
             ("parent buff effects source certified and parent local", ParentBuffEffectsAreSourceCertifiedAndParentLocal),
             ("parent ammo source semantics actual Prepare", ParentAmmoSourceSemanticsReachPrepare),
+            ("parent conditional shot alternatives source only", ParentConditionalShotAlternativesRemainSourceOnly),
             ("parent ammo mod hook shapes read without execution", ParentAmmoModHookShapesAreInspectedNotExecuted),
             ("parent ammo mixed hooks native phase order", ParentAmmoMixedHooksKeepNativePhaseOrder),
             ("use input scope strict DTO and legacy roundtrip", UseInputScopeDtoRoundtripAndStrictAdmission),

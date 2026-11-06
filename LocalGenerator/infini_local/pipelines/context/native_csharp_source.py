@@ -9,7 +9,7 @@ from infini_local.pipelines.context.attack_behavior import project_attack_behavi
 from infini_local.pipelines.context.attack_tables import pack_attack_tables
 from infini_local.pipelines.context.csharp_source_view import (
     SOURCE_READING, _CERT, _REFERENCE_FIELDS, _at_path, _capture_metadata, _certificate,
-    _compact_model_view, _integer, _known_graph, _linked_calls, _records, _windows,
+    _compact_model_view, _integer, _known_graph, _linked_calls, _records, _windows, _specialized_record,
 )
 from infini_local.pipelines.context.parent_stage import parent_context_for_stage
 
@@ -75,7 +75,7 @@ def native_csharp_source_for_llm(reference: dict[str, Any], source_calls: list[d
     def view_size(value: dict[str, Any], selection: dict[str, dict[str, Any]]) -> int:
         # Use the real stage/exact-sharing owner, rather than summing duplicate
         # graph costs. This already-captured packet cannot re-enter compaction.
-        value, linked = _compact_model_view(value, _linked_calls(calls, selection, predicates))
+        value, linked = _compact_model_view(value, _linked_calls(calls, selection, predicates), selection)
         profile = {"attackReference": pack_attack_tables(project_attack_behavior(value))}
         if calls is not None:
             profile["referencedProjectiles"] = {"source": "native_single_hop_projectile_references", "version": 1,
@@ -87,9 +87,12 @@ def native_csharp_source_for_llm(reference: dict[str, Any], source_calls: list[d
     original = candidate(chosen)
     best_size = view_size(original, chosen)
     for record in records.values():
-        selection = {**chosen, record["id"]: record}
-        proposed = candidate(selection)
-        size = view_size(proposed, selection)
-        if size < best_size:
-            chosen, original, best_size = selection, proposed, size
-    return _compact_model_view(original, _linked_calls(calls, chosen, predicates))
+        for alternative in (record, _specialized_record(reference, record)):
+            if alternative is None:
+                continue
+            selection = {**chosen, record["id"]: alternative}
+            proposed = candidate(selection)
+            size = view_size(proposed, selection)
+            if size < best_size:
+                chosen, original, best_size = selection, proposed, size
+    return _compact_model_view(original, _linked_calls(calls, chosen, predicates), chosen)

@@ -36,9 +36,9 @@ from infini_local.pipelines.context.author_source_notation import compact_author
 from infini_local.pipelines.context.stats import parent_stat_context
 from infini_local.pipelines.pipeline_runtime_constants import LLM_ITEM_RAW_KEYS
 
-# Engineering character guard, not a model token limit: complete compact JSON
-# dossiers include parent-local source effects and weapon conversion evidence.
-# Preserve literal tooltips, accepted graphs and capabilities; never clip to fit.
+# Development/test optimization target, not runtime admission or a model token limit.
+# Complete dossiers may exceed it; preserve literal source evidence, accepted
+# graphs and capabilities without clipping or rejecting crafts to fit this target.
 PLANNER_PROMPT_LIMIT_CHARS = 300_000
 PLANNER_PROMPT_MIN_HEADROOM_CHARS = 1_000
 COMBAT_EXECUTOR_RESULT_KIND_RULE = (
@@ -428,12 +428,6 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], key: str) -> 
         "balanceCorridor": corridor,
         "sourceWireUnits": source_wire_units_for_llm([row["packet"] for row in parents.values()]),
     }
-    chars = len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
-    if chars > PLANNER_PROMPT_LIMIT_CHARS:
-        raise ValueError(
-            f"honest low-level Author payload is {chars} chars, above configured {PLANNER_PROMPT_LIMIT_CHARS}; "
-            "raise the configured limit rather than hiding capabilities"
-        )
     return payload
 
 

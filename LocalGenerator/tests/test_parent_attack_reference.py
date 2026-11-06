@@ -256,7 +256,7 @@ def test_native_attack_context_does_not_widen_actual_frozen_gameplay_repair(monk
     assert_exact_json((source, parent), before)
 
 
-def test_attack_packet_size_is_measured_and_existing_guard_refuses_instead_of_clipping(packet_mode):
+def test_attack_packet_size_is_measured_without_runtime_rejection_or_clipping(packet_mode):
     from infini_local.pipelines.author.prompt import (
         PLANNER_PROMPT_LIMIT_CHARS, planner_prompt_usability_report)
     observation = source_defined_attack_fixture()
@@ -265,12 +265,17 @@ def test_attack_packet_size_is_measured_and_existing_guard_refuses_instead_of_cl
     request, user, _ = author.build_initial_author_request(parent, parent, "source-defined-size", model_name="offline")
     assert report["ok"] and report["chars"] == len(user) <= PLANNER_PROMPT_LIMIT_CHARS
     print(json.dumps({"scope": "source-defined fixture, not real native capture", "mode": packet_mode,
-        "authorPayloadChars": len(user), "guardChars": PLANNER_PROMPT_LIMIT_CHARS,
+        "authorPayloadChars": len(user), "developmentTargetChars": PLANNER_PROMPT_LIMIT_CHARS,
         "serializedRequestUtf8Bytes": len(json.dumps(request, ensure_ascii=False).encode("utf-8"))}))
     observation["sourceText"] = "large source-defined unique observation " + "x" * PLANNER_PROMPT_LIMIT_CHARS
     before = copy.deepcopy(parent)
-    with pytest.raises(ValueError, match="above configured"):
-        author.build_initial_author_request(parent, parent, "source-defined-overflow", model_name="offline")
+    request, user, _ = author.build_initial_author_request(parent, parent, "source-defined-overflow", model_name="offline")
+    assert len(user) > PLANNER_PROMPT_LIMIT_CHARS
+    report = planner_prompt_usability_report(parent, parent, "source-defined-overflow")
+    assert not report["ok"] and report["headroom"] < 0
+    dossier = expand_native_source_references(request_dossier(request))
+    for side in ("A", "B"):
+        assert_exact_json(dossier["parents"][side]["packet"]["raw"]["directProjectile"]["attackReference"], observation)
     assert_exact_json(parent, before)
 
 

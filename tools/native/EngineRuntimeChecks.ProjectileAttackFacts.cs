@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Text.Json.Nodes;
 using InfiniCrafterLocal.Common.Services;
 using Terraria;
@@ -159,6 +160,47 @@ internal static partial class EngineRuntimeChecks
         projectile.scale = growth;
     }
     private static void AttackMutateIdentity(ref int identity) { identity = 983; }
+    private static void AttackIdentityReadOnlyNative(Projectile projectile, NPC target)
+    {
+        projectile.rotation = projectile.MaxUpdates;
+        if (target.CanBeChasedBy(projectile)) projectile.rotation += 1f;
+        if (projectile.type == 982) projectile.scale = 1.25f;
+        else projectile.scale = 2.5f;
+    }
+    private static void AttackIdentityTerminatingHook(Projectile projectile)
+    {
+        if (projectile.ai[0] > 0f) { projectile.Kill(); return; }
+        if (projectile.type == 982) projectile.scale = 1.25f;
+        else projectile.scale = 2.5f;
+    }
+    private static void AttackIdentityContinuingHook(Projectile projectile)
+    {
+        if (projectile.ai[0] > 0f) projectile.Kill();
+        if (projectile.type == 982) projectile.scale = 1.25f;
+        else projectile.scale = 2.5f;
+    }
+    private static MethodInfo AttackIdentityNativeConversionFixture(OpCode conversion, Type returnType)
+    {
+        // Safe synthetic numeric conversion only. Neither generated method is
+        // invoked or JIT-prepared; there are no address reads or indirect writes.
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("IdentityConversion" + Guid.NewGuid().ToString("N")), AssemblyBuilderAccess.Run);
+        var type = assembly.DefineDynamicModule("fixture").DefineType("Numeric", TypeAttributes.Public);
+        var helper = type.DefineMethod("ConvertNumber", MethodAttributes.Public | MethodAttributes.Static,
+            returnType, new[] { typeof(Projectile), typeof(int) });
+        var value = helper.GetILGenerator();
+        value.Emit(OpCodes.Ldarg_1); value.Emit(conversion);
+        if (returnType == typeof(long)) value.Emit(OpCodes.Conv_I8);
+        value.Emit(OpCodes.Ret);
+        var source = type.DefineMethod("Source", MethodAttributes.Public | MethodAttributes.Static,
+            typeof(void), new[] { typeof(Projectile) });
+        var il = source.GetILGenerator(); var end = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Call, helper); il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, typeof(Projectile).GetField("type")!);
+        il.Emit(OpCodes.Ldc_I4, 982); il.Emit(OpCodes.Bne_Un, end);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_R4, 1.25f); il.Emit(OpCodes.Stfld, typeof(Projectile).GetField("scale")!);
+        il.MarkLabel(end); il.Emit(OpCodes.Ret);
+        return type.CreateType()!.GetMethod("Source")!;
+    }
     private static void ProjectileAttackIdentitySelectionKeepsUnknownConditions()
     {
         JsonObject Inspect(string name) => GeneratorClient.InspectProjectileAttackIdentitySource(
@@ -169,6 +211,21 @@ internal static partial class EngineRuntimeChecks
         foreach (string caller in new[] { nameof(AttackIdentityChangedBeforeCall), nameof(AttackIdentityEscapedBeforeCall), nameof(AttackIdentityExceptionBeforeCall) })
             Equal(false, GeneratorClient.InspectProjectileAttackCallBinding(Method(caller), Method(nameof(AttackIdentitySource))), "caller must preserve actor identity before helper: " + caller);
         Equal(true, GeneratorClient.InspectProjectileAttackCallBinding(Method(nameof(AttackIdentityExceptionAfterCall)), Method(nameof(AttackIdentitySource))), "unrelated later exception arm does not hide complete call prefix");
+        foreach (string name in new[] { nameof(AttackIdentityReadOnlyNative), nameof(AttackIdentityTerminatingHook) })
+        {
+            var proof = Inspect(name);
+            Equal(true, proof["identitySelection"]!["selectedEdges"]!.AsArray().Count > 0, "read-only or terminating effects preserve continuation identity: " + name);
+            Equal(false, proof.ToJsonString().Contains("2.5", StringComparison.Ordinal), "foreign branch excluded after verified effect: " + name);
+        }
+        Equal(0, Inspect(nameof(AttackIdentityContinuingHook))["identitySelection"]!["selectedEdges"]!.AsArray().Count,
+            "unknown hook on continuing path remains a barrier");
+        foreach (var conversion in new[] { OpCodes.Conv_I, OpCodes.Conv_U, OpCodes.Conv_Ovf_I, OpCodes.Conv_Ovf_U, OpCodes.Conv_Ovf_I_Un, OpCodes.Conv_Ovf_U_Un })
+            foreach (var returnType in new[] { typeof(IntPtr), typeof(UIntPtr), typeof(long) })
+            {
+                var proof = GeneratorClient.InspectProjectileAttackIdentitySource(AttackIdentityNativeConversionFixture(conversion, returnType), 982, 190);
+                Equal(0, proof["identitySelection"]!["selectedEdges"]!.AsArray().Count,
+                    "uncertified native conversion boundary remains opaque: " + conversion + " / " + returnType);
+            }
         var selected = Inspect(nameof(AttackIdentitySource));
         string json = selected.ToJsonString();
         Equal(true, json.Contains("1.25", StringComparison.Ordinal), "matching identity assignment remains");

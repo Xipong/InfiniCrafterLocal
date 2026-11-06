@@ -606,7 +606,22 @@ public sealed partial class GeneratorClient
         }
 
         if (item.useAmmo <= AmmoID.None)
-            return null;
+        {
+            if (item.shoot <= ProjectileID.None) return null;
+            var shotSemantics = CaptureAmmoProjectileSemantics(item);
+            bool hasArithmetic = shotSemantics["stages"]!.AsArray().OfType<JsonObject>().Any(stage =>
+                stage["conditionalArithmeticVariants"] is JsonArray alternatives && alternatives.Count > 0);
+            if (!hasArithmetic) return null;
+            // Source-derived alternatives also belong to weapons that do not
+            // consume ammunition. Reuse the existing source-profile transport;
+            // this mode does not invent an ammo category or final shot outcome.
+            return new
+            {
+                mode = "weapon_without_ammo_source_alternatives",
+                projectileSemanticsReference = shotSemantics,
+                nativeReplacementProjectileRaw = CaptureSourceReplacementProjectileProfiles(item, shotSemantics)
+            };
+        }
 
         // A weapon contributes its category and own source mechanics, not a
         // chosen ammo loadout. Do not enumerate defaults or inspect inventory.

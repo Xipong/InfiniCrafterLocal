@@ -83,6 +83,7 @@ public sealed partial class GeneratorClient
                 {
                     var facts = JsonNode.Parse(json)!.AsObject();
                     stage["rules"] = facts["rules"]!.DeepClone();
+                    stage["conditionalArithmeticVariants"] = facts["conditionalArithmeticVariants"]?.DeepClone() ?? new JsonArray();
                     stage["unresolvedLiteralWrites"] = facts["unresolvedLiteralWrites"]?.DeepClone() ?? new JsonArray();
                     stage["spawnSites"] = facts["spawnSites"]!.DeepClone();
                     stage["spawnOriginSetups"] = facts["spawnOriginSetups"]!.DeepClone();
@@ -181,6 +182,41 @@ public sealed partial class GeneratorClient
         {
             var stage = stages[stageIndex]!.AsObject();
             if (stage["sourceVerification"] is null || stage["sourceMethodSha256"] is null || stage["sourceModuleVersionId"] is null) continue;
+            // These identities are conditional source alternatives, never effective
+            // final shots or child spawns. The offline certificate binds the
+            // input local only under explicit item-field snapshot assumptions.
+            if (stage["conditionalArithmeticVariants"] is JsonArray variants)
+            {
+                for (int variantIndex = 0; variantIndex < variants.Count; variantIndex++)
+                {
+                    var variant = variants[variantIndex]!.AsObject();
+                    if (variant["inputBinding"] is not JsonObject binding
+                        || binding["basis"]?.GetValue<string>() != "item_shoot_snapshot"
+                        || binding["requiredUseAmmoMaximum"] is not JsonValue maximumValue
+                        || !maximumValue.TryGetValue<int>(out int maximumAmmo) || weapon.useAmmo > maximumAmmo
+                        || variant["projectileOffset"] is not JsonValue offsetValue || !offsetValue.TryGetValue<int>(out int offset)
+                        || variant["conditionalProbability"]?["numerator"]?.GetValue<int>() <= 0) continue;
+                    long output = (long)weapon.shoot + offset;
+                    // IL add/sub is signed int32; do not project a wrapped result.
+                    if (output <= ProjectileID.None || output > int.MaxValue || output >= ProjectileLoader.ProjectileCount)
+                    {
+                        variant["projectileProfileUnresolved"] = "projectile_arithmetic_out_of_registered_range";
+                        continue;
+                    }
+                    Add((int)output, new JsonObject {
+                        ["kind"] = "native_conditional_arithmetic_alternative",
+                        ["sourcePath"] = $"projectileSemanticsReference.stages[{stageIndex}].conditionalArithmeticVariants[{variantIndex}]",
+                        ["method"] = stage["method"]!.DeepClone(),
+                        ["sourceMethodSha256"] = stage["sourceMethodSha256"]!.DeepClone(),
+                        ["sourceModuleVersionId"] = stage["sourceModuleVersionId"]!.DeepClone(),
+                        ["sourceVerification"] = stage["sourceVerification"]!.DeepClone(),
+                        ["observedInputProjectileId"] = weapon.shoot,
+                        ["sourceFact"] = variant.DeepClone(),
+                        ["conditionStatus"] = "conditional_on_source_item_field_snapshots_and_branch",
+                        ["dispatchStatus"] = "stage_alternative_only_later_native_writes_ModifyShootStats_and_Shoot_may_change_or_suppress"
+                    }, variant);
+                }
+            }
             foreach (string collection in new[] { "rules", "unresolvedLiteralWrites", "spawnSites" })
             {
                 if (stage[collection] is not JsonArray sites) continue;
@@ -249,7 +285,7 @@ public sealed partial class GeneratorClient
             if (raw["unavailable"]?.GetValue<bool>() == true)
                 raw["unresolved"] = "projectile_defaults_snapshot_unavailable";
             raw["sourceReferences"] = references;
-            raw["profileScope"] = "Known source literal projectile defaults and mechanics, independent of ammunition selection. Conditions, dispatch admission and later rewrites are unresolved; not a final fired projectile, damage or speed. Author chooses generated behavior.";
+            raw["profileScope"] = "Source-referenced projectile defaults and mechanics, independent of ammunition selection. Conditions, dispatch admission and later rewrites are unresolved; not a final fired projectile, damage or speed. Author chooses generated behavior.";
             profiles.Add(raw);
         }
         return profiles;

@@ -486,3 +486,97 @@ def test_native_state_condition_survives_actual_prepare_author_request(monkeypat
     assert source["ammoProjectileRelation"] == "conditionally_replaced"
     assert source["stages"][1]["rules"][0]["whenSourceCondition"]["left"]["scope"] == "value_at_store"
     assert len(raw["nativeReplacementProjectileRaw"][0]["sourceReferences"]) == 2
+
+
+from native_hit_status_analysis import Instruction as VariantInstruction
+from native_ammo_fact_analysis import ammo_method_facts
+
+def _arithmetic_variant_fixture(*, item=81234, step=2, threshold=7, maximum=31, prefix=(), mutation=None):
+    ops=[('ldarg',2),('ldfld','Terraria.Item.shoot'),('stloc',0),*prefix,
+         ('ldarg',2),('ldfld','Terraria.Item.type'),('const',item),('bne','end'),
+         ('call',('Terraria.Main.get_rand',0,False,True)),('const',maximum),
+         ('call',('Terraria.Utilities.UnifiedRandom.Next',1,True,True)),('const',threshold),('bge','else'),
+         ('ldloc',0),('const',step),('add',None),('stloc',0),
+         ('ldloc',4),('const',5),('mul',None),('stloc',4),('br','end'),
+         ('label','else'),('ldloc',1),('const',2.5),('sub',None),('stloc',1),('label','end'),('ret',None)]
+    if mutation: ops=mutation(ops)
+    labels={}; n=0
+    for op,arg in ops:
+        if op=='label': labels[arg]=n
+        else:n+=1
+    return [VariantInstruction(n,op,labels.get(arg,arg) if isinstance(arg,str) else arg) for n,(op,arg) in enumerate((o for o in ops if o[0]!='label'))]
+
+def _arithmetic_variant_row(code):
+    return next(r for r in ammo_method_facts(code,'ItemCheck_Shoot') if r['itemId']==81234)
+
+def test_arbitrary_ids_values_not_weapon_template():
+    result=_arithmetic_variant_row(_arithmetic_variant_fixture())
+    a,b=result['conditionalArithmeticVariants']
+    assert a['projectileOffset']==2 and b['projectileOffset']==0
+    assert a['conditionalProbability']['numerator']==7
+    assert a['conditionalProbability']['denominator']==31
+    assert a['localUpdates'][1]['operand']==5
+    assert a['inputBinding']['basis']=='item_shoot_snapshot'
+    assert result['unrecognizedProjectileWriteOffsets']
+
+@pytest.mark.parametrize('prefix',[
+    [('const',123),('stloc',0)], [('ldloca',0),('call',('Opaque.Write',1,False,False))],
+])
+def test_unknown_prior_write_withholds_identity_binding_but_retains_source(prefix):
+    variants=_arithmetic_variant_row(_arithmetic_variant_fixture(prefix=prefix))['conditionalArithmeticVariants']
+    assert all(v['inputBinding'] is None for v in variants)
+
+@pytest.mark.parametrize('mutation',[
+    lambda ops:[(op,('Other.Random',1,True,True)) if op=='call' and arg[0].endswith('.Next') else (op,arg) for op,arg in ops],
+    lambda ops:[('add.ovf',arg) if op=='add' else (op,arg) for op,arg in ops],
+    lambda ops:[('bge.un',arg) if op=='bge' else (op,arg) for op,arg in ops],
+    lambda ops:[(op,('Terraria.Utilities.UnifiedRandom.Next',2,True,True)) if op=='call' and arg[0].endswith('.Next') else (op,arg) for op,arg in ops],
+])
+def test_unknown_shape_refuses_variant(mutation):
+    assert 'conditionalArithmeticVariants' not in _arithmetic_variant_row(_arithmetic_variant_fixture(mutation=mutation))
+
+@pytest.mark.parametrize('threshold,maximum',[(-1,100),(101,100),(0,0)])
+def test_invalid_rng_bounds_refuse(threshold,maximum):
+    assert 'conditionalArithmeticVariants' not in _arithmetic_variant_row(_arithmetic_variant_fixture(threshold=threshold,maximum=maximum))
+
+def test_header_bypass_refuses():
+    code=_arithmetic_variant_fixture()
+    code.insert(0,VariantInstruction(-1,'br',5))
+    assert 'conditionalArithmeticVariants' not in _arithmetic_variant_row(code)
+
+def test_foreign_arm_entry_refuses():
+    code=_arithmetic_variant_fixture()
+    code.insert(0,VariantInstruction(-1,'br',16))
+    assert 'conditionalArithmeticVariants' not in _arithmetic_variant_row(code)
+
+
+def test_arithmetic_binding_prunes_only_explicit_snapshot_guards():
+    prefix = [('ldarg',2),('ldfld','Terraria.Item.useAmmo'),('const',0),('ble','noammo'),
+              ('ldloca',0),('call',('Opaque.PickAmmo',1,False,False)),('label','noammo'),
+              ('ldarg',2),('ldfld','Terraria.Item.type'),('const',91234),('bne','other'),
+              ('const',14),('stloc',0),('label','other')]
+    variants = _arithmetic_variant_row(_arithmetic_variant_fixture(prefix=prefix))['conditionalArithmeticVariants']
+    assert all(v['inputBinding']['requiredUseAmmoMaximum']==0 for v in variants)
+    same_item = [(op,81234 if arg==91234 else arg) for op,arg in prefix]
+    assert all(v['inputBinding'] is None for v in _arithmetic_variant_row(_arithmetic_variant_fixture(prefix=same_item))['conditionalArithmeticVariants'])
+
+
+def test_arithmetic_initializer_foreign_entry_withholds_binding():
+    code = _arithmetic_variant_fixture()
+    code.insert(0, VariantInstruction(-1,'br',2))
+    assert all(v['inputBinding'] is None for v in _arithmetic_variant_row(code)['conditionalArithmeticVariants'])
+
+
+def test_arithmetic_unreachable_guard_withholds_binding():
+    variants = _arithmetic_variant_row(_arithmetic_variant_fixture(prefix=[('ret',None)]))['conditionalArithmeticVariants']
+    assert all(v['inputBinding'] is None for v in variants)
+
+
+def test_arithmetic_local_initialization_is_not_current_value():
+    prefix = [('ldarg',2),('ldfld','Terraria.Item.shootSpeed'),('stloc',1),
+              ('ldloc',1),('const',7.0),('mul',None),('stloc',1)]
+    variants = _arithmetic_variant_row(_arithmetic_variant_fixture(prefix=prefix))['conditionalArithmeticVariants']
+    provenance = variants[1]['localUpdates'][0]['initializationProvenance']
+    assert provenance['source']=={'kind':'argument_field','argument':2,'field':'Terraria.Item.shootSpeed'}
+    assert len(provenance['interveningWriteOrAddressOffsets'])==1
+    assert 'does not equate' in provenance['scope']

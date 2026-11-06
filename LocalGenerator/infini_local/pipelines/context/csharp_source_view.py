@@ -17,7 +17,7 @@ SOURCE_READING = (
     "A matching method uses C# only when its complete source record and references are smaller than "
     "the compact captured graph; other methods retain their graph. Unused source records stay diagnostic. "
     "nativeCSharpSourceRef resolves to nativeCSharpSource.records.id in this same parent reference. "
-    "A whole_method record retains all its source branches; conditional_ast_regions retains only the "
+    "A whole_method record retains all its source branches; identity_specialized_method retains the producer-proven identity paths with explicit identitySpecialization limits; conditional_ast_regions retains only the "
     "producer-certified closed regions and their explicit entry/coverage limits. Source calls/hooks and "
     "enclosing flow are not evaluated. Record coverage, entry limits and unresolveds remain here; "
     "graph extraction limits and proof receipts remain in raw diagnostics. The view does not prove "
@@ -33,7 +33,7 @@ _RECORD_FIELDS = {"id", *_CERT, "metadataToken", "assemblySha256", "decompiler",
     "code", "codeSha256", "locations", "unresolved", "entryGuards", "coveredWindows"}
 _CAPTURE_FIELDS = _PROGRAM_FIELDS | {"identitySelected", "identitySelection"}
 _MODEL_SOURCE = "read_only_native_csharp_view"
-_MODEL_SCOPE = ("Gameplay source view: code, entry conditions, coverage and unresolveds are unchanged. "
+_MODEL_SCOPE = ("Gameplay source view: code, entry conditions, coverage and unresolveds retain the selected certified representation. "
     "PE/IL/decompiler certificates, hashes and graph-proof paths remain in the raw diagnostic capture.")
 
 
@@ -49,12 +49,18 @@ def _model_records(reference: dict[str, Any]) -> dict[str, dict[str, Any]] | Non
         return None
     result = {}
     for record in envelope["records"]:
-        if (not isinstance(record, dict) or set(record) != {"id", "method", "code", "coverage", "entryGuards", "unresolved"}
+        if (not isinstance(record, dict) or set(record) not in ({"id", "method", "code", "coverage", "entryGuards", "unresolved"}, {"id", "method", "code", "coverage", "entryGuards", "unresolved", "identitySpecialization"})
                 or any(not isinstance(record[key], str) or not record[key] for key in ("id", "method", "code"))
                 or record["id"] in result or not isinstance(record["coverage"], str)
-                or record["coverage"] not in {"whole_method", "conditional_ast_regions"}
+                or record["coverage"] not in {"whole_method", "conditional_ast_regions", "identity_specialized_method"}
                 or not isinstance(record["unresolved"], list) or any(not isinstance(value, str) for value in record["unresolved"])
                 or not isinstance(record["entryGuards"], list)):
+            return None
+        if record["coverage"] == "identity_specialized_method":
+            identity = record.get("identitySpecialization")
+            if not isinstance(identity, dict) or set(identity) != {"identityPredicates", "scope"} or not _identity(identity["identityPredicates"]) or identity["scope"] != _IDENTITY_SCOPE:
+                return None
+        elif "identitySpecialization" in record:
             return None
         for guard in record["entryGuards"]:
             if (not isinstance(guard, dict) or set(guard) != {"field", "operator", "literal", "scope"}
@@ -67,10 +73,10 @@ def _model_records(reference: dict[str, Any]) -> dict[str, dict[str, Any]] | Non
     return result
 
 
-def _compact_model_view(reference: dict[str, Any], calls: list[dict[str, Any]] | None
+def _compact_model_view(reference: dict[str, Any], calls: list[dict[str, Any]] | None, selected_records: dict | None = None
                         ) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
     out, linked = copy.deepcopy(reference), copy.deepcopy(calls)
-    records = _records(out)
+    records = selected_records if selected_records is not None else _records(out)
     if not records or out.get("nativeCSharpSourceReading") != SOURCE_READING:
         return out, linked
     ids = {identity: f"s{index}" for index, identity in enumerate(records)}
@@ -86,7 +92,7 @@ def _compact_model_view(reference: dict[str, Any], calls: list[dict[str, Any]] |
     out["nativeCSharpSource"] = {"source": _MODEL_SOURCE, "version": 1, "scope": _MODEL_SCOPE,
         "unresolved": copy.deepcopy(reference["nativeCSharpSource"]["unresolved"]),
         "records": [{"id": ids[identity], **{key: copy.deepcopy(record[key]) for key in (
-            "method", "code", "coverage", "unresolved")}, "entryGuards": [{key: copy.deepcopy(value)
+            "method", "code", "coverage", "unresolved")}, **({"identitySpecialization": copy.deepcopy(record["identitySpecialization"])} if "identitySpecialization" in record else {}), "entryGuards": [{key: copy.deepcopy(value)
                 for key, value in guard.items() if key != "ilOffset"} for guard in record["entryGuards"]]}
             for identity, record in records.items()]}
     if linked is not None:
@@ -123,7 +129,7 @@ def _records(reference: dict[str, Any]) -> dict[str, dict[str, Any]] | None:
         return None
     result, certificates = {}, set()
     for record in envelope["records"]:
-        if (not isinstance(record, dict) or set(record) != _RECORD_FIELDS
+        if (not isinstance(record, dict) or not _RECORD_FIELDS <= set(record) <= _RECORD_FIELDS | {"identitySpecialized"}
                 or not isinstance(record.get("id"), str) or not record["id"] or record["id"] in result
                 or _certificate(record) is None or _certificate(record) in certificates
                 or not _sha(record["sourceMethodSha256"]) or not _sha(record["assemblySha256"]) or not _sha(record["codeSha256"])
@@ -388,3 +394,70 @@ def _linked_calls(calls: list[dict[str, Any]] | None, records: dict[str, dict[st
     return out
 
 
+
+
+_IDENTITY_SCOPE = "Source-only identity specialization; unknown runtime conditions retain all paths. Direct target identity writes/address escapes and uncertified target-passing calls before a read prevent selection. Native detours/global aliases remain outside capture coverage."
+
+
+def _identity(value: Any) -> bool:
+    return isinstance(value, dict) and set(value) == {"Projectile.type", "Projectile.aiStyle"} and all(type(v) is int for v in value.values())
+
+
+def _specialized_record(reference: dict[str, Any], record: dict[str, Any]) -> dict[str, Any] | None:
+    """Admit only the producer's versioned proof bound to the original capture."""
+    view = record.get("identitySpecialized")
+    if not isinstance(view, dict) or set(view) != {"id", "code", "codeSha256", "coverage", "locations", "proof", "sourceMap"}:
+        return None
+    proof = view["proof"]
+    if (not isinstance(proof, dict) or set(proof) != {"version", "source", "originalCodeSha256", "identityPredicates", "scope", "selectedEdges", "removedGuards"}
+            or type(proof["version"]) is not int or proof["version"] != 1 or proof["source"] != "certified_receiver_identity_ast"
+            or proof["originalCodeSha256"] != record["codeSha256"] or not _identity(proof["identityPredicates"])
+            or proof["identityPredicates"] != reference.get("identityPredicates") or proof["scope"] != _IDENTITY_SCOPE
+            or view["coverage"] != "identity_specialized_method" or record["coverage"] != "whole_method"
+            or not isinstance(view["code"], str) or not view["code"].strip()
+            or hashlib.sha256(view["code"].encode()).hexdigest() != view["codeSha256"]):
+        return None
+    identity = proof["identityPredicates"]
+    if view["id"] != f'csharp-specialized:{record["id"]}:{view["codeSha256"]}:{identity["Projectile.type"]}:{identity["Projectile.aiStyle"]}':
+        return None
+    edges = proof["selectedEdges"]
+    if (not isinstance(edges, list) or not edges or any(not isinstance(e, dict) or set(e) != {"at", "block", "op", "successor"}
+            or any(not _integer(e[k]) for k in ("at", "block", "successor")) or not isinstance(e["op"], str) for e in edges)
+            or not isinstance(proof["removedGuards"], list) or not proof["removedGuards"]
+            or any(not _integer(at) or at not in {e["at"] for e in edges} for at in proof["removedGuards"])):
+        return None
+    matched_receipt = False
+    for path in record["graphPaths"]:
+        found = _at_path(reference, path)
+        graph = found[2] if found else {}
+        if _certificate(graph) != _certificate(record):
+            return None
+        selected = graph.get("identitySelected", graph)
+        receipt = selected.get("identitySelection") if isinstance(selected, dict) else None
+        if isinstance(selected, dict) and "identitySelection" not in selected:
+            continue
+        if (not isinstance(receipt, dict) or receipt.get("source") != "certified_receiver_identity_cfg"
+                or type(receipt.get("version")) is not int or receipt["version"] != 1
+                or any(receipt.get(k) != proof[k] for k in ("identityPredicates", "scope"))
+                or not isinstance(receipt.get("selectedEdges"), list)
+                or any(edge not in edges for edge in receipt["selectedEdges"])):
+            return None
+        matched_receipt = True
+    if not matched_receipt:
+        return None
+    locations = view["locations"]
+    if not isinstance(locations, list) or len(locations) != len(record["locations"]):
+        return None
+    for old, row in zip(record["locations"], locations):
+        if not isinstance(row, dict) or row.get("ilOffset") != old["ilOffset"]:
+            return None
+        if set(row) == {"ilOffset", "unresolved"}:
+            if row["unresolved"] not in {"decompiler_source_location_unavailable", "excluded_by_identity_proof"}:
+                return None
+        elif (set(row) != {"ilOffset", "startLine", "endLine"} or not _integer(row["startLine"])
+              or not _integer(row["endLine"]) or not 1 <= row["startLine"] <= row["endLine"] <= len(view["code"].split("\n"))):
+            return None
+    if view["sourceMap"] != {"kind": "il_source_locations_v1", "original": record["locations"], "specialized": locations}:
+        return None
+    return {**record, **{k: copy.deepcopy(view[k]) for k in ("code", "codeSha256", "coverage", "locations")},
+            "identitySpecialization": {k: copy.deepcopy(proof[k]) for k in ("identityPredicates", "scope")}}

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from native_attack_fact_analysis import Unrecognized, direct_call_count, straight_line_arguments, type_blocks
 from native_ammo_control_flow import literal_store_predicates
+from native_shot_variant_analysis import conditional_arithmetic_variants
 
 
 def adjusted_counted_spawn(block, call_offset):
@@ -259,7 +260,7 @@ def ammo_method_facts(instructions, method):
     rejected = []
     blocks = [(item_id, guard, block, None) for item_id, guard, block in type_blocks(code, "Terraria.Item.type", item_arg, rejected)]
     for item_id, guard, block, rejection in blocks + rejected:
-        row = rows.setdefault(item_id, {"itemId": item_id, "rules": [], "unresolvedLiteralWrites": [], "spawnSites": [], "spawnOriginSetups": [], "unrecognizedProjectileWriteOffsets": []})
+        row = rows.setdefault(item_id, {"itemId": item_id, "rules": [], "conditionalArithmeticVariants": [], "unresolvedLiteralWrites": [], "spawnSites": [], "spawnOriginSetups": [], "unrecognizedProjectileWriteOffsets": []})
         if rejection is not None:
             row["unresolvedLiteralWrites"].extend(unresolved_literal_writes(block, target, guard, rejection, "unproved_item_guard"))
             row["unrecognizedProjectileWriteOffsets"].extend(projectile_write_offsets(block, target))
@@ -276,6 +277,8 @@ def ammo_method_facts(instructions, method):
                 row["spawnOriginSetups"].append({"sourceConstructorIlOffset": call.offset,
                     "initialYRelativeToMountedCenterPx": -prefix[3].arg,
                     "scope": "Vector2 constructor Y argument inside this native spawn branch; later origin mutations, X coordinate and final spawn position not modeled"})
+        variants = conditional_arithmetic_variants(code, guard, block, target, item_id)
+        row["conditionalArithmeticVariants"].extend(variants)
         rules, reason, ownership = item_literal_rewrite(code, guard, block, target)
         if not rules:
             rules = literal_store_predicates(code, guard, block, target)
@@ -297,6 +300,8 @@ def ammo_method_facts(instructions, method):
                 basis = "current_shot_projectile" if projectile == ("ldloc", target[1]) else "fixed_projectile" if projectile[0] == "const" else "unknown_expression"
                 spawn = {"sourceSpawnIlOffset": call.offset, "sourceGuardIlOffset": guard,
                          "projectileBasis": basis, "nativeItemSpecificDelivery": True,
+                         "projectileArgumentSource": projectile,
+                         "damageArgumentSource": args[4 if count == 10 else 6],
                          "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution"}
                 count_bounds = adjusted_counted_spawn(block, call.offset)
                 if count_bounds is not None:
@@ -308,4 +313,18 @@ def ammo_method_facts(instructions, method):
                 row["spawnSites"].append(spawn)
             except (Unrecognized, IndexError):
                 continue
-    return [rows[k] for k in sorted(rows) if any(rows[k][f] for f in ("rules", "unresolvedLiteralWrites", "spawnSites", "unrecognizedProjectileWriteOffsets"))]
+    for row in rows.values():
+        for variant in row["conditionalArithmeticVariants"]:
+            for update in variant["localUpdates"]:
+                update["laterSpawnArgumentUses"] = [
+                    {"sourceSpawnIlOffset": spawn["sourceSpawnIlOffset"], "argument": role,
+                     "scope": "Same local read at later spawn; intervening writes and hooks are not excluded"}
+                    for spawn in row["spawnSites"] if spawn["sourceSpawnIlOffset"] > update["sourceStoreIlOffset"]
+                    for role, key in (("projectile", "projectileArgumentSource"), ("damage", "damageArgumentSource"))
+                    if spawn.get(key) == ("ldloc", update["local"])]
+        if not row["conditionalArithmeticVariants"]:
+            del row["conditionalArithmeticVariants"]
+            for spawn in row["spawnSites"]:
+                spawn.pop("projectileArgumentSource", None)
+                spawn.pop("damageArgumentSource", None)
+    return [rows[k] for k in sorted(rows) if any(rows[k].get(f) for f in ("rules", "conditionalArithmeticVariants", "unresolvedLiteralWrites", "spawnSites", "unrecognizedProjectileWriteOffsets"))]

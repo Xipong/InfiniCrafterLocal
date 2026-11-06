@@ -1610,6 +1610,159 @@
         {
           "itemId": 3542,
           "rules": [],
+          "conditionalArithmeticVariants": [
+            {
+              "sourceGuardIlOffset": 298,
+              "sourceBranchIlOffset": 314,
+              "sourceRandomCallIlOffset": 307,
+              "branchTaken": false,
+              "whenSourceCondition": {
+                "operation": "uniform_integer_less_than",
+                "minimumInclusive": 0,
+                "maximumExclusive": 100,
+                "threshold": 20
+              },
+              "conditionalProbability": {
+                "numerator": 20,
+                "denominator": 100,
+                "scope": "Conditional on reaching this RNG call; not final shot frequency"
+              },
+              "projectileLocal": 0,
+              "projectileOffset": 1,
+              "localUpdates": [
+                {
+                  "local": 0,
+                  "operator": "add",
+                  "operand": 1,
+                  "sourceReadIlOffset": 316,
+                  "sourceStoreIlOffset": 319,
+                  "basis": "local_value_at_branch_entry",
+                  "numericSemantics": "original_IL_arithmetic_not_evaluated",
+                  "initializationProvenance": {
+                    "source": {
+                      "kind": "argument_field",
+                      "argument": 2,
+                      "field": "Terraria.Item.shoot"
+                    },
+                    "sourceStoreIlOffset": 28,
+                    "interveningWriteOrAddressOffsets": [
+                      140,
+                      238,
+                      262,
+                      286
+                    ],
+                    "scope": "Dominating initialization only; intervening transformations and byrefs are not evaluated. This does not equate the branch-entry value with the initial field or argument."
+                  },
+                  "laterSpawnArgumentUses": [
+                    {
+                      "sourceSpawnIlOffset": 21125,
+                      "argument": "projectile",
+                      "scope": "Same local read at later spawn; intervening writes and hooks are not excluded"
+                    }
+                  ]
+                },
+                {
+                  "local": 4,
+                  "operator": "mul",
+                  "operand": 3,
+                  "sourceReadIlOffset": 320,
+                  "sourceStoreIlOffset": 324,
+                  "basis": "local_value_at_branch_entry",
+                  "numericSemantics": "original_IL_arithmetic_not_evaluated",
+                  "initializationProvenance": {
+                    "source": {
+                      "kind": "argument",
+                      "argument": 3
+                    },
+                    "sourceStoreIlOffset": 116,
+                    "interveningWriteOrAddressOffsets": [
+                      146,
+                      196
+                    ],
+                    "scope": "Dominating initialization only; intervening transformations and byrefs are not evaluated. This does not equate the branch-entry value with the initial field or argument."
+                  },
+                  "laterSpawnArgumentUses": [
+                    {
+                      "sourceSpawnIlOffset": 21125,
+                      "argument": "damage",
+                      "scope": "Same local read at later spawn; intervening writes and hooks are not excluded"
+                    }
+                  ]
+                }
+              ],
+              "inputBinding": {
+                "basis": "item_shoot_snapshot",
+                "sourceInitializationIlOffset": 28,
+                "requiredUseAmmoMaximum": 0,
+                "conditions": [
+                  "Item.type equals catalog item identity at every tested read",
+                  "Item.useAmmo is nonpositive at the source read",
+                  "Item.shoot at initialization equals the captured item.shoot"
+                ],
+                "scope": "Conditional source input binding only; hooks may mutate item fields before reads or projectile locals after this site"
+              },
+              "scope": "Arithmetic source alternative at this stage only; source conditions, later writes, hooks and shooting admission are not evaluated"
+            },
+            {
+              "sourceGuardIlOffset": 298,
+              "sourceBranchIlOffset": 314,
+              "sourceRandomCallIlOffset": 307,
+              "branchTaken": true,
+              "whenSourceCondition": {
+                "operation": "uniform_integer_greater_equal",
+                "minimumInclusive": 0,
+                "maximumExclusive": 100,
+                "threshold": 20
+              },
+              "conditionalProbability": {
+                "numerator": 80,
+                "denominator": 100,
+                "scope": "Conditional on reaching this RNG call; not final shot frequency"
+              },
+              "projectileLocal": 0,
+              "projectileOffset": 0,
+              "localUpdates": [
+                {
+                  "local": 1,
+                  "operator": "sub",
+                  "operand": 1.0,
+                  "sourceReadIlOffset": 328,
+                  "sourceStoreIlOffset": 335,
+                  "basis": "local_value_at_branch_entry",
+                  "numericSemantics": "original_IL_arithmetic_not_evaluated",
+                  "initializationProvenance": {
+                    "source": {
+                      "kind": "argument_field",
+                      "argument": 2,
+                      "field": "Terraria.Item.shootSpeed"
+                    },
+                    "sourceStoreIlOffset": 35,
+                    "interveningWriteOrAddressOffsets": [
+                      68,
+                      98,
+                      112,
+                      142,
+                      204
+                    ],
+                    "scope": "Dominating initialization only; intervening transformations and byrefs are not evaluated. This does not equate the branch-entry value with the initial field or argument."
+                  },
+                  "laterSpawnArgumentUses": []
+                }
+              ],
+              "inputBinding": {
+                "basis": "item_shoot_snapshot",
+                "sourceInitializationIlOffset": 28,
+                "requiredUseAmmoMaximum": 0,
+                "conditions": [
+                  "Item.type equals catalog item identity at every tested read",
+                  "Item.useAmmo is nonpositive at the source read",
+                  "Item.shoot at initialization equals the captured item.shoot"
+                ],
+                "scope": "Conditional source input binding only; hooks may mutate item fields before reads or projectile locals after this site"
+              },
+              "scope": "Arithmetic source alternative at this stage only; source conditions, later writes, hooks and shooting admission are not evaluated"
+            }
+          ],
           "unresolvedLiteralWrites": [],
           "spawnSites": [
             {
@@ -1617,6 +1770,14 @@
               "sourceGuardIlOffset": 20835,
               "projectileBasis": "current_shot_projectile",
               "nativeItemSpecificDelivery": true,
+              "projectileArgumentSource": [
+                "ldloc",
+                0
+              ],
+              "damageArgumentSource": [
+                "ldloc",
+                4
+              ],
               "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution",
               "trajectoryReference": {
                 "status": "native_branch_aim_and_spread_not_fully_modeled",

@@ -230,3 +230,78 @@ def test_matching_pe_refusal_preserves_the_graph_and_its_explicit_source_refusal
     assert len(source["motion"]["programs"][0]["operations"]) == 161
     assert "nativeCSharpSourceRef" not in source["motion"]["programs"][0]
     assert parent == before
+
+
+def _specialized_fixture():
+    reference, calls = _parts(_parent())
+    record = reference["nativeCSharpSource"]["records"][0]
+    from infini_local.pipelines.context.csharp_source_view import _IDENTITY_SCOPE
+    edges = [{"at": 3, "block": 0, "op": "brfalse", "successor": 4}]
+    receipt = {"version": 1, "source": "certified_receiver_identity_cfg", "identityPredicates": reference["identityPredicates"],
+               "scope": _IDENTITY_SCOPE, "selectedEdges": edges}
+    graph = reference["motion"]["programs"][0]
+    graph["identitySelected"] = {**copy.deepcopy(graph), "identitySelection": receipt}
+    code = "void NativeAI() { Emit(0); }"
+    digest = hashlib.sha256(code.encode()).hexdigest()
+    locations = [{"ilOffset": 10, "startLine": 1, "endLine": 1}, {"ilOffset": 3, "unresolved": "excluded_by_identity_proof"}]
+    record["identitySpecialized"] = {"id": f'csharp-specialized:{record["id"]}:{digest}:1:1', "code": code,
+        "codeSha256": digest, "coverage": "identity_specialized_method", "locations": locations,
+        "proof": {**receipt, "version": 1, "source": "certified_receiver_identity_ast", "originalCodeSha256": record["codeSha256"], "removedGuards": [3]},
+        "sourceMap": {"kind": "il_source_locations_v1", "original": copy.deepcopy(record["locations"]), "specialized": copy.deepcopy(locations)}}
+    return reference, calls, record
+
+
+def test_specialized_source_remaps_locations_and_preserves_identity():
+    reference, calls, record = _specialized_fixture()
+    before = copy.deepcopy(reference)
+    projected, linked = native_csharp_source_for_llm(reference, calls)
+    selected = projected["nativeCSharpSource"]["records"][0]
+    assert selected["code"] == record["identitySpecialized"]["code"]
+    assert selected["identitySpecialization"]["identityPredicates"] == reference["identityPredicates"]
+    assert linked[0]["sourceLocation"]["statement"]["locations"][0]["startLine"] == 1
+    assert linked[0]["sourceLocation"]["predicates"][0]["sourceSites"][0]["mapping"] == "unavailable"
+    assert known_native_csharp_context(projected)
+    assert reference == before
+
+
+@pytest.mark.parametrize("mutation", ["hash", "identity", "original", "future", "map", "method"])
+def test_invalid_specialization_preserves_full_source(mutation):
+    reference, calls, record = _specialized_fixture()
+    view = record["identitySpecialized"]
+    if mutation == "hash": view["codeSha256"] = "f" * 64
+    if mutation == "identity": view["proof"]["identityPredicates"] = {"Projectile.type": 2, "Projectile.aiStyle": 1}
+    if mutation == "original": view["proof"]["originalCodeSha256"] = "f" * 64
+    if mutation == "future": view["proof"]["version"] = 2
+    if mutation == "map": view["locations"][0]["startLine"] = 999
+    if mutation == "method": reference["motion"]["programs"][0]["method"] = "Other.Method"
+    projected, linked = native_csharp_source_for_llm(reference, calls)
+    if mutation == "method":
+        assert projected == reference and linked == calls
+    else:
+        assert projected["nativeCSharpSource"]["records"][0]["code"] == record["code"]
+
+
+@pytest.mark.parametrize("variant", ["valid", "conflict", "absent", "certificate"])
+def test_specialization_multiple_same_method_graph_paths(variant):
+    from infini_local.pipelines.context.csharp_source_view import _specialized_record
+    reference, calls, record = _specialized_fixture()
+    graphs = reference["motion"]["programs"]
+    for index in range(1, 25):
+        graph = copy.deepcopy(graphs[0])
+        graph.pop("identitySelected")
+        graphs.append(graph)
+        record["graphPaths"].append(["motion", "programs", index])
+    if variant == "conflict":
+        graphs[-1]["identitySelection"] = copy.deepcopy(graphs[0]["identitySelected"]["identitySelection"])
+        graphs[-1]["identitySelection"]["identityPredicates"] = {"Projectile.type": 99, "Projectile.aiStyle": 1}
+    if variant == "absent": graphs[0].pop("identitySelected")
+    if variant == "certificate": graphs[-1]["method"] = "Other.Method"
+    candidate = _specialized_record(reference, record)
+    assert (candidate is not None) == (variant == "valid")
+    projected, _ = native_csharp_source_for_llm(reference, calls)
+    if variant == "valid":
+        assert projected["nativeCSharpSource"]["records"][0]["coverage"] == "identity_specialized_method"
+    elif variant == "certificate":
+        assert projected == reference
+    else:
+        assert projected["nativeCSharpSource"]["records"][0]["code"] == record["code"]
