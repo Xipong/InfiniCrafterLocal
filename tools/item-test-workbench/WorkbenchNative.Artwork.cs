@@ -144,16 +144,14 @@ internal sealed partial class WNativeArtwork:IDisposable {
    var info=new FileInfo(pair.Value);if(!info.Exists||info.Length<33||info.Length>8*1024*1024)throw new InvalidDataException("Artwork PNG missing or exceeds8MiB: "+pair.Key);
    byte[] bytes=File.ReadAllBytes(pair.Value);if(!bytes.AsSpan(0,8).SequenceEqual(new byte[]{137,80,78,71,13,10,26,10}))throw new InvalidDataException("Artwork must be actual PNG bytes: "+pair.Key);
    foreach(var publication in selected.Where(x=>GeneratedAssetSyncService.FileNameFromPath(x.Selection.Path)==pair.Key)) {
-    byte[] identity=Encoding.ASCII.GetBytes(JsonSerializer.Serialize(publication.Identity));
-    using var digest=IncrementalHash.CreateHash(HashAlgorithmName.SHA256);digest.AppendData(identity);digest.AppendData(new byte[]{0});digest.AppendData(bytes);
-    string expected=(publication.Role.StartsWith("vfx:",StringComparison.Ordinal)?"infini_vfx_png_":"infini_asset_png_")+Convert.ToHexString(digest.GetHashAndReset()).ToLowerInvariant()+".png";
-    if(!string.Equals(pair.Key,expected,StringComparison.Ordinal))throw new InvalidDataException("Artwork publication identity/content mismatch; custom logical asset IDs and non-publication filenames are not certified by this bounded mode: "+pair.Key);
+    var names=PublicationNames(data,publication.Role,publication.Identity,bytes);
+    if(!string.Equals(pair.Key,names.Legacy,StringComparison.Ordinal) && !string.Equals(pair.Key,names.Scoped,StringComparison.Ordinal))throw new InvalidDataException("Artwork publication identity/content mismatch; custom logical asset IDs and non-publication filenames are not certified by this bounded mode: "+pair.Key);
    }
    if(System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(8,4))!=13 || !bytes.AsSpan(12,4).SequenceEqual(new byte[]{73,72,68,82})) throw new InvalidDataException("Artwork PNG must start with canonical IHDR");
    uint width=System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16,4)),height=System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(20,4));
    if(width==0||height==0||width>4096||height>4096||(ulong)width*height>16UL*1024*1024) throw new InvalidDataException("Artwork PNG dimensions exceed admission limit: positive dimensions <=4096 and <=16M pixels");
    string destination=Path.Combine(sync.CacheRoot,pair.Key);RejectSymlink(destination);File.WriteAllBytes(destination,bytes);string sha=Hash(File.ReadAllBytes(destination));hashes[pair.Key]=sha;
-   receipts.Add(new JsonObject{["publicationFileName"]=pair.Key,["suppliedPath"]=pair.Value,["stagedPath"]=destination,["bytes"]=bytes.Length,["copiedBytesSha256"]=sha,["publicationVerified"]=true,["publicationAlgorithm"]="LocalGenerator visual_sprite_generation._runtime_publication_identity or _publish_vfx_png: compact ASCII identity JSON + NUL + exact PNG bytes",["publicationScope"]="Root/runtime/impact default logical asset IDs; VFX exact recipeId/assetId identity; safe ASCII identities only"});
+   receipts.Add(new JsonObject{["publicationFileName"]=pair.Key,["suppliedPath"]=pair.Value,["stagedPath"]=destination,["bytes"]=bytes.Length,["copiedBytesSha256"]=sha,["publicationVerified"]=true,["publicationAlgorithm"]="Current image_store.publish: compact [world,item,role] JSON + NUL + exact request identity JSON + NUL + PNG bytes; historical identity + NUL + PNG aliases also verified",["publicationScope"]="Root/runtime/impact default logical asset IDs; VFX exact recipeId/assetId identity; safe ASCII identities only"});
   }
   typeof(InfiniCrafterLocalMod).GetProperty("Sprites")!.SetValue(null,cache);typeof(InfiniCrafterLocalMod).GetProperty("AssetSync")!.SetValue(null,sync);
   bool old=Main.dedServ;Main.dedServ=false;
@@ -168,6 +166,23 @@ internal sealed partial class WNativeArtwork:IDisposable {
    }
   }catch {Dispose();throw;}finally{Main.dedServ=old;}
   Report=new JsonObject{["scope"]="Original authored PNG core, native held layer and separate inventory preview; not full PreDraw or Terraria world rendering",["descriptorMutated"]=false,["admissionLimits"]=new JsonObject{["maxFileBytes"]=8*1024*1024,["maxWidth"]=4096,["maxHeight"]=4096,["maxPixels"]=16*1024*1024},["assetReceipts"]=receipts,["entrypoints"]=Entrypoints(),["fullProjectilePreDrawExecuted"]=false,["missingFullPreDrawAsset"]="Terraria Content/Images/MagicPixel.xnb",["inventoryPreviewAnchor"]=PreviewAnchor()};geometryObserver=new WNativeVisualGeometry();EnableVisualObserver();BeginFrame();
+ }
+ internal static (string Legacy,string Scoped) PublicationNames(GeneratedItemData data,string selectedRole,string[] identity,byte[] bytes) {
+  bool vfx=selectedRole.StartsWith("vfx:",StringComparison.Ordinal);
+  string role=vfx?"vfx_"+selectedRole[4..]:identity[1];
+  byte[] encodedIdentity=Encoding.ASCII.GetBytes(JsonSerializer.Serialize(identity));
+  using var digest=IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+  digest.AppendData(encodedIdentity);digest.AppendData(new byte[]{0});digest.AppendData(bytes);
+  string legacy=(vfx?"infini_vfx_png_":"infini_asset_png_")+Convert.ToHexString(digest.GetHashAndReset()).ToLowerInvariant()+".png";
+  // Current storage/image_store.publish: world/item/role scope, exact request
+  // identity and PNG bytes. The readable role label is not the asset identity.
+  string world=string.IsNullOrEmpty(data.RecipeMeta.WorldId)?"unscoped":data.RecipeMeta.WorldId;
+  string item=string.IsNullOrEmpty(data.Id)?"unscoped":data.Id;
+  digest.AppendData(Encoding.ASCII.GetBytes(JsonSerializer.Serialize(new[]{world,item,role})));
+  digest.AppendData(new byte[]{0});digest.AppendData(encodedIdentity);digest.AppendData(new byte[]{0});digest.AppendData(bytes);
+  string label=System.Text.RegularExpressions.Regex.Replace(role.ToLowerInvariant(),"[^a-z0-9_-]+","_").Trim('_');
+  if(label.Length>24)label=label[..24];if(label.Length==0)label="asset";
+  return (legacy,label+"--"+Convert.ToHexString(digest.GetHashAndReset()).ToLowerInvariant()+".png");
  }
  static string Hash(byte[] bytes)=>Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
  static void RejectSymlink(string path) {for(FileSystemInfo? p=new FileInfo(path);p is not null;p=p is FileInfo file?file.Directory:((DirectoryInfo)p).Parent)if(p.LinkTarget is not null||(p.Exists&&(p.Attributes&FileAttributes.ReparsePoint)!=0))throw new InvalidDataException("Artwork symlink/reparse path is not admitted: "+p.FullName);}
