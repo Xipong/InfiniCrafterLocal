@@ -19,6 +19,12 @@ internal static partial class EngineRuntimeChecks
     {
         var raw = JsonSerializer.SerializeToNode(typeof(GeneratorClient).GetMethod("AmmoRawFromItem", BindingFlags.NonPublic | BindingFlags.Static)!
             .Invoke(null, new object?[] { weapon, player }))!.AsObject();
+        return WeaponSourceSupplement(raw);
+    }
+
+    private static JsonObject WeaponSourceSupplement(JsonNode value)
+    {
+        var raw = value.DeepClone().AsObject();
         // Isolate the source supplement; original main inventory tests separately
         // assert observations, availability, multiplicity and fingerprint scope.
         foreach (string key in new[] { "playerInventoryObservation", "playerInventoryAmmoRaw",
@@ -29,6 +35,20 @@ internal static partial class EngineRuntimeChecks
             .Select(profile => profile.DeepClone()).ToArray();
         raw["nativeReplacementProjectileRaw"] = new JsonArray(profiles);
         return raw;
+    }
+
+    private static void AssertWeaponSourceFingerprint(JsonNode root, JsonNode fingerprint, string label)
+    {
+        Equal("observed", root["playerInventoryObservation"]!["status"]!.GetValue<string>(),
+            label + " root retains its captured inventory observation");
+        Equal("unavailable", fingerprint["playerInventoryObservation"]!["status"]!.GetValue<string>(),
+            label + " fingerprint does not pretend to observe inventory");
+        Equal("no_player", fingerprint["playerInventoryObservation"]!["reason"]!.GetValue<string>(),
+            label + " fingerprint records the player-free basis");
+        Equal(true, root["playerInventoryAmmoRaw"] is JsonArray, label + " root has observed candidates");
+        Equal(true, fingerprint["playerInventoryAmmoRaw"] is null, label + " fingerprint candidates remain unknown");
+        AssertParentFingerprintNativeFacts(WeaponSourceSupplement(root), WeaponSourceSupplement(fingerprint),
+            label + " source supplement", requireRootView: true);
     }
 
     private static void ExportWeaponSourceHookFixture(string name, JsonObject raw)
@@ -350,8 +370,8 @@ internal static partial class EngineRuntimeChecks
             var packet = JsonNode.Parse(prepared.PayloadJson)!;
             Equal(5, packet["itemA"]!["ammoRaw"]!["nativeReplacementProjectileRaw"]!.AsArray().Count,
                 "actual deferred Prepare retains all five source-defined GlobalItem outputs");
-            AssertParentFingerprintNativeFacts(packet["itemA"]!["ammoRaw"], packet["itemA"]!["fingerprint"]!["ammoRaw"],
-                "actual source-defined roster packet root/fingerprint parity", requireRootView: true);
+            AssertWeaponSourceFingerprint(packet["itemA"]!["ammoRaw"]!, packet["itemA"]!["fingerprint"]!["ammoRaw"]!,
+                "actual source-defined roster packet root/fingerprint");
             string? export = Environment.GetEnvironmentVariable("INFINI_REPLACEMENT_PROFILE_DIR");
             if (!string.IsNullOrWhiteSpace(export))
             {
@@ -382,8 +402,8 @@ internal static partial class EngineRuntimeChecks
             PumpParentAnalysis(Task.Run(deferred.CompleteAnalysis));
             var actual = JsonNode.Parse(deferred.PayloadJson)!;
             Equal(true, JsonNode.DeepEquals(expected, actual), "replacement profiles have exact synchronous/deferred parity with frozen inputs");
-            AssertParentFingerprintNativeFacts(actual["itemA"]!["ammoRaw"], actual["itemA"]!["fingerprint"]!["ammoRaw"],
-                "root/fingerprint share every replacement mechanic and condition", requireRootView: true);
+            AssertWeaponSourceFingerprint(actual["itemA"]!["ammoRaw"]!, actual["itemA"]!["fingerprint"]!["ammoRaw"]!,
+                "root/fingerprint share every source replacement mechanic and condition");
             Equal(false, deferred.PayloadJson.Contains("$infiniSourceAnalysis", StringComparison.Ordinal), "replacement profiles cannot leak unresolved source markers");
             if (!string.IsNullOrWhiteSpace(export)) File.WriteAllText(Path.Combine(export, type + ".json"), deferred.PayloadJson);
         }

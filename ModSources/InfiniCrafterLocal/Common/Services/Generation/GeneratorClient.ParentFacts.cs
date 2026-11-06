@@ -640,12 +640,21 @@ public sealed partial class GeneratorClient
         bool KeepInputProfile(AmmoCandidate candidate) => bindings[candidate]["includeInputProjectileProfile"]!.GetValue<bool>();
         var replacementTypes = bindings.Values.Where(binding => binding["includeReplacementProjectileProfile"]!.GetValue<bool>())
             .Select(binding => binding["sourceRuleOutputProjectileId"]!.GetValue<int>()).Distinct().Take(3).ToArray();
-        var replacementProfiles = CaptureSourceReplacementProjectileProfiles(item, semantics);
-        var sourceProfileTypes = replacementProfiles.OfType<JsonObject>()
-            .Select(profile => profile["type"]!.GetValue<int>()).ToHashSet();
+        var sourceProfiles = CaptureSourceReplacementProjectileProfiles(item, semantics);
+        var sourceByType = sourceProfiles.OfType<JsonObject>()
+            .ToDictionary(profile => profile["type"]!.GetValue<int>());
+        var replacementProfiles = new JsonArray();
+        // Keep the existing candidate-derived order as the prefix. Enrich an
+        // overlapping identity with its exact source references, then append
+        // additional source-only alternatives without displacing observations.
         foreach (int type in replacementTypes)
-            if (!sourceProfileTypes.Contains(type))
-                replacementProfiles.Add(JsonSerializer.SerializeToNode(SourceReplacementProjectileRaw(type, item), WireJsonOptions));
+            replacementProfiles.Add(sourceByType.TryGetValue(type, out var sourceProfile)
+                ? sourceProfile.DeepClone()
+                : JsonSerializer.SerializeToNode(SourceReplacementProjectileRaw(type, item), WireJsonOptions));
+        var candidateTypes = replacementTypes.ToHashSet();
+        foreach (var sourceProfile in sourceProfiles.OfType<JsonObject>())
+            if (!candidateTypes.Contains(sourceProfile["type"]!.GetValue<int>()))
+                replacementProfiles.Add(sourceProfile.DeepClone());
         return new
         {
             mode = "weapon_uses_ammo",

@@ -311,7 +311,13 @@ internal static partial class EngineRuntimeChecks
                 {
                     Equal("suppressed_default_shot", ammo.GetProperty("projectileSemanticsReference").GetProperty("ammoProjectileRelation").GetString(), "summary also respects Global Shoot admission before ModItem");
                     Equal(JsonValueKind.Null, binding.GetProperty("sourceRuleOutputProjectileId").ValueKind, "Global Shoot false skips ModItem Shoot and default spawn");
-                    Equal(0, ammo.GetProperty("nativeReplacementProjectileRaw").GetArrayLength(), "skipped ModItem spawn cannot supply a replacement profile");
+                    var blockedProfile = ammo.GetProperty("nativeReplacementProjectileRaw").EnumerateArray()
+                        .Single(profile => profile.GetProperty("type").GetInt32() == ProjectileID.Bee);
+                    Equal(true, blockedProfile.GetProperty("sourceReferences").EnumerateArray().Any(source =>
+                        source.GetProperty("dispatchStatus").GetString() == "blocked_by_inspected_global_shoot_suppression"),
+                        "skipped ModItem source remains evidence with explicit blocked dispatch, not a candidate outcome");
+                    Equal(false, binding.GetProperty("includeReplacementProjectileProfile").GetBoolean(),
+                        "suppressed candidate does not claim an executed replacement");
                 }
                 else
                 {
