@@ -1,11 +1,11 @@
 # Движение игрока и VFX дополнительных прыжков
 
-Движение задаётся общим `playerEffect` в `configure_accessory`, `configure_armor`
-или `apply_generated_buff_on_use`. Оружие может выдавать такой бафф через явное
+Движение задаётся общим `playerEffect` в `accessory`, `armor`
+или `generated_buff_on_use`. Оружие может выдавать такой бафф через явное
 использование (`apply_item_effects`) или удержание именованной группы
-(`refresh_generated_effect_group_while_held`). Для движения не нужно превращать
+(`refresh_held_effect`). Для движения не нужно превращать
 оружие в аксессуар. Отдельно функциональная экипировка может применить выбранную
-группу через `apply_generated_buff_on_event` на `on_hurt` или `on_enemy_kill`.
+группу через `generated_buff_on_event` на `on_hurt` или `on_enemy_kill`.
 Условие `condition` относится ко всему конкретному компоненту: `always` или
 `stationary` (нулевая скорость, без анимации предмета).
 
@@ -37,6 +37,9 @@ Cloud/Blizzard/Sandstorm/Fart/Tsunami jumps не входят в этот кон
 во время этого дополнительного прыжка. Их точная нейтраль при пропуске — `1`;
 compiler оставляет отдельные receipts пропусков. Механика исполняется настоящим
 `tML ExtraJump` с обычным jump input, а не tooltip-описанием или ID ванильного прыжка.
+Авторская скорость применяется внутри native `JumpMovement`; последующие gravity,
+gliding и другие movement contributions не перезаписываются. Общий `Player.jumpSpeed`
+восстанавливается до выхода из этого вызова, включая исключение.
 
 Заряды обновляются только при native refresh движения (включая землю, native
 wall-slide и grappling/rope refresh). Смена экипировки, копия предмета и повторное

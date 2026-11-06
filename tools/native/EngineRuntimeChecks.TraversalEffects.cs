@@ -67,7 +67,7 @@ internal static partial class EngineRuntimeChecks
             Terraria.Main.player[0] = player;
             var data = NamedItemEffectsFixture(); data.Id = "airjump-buff-codec"; data.SourceMode = "test_fixture";
             data.RuntimeProgram.EffectGroups![0].GeneratedBuff = new GeneratedBuffSpec { DurationTicks = 3,
-                LifeRegen = 7, LifeRegenCondition = "stationary", OreSenseRadiusTiles = 2, TreasureSenseCondition = "stationary",
+                LifeRegen = 7, LifeRegenCondition = "stationary", OreSenseRadiusTiles = 1, TreasureSenseCondition = "stationary",
                 PlayerEffect = new PlayerEffectSpec { AirJump = new PlayerAirJumpSpec { Count = 1, LaunchSpeedPxPerTick = 8, HoldDurationTicks = 3 } } };
             data = GeneratedItemData.FromJson(data.ToNetworkJson()) ?? throw new System.InvalidOperationException("jump buff fixture refused");
             registry.Register(data);
