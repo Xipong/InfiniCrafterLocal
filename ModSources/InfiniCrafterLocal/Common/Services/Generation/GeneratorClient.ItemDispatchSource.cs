@@ -78,12 +78,12 @@ public sealed partial class GeneratorClient
             if (branches.Any(outer => outer != branch && (branch == outer.TrueStatement || branch.Ancestors.Contains(outer.TrueStatement)))) continue;
             if (++count > regionLimit) { gaps.Add("dispatcher_region_count_bound"); break; }
             var excerpt = (IfElseStatement)branch.Clone(); excerpt.FalseStatement = Statement.Null;
-            var rendered = RenderCSharp(excerpt);
+            var rendered = RenderCSharp(excerpt, includeLocations: false);
             if (rendered.Code.Length > regionCharacters || characters + rendered.Code.Length > totalCharacters)
             { gaps.Add("dispatcher_region_character_bound; entire_region_omitted"); continue; }
             var enclosing = new JsonArray();
             foreach (var outer in branch.Ancestors.OfType<IfElseStatement>().Reverse())
-                enclosing.Add(new JsonObject { ["condition"] = RenderCSharp(outer.Condition).Code.Trim(),
+                enclosing.Add(new JsonObject { ["condition"] = RenderCSharp(outer.Condition, includeLocations: false).Code.Trim(),
                     ["requiredArm"] = (branch == outer.TrueStatement || branch.Ancestors.Contains(outer.TrueStatement)) ? "true" : "false" });
             var offsets = branch.Condition.DescendantsAndSelf.Concat(branch.TrueStatement.DescendantsAndSelf).SelectMany(node => node.Annotations.OfType<ILInstruction>())
                 .SelectMany(instruction => instruction.ILRanges).Where(range => range.End > range.Start)
@@ -94,7 +94,7 @@ public sealed partial class GeneratorClient
             record["metadataToken"] = document.Method.MetadataToken; record["assemblySha256"] = document.Module.Sha256;
             record["coverage"] = "conditional_source_region_with_unresolved_inputs";
             record["code"] = rendered.Code; record["codeSha256"] = sha;
-            record["entryCondition"] = RenderCSharp(branch.Condition).Code.Trim();
+            record["entryCondition"] = RenderCSharp(branch.Condition, includeLocations: false).Code.Trim();
             record["enclosingConditions"] = enclosing;
             record["sourceIlOffsets"] = new JsonArray(offsets.Select(offset => (JsonNode?)JsonValue.Create(offset)).ToArray());
             record["unknowns"] = new JsonArray("local_bindings_and_receiver_aliases_not_evaluated", "enclosing_loops_exceptions_callers_and_hooks_unresolved", "false_arm_and_other_regions_not_included; absence_not_proved");

@@ -33,7 +33,14 @@ internal static partial class EngineRuntimeChecks
             "pre-cancelled document does not allocate a whole-module type system");
         using var document = (IDisposable)SourcePerformanceCreate("NativeCSharpDocument", method, module, CancellationToken.None);
         var shared = CSharpFixtureMember(module, "typeSystem");
+        var codeOnly = CSharpFixtureMember(document, "original");
+        Equal(0, ((Array)CSharpFixtureMember(codeOnly, "Locations")).Length,
+            "character accounting does not eagerly build whole-method locations");
         var original = CSharpFixtureMember(document, "Original");
+        Equal((string)CSharpFixtureMember(codeOnly, "Code"), (string)CSharpFixtureMember(original, "Code"),
+            "lazy location materialization preserves the already bounded code");
+        Equal(true, ReferenceEquals(original, CSharpFixtureMember(document, "Original")),
+            "whole-method locations are materialized only once per retained document");
         var tree = (SyntaxTree)CSharpFixtureMember(document, "Tree");
         var nodes = tree.DescendantsAndSelf.ToArray();
         var positions = nodes.Select(node => (node.StartLocation, node.EndLocation, node.Parent)).ToArray();

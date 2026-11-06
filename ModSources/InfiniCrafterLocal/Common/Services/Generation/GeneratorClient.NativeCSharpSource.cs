@@ -201,7 +201,22 @@ public sealed partial class GeneratorClient
         internal readonly SyntaxTree Tree;
         internal readonly MethodDeclaration Declaration;
         internal readonly int Nodes, Characters;
-        internal readonly CSharpRendered Original;
+        private CSharpRendered original;
+        private bool originalHasLocations;
+        internal CSharpRendered Original
+        {
+            get
+            {
+                // Most dispatcher/lifecycle consumers need only excerpts. Build
+                // the whole-method location map only when its reader asks for it.
+                if (!originalHasLocations)
+                {
+                    original = RenderCSharp(Tree);
+                    originalHasLocations = true;
+                }
+                return original;
+            }
+        }
 
         internal NativeCSharpDocument(MethodInfo method, NativeCSharpModule module, CancellationToken cancellation)
             : this(method, module, cancellation, methodAlreadyVerified: false) { }
@@ -224,8 +239,8 @@ public sealed partial class GeneratorClient
             Declaration = Tree.Descendants.OfType<MethodDeclaration>().Single();
             if (Tree.DescendantsAndSelf.SelectMany(node => node.Annotations.OfType<ILFunction>()).Distinct().Any(function => function.Warnings.Count > 0))
                 throw new NotSupportedException("csharp_decompiler_warnings");
-            Original = RenderCSharp(Tree);
-            Characters = Original.Code.Length;
+            original = RenderCSharp(Tree, includeLocations: false);
+            Characters = original.Code.Length;
             if (Characters > NativeCSharpCodeLimit) throw new NotSupportedException("csharp_method_character_bound");
             cancellation.ThrowIfCancellationRequested();
         }
