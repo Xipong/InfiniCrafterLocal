@@ -71,6 +71,13 @@ internal static class RecipeJournalView
             && !GeneratedItemData.IsPlayerSaveReferenceOnly(d) && d.RecipeMeta.WorldId == child.RecipeMeta.WorldId);
     }
 
+    internal static (Rectangle Ingredients, Rectangle Result) DiagramCaptionBounds(Rectangle inputA, Rectangle inputB, Rectangle result, int y)
+    {
+        var inputs = Rectangle.Union(inputA, inputB);
+        return (new Rectangle(inputs.X - 28, y, inputs.Width + 56, 20),
+            new Rectangle(result.X - 28, y, result.Width + 56, 20));
+    }
+
     internal static (Rectangle Back, Rectangle Save) DetailControls(Rectangle area)
     {
         int x = area.X + 12, width = Math.Max(0, area.Width - 24);
@@ -98,6 +105,16 @@ internal static class RecipeJournalView
             new Rectangle(list.Right - 30, bottom, 30, 24), new Rectangle(book.Right - 50, HeaderRow(book).Y, 30, HeaderRow(book).Height));
     }
 
+    internal static Rectangle DiscoverySlotBounds(Layout layout, int index)
+    {
+        if (layout.Columns <= 0 || index < 0 || index >= layout.Rows * layout.Columns) return Rectangle.Empty;
+        const int pitch = 52, size = 48;
+        int occupiedWidth = (layout.Columns - 1) * pitch + size;
+        int start = layout.List.X + (layout.List.Width - occupiedWidth) / 2;
+        return new Rectangle(start + index % layout.Columns * pitch,
+            layout.List.Y + index / layout.Columns * pitch, size, size);
+    }
+
     internal readonly record struct Layout(Rectangle Book, Rectangle List, Rectangle Detail, int Rows, int Columns);
     internal static Layout Bounds(int width, int height)
     {
@@ -116,7 +133,7 @@ internal static class RecipeJournalView
         int contentHeight = Math.Max(0, h - top - footer);
         bool narrow = w < 700;
         int gutter = Math.Min(12, narrow ? contentHeight : pageWidth);
-        int listWidth = narrow ? pageWidth : pageWidth * 42 / 100 / 52 * 52;
+        int listWidth = narrow ? pageWidth : pageWidth * 42 / 100;
         // A short viewport must not paint a partial row over the detail page.
         int listHeight = narrow
             ? Math.Min(104, Math.Max(contentHeight >= 104 ? 52 : 0, contentHeight / 3 / 52 * 52))
