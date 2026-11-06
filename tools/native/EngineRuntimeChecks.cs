@@ -68,6 +68,7 @@ internal static partial class EngineRuntimeChecks
         (string Name, Action Check)[] checks = {
             ("mechanics source preserves effects and unknowns", MechanicsSourcePreservesEffectsAndUnknowns),
             ("mechanics source binds explicit native roots", MechanicsSourceBindsExplicitNativeRoots),
+            ("mechanics source call index scanning parity", MechanicsCallIndexMatchesScanningOracle),
             ("parent capture panel validates offline inputs", ParentCapturePanelValidation),
             ("parent item dispatcher source actual Prepare", ParentItemDispatcherSourceReachesPrepare),
             ("parent item dispatcher source guards bounds and cancellation", ParentItemDispatcherBoundsStayUnknown),

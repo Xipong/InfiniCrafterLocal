@@ -30,6 +30,8 @@ Author получает исходники с guards, alias scopes, child-profil
 
 Document cache использует LRU с прежними пределами: 8 документов, 200000 AST nodes, 1500000 символов суммарно и 750000 на метод. Подсчёт размера и code-only представления не клонируют AST для назначения coordinates; карта whole-method locations строится лениво и повторно используется только для неизменённого исходного дерева. Индекс концов conditional instructions живёт вместе с соответствующим immutable IL decode и не удерживает его после сброса source cache.
 
+Для mechanics и lifecycle индекс `call/callvirt` строится один раз на проекцию. Поиск сохраняет точные token/type/name и реальные полуинтервалы IL annotations; пропуски между ними не становятся допустимыми offsets. Lifecycle дополнительно проверяет native `Projectile`, `MethodInfo` и число параметров. Неоднозначность не превращается в доказанное исключение вызова.
+
 Projectile program cache также использует LRU: до 256 identities и 16 Mi символов сериализованного JSON. При давлении вытесняются только необходимые старые entries. Завершившийся после invalidation или eviction старый build не возвращается в кеш; живой потребитель может повторить отменённый build в своём контексте. Готовый source хранится как immutable `JsonElement`; strict reference, mechanics и spawn consumers получают независимые lazy JSON wrappers без повторного разбора полного текста. Изменение одной проекции не меняет остальные или кеш.
 
 Эти пределы ограничивают сохраняемые документы и программы, а не transient allocations всего craft. Для затрат отдельно измеряются cold request, warm hits и source-cache-reset через `PrepareDeferred → CompleteAnalysis`; накопленные managed allocations и длительность headless-прогона не равны peak RAM и игровому frame time.
