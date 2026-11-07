@@ -426,7 +426,7 @@ public sealed partial class GeneratorClient
                 var stores = new Dictionary<int, int>();
                 foreach (AmmoIl instruction in block.Code)
                     if (instruction.Op == "stloc" && instruction.Arg is int local && storeBits.TryGetValue(instruction.Offset, out int storedDefinitionBit))
-                        stores[local] = bit;
+                        stores[local] = storedDefinitionBit;
                 finalStores[block.Start] = stores.Select(pair => (pair.Key, pair.Value)).ToArray();
             }
 
@@ -505,7 +505,7 @@ public sealed partial class GeneratorClient
                             }
                         }
                     }
-                    if (instruction.Op == "stloc" && instruction.Arg is int stored && storeBits.TryGetValue(instruction.Offset, out int bit))
+                    if (instruction.Op == "stloc" && instruction.Arg is int stored && storeBits.TryGetValue(instruction.Offset, out int storedDefinitionBit))
                     {
                         ClearLocal(state, localMasks[stored]); Set(state, storedDefinitionBit);
                     }
