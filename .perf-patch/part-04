@@ -1,0 +1,7 @@
+-                }
++                // Production stores the fixed point as compact numeric bitsets;
++                // the independent dense oracle below validates the observable
++                // reaching definitions at every load instead of its container type.
+                 var state = Copy(incoming[key]);
+                 foreach (object instruction in (IEnumerable)SparseLocalMember(block, "Code"))
+                 {

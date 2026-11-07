@@ -15,20 +15,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - id: bundle
+      - name: Apply and publish staged patch
         shell: bash
         run: |
-          if test -f tools/agent-performance-bundle.tar.gz; then
-            echo 'present=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'present=false' >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if ! compgen -G '.perf-patch/part-*' > /dev/null; then
+            echo 'No staged patch parts.'
+            exit 0
           fi
-      - name: Apply and publish bundle
-        if: steps.bundle.outputs.present == 'true'
-        shell: bash
-        run: |
-          tar -xzf tools/agent-performance-bundle.tar.gz
-          rm tools/agent-performance-bundle.tar.gz
+          cat .perf-patch/part-* > "$RUNNER_TEMP/perf.patch"
+          git apply --check "$RUNNER_TEMP/perf.patch"
+          git apply "$RUNNER_TEMP/perf.patch"
+          rm -rf .perf-patch
+          git rm .github/workflows/apply-agent-bundle.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A

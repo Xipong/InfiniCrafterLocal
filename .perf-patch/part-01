@@ -1,0 +1,190 @@
+index 824a1d6..fc638ab 100644
+--- a/ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.NativeCSharpSource.cs
++++ b/ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.NativeCSharpSource.cs
+@@ -259,11 +259,18 @@ public sealed partial class GeneratorClient
+     private static string CSharpHash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+ 
+     private static CSharpRendered RenderCSharp(AstNode source, bool includeLocations = true)
++        => RenderCSharpCore(source, includeLocations, privateTree: false);
++
++    // The caller owns this detached clone and will never reuse its source
++    // coordinates. Assign locations in-place instead of cloning the clone again.
++    private static CSharpRendered RenderPrivateCSharp(AstNode source, bool includeLocations = true)
++        => RenderCSharpCore(source, includeLocations, privateTree: true);
++
++    private static CSharpRendered RenderCSharpCore(AstNode source, bool includeLocations, bool privateTree)
+     {
+-        // Only location assignment needs a clone; the plain writer is read-only.
+-        // Coordinates are per record, never mutable cached AST state. The empty
++        // Only location assignment needs isolated mutable AST state. The empty
+         // indentation string avoids whitespace bloat in both identical outputs.
+-        var node = includeLocations ? source.Clone() : source;
++        var node = includeLocations && !privateTree ? source.Clone() : source;
+         using var output = new StringWriter(CultureInfo.InvariantCulture) { NewLine = "\n" };
+         var writer = new TextWriterTokenWriter(output) { IndentationString = "" };
+         node.AcceptVisitor(new CSharpOutputVisitor(includeLocations ? TokenWriter.WrapInWriterThatSetsLocationsInAST(writer) : writer,
+@@ -280,6 +287,23 @@ public sealed partial class GeneratorClient
+         return new(output.ToString(), locations.Distinct().ToArray());
+     }
+ 
++    // NativeCSharpSource serializes access through nativeCSharpGate. Borrow the
++    // cached declaration briefly without its body so a signature/skeleton never
++    // clones the huge dispatcher body it is about to discard.
++    private static T WithoutCSharpMethodBody<T>(NativeCSharpDocument document, Func<T> action)
++    {
++        BlockStatement body = document.Declaration.Body;
++        document.Declaration.Body = BlockStatement.Null;
++        try { return action(); }
++        finally { document.Declaration.Body = body; }
++    }
++
++    private static string NativeCSharpSignature(NativeCSharpDocument document)
++        => WithoutCSharpMethodBody(document, () => RenderCSharp(document.Declaration, includeLocations: false).Code);
++
++    private static SyntaxTree CloneNativeCSharpSkeleton(NativeCSharpDocument document)
++        => WithoutCSharpMethodBody(document, () => (SyntaxTree)document.Tree.Clone());
++
+     private static NativeCSharpDocument GetNativeCSharpDocument(MethodInfo method, CancellationToken cancellation)
+     {
+         // The immutable module snapshot is tied to the actual loaded Module and
+@@ -456,7 +480,7 @@ public sealed partial class GeneratorClient
+                 string? refusal = CSharpRegionRefusal(candidate.Branch.TrueStatement, method);
+                 if (refusal is not null) { unresolved.Add(refusal + "@" + candidate.Offset); continue; }
+                 var excerpt = (IfElseStatement)candidate.Branch.Clone(); excerpt.FalseStatement = Statement.Null;
+-                guards.Add(candidate); rendered.Add(RenderCSharp(excerpt));
++                guards.Add(candidate); rendered.Add(RenderPrivateCSharp(excerpt));
+             }
+             // Cover every original identity window represented by this graph.
+             // Matching one method hash or the first useful guard is insufficient.
+@@ -480,9 +504,8 @@ public sealed partial class GeneratorClient
+         string header = "";
+         if (coverage == "conditional_ast_regions")
+         {
+-            var signature = (MethodDeclaration)document.Declaration.Clone(); signature.Body = BlockStatement.Null;
+             header = string.Concat(document.Tree.Children.Where(node => node is UsingDeclaration or UsingAliasDeclaration).Select(node => RenderCSharp(node, includeLocations: false).Code));
+-            header += "// Source method on " + method.DeclaringType!.FullName + ": " + RenderCSharp(signature, includeLocations: false).Code.Trim().Replace("\r", "").Replace("\n", " ") + "\n";
++            header += "// Source method on " + method.DeclaringType!.FullName + ": " + NativeCSharpSignature(document).Trim().Replace("\r", "").Replace("\n", " ") + "\n";
+         }
+         string code = header + string.Join("\n", rendered.Select(row => row.Code));
+         if (code.Length > NativeCSharpRecordLimit) throw new NotSupportedException("csharp_record_character_bound");
+@@ -540,7 +563,7 @@ public sealed partial class GeneratorClient
+         if (AttackActorArgument(method) < 0 || method.GetMethodBody()!.ExceptionHandlingClauses.Count != 0) return;
+         if (document.Tree.Descendants.Any(node => node is GotoStatement or GotoCaseStatement or LabelStatement
+             or LambdaExpression or AnonymousMethodExpression or LocalFunctionDeclarationStatement)) return;
+-        var body = new ParentSourceMethod(method, AttackCode(method));
++        var body = ReadCompleteSourceMethod(method);
+         var selection = new AttackIdentitySelection(body, type, style);
+         var ends = CSharpConditionalEnds(method);
+         var selectedOffsets = selection.Receipt["selectedEdges"]!.AsArray().OfType<JsonObject>()
+@@ -576,7 +599,7 @@ public sealed partial class GeneratorClient
+             else branch.ReplaceWith((Statement)branch.FalseStatement.Clone());
+         }
+         if (removed.Count == 0) return;
+-        var rendered = RenderCSharp(tree);
++        var rendered = RenderPrivateCSharp(tree);
+         if (rendered.Code.Length >= record["code"]!.GetValue<string>().Length) return;
+         var mapped = new JsonArray();
+         foreach (var original in record["locations"]!.AsArray().OfType<JsonObject>())
+diff --git a/ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceGraphCache.cs b/ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceGraphCache.cs
+index 5f365c1..e271174 100644
+--- a/ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceGraphCache.cs
++++ b/ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceGraphCache.cs
+@@ -22,7 +22,7 @@ public sealed partial class GeneratorClient
+         try
+         {
+             var body = new ParentSourceMethod(method);
+-            cache?.Remember(method, body, null, body.Code.Count, body.Blocks.Count);
++            cache?.Remember(method, body, null, body.Code.Count, body.Blocks.Count, body.RetainedBytesEstimate);
+             return body;
+         }
+         catch (NotSupportedException error)
+@@ -79,7 +79,7 @@ public sealed partial class GeneratorClient
+             }
+         }
+ 
+-        internal void Remember(MethodBase method, object? body, string? refusal, int codeCount, int blocks)
++        internal void Remember(MethodBase method, object? body, string? refusal, int codeCount, int blocks, long retainedBytes = -1)
+         {
+             CheckThread();
+             lock (gate)
+@@ -87,10 +87,14 @@ public sealed partial class GeneratorClient
+                 if (disposed || entries.ContainsKey(method)) return;
+                 if (shared)
+                 {
+-                    // Account for values plus worst-case lazy CFG sets. Large mod
+-                    // hooks remain cacheable; eviction only changes work, never facts.
++                    // The old blocks^2 * HashSet accounting matched the former
++                    // postdominator representation and rejected exactly the large
++                    // methods worth reusing. The dense relation now costs one bit
++                    // per pair; use the producer estimate when available.
+                     const long limit = 128L * 1024 * 1024;
+-                    long cost = 1024L + codeCount * 256L + blocks * (long)blocks * 80;
++                    long densePostdomBytes = (blocks + 1L) * (blocks + 1L + 7L) / 8L;
++                    long cost = retainedBytes >= 0 ? retainedBytes
++                        : 4096L + codeCount * 256L + blocks * 512L + densePostdomBytes;
+                     if (cost > limit) return;
+                     while (order.Count > 0 && (entries.Count >= MethodLimit || weight + cost > limit))
+                     {
+diff --git a/ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceMethod.cs b/ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceMethod.cs
+index 680f3a6..0d650fa 100644
+--- a/ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceMethod.cs
++++ b/ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceMethod.cs
+@@ -3,6 +3,7 @@ using System;
+ using System.Collections.Generic;
+ using System.Globalization;
+ using System.Linq;
++using System.Numerics;
+ using System.Reflection;
+ using System.Reflection.Emit;
+ using System.Text.Json.Nodes;
+@@ -29,7 +30,10 @@ public sealed partial class GeneratorClient
+             internal List<int> Next = new();
+             internal List<AmmoIl> Code = new();
+             internal List<string> Exit = new();
+-            internal Dictionary<int, HashSet<string>> Incoming = new(), Outgoing = new();
++            // Numeric reaching-definition state. IDs are converted back to the
++            // established string contract only when a load is published.
++            internal ulong[] DefinitionIncoming = Array.Empty<ulong>();
++            internal ulong[] DefinitionOutgoing = Array.Empty<ulong>();
+         }
+         internal readonly MethodBase Method;
+         private readonly bool completeSource;
+@@ -45,7 +49,12 @@ public sealed partial class GeneratorClient
+         private static readonly Dictionary<string, OpCode> OpcodesByName = AmmoOpcodes.Values
+             .Where(op => op.Name is not null).ToDictionary(op => op.Name!, StringComparer.Ordinal);
+         private readonly Dictionary<int, HashSet<int>> reachable = new();
+-        private Dictionary<int, HashSet<int>>? postdominators;
++        // Postdominators are dense by nature. Store their N x N relation as
++        // bits instead of thousands of HashSet<int> objects.
++        private ulong[]? postdominatorBits;
++        private int[]? postdominatorNodes;
++        private Dictionary<int, int>? postdominatorIndices;
++        private int postdominatorWords;
+         private readonly Dictionary<int, HashSet<int>> controlRegions = new();
+ 
+         internal readonly HashSet<int> CompleteCallPrefixes = new();
+@@ -109,31 +118,18 @@ public sealed partial class GeneratorClient
+             Block block = Blocks[start];
+             var region = new HashSet<int> { start };
+             if (block.Next.Distinct().Count() < 2) return region;
+-            if (postdominators is null)
+-            {
+-                var all = Blocks.Values.Where(b => b.Height >= 0).Select(b => b.Start).Append(-1).ToHashSet();
+-                // Publish memoized control facts only after convergence. A
+-                // refusal/exception must not make a later projection consume a
+-                // partially solved CFG (including another row in an export).
+-                var solved = all.ToDictionary(b => b, b => b == -1 ? new HashSet<int> { -1 } : new HashSet<int>(all));
+-                bool changed = true; int passes = 0;
+-                while (changed)
+-                {
+-                    currentParentAnalysis?.ThrowIfCancelled();
+-                    if (++passes > 2048) throw new NotSupportedException("control_dependency_bound");
+-                    changed = false;
+-                    foreach (Block current in Blocks.Values.Reverse().Where(b => b.Height >= 0))
+-                    {
+-                        var next = current.Next.Count == 0 ? new[] { -1 } : current.Next.ToArray();
+-                        var common = new HashSet<int>(solved[next[0]]);
+-                        foreach (int successor in next.Skip(1)) common.IntersectWith(solved[successor]);
+-                        common.Add(current.Start);
+-                        if (!common.SetEquals(solved[current.Start])) { solved[current.Start] = common; changed = true; }
+-                    }
