@@ -1,0 +1,263 @@
+from __future__ import annotations
+from suite_paths import GENERATOR_ROOT
+
+import os
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(GENERATOR_ROOT))
+
+from infini_local.web import server_status as server
+from infini_local.pipelines.images import backends as IMAGE_BACKEND_PIPELINE
+from infini_local.services.sdcpp_service import SDCPP_SERVER_STATE
+from infini_local.services import sdcpp_backend
+
+
+def _expected_host_path(path: str) -> str:
+    if os.name == "nt":
+        return path
+    return "/mnt/" + path[0].lower() + path[2:].replace("\\", "/")
+
+
+def _set_pipeline_sdcpp_command(monkeypatch, **overrides: str) -> None:
+    config = {
+        "SDCPP_SERVER_COMMAND_MODE": "safe_args",
+        "SDCPP_SERVER_EXE": r"C:\Games\sdcpp\sd-server.exe",
+        "SDCPP_MODEL": r"C:\Games\sdcpp\models\z-image.gguf",
+        "SDCPP_VAE": r"C:\Games\sdcpp\models\ae.safetensors",
+        "SDCPP_LLM": r"C:\Games\sdcpp\models\qwen.gguf",
+        "SDCPP_LORA_DIR": r"C:\Games\sdcpp\loras",
+        "SDCPP_LORA_PROMPT_TAGS": "<lora:terraria:0.5>",
+        "SDCPP_SERVER_EXTRA_ARGS": "",
+        "SDCPP_SAMPLER": "euler",
+    }
+    config.update(overrides)
+    for key, value in config.items():
+        monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, key, value)
+
+
+def test_sdcpp_safe_args_ignores_corrupt_command_template(monkeypatch) -> None:
+    _set_pipeline_sdcpp_command(
+        monkeypatch,
+        SDCPP_SERVER_EXTRA_ARGS="-v --flow-shift 3",
+        SDCPP_SERVER_COMMAND_TEMPLATE="{exe} --sampling-mOpenRouter + local Z-Image/sd.cppethod {sampler} {extra}",
+    )
+
+    cmd, shell = IMAGE_BACKEND_PIPELINE.build_sdcpp_server_command()
+
+    assert shell is False
+    assert isinstance(cmd, list)
+    assert "--sampling-method" in cmd
+    assert "euler" in cmd
+    assert all("OpenRouter" not in part for part in cmd)
+    assert "--vae" in cmd and r"C:\Games\sdcpp\models\ae.safetensors" in cmd
+    assert "--llm" in cmd and r"C:\Games\sdcpp\models\qwen.gguf" in cmd
+    assert "--lora-model-dir" in cmd and r"C:\Games\sdcpp\loras" in cmd
+
+
+def test_sdcpp_safe_args_converts_only_exe_path_for_posix_subprocess(monkeypatch) -> None:
+    _set_pipeline_sdcpp_command(monkeypatch)
+
+    cmd, shell = IMAGE_BACKEND_PIPELINE.build_sdcpp_server_command()
+
+    assert shell is False
+    assert isinstance(cmd, list)
+    assert cmd[0] == _expected_host_path(r"C:\Games\sdcpp\sd-server.exe")
+    assert r"C:\Games\sdcpp\models\z-image.gguf" in cmd
+    assert r"C:\Games\sdcpp\models\ae.safetensors" in cmd
+    assert r"C:\Games\sdcpp\models\qwen.gguf" in cmd
+    assert r"C:\Games\sdcpp\loras" in cmd
+
+
+def test_sdcpp_template_mode_repairs_known_sampling_method_corruption(monkeypatch) -> None:
+    _set_pipeline_sdcpp_command(
+        monkeypatch,
+        SDCPP_SERVER_COMMAND_MODE="template",
+        SDCPP_VAE="", SDCPP_LLM="", SDCPP_LORA_DIR="", SDCPP_LORA_PROMPT_TAGS="",
+        SDCPP_SERVER_EXTRA_ARGS="-v",
+        SDCPP_SERVER_COMMAND_TEMPLATE="{exe} --diffusion-model {model} -l {host} --listen-port {port} -W {width} -H {height} --steps {steps} --cfg-scale {cfg} --sampling-mOpenRouter + local Z-Image/sd.cppethod {sampler} {extra}",
+    )
+
+    cmd, shell = IMAGE_BACKEND_PIPELINE.build_sdcpp_server_command()
+
+    assert shell is True
+    assert isinstance(cmd, str)
+    assert "--sampling-method euler" in cmd
+    assert "sampling-mOpenRouter" not in cmd
+
+
+def test_sdcpp_lora_file_tag_helper_and_prompt_suffix() -> None:
+    from infini_local.services import sdcpp_backend
+
+    assert sdcpp_backend.lora_tag_from_file(r"C:\Games\sdcpp\loras\terraria_items.safetensors", "0.55") == "<lora:terraria_items:0.55>"
+    assert sdcpp_backend.lora_tag_from_file(r"C:\Games\sdcpp\loras\terraria_items.safetensors", "") == "<lora:terraria_items:0.25>"
+
+    cfg = sdcpp_backend.SdcppBackendConfig(
+        default_command_template=sdcpp_backend.DEFAULT_COMMAND_TEMPLATE,
+        command_mode="safe_args",
+        server_exe=r"C:\Games\sdcpp\sd-server.exe",
+        model=r"C:\Games\sdcpp\models\z-image.gguf",
+        vae="",
+        llm="",
+        lora_dir=r"C:\Games\sdcpp\loras",
+        lora_file=r"C:\Games\sdcpp\loras\terraria_items.safetensors",
+        lora_prompt_tags="<lora:terraria_items:0.55>",
+        host="127.0.0.1",
+        port=7861,
+        width=512,
+        height=512,
+        steps=8,
+        cfg=1.0,
+        sampler="euler",
+        extra_args="",
+        server_url="http://127.0.0.1:7861",
+        health_paths=["/"],
+        zimage_prompt_contract="auto",
+        zimage_positive_only=True,
+    )
+
+    payload = sdcpp_backend.server_payload(
+        cfg,
+        "pixel art bow",
+        "",
+        512,
+        512,
+        42,
+        "auto",
+        is_zimage=True,
+        positive_only=True,
+    )
+    assert payload["prompt"] == "pixel art bow"
+    assert payload["lora"] == [{"path": "terraria_items.safetensors", "multiplier": 0.55, "is_high_noise": False}]
+    assert payload["prompt"].count("<lora:terraria_items:0.55>") == 0
+
+
+def test_sdcpp_debug_snapshot_exposes_lora_file_fields() -> None:
+    from infini_local.services import sdcpp_service
+
+    state = sdcpp_service.SdcppServerState()
+    snap = sdcpp_service.debug_snapshot(
+        state=state,
+        app_version="0.4.test",
+        server_url="http://127.0.0.1:7861",
+        server_autostart=True,
+        show_console=True,
+        server_exe="sd-server.exe",
+        model="z.gguf",
+        vae="ae.safetensors",
+        llm="qwen.gguf",
+        lora_dir=r"C:\Games\sdcpp\loras",
+        lora_file=r"C:\Games\sdcpp\loras\terraria_items.safetensors",
+        lora_weight="0.55",
+        lora_prompt_tags="<lora:terraria_items:0.55>",
+        command_mode="safe_args",
+        command_template="",
+        template_repair=("", False, ""),
+        manual_extra_args="",
+        effective_extra_args="--lora-model-dir C:/Games/sdcpp/loras",
+        command="sd-server.exe ...",
+        server_log_file="",
+        server_is_alive=False,
+        server_is_configured=True,
+        tail_text_file=lambda _path, _chars: "",
+        include_log_tail=False,
+    )
+
+    assert snap["loraFile"].endswith("terraria_items.safetensors")
+    assert snap["loraWeight"] == "0.55"
+    assert snap["loraPromptTags"] == "<lora:terraria_items:0.55>"
+
+
+def test_shutdown_releases_the_owned_sdcpp_process(monkeypatch) -> None:
+    import io
+    import threading
+    from types import SimpleNamespace
+    from provider_test_support import OwnedProcess
+    from infini_local.services import combine_endpoint, sdcpp_service
+    from infini_local.web import server_utility_routes
+
+    state = SDCPP_SERVER_STATE
+    process = OwnedProcess()
+    def completed_wait(**_kwargs):
+        # Popen.wait() returning an exit code also makes subsequent poll terminal.
+        monkeypatch.setattr(process, "poll", lambda: 0)
+        return 0
+    monkeypatch.setattr(process, "wait", completed_wait)
+    log_handle = io.StringIO()
+    process._infini_log_handle = log_handle
+    monkeypatch.setattr(state, "process", process)
+    # Never let Windows taskkill or a process-group signal target a fabricated PID.
+    def terminate(owned, *, hard):
+        assert owned is process and hard is False
+        owned.terminate()
+    monkeypatch.setattr(sdcpp_service, "_terminate_process_tree", terminate)
+    workers = []
+    def new_thread(*args, **kwargs):
+        thread = threading.Thread(*args, **kwargs)
+        workers.append(thread)
+        return thread
+    monkeypatch.setattr(server_utility_routes, "threading", SimpleNamespace(Thread=new_thread))
+    monkeypatch.setattr(combine_endpoint, "_GENERATION_ACCEPTING", True)
+    stopped = threading.Event()
+    replies = []
+    handler = SimpleNamespace(json=replies.append, server=SimpleNamespace(shutdown=stopped.set))
+
+    # Exercise the real route -> cleanup callback -> process owner. Wrappers and
+    # module aliases may change, but shutdown must terminate the owned child.
+    try:
+        assert server_utility_routes.handle_post(handler, "/shutdown?force=1", {})
+        assert stopped.wait(5), "shutdown never completed"
+    finally:
+        for worker in workers:
+            worker.join(5)
+        assert all(not worker.is_alive() for worker in workers), "shutdown leaked a worker"
+    assert replies[0]["ok"] is True
+    assert process.actions == ["terminate"]
+    assert state.process is None and process.poll() == 0
+    assert state.lifecycle == "stopped"
+    assert log_handle.closed
+
+
+@pytest.mark.parametrize("backend", ["openai_codex", "sdcpp"])
+def test_helper_health_does_not_probe_image_servers(monkeypatch, backend):
+    monkeypatch.setattr(IMAGE_BACKEND_PIPELINE, "sdcpp_server_is_alive", lambda: pytest.fail("health performed a blocking image-server probe"))
+    monkeypatch.setattr(server.visual_config, "IMAGE_BACKEND", backend)
+    monkeypatch.setattr(server, "multiplayer_connect_info", lambda: {})
+    monkeypatch.setattr(server, "llm_auth_snapshot", lambda: {"provider": "openai_codex", "model": "test-model"})
+    health = server.health_payload()
+    assert health["ok"] is True
+    assert health["sdcpp"]["serverAlive"] is None
+    assert health["sdcpp"]["serverAliveProbed"] is False
+
+
+def test_sdcpp_health_reads_canonical_state_fields() -> None:
+    state = SDCPP_SERVER_STATE
+    old_last_command = state.last_command
+    old_last_start_error = state.last_start_error
+    old_last_exit = state.last_exit
+    old_last_log_file = state.last_log_file
+
+    try:
+        state.last_command = "test canonical command"
+        state.last_start_error = "test canonical start error"
+        state.last_exit = {"returncode": 23, "signal": None}
+        state.last_log_file = "/tmp/canonical-sdcpp.log"
+
+        health = server.health_payload()
+
+        assert health["sdcpp"]["lastCommand"] == "test canonical command"
+        assert health["sdcpp"]["lastStartError"] == "test canonical start error"
+        assert health["sdcpp"]["lastExit"] == {"returncode": 23, "signal": None}
+        assert health["sdcpp"]["logFile"] == "/tmp/canonical-sdcpp.log"
+    finally:
+        state.last_command = old_last_command
+        state.last_start_error = old_last_start_error
+        state.last_exit = old_last_exit
+        state.last_log_file = old_last_log_file
+
+
+# One collected item per contract module: the checks above keep source order and
+# their own tracebacks. The shared runner discovers them by prefix, so a new check
+# cannot be silently left out of a hand-maintained dispatch list.

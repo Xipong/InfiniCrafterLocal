@@ -9,13 +9,13 @@
 - Настоящие **ParticleLibrary.dll** и **Luminance.dll**. Одних названий модов в конфиге недостаточно: компилятору нужны файлы DLL.
 - Python **3.11+** с pip на сборочной машине для подготовки встроенной Studio. Игроку отдельный Python не нужен: Windows x64 runtime входит в `.tmod`.
 
-[Проект мода](../../ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj) использует `Tomat.Terraria.ModLoader.Sdk/2.1.1`. Зависимости не лежат в исходном архиве. Сборка без них сообщает, какой файл отсутствует.
+[Проект мода](../../mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj) использует `Tomat.Terraria.ModLoader.Sdk/2.1.1`. Зависимости не лежат в исходном архиве. Сборка без них сообщает, какой файл отсутствует.
 
 ## Вариант 1: Build + Reload в tModLoader
 
-Сначала из корня репозитория выполни `python tools/build/build_studio_bundle.py`. Команда подготовит Studio вместе с её Python и зависимостями внутри `ModSources/InfiniCrafterLocal/Studio/`; затем установщик скопирует их вместе с модом. Повтори подготовку после изменений Python-кода, Studio или её ресурсов.
+Сначала из корня репозитория выполни `python tools/build/build_studio_bundle.py`. Команда подготовит Studio вместе с её Python и зависимостями внутри `mod/InfiniCrafterLocal/Studio/`; затем установщик скопирует их вместе с модом. Повтори подготовку после изменений Python-кода, Studio или её ресурсов.
 
-1. Сохрани свою прежнюю папку `ModSources/InfiniCrafterLocal`, если она содержит изменения.
+1. Сохрани свою прежнюю папку `mod/InfiniCrafterLocal`, если она содержит изменения.
 2. Запусти [tools/windows/01_INSTALL_MOD_TO_TMODLOADER.bat](../../tools/windows/01_INSTALL_MOD_TO_TMODLOADER.bat). Он копирует исходники в пользовательский ModSources **с заменой старой одноимённой папки**.
 3. В tModLoader открой **Workshop → Develop Mods → Build + Reload** для InfiniCrafterLocal.
 4. При ошибке сборки сохрани полный журнал. Дополнительный сборщик журнала: [03_COLLECT_TMODLOADER_BUILD_ERRORS.bat](../../tools/windows/03_COLLECT_TMODLOADER_BUILD_ERRORS.bat).
@@ -29,7 +29,7 @@
 Из корня проекта в PowerShell, подставив пути к своим DLL:
 
 ```powershell
-dotnet build ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj -c Release `
+dotnet build mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj -c Release `
   /p:InfiniParticleLibraryDll="C:\deps\ParticleLibrary.dll" `
   /p:InfiniLuminanceDll="C:\deps\Luminance.dll"
 ```
@@ -37,7 +37,7 @@ dotnet build ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj -c Release 
 Или задай один корень:
 
 ```powershell
-dotnet build ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj -c Release `
+dotnet build mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj -c Release `
   /p:InfiniExternalDepsRoot="C:\deps"
 ```
 

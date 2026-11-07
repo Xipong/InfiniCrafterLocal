@@ -10,9 +10,9 @@
   "params": {
     "when": "on_hit",
     "maxTargets": 3,
-    "radiusTiles": 8,
+    "radius": 8,
     "damageMultiplier": 0.5,
-    "delaySeconds": 0
+    "delay": 0
   }
 }
 ```
@@ -26,7 +26,7 @@ opcode `10`. Все NPC ранжируются от одной записанн�
   не «без ограничений» и не отсутствие урона. Это нейтральное ограничение отбора
   в рамках общего cap, а не нейтральность всего эффекта. Compiler записывает
   `maxTargets=16` с отдельным `declared_neutral_omission` receipt.
-- `radiusTiles`: **0.5…60**, точная сетка **1/16 блока**; граница включена.
+- `radius`: **0.5…60**, точная сетка **1/16 блока**; граница включена.
 - `damageMultiplier`: **0.05…4**, умножает authored base damage владельца события,
   не `damageDone` и не live damage уже усиленного снаряда.
 - События: `on_hit`, `on_crit`, `on_tile_collision`, `on_expire`, `on_kill`,
@@ -34,14 +34,9 @@ opcode `10`. Все NPC ранжируются от одной записанн�
   в trigger object. Реальный producer обязателен.
 - Direct target исключён **только** при `on_hit/on_crit`. При истечении срока или
   proximity detonation выбранная NPC не считается уже поражённой и не исключается.
-- `delaySeconds` сохраняет существующие scheduler, snapshot и authority правила.
+- `delay` сохраняет существующие scheduler, snapshot и authority правила.
 
-Это сознательно новый алгоритм для свежих предметов: прежний slot-first area cap16
-не эквивалентен nearest selection, а прежний nearest имел cap12. Сохранённые
-`damage_area_on_event`/opcode3 и `chain_damage_on_event`/opcode4 продолжают исполнять
-старые algorithms. Их readers не перенаправлены на opcode10. Fresh карточки
-`damage_area_on_event` и `damage_nearest_on_event` скрыты и fresh admission их отвергает;
-существующие registry records сохранены для исходных принятых receipts.
+Nearby damage не является цепочкой физических projectile. Для такой механики Author выбирает отдельный `emit_to_targets_on_event` с явной child entity.
 
 ## Pull: направление и независимые импульсы
 
@@ -61,8 +56,8 @@ opcode `10`. Все NPC ранжируются от одной записанн�
 
 | Mode | Явные поля | Смысл |
 |---|---|---|
-| `target_to_owner` | `impulseBlocksPerSecond`, `radiusTiles` | NPC к игроку |
-| `target_to_entity` | `impulseBlocksPerSecond`, `radiusTiles` | NPC к записанному центру снаряда |
+| `target_to_owner` | `impulseBlocksPerSecond`, `radius` | NPC к игроку |
+| `target_to_entity` | `impulseBlocksPerSecond`, `radius` | NPC к записанному центру снаряда |
 | `owner_to_target` | `impulseBlocksPerSecond` | Игрок к прямой цели попадания |
 | `both` | `ownerImpulseBlocksPerSecond`, `targetImpulseBlocksPerSecond` | Обе стороны к одной и той же цели события |
 
@@ -80,9 +75,7 @@ shared impulse и radius запрещены. Исчезнувшая/неакти
 
 NPC-only modes сохраняют свои `on_hit`, `periodic`, `on_expire` и теперь принимают
 также `on_crit`. Их старое radius-search поведение при отсутствии активной прямой
-цели не изменено: запрет fallback относится к `both` и owner-only. Сохранённый
-owner-only wire тоже не мигрируется. Старый fresh fn `pull_owner_to_event_target`
-больше не предлагается, но его уже принятые receipts читаются.
+цели не изменено: запрет fallback относится к `both` и owner-only. Current pull receipts принадлежат `pull_on_event`; альтернативного старого owner нет.
 
 ## Same-target bias: диапазон различимых Author choices
 
@@ -100,41 +93,34 @@ owner-only wire тоже не мигрируется. Старый fresh fn `pul
 одна event row с двумя impulse leaves, не два действия с выдуманными ID. Новые
 wire поля `ownerStrength/targetStrength` допустимы только вместе при mode `both`;
 `maxTargets` — только для opcode10. Bool/null/foreign fields и выход за новые
-bounds отвергаются, не лечатся clamp-ом. Сохранённый wire остальных opcodes
-сохраняет прежние DTO defaults и исполнение.
+bounds отвергаются, не лечатся clamp-ом. Остальные current actions проходят свои strict branches; общий Params bag не допускается.
 
 Frozen Repair открывает только неверный или действительно отсутствующий leaf.
 Исправление второго импульса не позволяет заменить первый, режим или соседний
 валидный radius. Принятые отсутствия остаются frozen. Новая вложенность или
 retirement fresh карточки не разрешает переписывать сохранённый предмет.
 
-`fixtures/event_api_pre_simplification.json` хранит реальные исходные Author и
-wire/receipts с head `723f0e1`: оба прежних damage и оба pull проверяются без
-изменения байтовых значений, с исходным Author и без него. Более ранний
-`event_domain_retained_wire.json` остаётся прежней отрицательной fixture для
-уже отвергавшихся исторических contracts; эта работа не восстанавливает их.
+
 
 ## Проверки
 
 `test_author_event_domains.py` проверяет registry/provider → validation → compiler
 → exact receipts → strict wire, omission cap16, режимы pull, неправильные branch
-поля, ограничения событий, frozen leaf Repair и сохранённые определения.
+поля, ограничения событий, frozen leaf Repair и current-only refusal.
 
 Зарегистрированные native checks в `EngineRuntimeChecks.EventApi.cs` используют
 реальные DTO/executor/scheduler: раздельная owner/server authority, observer,
 knockback-immune NPC, отсутствующая и recycled цель; deterministic closest ties,
 inclusive radius, ограничение 16 и реальный damage consumer для 3/16 целей.
-Существующий `EngineRuntimeChecks.EventDomains.cs` продолжает проверять прежний
-ChainDamage. Source-policy PASS не является native execution PASS; native build/run
-проверяется интеграционным CI точного итогового дерева, не игровым UI smoke.
+Native build/run проверяет actual registered consumers, не source-policy PASS. Игра и MP delivery требуют отдельных проверок.
 
 ## Канонические владельцы
 
 - `core/runtime_authoring/capability_registry.py`: fresh branch shapes, bounds,
-  declared omission, скрытые сохранённые records.
+  declared omission и current records.
 - `technical_lowering.py`: общий scalar projector и audit receipts.
 - `wire_validator.py`, `RuntimeProgramSpec.cs`: strict wire/DTO admission.
-- `RuntimeProgramExecutor.cs`: новый nearby selector, оба старых damage executors,
+- `RuntimeProgramExecutor.cs`: current nearby selector,
   независимые authority checks `both`.
 - `RuntimeHitPullBridge.cs`, `RuntimeDelayedActionScheduler.cs`: существующая
   проверка owner hit receipt и NPC incarnation, без нового router.
@@ -156,15 +142,14 @@ ChainDamage. Source-policy PASS не является native execution PASS; nat
 фиксируется при постановке действия в очередь: переключение кнопки позже
 не меняет уже принятое действие.
 
-Отдельно `configure_item_stats.params.manaCostInput` выбирает, какая кнопка
+Отдельно `item_stats.params.manaCostInput` выбирает, какая кнопка
 оплачивает заданный `manaCost`: те же `primary_use`, `alternate_use`, `both`.
 Пропуск явно эквивалентен `both`, поэтому старые предметы сохраняют общую цену.
 Например, `manaCost: 12, manaCostInput: "alternate_use"` не берёт базовую ману
 за основной удар и оставляет нативную оплату 12 базовых единиц для альтернативы.
 Модификаторы игрока продолжают действовать. Это не новая ручная транзакция:
 оплата остаётся нативной в начале анимации, не за каждый созданный снаряд или
-повторный вызов внутри той же анимации. Явные периодические `manaPayment`
-контроллеров этим полем не переопределяются.
+повторный вызов внутри той же анимации. Явный `sustain_mana` этим полем не переопределяются.
 
 Выбор кнопки эффекта и выбор кнопки цены независимы: модель должна явно
 согласовать их с задуманным действием. Никакой выбор не выводится из названия,

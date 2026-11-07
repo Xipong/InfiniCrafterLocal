@@ -34,19 +34,19 @@ PYTHON_TAG = "314"
 # Published by https://www.python.org/downloads/release/python-31410/.
 PYTHON_URL = f"https://www.python.org/ftp/python/{PYTHON_VERSION}/python-{PYTHON_VERSION}-embed-amd64.zip"
 PYTHON_SHA256 = "90905e64a840557d8c1bc4f5b74db3d7ee85e3ffb217611cac1c7813acea4159"
-ENTRY_POINT = "LocalGenerator/scripts/bundled_studio.py"
+ENTRY_POINT = "generator/scripts/bundled_studio.py"
 SOURCE_FILES = (
-    "LocalGenerator/server.py",
-    "LocalGenerator/config.example.env",
-    "LocalGenerator/requirements.txt",
+    "generator/server.py",
+    "generator/config.example.env",
+    "generator/requirements.txt",
     ENTRY_POINT,
-    "LocalGenerator/data/item_knowledge.json",
-    "LocalGenerator/data/vanilla_seed_items.json",
+    "generator/data/item_knowledge.json",
+    "generator/data/vanilla_seed_items.json",
     "START_HERE.html",
     "LICENSE",
     "LICENSE_RU.md",
 )
-SOURCE_DIRS = ("LocalGenerator/infini_local", "contracts", "docs/user")
+SOURCE_DIRS = ("generator/infini_local", "contracts", "docs/user")
 MAX_UNPACKED_BYTES = 512 * 1024 * 1024
 
 
@@ -125,11 +125,11 @@ def verify_resources(read: Callable[[str], bytes], *, source_root: Path | None =
             files = safe_archive_entries(archive)
             required = {
                 descriptor.get("python", ""), descriptor.get("entryPoint", ""),
-                "LocalGenerator/server.py", "LocalGenerator/config.example.env",
-                "LocalGenerator/infini_local/desktop/web_studio.py",
-                "LocalGenerator/infini_local/desktop/webui/index.html",
-                "LocalGenerator/infini_local/desktop/webui/studio.js",
-                "LocalGenerator/infini_local/desktop/webui/studio.css",
+                "generator/server.py", "generator/config.example.env",
+                "generator/infini_local/desktop/web_studio.py",
+                "generator/infini_local/desktop/webui/index.html",
+                "generator/infini_local/desktop/webui/studio.js",
+                "generator/infini_local/desktop/webui/studio.css",
                 "python/Lib/site-packages/PIL/__init__.py",
                 "python/Lib/site-packages/pydantic/__init__.py",
                 "python/Lib/site-packages/pydantic_core/__init__.py",
@@ -153,7 +153,7 @@ def verify_resources(read: Callable[[str], bytes], *, source_root: Path | None =
             bad_state = ("config.env", "config.env.defaults.json", "gui_user_presets.json", "codex-auth.json")
             for path in files:
                 parts = PurePosixPath(path).parts
-                if (parts[:2] == ("LocalGenerator", "images") or PurePosixPath(path).name in bad_state
+                if (parts[:2] == ("generator", "images") or PurePosixPath(path).name in bad_state
                         or any(part in {".git", ".venv", "__pycache__", "cache", "prompt_traces", ".codex"} for part in parts)):
                     raise ValueError(f"Operator state/development debris in Studio runtime: {path}")
             bad = archive.testzip()
@@ -178,7 +178,7 @@ def prepare_python(archive_path: Path, destination: Path) -> None:
         safe_archive_entries(archive)
         archive.extractall(destination)
     (destination / f"python{PYTHON_TAG}._pth").write_text(
-        f"python{PYTHON_TAG}.zip\n.\nLib/site-packages\n../LocalGenerator\nimport site\n", encoding="utf-8")
+        f"python{PYTHON_TAG}.zip\n.\nLib/site-packages\n../generator\nimport site\n", encoding="utf-8")
 
 
 def install_dependencies(root: Path, destination: Path, wheelhouse: Path | None) -> None:
@@ -187,8 +187,8 @@ def install_dependencies(root: Path, destination: Path, wheelhouse: Path | None)
                "--implementation", "cp", "--abi", f"cp{PYTHON_TAG}", "--no-warn-script-location",
                "--target", str(destination / "Lib/site-packages"),
                "--report", str(destination / "dependencies.json"),
-               "-r", str(root / "LocalGenerator/requirements.txt"),
-               "-c", str(root / "LocalGenerator/requirements-dev.lock")]
+               "-r", str(root / "generator/requirements.txt"),
+               "-c", str(root / "generator/requirements-dev.lock")]
     if wheelhouse is not None:
         command += ["--no-index", "--find-links", str(wheelhouse)]
     subprocess.run(command, check=True)
@@ -283,7 +283,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skip-smoke", action="store_true", help="Build on another OS; never used by release packaging.")
     args = parser.parse_args(argv)
     root = args.root.resolve()
-    output = (args.output or root / "ModSources/InfiniCrafterLocal/Studio").resolve()
+    output = (args.output or root / "mod/InfiniCrafterLocal/Studio").resolve()
     source_files(root)  # Fail before downloading when the source tree is incomplete.
     with tempfile.TemporaryDirectory(prefix="ifc-studio-build-") as temporary:
         work = Path(temporary)

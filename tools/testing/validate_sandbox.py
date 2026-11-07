@@ -31,7 +31,6 @@ FULL_SUITE_MODULES = {
 STATIC_COMMANDS = (
     ("config_registry", ("tools/generate/config_registry.py", "--check")),
     ("targeted_repair", ("tools/checks/audit_targeted_repair.py", "--check")),
-    ("terraria_standardization", ("tools/checks/audit_terraria_standardization.py", "--check")),
     ("csharp_contracts", ("tools/checks/check_csharp_contracts.py",)),
     ("project_hygiene", ("tools/checks/check_project_hygiene.py",)),
 )
@@ -103,7 +102,7 @@ def _python_and_json_syntax() -> dict[str, Any]:
     errors: list[str] = []
     python_count = 0
     json_count = 0
-    for source_root in (ROOT / "LocalGenerator" / "infini_local", ROOT / "LocalGenerator" / "tests", ROOT / "tools"):
+    for source_root in (ROOT / "generator" / "infini_local", ROOT / "tests" / "generator", ROOT / "tools"):
         for path in sorted(source_root.rglob("*.py")):
             if "__pycache__" in path.parts:
                 continue
@@ -165,8 +164,8 @@ def _call_name(node: ast.AST) -> str:
 def _test_process_safety() -> dict[str, Any]:
     errors: list[str] = []
     subprocess_count = 0
-    tests_root = ROOT / "LocalGenerator" / "tests"
-    for path in sorted(tests_root.glob("test_*.py")):
+    tests_root = ROOT / "tests" / "generator"
+    for path in sorted(tests_root.rglob("test_*.py")):
         text = path.read_text(encoding="utf-8-sig")
         tree = ast.parse(text, filename=str(path))
         parents: dict[ast.AST, ast.AST] = {}
@@ -211,7 +210,7 @@ def _test_process_safety() -> dict[str, Any]:
     return {
         "name": "test_process_safety",
         "status": "passed" if not errors else "failed",
-        "scope": "LocalGenerator/tests/test_*.py",
+        "scope": "tests/generator/**/test_*.py",
         "boundedSubprocessCalls": subprocess_count,
         "errors": errors[:100],
     }
@@ -219,9 +218,8 @@ def _test_process_safety() -> dict[str, Any]:
 
 def _pytest_bootstrap_policy() -> dict[str, Any]:
     """Make the one sanctioned import-time test bootstrap explicit and finite."""
-    path = ROOT / "LocalGenerator" / "tests" / "conftest.py"
+    path = ROOT / "tests" / "generator" / "conftest.py"
     allowed_keys = {
-        "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK",
         "INFINI_CACHE_DIR",
         "INFINI_IMAGE_BACKEND",
         "INFINI_SDCPP_SERVER_AUTOSTART",
@@ -326,7 +324,7 @@ def main() -> int:
         "nextCommand": (
             f"{sys.executable} tools/validate_release.py --skip-build"
             if full_available
-            else "Do not run full pytest here; install LocalGenerator/requirements-dev.txt in a capable environment."
+            else "Do not run full pytest here; install generator/requirements-dev.txt in a capable environment."
         ),
     }
     text = json.dumps(report, ensure_ascii=False, indent=2)

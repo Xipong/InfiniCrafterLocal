@@ -162,7 +162,7 @@ ID, proc probability и duration не теряются, если downstream де
 Author явно составляет бафф/дебафф из зарегистрированных generated-effect
 примитивов: выбирает получателя, характеристики, триггер, длительность и
 поддержанный шанс. Знаковые player modifiers выражают также штрафы и обмены;
-`apply_npc_effect_on_event` выражает временные NPC эффекты без нативного
+`npc_effect_on_event` выражает временные NPC эффекты без нативного
 buff-ID. Код не переводит имя родителя или source-reference в автоматически
 выбранную механику. Точные значения нового эффекта — решение Author,
 а не исправление факта о родителе. См. [construction contract](../../reference/authoring/LOW_LEVEL_RUNTIME_AUTHORING_RU.md#полезная-композиция-баффов-и-дебаффов).
@@ -339,3 +339,8 @@ SHA всего tModLoader — диагностическая идентично�
 В provenance различаются исходная проверенная экстракция (audited certificate и сохранённые данные экстракции) и текущая наблюдаемая сборка (`observed*`); старые signature tokens не объявляются токенами новой сборки. Existing registry values остаются текущими наблюдениями, а не константами из прошлого DLL.
 
 Карта сертификатов генерируется metadata-only инструментом `tools/generate/native_source_certificates/NativeSourceCertificates.csproj` из официального DLL и существующих `contracts/reports/native_*_sources.generated.json`; общий `NativeSourceFingerprint` используется и генератором, и runtime. Аргументы: `<assembly> <reports directory> <output NativeSourceCertificates.g.cs> [--check]`, MSBuild property `InfiniTmlReferenceDir` указывает существующие tML reference assemblies. Неразрешённый или неоднозначный обязательный source key прерывает генерацию, а не создаёт частичный сертификат.
+
+
+## Source analysis и compact Author view
+
+[Контракт source analysis, сжатия, warning и транспорта](PARENT_SOURCE_ANALYSIS_RU.md). Сохраняются main inventory/fallback ammo observations, отдельные root/fingerprint envelopes и source-only cache isolation.

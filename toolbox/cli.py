@@ -6,27 +6,28 @@ import json
 import sys
 import subprocess
 
-from toolbox.infini_toolbox import BASE_ROOT
+from toolbox.project import BASE_ROOT
 
-from toolbox.live.options import build_parser
-from toolbox.live.preflight import prepare
 
 
 def main(argv: list[str] | None = None) -> int:
     values = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(
         description='Утилиты QA: безопасный offline-вход; live только с --run.',
-        epilog='live10/live20: versioned inputs, preflight или явная text/image-кампания; panels: каталог запросов; summary: saved ledgers; doctor: read-only prerequisites; replay: saved wire; verify: canonical affected checks; workbench: native item tests and recorded frames.',
+        epilog='live10/live20/live40: versioned inputs, preflight или явная text/image-кампания; live40 --offline: raw native Prepare capture; panels: каталог запросов; summary: saved ledgers; doctor: read-only prerequisites; replay: saved wire; verify: canonical affected checks; workbench: native item tests and recorded frames.',
     )
-    parser.add_argument('command', choices=('live10', 'live20', 'panels', 'summary', 'doctor', 'verify', 'replay', 'workbench'))
+    parser.add_argument('command', choices=('live10', 'live20', 'live40', 'panels', 'summary', 'doctor', 'verify', 'replay', 'workbench'))
     if not values or values[0] in ('-h', '--help'):
         parser.print_help()
         return 0
+    if values[0] == 'live40' and '--offline' in values[1:]:
+        from toolbox.testing.capture_panel import main as capture_panel
+        return capture_panel(values[1:])
     if values[0] == 'workbench':
         # Keep caller-relative item/scenario/output paths and stream semantics.
         # The existing owner alone parses arguments and decides whether to execute.
         return subprocess.run(
-            [sys.executable, str(BASE_ROOT / 'tools/item-test-workbench/workbench.py'), *values[1:]],
+            [sys.executable, str(BASE_ROOT / 'tools/workbench/workbench.py'), *values[1:]],
         ).returncode
     if values[0] == 'panels':
         from toolbox.live.catalog import panel_catalog
@@ -54,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
         return child.returncode
     if values[0] == 'doctor':
         from pathlib import Path
-        from toolbox.infini_toolbox import discover_project
+        from toolbox.project import discover_project
         from toolbox.testing.doctor import doctor
         doctor_parser = argparse.ArgumentParser(description='Read-only dependencies and registered native command (no credentials).')
         doctor_parser.add_argument('--project', type=Path)
@@ -78,6 +79,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0 if report['ok'] else 1
     command = parser.parse_args(values[:1]).command
+    from toolbox.live.options import build_parser
+    from toolbox.live.preflight import prepare
     options = build_parser()
     args = options.parse_args(values[1:])
     args.panel = command

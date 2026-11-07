@@ -1,15 +1,31 @@
 # Native ammo source observations
 
-Producer: `tools/generate/generate_native_ammo_facts.py`; machine-readable evidence:
-`native_ammo_sources.generated.json`. Capture: `GeneratorClient.AmmoFacts.cs`,
+Producer: `tools/generate/generate_native_ammo_facts.py`; runtime facts:
+`NativeAmmoFactsCatalog.g.cs`. The compact `native_ammo_sources.generated.json`
+retains evidence for `tools/generate/native_source_certificates/Program.cs`.
+Capture: `GeneratorClient.AmmoFacts.cs`,
 used by `GeneratorClient.ParentFacts.cs::AmmoRawFromItem`; Python projection:
 `parent_context_pipeline.py::compact_ammo_profile`.
 
 ```sh
 agent-python tools/generate/generate_native_ammo_facts.py \
   --assembly '<installed tModLoader.dll>'
-# Same command with --check verifies both generated products.
+# Same command with --check verifies the runtime catalog and compact certificate report.
+# Export the complete machine-readable evidence when investigating source facts:
+agent-python tools/generate/generate_native_ammo_facts.py \
+  --assembly '<installed tModLoader.dll>' \
+  --report artifacts/native-ammo-sources.json
+# Add --check --report <path> to verify an existing audit export as well.
 ```
+
+The stored report contains deduplicated certificate evidence, including nested
+spawn-expression dependencies, method identities, module IDs, assembly hashes
+and scope. The certificate generator consumes it at its original path; its
+assembly/module mismatch checks remain intact. Gameplay records live once in
+the runtime catalog. The optional full export retains the original
+`infini.native-ammo-sources.v1` shape for audits and external tooling; scripts
+that need `sources[].records` must request that export explicitly. The separate
+Workbench `vanilla-draw-assets.json` index and its consumers are unchanged.
 
 ## What is certified
 

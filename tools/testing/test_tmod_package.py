@@ -33,12 +33,12 @@ def studio_fixture(*, omit=(), extra=None):
         'python/Lib/site-packages/pydantic_core/__init__.py': b'Pydantic Core fixture',
         'python/Lib/site-packages/pydantic_core/_pydantic_core.cp314-win_amd64.pyd': b'MZfixture-native-pydantic',
         ENTRY_POINT: b'fixture managed entrypoint',
-        'LocalGenerator/server.py': b'fixture generator entrypoint',
-        'LocalGenerator/config.example.env': b'fixture configuration template',
-        'LocalGenerator/infini_local/desktop/web_studio.py': b'fixture web bridge',
-        'LocalGenerator/infini_local/desktop/webui/index.html': b'fixture frontend',
-        'LocalGenerator/infini_local/desktop/webui/studio.js': b'fixture script',
-        'LocalGenerator/infini_local/desktop/webui/studio.css': b'fixture styles',
+        'generator/server.py': b'fixture generator entrypoint',
+        'generator/config.example.env': b'fixture configuration template',
+        'generator/infini_local/desktop/web_studio.py': b'fixture web bridge',
+        'generator/infini_local/desktop/webui/index.html': b'fixture frontend',
+        'generator/infini_local/desktop/webui/studio.js': b'fixture script',
+        'generator/infini_local/desktop/webui/studio.css': b'fixture styles',
         'START_HERE.html': b'fixture handbook',
         'LICENSE': b'fixture IFC license',
     }
@@ -162,6 +162,46 @@ class FullVerificationTests(unittest.TestCase):
         self.assertEqual(report['sha256'], hashlib.sha256(self.package.read_bytes()).hexdigest())
         self.assertEqual(report['files'], sorted(self.files))
 
+    def add_managed_dependency(self):
+        with (self.source / 'build.txt').open('a', encoding='utf-8') as manifest:
+            manifest.write('dllReferences = Fixture.Dependency\n')
+        library = self.source / 'lib' / 'Fixture.Dependency.dll'
+        library.parent.mkdir()
+        library.write_bytes(b'MZmanaged-dependency-fixture')
+        notice = library.with_suffix('.LICENSE.txt')
+        notice.write_text('Dependency MIT notice fixture', encoding='utf-8')
+        self.files['lib/' + library.name] = library.read_bytes()
+        self.files['lib/' + notice.name] = notice.read_bytes()
+        # Info carries the same declared loader dependency as build.txt.
+        self.files['Info'] = self.files['Info'][:-1] + string('dllReferences') + string('Fixture.Dependency') + b'\0\0'
+
+    def test_managed_dependency_and_license_are_exact(self):
+        self.add_managed_dependency()
+        self.assertEqual(self.check()['dllReferences'], ['Fixture.Dependency'])
+
+    def test_missing_or_changed_managed_dependency_rejected(self):
+        self.add_managed_dependency()
+        for content in (None, b'MZwrong-managed-library'):
+            with self.subTest(content=content):
+                if content is None:
+                    self.files.pop('lib/Fixture.Dependency.dll')
+                else:
+                    self.files['lib/Fixture.Dependency.dll'] = content
+                with self.assertRaisesRegex(ValueError, 'managed dependency missing or changed'):
+                    self.check()
+
+    def test_managed_dependency_loader_declaration_required(self):
+        self.add_managed_dependency()
+        self.files['Info'] = string('version') + string('0.5.1') + string('modReferences') + string('ParticleLibrary@3.2.1.0') + string('Luminance') + b'\0\0'
+        with self.assertRaisesRegex(ValueError, 'manifest version/dependencies mismatch'):
+            self.check()
+
+    def test_managed_dependency_notice_required(self):
+        self.add_managed_dependency()
+        self.files.pop('lib/Fixture.Dependency.LICENSE.txt')
+        with self.assertRaisesRegex(ValueError, 'notice missing or changed'):
+            self.check()
+
     def test_wrong_package_version_rejected(self):
         with self.assertRaisesRegex(ValueError, 'version differs'):
             self.check(version='0.5.2')
@@ -197,7 +237,7 @@ class StudioBundleTests(unittest.TestCase):
         native = 'python/Lib/site-packages/pydantic_core/_pydantic_core.cp314-win_amd64.pyd'
         for resources, error in (
             (studio_fixture(omit=(native,)), 'native dependency missing'),
-            (studio_fixture(extra={'LocalGenerator/config.env': b'private provider settings'}), 'Operator state'),
+            (studio_fixture(extra={'generator/config.env': b'private provider settings'}), 'Operator state'),
             (studio_fixture(extra={'../outside.txt': b'escape'}), 'Unsafe Studio archive path'),
         ):
             with self.subTest(error=error), self.assertRaisesRegex(ValueError, error):
@@ -221,14 +261,14 @@ class StudioBundleTests(unittest.TestCase):
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(('source: ' + name).encode())
-            selected = root / 'LocalGenerator/infini_local/desktop/webui/icon.png'
+            selected = root / 'generator/infini_local/desktop/webui/icon.png'
             selected.parent.mkdir(parents=True, exist_ok=True)
             selected.write_bytes(b'PNG bytes preserved without tML conversion')
             excluded = (
-                'LocalGenerator/config.env', 'LocalGenerator/cache/private.json',
-                'LocalGenerator/tests/fixture.py', 'LocalGenerator/.venv/python.exe',
-                'LocalGenerator/infini_local/__pycache__/module.pyc',
-                'LocalGenerator/infini_local/.env',
+                'generator/config.env', 'generator/cache/private.json',
+                'tests/generator/fixture.py', 'generator/.venv/python.exe',
+                'generator/infini_local/__pycache__/module.pyc',
+                'generator/infini_local/.env',
             )
             for name in excluded:
                 path = root / name

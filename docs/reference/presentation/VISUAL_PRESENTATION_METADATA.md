@@ -5,7 +5,7 @@
 
 Visual Director выбирает внешний вид принятого gameplay, не mechanics/classifier outputs. Одна физическая вещь имеет один visual project; отдельный объект — отдельный. `item_body` всегда требует отдельный inventory PNG: единственный missing-mode Fix допускается только при уже непустых `prompt`, `silhouette`, `visualIdentity` и добавляет `baked_sprite` с audit. Без описания — Visual Repair/RED, не artwork из кода.
 
-Источник ordinary/Repair schema и dispatch — [Visual contract](../../../LocalGenerator/infini_local/pipelines/visual/contract.py); projects/processing role — [visual_asset_plan.py](../../../LocalGenerator/infini_local/pipelines/visual/assets.py). Director root: `schema`, `item`, одна `entities` запись на runtime entity, optional advisory текст `animationPlan` (не основание для Repair); `equipOverlay` обязателен только для объявленной equipment потребности. Root `item` — единственный автор внешности тела предмета: его `prompt`, `silhouette`, `visualIdentity` не дублируются в `entities`. Существующий projector выбирает этот root по `visualProjectRef=item`, не восстанавливает копии в `visualKit`. Поэтому Repair root-текста не открывает permissions на entity rows. Отдельный baked entity по-прежнему обязан полностью описать собственный проект; missing/invalid root-дизайн остаётся RED. Сохранённые delivered DTO и их presentation не мигрируются.
+Источник ordinary/Repair schema и dispatch — [Visual contract](../../../generator/infini_local/pipelines/visual/contract.py); projects/processing role — [visual_asset_plan.py](../../../generator/infini_local/pipelines/visual/assets.py). Director root: `schema`, `item`, одна `entities` запись на runtime entity, optional advisory текст `animationPlan` (не основание для Repair); `equipOverlay` обязателен только для объявленной equipment потребности. Root `item` — единственный автор внешности тела предмета: его `prompt`, `silhouette`, `visualIdentity` не дублируются в `entities`. Существующий projector выбирает этот root по `visualProjectRef=item`, не восстанавливает копии в `visualKit`. Поэтому Repair root-текста не открывает permissions на entity rows. Отдельный baked entity по-прежнему обязан полностью описать собственный проект; missing/invalid root-дизайн остаётся RED. Сохранённые delivered DTO и их presentation не мигрируются.
 
 | Entity branch | Обязательная Visual запись |
 |---|---|
@@ -14,7 +14,7 @@ Visual Director выбирает внешний вид принятого gamepl
 | `reuse_item_icon` | `entityId`, `assetMode`, `visualProjectRef=item`, `scale`; exact root PNG, base size, canvas и ось; свои prompt/size/canvas/axis запрещены |
 | `runtime_geometry`, `no_asset` | `entityId`, `assetMode`, `visualProjectRef=none`, `scale`; не authored sprite prompts |
 
-`entityId` ссылается на уже принятый runtime entity. `scale` [.25,4] — visual multiplier, не hitbox, в том числе для `no_asset`. Из exact mode/identity может losslessly нормализоваться единственный `visualProjectRef`; это не разрешение угадать mode или дизайн. Impact PNG запрашивает только выбранный поздний VFX `impactSprite`, а не обязательный ранний Visual `impactPrompt` для каждой entity. VFX ingredients принадлежат VFX, не меняют основной Visual.
+`entityId` ссылается на уже принятый runtime entity. `scale` [.25,4] — visual multiplier, не hitbox, в том числе для `no_asset`. Из exact mode/identity может losslessly нормализоваться единственный `visualProjectRef`; это не разрешение угадать mode или дизайн. VFX ingredients объявляются отдельными asset requests у VFX Director; они не меняют основной Visual.
 
 <a id="image-contract"></a>
 ## Изображение, canvas и художественная граница
@@ -23,7 +23,7 @@ Fresh Visual v2 item требует `prompt`, `negativePrompt`, `silhouette`, `v
 
 Processing role отделена от произвольного entity ID: identity вроде `entity_<id>` не является geometry role. Directional convention обязана соответствовать renderer: +X canonicalization нельзя применять поверх native +Y rotation; PCA/taper не semantic detector носа/рукояти. Authored design/palette/silhouette не переписываются name/category/regex heuristics.
 
-Item/equipment сохраняют hard pixel alpha, impact/effect — soft alpha. Straight RGBA PNG premultiplies только при runtime upload, не вместо bake policy. Final PNG transparent; raw backend input может требовать solid chroma key по [sprite_contracts.py](../../../LocalGenerator/infini_local/core/images/contracts.py). Prompt/keyer/retry используют один mapping (white/black/cyan и retained aliases); magenta-only spill не применяется к другому key, unknown key диагностируется. Нельзя путать raw solid-key background с непрозрачным final PNG или восстанавливать arbitrary alpha, уже сплющенную provider на opaque фон.
+Item/equipment сохраняют hard pixel alpha, effect cutouts — soft alpha. Straight RGBA PNG premultiplies только при runtime upload, не вместо bake policy. Final PNG transparent; raw backend input может требовать solid chroma key по [sprite_contracts.py](../../../generator/infini_local/core/images/contracts.py). Prompt/keyer/retry используют один mapping (white/black/cyan и retained aliases); magenta-only spill не применяется к другому key, unknown key диагностируется. Нельзя путать raw solid-key background с непрозрачным final PNG или восстанавливать arbitrary alpha, уже сплющенную provider на opaque фон.
 
 <a id="size-axis"></a>
 ## Base world size, final-PNG axis и независимый canvas
@@ -33,23 +33,23 @@ Authoring schemas: `infini.visual-kit.runtime-entities.v2` и `infini.visual-kit
 - `renderSizePx` — integer `1..512`, большая сторона **полного final PNG frame** в base world pixels до rotation/camera/independent multipliers. Не alpha-bbox, hitbox, физическая длина древка или inventory slot. Если `C=max(actual final frame width,height)`, техническая конверсия `q=R/C`. Requested canvas не используется вместо реального C.
 - `forwardAngleDegrees` — finite number `[-180,180]`, local forward-axis final PNG после crop/fit/padding, до facing/gravity flips: `0=+X`, positive clockwise в y-down. Это выбор Visual о нарисованных пикселях, не AI/movement/controller angle. Describe the same pose in authored prompt; не выводить ось из имени, прозы, PCA или image inspection. Runtime axis correction не меняет gameplay movement.
 - Root item owns size/canvas/axis для exact `kind=item_body` независимо от spelling ID и для explicit `reuse_item_icon`. Никаких дополнительных authoritative копий в entity DTO. Distinct baked non-item owns свои три поля; enum canvas `24/32/48/64/96/128`. `runtime_geometry/no_asset` не имеют этих полей. `scale` каждого entity остаётся independent multiplier.
-- Main-body `_canvas_for` требует explicit current `preferredCanvasSize` для item/distinct entity project; отсутствие или неверное значение даёт отказ, не hitbox-derived canvas; dedicated impact PNG получает explicit VFX `spriteCanvasSize` → `entity.visual.impactCanvasSize`, не hitbox-derived policy. Overlay и VFX ingredients сохраняют своих owners. Plan/manifest presentation values — diagnostics выбранного owner, не повторный Author.
+- Main-body `_canvas_for` требует explicit current `preferredCanvasSize` для item/distinct entity project; отсутствие или неверное значение даёт отказ, не hitbox-derived canvas. Overlay и VFX ingredients сохраняют своих owners. Plan/manifest presentation values — diagnostics выбранного owner, не повторный Author.
 
 ### Draw factors (не gameplay scale)
 
 `I=inventoryScale`, `W=worldScale`, `G=gameplay.itemScale`, `D=hitbox.drawScale`, `E=entity.visual.scale`, `P=current Projectile.scale` (initial `D*E`).
 
-| Consumer | Declared-size factor | Legacy absence |
+| Consumer | Declared-size factor | Объявленное отсутствие size |
 |---|---|---|
 | Inventory | unchanged `s_inventory * min(1, caller frame max-side / C) * I`, **без q** | exact old fit |
 | Dropped item | `q_item * s_world * W`; same finalScale bottom alignment | `s_world * W` |
 | Held generated root | `q_item * player.GetAdjustedItemScale(held)`; G already included once | existing adjusted scale |
 | Registry-only held root | `q_item * baseScale * clamp(G,.25,4)` | existing registry branch |
 | Baked/reused body | `q_selected * P` при accepted `hitboxCurve.mirrorToSprite=true`; иначе `q_selected * clamp(P,.1,8)` | та же body policy без q |
-| Live body copies | `q_selected * clamp(P,.1,8) * slot.Scale` | exact old `max(.05,P*slot.Scale)` |
+| History body copies | Размер берётся из текущего historyTrail payload и принятого body pose | Отдельные обязательные/optional fields задаёт history schema |
 | Detached body copies | selected q after actual texture load, existing dimensionless pose/slot multiplier | exact existing branch |
 
-Snapshot/network `Pose.Scale`, Item.scale, Projectile.scale, collision, hitbox/tip anchors и growth остаются механическими/dimensionless. Size/path выбираются у одного texture owner; dedicated impact/overlay/material world widths/textured paths не получают body q. Existing tip anchors не являются измеренным PNG наконечником. Один scalar max-side не гарантирует равную физическую длину разных поз или точный grip/tip.
+Snapshot/network `Pose.Scale`, Item.scale, Projectile.scale, collision, hitbox/tip anchors и growth остаются механическими/dimensionless. Size/path выбираются у одного texture owner; overlay/material world widths/textured paths не получают body q. Existing tip anchors не являются измеренным PNG наконечником. Один scalar max-side не гарантирует равную физическую длину разных поз или точный grip/tip.
 
 Reuse гарантирует одинаковые pixels и **base** frame extent, не принудительное равенство final held/world/body: с нейтральными caller hooks equality held/body требует `G == clamp(D*E,.1,8)` либо `G == D*E*curveScale(active age)` при явном mirror. W не переносится на held, G не дописывается в projectile. Accepted G/D/gameplay не менять ради арта. Mirror относится к базовому body; VFX body copies сохраняют собственные опубликованные scale rules.
 
@@ -58,7 +58,7 @@ Reuse гарантирует одинаковые pixels и **base** frame exten
 `SpritePresentation.ProjectileNativeRotation/ProjectileBodyAngle` — единственный
 владелец преобразования угла между native storage и смысловым body-forward.
 Обычные generated movement drivers сохраняют native `body + π/2`; explicit
-`rotation` и legacy spin 14/16/17 хранят body-forward непосредственно. Для любого
+Явный `rotation` component хранит body-forward непосредственно. Для любого
 main PNG, включая spin/whip, renderer вычитает declared PNG forward axis с учётом
 flip. Эта ось описывает пиксели, не меняет полёт, aim или collider.
 
@@ -71,7 +71,7 @@ hydration. Повторная metadata hydration того же source не сб�
 
 Это намеренное изменение presentation, не обещание pixel-совместимости старых
 предметов. В частности, stationary main PNG больше не получает скрытые −90°.
-Dedicated impact/asset stamps и `body_segment.axis=rotation` сохраняют свой
+Material asset stamps и `body_segment.axis=rotation` сохраняют свой
 **literal raw native angle** contract: у обычного source начальный raw angle теперь
 π/2, поэтому их начальная поза тоже меняется. У движущегося ordinary body после AI
 raw convention прежняя; explicit spin также не переопределён. `body_segment` —
@@ -141,7 +141,7 @@ Visual Repair root использует partial `itemPatch|null`, условно
 
 `test_visual_presentation_metadata.py`: strict values, refusal of foreign color metadata, schema transport/downgrade behavior, Director dispatch/conditional Repair, frozen absences/siblings, delivery. Existing held/equipment fixture extensions in `EngineRuntimeChecks`: real DTO full/cache/network/save/registry routes, facing/gravity grip DrawData and FNA CPU submission, all fixed mounts/orbit through real player transforms. Texture shells and intercepted GPU flushes are headless seams, not in-game rendering.
 
-Условные проекты/actual packets/pixels защищают `test_vfx_packet_contracts.py`, `test_vfx_frozen_boundary_contracts.py`, `test_sprite_render_contracts.py`, `test_visual_vfx_prompt_prefix.py`. C# consumers — [VisualSpec](../../../ModSources/InfiniCrafterLocal/Common/Models/Contracts/GeneratedItemData.Model.cs), [held layer](../../../ModSources/InfiniCrafterLocal/Common/Players/GeneratedHeldItemPresentation.cs), [equip layer](../../../ModSources/InfiniCrafterLocal/Common/Players/GeneratedEquipOverlayDrawLayer.cs). Результаты старых проходов — [history](../../archive/VISUAL_AUDIT_HISTORY_RU.md#presentation); актуальные команды/границы — [test owners](../../development/TESTING_RU.md).
+Условные проекты/actual packets/pixels защищают `test_vfx_packet_contracts.py`, `test_vfx_frozen_boundary_contracts.py`, `test_sprite_render_contracts.py`, `test_visual_vfx_prompt_prefix.py`. C# consumers — [VisualSpec](../../../mod/InfiniCrafterLocal/Common/Models/Contracts/GeneratedItemData.Model.cs), [held layer](../../../mod/InfiniCrafterLocal/Common/Players/GeneratedHeldItemPresentation.cs), [equip layer](../../../mod/InfiniCrafterLocal/Common/Players/GeneratedEquipOverlayDrawLayer.cs). Результаты старых проходов — [history](../../archive/VISUAL_AUDIT_HISTORY_RU.md#presentation); актуальные команды/границы — [test owners](../../development/TESTING_RU.md).
 
 ### Single native held owner
 

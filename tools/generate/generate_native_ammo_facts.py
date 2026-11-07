@@ -10,7 +10,7 @@ from generate_native_hit_status import decode
 from native_ammo_fact_analysis import ammo_method_facts, default_ammo_selection, item_type_mentions
 
 ROOT = Path(__file__).resolve().parents[2]
-OUTPUT = ROOT / "ModSources/InfiniCrafterLocal/Common/Services/Generation/NativeAmmoFactsCatalog.g.cs"
+OUTPUT = ROOT / "mod/InfiniCrafterLocal/Common/Services/Generation/NativeAmmoFactsCatalog.g.cs"
 REPORT = ROOT / "contracts/reports/native_ammo_sources.generated.json"
 
 
@@ -113,18 +113,52 @@ def render(sources):
     return "\n".join(lines + ["    };", "}", ""])
 
 
+def certificate_report(sources):
+    """Keep the evidence read by native_source_certificates/Program.cs, once.
+
+    Gameplay records already live in the runtime catalog. Nested provenance
+    still matters: dropping whole records would lose dependency certificates.
+    """
+    evidence_keys = {"sourceModuleVersionId", "moduleVersionId", "assemblySha256",
+                     "sourceMethodSha256", "specificMatchLookupCertificate", "nativeMember"}
+    identity_keys = {"method", "member", "owner", "name", "sourceKind", "assemblyVersion", "scope"}
+    certificates = []
+    seen = set()
+
+    def visit(value):
+        if isinstance(value, dict):
+            if evidence_keys.intersection(value):
+                row = {key: item for key, item in value.items() if key in evidence_keys | identity_keys}
+                identity = json.dumps(row, sort_keys=True, separators=(",", ":"))
+                if identity not in seen:
+                    seen.add(identity)
+                    certificates.append(row)
+            for item in value.values():
+                visit(item)
+        elif isinstance(value, list):
+            for item in value:
+                visit(item)
+
+    visit(sources)
+    return {"schema": "infini.native-ammo-certificates.v1", "certificates": certificates}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--assembly", type=Path, action="append", required=True)
+    parser.add_argument("--report", type=Path, help="Optional full JSON audit export (not needed by runtime)")
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     sources = [s for path in args.assembly for s in extract(path)]
-    products = {OUTPUT: render(sources), REPORT: json.dumps({"schema": "infini.native-ammo-sources.v1", "sources": sources}, indent=2) + "\n"}
+    products = {OUTPUT: render(sources), REPORT: json.dumps(certificate_report(sources), indent=2) + "\n"}
+    if args.report is not None:
+        products[args.report] = json.dumps({"schema": "infini.native-ammo-sources.v1", "sources": sources}, indent=2) + "\n"
     for path, text in products.items():
         if args.check:
             if not path.exists() or path.read_text(encoding="utf-8") != text:
                 raise SystemExit("stale ammo source facts: " + str(path))
         else:
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text, encoding="utf-8")
     for s in sources:
         print(s["method"], len(s["records"]), "bounded source records")

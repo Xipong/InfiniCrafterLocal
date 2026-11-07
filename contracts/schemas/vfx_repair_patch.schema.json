@@ -212,18 +212,6 @@
                 },
                 "layer": {
                   "enum": []
-                },
-                "particleSystemId": {
-                  "enum": []
-                },
-                "scale": {
-                  "enum": []
-                },
-                "spread": {
-                  "enum": []
-                },
-                "textureRole": {
-                  "enum": []
                 }
               },
               "required": []
@@ -248,28 +236,13 @@
                 "blend": {
                   "enum": []
                 },
-                "density": {
-                  "enum": []
-                },
                 "duration": {
                   "enum": []
                 },
                 "layer": {
                   "enum": []
                 },
-                "particleSystemId": {
-                  "enum": []
-                },
                 "repeatEvery": {
-                  "enum": []
-                },
-                "scale": {
-                  "enum": []
-                },
-                "spread": {
-                  "enum": []
-                },
-                "textureRole": {
                   "enum": []
                 }
               },
@@ -290,23 +263,7 @@
               ]
             },
             "then": {
-              "properties": {
-                "density": {
-                  "enum": []
-                },
-                "particleSystemId": {
-                  "enum": []
-                },
-                "scale": {
-                  "enum": []
-                },
-                "spread": {
-                  "enum": []
-                },
-                "textureRole": {
-                  "enum": []
-                }
-              },
+              "properties": {},
               "required": [
                 "alpha",
                 "blend",
@@ -331,21 +288,6 @@
             "then": {
               "properties": {
                 "alpha": {
-                  "enum": []
-                },
-                "density": {
-                  "enum": []
-                },
-                "particleSystemId": {
-                  "enum": []
-                },
-                "scale": {
-                  "enum": []
-                },
-                "spread": {
-                  "enum": []
-                },
-                "textureRole": {
                   "enum": []
                 }
               },
@@ -372,21 +314,6 @@
             "then": {
               "properties": {
                 "alpha": {
-                  "enum": []
-                },
-                "density": {
-                  "enum": []
-                },
-                "particleSystemId": {
-                  "enum": []
-                },
-                "scale": {
-                  "enum": []
-                },
-                "spread": {
-                  "enum": []
-                },
-                "textureRole": {
                   "enum": []
                 }
               },
@@ -415,28 +342,13 @@
                 "alpha": {
                   "enum": []
                 },
-                "density": {
-                  "enum": []
-                },
                 "duration": {
-                  "enum": []
-                },
-                "particleSystemId": {
                   "enum": []
                 },
                 "repeatEvery": {
                   "enum": []
                 },
-                "scale": {
-                  "enum": []
-                },
-                "spread": {
-                  "enum": []
-                },
                 "startTick": {
-                  "enum": []
-                },
-                "textureRole": {
                   "enum": []
                 }
               },
@@ -465,25 +377,10 @@
                 "blend": {
                   "enum": []
                 },
-                "density": {
-                  "enum": []
-                },
                 "duration": {
                   "enum": []
                 },
                 "layer": {
-                  "enum": []
-                },
-                "particleSystemId": {
-                  "enum": []
-                },
-                "scale": {
-                  "enum": []
-                },
-                "spread": {
-                  "enum": []
-                },
-                "textureRole": {
                   "enum": []
                 }
               },
@@ -512,25 +409,10 @@
                 "blend": {
                   "enum": []
                 },
-                "density": {
-                  "enum": []
-                },
                 "duration": {
                   "enum": []
                 },
                 "layer": {
-                  "enum": []
-                },
-                "particleSystemId": {
-                  "enum": []
-                },
-                "scale": {
-                  "enum": []
-                },
-                "spread": {
-                  "enum": []
-                },
-                "textureRole": {
                   "enum": []
                 }
               },
@@ -559,25 +441,10 @@
                 "blend": {
                   "enum": []
                 },
-                "density": {
-                  "enum": []
-                },
                 "duration": {
                   "enum": []
                 },
                 "layer": {
-                  "enum": []
-                },
-                "particleSystemId": {
-                  "enum": []
-                },
-                "scale": {
-                  "enum": []
-                },
-                "spread": {
-                  "enum": []
-                },
-                "textureRole": {
                   "enum": []
                 }
               },
@@ -599,23 +466,7 @@
               ]
             },
             "then": {
-              "properties": {
-                "density": {
-                  "enum": []
-                },
-                "particleSystemId": {
-                  "enum": []
-                },
-                "scale": {
-                  "enum": []
-                },
-                "spread": {
-                  "enum": []
-                },
-                "textureRole": {
-                  "enum": []
-                }
-              },
+              "properties": {},
               "required": [
                 "alpha",
                 "blend",
@@ -639,25 +490,10 @@
             },
             "then": {
               "properties": {
-                "density": {
-                  "enum": []
-                },
                 "duration": {
                   "enum": []
                 },
-                "particleSystemId": {
-                  "enum": []
-                },
                 "repeatEvery": {
-                  "enum": []
-                },
-                "scale": {
-                  "enum": []
-                },
-                "spread": {
-                  "enum": []
-                },
-                "textureRole": {
                   "enum": []
                 }
               },
@@ -976,11 +812,6 @@
               ]
             },
             "then": {
-              "properties": {
-                "phaseOffset": {
-                  "enum": []
-                }
-              },
               "required": [
                 "shape"
               ]
@@ -1141,11 +972,6 @@
               ]
             },
             "then": {
-              "properties": {
-                "phaseOffset": {
-                  "enum": []
-                }
-              },
               "required": [
                 "geometry"
               ]
@@ -1448,31 +1274,13 @@
                 "anchor": {
                   "const": "self"
                 },
-                "density": {
-                  "enum": []
-                },
                 "duration": {
-                  "enum": []
-                },
-                "particleSystemId": {
-                  "enum": []
-                },
-                "phaseOffset": {
                   "enum": []
                 },
                 "repeatEvery": {
                   "enum": []
                 },
-                "scale": {
-                  "enum": []
-                },
-                "spread": {
-                  "enum": []
-                },
                 "startTick": {
-                  "enum": []
-                },
-                "textureRole": {
                   "enum": []
                 }
               },
@@ -1979,28 +1787,10 @@
                 "blend": {
                   "enum": []
                 },
-                "density": {
-                  "enum": []
-                },
                 "duration": {
                   "enum": []
                 },
                 "layer": {
-                  "enum": []
-                },
-                "particleSystemId": {
-                  "enum": []
-                },
-                "phaseOffset": {
-                  "enum": []
-                },
-                "scale": {
-                  "enum": []
-                },
-                "spread": {
-                  "enum": []
-                },
-                "textureRole": {
                   "enum": []
                 }
               },
@@ -2316,43 +2106,6 @@
           {
             "if": {
               "properties": {
-                "rendererKind": {
-                  "enum": [
-                    "soundCue",
-                    "screenShakeCue",
-                    "libraryParticle",
-                    "shape",
-                    "contour",
-                    "historyTrail",
-                    "nativeDust",
-                    "nativeLight",
-                    "nativeEffect",
-                    "spriteElement",
-                    "texturedPath"
-                  ]
-                }
-              },
-              "required": [
-                "rendererKind"
-              ]
-            },
-            "then": {
-              "properties": {
-                "spriteCanvasSize": {
-                  "enum": []
-                },
-                "spriteNegativePrompt": {
-                  "enum": []
-                },
-                "spritePrompt": {
-                  "enum": []
-                }
-              }
-            }
-          },
-          {
-            "if": {
-              "properties": {
                 "event": {
                   "enum": [
                     "on_crit",
@@ -2365,9 +2118,7 @@
                   ]
                 },
                 "rendererKind": {
-                  "enum": [
-                    "soundCue"
-                  ]
+                  "const": "soundCue"
                 }
               },
               "required": [
@@ -2377,9 +2128,6 @@
             },
             "then": {
               "properties": {
-                "density": {
-                  "enum": []
-                },
                 "repeatEvery": {
                   "enum": []
                 },
@@ -2445,9 +2193,7 @@
                   "const": "periodic"
                 },
                 "rendererKind": {
-                  "enum": [
-                    "soundCue"
-                  ]
+                  "const": "soundCue"
                 }
               },
               "required": [
@@ -2473,9 +2219,7 @@
                   "const": "periodic"
                 },
                 "rendererKind": {
-                  "enum": [
-                    "soundCue"
-                  ]
+                  "const": "soundCue"
                 }
               },
               "required": [
@@ -2486,9 +2230,6 @@
             },
             "then": {
               "properties": {
-                "density": {
-                  "enum": []
-                },
                 "startTick": {
                   "enum": []
                 }
@@ -2508,9 +2249,7 @@
                   "const": "periodic"
                 },
                 "rendererKind": {
-                  "enum": [
-                    "soundCue"
-                  ]
+                  "const": "soundCue"
                 }
               },
               "required": [
@@ -2520,44 +2259,6 @@
               ]
             },
             "then": {
-              "allOf": [
-                {
-                  "if": {
-                    "properties": {
-                      "repeatEvery": {
-                        "const": 0
-                      }
-                    },
-                    "required": [
-                      "repeatEvery"
-                    ]
-                  },
-                  "then": {
-                    "required": [
-                      "density"
-                    ]
-                  }
-                },
-                {
-                  "if": {
-                    "properties": {
-                      "repeatEvery": {
-                        "minimum": 1
-                      }
-                    },
-                    "required": [
-                      "repeatEvery"
-                    ]
-                  },
-                  "then": {
-                    "properties": {
-                      "density": {
-                        "enum": []
-                      }
-                    }
-                  }
-                }
-              ],
               "required": [
                 "startTick"
               ]
@@ -3741,7 +3442,7 @@
                     }
                   }
                 ],
-                "description": "Exact accepted item/entity PNG, declared asset ID, or registered library texture ID (no PNG generation). No paths, URLs or cross-entity guesses; UV and blend remain literal.",
+                "description": "Explicit exact item/entity image role or one declared asset ID. source=library selects one exact built-in texture ID, no asset declaration or PNG generation. Same literal UV/blend rules: bloomLine is long on texture Y, never auto-rotated. No paths/URLs; no cross-entity guesses.",
                 "properties": {
                   "assetId": {
                     "maxLength": 48,
@@ -3758,7 +3459,7 @@
                   },
                   "uv": {
                     "additionalProperties": false,
-                    "description": "Sampling coordinates only: first mirror U/V, then quarterTurns 1:(v,1-u), 2:(1-u,1-v), 3:(1-v,u). Preserves world geometry, size, history and original pivot; no inferred grip correction. Body flip precedes this transform. Repeat/scroll stay unbounded; no implicit UV wrapping/clamping. Saved omission is exact identity.",
+                    "description": "Sampling coordinates only: first mirror U/V, then quarterTurns 1:(v,1-u), 2:(1-u,1-v), 3:(1-v,u). Preserves world geometry, size, history and original pivot; no inferred grip correction. Body flip precedes this transform. Repeat/scroll stay unbounded; no implicit UV wrapping/clamping. UV is required; choose zero turns and no mirrors for identity.",
                     "properties": {
                       "mirrorU": {
                         "type": "boolean"
@@ -5063,8 +4764,7 @@
                                   "source": {
                                     "enum": [
                                       "item",
-                                      "entity",
-                                      "impact"
+                                      "entity"
                                     ]
                                   }
                                 },
@@ -5081,7 +4781,7 @@
                               }
                             }
                           ],
-                          "description": "Explicit exact item/entity/impact image role or one declared asset ID. source=library selects one exact built-in texture ID, no asset declaration or PNG generation. Same literal UV/blend rules: bloomLine is long on texture Y, never auto-rotated. No paths/URLs; no cross-entity guesses. impact requires that entity's existing impactSprite producer.",
+                          "description": "Explicit exact item/entity image role or one declared asset ID. source=library selects one exact built-in texture ID, no asset declaration or PNG generation. Same literal UV/blend rules: bloomLine is long on texture Y, never auto-rotated. No paths/URLs; no cross-entity guesses.",
                           "properties": {
                             "assetId": {
                               "maxLength": 48,
@@ -5098,7 +4798,7 @@
                             },
                             "uv": {
                               "additionalProperties": false,
-                              "description": "Sampling coordinates only: first mirror U/V, then quarterTurns 1:(v,1-u), 2:(1-u,1-v), 3:(1-v,u). Preserves world geometry, size, history and original pivot; no inferred grip correction. Body flip precedes this transform. Repeat/scroll stay unbounded; no implicit UV wrapping/clamping. Saved omission is exact identity.",
+                              "description": "Sampling coordinates only: first mirror U/V, then quarterTurns 1:(v,1-u), 2:(1-u,1-v), 3:(1-v,u). Preserves world geometry, size, history and original pivot; no inferred grip correction. Body flip precedes this transform. Repeat/scroll stay unbounded; no implicit UV wrapping/clamping. UV is required; choose zero turns and no mirrors for identity.",
                               "properties": {
                                 "mirrorU": {
                                   "type": "boolean"
@@ -5547,7 +5247,7 @@
                 "type": "number"
               },
               "sampling": {
-                "description": "Exact PointClamp (crisp texels) or LinearClamp (interpolated texels); no geometry/opacity changes. Old saved omission means point.",
+                "description": "Exact PointClamp (crisp texels) or LinearClamp (interpolated texels); no geometry/opacity changes. Explicit point/linear choice is required.",
                 "enum": [
                   "point",
                   "linear"
@@ -6214,7 +5914,7 @@
                     }
                   }
                 ],
-                "description": "Exact accepted item/entity PNG, declared asset ID, or registered library texture ID (no PNG generation). No paths, URLs or cross-entity guesses; UV and blend remain literal.",
+                "description": "Explicit exact item/entity image role or one declared asset ID. source=library selects one exact built-in texture ID, no asset declaration or PNG generation. Same literal UV/blend rules: bloomLine is long on texture Y, never auto-rotated. No paths/URLs; no cross-entity guesses.",
                 "properties": {
                   "assetId": {
                     "maxLength": 48,
@@ -6231,7 +5931,7 @@
                   },
                   "uv": {
                     "additionalProperties": false,
-                    "description": "Sampling coordinates only: first mirror U/V, then quarterTurns 1:(v,1-u), 2:(1-u,1-v), 3:(1-v,u). Preserves world geometry, size, history and original pivot; no inferred grip correction. Body flip precedes this transform. Repeat/scroll stay unbounded; no implicit UV wrapping/clamping. Saved omission is exact identity.",
+                    "description": "Sampling coordinates only: first mirror U/V, then quarterTurns 1:(v,1-u), 2:(1-u,1-v), 3:(1-v,u). Preserves world geometry, size, history and original pivot; no inferred grip correction. Body flip precedes this transform. Repeat/scroll stay unbounded; no implicit UV wrapping/clamping. UV is required; choose zero turns and no mirrors for identity.",
                     "properties": {
                       "mirrorU": {
                         "type": "boolean"
@@ -7021,7 +6721,7 @@
             "additionalProperties": false,
             "properties": {
               "pitch": {
-                "description": "Exact central pitch relative to the unpitched sample: 0 normal, -1 down one octave, +1 up one octave. No native sample pitch, musicPitch, phaseOffset or seed offset is added. Nonzero pitch must remain nonzero in native float32 storage.",
+                "description": "Exact central pitch relative to the unpitched sample: 0 normal, -1 down one octave, +1 up one octave. No native sample pitch, musicPitch or seed offset is added. Nonzero pitch must remain nonzero in native float32 storage.",
                 "maximum": 0.9,
                 "minimum": -0.9,
                 "type": "number"
@@ -7393,7 +7093,7 @@
                     }
                   }
                 ],
-                "description": "Exact accepted item/entity PNG, declared asset ID, or registered library texture ID (no PNG generation). No paths, URLs or cross-entity guesses; UV and blend remain literal.",
+                "description": "Explicit exact item/entity image role or one declared asset ID. source=library selects one exact built-in texture ID, no asset declaration or PNG generation. Same literal UV/blend rules: bloomLine is long on texture Y, never auto-rotated. No paths/URLs; no cross-entity guesses.",
                 "properties": {
                   "assetId": {
                     "maxLength": 48,
@@ -7410,7 +7110,7 @@
                   },
                   "uv": {
                     "additionalProperties": false,
-                    "description": "Sampling coordinates only: first mirror U/V, then quarterTurns 1:(v,1-u), 2:(1-u,1-v), 3:(1-v,u). Preserves world geometry, size, history and original pivot; no inferred grip correction. Body flip precedes this transform. Repeat/scroll stay unbounded; no implicit UV wrapping/clamping. Saved omission is exact identity.",
+                    "description": "Sampling coordinates only: first mirror U/V, then quarterTurns 1:(v,1-u), 2:(1-u,1-v), 3:(1-v,u). Preserves world geometry, size, history and original pivot; no inferred grip correction. Body flip precedes this transform. Repeat/scroll stay unbounded; no implicit UV wrapping/clamping. UV is required; choose zero turns and no mirrors for identity.",
                     "properties": {
                       "mirrorU": {
                         "type": "boolean"

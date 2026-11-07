@@ -4,10 +4,9 @@ on:
   pull_request:
     paths:
       - '.github/workflows/workbench-native.yml'
-      - 'tools/item-test-workbench/**'
-      - 'tools/native/**'
-      - 'tools/fixtures/video-ui-buffs/**'
-      - 'ModSources/InfiniCrafterLocal/**'
+      - 'tools/workbench/**'
+      - 'tests/native/**'
+      - 'mod/InfiniCrafterLocal/**'
   workflow_dispatch:
 
 permissions:
@@ -58,12 +57,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj -p:TmlVersion=2026.08.3.0
-          dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj -p:TmlVersion=2026.08.3.0
+          dotnet restore mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj -p:TmlVersion=2026.08.3.0
+          dotnet restore mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj -p:TmlVersion=2026.08.3.0
           python - <<'PY'
           import json, os, shutil
           from pathlib import Path
-          data = json.loads(Path('ModSources/InfiniCrafterLocal/obj/project.assets.json').read_text())
+          data = json.loads(Path('mod/InfiniCrafterLocal/obj/project.assets.json').read_text())
           packages = [entry for name, entry in data['libraries'].items() if name.lower().startswith('tmodloader/')]
           if len(packages) != 1:
               raise SystemExit('Expected exactly one restored tModLoader reference package')
@@ -88,61 +87,61 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python tools/item-test-workbench/fetch_player_assets.py --include-dummy --include-zombie --out "$RUNNER_TEMP/player-assets"
+          python tools/workbench/python/fetch_player_assets.py --include-dummy --include-zombie --out "$RUNNER_TEMP/player-assets"
           echo "INFINI_PLAYER_ASSET_DIR=$RUNNER_TEMP/player-assets" >> "$GITHUB_ENV"
-      - name: Build and execute original native particle checks
+      - name: Build and execute current native particle checks
         id: native_build
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p artifacts/workbench-ci
-          python tools/item-test-workbench/workbench.py build 2>&1 | tee artifacts/workbench-ci/build.log
-          python tools/item-test-workbench/verify_vfx.py --no-build --out artifacts/workbench-ci/evidence \
+          python tools/workbench/workbench.py build 2>&1 | tee artifacts/workbench-ci/build.log
+          python tools/workbench/python/verify_particles.py --no-build --out artifacts/workbench-ci/evidence \
             2>&1 | tee artifacts/workbench-ci/verify.log
       - name: Verify native and owned placement consumers
         shell: bash
         run: |
           set -euo pipefail
-          base=tools/item-test-workbench
-          host="$base/bin/Release/net8.0/ItemTestWorkbench.dll"
+          base=tools/workbench
+          host="$base/native/bin/Release/net8.0/ItemTestWorkbench.dll"
           dotnet "$host" --check-assertions
           dotnet "$host" --check-owned-registration
-          INFINI_MOD_SOURCE_ROOT="$PWD/ModSources/InfiniCrafterLocal" \
+          INFINI_MOD_SOURCE_ROOT="$PWD/mod/InfiniCrafterLocal" \
             dotnet "$host" --check-owned-registration
-          python "$base/verify_world.py" --no-build --out artifacts/workbench-ci/world \
+          python "$base/python/verify_world.py" --no-build --out artifacts/workbench-ci/world \
             2>&1 | tee artifacts/workbench-ci/world.log
-          python "$base/verify_quality.py" --native-dll "$host" --out artifacts/workbench-ci/owned-quality \
+          python "$base/python/verify_quality.py" --native-dll "$host" --out artifacts/workbench-ci/owned-quality \
             2>&1 | tee artifacts/workbench-ci/owned-quality.log
       - name: Verify independently loaded dependent tModLoader mods
         shell: bash
         run: |
           set -euo pipefail
-          base=tools/item-test-workbench
-          dotnet build "$base/fixture-mod/WorkbenchObserverFixture.Standalone.csproj" -c Release \
+          base=tools/workbench
+          dotnet build "$base/native/fixture-mod/WorkbenchObserverFixture.Standalone.csproj" -c Release \
             -p:InfiniTmlReferenceDir="$INFINI_TML_REFERENCE_DIR"
-          dotnet build "$base/fixture-mod/WorkbenchDependentFixture/WorkbenchDependentFixture.Standalone.csproj" -c Release \
+          dotnet build "$base/native/fixture-mod/WorkbenchDependentFixture/WorkbenchDependentFixture.Standalone.csproj" -c Release \
             -p:InfiniTmlReferenceDir="$INFINI_TML_REFERENCE_DIR"
-          host="$base/bin/Release/net8.0/ItemTestWorkbench.dll"
-          dependency="$base/fixture-mod/bin/Release/net8.0/WorkbenchObserverFixture.dll"
-          dependent="$base/fixture-mod/WorkbenchDependentFixture/bin/Release/net8.0/WorkbenchDependentFixture.dll"
-          python "$base/verify_native_loader.py" --native-dll "$host" --mod-dll "$dependency" \
+          host="$base/native/bin/Release/net8.0/ItemTestWorkbench.dll"
+          dependency="$base/native/fixture-mod/bin/Release/net8.0/WorkbenchObserverFixture.dll"
+          dependent="$base/native/fixture-mod/WorkbenchDependentFixture/bin/Release/net8.0/WorkbenchDependentFixture.dll"
+          python "$base/python/verify_native_loader.py" --native-dll "$host" --mod-dll "$dependency" \
             --mod-root "$base/fixtures/WorkbenchObserverFixture" \
             2>&1 | tee artifacts/workbench-ci/loader-single.log
-          python "$base/verify_multi_mod_loader.py" --native-dll "$host" \
+          python "$base/python/verify_multi_mod_loader.py" --native-dll "$host" \
             --dependency-dll "$dependency" --dependency-root "$base/fixtures/WorkbenchObserverFixture" \
             --dependent-dll "$dependent" --dependent-root "$base/fixtures/WorkbenchDependentFixture" \
             2>&1 | tee artifacts/workbench-ci/loader-multiple.log
-          python "$base/verify_multi_mod_loader.py" --server-mode --native-dll "$host" \
+          python "$base/python/verify_multi_mod_loader.py" --server-mode --native-dll "$host" \
             --dependency-dll "$dependency" --dependency-root "$base/fixtures/WorkbenchObserverFixture" \
             --dependent-dll "$dependent" --dependent-root "$base/fixtures/WorkbenchDependentFixture" \
             2>&1 | tee artifacts/workbench-ci/loader-server.log
-          packer="$base/fixture-mod/WorkbenchTmodFixture/WorkbenchTmodFixture.csproj"
+          packer="$base/native/fixture-mod/WorkbenchTmodFixture/WorkbenchTmodFixture.csproj"
           dotnet build "$packer" -c Release -p:InfiniTmlReferenceDir="$INFINI_TML_REFERENCE_DIR"
           dotnet run --no-build -c Release --project "$packer" -- "$dependency" \
             "$base/fixtures/WorkbenchObserverFixture" "$RUNNER_TEMP/WorkbenchObserverFixture.tmod"
           dotnet run --no-build -c Release --project "$packer" -- "$dependent" \
             "$base/fixtures/WorkbenchDependentFixture" "$RUNNER_TEMP/WorkbenchDependentFixture.tmod"
-          python "$base/verify_tmod_loader.py" --native-dll "$host" \
+          python "$base/python/verify_tmod_loader.py" --native-dll "$host" \
             --dependency-tmod "$RUNNER_TEMP/WorkbenchObserverFixture.tmod" \
             --dependent-tmod "$RUNNER_TEMP/WorkbenchDependentFixture.tmod" \
             2>&1 | tee artifacts/workbench-ci/loader-tmod.log
@@ -150,53 +149,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base=tools/item-test-workbench
-          host="$base/bin/Release/net8.0/ItemTestWorkbench.dll"
-          fixture="$base/fixture-mod/bin/Release/net8.0/WorkbenchObserverFixture.dll"
-          python "$base/verify_loader_scene.py" --native-dll "$host" --mod-dll "$fixture" \
+          base=tools/workbench
+          host="$base/native/bin/Release/net8.0/ItemTestWorkbench.dll"
+          fixture="$base/native/fixture-mod/bin/Release/net8.0/WorkbenchObserverFixture.dll"
+          python "$base/python/verify_loader_scene.py" --native-dll "$host" --mod-dll "$fixture" \
             --mod-root "$base/fixtures/WorkbenchObserverFixture" \
             2>&1 | tee artifacts/workbench-ci/loader-scene.log
-          python "$base/verify_loader_render.py" --native-dll "$host" --mod-dll "$fixture" \
+          python "$base/python/verify_loader_render.py" --native-dll "$host" --mod-dll "$fixture" \
             --mod-root "$base/fixtures/WorkbenchObserverFixture" --player-assets "$INFINI_PLAYER_ASSET_DIR" \
             --out artifacts/workbench-ci/loader-render \
             2>&1 | tee artifacts/workbench-ci/loader-render.log
-      - name: Render a Luminance on-hit particle using the real resource
+      - name: Verify Luminance on-hit particles with the real resource
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          item = json.loads(Path('artifacts/workbench-ci/evidence/captured-hit/item.json').read_text())
-          for slot in item['vfxManifest']['slots']:
-              if slot.get('rendererKind') == 'libraryParticle' and slot.get('event') == 'on_hit':
-                  slot['particle']['textureId'] = 'shineFlare'
-          Path('artifacts/workbench-ci/luminance-item.json').write_text(json.dumps(item))
-          PY
-          python tools/item-test-workbench/workbench.py run --no-build \
-            --item artifacts/workbench-ci/luminance-item.json \
-            --scenario tools/item-test-workbench/scenarios/client-vfx-captured.json \
-            --review native --gif --out artifacts/workbench-ci/luminance-hit
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          trace = json.loads(Path('artifacts/workbench-ci/luminance-hit/native.json').read_text())
-          render = trace['nativeRender']
-          hashes = render.get('luminanceResources', {}).get('selectedTextureSha256', {})
-          key = 'Luminance/Assets/GreyscaleTextures/ShineFlare'
-          if trace.get('status') != 'passed' or hashes.get(key) != '0d0445abd56981effdb50e045694ebd3312959eaa3a21c64618a345d5b9351e6':
-              raise SystemExit('Original Luminance on-hit texture was not loaded')
-          if not any(s.get('particleCount', 0) > 0 for s in render.get('snapshots', [])):
-              raise SystemExit('No native on-hit particles observed')
-          if not any(f.get('nonblackPixels', 0) > 0 for f in render.get('frames', [])):
-              raise SystemExit('No native pixels were rendered')
-          PY
+          python tools/workbench/python/verify_particles.py --no-build --texture shineFlare \
+            --out artifacts/workbench-ci/luminance \
+            2>&1 | tee artifacts/workbench-ci/luminance.log
       - name: Exercise automatic equipment input
         shell: bash
         run: |
           set -euo pipefail
           python -m toolbox workbench probe --no-build \
-            --item tools/item-test-workbench/fixtures/synthetic-reaction-accessory.json \
+            --item tools/workbench/fixtures/synthetic-reaction-accessory.json \
             --assert '{"kind":"player_stat_at","tick":5,"stat":"defense","value":2}' \
             --out artifacts/workbench-ci/equip-probe
           python - <<'PY'
@@ -208,14 +183,14 @@ jobs:
           if plan['cases'][0]['input'] != 'equip' or not result['passed']:
               raise SystemExit('Authored equip input did not execute with the expected defense')
           PY
-      - name: Export captured native frames as GIF
+      - name: Export current synthetic native frames as GIF
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          trace=artifacts/workbench-ci/evidence/captured-hit/native.json
+          trace=artifacts/workbench-ci/evidence/hit/native.json
           if test -f "$trace"; then
-            python tools/item-test-workbench/workbench.py native-review "$trace" \
+            python tools/workbench/workbench.py native-review "$trace" \
               --out artifacts/workbench-ci/native-review --gif --gif-stride 2
           else
             echo 'Native capture did not complete; see previous step and logs.'
@@ -226,7 +201,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python tools/item-test-workbench/examples/lunar-harpoon/build.py \
+          python tools/workbench/examples/lunar-harpoon/build.py \
             --player-assets "$INFINI_PLAYER_ASSET_DIR" --out artifacts/workbench-ci/lunar-item
           python -m toolbox workbench probe \
             --item artifacts/workbench-ci/lunar-item/item.json --gif --no-build \
@@ -236,6 +211,9 @@ jobs:
           import json
           from pathlib import Path
           from PIL import Image
+          import sys
+          sys.path.insert(0, 'tools/workbench')
+          import workbench as w
           root = Path('artifacts/workbench-ci/lunar-probe')
           result = json.loads((root / 'probe-result.json').read_text())
           if result.get('passed') is not True or len(result['cases']) != 1:
@@ -253,7 +231,7 @@ jobs:
           with Image.open(close_gif) as image:
               if getattr(image, 'n_frames', 1) < 2:
                   raise SystemExit('Lunar close GIF does not contain an animation')
-          trace = json.loads((root / 'runs' / case['run'] / 'native.json').read_text())
+          trace = w.read_native_json(root / 'runs' / case['run'] / 'native.json')
           render = trace['nativeRender']
           if trace.get('status') != 'passed' or len(render.get('frames', [])) != 160:
               raise SystemExit('Lunar trace is incomplete or failed')
@@ -268,7 +246,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python tools/item-test-workbench/verify_hit_feedback.py --no-build \
+          python tools/workbench/python/verify_hit_feedback.py --no-build \
             --item artifacts/workbench-ci/lunar-item/item.json \
             --out artifacts/workbench-ci/hit-feedback
       - name: Capture native vanilla weapon effects through probe
@@ -277,7 +255,7 @@ jobs:
         run: |
           set -euo pipefail
           assets="$RUNNER_TEMP/vanilla-assets"
-          python tools/item-test-workbench/fetch_performance_assets.py \
+          python tools/workbench/python/fetch_performance_assets.py \
             --out "$assets" --items 98 368 --include-projectiles
           python -m toolbox workbench probe --vanilla-item Minishark --gif \
             --vanilla-assets "$assets" --ammo 97:200 --aim 1056 728 --set dummy.tileX=65 \
@@ -302,7 +280,7 @@ jobs:
           python -m toolbox workbench probe --vanilla-item 368 --gif \
             --vanilla-assets "$legacy" --ticks 20 --hold 10 --gif-stride 2 --no-build \
             --prepare --out artifacts/workbench-ci/vanilla-legacy-excalibur
-          if python tools/item-test-workbench/workbench.py run --vanilla-item 368 --no-build \
+          if python tools/workbench/workbench.py run --vanilla-item 368 --no-build \
             --scenario artifacts/workbench-ci/vanilla-legacy-excalibur/inputs/001-primary.json \
             --out artifacts/workbench-ci/vanilla-legacy-excalibur-run --review none; then
             echo 'Excalibur unexpectedly rendered without its native texture pair' >&2
@@ -312,15 +290,19 @@ jobs:
             test "$status" -eq 2 || { echo "Expected native error exit 2; got $status" >&2; exit 1; }
           fi
           python - <<'PY'
-          import json
+          import hashlib, json, os, struct, sys
           from pathlib import Path
+          sys.path.insert(0, 'tools/workbench')
+          import workbench as w
+          from python.fetch_performance_assets import draw_entries, verify_asset
+          from python.fetch_vfx_assets import destination
           root = Path('artifacts/workbench-ci')
           for label in ('vanilla-bullet', 'vanilla-excalibur'):
               result = json.loads((root / label / 'probe-result.json').read_text())
               case = result['cases'][0]
               if not result['passed'] or not Path(case.get('gif', '')).is_file():
                   raise SystemExit(f'{label}: native capture or GIF failed')
-              trace = json.loads((root / label / 'runs' / case['run'] / 'native.json').read_text())
+              trace = w.read_native_json(root / label / 'runs' / case['run'] / 'native.json')
               frames = trace['nativeRender']['frames']
               if not any(f.get('heldItemDrawCount', 0) > 0 for f in frames):
                   raise SystemExit(f'{label}: native item was not actually drawn')
@@ -332,14 +314,33 @@ jobs:
                   if not any(e.get('kind') == 'spawn' and e.get('ammoItemIdUsed') == 97 for e in events):
                       raise SystemExit('Native musket ball source was not observed')
           legacy = json.loads((root / 'vanilla-legacy-bullet/probe-result.json').read_text())
-          refused = json.loads((root / 'vanilla-legacy-excalibur-run/native.json').read_text())
+          refused = w.read_native_json(root / 'vanilla-legacy-excalibur-run/native.json')
           complete_case = json.loads((root / 'vanilla-excalibur/probe-result.json').read_text())['cases'][0]
-          complete = json.loads((root / 'vanilla-excalibur/runs' / complete_case['run'] / 'native.json').read_text())
+          complete = w.read_native_json(root / 'vanilla-excalibur/runs' / complete_case['run'] / 'native.json')
           def assets(trace):
               return trace['nativeRender']['vanillaProjectileAssets']['textures']
-          def loaded_projectile(rows, native_type):
-              return any(row.get('nativeType') == native_type and row.get('state') == 'Loaded'
-                         and row.get('sha256') and row.get('sha256') == row.get('loadedBytesSha256') for row in rows)
+          index = w.read_json(w.ASSETS / 'vanilla-draw-assets.json')
+          def loaded_asset(rows, name, asset_root):
+              matches = [row for row in rows if row.get('asset') == name]
+              if len(matches) != 1:
+                  return False
+              row = matches[0]
+              entry = draw_entries(None, None, [name], index)[0]
+              path = destination(asset_root.absolute(), entry['path'])
+              if Path(row.get('path', '')).absolute() != path:
+                  return False
+              with path.open('rb') as stream:
+                  data = stream.read(entry['bytes'] + 1)
+              verify_asset(data, entry, str(path))
+              # sha256 is computed from the same byte[] passed to the decoder;
+              # Loaded is recorded only after immediate native texture loading.
+              return (row.get('state') == 'Loaded' and row.get('sha256') == hashlib.sha256(data).hexdigest()
+                      and row.get('gitBlobSha1') == entry['gitBlobSha1'] and row.get('bytes') == len(data)
+                      and (row.get('width'), row.get('height')) == struct.unpack('>II', data[16:24])
+                      and row.get('communityCommit') == index['communityCommit']
+                      and row.get('sourceTreeSha') == index['sourceTreeSha'])
+          asset_root = Path(os.environ['RUNNER_TEMP']) / 'vanilla-assets'
+          legacy_root = Path(os.environ['RUNNER_TEMP']) / 'vanilla-legacy-assets'
           full_assets, missing_assets = assets(complete), assets(refused)
           error_lines = refused.get('error', '').splitlines()
           error_class = error_lines[0].partition(':')[0] if error_lines else ''
@@ -347,10 +348,10 @@ jobs:
           if (not legacy['passed'] or refused['status'] != 'error'
                   or error_class != 'System.IO.FileNotFoundException'
                   or error_site != 'at WNativeVanillaProjectileAssets.RequireReady'
-                  or not loaded_projectile(full_assets, 982)
-                  or not any(row.get('asset') == 'Extra_98' and row.get('state') == 'Loaded' for row in full_assets)
-                  or not loaded_projectile(missing_assets, 14)
-                  or any(row.get('nativeType') == 982 or row.get('asset') == 'Extra_98' for row in missing_assets)):
+                  or not loaded_asset(full_assets, 'Projectile_982.png', asset_root)
+                  or not loaded_asset(full_assets, 'Extra_98.png', asset_root)
+                  or not loaded_asset(missing_assets, 'Projectile_14.png', legacy_root)
+                  or any(row.get('asset') in ('Projectile_982.png', 'Extra_98.png') for row in missing_assets)):
               raise SystemExit('Legacy asset control did not prove loaded bullet resources and refusal of the missing native texture pair')
           PY
       - name: Upload native evidence and diagnostics

@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
-TEST_ROOTS = ((ROOT / "LocalGenerator" / "tests").resolve(), (ROOT / "toolbox" / "tests").resolve())
+TEST_ROOTS = ((ROOT / "tests" / "generator").resolve(), (ROOT / "tests" / "toolbox").resolve())
 
 
 def _safe_test_path(raw: str) -> Path:
@@ -33,7 +33,7 @@ def main() -> int:
         return 2
 
     env = dict(os.environ)
-    env["PYTHONPATH"] = str(ROOT / "LocalGenerator")
+    env["PYTHONPATH"] = str(ROOT / "generator")
     env["INFINI_FOCUSED_PYTEST"] = "1"
     env["INFINI_TEST_USE_PROJECT_CONFIG"] = "0"
     return subprocess.run(

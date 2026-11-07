@@ -1,0 +1,247 @@
+"""Request-local Repair grammar must preserve scope, inverses and exact sources."""
+from __future__ import annotations
+from suite_paths import TEST_ROOT
+
+import copy
+import json
+
+import infini_local.core.provider_schema as contract_provider_schema
+import pytest
+from infini_local.core.errors import PlannerUnavailable
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
+from infini_local.core.runtime_authoring.repair.schema import runtime_repair_schema_capabilities
+from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.pipelines.author import item_contract as contract
+from infini_local.pipelines.author import request as author
+from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from jsonschema import Draft202012Validator
+from prompt_packet_helpers import request_dossier
+from tests.generator.providers.test_codex_subscription_contract import _encode_nullable_fixture
+from tests.generator.authoring.test_gameplay_repair_readonly_context import _offline_builder
+
+
+def _local(scope):
+    return contract.author_item_repair_response_schema(
+        capability_names=runtime_repair_schema_capabilities(scope))
+
+
+def _call(item, fn):
+    return next(row for row in item["runtimeProgram"]["calls"] if row["fn"] == fn)
+
+
+def _wire_roundtrip(patch, local):
+    provider = contract.author_item_provider_repair_response_schema(local_schema=local)
+    encoded = _encode_nullable_fixture(patch, local)
+    Draft202012Validator(provider).validate(encoded)
+    restored = contract_provider_schema.project_provider_nullable_optionals_to_local(
+        encoded, local_schema=local,
+        response_format={"type": "json_schema", "json_schema": {"schema": provider}})
+    assert restored == patch
+    return provider, encoded
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_parameter_repair_uses_exact_scoped_schema_and_retains_accepted_omission(monkeypatch, mode):
+    item = build_runtime_fixture("workbench_blade")
+    stats = _call(item, "item_stats")
+    stats["params"].pop("manaCost")
+    expected = copy.deepcopy(item)
+    stats["params"]["damage"] = -1
+    failure = validate_runtime_program(item)
+    scope = build_runtime_repair_scope(item, failure["errors"])
+    assert runtime_repair_schema_capabilities(scope) == ["item_stats"]
+    local = _local(scope)
+    fixed = copy.deepcopy(_call(expected, "item_stats"))
+    patch = {"note": "Repair exact damage only", "callsUpsert": [fixed], "realizationReplacement": item["realization"]}
+    provider, encoded = _wire_roundtrip(patch, local)
+    requests = []
+
+    def respond(request, **_kwargs):
+        requests.append(copy.deepcopy(request))
+        if mode == "json_schema":
+            assert request["response_format"]["json_schema"]["schema"] == provider
+            assert encoded["callsUpsert"][0]["params"]["manaCost"] is None
+        return {"choices": [{"message": {"content": json.dumps(encoded if mode == "json_schema" else patch)}}],
+                "_debug": {"responseFormatType": mode}}
+
+    _offline_builder(monkeypatch, mode, respond)
+    before = copy.deepcopy(item)
+    repaired = author.repair_author_item_after_failure(item, {}, {}, "scoped-request", failure_report=failure)
+    assert len(requests) == 1
+    assert repaired["debug"]["gameplayRepairScope"] == scope
+    repaired.pop("debug")
+    assert repaired == expected and item == before
+    assert "manaCost" not in _call(repaired, "item_stats")["params"]
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("original", ["missing", "null", "present"])
+@pytest.mark.parametrize("operation", ["omit", "null", "replace", "clear", "empty_description"])
+def test_real_repair_report_operations_preserve_explicit_intent(monkeypatch, mode, original, operation):
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+    from repair_test_helpers import gameplay_repair
+
+    item = build_runtime_fixture("workbench_blade")
+    if original == "missing":
+        item.pop("realization", None)
+    else:
+        item["realization"] = None if original == "null" else {
+            "description": "  Original description 🌟\r\n", "selfEvaluation": "Original debug"}
+    expected = copy.deepcopy(item)
+    fixed = copy.deepcopy(_call(item, "item_stats"))
+    _call(item, "item_stats")["params"]["damage"] = -1
+    before = copy.deepcopy(item)
+    patch = {"note": "exact executable correction only", "callsUpsert": [fixed]}
+    if operation != "omit":
+        patch["realizationReplacement"] = {
+            "null": None, "replace": {"description": "New description"},
+            "clear": {}, "empty_description": {"description": ""},
+        }[operation]
+    if operation not in {"omit", "null"}:
+        expected["realization"] = copy.deepcopy(patch["realizationReplacement"])
+    repaired, _ = gameplay_repair(monkeypatch, item, patch, mode)
+    debug = repaired.pop("debug")
+    assert repaired == expected and item == before
+    assert compile_runtime_program(repaired)["runtimeProgram"] == compile_runtime_program(expected)["runtimeProgram"]
+    if operation == "null":
+        assert debug["gameplayRepairRawPatch"]["realizationReplacement"] is None
+    assert debug["gameplayRepairScope"] == build_runtime_repair_scope(item, validate_runtime_program(item)["errors"])
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_captured_null_report_repair_retains_description_and_exact_gameplay(monkeypatch, mode):
+    from pathlib import Path
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+    from infini_local.pipelines.context.generated_summary import generated_parent_summary_from_data
+    from repair_test_helpers import gameplay_repair
+
+    case = json.loads((TEST_ROOT / "fixtures" / "repair_advisory_null.json").read_text())
+    source, incoming = case["source"], case["patch"]
+    before = copy.deepcopy(source)
+    assert incoming["realizationReplacement"] is None
+    repaired, _ = gameplay_repair(monkeypatch, source, incoming, mode)
+    assert repaired["realization"] == source["realization"]
+    assert repaired["debug"]["gameplayRepairRawPatch"]["realizationReplacement"] is None
+    compiled = compile_runtime_program(repaired)
+    wire = copy.deepcopy(compiled["runtimeProgram"])
+    for entity in wire["entities"]:
+        entity.pop("visual", None)  # Later Visual delivery is outside Gameplay Repair.
+    expected = copy.deepcopy(case["expectedRuntimeProgram"])
+    # Only the retired, empty movement parameter bag disappeared. The capture
+    # stays immutable; every executable value and ordered row remains exact.
+    for entity in expected["entities"]:
+        if "movement" in entity:
+            assert entity["movement"].pop("params") == {}
+    assert wire == expected
+    assert generated_parent_summary_from_data(compiled)["description"] == source["realization"]["description"]
+    assert source == before
+
+
+@pytest.mark.parametrize("source", [{}, {"realization": None}, {"realization": {"description": "Keep me"}}])
+def test_direct_patch_null_is_declared_noop_not_global_null_normalization(source):
+    patch = {"note": "No report replacement", "realizationReplacement": None}
+    schema = contract.author_item_repair_response_schema(capability_names=[])
+    Draft202012Validator(schema).validate(patch)
+    before = copy.deepcopy(source)
+    result = apply_repair_patch(source, patch)
+    assert ("realization" in result) is ("realization" in source)
+    assert result.get("realization") == source.get("realization")
+    assert source == before
+    assert contract_provider_schema.project_provider_nullable_optionals_to_local(
+        patch, schema, response_format={"type": "json_object"}) == patch
+
+
+def test_single_function_schema_never_decodes_an_unknown_function_by_object_type():
+    local = contract.author_item_repair_response_schema(capability_names=["item_stats"])
+    provider = contract.author_item_provider_repair_response_schema(local_schema=local)
+    bad = {"note": "unknown function", "callsUpsert": [{"id": "probe", "fn": "not_registered", "target": "item", "params": {"manaCost": None}}]}
+    actual = contract_provider_schema.project_provider_nullable_optionals_to_local(
+        bad, local_schema=local, response_format={"type": "json_schema", "json_schema": {"schema": provider}})
+    assert actual == bad
+    assert not Draft202012Validator(provider).is_valid(bad)
+
+
+@pytest.mark.parametrize("scope", [
+    pytest.param({"identityChanges": {"callFnIds": ["move"]}}, id="function-identity"),
+    pytest.param({"fieldPermissions": {"calls": [{"id": "move", "paths": ["fn"]}]}}, id="function-leaf"),
+    pytest.param({"fieldPermissions": {"calls": [{"id": "move", "paths": [""]}]}}, id="whole-call"),
+])
+def test_authorized_function_or_whole_call_edits_keep_every_author_visible_variant(scope):
+    before = copy.deepcopy(scope)
+    visible = {name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible}
+    hidden = set(CAPABILITY_REGISTRY) - visible
+    assert visible and hidden
+    assert set(runtime_repair_schema_capabilities(scope)) == visible
+    local = _local(scope)
+    variants = local["properties"]["callsUpsert"]["items"]["oneOf"]
+    assert {row["properties"]["fn"]["const"] for row in variants} == visible
+    # Function identity authority is not authority to resurrect saved-only bundles.
+    for name in hidden:
+        patch = {"note": "retained wire metadata is not Repair grammar", "callsUpsert": [
+            {"id": "retired_probe", "fn": name, "target": "move", "params": {}}]}
+        assert not Draft202012Validator(local).is_valid(patch)
+    assert scope == before
+
+
+@pytest.mark.parametrize("rows,valid", [
+    pytest.param([], True, id="empty-list"), pytest.param([{"id": "illegal"}], False, id="forbidden-call"),
+])
+def test_empty_scope_never_becomes_full_catalog_and_unknown_names_fail_closed(rows, valid):
+    assert runtime_repair_schema_capabilities({}) == []
+    local = _local({})
+    assert local["properties"]["callsUpsert"]["maxItems"] == 0
+    assert contract.author_item_repair_prompt_shape_card(capability_names=[])["callsUpsert"] == []
+    assert Draft202012Validator(local).is_valid({"note": "no call changes", "callsUpsert": rows}) is valid
+    _wire_roundtrip({"note": "empty call list", "callsUpsert": []}, local)
+    with pytest.raises(ValueError, match="unregistered"):
+        runtime_repair_schema_capabilities({"capabilitySubset": ["not_registered"]})
+    with pytest.raises(ValueError, match="Unknown"):
+        contract.author_item_repair_response_schema(capability_names=["not_registered"])
+
+
+def test_create_policy_and_event_support_are_included_without_granting_permissions():
+    item = build_runtime_fixture("door_on_chain")
+    damage = copy.deepcopy(_call(item, "projectile_damage"))
+    item["runtimeProgram"]["calls"].remove(_call(item, "projectile_damage"))
+    event = _call(item, "apply_status_on_event")
+    event["params"]["when"] = "on_spawn"
+    failure = validate_runtime_program(item)
+    scope = build_runtime_repair_scope(item, failure["errors"])
+    before = copy.deepcopy(scope)
+    assert "projectile_damage" in runtime_repair_schema_capabilities(scope)
+    assert "apply_status_on_event" in runtime_repair_schema_capabilities(scope)
+    corrected = copy.deepcopy(event)
+    corrected["params"]["when"] = "on_hit"
+    patch = {"note": "Explicit event and its exact producer", "callsUpsert": [corrected, damage],
+             "realizationReplacement": item["realization"]}
+    _wire_roundtrip(patch, _local(scope))
+    filtered, audit = filter_repair_patch_scope(item, patch, scope)
+    assert audit["ok"], audit
+    assert validate_runtime_program(apply_repair_patch(item, filtered))["ok"]
+    assert scope == before
+    # Missing-component create alternatives remain a complete finite set.
+    missing = build_runtime_fixture("workbench_blade")
+    attachment = copy.deepcopy(_call(missing, "attach"))
+    missing["runtimeProgram"]["calls"].remove(_call(missing, "attach"))
+    create_scope = build_runtime_repair_scope(missing, validate_runtime_program(missing)["errors"])
+    assert create_scope["create"]["calls"]["allowed"]
+    assert set(create_scope["create"]["calls"]["allowedFns"]) <= set(runtime_repair_schema_capabilities(create_scope))
+    assert all(CAPABILITY_REGISTRY[name].author_visible for name in create_scope["create"]["calls"]["allowedFns"])
+    restored, audit = filter_repair_patch_scope(missing, {"note": "restore exact missing attachment", "callsUpsert": [attachment]}, create_scope)
+    assert audit["ok"], audit
+    expected = copy.deepcopy(missing)
+    expected["runtimeProgram"]["calls"].append(attachment)
+    assert apply_repair_patch(missing, restored) == expected
+    assert validate_runtime_program(expected)["ok"]
+    before_missing, before_scope = copy.deepcopy(missing), copy.deepcopy(create_scope)
+    hidden = {"id": "hidden_bundle", "fn": "move_forward_then_retract", "target": attachment["target"],
+              "params": {"rangeTiles": 6, "durationSeconds": 0.4}}
+    hostile = {"note": "do not smuggle saved-only movement", "callsUpsert": [attachment, hidden]}
+    _, audit = filter_repair_patch_scope(missing, hostile, create_scope)
+    assert not audit["ok"], "a registered saved-only bundle must fail fresh Repair admission"
+    assert any(row["path"] == "$.callsUpsert[1]" for row in audit["errors"])
+    assert audit["acceptedPaths"] == []
+    assert missing == before_missing and create_scope == before_scope

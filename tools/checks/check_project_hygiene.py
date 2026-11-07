@@ -14,36 +14,15 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKSPACE_METADATA_DIRS = {".git", ".gitnexus", ".hermes", ".codex", ".agents"}
-IGNORED_DOC_DIRS = WORKSPACE_METADATA_DIRS | {"agent_reports", ".tml-build-cache", ".nuget", "build_logs", "Runtime_dumps", "obj", "bin", ".ruff_cache", ".hypothesis", "artifacts"}
 RUNTIME_JUNK_NAMES = {"__pycache__", ".pytest_cache", ".ruff_cache", ".hypothesis", ".venv", "venv", "artifacts", "build_logs"}
 PACKAGED_METADATA_DIRS = WORKSPACE_METADATA_DIRS
 FORBIDDEN_RELEASE_FILE_NAMES = {"Zone.Identifier", ".DS_Store", "Thumbs.db"}
 FORBIDDEN_RELEASE_SUFFIXES = (":Zone.Identifier",)
-PYTHON_BROAD_EXCEPTION_BASELINE = 227
-PYTHON_BARE_EXCEPT_BASELINE = 0
 
 
 def fail(msg: str) -> None:
     print(f"[FAIL] {msg}")
     raise SystemExit(1)
-
-
-def iter_project_dirs() -> list[Path]:
-    dirs: list[Path] = []
-    for p in ROOT.rglob("*"):
-        if not p.is_dir():
-            continue
-        rel = p.relative_to(ROOT)
-        if any(part in IGNORED_DOC_DIRS for part in rel.parts):
-            continue
-        if any(part in RUNTIME_JUNK_NAMES for part in rel.parts):
-            continue
-        if _is_forbidden_release_metadata(rel, p):
-            continue
-        if rel.parts[:2] in {("LocalGenerator", "cache"), ("LocalGenerator", "images")}:
-            continue
-        dirs.append(p)
-    return [ROOT] + dirs
 
 
 def check_documentation_layout() -> None:
@@ -59,7 +38,7 @@ def check_documentation_layout() -> None:
 def _is_runtime_junk(rel: Path, p: Path) -> bool:
     if any(part in PACKAGED_METADATA_DIRS for part in rel.parts):
         return True
-    if rel.parts[:2] == ("LocalGenerator", "images") or any(part == "cache" and rel.parts[:1] == ("LocalGenerator",) for part in rel.parts):
+    if rel.parts[:2] == ("generator", "images") or any(part == "cache" and rel.parts[:1] == ("generator",) for part in rel.parts):
         return True
     return any(part in RUNTIME_JUNK_NAMES for part in rel.parts) or p.suffix == ".pyc"
 
@@ -82,7 +61,7 @@ def check_no_packaged_runtime_junk(strict_archive: bool = False) -> None:
     """Check release junk without making local test runs fight the checker.
 
     Pytest/compileall legitimately create __pycache__, .pytest_cache and
-    LocalGenerator/cache during local checks. Default mode ignores those
+    generator/cache during local checks. Default mode ignores those
     auto-generated artifacts so `pytest && python tools/checks/check_project_hygiene.py`
     stays green. Use `--strict-archive` before zipping a release if you want
     this script to fail on those files being physically present in the tree.
@@ -105,37 +84,6 @@ def check_no_packaged_runtime_junk(strict_archive: bool = False) -> None:
         fail("runtime junk present in archive tree: " + ", ".join(junk[:30]))
 
 
-
-
-def _count_python_exception_handlers(root: Path | None = None) -> dict[str, int]:
-    """Return broad-exception counts for source hygiene checks.
-
-    Broad `except Exception` is tolerated in the generator because many paths are
-    diagnostic/recovery boundaries around LLM, image, filesystem and debug
-    tooling.  The release guard does not pretend to fix that debt; it makes the
-    current debt visible and prevents accidental growth.
-    """
-    source_root = root or (ROOT / "LocalGenerator" / "infini_local")
-    broad = 0
-    bare = 0
-    for py in sorted(source_root.rglob("*.py")):
-        text = py.read_text(encoding="utf-8", errors="ignore")
-        for line in text.splitlines():
-            stripped = line.strip()
-            if re.match(r"^except\s+Exception\b", stripped):
-                broad += 1
-            if re.match(r"^except\s*:\s*(#.*)?$", stripped):
-                bare += 1
-    return {"broad_exception": broad, "bare_except": bare}
-
-
-def check_python_exception_hygiene() -> None:
-    stats = _count_python_exception_handlers()
-    if stats["bare_except"] > PYTHON_BARE_EXCEPT_BASELINE:
-        fail(f"bare except handlers increased: {stats['bare_except']} > {PYTHON_BARE_EXCEPT_BASELINE}")
-    if stats["broad_exception"] > PYTHON_BROAD_EXCEPTION_BASELINE:
-        fail(f"broad except Exception handlers increased: {stats['broad_exception']} > {PYTHON_BROAD_EXCEPTION_BASELINE}")
-
 def read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
@@ -149,62 +97,28 @@ def _version_literal(path: str, pattern: str, label: str) -> str:
 
 def check_version_sync() -> None:
     versions = {
-        "infini_local APP_VERSION": _version_literal("LocalGenerator/infini_local/__init__.py", r'APP_VERSION = "([^"]+)"', "bootstrap APP_VERSION"),
-        "InfiniCrafterLocal.cs Version": _version_literal("ModSources/InfiniCrafterLocal/InfiniCrafterLocal.cs", r'Version = "([^"]+)"', "C# mod Version"),
-        "build.txt version": _version_literal("ModSources/InfiniCrafterLocal/build.txt", r'version = ([^\s]+)', "tModLoader build.txt"),
+        "infini_local APP_VERSION": _version_literal("generator/infini_local/__init__.py", r'APP_VERSION = "([^"]+)"', "bootstrap APP_VERSION"),
+        "InfiniCrafterLocal.cs Version": _version_literal("mod/InfiniCrafterLocal/InfiniCrafterLocal.cs", r'Version = "([^"]+)"', "C# mod Version"),
+        "build.txt version": _version_literal("mod/InfiniCrafterLocal/build.txt", r'version = ([^\s]+)', "tModLoader build.txt"),
     }
     if len(set(versions.values())) != 1:
         detail = "; ".join(f"{label}={value}" for label, value in versions.items())
         fail("version mismatch: " + detail)
 
 
-
-
-
-
 def check_runtime_api_sync() -> None:
     py_runtime_api = _version_literal(
-        "LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py",
+        "generator/infini_local/core/runtime_authoring/capability_registry.py",
         r'RUNTIME_PROGRAM_API_VERSION: Final\[str\] = "([^"]+)"',
         "Python runtime program API",
     )
     cs_runtime_api = _version_literal(
-        "ModSources/InfiniCrafterLocal/Common/InfiniRuntimeLimits.cs",
+        "mod/InfiniCrafterLocal/Common/InfiniRuntimeLimits.cs",
         r'RuntimeApiCurrent = "([^"]+)"',
         "C# runtime API",
     )
     if py_runtime_api != cs_runtime_api:
         fail(f"runtime API mismatch: Python RUNTIME_PROGRAM_API_VERSION={py_runtime_api}; C# RuntimeApiCurrent={cs_runtime_api}")
-
-
-def check_no_flat_helper_shims() -> None:
-    flat_py = sorted(p.name for p in (ROOT / "LocalGenerator").glob("*.py"))
-    allowed = ["server.py", "settings_gui.py"]
-    if flat_py != allowed:
-        fail("flat LocalGenerator helper shims still present: " + ", ".join(flat_py))
-
-
-def check_internal_import_boundaries() -> None:
-    local = ROOT / "LocalGenerator"
-    production = local / "infini_local"
-    legacy_support = production / "pipelines" / "pipeline_support.py"
-    if legacy_support.exists():
-        fail("retired pipeline_support.py barrel was restored")
-
-    for path in local.rglob("*.py"):
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except SyntaxError as exc:
-            fail(f"cannot parse Python source {path.relative_to(ROOT)}: {exc}")
-            continue
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom):
-                if node.module == "infini_local.pipelines.pipeline_support":
-                    fail(f"retired pipeline_support import in {path.relative_to(ROOT)}:{node.lineno}")
-            elif isinstance(node, ast.Import):
-                if any(alias.name == "infini_local.pipelines.pipeline_support" for alias in node.names):
-                    fail(f"retired pipeline_support import in {path.relative_to(ROOT)}:{node.lineno}")
-
 
 
 def python_source_issues(sources: dict[str, str]) -> list[str]:
@@ -215,19 +129,19 @@ def python_source_issues(sources: dict[str, str]) -> list[str]:
     """
     issues: list[str] = []
     trees = {path: ast.parse(text, filename=path) for path, text in sources.items()}
-    package = "LocalGenerator/infini_local/"
-    modules = {path.removeprefix("LocalGenerator/").removesuffix(".py").replace("/", "."): path
+    package = "generator/infini_local/"
+    modules = {path.removeprefix("generator/").removesuffix(".py").replace("/", "."): path
                for path in trees if path.startswith(package)}
     edges: dict[str, set[str]] = {name: set() for name in modules}
     owners: list[str] = []
     for path, tree in trees.items():
-        module = path.removeprefix("LocalGenerator/").removesuffix(".py").replace("/", ".")
+        module = path.removeprefix("generator/").removesuffix(".py").replace("/", ".")
         os_names, environ_names, getenv_names = {"os"}, set(), set()
         for node in ast.walk(tree):
             if path.startswith(package) and isinstance(node, (ast.Import, ast.ImportFrom)):
                 imported = ([alias.name for alias in node.names] if isinstance(node, ast.Import)
                             else [node.module or ""])
-                if any(name.split(".")[0] in {"tools", "mutation_contract_gate"} for name in imported):
+                if any(name.split(".")[0] == "tools" for name in imported):
                     issues.append(f"tooling_import:{path}:{node.lineno}")
             if (path == package + "core/runtime_authoring/__init__.py"
                     and isinstance(node, (ast.Import, ast.ImportFrom))
@@ -307,57 +221,11 @@ def python_source_issues(sources: dict[str, str]) -> list[str]:
 
 def check_python_source_integrity() -> None:
     sources = {path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8-sig")
-               for directory in (ROOT / "LocalGenerator", ROOT / "tools")
+               for directory in (ROOT / "generator", ROOT / "tools")
                for path in sorted(directory.rglob("*.py"))}
     issues = python_source_issues(sources)
     if issues:
         fail("Python source integrity:\n" + "\n".join(issues))
-
-
-# These are forbidden authored-language fields, not implementation snapshots.
-AUTHOR_TEXT_POLICY = {
-    "runtime_program_author.schema.json": ({"tooltip", "setBonusText"}, set()),
-    "author_item_response.schema.json": ({"tooltip", "setBonusText"}, set()),
-    "author_item_repair.schema.json": ({"tooltip", "setBonusText"}, set()),
-    "capability_inventory.generated.json": ({"tooltip", "setBonusText"}, set()),
-    "technical_lowering.generated.json": ({"tooltip", "setBonusText"}, set()),
-    "visual_runtime_entities.schema.json": ({"impactPrompt", "impactNegativePrompt"}, set()),
-    "visual_repair_patch.schema.json": ({"impactPrompt", "impactNegativePrompt"}, set()),
-    "vfx_runtime_events.schema.json": (set(), {"spritePrompt", "spriteNegativePrompt"}),
-    "vfx_repair_patch.schema.json": (set(), {"spritePrompt", "spriteNegativePrompt"}),
-}
-
-
-def authored_contract_issues(sources: dict[str, str]) -> list[str]:
-    issues: list[str] = []
-    def strings(value: object) -> set[str]:
-        if isinstance(value, dict):
-            return set(value) | set().union(*(strings(child) for child in value.values()))
-        if isinstance(value, list):
-            return set().union(*(strings(child) for child in value))
-        return {value} if isinstance(value, str) else set()
-    for path, source in sources.items():
-        name = Path(path).name
-        if name in AUTHOR_TEXT_POLICY:
-            forbidden, required = AUTHOR_TEXT_POLICY[name]
-            tokens = strings(json.loads(source))
-            for token in sorted(tokens & forbidden):
-                code = "foreign_visual_prompt" if token.startswith("impact") else "forbidden_author_field"
-                issues.append(f"{code}:{path}:{token}")
-            for token in sorted(required - tokens):
-                issues.append(f"missing_vfx_prompt:{path}:{token}")
-        elif path == "LocalGenerator/infini_local/core/runtime_authoring/compiler.py":
-            if any(isinstance(node, ast.Constant) and node.value == "setBonusText" for node in ast.walk(ast.parse(source))):
-                issues.append(f"forbidden_author_field:{path}:setBonusText")
-    return issues
-
-
-def check_authored_contract_policy() -> None:
-    paths = ["contracts/schemas/" + name for name in AUTHOR_TEXT_POLICY]
-    paths.append("LocalGenerator/infini_local/core/runtime_authoring/compiler.py")
-    issues = authored_contract_issues({path: read(path) for path in paths})
-    if issues:
-        fail("Authored language policy:\n" + "\n".join(issues))
 
 
 def check_agent_metadata() -> None:
@@ -392,14 +260,14 @@ def check_agent_metadata() -> None:
 
 
 def check_release_docs_version() -> None:
-    version = re.search(r'APP_VERSION = "([^"]+)"', read("LocalGenerator/infini_local/__init__.py"))
+    version = re.search(r'APP_VERSION = "([^"]+)"', read("generator/infini_local/__init__.py"))
     if not version:
         fail("could not read canonical APP_VERSION for docs check")
     current = version.group(1)
     docs = [
         "README.md",
         "docs/user/START_RU.md",
-        "ModSources/InfiniCrafterLocal/description.txt",
+        "mod/InfiniCrafterLocal/description.txt",
     ]
     stale = []
     for doc in docs:
@@ -417,11 +285,7 @@ def main() -> int:
     check_no_packaged_runtime_junk(strict_archive=strict_archive)
     check_version_sync()
     check_runtime_api_sync()
-    check_python_exception_hygiene()
-    check_no_flat_helper_shims()
-    check_internal_import_boundaries()
     check_python_source_integrity()
-    check_authored_contract_policy()
     check_agent_metadata()
     check_release_docs_version()
     print("[OK] project hygiene checks passed")

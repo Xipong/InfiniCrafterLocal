@@ -38,11 +38,11 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-          cache-dependency-path: LocalGenerator/requirements-dev.lock
+          cache-dependency-path: generator/requirements-dev.lock
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r LocalGenerator/requirements-dev.lock
+          python -m pip install -r generator/requirements-dev.lock
       - name: Run canonical pytest partition
         run: python tools/testing/run_pytest_shards.py --shard-index ${{ matrix.shard }} --timeout-seconds 300 --json-out artifacts/validation/pytest_shards.json
       - name: Upload partition coverage and timing
@@ -65,11 +65,11 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-          cache-dependency-path: LocalGenerator/requirements-dev.lock
+          cache-dependency-path: generator/requirements-dev.lock
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r LocalGenerator/requirements-dev.lock
+          python -m pip install -r generator/requirements-dev.lock
       - name: Download this run's partition receipts
         uses: actions/download-artifact@v4
         with:
@@ -101,11 +101,11 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-          cache-dependency-path: LocalGenerator/requirements-dev.lock
+          cache-dependency-path: generator/requirements-dev.lock
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r LocalGenerator/requirements-dev.lock
+          python -m pip install -r generator/requirements-dev.lock
       - name: Shared static validation gates
         run: python tools/validate_release.py --group static
       - name: Strict archive hygiene
@@ -223,16 +223,16 @@ jobs:
       - name: Restore tML SDK references
         shell: pwsh
         run: |
-          dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity normal
+          dotnet restore mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity normal
           exit $LASTEXITCODE
       - name: Locate restored references for native CPU regressions
         shell: pwsh
         run: |
           # The first SDK restore creates the version-alias props; reevaluate
           # the graph so the exact tML package appears in project.assets.json.
-          dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity minimal
+          dotnet restore mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $assets = Get-Content ModSources/InfiniCrafterLocal/obj/project.assets.json -Raw | ConvertFrom-Json
+          $assets = Get-Content mod/InfiniCrafterLocal/obj/project.assets.json -Raw | ConvertFrom-Json
           $tml = @($assets.libraries.PSObject.Properties | Where-Object { $_.Name -like 'tModLoader/*' })
           if ($tml.Count -ne 1) { throw 'Expected one resolved tModLoader package for native checks.' }
           $references = @($assets.packageFolders.PSObject.Properties.Name | ForEach-Object {
@@ -293,7 +293,7 @@ jobs:
           ./tools/build/package_tmod.ps1
       - name: Studio extraction and C# to bundled Python lifecycle smoke
         shell: pwsh
-        run: dotnet run --project tools/native/StudioBundleChecks/StudioBundleChecks.csproj -- --bundle-root ModSources/InfiniCrafterLocal
+        run: dotnet run --project tests/native/StudioBundleChecks/StudioBundleChecks.csproj -- --bundle-root mod/InfiniCrafterLocal
       - name: Upload verified playable mod package
         uses: actions/upload-artifact@v4
         with:

@@ -135,7 +135,7 @@ def compare(before: dict[str, str], after: dict[str, str]) -> dict[str, Any]:
 
 
 def _in_scope(path: str) -> bool:
-    return (path.endswith(".py") and path.startswith(("LocalGenerator/infini_local/", "tools/", "toolbox/"))
+    return (path.endswith(".py") and path.startswith(("generator/infini_local/", "tools/", "toolbox/"))
             and "/tests/" not in path and not path.rsplit("/", 1)[-1].startswith(("test_", "conftest.")))
 
 
@@ -149,7 +149,7 @@ def build_report(base: str, paths: list[str] | None = None) -> dict[str, Any]:
     baseline = ancestor.stdout.strip()
     selected = agentctl.repository_paths(paths, require_files=True) if paths else agentctl.changed_files(base)
     if paths and any(not _in_scope(path) for path in selected):
-        raise ValueError("--path must select Python implementation files under LocalGenerator/infini_local, tools or toolbox")
+        raise ValueError("--path must select Python implementation files under generator/infini_local, tools or toolbox")
     selected = agentctl.repository_paths([path for path in selected if _in_scope(path)])
     before: dict[str, str] = {}
     after: dict[str, str] = {}

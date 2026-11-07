@@ -1,17 +1,21 @@
-# Live10 / Live20 и явные real-image итерации
+# Live10 / Live20 / Live40 и явные real-image итерации
 
 Исторический режим ниже по умолчанию жёстко блокирует image inference.
 Отдельный `--real-images` не меняет старые панели и не использует synthetic PNG.
 
-## Сначала offline
+Для native capture без провайдера используйте отдельный
+[`live40 --offline`](../README.md#детерминированный-native-capture40). Он снимает raw Prepare,
+а не запускает описанную здесь генерационную кампанию.
+
+## Сначала preflight
 
 Из корня репозитория:
 
 ```bash
-python -m toolbox live10
+python -m toolbox live10 --runtime-dump /path/to/current-parents.jsonl
 python -m toolbox panels
 python -m toolbox live20 --expected-case-count 20
-python -m toolbox live20 --preset live20-classic-sprites
+python -m toolbox live40 --runtime-dump /path/to/current-parents.jsonl
 python -m toolbox live10 --help
 python -m toolbox live20 --config /path/outside/repo/private.env --preflight-only
 ```
@@ -23,7 +27,7 @@ python -m toolbox live20 --config /path/outside/repo/private.env --preflight-onl
 сервиса или effective request sampling**: `requestSettingsVerified=false` честно
 остаётся в отчёте. Последние проверяются непосредственно перед sender.
 
-Без `--config` учитываются environment и, если есть, `LocalGenerator/config.env`.
+Без `--config` учитываются environment и, если есть, `generator/config.env`.
 Environment имеет приоритет; используется канонический `core/env_file.py` codec
 (legacy / JSON-string формат, first occurrence wins). `INFINI_SKIP_CONFIG_FILE=1`
 отключает только неявный файл; явный `--config` читается и при нём. Файл не меняется,
@@ -32,38 +36,21 @@ Environment имеет приоритет; используется канони
 
 ## Панели и fixture
 
-`live10` по умолчанию — **исторический midgame**: от `night_missile`
-(`NightsEdge` + `MagicMissile`) до `meteor_star_cannon` (`StarCannon` + `MeteorStaff`).
-Это прежние 10 кейсов в исходном порядке и 20 точных parent rows, не subset Live20.
-`live20` — прежние 20 пар, от `woodwork_blade` до `silt_extractinator`, и отдельный
-исходный snapshot из 39 родителей. Есть восстановленный вариант тех же запросов
-со `spriteReferenceRaw`: `live20 --preset live20-classic-sprites`.
+Поддерживаются `live10-midgame`, `live20-classic`, `live40-diverse` через команды
+`live10`, `live20`, `live40`. Midgame10 сохраняет девять прежних пар и заменяет
+Star Cannon + Meteor Staff на Nebula Blaze + Last Prism. Live40 — новый набор
+аудита 2026-11-06, не историческая GIF-галерея. [Списки и provenance](../fixtures/README.md).
 
-Все пары, источники и fixtures — в [каталоге входов](../fixtures/README.md);
-`python -m toolbox panels` показывает доступные пакеты без runtime/network.
-`--preset` выбирает пакет вместе с его собственным fixture. Нельзя смешивать его
-с `--cases-file`; `--runtime-dump` остаётся явной заменой родительских данных.
-Новый subset из PR141 доступен только как `live10 --preset live10-starter`.
+Live10 и Live40 требуют явный актуальный `--runtime-dump`; частные native packets
+не входят в репозиторий. Classic20 сохраняет исходный fixture. Никакой профиль
+модели не выбирается автоматически. Custom `--cases-file` и выбор `--cases`
+остаются доступными, без смешивания различных snapshots по `internalName`.
 
-Восстановлены исторические **входы**, не старая версия production-кода или ответов.
-Исполняется настоящий текущий pipeline Gameplay Author → Visual/VFX → conditional
-Repair и delivery с прежним no-image control. Старые модели/порты/температуры не
-назначаются defaults. Точные bytes fixture и SHA256 case-пакета записываются в
-preflight и campaign manifest; успешность прежних прогонов не наследуется.
+## Явный text-only запуск
 
-`--cases id1,id2` выбирает subset известных IDs в порядке панели; `--cases-file`
-читает JSON list или `{ "cases": [...] }` с `{ "case", "itemA", "itemB" }`, где
-родители — `internalName` в dump. `--runtime-dump` заменяет fixture. Duplicate case
-IDs / parent identities, неизвестные IDs и отсутствующие родители — отказ до сети.
-Legacy `INFINI_LIVE_CASES` не уменьшает named panel неявно: subset выбирается только флагом.
-Custom selection меняет знаменатель: не называйте запуск одного case «полным Live20».
-При необходимости закрепите `--expected-case-count`.
-
-## Явный live-запуск (нужна отдельная авторизация расходов)
-
-Поддерживается только configured `openai_compat` с явно выбранным
-`chat_completions` / `responses` и `json_object` / `json_schema`. Авторизация в
-данной задаче **не включала live inference**; тесты toolbox используют offline doubles.
+Этот режим использует configured `openai_compat` с явно выбранным
+`chat_completions` / `responses` и `json_object` / `json_schema`. Тесты toolbox используют offline doubles; реальный запуск расходует квоту
+провайдера. Режим с изображениями описан отдельно ниже.
 
 В private env должны быть `INFINI_USE_LLM=1`, provider/model/base URL/API mode/format
 и нужные sampling/token settings. Подготовьте переменные shell из своей актуальной

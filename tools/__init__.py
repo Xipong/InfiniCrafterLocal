@@ -1,1 +1,1 @@
-"""Repository tooling; not part of the LocalGenerator production package."""
+"""Repository tooling; not part of the generator production package."""

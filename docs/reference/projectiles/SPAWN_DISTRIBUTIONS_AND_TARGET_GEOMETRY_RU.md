@@ -2,38 +2,38 @@
 
 [Author contract](../authoring/LOW_LEVEL_RUNTIME_AUTHORING_RU.md) · [Capability inventory](../generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) · [Combat inheritance](CHILD_COMBAT_INHERITANCE_RU.md) · [NPC exclusion](INITIAL_NPC_EXCLUSION_RUNTIME_RU.md)
 
-Категория A11 возвращает два независимых низкоуровневых выбора: распределение начальной скорости и точные origin/direction дочерних снарядов относительно NPC из `on_hit`/`on_crit`. Author задаёт каждый параметр. Название предмета, семейство оружия и текст запроса не выбирают ветку или формулу.
+Контракт предоставляет два независимых низкоуровневых выбора: распределение начальной скорости и точные origin/direction дочерних снарядов относительно NPC из `on_hit`/`on_crit`. Author задаёт каждый параметр. Название предмета, семейство оружия и текст запроса не выбирают ветку или формулу.
 
-Канонические владельцы: [`capability_registry.py`](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py), [`technical_lowering.py`](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py), [`RuntimeProgramSpec.cs`](../../../ModSources/InfiniCrafterLocal/Common/Models/Contracts/RuntimeProgramSpec.cs), [`RuntimeSpawnVelocity.cs`](../../../ModSources/InfiniCrafterLocal/Common/Runtime/RuntimeSpawnVelocity.cs), [`RuntimeHitTargetSpawn.cs`](../../../ModSources/InfiniCrafterLocal/Common/Runtime/RuntimeHitTargetSpawn.cs). Provider schema, cards, strict inverse, requirements, receipts и inventory выводятся из того же registry.
+Канонические владельцы: [`capability_registry.py`](../../../generator/infini_local/core/runtime_authoring/capability_registry.py), [`technical_lowering.py`](../../../generator/infini_local/core/runtime_authoring/technical_lowering.py), [`RuntimeProgramSpec.cs`](../../../mod/InfiniCrafterLocal/Common/Models/Contracts/RuntimeProgramSpec.cs), [`RuntimeSpawnVelocity.cs`](../../../mod/InfiniCrafterLocal/Common/Runtime/RuntimeSpawnVelocity.cs), [`RuntimeHitTargetSpawn.cs`](../../../mod/InfiniCrafterLocal/Common/Runtime/RuntimeHitTargetSpawn.cs). Provider schema, cards, strict inverse, requirements, receipts и inventory выводятся из того же registry.
 
-## `configure_spawn.velocity`: один явный вариант
+## `spawn.velocity`: один явный вариант
 
-Свежий Author v6 выбирает обязательный `velocity` в блоках/с. Объекты закрыты; одновременно выбрать две ветки, пропустить обязательный предел или передать `null` нельзя. Старые pixel/update Author keys не являются aliases. Полная [таблица единиц](../authoring/MODEL_FACING_UNITS_RU.md#authority) задаёт границу с неизменённым native wire.
+Текущий Author v7 выбирает обязательный `velocity` в блоках/с. Объекты закрыты; одновременно выбрать две ветки, пропустить обязательный предел или передать `null` нельзя. Старые pixel/update Author keys не являются aliases. Полная [таблица единиц](../authoring/MODEL_FACING_UNITS_RU.md#authority) задаёт границу с неизменённым native wire.
 
 | Значение `velocity` | Начальная скорость |
 |---|---|
-| `{"constantSpeedBlocksPerSecond":40}` | Прежний детерминированный веер с постоянной величиной скорости. |
-| `{"fanSpeed":{"minSpeedBlocksPerSecond":20,"maxSpeedBlocksPerSecond":40}}` | Сохраняет каждый луч authored веера; независимо выбирает его скорость равномерно между пределами. |
-| `{"radial":{"minSpeedBlocksPerSecond":20,"maxSpeedBlocksPerSecond":40}}` | Для каждого ребёнка выбирает направление по всей окружности и равномерную величину скорости. |
-| `{"disk":{"maxSpeedBlocksPerSecond":40}}` | Выбирает вектор равномерно по площади диска скоростей: радиус `max * sqrt(U)`. |
-| `{"cone":{"minSpeedBlocksPerSecond":20,"maxSpeedBlocksPerSecond":40,"halfAngleRadians":0.2}}` | Добавляет независимое равномерное угловое отклонение к каждому лучу authored веера и независимо выбирает скорость. |
+| `{"speed":40}` | Прежний детерминированный веер с постоянной величиной скорости. |
+| `{"fanSpeed":{"minSpeed":20,"maxSpeed":40}}` | Сохраняет каждый луч authored веера; независимо выбирает его скорость равномерно между пределами. |
+| `{"radial":{"minSpeed":20,"maxSpeed":40}}` | Для каждого ребёнка выбирает направление по всей окружности и равномерную величину скорости. |
+| `{"disk":{"maxSpeed":40}}` | Выбирает вектор равномерно по площади диска скоростей: радиус `max * sqrt(U)`. |
+| `{"cone":{"minSpeed":20,"maxSpeed":40,"halfAngleRadians":0.2}}` | Добавляет независимое равномерное угловое отклонение к каждому лучу authored веера и независимо выбирает скорость. |
 
 Author speed domain зависит от N этого projectile: `0..300×N` блоков/с при N=1..6. Canonical lowering сохраняет прежний wire domain `0..80` пикселей за **native projectile update**; emitter N не используется вместо child N. `min <= max`; равные пределы сохраняют точную постоянную величину. `halfAngleRadians` — половина угловой ширины, `0..π`. Native хранит скорости/углы как `float32`; нечисловые, бесконечные значения и потеря ненулевого значения в storage отвергаются каноническими проверками.
 
-Случайные ветки допустимы для `owner_attached_projectile`, `free_projectile`, `child_projectile`. `stationary_projectile`, `field`, `temporary_helper` требуют constant-вариант: их consumer не исполняет такую начальную скорость. `channel_beam` и `charge_then_release` также требуют constant-вариант, поскольку сами владеют launch velocity. Это проверяется до compile, в strict wire и в C#.
+Случайные ветки допустимы для `owner_attached_projectile`, `free_projectile`, `child_projectile`. `stationary_projectile`, `field`, `temporary_helper` требуют constant-вариант: их consumer не исполняет такую начальную скорость. Selected motion/release components сохраняют свои explicit constraints; допустимость комбинации проверяется до compile и на strict wire/C# boundary.
 
-`fanSpeed`/`cone` требуют ось `aim=cursor|facing|velocity`. `radial`/`disk` требуют `configure_spawn.spreadRadians=0`: независимое полное распределение не должно молча поглощать authored fan spread. То же ограничение действует на `spawn_entity_on_event.spreadRadians`, если он ссылается на radial/disk child. Ошибка разрешает Repair исправить только event spread; корректное определение ребёнка остаётся frozen. Runtime проверяет actual override до clamp.
+`fanSpeed`/`cone` требуют ось `aim=cursor|facing|velocity`. `radial`/`disk` требуют `spawn.spreadRadians=0`: независимое полное распределение не должно молча поглощать authored fan spread. То же ограничение действует на `spawn_on_event.spreadRadians`, если он ссылается на radial/disk child. Ошибка разрешает Repair исправить только event spread; корректное определение ребёнка остаётся frozen. Runtime проверяет actual override до clamp.
 
 После начального native spawn дальнейшую траекторию определяют явно выбранные movement, gravity, collisions и controller. Распределение не создаёт скрытый movement и не обещает неизменную скорость в полёте.
 
-## `spawn_entity_from_hit_target`: геометрия одного события
+## `spawn_at_hit`: геометрия одного события
 
 Новый вызов принадлежит снаряду и принимает только `on_hit` или `on_crit`. Он создаёт явно названную entity вида `free_projectile` либо `child_projectile`. Пример полного вызова:
 
 ```json
 {
   "id": "impact_children",
-  "fn": "spawn_entity_from_hit_target",
+  "fn": "spawn_at_hit",
   "target": "parent",
   "params": {
     "when": "on_hit",
@@ -42,7 +42,7 @@ Author speed domain зависит от N этого projectile: `0..300×N` б�
     "damageBasis": "live_parent",
     "knockbackBasis": "authored_child",
     "damageMultiplier": 0.5,
-    "delaySeconds": 0.1,
+    "delay": 0.1,
     "geometry": {
       "beforeProbability": 0.85,
       "hitboxMaxSideFactor": 0.6,
@@ -58,7 +58,7 @@ Author speed domain зависит от N этого projectile: `0..300×N` б�
 
 Все листья `geometry` обязательны. `beforeProbability` лежит в `0..1` и хранится как `double`; `hitboxMaxSideFactor` — в `0..2`; clearance и positional jitter — в `0..8` блоков; before direction jitter — в `0..π`; after fan spread — в `0..2π`; countdown — целое `0..600`. `count=1..12`, multiplier `0..4`, delay `0..10` секунд, с объявленной world-tick quantization. Damage и knockback независимо выбирают `authored_child|live_parent` по [контракту A9](CHILD_COMBAT_INHERITANCE_RU.md).
 
-Ребёнок должен явно иметь `configure_spawn(position={at:activation_origin}, aim=velocity, offsetBlocks=0)` и не иметь `spawn_over_target`. Его velocity остаётся самостоятельным выбором. Эти reference requirements проверяют правильную entity, не дописывают ей новую конфигурацию. Missing или несовместимый reference даёт Repair право выбрать совместимую entity либо создать полный новый child, если исходная child имеет независимого consumer и остаётся frozen/reachable. Для sole-reference child без primary/binding использования открываются только конфликтующие registry-exact dependency leaves существующего spawn; остальные значения и reference frozen, замена не создаётся. Модель явно пишет поправку, compiler её не достраивает. C# проверяет исходные presence и exact значения **до** legacy normalization, поэтому отсутствующие поля, другой регистр, отрицательный over-target offset и `null` не становятся валидными за счёт defaults/clamp.
+Ребёнок должен явно иметь `spawn(position={at:activation_origin}, aim=velocity, offsetBlocks=0)`. Его velocity остаётся самостоятельным выбором. Эти reference requirements проверяют правильную entity, не дописывают ей новую конфигурацию. Missing или несовместимый reference даёт Repair право выбрать совместимую entity либо создать полный новый child, если исходная child имеет независимого consumer и остаётся frozen/reachable. Для sole-reference child без primary/binding использования открываются только конфликтующие registry-exact dependency leaves существующего spawn; остальные значения и reference frozen, замена не создаётся. Модель явно пишет поправку, compiler её не достраивает. C# проверяет исходные presence и exact значения **до** legacy normalization, поэтому отсутствующие поля, другой регистр, отрицательный over-target offset и `null` не становятся валидными за счёт defaults/clamp.
 
 ### Точная формула
 
@@ -71,7 +71,7 @@ Native формула ниже использует world pixels: lowerer зар
 
 `beforeProbability` выбирает сторону рождения, а не вероятность повторного попадания. Radial/disk velocity ребёнка может изменить направление относительно переданной оси. Отдельные hitbox, movement, immunity, tile collision и NPC movement продолжают определять реальное столкновение.
 
-Старая готовая split-формула также использовала скорость вида `max(4,parent.speed*0.78)`. **Этой формулы здесь нет:** скорость задаёт `child.configure_spawn.velocity`. A11 не обещает полного old-split parity или прежней вероятности повторного попадания.
+Старая готовая split-формула также использовала скорость вида `max(4,parent.speed*0.78)`. **Этой формулы здесь нет:** скорость задаёт `child.spawn.velocity`. A11 не обещает полного old-split parity или прежней вероятности повторного попадания.
 
 ## Owner, задержка, бюджеты и сеть
 
@@ -83,22 +83,20 @@ Countdown убывает **перед collision** на каждом native AI up
 
 Multi-emission резервирует bounded batch. Перед каждым native вызовом caller передаёт одну reservation. Обычный отказ возвращает её caller-у; exception возвращает её внутри `SpawnRuntimeEntity`, а caller `finally` возвращает только ещё не начатые попытки. Частично сконфигурированный host деактивируется без terminal effects. Успешные дети используют один activation ledger; peer observation не создаёт capacity.
 
-Projectile ExtraAI **v4** добавляет к v3 presence-byte и выбранный initial velocity vector, когда distribution активна. V2/v3 принимаются для старого constant wire. Для новой distribution отсутствие sampled state, invalid presence-byte, non-finite vector или обрезанный payload оставляют actor inert до нового валидного payload. Owner сохраняет собственный countdown/vector при observation той же generation. Activation delay восстанавливает выбранный vector один раз; повторная hydration не запускает движение заново и не бросает RNG.
+Projectile ExtraAI **v4** добавляет к v3 presence-byte и выбранный initial velocity vector, когда distribution активна. V2/v3 отвергаются; active writer/reader branches перечислены в `GeneratedProjectile.NetSync.cs`. Для новой distribution отсутствие sampled state, invalid presence-byte, non-finite vector или обрезанный payload оставляют actor inert до нового валидного payload. Owner сохраняет собственный countdown/vector при observation той же generation. Activation delay восстанавливает выбранный vector один раз; повторная hydration не запускает движение заново и не бросает RNG.
 
 ## Lowering, provenance и сохранённые определения
 
-Выбор структуры и literal kind — **Alias Lowering**; physical unit scales и явная секундная quantization принадлежат canonical `ParamSpec`. Constant-вариант точно пишет старый `spawn.speedPxPerTick`. Случайная ветка пишет зарегистрированные `spawn.velocityDistribution.*`, literal kind и inactive constant slot `0`. Target geometry пишет `hitTargetSpawn.*` и literal ordinary spread `0`, сохраняя wire action `spawn_entity_on_event` и opcode `1`. Runtime исполняет эти явные параметры; compiler не вычисляет trajectory, не выбирает branch и не изобретает child.
+Выбор структуры и literal kind — **Alias Lowering**; physical unit scales и явная секундная quantization принадлежат canonical `ParamSpec`. Constant-вариант точно пишет старый `spawn.speedPxPerTick`. Случайная ветка пишет зарегистрированные `spawn.velocityDistribution.*`, literal kind и inactive constant slot `0`. Target geometry пишет `hitTargetSpawn.*` и literal ordinary spread `0`, сохраняя canonical wire action `spawn_entity_on_event` и opcode `1`. Runtime исполняет эти явные параметры; compiler не вычисляет trajectory, не выбирает branch и не изобретает child.
 
 Каждый leaf и literal имеет exact source/call ID/target receipt. Новый `wire_action` связывает fn alias с сохранённым opcode; fixed action/name receipts исходят от `.fn`. Strict audit требует единственного полного consistent variant и не позволяет подменить новый fn старым, скрестить radial/cone paths, удалить geometry вместе с receipts или приписать новому distribution старый speed receipt.
 
-`_wire_projection_witness` — внутренняя конечная проверка соответствия wire одному зарегистрированному варианту. Она возвращает только доказанные projection rows для audit; не выдаёт Author-документ, не кормит compiler/Repair и не становится production importer. `retained_receipt_params` сохраняет прежнюю scalar projection только для wire-only audit. С actual Author единственным источником истины остаётся текущая форма.
-
-У сохранённого wire без новых полей исполняемые значения, opcodes, IDs и старые receipts остаются читаемыми. Frozen JSON и хеши не перезаписываются. Fresh constant Author имеет новый source path `.params.velocity.constantSpeedBlocksPerSecond`, а его диагностический `runtimeContract.validation.stats.registryDrivenChecks` отражает текущий registry. Полная byte identity свежего отчёта с историческим не заявляется. Saved source-free receipts принимают только registry-declared predecessor paths этой unit-миграции; source-backed audit остаётся exact. Archive replay использует ограниченные **test-only** projections для текущих Author fixtures; production importer отсутствует, frozen wire не пересчитывается.
+`_wire_projection_witness` проверяет конечную current проекцию и возвращает exact rows для audit. Он не восстанавливает Author и не является importer. Source-backed audit требует current source paths; source-free подтверждает только consistent current wire. Constant-speed source path — `.params.velocity.speed`; старые receipts не принимаются. Archived bytes не являются шаблоном нового Author.
 
 ## Проверки и предел доказательства
 
-Python acceptance проходит действительные provider strict schema/inverse, validator, compiler, final-wire audit и frozen Repair: все пять velocity variants, branch/range/ref constraints, receipt loss/spoofing, old saved wire, exact child creation и ignored attempted edits. Source mutations проверяют реальные consumer seams: retained seed, raw reference validation, sampled vector после delay, malformed ExtraAI, reused incarnation и reservation ownership.
+Python acceptance проходит действительные provider strict schema/inverse, validator, compiler, final-wire audit и frozen Repair: все пять velocity variants, branch/range/ref constraints, receipt loss/spoofing, current positive/refusal inputs, exact child creation и ignored attempted edits. Native tests отдельно проверяют retained seed, raw references, sampled vector после delay, malformed ExtraAI, reused incarnation и reservation ownership.
 
-[`EngineRuntimeChecks.SpawnDistributions.cs`](../../../tools/native/EngineRuntimeChecks.SpawnDistributions.cs) содержит шесть native сценариев: strict DTO; seeded sampler с disk-area moment; actual `NewProjectileDirect` boundary во всех authority roles; delay/ExtraAI/hydration; frozen hitbox geometry/branch endpoints; delayed target emission с точными combat snapshots, slot reuse и refund on exception. Native interception наблюдает аргументы настоящего spawn entry и останавливается exception; фиктивный успешный actor не создаётся.
+[`EngineRuntimeChecks.SpawnDistributions.cs`](../../../tests/native/gameplay/EngineRuntimeChecks.SpawnDistributions.cs) содержит шесть native сценариев: strict DTO; seeded sampler с disk-area moment; actual `NewProjectileDirect` boundary во всех authority roles; delay/ExtraAI/hydration; frozen hitbox geometry/branch endpoints; delayed target emission с точными combat snapshots, slot reuse и refund on exception. Native interception наблюдает аргументы настоящего spawn entry и останавливается exception; фиктивный успешный actor не создаётся.
 
-.NET/tModLoader/game references в этой среде недоступны: **C# build, native harness и live SP/MP smoke — notRun**. Portable source/contract/pytest gates не заявляют их выполнение или живую сетевую доставку.
+Native execution требует .NET/tModLoader и игровых references. Отсутствующая среда означает `notRun`, не current PASS; команды — [TESTING](../../development/TESTING_RU.md).

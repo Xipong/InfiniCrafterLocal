@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-ROOT=Path(__file__).resolve().parents[2]; sys.path.insert(0,str(ROOT/"LocalGenerator"))
+ROOT=Path(__file__).resolve().parents[2]; sys.path.insert(0,str(ROOT/"generator"))
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.program_schema import (
     author_item_repair_schema,

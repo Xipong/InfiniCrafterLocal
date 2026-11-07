@@ -20,7 +20,7 @@ import tempfile
 import zlib
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "LocalGenerator"))
+sys.path.insert(0, str(ROOT / "generator"))
 
 from infini_local.core.env_utils import env_credential_values  # noqa: E402
 from infini_local.services.codex_auth import redact_credentials  # noqa: E402

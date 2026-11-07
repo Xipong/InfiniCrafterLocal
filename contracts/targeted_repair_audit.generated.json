@@ -77,7 +77,7 @@
         "scale_velocity",
         "seek"
       ],
-      "dossierChars": 66539,
+      "dossierChars": 66323,
       "errorCodes": [
         "missing_movement_component"
       ],
@@ -129,12 +129,6 @@
     }
   ],
   "errors": [],
-  "frozenCallsites": {
-    "badCallsites": [],
-    "calls": 7,
-    "explicitFalse": 7,
-    "ok": true
-  },
   "frozenMerge": {
     "acceptedPaths": [
       "$.callsUpsert[0].params.useStyle"
@@ -147,16 +141,16 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-  "fullAuthorPayloadChars": 166731,
-  "fullCapabilityCatalogCount": 101,
+  "fullAuthorPayloadChars": 171803,
+  "fullCapabilityCatalogCount": 74,
   "ok": true,
   "policyCoverage": {
-    "declaredCodes": 57,
+    "declaredCodes": 56,
     "declaredEqualsPolicy": true,
-    "emittedCodes": 56,
+    "emittedCodes": 55,
     "nonRepairableRegistryDefect": true,
-    "policyCodes": 57,
-    "runtimeDeclaredCodes": 56,
+    "policyCodes": 56,
+    "runtimeDeclaredCodes": 55,
     "runtimeDeclaredEqualsEmitted": true
   },
   "schema": "infini.targeted-repair-audit.v1"

@@ -51,4 +51,4 @@ INFINI_OPENROUTER_PROVIDER=deepinfra
 3. При ошибке авторизации/квоты исправь аккаунт или ключ, не площадку.
 4. Если строгий выбор не принципиален, очисти поле. Если принципиален — дождись восстановления или вручную выбери другую допустимую площадку.
 
-[Правила выбора площадок OpenRouter](https://openrouter.ai/docs/guides/routing/provider-selection). Реализация локального ограничения: [admission.py](../../LocalGenerator/infini_local/pipelines/transport/admission.py).
+[Правила выбора площадок OpenRouter](https://openrouter.ai/docs/guides/routing/provider-selection). Реализация локального ограничения: [admission.py](../../generator/infini_local/pipelines/transport/admission.py).

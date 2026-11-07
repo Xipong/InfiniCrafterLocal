@@ -1,6 +1,6 @@
 # Provider-aware admission для LLM HTTP
 
-Canonical owners: FIFO quota/rate admission — `LocalGenerator/infini_local/pipelines/transport/admission.py`; profile/lease/cooldown — `pipelines/transport/profiles.py`; logical deadline/physical attempts — `pipelines/transport/diagnostics.py`, HTTP — `pipelines/transport/http.py`, retry/negotiation — `pipelines/transport/client.py`. Admission получает attempt diagnostics от executor явно.
+Canonical owners: FIFO quota/rate admission — `generator/infini_local/pipelines/transport/admission.py`; profile/lease/cooldown — `pipelines/transport/profiles.py`; logical deadline/physical attempts — `pipelines/transport/diagnostics.py`, HTTP — `pipelines/transport/http.py`, retry/negotiation — `pipelines/transport/client.py`. Admission получает attempt diagnostics от executor явно.
 Это transport policy, не gameplay normalization и не изменение Author/parent packets.
 
 ## Что известно о quota contract
@@ -136,7 +136,7 @@ cache hit и stage repairs не обещаются прежними, новый 
 
 ## Offline verification
 
-`LocalGenerator/tests/test_provider_transport_contract.py` проходит real
+`tests/generator/providers/test_provider_transport_contract.py` проходит real
 `http_json` seam с управляемым monotonic clock, threaded Event gates и recording
 sender; отдельно настоящий loopback urllib проверяет HTTP 200/429 headers через
 `llm_chat_json` и logical diagnostics. Покрыты:
@@ -150,7 +150,7 @@ sender; отдельно настоящий loopback urllib проверяет H
 - unknown routes + cached usage сохраняют прежний conservative budget;
 - native Codex boundary сохраняет собственный transport owner.
 
-Verified scoped command: `PYTHONPATH=LocalGenerator python -m pytest`
+Verified scoped command: `PYTHONPATH=generator python -m pytest`
 для `test_provider_transport_contract.py`, `test_provider_request_contract.py`,
 `test_transport_retry_redaction.py`, `test_codex_subscription_contract.py`,
 `test_visual_vfx_prompt_prefix.py`, `test_stage_request_artifacts.py` и

@@ -27,7 +27,7 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($Project)) {
-    $candidates = Get-ChildItem -Path (Join-Path $Root "ModSources") -Filter "*.csproj" -Recurse -ErrorAction SilentlyContinue
+    $candidates = Get-ChildItem -Path (Join-Path $Root "mod") -Filter "*.csproj" -Recurse -ErrorAction SilentlyContinue
     if ($candidates.Count -eq 1) {
         $Project = $candidates[0].FullName
     } elseif ($candidates.Count -gt 1) {
@@ -35,7 +35,7 @@ if ([string]::IsNullOrWhiteSpace($Project)) {
         $candidates | ForEach-Object { Write-Host "  $($_.FullName)" }
         exit 2
     } else {
-        Write-Host "[FAIL] no .csproj found under ModSources/."
+        Write-Host "[FAIL] no .csproj found under mod/."
         exit 2
     }
 }

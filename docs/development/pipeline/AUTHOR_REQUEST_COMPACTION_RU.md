@@ -48,7 +48,7 @@ keys, required null и чужая schema wrapper не удаляются.
 ## Offline production capture
 
 ```bash
-PYTHONPATH=LocalGenerator python tools/diagnostics/measure_llm_request_sizes.py --out request-sizes.json
+PYTHONPATH=generator python tools/diagnostics/measure_llm_request_sizes.py --out request-sizes.json
 ```
 
 Скрипт блокирует network/LLM calls и захватывает actual production builders/Chat/Responses/Codex serializers. Он фиксирует SHA256 owners, settings и synthetic-fixture provenance. Размеры wire JSON — не billed tokens, latency, cache hit или качество ответа; optional baseline comparison выполняется через `--repo /path/to/base-checkout` без compatibility grammar в runtime.

@@ -1,13 +1,13 @@
 # Terraria/tModLoader standardization — точная граница 0.4.248
 
-[Generated vocabulary/lowerings](../generated/LOWERY_RU.md) · [Primitive parity/units](../generated/PRIMITIVE_PARITY_RU.md) · [External references](LOW_LEVEL_RUNTIME_EXTERNAL_REFERENCES_RU.md) · [Add capability](../../development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md)
+[Generated vocabulary/lowerings](../generated/LOWERY_RU.md) · [Units](../authoring/MODEL_FACING_UNITS_RU.md) · [External references](LOW_LEVEL_RUNTIME_EXTERNAL_REFERENCES_RU.md) · [Add capability](../../development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md)
 
 <a id="boundary"></a>
 ## Принцип и canonical owners
 
 Используются точные stable tModLoader 1.4.4 понятия: DamageClass/ItemUseStyleID/AmmoID, Item/Projectile fields, NewProjectileDirect и обычные hooks. Mapping переводит **один authored token в одно engine value**, не выбирает movement/delivery/attachment/lifecycle/family. Точный установленный patch определяется build references, не названием stable.
 
-Python vocabulary — `core/runtime_authoring/terraria_vocabulary.py`; mechanical facts — capability registry; C# mapping — `Common/Models/Contracts/TerrariaRuntimeVocabulary.cs`; strict DTO — RuntimeProgramSpec/GeneratedItemData.Normalize; item projection — GeneratedItemData.Apply; projectile defaults/spawn — GeneratedProjectile. [Source map](../../development/CODE_MAP_RU.md) и `tools/checks/audit_terraria_standardization.py` связывают owners. Новое canonical spelling требует совместного Python/C#/registry/schema/wire/tests/generated-audit изменения, не второго mapping.
+Python vocabulary — `core/runtime_authoring/terraria_vocabulary.py`; mechanical facts — capability registry; C# mapping — `Common/Models/Contracts/TerrariaRuntimeVocabulary.cs`; strict DTO — RuntimeProgramSpec/GeneratedItemData.Normalize; item projection — GeneratedItemData.Apply; projectile defaults/spawn — GeneratedProjectile. [Source map](../../development/CODE_MAP_RU.md) связывает owners. Новое canonical spelling требует совместного Python/C#/registry/schema/wire/tests/generated-audit изменения, не второго mapping.
 
 <a id="vocabulary"></a>
 ## Finite vocabulary и loaded IDs
@@ -17,14 +17,14 @@ Python vocabulary — `core/runtime_authoring/terraria_vocabulary.py`; mechanica
 - Rarity/buff/tile/wall IDs C# проверяет по текущим RarityLoader/BuffLoader/TileLoader/WallLoader counts, не произвольным clamps. Special negative rarity не заменяет expert/master/quest flags. Author получает exact parent IDs/names и не угадывает их.
 - Parent packets содержат canonical useStyleName/ammoCategoryName/potion/notAmmo и damage-class content ID; это source facts, не semantic helper.
 
-Author-visible gameplay aliases отсутствуют. Конечные technical/config aliases перечислены в generated Lowery; internal migration normalization вне gameplay не означает разрешение legacy recipe importer.
+Текущие exact aliases/typed projections перечислены в Lowery. Они раскрывают явно выбранную форму без semantic routing; это не importer прежнего языка.
 
 <a id="ammo-healing"></a>
 ## Ammo и healing: независимые решения
 
-`configure_vanilla_ammo_item`: Item.ammo через finite AmmoID, authored Item.shoot (stable ProjectileID 1..1021), отдельный `shootSpeedContributionPxPerUpdate`, Item.notAmmo и обязательный consumable=true. Это **ammo-item identity**, не weapon ammo consumption.
+`ammo_item`: Item.ammo через finite AmmoID, authored Item.shoot (stable ProjectileID 1..1021), отдельный `shootSpeedContributionPxPerUpdate`, Item.notAmmo и обязательный consumable=true. Это **ammo-item identity**, не weapon ammo consumption.
 
-Item.useAmmo не выводится из ammo-item. Отдельный [weapon ammo slice](../items/WEAPON_AMMO_CONSUMPTION_RU.md) (`configure_weapon_ammo`) сохраняет native selection/conservation и damage/knockback, явно выбирает speed basis и оставляет projectile behavior у authored runtime entity. Sand не exposed: type-wide ItemID.Sets.SandgunAmmoProjectileData несовместим с независимой семантикой generated items, разделяющих proxy Item.type.
+Item.useAmmo не выводится из ammo-item. Отдельный [weapon ammo slice](../items/WEAPON_AMMO_CONSUMPTION_RU.md) (`weapon_ammo`) сохраняет native selection/conservation и damage/knockback, явно выбирает speed basis и оставляет projectile behavior у authored runtime entity. Sand не exposed: type-wide ItemID.Sets.SandgunAmmoProjectileData несовместим с независимой семантикой generated items, разделяющих proxy Item.type.
 
 `restore_resources_on_use.usesPotionRules` напрямую задаёт Item.potion; healLife/healMana сами не включают potion sickness. Food/нестандартный heal не получает скрытые potion rules.
 
@@ -38,9 +38,9 @@ Proxy starts: ignoreWater=false, netImportant=false. Liquid/tile collision, pene
 <a id="units"></a>
 ## Units и exact conversions
 
-[Model-facing units](../authoring/MODEL_FACING_UNITS_RU.md#gameplay) владеет current units/consumer traps; [conversion/null proof](../authoring/MODEL_FACING_UNITS_RU.md#conversions) — percent/regen/zero/sentinel/float границей; [generated parity](../generated/PRIMITIVE_PARITY_RU.md) — full roster. Не копировать все ranges/cards сюда.
+[Model-facing units](../authoring/MODEL_FACING_UNITS_RU.md#gameplay) владеет current units/consumer traps; [conversion/null proof](../authoring/MODEL_FACING_UNITS_RU.md#conversions) — percent/regen/zero/sentinel/float границей; [generated inventory](../generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) — full roster. Не копировать все ranges/cards сюда.
 
-Terraria-specific display adapter: `axePowerTooltipPercent` — integer 0..500, шаг 5 → прежний integer `gameplay.axePower`/Item.axe 0..100 через /5. Старый DTO остаётся; Author `axePower` не alias. Generated buff `lifeRegenHpPerSecond` — 0..60, шаг .5 → прежний integer lifeRegen 0..120 через ×2; Author `lifeRegen` не alias. `valueCopper` остаётся exact Item.value в copper, не resale guarantee/Author value alias.
+Terraria-specific display adapter: `axePower` — integer 0..500, шаг 5 → прежний integer `gameplay.axePower`/Item.axe 0..100 через /5. Author выражает tooltip percent, а wire/Item.axe — внутренние единицы. Generated buff `lifeRegen` — -50..60, шаг .5 → прежний integer lifeRegen -100..120 через ×2; Проекция HP/s и native regen counts различается. `valueCopper` остаётся exact Item.value в copper, не resale guarantee/Author value alias.
 
 Проценты `15` и `0.15` — разные authored значения, не interchangeable spelling; движение/скорость — projectile updates, длительности — world ticks, raw local-immunity cooldown — engine units (`-1` one hit per NPC). Если биекция не доказана, units не переводятся в удобную prose единицу. Полное объяснение — canonical units owner выше.
 
@@ -48,9 +48,9 @@ Author и Repair получают в `sourceWireUnits.scopes[].readings` выч�
 
 Canonical-карточка `attach` уточняет: пока attachment активен, он задаёт центр и обнуляет velocity на своей стадии. Последующие стадии движения могут изменить velocity. Отдельный общий reach guide не добавляется.
 
-`add_equipment_damage_bonus(phase,damageClass,bonusPercent)` — один explicit operation с пятью executable damage selectors; compiler пишет прежние scalar DTO без выбора класса/фазы. Generic-only crit/speed/knockback/penetration не произвольный DamageClass support. UpdateAccessory/UpdateEquip/UpdateArmorSet phase, neutral/ranges и additive units принадлежат registry/parity. GeneratedEquipmentBounds.g.cs сохраняет выборочные historical DTO clamps, включая generic/set damage; новые Author bounds всё равно обязательны. Authority/lifecycle — runtime ownership, не authored network switch.
+`equipment_damage_bonus(phase,damageClass,bonusPercent)` — один explicit operation с пятью executable damage selectors; compiler пишет прежние scalar DTO без выбора класса/фазы. Generic-only crit/speed/knockback/penetration не произвольный DamageClass support. UpdateAccessory/UpdateEquip/UpdateArmorSet phase, neutral/ranges и additive units принадлежат registry. GeneratedEquipmentBounds.g.cs задаёт текущие equipment bounds; Author-valid значения проверяются на реальном C# consumer. Authority/lifecycle — runtime ownership, не authored network switch.
 
-Author-valid value не должно тихо меняться на C# boundary: несовпадение — contract defect и range-parity regression. Legacy safety envelope может быть шире Author, не уже; отсутствующая доказанная биекция не разрешает удобный approximate conversion. Event producer/timing units — [Author events](../authoring/LOW_LEVEL_RUNTIME_AUTHORING_RU.md#validation-events).
+Author-valid value не должно тихо меняться на C# boundary: несовпадение — contract defect и range-parity regression. отсутствующая доказанная биекция не разрешает удобный approximate conversion. Event producer/timing units — [Author events](../authoring/LOW_LEVEL_RUNTIME_AUTHORING_RU.md#validation-events).
 
 [Независимые native equipment utilities и границы headless proof](../items/NATIVE_EQUIPMENT_UTILITIES_RU.md): wire visibility, ice skating, hot-block/knockback immunity, bounded rocket mode и native sprint speed. Это explicit accessory params, не whole-item presets.
 
