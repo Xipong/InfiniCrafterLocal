@@ -30,7 +30,7 @@
 Полные исходники удалённых заметок и прежние пути доступны в Git baseline `42955070e92fd3d5d1ccd867e7061401c1e07b5f`, например:
 
 ```bash
-git show 42955070e92fd3d5d1ccd867e7061401c1e07b5f:LocalGenerator/infini_local/desktop/webui/FOLDER_DOCS_RU.md
+git show 42955070e92fd3d5d1ccd867e7061401c1e07b5f:generator/infini_local/desktop/webui/FOLDER_DOCS_RU.md
 ```
 
 Нынешняя навигация от этого пути не зависит. В активных guides остаются только полезные constraints и явные proof limits; historical UI observations свернуты в [MODULES](MODULES_RU.md#studio), подробные release/audit записи — в archive. Список «старый маршрут сохранён» не нужен: старые входы не сохраняются.

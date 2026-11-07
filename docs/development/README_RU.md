@@ -28,7 +28,7 @@
 | Provider envelope/quota/cache | [Request shape](providers/LLM_TRANSPORT_REQUEST_SHAPE_RU.md), [admission](providers/LLM_PROVIDER_ADMISSION_RU.md), [cache/latency](providers/LLM_PROMPT_CACHE_AND_LATENCY_RU.md) |
 | Image attempts/publication/delivery | [Image lifecycle](pipeline/IMAGE_ASSET_LIFECYCLE_RU.md) |
 | Craft/cancel/refund/world-exit | [Native craft lifecycle](runtime/NATIVE_CRAFT_LIFECYCLE_QOL.md) |
-| Родители и родословная в Атласе | [Восстановление точной пары по recipe hash](runtime/ATLAS_LINEAGE_RECOVERY_RU.md) |
+| Родители и родословная в Атласе | [Граница поддержки данных](../user/UPDATING_RU.md) |
 | Технические исправления текущего мира | [Границы и владельцы](runtime/CURRENT_WORLD_TECHNICAL_FIXES_RU.md) |
 | Engine execution/trust | [Runtime boundaries](architecture/ENGINE_RUNTIME_BOUNDARIES_RU.md) |
 | Где хранить и обновлять docs | [Организация и sources](DOCUMENTATION_RU.md), [generated refresh](../reference/GENERATED_RU.md) |
@@ -40,7 +40,7 @@
 ```bash
 python3 -m venv .venv-dev
 . .venv-dev/bin/activate
-python -m pip install -r LocalGenerator/requirements-dev.txt
+python -m pip install -r generator/requirements-dev.txt
 ```
 
 Если окружение уже есть, используй его. Это установка dev-зависимостей, не acceptance. На Windows нужен отдельный venv/`Scripts/python.exe`; пользовательский Studio открывается основным BAT. .NET/tML/external DLL — отдельные prerequisites [BUILD](BUILD_RU.md).
@@ -49,12 +49,11 @@ python -m pip install -r LocalGenerator/requirements-dev.txt
 ## Быстрый offline проход
 
 ```bash
-PYTHONPATH=LocalGenerator python tools/generate/generate_lowery.py --check
-PYTHONPATH=LocalGenerator python tools/generate/generate_low_level_runtime_docs.py --check
-PYTHONPATH=LocalGenerator python tools/generate/generate_primitive_parity.py --check
+PYTHONPATH=generator python tools/generate/generate_lowery.py --check
+PYTHONPATH=generator python tools/generate/generate_low_level_runtime_docs.py --check
 python tools/checks/check_project_hygiene.py
 ```
 
-Affected behavioral suite выбирай по [TESTING](TESTING_RU.md). Полный Python runner — `tools/testing/run_pytest_shards.py` (оба roots); полный packaging набор — [AGENTS](../../AGENTS.md#обязательный-vertical-slice). Для gameplay требуется registry → schema/prompt → validator/compiler receipts → strict wire → C# DTO/executor → tests/docs, не локальная запись только в prompt/schema/C#.
+Affected behavioral suite выбирай по [TESTING](TESTING_RU.md). Полный Python runner — `tools/testing/run_pytest_shards.py` (текущие test roots); полный packaging набор — [AGENTS](../../AGENTS.md#обязательный-vertical-slice). Для gameplay требуется registry → schema/prompt → validator/compiler receipts → strict wire → C# DTO/executor → tests/docs, не локальная запись только в prompt/schema/C#.
 
 Обычный docs/offline проход не запускает live campaign, модель, OAuth/login, игру или paid API. Source/headless CPU/full build/GPU/world loop/art/MP — разные уровни; неисполненное — `notRun`, не PASS. [PR workflow и лицензия](../../CONTRIBUTING.md).

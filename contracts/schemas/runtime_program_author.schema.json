@@ -6436,25 +6436,6 @@
                     "x-infini-semanticType": "blocks/s",
                     "x-infini-units": "blocks/s"
                   },
-                  "taggedSummonDamageBonus": {
-                    "description": "Increase summon projectile source damage by this percentage only against an NPC tagged by this owner's generated whip",
-                    "maximum": 300,
-                    "minimum": 0,
-                    "type": "number",
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
-                      "neutral": 0,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32",
-                      "wireProjection": {
-                        "divisor": 100,
-                        "multiplier": 1
-                      }
-                    },
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "source_damage_percent",
-                    "x-infini-units": "source_damage_percent"
-                  },
                   "treasureSense": {
                     "description": "Highlight eligible native treasures, including ores, chests and life crystals; not a radius or ore-only scan",
                     "type": "boolean",
@@ -7003,25 +6984,6 @@
                     ],
                     "type": "string",
                     "x-infini-semanticType": "bounded_text"
-                  },
-                  "taggedSummonDamageBonus": {
-                    "description": "Increase summon projectile source damage by this percentage only against an NPC tagged by this owner's generated whip",
-                    "maximum": 300,
-                    "minimum": 0,
-                    "type": "number",
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
-                      "neutral": 0,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32",
-                      "wireProjection": {
-                        "divisor": 100,
-                        "multiplier": 1
-                      }
-                    },
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "source_damage_percent",
-                    "x-infini-units": "source_damage_percent"
                   },
                   "treasureSense": {
                     "description": "Highlight eligible native treasures, including ores, chests and life crystals; not a radius or ore-only scan",
@@ -8239,7 +8201,7 @@
                     "x-infini-units": "dimensionless multiplier"
                   },
                   "mirrorToSprite": {
-                    "description": "True multiplies the authored base sprite scale by this same curve; false leaves visual growth independent. Never reads VFX scale for gameplay. Cannot combine true with move_expanding_wave, which independently owns dynamic sprite scale.",
+                    "description": "True multiplies the authored base sprite scale by this same curve; false leaves visual growth independent. Never reads VFX scale for gameplay. Cannot combine true with add_sprite_scale, which independently owns dynamic sprite scale.",
                     "type": "boolean",
                     "x-infini-semanticType": "bounded_text"
                   },
@@ -9305,7 +9267,7 @@
                 "properties": {
                   "bounceCount": {
                     "default": 0,
-                    "description": "bounceCount=N reflects N tile contacts using bounceSpeedRetention on collided-axis velocity (each collided axis reverses); the next contact kills. move_boomerang, move_returning_glaive and move_flail_tether instead start returning and disable tile collision before bounce/kill handling. Otherwise 0 kills on the first tile contact; this does not add horizontal friction between contacts",
+                    "description": "bounceCount=N reflects N tile contacts using bounceSpeedRetention on collided-axis velocity (each collided axis reverses); the next contact kills. An explicitly selected return trigger may instead latch return before bounce/kill handling. Otherwise 0 kills on the first tile contact; this does not add horizontal friction between contacts",
                     "maximum": 32,
                     "minimum": 0,
                     "type": "integer",

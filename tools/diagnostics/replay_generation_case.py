@@ -19,7 +19,7 @@ import time
 from typing import Any
 
 _HERE = Path(__file__).resolve().parent
-_LOCAL_GEN = _HERE.parents[1] / "LocalGenerator"
+_LOCAL_GEN = _HERE.parents[1] / "generator"
 if str(_LOCAL_GEN) not in sys.path:
     sys.path.insert(0, str(_LOCAL_GEN))
 

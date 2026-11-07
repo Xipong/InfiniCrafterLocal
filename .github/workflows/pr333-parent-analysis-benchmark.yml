@@ -1,0 +1,224 @@
+name: PR333 parent analysis A-B benchmark
+
+on:
+  push:
+    branches:
+      - feat/parent-source-compression-main-20261106
+    paths:
+      - 'mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.ParentAnalysis.cs'
+      - 'mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceMethod*.cs'
+      - 'mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceGraphCache.cs'
+      - 'mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.NativeCSharpSource.cs'
+      - 'tests/native/context/EngineRuntimeChecks.ParentAnalysisProfiling.cs'
+      - 'tests/native/EngineRuntimeChecks.csproj'
+      - 'tests/native/EngineRuntimeChecks.cs'
+      - 'mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj'
+      - '.github/workflows/pr333-parent-analysis-benchmark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr333-parent-analysis-benchmark
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    name: Baseline vs candidate cold analysis
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      BASELINE_SHA: 3c092e34403eefceea47665123be888a261cd820
+      INFINI_PARENT_ANALYSIS_PROFILE: 1
+    steps:
+      - name: Preserve Git bytes
+        shell: pwsh
+        run: git config --global core.autocrlf false
+
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          path: candidate
+
+      - name: Checkout pre-audit baseline
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BASELINE_SHA }}
+          path: baseline
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download native build dependencies
+        shell: pwsh
+        run: |
+          $depsRoot = Join-Path $env:RUNNER_TEMP 'infinicrafter-profile-deps'
+          $particleLibraryDll = Join-Path $depsRoot 'ParticleLibrary\ParticleLibrary.dll'
+          $luminanceDll = Join-Path $depsRoot 'Luminance\bin\Debug\net8.0\Luminance.dll'
+          New-Item -ItemType Directory -Force -Path (Split-Path $particleLibraryDll), (Split-Path $luminanceDll) | Out-Null
+          & curl.exe --fail --location --retry 3 --silent --show-error --output $particleLibraryDll 'https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/ParticleLibrary.dll'
+          if ($LASTEXITCODE -ne 0) { throw "ParticleLibrary download failed: $LASTEXITCODE" }
+          & curl.exe --fail --location --retry 3 --silent --show-error --output $luminanceDll 'https://github.com/LucilleKarma/Luminance/releases/latest/download/Luminance.dll'
+          if ($LASTEXITCODE -ne 0) { throw "Luminance download failed: $LASTEXITCODE" }
+          "INFINI_TML_DEPS_SRC=$depsRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Seed tML SDK release cache
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $headers = @{
+            Accept = 'application/vnd.github+json'
+            Authorization = "Bearer $env:GITHUB_TOKEN"
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $releases = Invoke-RestMethod -Uri 'https://api.github.com/repos/tModLoader/tModLoader/releases?per_page=100' -Headers $headers
+          $releases = @($releases | Sort-Object { [DateTimeOffset]::Parse($_.published_at) } -Descending)
+          $entries = @()
+          foreach ($release in $releases) {
+            $version = $null
+            if (-not [Version]::TryParse((([string]$release.tag_name) -replace '^v', ''), [ref]$version)) { continue }
+            $asset = @($release.assets | Where-Object { $_.name -eq 'tModLoader.zip' } | Select-Object -First 1)
+            if ($asset.Count -eq 0) { continue }
+            $entries += [pscustomobject]@{
+              Version = $version
+              DownloadUrl = [string]$asset[0].browser_download_url
+              PreRelease = [bool]$release.prerelease
+            }
+          }
+          $stable = $entries | Where-Object { -not $_.PreRelease } | Select-Object -First 1
+          $preview = $entries | Where-Object { $_.PreRelease } | Select-Object -First 1
+          if ($null -eq $stable -or $null -eq $preview) { throw 'Missing stable/preview tModLoader release.' }
+          $cacheRoot = Join-Path $env:APPDATA 'tml-build'
+          New-Item -ItemType Directory -Force -Path $cacheRoot | Out-Null
+          $stream = [System.IO.File]::Create((Join-Path $cacheRoot 'cached_versions'))
+          $writer = [System.IO.BinaryWriter]::new($stream, [System.Text.Encoding]::UTF8)
+          try {
+            $writer.Write([DateTime]::Now.ToBinary())
+            $writer.Write([Int32]$entries.Count)
+            foreach ($entry in $entries) {
+              foreach ($part in @($entry.Version.Major, $entry.Version.Minor, $entry.Version.Build, $entry.Version.Revision)) { $writer.Write([Int32]$part) }
+              $writer.Write([string]$entry.DownloadUrl)
+            }
+            foreach ($version in @($stable.Version, $preview.Version)) {
+              foreach ($part in @($version.Major, $version.Minor, $version.Build, $version.Revision)) { $writer.Write([Int32]$part) }
+            }
+          }
+          finally { $writer.Dispose() }
+
+      - name: Restore and locate tModLoader references
+        shell: pwsh
+        run: |
+          dotnet restore candidate/mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet restore candidate/mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $assets = Get-Content candidate/mod/InfiniCrafterLocal/obj/project.assets.json -Raw | ConvertFrom-Json
+          $tml = @($assets.libraries.PSObject.Properties | Where-Object { $_.Name -like 'tModLoader/*' })
+          if ($tml.Count -ne 1) { throw 'Expected exactly one tModLoader package.' }
+          $references = @($assets.packageFolders.PSObject.Properties.Name | ForEach-Object {
+            $candidate = Join-Path $_ ($tml[0].Value.path + '/lib/net8.0')
+            if (Test-Path (Join-Path $candidate 'tModLoader.dll')) { $candidate }
+          })
+          if ($references.Count -ne 1) { throw 'Could not locate tModLoader references.' }
+          "INFINI_TML_REFERENCE_DIR=$($references[0])" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build baseline and candidate harnesses
+        shell: pwsh
+        run: |
+          # Compile-only correction for the pinned historical baseline fixture;
+          # current candidate already calls Enumerable.Reverse explicitly.
+          # Neither change is part of the measured source-analysis code.
+          $fixture = Join-Path $env:GITHUB_WORKSPACE 'baseline/tools/native/EngineRuntimeChecks.GeneratedItemReforge.cs'
+          $text = [System.IO.File]::ReadAllText($fixture)
+          $before = 'scenarios.Concat(scenarios.Reverse())'
+          $after = 'scenarios.Concat(scenarios.AsEnumerable().Reverse())'
+          if ([regex]::Matches($text, [regex]::Escape($before)).Count -ne 1) { throw 'Pinned baseline reforge fixture did not match its expected source.' }
+          [System.IO.File]::WriteAllText($fixture, $text.Replace($before, $after), [System.Text.UTF8Encoding]::new($false))
+          $baselineOut = Join-Path $env:RUNNER_TEMP 'ifc-profile-baseline'
+          $candidateOut = Join-Path $env:RUNNER_TEMP 'ifc-profile-candidate'
+          dotnet build baseline/tools/native/EngineRuntimeChecks.csproj --configuration Release --output $baselineOut "-p:InfiniTmlReferenceDir=$env:INFINI_TML_REFERENCE_DIR" "-p:InfiniExternalDepsRoot=$env:INFINI_TML_DEPS_SRC"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build candidate/tests/native/EngineRuntimeChecks.csproj --configuration Release --output $candidateOut "-p:InfiniTmlReferenceDir=$env:INFINI_TML_REFERENCE_DIR" "-p:InfiniExternalDepsRoot=$env:INFINI_TML_DEPS_SRC"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "BASELINE_HARNESS=$baselineOut\EngineRuntimeChecks.dll" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "CANDIDATE_HARNESS=$candidateOut\EngineRuntimeChecks.dll" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Run matched fresh-process profiles
+        shell: pwsh
+        run: |
+          $evidence = Join-Path $env:GITHUB_WORKSPACE 'profile-evidence'
+          New-Item -ItemType Directory -Force -Path $evidence | Out-Null
+          foreach ($variant in @('baseline', 'candidate')) {
+            $root = Join-Path $env:GITHUB_WORKSPACE $variant
+            $harness = if ($variant -eq 'baseline') { $env:BASELINE_HARNESS } else { $env:CANDIDATE_HARNESS }
+            foreach ($scenario in @('plain', 'mixed', 'nebula-prism', 'eventide')) {
+              Push-Location $root
+              try {
+                dotnet $harness --profile-parent-craft $scenario
+                if ($LASTEXITCODE -ne 0) { throw "$variant/$scenario failed with exit $LASTEXITCODE" }
+                $report = Get-ChildItem artifacts/parent-profiling -Filter report.json -Recurse |
+                  Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+                if ($null -eq $report) { throw "Missing report for $variant/$scenario" }
+                Copy-Item $report.FullName (Join-Path $evidence "$variant-$scenario.json")
+              }
+              finally { Pop-Location }
+            }
+          }
+
+      - name: Verify packet parity and summarize
+        shell: pwsh
+        run: |
+          $evidence = Join-Path $env:GITHUB_WORKSPACE 'profile-evidence'
+          $rows = @()
+          foreach ($scenario in @('plain', 'mixed', 'nebula-prism', 'eventide')) {
+            $baseline = Get-Content (Join-Path $evidence "baseline-$scenario.json") -Raw | ConvertFrom-Json
+            $candidate = Get-Content (Join-Path $evidence "candidate-$scenario.json") -Raw | ConvertFrom-Json
+            $baselineCold = @($baseline.measurements | Where-Object { $_.case -eq 'cold-first-request' })
+            $candidateCold = @($candidate.measurements | Where-Object { $_.case -eq 'cold-first-request' })
+            if ($baselineCold.Count -ne 1 -or $candidateCold.Count -ne 1) { throw "Expected one cold measurement per variant for $scenario" }
+            $b = $baselineCold[0]
+            $c = $candidateCold[0]
+            if ($b.sha256 -ne $c.sha256) { throw "Cold packet hash mismatch for ${scenario}: $($b.sha256) != $($c.sha256)" }
+            # Cold compares with itself; inspect each later phase instead of
+            # accidentally accepting a warm/reset mismatch through that row.
+            foreach ($phase in @('cold-first-request', 'warm-1', 'warm-2', 'source-cache-reset')) {
+              $measurements = @($candidate.measurements | Where-Object { $_.case -eq $phase })
+              if ($measurements.Count -ne 1) { throw "Expected one candidate $phase measurement for $scenario" }
+              if ($measurements[0].equalToFirstRequest -isnot [bool] -or -not $measurements[0].equalToFirstRequest) {
+                throw "Candidate $phase parity failed for $scenario"
+              }
+            }
+            $rows += [pscustomobject]@{
+              scenario = $scenario
+              packetSha256 = [string]$c.sha256
+              baselineWallMs = [double]$b.wallMs
+              candidateWallMs = [double]$c.wallMs
+              speedup = [double]$b.wallMs / [double]$c.wallMs
+              baselineAllocatedBytes = [long]$b.totalAllocatedBytes
+              candidateAllocatedBytes = [long]$c.totalAllocatedBytes
+              allocationRatio = [double]$c.totalAllocatedBytes / [double]$b.totalAllocatedBytes
+              underFiveSeconds = [double]$c.wallMs -lt 5000.0
+            }
+          }
+          $rows | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $evidence 'summary.json') -Encoding utf8
+          Add-Content $env:GITHUB_STEP_SUMMARY '### PR #333 parent-analysis A/B'
+          Add-Content $env:GITHUB_STEP_SUMMARY '| Scenario | Baseline ms | Candidate ms | Speedup | Baseline alloc | Candidate alloc | <5 s |'
+          Add-Content $env:GITHUB_STEP_SUMMARY '| --- | ---: | ---: | ---: | ---: | ---: | :---: |'
+          foreach ($row in $rows) {
+            Add-Content $env:GITHUB_STEP_SUMMARY ("| {0} | {1:N1} | {2:N1} | {3:N2}x | {4:N0} | {5:N0} | {6} |" -f $row.scenario, $row.baselineWallMs, $row.candidateWallMs, $row.speedup, $row.baselineAllocatedBytes, $row.candidateAllocatedBytes, $(if ($row.underFiveSeconds) { 'yes' } else { 'no' }))
+          }
+
+      - name: Upload profiling evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr333-parent-analysis-ab
+          path: profile-evidence/
+          if-no-files-found: ignore

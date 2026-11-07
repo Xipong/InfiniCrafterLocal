@@ -1,7 +1,7 @@
 START_HERE.html linguist-generated=true
 
 # Frozen byte-hash fixture must remain identical on Windows checkouts.
-tools/fixtures/placed-body-pre-alpha-delivered.json text eol=lf
+tests/fixtures/placed-body-pre-alpha-delivered.json text eol=lf
 
 # Historical inputs retain exact source bytes, including their original line endings.
 toolbox/fixtures/items.jsonl -text
@@ -9,7 +9,7 @@ toolbox/fixtures/parents/live10-midgame.jsonl -text whitespace=blank-at-eol,blan
 toolbox/fixtures/parents/live20-classic-sprites.jsonl -text
 
 # Immutable archived native regression inputs: preserve blob bytes on every checkout.
-LocalGenerator/tests/fixtures/persisted_v5_baseline.json -text
-tools/fixtures/played-silver-delivered.json -text
-tools/fixtures/played-secondaries-delivered.json -text
-tools/fixtures/front-hand-compiled.json -text
+tests/generator/fixtures/persisted_v5_baseline.json -text
+tests/fixtures/played-silver-delivered.json -text
+tests/fixtures/played-secondaries-delivered.json -text
+tests/fixtures/front-hand-compiled.json -text

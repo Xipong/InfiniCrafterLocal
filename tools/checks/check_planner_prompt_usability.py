@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse, hashlib, json, sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "LocalGenerator"))
+sys.path.insert(0, str(ROOT / "generator"))
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.pipelines.author.prompt import planner_prompt_usability_report
 

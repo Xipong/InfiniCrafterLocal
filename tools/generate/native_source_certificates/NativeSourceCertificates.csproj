@@ -2,6 +2,6 @@
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
   <ItemGroup>
     <Reference Include="Mono.Cecil"><HintPath>$(InfiniTmlReferenceDir)/Mono.Cecil.dll</HintPath></Reference>
-    <Compile Include="../../../ModSources/InfiniCrafterLocal/Common/Services/Generation/NativeSourceFingerprint.cs" Link="NativeSourceFingerprint.cs" />
+    <Compile Include="../../../mod/InfiniCrafterLocal/Common/Services/Generation/NativeSourceFingerprint.cs" Link="NativeSourceFingerprint.cs" />
   </ItemGroup>
 </Project>

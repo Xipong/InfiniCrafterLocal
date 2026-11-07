@@ -22,7 +22,7 @@
 
 - `Common/Systems/Presentation/GeneratedCursorItemPresentationSystem.cs` подключает только verified native `DrawInterface_40_InteractItemIcon`: заменяет type-wide `ContentSamples.ItemsByType` на точный выбранный `Item`, только для generated selected preview с готовым instance PNG. При смерти preview выбранного generated item подавляется до native cache swap, включая disabled cached icon; живые disabled/missing previews и explicit foreign icons сохраняют native поведение.
 - Пропускается только дополнительный static tint tail этого cursor owner; native ItemSlot продолжает работать и выполняет PNG tint сам. Unknown IL shape/source owner отвергается до частичной emission; unload снимает hook. Guard финального tint проверяет его собственную receiver→texture последовательность после ammo Draw; более ранний `TextureAssets.Item` не разрешает чужой final `GlowMask`.
-- `GeneratedItem.ModifyItemDraw` подавляет только совпадающий готовый static held proxy. Unrelated colored/glow textures, cache entries, authored `hideUseGraphic`/release timing и custom AfterParent слой не меняются.
+- `GeneratedItem.ModifyItemDraw` подавляет только совпадающий готовый static held proxy. Unrelated colored/glow textures, cache entries, authored `hideUseGraphic` и native draw order не меняются.
 - Native checks используют exact frozen game-saved `Campfire Twin Wooden Sword` DTO из текущего мира, включая identity, два экземпляра shared type, missing-PNG/foreign/disabled controls и source-shape mutant. Это CPU native consumer evidence, не GPU/world/MP acceptance.
 
 ## Явные runtime choices
@@ -31,9 +31,9 @@
 
 `spawn.count` ограничивает одну активацию, `autoReuse=false` — удержание кнопки; ни одно не задаёт live cardinality. Для free projectile owner-attached singleton не является общим cap.
 
-Opt-in `set_projectile_concurrency(maxActive: integer 1…96)` → `entity.spawn.maxActive`. Модель сама выбирает 1 или больше; отсутствие не создаёт cap. Считаются live экземпляры по owner + generated item ID + entity ID, независимо от inventory copy/binding/input/root/descendant. Pending delayed work не live; due dispatch проверяет admission заново и возвращает неиспользованный event budget. Shared SpawnRuntimeEntity отказывает целой effective batch после existing global/depth/event limits, не режет её по остаточным entity slots. Root binding preflight проверяет полный batch в `CanUseItem` до `Shoot`/spawn. Поздний отказ event/controller/spawn не откатывает costs/effects, уже принятые для активации. Один cap не устанавливает, была ли отклонённая root use оплачена или возвращена, и не означает дополнительную оплату. Existing owner-attached repeat-use singleton и Hold одной existing batch сохранены; cap не является refill mode.
+Opt-in `projectile_limit(maxActive: integer 1…96)` → `entity.spawn.maxActive`. Модель сама выбирает 1 или больше; отсутствие не создаёт cap. Считаются live экземпляры по owner + generated item ID + entity ID, независимо от inventory copy/binding/input/root/descendant. Pending delayed work не live; due dispatch проверяет admission заново и возвращает неиспользованный event budget. Shared SpawnRuntimeEntity отказывает целой effective batch после existing global/depth/event limits, не режет её по остаточным entity slots. Root binding preflight проверяет полный batch в `CanUseItem` до `Shoot`/spawn. Поздний отказ event/controller/spawn не откатывает costs/effects, уже принятые для активации. Один cap не устанавливает, была ли отклонённая root use оплачена или возвращена, и не означает дополнительную оплату. Existing owner-attached repeat-use singleton и Hold одной existing batch сохранены; cap не является refill mode.
 
-Saved definitions по решению пользователя не правятся, runtime не классифицирует предметы по names/movement. Legacy omission/full/network/definition hash сохранены; present null/type/out-of-range и cap на item_body отвергаются. Headless consumer evidence покрывает последовательные production producers; OS-thread concurrency и synchronous foreign GlobalProjectile.OnSpawn reentry не приняты как проверенный scope.
+Saved definitions по решению пользователя не правятся, runtime не классифицирует предметы по names/movement. Текущая optional absence сохраняется в full/network definition; present null/type/out-of-range и cap на item_body отвергаются. Headless consumer evidence покрывает последовательные production producers; OS-thread concurrency и synchronous foreign GlobalProjectile.OnSpawn reentry не приняты как проверенный scope.
 
 ### Явная detonation и terminal events
 
@@ -41,4 +41,4 @@ Saved definitions по решению пользователя не правят
 
 ## Проверка и границы
 
-Generated schemas, Repair audit и config registry проверяются canonical tools; команды и доступные уровни proof — [TESTING](../TESTING_RU.md). Offline/headless output не доказывает game-loop, GPU, live AI/provider или MP match. Обновление мода и LocalGenerator не требует редактирования личных config/cache/recipes/PNG.
+Generated schemas, Repair audit и config registry проверяются canonical tools; команды и доступные уровни proof — [TESTING](../TESTING_RU.md). Offline/headless output не доказывает game-loop, GPU, live AI/provider или MP match. Обновление мода и generator не требует редактирования личных config/cache/recipes/PNG.

@@ -33,12 +33,12 @@ def studio_fixture(*, omit=(), extra=None):
         'python/Lib/site-packages/pydantic_core/__init__.py': b'Pydantic Core fixture',
         'python/Lib/site-packages/pydantic_core/_pydantic_core.cp314-win_amd64.pyd': b'MZfixture-native-pydantic',
         ENTRY_POINT: b'fixture managed entrypoint',
-        'LocalGenerator/server.py': b'fixture generator entrypoint',
-        'LocalGenerator/config.example.env': b'fixture configuration template',
-        'LocalGenerator/infini_local/desktop/web_studio.py': b'fixture web bridge',
-        'LocalGenerator/infini_local/desktop/webui/index.html': b'fixture frontend',
-        'LocalGenerator/infini_local/desktop/webui/studio.js': b'fixture script',
-        'LocalGenerator/infini_local/desktop/webui/studio.css': b'fixture styles',
+        'generator/server.py': b'fixture generator entrypoint',
+        'generator/config.example.env': b'fixture configuration template',
+        'generator/infini_local/desktop/web_studio.py': b'fixture web bridge',
+        'generator/infini_local/desktop/webui/index.html': b'fixture frontend',
+        'generator/infini_local/desktop/webui/studio.js': b'fixture script',
+        'generator/infini_local/desktop/webui/studio.css': b'fixture styles',
         'START_HERE.html': b'fixture handbook',
         'LICENSE': b'fixture IFC license',
     }
@@ -237,7 +237,7 @@ class StudioBundleTests(unittest.TestCase):
         native = 'python/Lib/site-packages/pydantic_core/_pydantic_core.cp314-win_amd64.pyd'
         for resources, error in (
             (studio_fixture(omit=(native,)), 'native dependency missing'),
-            (studio_fixture(extra={'LocalGenerator/config.env': b'private provider settings'}), 'Operator state'),
+            (studio_fixture(extra={'generator/config.env': b'private provider settings'}), 'Operator state'),
             (studio_fixture(extra={'../outside.txt': b'escape'}), 'Unsafe Studio archive path'),
         ):
             with self.subTest(error=error), self.assertRaisesRegex(ValueError, error):
@@ -261,14 +261,14 @@ class StudioBundleTests(unittest.TestCase):
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(('source: ' + name).encode())
-            selected = root / 'LocalGenerator/infini_local/desktop/webui/icon.png'
+            selected = root / 'generator/infini_local/desktop/webui/icon.png'
             selected.parent.mkdir(parents=True, exist_ok=True)
             selected.write_bytes(b'PNG bytes preserved without tML conversion')
             excluded = (
-                'LocalGenerator/config.env', 'LocalGenerator/cache/private.json',
-                'LocalGenerator/tests/fixture.py', 'LocalGenerator/.venv/python.exe',
-                'LocalGenerator/infini_local/__pycache__/module.pyc',
-                'LocalGenerator/infini_local/.env',
+                'generator/config.env', 'generator/cache/private.json',
+                'tests/generator/fixture.py', 'generator/.venv/python.exe',
+                'generator/infini_local/__pycache__/module.pyc',
+                'generator/infini_local/.env',
             )
             for name in excluded:
                 path = root / name

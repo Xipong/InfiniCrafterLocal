@@ -56,7 +56,7 @@ def pause() -> None:
 def main(argv: list[str]) -> int:
     script_dir = Path(__file__).resolve().parent
     root = script_dir.parent.parent
-    source = root / "ModSources" / "InfiniCrafterLocal"
+    source = root / "mod" / "InfiniCrafterLocal"
     if not source.exists():
         print(f"Source mod folder not found: {source}")
         print("Extract the archive first, then run this installer from the extracted folder.")

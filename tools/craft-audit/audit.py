@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "LocalGenerator"))
+sys.path.insert(0, str(ROOT / "generator"))
 from infini_local.core.schema_validation import strict_schema_errors
 
 MISSING = object()
@@ -126,23 +126,6 @@ class SchemaDocs:
         if "default" in schema:
             row["default"] = schema["default"]
         return rows
-
-    def saved_param_docs(self, fn: str, suffix: tuple, *, same_units_only: bool = False) -> dict:
-        """Read declared historical names for display, never source admission."""
-        from infini_local.core.runtime_authoring.capability_registry import capability_for_saved_receipt
-        from infini_local.core.runtime_authoring.receipt_input import receipt_param_spec
-        if not suffix or not all(isinstance(part, str) for part in suffix):
-            return {}
-        cap = capability_for_saved_receipt(fn)
-        original = ".".join(suffix)
-        canonical = cap.canonical_receipt_param_path(original) if cap is not None else None
-        if canonical is None:
-            return {}
-        if same_units_only and canonical != original:
-            leaf = receipt_param_spec(cap, canonical)
-            if leaf is None or suffix[-1] not in leaf.previous_author_names:
-                return {}  # Old engine-domain units are not v6 Author units.
-        return self.param_docs(cap.name, tuple(canonical.split(".")))
 
     def param_docs(self, fn: str, suffix: tuple) -> dict:
         calls = self.root.get("properties", {}).get("calls", {}).get("items", {}).get("oneOf", [])
@@ -286,19 +269,6 @@ def build_report(item: dict, author: dict | None = None, visual: dict | None = N
         author_rows = [r for r in author_rows if r["parts"][:1] != ["runtimeProgram"]]
         if "runtimeProgram" in source["data"]:
             author_rows += runtime_docs.rows(source["data"]["runtimeProgram"], parts=("runtimeProgram",))
-        old_program = source["data"].get("runtimeProgram")
-        if isinstance(old_program, dict) and old_program.get("schema") == "infini.runtime-program.authoring.v6":
-            for row in author_rows:
-                parts = tuple(row["parts"])
-                if parts[:2] != ("runtimeProgram", "calls") or len(parts) <= 4 or parts[3] != "params":
-                    continue
-                call = lookup(source["data"], parts[:3])
-                docs = runtime_docs.saved_param_docs(call.get("fn", ""), parts[4:], same_units_only=True) if isinstance(call, dict) else {}
-                if docs:
-                    row.update({key: docs[key] for key in ("description", "units", "schema")})
-                    row["documented"] = True
-                    # Present value/path stay literal; validation below still
-                    # rejects v6 as fresh Author and cannot authenticate it.
     checks = []
     if source is not None:
         def validate_author():
@@ -339,10 +309,7 @@ def build_report(item: dict, author: dict | None = None, visual: dict | None = N
         fp = receipt_parts(receipt.get("finalPath", ""))
         actual = lookup(data, fp) if fp else MISSING
         origin = source_index.get(pointer(ap)) if ap else None
-        docs = origin or (runtime_docs.saved_param_docs(receipt.get("fn", ""), ap[4:])
-                          if source is None and receipt_origin == "saved"
-                          and ap[:2] == ("runtimeProgram", "calls") and len(ap) > 4 and ap[3] == "params"
-                          else runtime_docs.param_docs(receipt.get("fn", ""), ap[4:])
+        docs = origin or (runtime_docs.param_docs(receipt.get("fn", ""), ap[4:])
                           if ap[:2] == ("runtimeProgram", "calls") and len(ap) > 4 and ap[3] == "params" else {})
         link = {"receiptIndex": i, "receipt": receipt, "wirePath": pointer(fp) if fp else "",
                 "wireValuePresent": actual is not MISSING, "wireValue": actual if actual is not MISSING else None,
@@ -377,8 +344,8 @@ def build_report(item: dict, author: dict | None = None, visual: dict | None = N
             "lane": "author" if authored else "wire", "authorAvailable": source is not None,
             "sources": sources, "schemas": [{k: d[k] for k in ("file", "sha256")} for d in schema_documents],
             "codeOwners": [{"file": str(p.relative_to(ROOT)), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()} for p in
-                           (Path(__file__), ROOT / "LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py",
-                            ROOT / "LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py")],
+                           (Path(__file__), ROOT / "generator/infini_local/core/runtime_authoring/capability_registry.py",
+                            ROOT / "generator/infini_local/core/runtime_authoring/technical_lowering.py")],
             "advisory": advisory, "authorFields": author_rows, "wireFields": [] if authored else wire_documentation(data, runtime_docs),
             "connections": connections(data, author_rows, authored), "receipts": receipt_links,
             "authorConnections": connections(source["data"], author_rows, True) if source and not authored else None,

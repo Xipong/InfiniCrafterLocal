@@ -11,12 +11,12 @@ import subprocess
 from urllib.parse import urlsplit
 from typing import Any
 
-from toolbox.infini_toolbox import BASE_ROOT, discover_project, read_config_env
+from toolbox.project import BASE_ROOT, discover_project, read_config_env
 from toolbox.live.panels import load_case_input_payloads, load_selection
 
 
 def read_environment(project: Path, config: Path | None) -> dict[str, str]:
-    path = config.expanduser().resolve() if config else project / 'LocalGenerator/config.env'
+    path = config.expanduser().resolve() if config else project / 'generator/config.env'
     if config and not path.is_file():
         raise ValueError('explicit --config file is missing')
     env = dict(os.environ)
@@ -26,7 +26,7 @@ def read_environment(project: Path, config: Path | None) -> dict[str, str]:
             env.setdefault(key, value)
     # Load the same pure settings validator as the generator without importing
     # runtime bootstrap or exposing configured secrets in an offline preflight.
-    source = BASE_ROOT / 'LocalGenerator/infini_local/core/config_validation.py'
+    source = BASE_ROOT / 'generator/infini_local/core/config_validation.py'
     spec = importlib.util.spec_from_file_location('_toolbox_config_validation', source)
     if spec is None or spec.loader is None:
         raise RuntimeError('Cannot load canonical config validation')

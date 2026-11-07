@@ -27,7 +27,7 @@ python -m toolbox live20 --config /path/outside/repo/private.env --preflight-onl
 сервиса или effective request sampling**: `requestSettingsVerified=false` честно
 остаётся в отчёте. Последние проверяются непосредственно перед sender.
 
-Без `--config` учитываются environment и, если есть, `LocalGenerator/config.env`.
+Без `--config` учитываются environment и, если есть, `generator/config.env`.
 Environment имеет приоритет; используется канонический `core/env_file.py` codec
 (legacy / JSON-string формат, first occurrence wins). `INFINI_SKIP_CONFIG_FILE=1`
 отключает только неявный файл; явный `--config` читается и при нём. Файл не меняется,

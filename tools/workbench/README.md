@@ -1,0 +1,1436 @@
+# Item Test Workbench
+
+## Source layout
+
+- `workbench.py`: public CLI, native execution and read-only telemetry replay.
+- `python/`: evidence/review owners, asset setup and explicit `verify_*.py` scenario scripts.
+- `native/`: the C# host and separate production/fixture build projects.
+- `tests/`: offline Python and optional JavaScript viewer tests.
+- `assets/`: pinned dependency/PNG manifests and source indexes; their bytes are unchanged by layout moves.
+- `fixtures/`, `scenarios/`, `suites/`: explicit test inputs; `examples/` contains authored examples and bound artwork.
+
+Run `python tools/workbench/workbench.py test` for the offline suite.
+Helper scripts run at their actual `python/` paths; there are no old-path forwarding modules.
+The native project is `native/ItemTestWorkbench.csproj`, with default output under
+`native/bin/Release/net8.0/`. Build receipts include the relocated C# sources,
+project files, asset indexes and production inputs, so relocation requires a fresh build.
+
+## Standalone native loader
+
+`loader-run` is the CPU path for native tModLoader autoload from separate
+DLLs or supplied `.tmod` archives. It needs no game client or saved world:
+
+```bash
+python tools/workbench/workbench.py loader-run \
+  --item /path/to/item.json --scenario /path/to/scenario.json --out /path/to/run
+```
+
+The first invocation builds the host and a separate production
+`InfiniCrafterLocal.dll` from the real mod sources. Later invocations can use
+`--no-build` while their build receipt remains valid. The usual reference DLL
+environment described below is required. Native metadata is held in memory;
+no archive is written. The process autoloads tML's built-in content and IFC,
+builds native hook tables and uses actual Player/NPC/Projectile updates with
+SystemLoader phases. It does not enumerate IFC gameplay handlers by name.
+The wrapper records the effective production metadata/assets in `receipt.json`,
+including an `INFINI_MOD_SOURCE_ROOT` override, and refuses evidence if those
+inputs change during the run.
+
+For a registered item use `--native-item WoodenBoomerang`, a native ID, or
+`--native-item ModName/ItemName` instead of generated JSON. Supply additional
+separately built mod DLLs and their source/content roots with repeatable `--mod`
+options, for example:
+
+```bash
+python tools/workbench/workbench.py loader-run \
+  --native-item ExampleMod/ExampleItem --scenario /path/to/scenario.json \
+  --mod /path/to/ExampleMod.dll /path/to/ExampleMod \
+  --mod /path/to/Dependency.dll /path/to/Dependency --out /path/to/run
+```
+
+Only run trusted mod DLLs/archives. They execute native mod code with the host
+process's permissions. The temporary save/world directory isolates test data;
+it is **not a security sandbox** for untrusted code.
+
+Each root must contain `build.txt` and the original content files. The loader
+orders supplied mods by their declared dependency names; CLI order need not
+match load order. Use repeatable `--mod DLL SOURCE_ROOT` for all additional mods.
+Declared dependencies, including weak references, must be loaded;
+unavailable ones are refused because this host does not emulate tML's separate
+mod assembly contexts and weak-dependency type filtering.
+Alternatively use repeatable `--tmod /path/to/mod.tmod` for original archives,
+including their dependencies. The loader keeps the original `TmodFile` open,
+uses its original `Info`, verifies its payload hash, and stages its unmodified
+managed DLL for the process. It refuses archives with embedded DLL references:
+the separate assembly contexts needed to resolve those correctly are not implemented.
+Source-root and archive inputs may be combined. The receipt hashes every archive
+before and after the run.
+
+This name-based dependency check does not validate dependency versions. For a
+source-root mod, the in-memory `Mod.File` contains metadata and localization
+rather than a complete original `.tmod`. Even with a genuine archive, asset
+readers and the client lifecycle are not initialized by this headless mode.
+Therefore a passing CPU scenario is not evidence that arbitrary mod content,
+resources or graphics will load correctly in the client.
+For a native mod NPC set `dummy.nativeType` to its exact `ModName/NpcName`.
+
+Pass `--server-mode` to keep tML's server network mode throughout mod loading
+and the CPU scene. This enables native server initialization for mods that
+register mounts without requiring client textures. The server uses the native dedicated-server local player index (255); the
+scene has no connected client and does not simulate a network session or
+client-side item firing. Primary and alternate use actions fail explicitly in
+this mode. Its report identifies the mode and these limitations. For a
+no-input server check of a registered item, use
+`tools/workbench/scenarios/server-native-item.json`; this tests
+loading and finite state, not an attack. The default remains the earlier
+single-player network mode.
+
+This path currently supports CPU scenes with aim/primary/alt/release, a bounded
+tile layout, a controlled vanilla target or a mod NPC with its native defaults
+and AI, plus the explicitly admitted assertions. Generated JSON must match the
+scenario `worldId`; it is not rewritten. Reports disclose skipped world,
+dust, gore, dropped-item and time phases and missing IFC mod dependencies.
+ParticleLibrary/Luminance DLL references are present, but their complete mod
+content and VFX lifecycle are not loaded by this path. This is not complete
+game/client, arbitrary dependency graph, melee geometry or visual parity.
+Unsupported scenario features fail explicitly; they do not fall back to the
+`run` executor. The `run` and rendering tools have their own explicit scope.
+
+`python/verify_native_loader.py` checks autoload and a missing-dependency control.
+`python/verify_loader_scene.py` checks real combat and effects plus independent hooks
+from `native/fixture-mod/WorkbenchObserverFixture.Standalone.csproj`. These are
+standalone child processes, without launching `Terraria.Main` or a server.
+`python/verify_multi_mod_loader.py` exercises separate dependent fixture assemblies,
+dependency ordering, missing/cyclic dependencies and the effects of each mod's
+hooks on combat.
+
+### Native mod animation diagnostics
+
+`loader-run --render` captures each **actual post-update frame** in the loader
+process, using real `Main.DrawProj` and `PlayerRenderer.DrawPlayers`. It does
+not replay manual AI/poses or reset animations between frames:
+
+```bash
+python tools/workbench/workbench.py loader-run \
+  --native-item ExampleMod/ExampleItem \
+  --mod /path/to/ExampleMod.dll /path/to/ExampleMod \
+  --scenario tools/workbench/scenarios/loader-native-grounded.json \
+  --render --player-assets /path/to/player-assets --out /path/to/native-run
+```
+
+Requires the same matching tML native libraries/PixelShader and pinned community
+player PNGs used by the existing native renderer. `INFINI_PLAYER_ASSET_DIR` can
+replace `--player-assets`. Mod textures must be actual PNG resources named by
+`ModItem.Texture` / `ModProjectile.Texture` in the supplied content roots or
+archives. Missing resources and unsupported `Terraria/` texture aliases fail;
+no weapon art, texture substitutions or binary assets are included.
+
+The output contains `native.json` with CPU snapshots and a `nativeRender`
+receipt, plus every 640×640 PNG under `native-frames/frames/`. The wrapper
+verifies every tick, decoded PNG and frame SHA-256 before accepting a passing
+render. The camera follows the actual player at zoom 1, on a neutral background
+with diagnostic white lighting. This is not the existing generated-item GIF
+probe, and does not claim complete `Main.Draw` ordering.
+
+The narrow draw path supports an unequipped starter player, ordinary visible
+native mod projectiles and the native held-projectile layer. It rejects
+custom `DrawBehind` overrides, hidden non-held projectiles, generated/vanilla
+content, equipment/mounts and server mode. NPC/world/dust/gore drawing, custom
+client effects, full client mod lifecycle and networking remain unsupported.
+Updates still execute in the standalone loader's dedicated mode; temporarily
+observing client drawing does not establish client-update parity. Authored draw
+hooks execute real mod code and can consume RNG or change mod state. The renderer
+restores its own temporary bindings/camera and native player draw geometry, not
+arbitrary hook side effects. Equality with a CPU-only run is verified for the
+supplied fixture, not guaranteed for an arbitrary mod. Draw exceptions
+(including ones swallowed by native drawing) produce an error, not a blank PASS.
+
+CPU snapshots now expose commanded input before `Player.Update`, resolved item
+timers/release state, player position/velocity/`gfxOffY`/composite arms and public
+projectile identity/AI fields after the full update. No weapon-private fields or
+additional gameplay hooks are queried. Draw receipts record actual shared `ProjectileLoader.PreDraw`
+entries separately: the native player layer can draw a just-expired held slot
+for one last frame even though it no longer appears among active projectiles.
+That native behavior is recorded, not repaired. For animation review, start from a settled
+scene: the supplied grounded example includes 45 **visible idle ticks** before
+input, standing at y=710 above a floor at y=752. These are not hidden warm-up
+updates and can be changed explicitly. Check the trace rather than attributing
+spawn/collision/`gfxOffY` shifts to a weapon's pose.
+
+Community asset version labels do not certify each source file. In particular,
+the pinned `MagicPixel` is 1×1000, not a one-pixel image. Its SHA and decoded
+geometry are reported unchanged. A custom thin-line draw should use an explicit
+1×1 source rectangle; the workbench does not replace the texture or repair mod
+`PreDraw` code. Official Terraria 1.4.4.9 byte identity remains unverified.
+
+`python/verify_loader_render.py` compares CPU/rendered snapshots and native hook counts
+for independent free/held fixture projectiles, verifies actual custom PreDraw
+pixels and negative draw/resource controls. This is fixture coverage, not proof
+that arbitrary dependency mods or weapons render faithfully.
+
+A separate local utility for exercising an **already generated InfiniCrafterLocal
+item JSON**, then inspecting its behavior with code and vision. Runs do not call an
+LLM or image API. The C# project links the mod sources from this checkout and uses
+actual installed Terraria/tModLoader assemblies—not a Python or JavaScript physics
+port. It does not modify the mod's gameplay implementation.
+
+This is a controlled test scene, **not a complete Terraria client/world emulator**.
+A passing scenario certifies only its assertions and admitted execution paths.
+See [support boundaries](SUPPORT_MATRIX.md) and [verification](VERIFICATION.md).
+
+## Prerequisites
+
+Run commands below from the repository root.
+
+- Python 3.11+; Pillow for native PNG inspection/GIF export. CairoSVG is additionally
+  needed for rasterizing the schematic SVG replay. The authored demo also uses the
+  existing [generator dependencies](../../generator/requirements.txt).
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
+- Matching [official tModLoader assemblies](https://github.com/tModLoader/tModLoader/releases)
+  and their managed dependencies. Local development exercised tML `v2026.08.3.0`
+  (Terraria 1.4.4.9); a different release requires revalidation.
+- ParticleLibrary and Luminance reference DLLs, using the layout below. Install the
+  pinned DLLs and original VFX resources together with
+  `python -m toolbox workbench setup-vfx`. The existing
+  [repository CI setup](../../.github/workflows/ci.yml) documents tModLoader
+  reference discovery after restoring the mod project.
+
+Set these to your own existing dependency directories:
+
+```sh
+export INFINI_TML_REFERENCE_DIR="/path/to/tml/references"
+export INFINI_TML_DEPS_SRC="/path/to/mod-dependencies"
+```
+
+Expected files:
+
+```text
+$INFINI_TML_REFERENCE_DIR/tModLoader.dll
+$INFINI_TML_REFERENCE_DIR/<other managed reference DLLs>
+$INFINI_TML_DEPS_SRC/ParticleLibrary/ParticleLibrary.dll
+$INFINI_TML_DEPS_SRC/Luminance/bin/Debug/net8.0/Luminance.dll
+```
+
+`DOTNET` can select a particular `dotnet` executable. `doctor` checks these basic
+prerequisites; it is **not** a graphics initialization or native execution test.
+
+```sh
+python tools/workbench/workbench.py doctor
+python tools/workbench/workbench.py build
+```
+
+## Capture a generated item without a scenario
+
+After the native and graphics prerequisites below are available, create an actual
+native-frame GIF in one command:
+
+```sh
+python -m toolbox workbench probe --item /path/to/definition.json --gif
+# Multiple items, both buttons, explicit aim/hold/ammo if relevant:
+python -m toolbox workbench probe --item /path/to/items/*/definition.json --gif \
+  --input primary alt --hold 120 --ammo 40:200 --aim 864 732
+# Published art outside the usual nearby directories:
+python -m toolbox workbench probe --item /path/item.json --gif --asset-dir /path/to/sprites
+# Vanilla controls need the verified vanilla item/projectile asset bundle:
+python tools/workbench/python/fetch_performance_assets.py --out artifacts/dependencies/vanilla-assets --items 98 368 --include-projectiles
+python -m toolbox workbench probe --vanilla-item Minishark --gif --ammo 97:200 --aim 930 730
+```
+
+The result prints each successful `gif` path and, when native player bounds are available,
+`closeGif`: a fixed 2× nearest-neighbor crop of the same recorded frames. The close
+view can omit distant action; the full GIF remains available. The original PNGs, native trace and
+HTML review are alongside it in `runs/<case>/`. Default capture uses a fixed
+side-view, up to 120 ticks of held input and 180 total ticks. Use `--hold`,
+`--ticks`, `--input`, `--action`, `--assert` and `--set` to express the desired
+interaction; ammunition is never guessed. `--gif-stride` samples only the GIF; by default it is selected to fit the GIF pixel budget and recorded in the plan and receipt.
+`--ammo ITEM_ID[:STACK]` puts explicitly selected vanilla ammo into slots 54–57
+(repeat for up to four types; default stack 100). Native admission checks the
+item type and maximum stack. `--aim X Y` sets the initial cursor in world pixels;
+later explicit aim actions can change it.
+Use `--target zombie` to test native zombie hit feedback with a stationary
+controlled target. For GIF capture, fetch its pinned community PNG once with
+`python/fetch_player_assets.py --out /path/to/player-assets --include-zombie` and set
+`INFINI_PLAYER_ASSET_DIR` to that directory. The target uses original
+`NPC.FindFrame` / `Main.DrawNPC`; its AI is disabled, hitbox is set to 32×48,
+and life is set to 10,000 by this controlled scenario. It does not simulate
+world AI or natural spawning.
+When no `--input` is given, an item whose authored bindings exclusively specify
+`equipped` / `equip_passive` uses `equip`; other items use `primary`. The selected
+input is shown in the plan. Explicit `--input` always takes precedence.
+`--plan` shows the actual scene and resolved art without running or writing;
+`--prepare` creates a suite without running, but art paths remain external and
+must still exist at execution. Check the native results and event counts: default
+`no_nonfinite` does not certify an attack, hit or item behavior.
+
+The selected authored PNGs are found by publication name beside the item, in
+nearby `sprites`, `cache/sprites`, or `art/game_ready`, and in repeatable
+`--asset-dir` directories. Missing or conflicting files stop the run; the native
+renderer still validates publication identity and actual image bytes. It draws
+native player/item, training dummy and supported VFX on a neutral background; this
+is **not a complete Terraria scene**. The capture requires the dummy assets from
+`python/fetch_player_assets.py --include-dummy`.
+Unsupported content refuses rather than silently substituting a schematic frame.
+
+A world-scoped item with a nonnumeric world ID cannot match Terraria's integer
+world ID. For a deliberate isolated test, `--test-world-id 12` saves the original
+input beside a test copy and changes only that copy's `recipeMeta.worldId`; the
+plan records old and new values. This is not required for normal numeric world IDs.
+Vanilla GIFs use the complete pinned Projectile/Extra source index. Provision the
+actual textures needed by the native draw path; missing or changed resources fail,
+and hidden bodies are drawn only through their observed native held-owner calls.
+Other hidden/world passes remain unimplemented. Excalibur is ItemID 368.
+
+`doctor` shows dependency and graphics readiness and selected paths. It can discover
+standard Steam/tML paths and `artifacts/dependencies` assets; explicit environment
+variables override discovery. Set `INFINI_TML_DIR` to a tModLoader install for
+native/content discovery, or set the documented individual paths. `setup-vfx` supplies
+Luminance textures in the discovered dependency root; an explicit
+`INFINI_LUMINANCE_ASSET_DIR` takes precedence. Rendering still requires Linux OpenGL and the actual
+resources in the native graphics section. A missing dependency or unsupported
+render is an error, not a successful capture.
+
+The artwork observer verifies current `role--digest.png` publications with the
+same world/item/role + request-identity + exact-PNG digest as
+`generator/infini_local/storage/image_store.py`. Only current indexed publications
+are staged and certified for native loading; historical names, arbitrary filenames
+and renamed/tampered PNGs are refused.
+
+## Fast agent workflow
+
+For your own item, start with `probe`. It prepares the scene and suite and invokes
+the existing native runner; no helper Python script or handwritten manifest is needed.
+
+```sh
+# One item, one click, full native Player.Update, compact reports.
+python -m toolbox workbench probe --item /path/item.json
+# Several items × explicit inputs. Shell globs expand into separate inputs.
+python -m toolbox workbench probe --item /path/items/*.json --input primary alt \
+  --out artifacts/my-probes
+# Hold alternate for 90 ticks, release, observe until tick 179.
+python -m toolbox workbench probe --item /path/item.json --input alt --hold 90 \
+  --assert '{"kind":"entity_spawn_count","entityId":"my_projectile","value":1}'
+# Repeated clicks every 30 ticks, with a real release after each press.
+python -m toolbox workbench probe --item /path/item.json --repeat 30 \
+  --assert dummy_damaged --set dummy.x=840 --set tiles.0.tileY=44
+# Inspect the exact matrix/scenarios without an SDK, building, running or writing.
+python -m toolbox workbench probe --item /path/item.json --input primary alt --plan
+# Prepare a portable suite, including byte-identical item copies, entirely offline.
+python -m toolbox workbench probe --item /path/item.json --prepare --out artifacts/prepared
+python -m toolbox workbench suite artifacts/prepared/suite.json --out artifacts/prepared-runs
+```
+
+The default [probe scene](scenarios/probe.json) is a controlled floor and target,
+180 ticks, seed 1, full player loop, one primary press at tick 0 and release at tick 1.
+Its **only default assertion is `no_nonfinite`**. Exit 0 alone does not demonstrate
+damage, successful input, correct mechanics or visuals. Add `--assert KIND` or
+`--assert '{"kind":..., ...}'` for the behavior you intend to verify. Assertions and
+native admission are still owned by C#, including unknown-kind/field refusals.
+
+`--input primary alt idle equip` selects an explicit item × input matrix; an
+unsupported binding remains an error. `--hold N` changes the press-to-release
+interval; `--repeat N` sets the interval between presses. Repeat must exceed hold,
+every release must fit inside `--ticks`, and the native 256-action/128-case limits
+are checked before execution. No per-tick alternate-input script is required.
+Use `--start`, `--ticks` and `--seed` to control timing and reproducibility.
+
+`--set dotted.path=JSON` edits the scene, including array indices, without touching
+the item. For example, supply ammunition explicitly with
+`--set 'inventory=[{"slot":54,"itemId":97,"stack":100}]'`, or use
+`--mode client_hybrid` for admitted client contact. `--mode client_vfx` requires
+explicit `--set 'nativeRender={...}'` settings and the existing graphics/assets
+setup. `--action '{"kind":"aim","tick":0,"x":850,"y":700}'` appends a native
+action; same-tick additions follow generated press/release actions in supplied
+order. Missing intermediate objects must be set as objects first. The item is
+never rewritten to remove VFX or bypass native admission, and ammo, assertions,
+mechanics and retries in another mode are never inferred from item names.
+
+Explicit negative controls use the same exact suite expectation contract, e.g.
+`--assert dummy_damaged --expect '{"status":"failed","failedAssertions":["dummy_damaged"]}'`.
+The expectation applies to every selected case. A crash or an extra failed assertion
+cannot satisfy it. Use separate commands or an explicit suite for differing expectations.
+
+Without `--out`, execution/preparation chooses a fresh timestamped directory under
+`artifacts/workbench`. It contains `suite.json`, `probe-plan.json`, `inputs/` and,
+after execution, `probe-result.json`, `runs/summary.json` and each case's native trace
+and agent report. The probe result includes original item paths and authored display
+names, so a batch of files all named `item.json` remains distinguishable. Case
+`observations` include native spawn/use/ammo event counts, separate projectile and
+item-body hit/damage totals and resource endpoints. Zero recorded shots stay zero
+even when the selected finite-state assertion passes; supply ammo and assert the
+behavior you actually want to check.
+The emitted manifest uses relative paths and survives moving the prepared directory.
+Run all cases with one build; failures do not stop later cases. `--no-build` retains
+the existing stale-build refusal. `--prepare` means **native notRun**, while `--plan`
+is read-only and creates no directory. These conveniences use the existing isolated
+native host; the separate tModLoader-process prototype has its own launcher.
+
+All commands also work through `python -m toolbox workbench`. `catalog`, `report`
+and `suite --plan` are offline/read-only unless an explicit report output
+is requested. They need no game install, SDK or API credentials.
+
+```sh
+# Discover actual supplied scenarios and their complete assertion requests.
+python -m toolbox workbench catalog
+# Validate/list the portable native smoke matrix without building or writing.
+python -m toolbox workbench suite tools/workbench/suites/smoke.json \
+  --out artifacts/smoke --plan
+# Build once, write synthetic fixtures through C#, run the controls.
+python -m toolbox workbench suite tools/workbench/suites/smoke.json \
+  --out artifacts/smoke
+# Read compact results without dumping thousands of snapshots.
+python -m toolbox workbench report artifacts/smoke/straight
+```
+
+Each `run` now writes `agent-report.json` and `agent-report.md` alongside the raw
+inputs, `native.json`, `run.json` and process logs. Inspect `nativeStatus`, failed
+assertion **requests**, `integrity`, coverage, first event ticks and failure context.
+Final assertions do not identify a causal tick: only explicit native invariant
+evidence sets `observedFailureTick`; otherwise context points to the last tick or
+an assertion's requested tick. No event or cause is invented from the artwork.
+
+`run.json` separately records `nativeExitCode`, `nativeStatus`, wrapper `exitCode`
+and review export status. Exit 0 without a valid terminal trace is refused. Missing
+frames or failed optional exports preserve the native outcome and logs but return
+wrapper error 2. `--timeout 180` bounds native execution (allowed 1..3600 seconds).
+`--review none` omits replay export for batch work; it **does not** disable native
+rendering/capture requested by the scenario. `--review native` exports the exact PNG
+viewer directly; `--gif-stride` applies to that viewer's GIF. Default review remains
+`schematic`; `--png` selects schematic rasterization, not original game pixels.
+
+For an authored graphics run, export a bounded, labelled vision contact sheet:
+
+```sh
+python -m toolbox workbench report artifacts/my-run \
+  --out artifacts/my-run/agent-review --contact-sheet
+```
+
+`vision.png` contains at most 12 recorded native frames, prioritizing start/end,
+first events, observed transitions and available neighboring ticks. `vision.json`
+records original frame hashes/ticks. Only thumbnail scaling and labels are added;
+no schematic substitution or intermediate animation is generated. Use the complete
+`native-review` viewer/raw PNGs for omitted ticks. Visual approval remains a task
+for the reviewing agent, never a conclusion of a hash check.
+
+### Saved-run audit
+
+Reports validate native trace structure, archived input/trace hashes, process status
+and any recorded PNGs. The original checkout, original source paths and installed
+game are not required to inspect a copied run directory. `verified` means internal
+archive consistency, **not authentication, current source freshness or visual/game
+approval**. Old/direct traces without all receipts remain `unverified`; changed or
+inconsistent evidence is `invalid`. Missing current source/dependency installations
+do not invalidate a portable archive. `--no-build` still checks the current build
+before executing.
+
+| Command | Exit 0 | Exit 1 | Exit 2 |
+|---|---|---|---|
+| `run` | Native assertions passed, requested evidence exported | Native assertions failed | Refusal, timeout, bad evidence or export error; inspect separate native status |
+| `report` | Read/export succeeded; inspect `nativeStatus` and `integrity` | — | Invalid evidence or command/export error |
+| `suite` | Every explicit expectation matched | At least one mismatch | Setup/manifest error |
+
+### Your own scenario matrix
+
+Use the checked-in [smoke suite](suites/smoke.json) as the manifest format. Paths
+resolve relative to that **manifest**, independently of the caller's working
+directory. A case has a unique safe `name`, exactly one `item` path, `vanillaItem`
+name/ID string or `fixture` filename, a `scenario` path, and explicit `expect`.
+Optional `itemBoundary`, `review`, and `timeout` select existing owner behavior.
+All cases are planned before execution, built once and run in
+separate processes; failed cases do not stop later controls. Summary checkpoints
+retain `passed: false` until the entire matrix finishes.
+
+```json
+{
+  "schemaVersion": 1,
+  "cases": [
+    {"name": "primary", "item": "item.json", "scenario": "primary.json", "expect": {"status": "passed"}},
+    {"name": "miss-detector", "item": "item.json", "scenario": "miss.json", "expect": {"status": "failed", "failedAssertions": ["dummy_damaged"]}}
+  ]
+}
+```
+
+An expected failure must match the **exact multiset** of failed native assertion
+names; an additional nonfinite failure or a process crash cannot satisfy a miss
+control. Expected refusals use `{"status":"error","errorContains":"specific native reason"}`.
+Their process status, valid trace, archive and error substring must all agree.
+Suite success certifies the detector expectations, not health of negative items.
+The five-case smoke is bounded infrastructure coverage, not all-item certification;
+the specialized `verify_*.py` matrices remain available for their wider scenarios.
+
+## First run: no generated artwork required
+
+This exports explicitly synthetic fixtures using the native executable, then runs
+one through actual item use, projectile update, collision and lifetime code:
+
+```sh
+python -m toolbox workbench fixtures --out artifacts/workbench-fixtures --no-build
+python tools/workbench/workbench.py run \
+  --item artifacts/workbench-fixtures/synthetic-straight.json \
+  --scenario tools/workbench/scenarios/primary.json \
+  --out artifacts/straight-run --no-build
+python tools/workbench/workbench.py inspect artifacts/straight-run/native.json --summary
+```
+
+Use a **new output directory** for each run. `--no-build` requires matching recorded
+build provenance; it is not permission to execute a stale binary after source edits.
+The source pin includes bundled `lib/` DLLs and notices, independently of copied
+runtime DLL hashes; changing or removing either source or output invalidates the build.
+To test your own item, replace `--item` and choose assertions appropriate to its
+contract. Saved cache JSON uses `--item-boundary local_cache`, which invokes the
+production cache reader and records its normalization receipt. It does not rewrite
+the input file. A supported vanilla control can instead use
+`--vanilla-item WoodenBoomerang` with `scenarios/full-vanilla.json`.
+
+The C# CLI is also available directly:
+
+```sh
+dotnet tools/workbench/native/bin/Release/net8.0/ItemTestWorkbench.dll \
+  --item /path/to/item.json --scenario /path/to/scenario.json \
+  --output artifacts/direct-run/native.json
+```
+
+The Python wrapper adds source/dependency/input hashes and output-directory checks;
+prefer it for reproducible evidence. Native exit codes: **0 passed, 1 assertion
+failure, 2 error/refusal**. Missing dependencies or unsupported behavior are not PASS.
+
+## Execution modes
+
+Set `playerUpdate` in the scenario; see existing `scenarios/*.json` for action and
+assertion syntax. Unknown commands and unsupported requested paths fail closed.
+
+| Mode | Actual execution | Important boundary |
+|---|---|---|
+| `item_check` (default) | `Player.ItemCheck`, registered generated types, native projectile/NPC updates | Not the full player movement/buff/equipment loop |
+| `full` | Original `Player.Update`, native physics, regeneration and supported ModPlayer/equipment clocks | Controlled world and target; no GPU rendering |
+| `client` | Client player/use-style/item contact with a real loaded proxy texture | Restricted pure generated item-body contact |
+| `client_hybrid` | Client player/projectile/scheduler, supported contact and child effects | Restricted no-authored-VFX combinations |
+| `client_vfx` | Client combat plus original supported VFX update/draw paths | Requires real graphics/dependency resources; optional artwork/player/dummy modes below |
+
+A full-player scene needs an explicit floor in `tiles`; otherwise the player really
+falls. Ordinary fixture targets intentionally override NPC geometry/AI. The separate
+`dummy.mode: "native_training_dummy"` uses genuine tile placement, tile entity and
+NPC defaults instead. It requires the explicit player/artwork mode and dummy assets.
+
+Client hybrid/VFX admission also covers `on_hit` native status and pull actions
+on item bodies and generated projectiles. `python/verify_hit_status_pull.py` exercises
+actual native contact, NPC buff presence/expiry, miss and no-callback controls,
+and native pull versus an otherwise identical target. This is not a multiplayer
+or arbitrary event-timing claim; other unproven callback combinations still refuse.
+Controlled targets default to `knockBackResist: 0` (immune to knockback/pull).
+A scenario may explicitly set `dummy.knockBackResist` in `0..1` to test a
+susceptible target; the value is assigned to the native NPC, not simulated motion.
+Genuine training-dummy mode does not accept this override.
+
+Rendered `hurt_player` stimuli require native player and native dust drawing.
+The stimulus runs original `Player.Hurt` in a scoped client phase, restoring
+`Main.dedServ` afterward, so real equipment `PostHurt` VFX are not suppressed by
+the stand's CPU phase. Rendered hostile-death stimuli remain unadmitted.
+Native item `ExtraBuffs` rendering is restricted to proven `Gravitation` and
+`Sonar`: native `Player.Update` owns their flags, expiry and gravity controls.
+Pets and other unproven buff presentation still refuse; sonar's fishing UI is
+not certified by the controlled no-fishing scene.
+`python/verify_rendered_player_effects.py --item ITEM --scenario SCENE --kind hurt|buff`
+(with `--buff-id 18|122` for buffs) retains original inputs and compares native
+positive/no-use or no-hurt/vanity controls, plus explicit refusal controls.
+The short-expiry buff counterpart is synthetic test data, not a changed craft.
+
+### Controlled passive-accessory movement
+
+CPU `full` scenes may equip one native passive accessory with the same existing
+`equip` / `vanity` / `unequip` commands as generated equipment. Native
+`Player.Update` owns all effects, acceleration and braking; native accessories
+are not admitted as damage weapons or rendered equipment by this extension.
+Movement snapshots expose the actual `accRunSpeed`, `maxRunSpeed`,
+`runAcceleration` and `runSlowdown` fields, but these fields are not a measured
+maximum speed. Measure actual `vx`, displacement, plateau and stopping distance.
+
+Optional `worldWidthTiles` is bounded to100..400 for full-player scenes; default100
+is unchanged. Native world's side margins make the old100-tile scene too short
+for sustained running. A wider real tilemap prevents that boundary confound;
+it does not change movement physics. `python/verify_accessory_movement.py` checks native
+Hermes/Frostspark equip, vanity/inventory equivalence, actual acceleration/plateau/
+braking, unchanged default width and invalid-width/input refusals. No shoe-art,
+full world, ice/flight or multiplayer parity is implied.
+
+## Authored native air jumps
+
+Full-player modes register the production `GeneratedAirJump` **before** creating
+`Player`, then load/unload the original `GeneratedAirJumpLifecycleSystem` around
+the scene. Native `Player.Update` owns equipment grants, grounded refresh,
+`ExtraJumpLoader` consumption, `JumpMovement`, held duration and downstream
+physics. The stand does not refill charges, assign jump velocity or emit VFX.
+The separate full-mod-loader mode retains its own normal content autoload.
+
+Use explicit `controls` press/release actions after `equip` (or the item's actual
+buff activation). An ordinary ground jump is not an authored extra jump.
+Snapshots now distinguish these observations:
+
+- `native_jump_movement`: original movement entry/exit, ground-start detection,
+  actual extra-start flag, and shared native jump-speed restoration;
+- `native_extra_jump_started`: returned production `GeneratedAirJump.OnStarted`,
+  native duration, impulse and remaining availability;
+- `native_air_jump_vfx_dispatch`: returned production `EmitAndSyncJump`. This is
+  a dispatch observation, **not** proof of emitted particles or visible pixels.
+  Use `nativeRender.snapshots`, native PNGs and a no-VFX control for that claim.
+
+Leave real headroom: the native world's top player margin is 656px, so the short
+probe floor at tile47 can clip a multi-jump capture. The synthetic regression uses
+floor tile100, player top Y1558 and camera Y1150, without overriding native bounds.
+Adapt framing to the generated item's actual motion rather than changing it.
+
+```sh
+# CPU registration/hold/ground-only/no-input/vanity controls.
+python tools/workbench/python/verify_air_jumps.py --out /new/cpu --no-build
+# Authorized offscreen original native player + on_jump libraryParticle draw;
+# adds an otherwise identical no-VFX control and exact PNG difference checks.
+python tools/workbench/python/verify_air_jumps.py --out /new/render --no-build --render
+```
+
+`--native-dll /private/build/ItemTestWorkbench.dll --no-build` selects an isolated
+build; retain its independent source-build receipt. Ordinary runs should use the
+normal wrapper's build-state checks. The regression creates explicitly synthetic
+fixture PNGs and no model calls; it never rewrites the user's generated item.
+Ground-only, no-input and vanity controls must emit zero jump particles; the two
+extra jumps must produce native callbacks and visible original VFX, then expire.
+This is standalone native scene evidence, not a full game or multiplayer test.
+
+## Actual pixels versus schematic replay
+
+`render`, `frame` and the run's `review/replay.html` visualize recorded positions and
+collision boxes. They are **schematic telemetry replay, not game rendering**.
+
+`native-review` consumes actual native-rendered PNGs and pairs each with its recorded
+tick, input, events, resource state and draw provenance:
+
+```sh
+python tools/workbench/workbench.py native-review artifacts/my-run/native.json \
+  --out artifacts/my-run/native-review --gif
+python tools/workbench/workbench.py inspect artifacts/my-run/native.json --tick 30 --events
+python tools/workbench/workbench.py timeline artifacts/my-run/native.json \
+  --out artifacts/my-run/clocks.svg
+```
+
+Open the generated `native-review/native.html`. PNG hashes/dimensions and trace
+completeness are validated. GIF export assembles recorded images; it does not invent
+intermediate physics. `--gif-stride 2` samples only the GIF, leaving the HTML/trace
+complete. Viewer charge indicators and observed-state bookmarks are telemetry, not
+claims that the original game's HUD or audio was rendered.
+
+### Native graphics and resources
+
+The implemented offscreen graphics setup targets **Linux SDL/FNA/OpenGL**, including
+software Mesa. Other platforms are not certified by this setup. Install a working
+OpenGL/Mesa stack and expose the official tML native libraries and content:
+
+```sh
+export INFINI_TML_NATIVE_DIR="/path/to/tModLoader/Libraries/Native/Linux"
+export INFINI_TML_CONTENT_DIR="/path/to/tModLoader/Content"
+python -m toolbox workbench setup-vfx
+python tools/workbench/python/fetch_player_assets.py \
+  --out artifacts/dependencies/player-assets --include-dummy
+export INFINI_PLAYER_ASSET_DIR="$PWD/artifacts/dependencies/player-assets"
+```
+
+The VFX setup downloads pinned original DLLs and upstream resources, verifies the
+DLL and ParticleLibrary SHA-256 hashes and the Luminance texture Git blob identities,
+and refuses to overwrite mismatched existing files. Its default location is
+`artifacts/dependencies`, or `INFINI_TML_DEPS_SRC`
+when set; `--deps-root` selects another root. Set `INFINI_TML_DEPS_SRC` to that
+custom root for subsequent commands. The setup does not install .NET or tML and
+does not establish that the renderer initialized successfully.
+`setup-particle` and `setup-luminance` can also install the two packages separately.
+To use an existing matching DLL, the separate `python/fetch_vfx_assets.py --particle-dll
+DLL --out DIR` remains available. The player fetcher downloads 20 pinned **community
+source PNGs**, or 22 with `--include-dummy`, not HD upscales. These are labelled
+1.4.4.9 upstream but are not certified against official game XNB bytes. Both fetchers
+verify hashes/sizes and refuse mismatches/symlinks instead of silently overwriting.
+Game assets and external dependency binaries are **not bundled** with this utility.
+
+For `client_vfx`, `nativeRender.drawArtwork: true` requires explicit
+`artworkFiles`: genuine PNGs matching the item's selected publication identities.
+Missing/wrong artwork is refused, not replaced by an invented sprite.
+`drawPlayer: true` adds the actual starter player via original player draw layers,
+loads genuine MagicPixel/PixelShader resources, and enables full projectile hooks.
+Without that mode, the authored projectile draw-core path remains explicitly partial.
+The inventory preview is a separate thumbnail, not a second world item.
+
+For admitted procedural shapes, contours or native dust on a mechanical/no-image
+item, explicitly select the procedural VFX-only path:
+
+```sh
+python -m toolbox workbench probe --item /path/item.json --mode client_vfx \
+  --set dummy.x=840 \
+  --set 'nativeRender={"drawProjectileVfx":true,"drawNativeDust":true,"cameraX":650,"cameraY":550}' \
+  --assert dummy_damaged
+```
+
+This loads verified native MagicPixel/Dust/shader resources via the existing
+`INFINI_PLAYER_ASSET_DIR` / `INFINI_TML_CONTENT_DIR` setup. It calls the original
+under/over projectile VFX passes and detached wrapper without drawing or inventing
+missing authored sprites. `drawProjectileVfx` and `drawArtwork` are separate explicit
+choices; artwork mode already owns its full PreDraw. Active draw runs with
+`capture:false` too; capture selects PNG export only. This procedural-only mode
+does not admit `historyTrail` or authored material assets.
+
+The current projectile `historyTrail` lane requires **`drawPlayer:true`**
+(and therefore `drawArtwork:true`, exact publication PNGs and native player resources).
+It admits `stroke`/`center`, plus `sprites`/`center` with `pose:"sampled"` and
+`texture.source:"entity"`. The latter uses the actual published entity texture and
+recorded native sprite pose, not a stand substitute. Other texture selectors,
+current-pose sprite trails and projectile tip trails remain unadmitted by this
+bounded lane. Partial authored draw-core and procedural-only scenes refuse it.
+`activeProjectileVfx.historyTrailDraws` records original SpriteBatch submission
+counts and geometry per slot. `heldHistoryDraws` independently records final native
+held DrawData samples and submitted geometry. Totals are reported separately as
+`historyTrailSubmittedSegments` and `heldHistorySubmittedSegments`. A stationary
+history can correctly submit zero segments. Admission or a PNG hash alone is not
+visual approval.
+
+`python/verify_projectile_sprite_history.py --no-build --out <new-directory>` exercises
+native sampled rotations, exact texture dimensions, pixel difference against the
+same no-trail item, gameplay/capture parity, expiry, deterministic fresh-process
+reset, missing-publication refusal and unsupported-pose/no-draw controls. This is
+synthetic capability evidence, not a generated item's gameplay verdict.
+
+Particle resource readiness uses each selected `slot.particle.textureId` through
+the production texture registry and drains the native main-thread queue per
+distinct path. `nativeRender.readyLibraryTexturePaths` lists the paths actually
+prewarmed; no particle slots means no invented particle texture. Missing selected
+resources fail explicitly instead of substituting Star/WhitePixel. The existing
+Star/effect resource prerequisites and receipts remain in force. VFX-only scenes
+also require `Images/MagicPixel.png` through `playerAssetRoot` or
+`INFINI_PLAYER_ASSET_DIR`: only that pinned PNG is decoded by the original native
+PngReader, scoped and restored, without loading or drawing player artwork. Its
+receipt is `nativeRender.magicPixelResource`; no synthetic white texture is used.
+When a Luminance texture is selected, the renderer registers its original resource
+tree without running Luminance gameplay hooks. Missing resources cause a refusal.
+
+Reusable current native controls:
+
+```sh
+python tools/workbench/python/verify_history_trail.py --no-build \
+  --out artifacts/history-controls
+```
+
+This matrix exercises synthetic stroke/center `historyTrail` through full native
+PreDraw, moving/stationary histories, both selected Star/solidPixel particle
+resources, a native training dummy plus an invisible moving hostile,
+capture-disabled parity, repeat pixels, missing selected texture and partial/
+procedural refusal controls. It requires the existing dummy assets
+(`--include-dummy` setup above). For authored inputs, use `workbench run` with an
+explicit full-artwork scenario and the exact selected publication PNGs; this
+synthetic matrix does not rewrite or certify an authored item.
+
+Controlled `hostiles` remain **unrendered**. Only their `NPC.UpdateNPC` runs with
+`dedServ:true`, omitting client FindFrame/artwork; a scoped restore also covers an
+exception. Training-dummy client AI/frame and subsequent native client projectile,
+damage, VFX and render phases are unchanged. `execution.controlledHostiles` and
+the individual native phase events disclose this intervention. This is not
+visible-enemy or complete NPC/client parity.
+
+`drawNativeDust: true` runs original `Main.DrawDust` after the player pass. Because
+that method can retire dust, **`capture: false` still executes the GPU draw lifecycle
+in dust mode and skips only PNG export**. In earlier modes without native dust,
+`capture: false` skips drawing. Read the report's explicit lifecycle/export flags.
+Camera and one-render-per-tick cadence are part of this controlled scene.
+
+## Public authored example
+
+[The Lunar Harpoon example](examples/lunar-harpoon/README.md) contains assistant-authored
+Author/Visual/VFX inputs and invokes the production compiler. Its supplied image was
+created with image generation, then normalized through the existing asset pipeline.
+This is not a claim that the complete mod LLM pipeline generated the example. Follow
+its build instructions; replay requires no LLM API key.
+
+## Agent review loop
+
+1. Read the item and choose expected assertions **before** running it.
+2. Keep the unchanged input, scenario, native trace, receipts and real frames together.
+3. Check status, coverage, unsupported paths and failed assertions before vision review.
+4. Inspect actual event/state ticks, not just the final frame or final mana balance.
+5. Run a negative control, such as moving the target away while retaining a hit assertion.
+6. Re-run both cases after a change. Do not relax assertions merely to obtain green output.
+
+See [VERIFICATION.md](VERIFICATION.md) for portable checks and interpretation.
+
+### Camera and controlled lighting diagnostics
+
+`nativeRender.lightingMode` accepts `legacy_point` (default native white point at
+ tile 50,45) or `viewport_fill` (explicit diagnostic white native lights on a
+ four-tile grid). Both use **original** `Lighting.AddLight/LightTiles`. The processed
+ region now follows the actual camera/zoom matrix, with a 16-tile margin clipped
+ to the initialized world, rather than a fixed Y=32..56 band. This is controlled
+ test illumination, not Terraria world-light parity; the fill mode is opt-in.
+
+Every captured PNG's frame record includes `scene`: the camera, native-transformed
+ player/projectile collision bounds, `hitboxIntersectsViewport`, and sampled
+ `centerLightRgb`. This separates an off-camera or dark object from a missing
+ spawn. Hitbox overlap and a draw call do **not** prove visible sprite pixels,
+ complete VFX coverage, grip correctness or visual quality. Review original PNGs.
+ The camera does not auto-follow or change gameplay; enlarge/reposition it in the
+ explicit scenario when an intended lifecycle leaves the viewport.
+
+### Authored material textures and on-hit shapes
+
+The original current renderers admit `spriteElement` and `texturedPath` when
+`drawArtwork=true`. Supply the exact selected VFX PNG files alongside item/entity
+files in `artworkFiles`; unrelated files still refuse. VFX files are checked
+against the current world/item/`vfx_<assetId>` scope, exact `[recipeId, assetId]`
+request identity and PNG bytes (`vfx_<assetId>--digest.png`). Missing, substituted or incorrectly named bytes do not pass
+admission. On-hit sprites use an explicitly authored `spriteElement`; a ring is an
+explicit world-attached arc `shape`, not a separate renderer or legacy texture role.
+
+Native snapshots expose current `records` (material/ParticleLibrary state and
+selected texture paths), material `paths` histories/geometries, `shapes` and
+`contours`. A record proves state exists, not that it was drawn or visually
+approved; inspect corresponding original PNGs and renderer coverage separately.
+`python/verify_hit_feedback.py` observes current on-hit material/arc records,
+native NPC hit dust and real PNG differences against its synthetic-effect ablation.
+
+In `client_vfx` with `drawNativeDust=true`, `native_npc_hit_effect` events observe the original
+`NPC.HitEffect` call, including its vanilla and NPCLoader hooks. They record
+the target and the dust slots newly active during that call; the observer does
+not create dust. A training dummy can legitimately produce no such dust, while
+the controlled `dummy.nativeType: "zombie"` exercises native NPC hit effects.
+`nativeRender.drawZombie=true` also draws its verified source PNG through the
+original NPC renderer; its controlled, stationary AI is not a full NPC simulation.
+
+### Equipment reactions and secondary targets
+
+CPU `playerUpdate: "full"` admits a single authored head/body/legs armor item or
+accessory via `equip`, `vanity`, and `unequip`. The instance moves, rather than
+being copied. Armor uses its actual generated armor proxy and native equip-slot
+registration; `Player.Update` owns effects and reset. `player_stat_at` also accepts
+`genericCrit` (including the native baseline).
+
+Reaction scenarios can schedule `{"tick":5,"kind":"hurt_player","damage":10}`
+or `{"tick":5,"kind":"strike_hostile","damage":10}`. They run **after** that
+tick's native player update, so functional equipment registration, defense,
+immunity, death credit and cooldowns are real. `strike_hostile` allocates a declared
+one-HP, stationary Zombie fixture in slot 1 and calls `Player.StrikeNPCDirect`;
+`GeneratedEquipmentKillGlobalNPC` is registered in the actual native loader.
+Native death callbacks and player damage are recorded. The controlled hostile uses
+an explicitly empty native loot table: this tests kill/reaction hooks, not vanilla
+loot, enemy AI, graphical enemy death or multiplayer. A live previous hostile is
+never silently overwritten. These stimuli are not admitted in rendered modes.
+
+Optional `hostiles: [{"x":960,"y":700,"life":10000}]` provisions up to eight
+additional stationary controlled Zombies in slots 2–9. They retain native geometry,
+NPC updates, collision and damage hooks, but have disabled AI/gravity/contact damage
+and zero defense/knockback. Their snapshots let a scenario distinguish secondary
+projectile targeting from a hit on the first dummy. This is not NPC-AI certification.
+
+```sh
+python tools/workbench/python/verify_equipment_reactions.py --out artifacts/equipment
+# For an independently source-built native executable, preserve its build receipt:
+python tools/workbench/python/verify_equipment_reactions.py --out artifacts/equipment \
+  --no-build --native-dll /path/to/ItemTestWorkbench.dll
+```
+
+### Native placement and mining world scenes
+
+`world.trackTiles` selects explicit `{tileX,tileY}` cells for native telemetry.
+Optional `world.walls` initializes bounded vanilla wall rectangles with `tileX`,
+`tileY`, `width`, `height`, `wallId`; `tiles` still supplies Dirt terrain.
+The scene loads Terraria's actual second tile/NPC metadata initializer, the
+production placement ledger and its native `GlobalTile.CanDrop` callback, plus
+native NBT bool serialization. It does not implement a parallel material ledger.
+
+- `tile_target` sets the native tile target and mouse coordinates. Subsequent
+  `primary`/`alt` runs real `Player.Update`/`ItemCheck`, `PlaceThing` or mining hooks.
+- `break_tile` calls original `WorldGen.KillTile` as an **external break stimulus**.
+  It is not evidence that a player mined the object. Primary pickaxe tests use
+  ordinary input instead and observe the actual native tile removal.
+- `tile_at`, `placement_groups_at`, `placement_pending_at` and
+  `generated_world_items_at` assert native state at an explicit post-update `tick`.
+  `tile_at` requires `tileX`, `tileY`, `hasTile` and, for a present tile, `tileId`.
+  Count assertions require `value`. Assert stack debit separately with
+  `generated_stack_at`; an observed world item count alone is not conservation.
+- Snapshots include exact tile frames, pending/quarantined return counts and
+  returned generated-item definition hashes. `GeneratedPlacementLedgerSystem`
+  performs real post-world maintenance and `Item.NewItem` allocation.
+
+```sh
+python tools/workbench/python/verify_world.py --out artifacts/world-controls
+```
+
+The synthetic controls cover native campfire placement/last-unit debit, full
+footprint removal, repeated break without duplicate return, a deliberately wrong
+return count, native pickaxe mining versus no use, and an out-of-world refusal.
+Placement lifecycle tests use `full` (dedicated visual branch); mining/contact uses
+`client`. These controls do not certify placed-body artwork, wall breaking,
+chests, arbitrary vanilla tiles, wiring, multiplayer, or the client renderer after
+consuming the final held unit. World maps are disabled in this controlled scene;
+map UI and full world ecology are not simulated.
+
+### Resource, entity and long-lifecycle checks
+
+`itemStack` provisions the actual generated item instance (default 1, bounded by
+its native `maxStack`). Native `ItemCheck` owns consumption; the bench does not
+subtract stacks. Arrow, bullet, flare, fallen star and solution inventory go through native ammo selection.
+`python/verify_solution_ammo.py` checks native Green Solution payment/source identity,
+no-ammo and wrong-category refusals, with an existing bullet control. It may also
+exercise an intact authored solution item via `--item`; this does not certify
+terrain conversion, other ammunition categories or generated ammo items.
+Headless scenarios accept up to 14,400 ticks; rendered captures remain bounded to
+600. This permits full multi-minute field expiry without increasing image budgets.
+
+- `entity_spawn_count` counts distinct observed configured native lifetimes.
+- `entity_hit_count_at_least` counts actual projectile hit callbacks;
+  `entity_hit_count` requires an exact count, including zero. Both accept an
+  optional `npcId` native slot filter (dummy: 0, controlled `hostiles`: 2 onward).
+  For example, `{"kind":"entity_hit_count_at_least","entityId":"arrow","npcId":2,"value":1}`
+  checks that the arrow actually hits the first downstream hostile. Child
+  allocations, hits by a parent, or hits on a different target do not satisfy it.
+  A spawn-only assertion cannot certify a hit-triggered projectile's usefulness.
+- `entity_peak_active_at_most` checks native snapshots and configuration-time
+  counts, including allocations between snapshots. All take `entityId` and `value`.
+- `entity_inactive` and `entity_natural_expiry` take `entityId`; they inspect final
+  native activity or observed lifetime-depleted Kill, respectively.
+- `generated_stack_at` and `exhaustion_at` take post-update `tick` and exact `value`.
+  Stack assertions sum the single generated identity across inventory/equipment.
+- `target_effect_at` takes `tick`, `stat` and `value`. It samples the dummy's
+  `lifeRegen`, `vx`, `vy` or active generated effect `count`, `lifeRegenPenalty`,
+  `defenseDelta`, `contactMultiplier`, `velocityRetentionPerTick`. The latter are
+  modifier totals, not proof of a particular hit or outgoing contact. Defense is
+  applied by the registered `RuntimeHitNpcGeneration.ModifyIncomingHit` hook and
+  does not change `npc.defense`. `target_hit_damage_at` checks actual item or
+  projectile hit damage to the dummy at the specified tick; RNG and defense affect
+  this value. The smoke controls check regen, expiry, velocity and a second hit,
+  with an otherwise identical item lacking the effect as a negative control.
+- Direct `Player.ApplyDamageToNPC` calls are observed separately from native
+  item/projectile hit callbacks, so nearby-event damage is not mistaken for zero
+  damage simply because it bypasses projectile contact callbacks.
+
+```sh
+python tools/workbench/python/verify_lifecycle.py --out artifacts/lifecycle
+```
+
+For separately source-built executables, the new lifecycle/world/equipment
+verifiers accept `--no-build --native-dll PATH`. They record binary identity and
+refuse a changed binary mid-matrix. This is direct native execution, **not** proof
+of the standard wrapper's build provenance, archive or optional exports. Preserve
+the external compiler/source/reference receipt with that evidence.
+
+### Native placed-body drawing
+
+`nativeRender.drawPlacedBodies: true` requires `drawArtwork: true` and an explicit
+`world` scene. It calls the original `GeneratedPlacedBodyDrawSystem.PostDrawTiles`
+over the real placement ledger and records successful original `DrawBody` calls.
+`placed_body_draw_count_at_least` requires a positive `minimum`; no emitted body
+cannot count as visual-path coverage. No native terrain texture or background is
+invented. This verifies the authored placed-body renderer, not the complete world.
+
+Owned rendering uses the explicit `synthetic-world-owned.json` fixture and
+`scenarios/world-owned-placement.json`, separate from the genuine native campfire
+fixture. The partial host calls production `GeneratedOwnedTiles.Register` through
+real `Mod.AddContent` and native tile setup, without substituting a vanilla tile
+or replacing the symbolic resolver. Tile assertions select exactly one native
+`tileId` or canonical `ownedTileKey` (for example `GeneratedOwned_3x2_open_floor`).
+Snapshots retain the numeric ID and observe the symbolic name from the actual
+registered `GeneratedOwnedTile`; numeric load order is not an owned identity.
+
+`python/verify_world.py` covers both native and owned placement, missing support, no-use,
+one-return conservation and wrong owned identity. `python/verify_placed_render.py`
+requires successful original body drawing, retirement, missing-PNG refusal and
+missing-artwork refusal. `python/verify_quality.py`
+also checks original dropped-item drawing and native settling. Full-loader smoke
+checks independently verify all 1,536 production owned registrations.
+
+Returned material telemetry includes both the retained canonical source and returned
+`ToNetworkJson` hashes. `generated_world_items_at` also rejects any returned item
+whose canonical definition differs from the source; item ID/count alone is not
+sufficient evidence that a placement round-trip preserved the definition.
+
+Native movement inputs are explicit and persistent until changed:
+`{"tick":20,"kind":"controls","left":false,"right":true,"jump":true}`.
+All three booleans are required. Release them with all three `false`; ordinary
+weapon `release` does not release movement. This requires full `Player.Update`,
+which remains responsible for acceleration, jump, gravity, collisions and friction.
+No workbench motion/physics model is used. Native input flags are in every player
+snapshot. `python/verify_controls.py` checks run, jump, release and preflight refusals.
+
+For equipped PNG checks, `python/verify_equipment_render.py` accepts `--item`, exact
+`--artwork` PNG paths and `--player-assets`, plus the common output/build options.
+It runs actual equipment layers and checks the idle player-region pixels against
+unequip, retaining raw PNGs. A dispatched draw is **not** sufficient: fully occluded
+overlays fail its visibility check. Facing/animation coverage remains explicit.
+All equipment artwork runs require both exact item and `equipOverlayPath` PNGs,
+even when the supplied scenario only uses the item in hand or places it.
+
+Rendered movement can complete native achievements in the controlled scene. The
+workbench preserves native achievement completion and its original notification/
+sound dispatch, but captures achievement chat text before font layout, like the
+existing generated-use-refusal text sink. It records `native_achievement_completed`
+and `native_ui_message`; chat glyph rendering and audible audio are not certified.
+This adapter does not alter world position, movement, achievement conditions or
+item behavior. Unrelated chat paths are not silently swallowed.
+
+## Item quality review (not just hook execution)
+
+`python/quality_review.py` keeps native execution, numeric observations and visual judgment
+separate. It never labels art acceptable because a draw occurred, a collider
+passed, an overlay was visible, or the lowest alpha pixel touched a reference.
+
+```bash
+# Start with a proven private native scene: exact artworkFiles/player assets,
+# correct ammo inventory, camera, terrain and item boundary. No asset rewriting.
+python tools/workbench/python/quality_review.py cycle \
+  --item /private/item.json --scenario /private/native-scene.json \
+  --native-dll /absolute/ItemTestWorkbench.dll --hold-ticks 30 --out /private/review
+# For passive equipment add --equipment (native equip, not invented use input).
+# A single existing trace, including placement/drop scenes:
+python tools/workbench/python/quality_review.py report /private/native.json \
+  --out /private/report --terrain-reference
+# Neutral sparse-support regression; requires existing native asset environment:
+python tools/workbench/python/verify_quality.py \
+  --native-dll /absolute/ItemTestWorkbench.dll --out /private/quality-controls
+```
+
+Scripted `primary` and `alt` represent held use intent until `release` or a
+different use command. For held `alt` the harness reasserts alternate intent on
+each update, since the native animation resets `altFunctionUse`; otherwise a
+long hold can silently become primary use. This is an explicit scripted input
+adapter, not a certification of physical right-click polling or repeat rules.
+
+The compact cycle runs both facings, idle and native moving/jumping, with an
+explicit held-input interval and release. It preserves ammo/environment settings
+but replaces item-specific assertions with `no_nonfinite`: changed input cannot
+inherit old shot counts. Inspect resource snapshots and observed held frames;
+no-ammo refusal is not a missing animation. Use a long enough scene for recovery.
+A separate scene may set `player.gravityDirection:-1` **and**
+`player.gravitationPotion:true`: the real native buff permits inverted gravity.
+Do not infer inverted-gravity coverage from ordinary facing tests; the summary
+reports observed states. This is a native input scene, not a physics simulator.
+
+Every artwork frame includes:
+- Native front hand, rendered front hand (including `gfxOffY`), composite-arm
+  authority, facing, gravity, velocity and input/use clocks. A frame-arm getter
+  is not authoritative when the composite arm is disabled.
+- Root held geometry **after** native player draw-data transformation, versus
+  generated-projectile core geometry observed at actual `SpriteBatch.Draw`.
+  Authored grip is projected through that exact draw. Distances and attachment
+  offsets are observations: intentional authored reach is **review required**,
+  never automatically canceled or declared invalid.
+- Player/projectile colliders, placed footprint, and actual equipped layer draw
+  anchors plus authored accessory mount. A visible badge can still be misplaced,
+  badly scaled or aesthetically unsuitable.
+- Placed-body alpha support per world-pixel column, clipped against transformed
+  pixel polygons (`alpha>=128`, reported explicitly), contact-column count,
+  minimum **and median** gap. Leaves or a single tilted end cannot turn a zero
+  minimum into a generic support PASS. This measures silhouette, not structural
+  material or semantic base. Textures are immutable during this isolated run.
+
+Set `nativeRender.drawDroppedItems:true` alongside `drawArtwork` to execute
+`GeneratedItem.PreDrawInWorld` on actual active generated `Main.item` instances
+(e.g. native placement returns). Its collider, authored offsets and original
+sprite draws are recorded separately. The diagnostic caller explicitly uses
+white light and zero rotation; it is not complete `Main.DrawItem` treatment,
+full-world item treatment, or detected terrain contact. Set explicit
+`world.updateDroppedItems:true` to execute original `Item.UpdateItem` for active
+world instances; snapshots record position/velocity and exact update scope. The
+neutral regression moves the player away using native controls and verifies
+settling on the configured tile floor. Pickup popup/font UI remains outside
+this focused scene (keep the player away); no custom physics is substituted.
+Collider/footprint bottoms are
+reference lines, and authored offsets may deliberately produce nonzero gaps.
+
+Reports retain byte-identical hash-verified original PNGs beside diagnostic
+copies. Optional brown terrain rectangles are **schematic context only**, never
+Terraria terrain pixels or full-world parity. No actual user definitions, art,
+logs, videos or reports belong in the repository. Synthetic fixtures alone are
+public. Direct DLL users must retain the independent source/reference build
+receipt and use final exact source hashes; a successful render is not a packaged
+live-game self-test.
+
+### Native performance against the actual parents
+
+`python/performance_review.py` runs one supplied use schedule against **lone, moving and
+three grouped controlled Zombies**, once for the item and each exact distinct
+`recipeMeta.parentIdentities` entry. Names in prose are never guessed as parents.
+Missing generated parents and noncombat ingredients are `notRun`/`notMeasured`,
+not zero-damage controls. Supply an actual generated parent with
+`--parent-item 'generated:ID=/private/parent.json'`. Modded native parents are not
+admitted. The recorded vanilla numeric ID must agree with native stable-name lookup.
+
+```sh
+python tools/workbench/python/fetch_performance_assets.py --out /private/parent-assets
+python tools/workbench/python/performance_review.py \
+  --item /private/item.json --item-boundary local_cache \
+  --scenario tools/workbench/scenarios/performance-primary.json \
+  --out /private/performance --plan
+# Remove --plan to execute. For a separately source-built native binary also use:
+# --native-dll /private/ItemTestWorkbench.dll
+# For client contact geometry: --vanilla-assets /private/parent-assets
+```
+
+The example is **two explicit hold/release cycles**, not universal input for every
+weapon. Tune range, aim, duration and holds to the authored item, then keep them
+identical for all candidates. A non-auto-reuse sword held down may swing only once;
+the report shows actual `Player.ApplyItemTime` ticks rather than calling the whole
+held interval continuous fire. Ammo inventory is shared and actual matching-ammo
+availability, native consumption callbacks and final stack debits are separate.
+Full CPU scenes refuse native-contact weapons instead of reporting false zero
+melee damage. For such weapons supply a `client_hybrid` scene (no VFX) or a
+`client_vfx` scene with the item's exact admitted publication files.
+
+A Live10 Terra ShadowFrost mechanical probe used the archived `test_fixture`
+item, whose asset PNGs were already synthetic. The only change to its item JSON
+was removing VFX slots, because `client_hybrid` does not execute authored VFX;
+the runtime mechanics remained unchanged. In a close-range interior scene
+(player 800,700; dummy 828,700; floor tileY 47), native contact and projectile
+hits were both observed. This mode uses the repository's 32×32 generated proxy
+texture for contact geometry, so it does not certify contact reach for final
+artwork, VFX appearance, or a complete in-game fight.
+
+In performance `client_vfx` runs, drawing and PNG capture are deliberately disabled
+for **every** candidate; material assets still load where required. Vanilla items
+use their pinned real item PNG for native use-style/hitbox geometry, never the
+generated proxy. Native player/projectile/NPC, dust/lighting and detached-VFX
+updates execute in the same mode. Draw-required effects such as `historyTrail` may
+refuse this non-drawing workload and remain explicitly unmeasured. Use the separate
+visual workflow to inspect artwork; this report does not certify visuals.
+
+`performance.json` and `.md` preserve each trial status and raw trace/log/hash
+receipts. Measurements include separate item/projectile/direct-damage callbacks,
+actual target HP lost, critical hits, sampled per-target native buff uptime, target
+positions/armor, native use-clock intervals, paid mana and inventory debits. The
+channels are **not blindly added**: direct damage may nest callbacks and health
+loss also reflects DoT/regeneration. A dead target censors the remaining trial.
+The same native RNG seed is reset **after scene/assets setup, before tick 0**;
+weapons still consume RNG differently, so a single seed is not a distribution.
+Initial native player/ammo and seed receipts are checked for equality. No prefixes,
+armor/accessory loadout, real NPC AI or full-world certification is claimed. Moving
+targets have an initial 0.5 px/tick velocity integrated by original `NPC.UpdateNPC`,
+not a separate physics model. Zero-defense and configured-defense results are not
+interchangeable. None of these measurements emits a balance/quality PASS.
+
+Vanilla geometry loading uses the complete pinned source index of 5414 item PNGs,
+embedded in the native executable. There is no per-item ID allowlist in the loader.
+Fetch any needed native item IDs explicitly; the original twelve-item control set
+remains the downloader's default:
+
+```sh
+python tools/workbench/python/fetch_performance_assets.py \
+  --items 24 3507 --out artifacts/dependencies/vanilla-assets
+python -m toolbox workbench probe --vanilla-item WoodenSword \
+  --mode client_hybrid --set dummy.x=840 \
+  --set 'vanillaAssetRoot="artifacts/dependencies/vanilla-assets"' \
+  --assert dummy_damaged
+```
+
+The downloader and native loader verify exact Git blob SHA-1 and byte length against
+the pinned commit's source tree, bounded PNG dimensions, and symlink/reparse refusal.
+The native receipt adds SHA-256 and actual loaded dimensions. Missing or changed
+PNGs refuse; they are not substituted. The index contains source availability facts,
+not gameplay support guarantees. It is reproducible with
+`python/index_vanilla_assets.py --out /path/vanilla-item-assets.json`. The PNGs are community
+1.4.4.9 extractions, **not official-byte-certified**, and are not bundled.
+Private definitions, authored art, logs and rendered evidence stay outside git.
+
+For a sustained **repeated-press** view, choose an explicit schedule rather than
+assuming auto-reuse. For example, add `--input-pattern repeated --repeat-every 30
+--hold-ticks 5` (primary by default; `--repeat-input alt` selects alternate).
+This replaces only use/release actions, preserving aim/movement and all scene
+conditions, and applies the **same** schedule to every candidate. The report labels
+these `repeated-*` scenes and shows actual native use-clock applications even when
+a cooldown or channel lifetime prevents a requested press from firing. `both`
+keeps the caller's supplied schedule too (six scenes instead of three); the bounded
+default remains `supplied`. These are requested input opportunities, not invented
+attack counts or a universal optimal firing schedule.
+
+Additional **user-requested controls** can be added without changing recipe
+metadata: `--control item:Terraria/Minishark:98 --control item:Terraria/Musket:96`.
+They are labelled `requestedControl`, never `authoredParent`; both stable name and
+native ID are verified. The report assesses requested-control comparability
+separately so a real noncombat ingredient does not become a fake zero-damage
+weapon. For bullet guns share the same bullet inventory; compare actual native
+use-clock counts with ammo callbacks and stack debits. Native ammo conservation
+and `autoReuse` remain active, not normalized away. Flare-gun utility/lighting and
+status uptime are distinct from bullet-gun direct damage.
+
+### Explicit vanilla controls and actual vanilla player layers
+
+`python/performance_review.py --control item:Terraria/Minishark:98 --control item:Terraria/Musket:96`
+adds **requested controls**, not fabricated recipe parents. They retain separate
+comparison/admission rows. A noncombat parent refusal does not erase valid
+requested-control measurements. Use both supplied held input and explicit
+repeated presses: autoReuse and native ammo conservation change actual counts.
+Never infer damage/resource rates from nominal damage or reuse flags alone.
+
+For actual vanilla player/item artwork, set `drawArtwork:true`, `drawPlayer:true`,
+`artworkFiles:[]` and the explicit `vanillaAssetRoot`. The ordinary native held-item
+layer uses its genuine pinned texture; no generated proxy/layer replaces it.
+Native items have no fabricated authored grip: their exact DrawData is recorded
+and numerical grip error remains unavailable. Generated composite poses and
+vanilla frame-arm poses may deliberately differ. `initialX/Y` and
+`requestedSpawnX/Y` record actual/native requested projectile spawn centers,
+not a guessed image muzzle marker.
+
+```sh
+python tools/workbench/python/verify_vanilla_pose.py \
+  --native-dll /absolute/ItemTestWorkbench.dll \
+  --vanilla-assets /private/performance-assets --out /private/vanilla-poses
+```
+
+This compact native control covers Minishark/Musket in both actual observed
+facings, original player/item draw, original dust, PNG integrity and absence of
+generated replacement/veto. Bullet simulation/hits still execute, but **vanilla
+projectile sprites are explicitly not rendered** in this pose mode. Full-world
+parity and an inferred vanilla hand/grip point are not claimed. Asset provenance
+remains pinned community extraction, not official byte certification.
+
+
+### Native vanilla projectile capture
+
+Opt in with `nativeRender.drawVanillaProjectiles: true` alongside `drawArtwork`
+and `drawPlayer`. Gameplay continues through original `Player.Update` / ItemCheck,
+`Projectile.Update` and native hit hooks; the sprite pass calls original
+`Main.DrawProj`. Resource loading uses the complete pinned Projectile/Extra
+source index (including Glow and BackPack resources) rather than a weapon or projectile allowlist. Every supplied indexed
+PNG is checked for its exact Git blob, byte size and bounded geometry before GPU
+loading. Missing active-projectile PNGs and hash mismatches refuse; missing
+companion resources can also fail in the original draw path. Hidden native bodies
+are skipped in the ordinary pass and may be drawn recursively by their real held
+owner. Each original `Main.DrawProjDirect` visit and sprite count is recorded, so
+these bodies are not drawn twice. Hidden bodies without an observed owner call
+are explicitly listed; other hidden/world draw passes are not implemented. Resource availability is not a guarantee that every
+vanilla draw path is implemented by this controlled scene. No generated projectile
+or schematic sprite substitutes for an absent native texture.
+The default vanilla pose mode still omits projectile sprites explicitly.
+
+```sh
+python tools/workbench/python/fetch_performance_assets.py \
+  --out artifacts/dependencies/vanilla-assets --include-projectiles
+python tools/workbench/python/fetch_player_assets.py \
+  --out artifacts/dependencies/player-assets --include-dummy
+export INFINI_PLAYER_ASSET_DIR="$PWD/artifacts/dependencies/player-assets"
+# Also configure the native tML/ParticleLibrary dependencies described above.
+python tools/workbench/python/verify_vanilla_projectiles.py \
+  --vanilla-assets artifacts/dependencies/vanilla-assets \
+  --out artifacts/vanilla-projectiles --gif
+```
+
+For the channelled/conditional weapon matrix, provision the exact resources and
+select `--complex` (the ordinary control matrix remains available):
+
+```sh
+python tools/workbench/python/fetch_performance_assets.py \
+  --out artifacts/dependencies/vanilla-assets --include-projectiles \
+  --items 3542 3541 4953 2882 1295 39 \
+  --projectiles 634 635 633 632 932 460 461 459 260 2 \
+  --glow 102 --backpacks 3
+python tools/workbench/python/verify_vanilla_projectiles.py \
+  --vanilla-assets artifacts/dependencies/vanilla-assets \
+  --out artifacts/complex-vanilla --complex --gif \
+  --case nebula --case prism --case prism-mana --case eventide \
+  --case charged --case heat-ray --case flaming-arrow
+```
+
+The genuine native `WaterShaderData` constructor and ripple queue require the
+pinned `Misc/Ripples.png`, included by `--include-projectiles`. This is not full
+water/world postprocessing: wave stepping, screen distortion and audio are not
+certified. Its receipt reports the actual type, resource and cleanup of native
+event subscriptions. No generic shader or texture stand-in is used for this path.
+
+`quick_mana` is an explicit full-player input action that calls the original
+`Player.QuickMana()`. Provision native mana-restoring consumables in ordinary
+inventory slots 1–49; ammo slots reject potions. Native selection, consumption,
+healing and mana sickness remain unchanged and are recorded. The unbuffed Prism
+case can exhaust its 200 mana before full charge. `prism-mana` adds one explicit
+quick-mana input at tick 140 with two Mana Potions in slot 1, then verifies one
+consumed potion, sickness and a charged beam. It does not refill mana artificially.
+
+The Prism fixtures use a 400-tile world so native laser scanning has room beyond
+the held beam. Heat Ray uses a distant target: its 100 native extra updates can
+hit and kill the projectile before the first render in a short scene. Its pinned
+projectile sprite is transparent; the visible ray is original native dust.
+These are scene inputs, not changes to weapon speed, collision or lifetime.
+
+All original PNG frames and exact sprite-submission counts are preserved. To keep
+serialized geometry bounded, at most 32 sprite-geometry rows per frame are retained, with
+an explicit omitted-row count. This limit affects diagnostic metadata only, not
+native drawing, gameplay updates or captured pixels. A passing scenario is not
+an aesthetic judgment or complete world-render parity. The row cap is applied
+after capture and is not a runtime allocation limit. Native trace readers admit
+at most 256 MiB across run/loader-run, agent report/contact sheet, replay, quality
+and performance review, CI and native verifiers. Item/scenario inputs and wrapper
+receipts retain the separate 64 MiB limit. This is a post-run read bound, not a
+native output or memory budget.
+
+The verifier builds once, runs Daedalus with wooden arrows, Pulse Bow and Hellwing
+Bow with wooden/Holy arrows, and a bullet control. It retains native assertion,
+ammo-source, hit and exact-frame evidence. Additional controls cover no ammo,
+legacy omission, original camera culling, capture-disabled rendering without dust,
+unsupported projectile type, invalid mode, and missing/tampered assets. An explicit
+`--native-dll PATH --no-build` records an independent binary hash; retain its
+source/reference build receipt. `--case NAME` runs a labelled subset, not the full
+matrix. GIF/HTML review is exported under each passing bow's `review` directory;
+no game PNGs, captured frames or private runs are bundled in source.
+
+`scenarios/daedalus-stormbow.json` is the reusable native training-dummy scene.
+Its relative `vanillaAssetRoot` matches the downloader command above. It asserts
+native hits rather than an HP drop: the real dummy is immortal. The verifier's
+other bows use a separate explicit side-view scene and solid wall. The wall has
+native collision but no terrain artwork in this controlled renderer.
+
+The explicit camera now applies **before player/projectile updates**, preserving
+world-space aim. Original `Dust.NewDust` performs its real camera culling during
+those updates; a distant scene no longer loses every trail before drawing starts.
+The Pulse Bolt's pinned sprite is genuinely a transparent 1px resource: its visible
+trail is original native dust, so enable `drawNativeDust` for its visual review.
+Native Gore allocation is initialized for Holy Arrow impacts; Gore update/drawing,
+full terrain/world rendering and audio remain outside this lane.
+
+Reports distinguish `vanillaProjectileDrawAttemptCount` and per-projectile
+`vanillaProjectileDrawAttempts` from observed `SpriteBatch.Draw` submissions in
+`projectileDrawCount` / `projectileGeometry`. An off-camera `Main.DrawProj` attempt
+cannot certify sprite drawing. A submitted draw still does not prove visible
+pixels or aesthetic quality; inspect the original PNGs. Both scalar and vector
+SpriteBatch overloads are observed once even when one forwards to the other.
+`capture:false` with this opt-in still executes the native GPU lifecycle and omits
+only PNG encoding, including when native dust drawing is disabled.
+
+Native GIF export rounds cumulative native tick timestamps to centiseconds, so
+60fps and stride-2 review do not accumulate a speed error. Palette conversion and
+an explicit final 800ms pause remain; no intermediate game frame is invented.
+
+Complete before/after native dust states live once in `nativeRender.snapshots`; PNG frame receipts refer to the same tick with `nativeDustStateTick` and counts. Compact JSON preserves every observation without duplicating particle arrays, keeping trail-heavy bow traces within the portable reader budget.
+
+#### Bounded native shape rendering
+
+The client lane admits world-attached, world-rotation `shape` arcs in full native
+player/procedural draw contexts. They execute the production detached renderer
+with the verified MagicPixel; no substitute geometry is rendered by the stand.
+Read-only shape records include their due tick, duration and world position.
+Other kinds, source-attached/source-rotation shapes and partial draw contexts
+remain unverified and refused. See `python/verify_shapes.py` and VERIFICATION.md for
+actual pixel, lifetime, replay and negative controls.
+
+### Explicit recall destination
+
+A binding that actually applies `recall_home` requires an explicit scenario:
+`--set 'recallSpawn={"worldTileX":43,"worldTileY":47}'`.
+Optional `playerTileX`/`playerTileY` override the world spawn, exactly as the
+production owner chooses them. Both coordinates are required for each pair;
+zero world coordinates express a missing destination for refusal controls.
+The scope saves/restores these native fields and never moves the player itself.
+The canonical implementation uses `TryRecallHome` → `Player.Teleport`, **not**
+`Player.Spawn`; this stand does not add bed validation or destination safety.
+Coordinates inside the initialized tile world can still be constrained by the
+native player's edge margins, so inspect both teleport events and later position.
+
+`python/verify_recall_home.py --native-dll <built DLL> --item <authored recall item>
+--out <fresh-directory>` proves ready return, cooldown/expiry, no-use, missing
+spawn, player override, invalid scene refusal and unaffected primary firing.
+Only the test world's identity changes in the copied item. Rendered gallery
+capture is separate from these CPU controls; multiplayer remains unproven.
+
+### Native fishing proof
+
+`python/verify_native_fishing.py --native-dll PATH --out DIR` executes native rod, bait,
+water, natural bite, ordinary reel input and inventory catch. The generated rod
+is an explicit synthetic fixture, not a model sample. CPU negatives run within a
+bounded 2,400-tick window; no-bait casting is allowed by vanilla, but cannot catch.
+The verifier checks cast evidence before cancel/switch/death, zero-mana refusal,
+native bait debit, and the native caught-item identity against inventory.
+
+A `fishing` scene requires full player updates. Optional `water` is a bounded
+`tileX/tileY/width/height` rectangle of real static water tiles, not rendered liquid.
+`reelOnBite` sends a single ordinary input after observing native negative bobber
+`ai[1]`; `reelInput` explicitly selects `primary` (default) or `alt`. It never sets
+bite/catch state. Gameplay still owns admission and payment. Native popup text is
+not rendered; inventory observations are retained.
+
+For native bobber/line rendering, fetch the pinned projectile resources with
+`python/fetch_performance_assets.py --include-projectiles` (including Projectile_360 and
+FishingLine). `nativeRender.vanillaItemTextures` optionally declares at most 16
+unique native item texture IDs for original native draw calls, e.g. a caught fish;
+fetch their exact PNGs through the existing `--items` option. This list grants no
+items and does not choose a catch. Missing or corrupt selected textures refuse;
+there is no auto-fetch or placeholder. Original native Main.DrawProj renders the
+bobber, line and caught fish. Existing 600-tick/pixel GPU limits are unchanged.
+
+`python/verify_fishing_resources.py --native-dll PATH --assets DIR --out DIR` checks
+actual native loading plus missing/corrupt texture, duplicate/over-budget IDs and
+incompatible render-mode refusals. Its 12-tick positive does not claim a catch:
+explicitly loading a fish texture must not grant that fish to inventory.
+
+### Explicit native solution-emission observations
+
+The default vanilla performance path still refuses non-damaging items. For
+emission, trajectory, ammunition and pose observations, opt in with
+`--set vanillaUtilityEmission=true`. This requires a native non-damaging
+solution-ammo shoot item, no melee contact or placement, and full Player.Update.
+Generated items and damage weapons refuse the utility flag. The trace records
+`coverage.utilityEmissionScope`; it does not certify damage or world conversion.
+Native negative damage sentinels are preserved, not replaced with fabricated damage.
+
+The Clentaminator's native player layer also requires its real backpack texture:
+
+```sh
+python tools/workbench/python/fetch_player_assets.py \
+  --out /path/to/player-assets --include-backpack
+export INFINI_PLAYER_ASSET_DIR=/path/to/player-assets
+python -m toolbox workbench probe --vanilla-item Clentaminator --gif \
+  --vanilla-assets /path/to/vanilla-assets --ammo 780:100 \
+  --set vanillaUtilityEmission=true --set nativeRender.backpackTexture=2 \
+  --set nativeRender.drawVanillaProjectiles=false
+```
+
+`backpackTexture=2` explicitly loads the pinned original community BackPack_2 PNG
+through the existing native ReLogic loader. Missing, changed or unsupported
+textures refuse; no placeholder is substituted. The optional fetch leaves the
+20-file default unchanged. Vanilla projectile sprite drawing remains disabled in
+this pose/dust scene, and the trace discloses that omission. PureSpray uses an
+invisible projectile and native dust; do not generalize that fact to other
+projectiles or claim full-world visual parity. `probe` preserves an explicitly
+false `drawVanillaProjectiles` setting; its ordinary vanilla GIF default stays true.
+
+Behavioral admission/ammo regressions:
+
+```sh
+python tools/workbench/python/verify_utility_emission.py \
+  --native-dll /path/to/ItemTestWorkbench.dll \
+  --generated-item /path/to/accepted-item.json --out /fresh/evidence/path
+```
+
+Add `--player-assets /path/to/player-assets --vanilla-assets /path/to/vanilla-assets`
+to that regression command to also execute real native refusals for missing,
+corrupt and unsupported backpack assets. These tests alter only private copies.
+
+### Pinned generic native draw resources
+
+`assets/vanilla-draw-assets.json` indexes every matching source PNG in the pinned community
+Git tree: 1,020 `Projectile_*.png`, 266 `Extra_*.png`, 353 `Glow_*.png`, nine `BackPack_*.png`,
+`FishingLine.png`, and the exact nested `Misc/Ripples.png` water texture.
+These are available resources, not a declaration that every native draw path works.
+The downloader accepts arbitrary IDs present in that index; it does not choose
+textures from an item family or substitute missing resources:
+
+```sh
+python tools/workbench/python/fetch_performance_assets.py \
+  --out /private/vanilla-assets --items 3542 3541 4953 \
+  --projectiles 634 635 633 632 932 --extras 98 --glow 102 --backpacks 3 \
+  --draw-assets FishingLine.png Misc/Ripples.png
+```
+
+`--include-projectiles` provisions the original small manifest-backed control bundle
+plus the pinned `Misc/Ripples.png` required by genuine native WaterShaderData for
+every vanilla projectile pass. Explicitly also requesting Ripples does not fetch it twice.
+Use the explicit selectors for other textures. Duplicate/unknown selectors,
+unsafe paths, corrupt existing files, mismatched pinned Git blobs and oversized
+PNG dimensions are rejected. Existing files are verified before reuse; downloads
+never overwrite a corrupt file. `python/index_vanilla_draw_assets.py --out PATH` regenerates
+the complete index from the pinned commit and its non-truncated source tree.
+
+**Provenance and rights:** the source is the public community extraction
+[sullerandras/terraria-hd-textures](https://github.com/sullerandras/terraria-hd-textures/tree/c835594415e31ed88734dc778661014b48ffb648/source-pngs),
+commit `c835594415e31ed88734dc778661014b48ffb648`, not an official Re-Logic asset
+release. The pinned repository root has no LICENSE file, and its README does not
+grant redistribution rights for Terraria images. A matching Git blob establishes
+integrity against that source, not copyright permission or official-byte identity.
+No game PNGs are bundled here. Keep downloaded assets private; obtain any needed
+rights separately. An official tModLoader binary does not certify the provenance
+of independently obtained PNGs. Content from a user's legitimate Terraria install
+is a separate source and requires its own extraction/identity workflow.

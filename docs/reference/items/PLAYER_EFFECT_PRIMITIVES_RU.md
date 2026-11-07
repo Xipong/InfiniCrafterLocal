@@ -55,9 +55,7 @@
 Вторых `playerEffect.lifeRegenHpPerSecond`, `playerEffect.lifeRegenUnits` и
 `playerEffect.highlightTreasure` нет. Старые длинные Author-spellings
 `lifeRegenHpPerSecond` и `oreSenseEnabled` не являются вторым свежим API.
-Существующие native wire-значения и их исторические receipt-пути сохраняются
-объявленным lowering; сохранённые определения без условий остаются безусловными
-и не получают выдуманных полей при сериализации.
+Native wire-значения задаёт текущий lowering с exact current receipts. Отсутствующее условие допустимо только по объявленной нейтрали; сериализация не добавляет невыбранную механику.
 
 ## Поля компонента `playerEffect`
 

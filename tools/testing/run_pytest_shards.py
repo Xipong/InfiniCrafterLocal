@@ -24,7 +24,7 @@ import time
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-TEST_ROOTS = (ROOT / "LocalGenerator" / "tests", ROOT / "toolbox" / "tests")
+TEST_ROOTS = (ROOT / "tests" / "generator", ROOT / "tests" / "toolbox")
 FULL_TEST_MODULES = {
     "pytest": "pytest",
     "pydantic": "pydantic",
@@ -41,14 +41,13 @@ FULL_TEST_MODULES = {
 ISOLATED_TEST_FILES = {
     "test_provider_http_contract.py",
     "test_provider_runtime_contract.py",
-    "test_csharp_compile_surface_contract.py",
     "test_environment_access_contract.py",
     "test_sdcpp_command_contract.py",
 }
 
 
 def _test_files() -> list[Path]:
-    return sorted(path for root in TEST_ROOTS for path in root.glob("test_*.py")
+    return sorted(path for root in TEST_ROOTS for path in root.rglob("test_*.py")
                   if path.is_file() and path.resolve().is_relative_to(root.resolve()))
 
 
@@ -113,7 +112,7 @@ def _run_pytest_command(
     with log_path.open("w", encoding="utf-8") as log:
         proc = subprocess.Popen(
             command,
-            cwd=temp_root / "LocalGenerator",
+            cwd=temp_root,
             env=env,
             text=True,
             stdout=log,
@@ -209,7 +208,7 @@ def run(shard_count: int, shard_index: int | None = None, timeout_seconds: int =
                 ),
             )
             env = dict(base_env)
-            env["PYTHONPATH"] = os.pathsep.join((str(temp_root / "LocalGenerator"), str(temp_root)))
+            env["PYTHONPATH"] = os.pathsep.join((str(temp_root / "generator"), str(temp_root)))
             normal = [path for path in shard if path.name not in ISOLATED_TEST_FILES]
             isolated = [path for path in shard if path.name in ISOLATED_TEST_FILES]
             # Keep one finite command timeout meaningful as parameterized
@@ -220,12 +219,7 @@ def run(shard_count: int, shard_index: int | None = None, timeout_seconds: int =
             commands.extend(("isolated", [path]) for path in isolated)
 
             for command_index, (mode, command_files) in enumerate(commands, 1):
-                relatives = [
-                    path.relative_to(ROOT / "LocalGenerator").as_posix()
-                    if path.is_relative_to(ROOT / "LocalGenerator")
-                    else "../" + path.relative_to(ROOT).as_posix()
-                    for path in command_files
-                ]
+                relatives = [path.relative_to(ROOT).as_posix() for path in command_files]
                 row = _run_pytest_command(
                     temp_root=temp_root,
                     relatives=relatives,
@@ -332,9 +326,7 @@ def merge_reports(directory: Path, shard_count: int, source_revision: str) -> di
                 raise ValueError("Changed pytest process-isolation coverage")
             executed.extend(command["files"])
             total += command["passed"]
-        expected_commands = [path.relative_to(ROOT / "LocalGenerator").as_posix()
-                             if path.is_relative_to(ROOT / "LocalGenerator")
-                             else "../" + path.relative_to(ROOT).as_posix() for path in expected]
+        expected_commands = [path.relative_to(ROOT).as_posix() for path in expected]
         if sorted(executed) != sorted(expected_commands) or total != row.get("passed") or total != report.get("passed"):
             raise ValueError("Missing/duplicate executed files or inconsistent pytest counts")
         selected[index] = row

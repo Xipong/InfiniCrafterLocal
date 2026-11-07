@@ -3,7 +3,7 @@
 <a id="authority"></a>
 ## Один источник диапазонов и преобразований
 
-Gameplay параметры, descriptions, domains, units и exact wire mapping — [capability_registry.py](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) (`CapabilitySpec` и конкретные объявления параметров). Общий контракт параметра и его точная проекция — [parameter_contract.py](../../../LocalGenerator/infini_local/core/runtime_authoring/parameter_contract.py) (`ParamSpec`); model/audit представления registry — [registry_views.py](../../../LocalGenerator/infini_local/core/runtime_authoring/registry_views.py). Структура — [program_schema.py](../../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py), executable projection/receipts — [compiler.py](../../../LocalGenerator/infini_local/core/runtime_authoring/compiler.py) и [technical_lowering.py](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py). Полный roster — generated [capability inventory](../generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) / [primitive parity](../generated/PRIMITIVE_PARITY_RU.md), не ручная копия всех registry rows.
+Gameplay параметры, descriptions, domains, units и exact wire mapping — [capability_registry.py](../../../generator/infini_local/core/runtime_authoring/capability_registry.py) (`CapabilitySpec` и конкретные объявления параметров). Общий контракт параметра и его точная проекция — [parameter_contract.py](../../../generator/infini_local/core/runtime_authoring/parameter_contract.py) (`ParamSpec`); model/audit представления registry — [registry_views.py](../../../generator/infini_local/core/runtime_authoring/registry_views.py). Структура — [program_schema.py](../../../generator/infini_local/core/runtime_authoring/program_schema.py), executable projection/receipts — [compiler.py](../../../generator/infini_local/core/runtime_authoring/compiler.py) и [technical_lowering.py](../../../generator/infini_local/core/runtime_authoring/technical_lowering.py). Полный roster — generated [capability inventory](../generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md), не ручная копия всех registry rows.
 
 Путь изменения: registry → actual provider schema/prompt → validator/Repair → compiler receipt → strict wire → C# DTO/executor → regression. Исторический rename не становится Author alias; C# wire сохраняет объявленные старые leaves. Category/name/prose не выбирают единицу, sentinel, механическую композицию или default.
 
@@ -11,20 +11,20 @@ Gameplay параметры, descriptions, domains, units и exact wire mapping 
 
 | Семейство | Author | Canonical lowering в прежний wire |
 |---|---|---|
-| World distance | `*Blocks`; существующие `rangeTiles`/`radiusTiles` уже означают блоки | ×16, если consumer хранит world pixels; already-block values не конвертируются повторно |
-| World duration | `*Seconds` | ×60, ближайший целый world tick, половина тика вверх |
-| Projectile velocity | `*BlocksPerSecond` | ×16/(60×N), N принадлежит этому target |
-| Projectile gravity acceleration | `accelerationYBlocksPerSecondSquared` | ×16/(3600×N²) |
-| Continuous NPC acceleration | `*BlocksPerSecondSquared` | ×16/(3600×N), по частоте вызывающего projectile |
-| One-off impulse / player bonus / ammo contribution | `*BlocksPerSecond` | ×16/60; не использовать N projectile как множитель бонуса Player/Item |
-| True angular rate | `*RadiansPerSecond` | /(60×N) |
+| World distance | Объявленные registry distance fields, включая `radius`, `range`, `*Blocks` | ×16, если consumer хранит world pixels; already-block values не конвертируются повторно |
+| World duration | Registry duration fields в секундах | ×60, ближайший целый world tick, половина тика вверх |
+| Projectile velocity | Registry world speed/impulse fields | ×16/(60×N), N принадлежит этому target |
+| Projectile gravity acceleration | `accelerate_y.accelY` | ×16/(3600×N²) |
+| Continuous NPC acceleration | Registry continuous acceleration fields | ×16/(3600×N), по частоте вызывающего projectile |
+| One-off impulse / player bonus / ammo contribution | Registry world speed/impulse fields | ×16/60; не использовать N projectile как множитель бонуса Player/Item |
+| True angular rate | Registry angular-rate fields | /(60×N) |
 | Technical counters, ratios, percent | Declared count/coefficient/percent | Их прежний контракт; это не duration/rate по одному названию |
 
-N = explicit `set_projectile_collision.updatesPerTick` **того же target**; у ребёнка собственный N, а не N emitter-а. Missing, malformed и ambiguous clocks не заменяются единицей. Полный прежний engine domain доступен для каждого N=1..6 через registry-derived contextual Author bounds; engine bounds и native clamps не пересматриваются.
+N = explicit `projectile_collision.updatesPerTick` **того же target**; у ребёнка собственный N, а не N emitter-а. Missing, malformed и ambiguous clocks не заменяются единицей. Полный прежний engine domain доступен для каждого N=1..6 через registry-derived contextual Author bounds; engine bounds и native clamps не пересматриваются.
 
 Секундная проекция — объявленная quantization, не обещание точного восстановления исходного decimal: половина тика округляется вверх. Ненулевой эффект не может исчезнуть при lowering/storage. Для integer world-pixel wire, например `offsetBlocks`, сохраняется точная пиксельная решётка; произвольная дробь блока не округляется скрыто.
 
-Current Author/Repair принимают только v7 keys, не старые `*Ticks`/`*PxPerUpdate` как fresh aliases. Saved wire не переписывается. Source-free audit принимает только конечные predecessor paths, **явно объявленные для этой миграции** в `ParamSpec`; это не возврат всех ранее retired aliases и не importer. Source-backed audit требует exact current Author source. Архивные JSON/hashes остаются неизменными. Проверки: `test_author_world_unit_projection.py` плюс существующие numeric/Repair/receipt controls; historical diagnostic hash не становится current admission contract.
+Author/Repair принимают только текущие registry keys. Receipt проверяет точные current source paths, значения и ownership; source-free audit подтверждает лишь внутреннюю согласованность текущей проекции, не наличие исходного Author. Predecessor paths и старые единицы не являются aliases. Проверки: `test_author_world_unit_projection.py` и numeric/Repair/receipt controls.
 
 <a id="clocks"></a>
 ## World ticks, updates, pixels
@@ -41,13 +41,13 @@ Terraria nominal world clock — 60 ticks/s, tile — 16 px. Это не гар�
 | 120 | 2.00 |
 | 180 | 3.00 |
 
-Native `extraUpdates` даёт `N=extraUpdates+1` AI/movement updates/world tick. Wire velocities/gravity и engine local NPC cooldown сохраняют прежние engine units, но Author задаёт перечисленные физические world rates: lowerer учитывает N детерминированно. `velocityRetention`/`speedMultiplierPerUpdate` и другие явно объявленные per-update coefficients остаются коэффициентами алгоритма; `immunity.localCooldown` и `initialIgnoreCountdownUpdates` — counts. Native `lifetimeTicks`, charge/warmup/return-after и scheduler `delayTicks` остаются world ticks; их Author counterparts теперь Seconds. VFX material simulation сохраняет свой world-tick контракт и этой миграцией не меняется.
+Native `extraUpdates` даёт `N=extraUpdates+1` AI/movement updates/world tick. Wire velocities/gravity и engine local NPC cooldown сохраняют прежние engine units, но Author задаёт перечисленные физические world rates: lowerer учитывает N детерминированно. `scale_velocity.scalePerUpdate` и другие явно объявленные per-update coefficients остаются коэффициентами алгоритма; `immunity.localCooldown` и `initialIgnoreCountdownUpdates` — counts. Native `lifetimeTicks`, charge/warmup/return-after и scheduler `delayTicks` остаются world ticks; их Author counterparts теперь Seconds. VFX material simulation использует world ticks независимо от projectile N.
 
 **16 world pixels = 1 блок**. Texture texels/canvas resolution и normalized UV — отдельные пространства; UV нельзя делить на16. Явные `*Px` hitbox/sprite/hand/beam geometry сохраняют пиксели. Standing unmounted collider обычного игрока — 20×42 world px (1,25×2,625 блока); базовый бег — 11,25 блока/с; начальная скорость обычного прыжка — примерно 18,79 блока/с вверх. Это сравнения для normal gravity без modifiers, не balance presets: initial jump velocity не задаёт высоту/дальность без hold duration, gravity и движения.
 
 Только для прямолинейного движения с постоянной скоростью без столкновений дальность в блоках равна `speedBlocksPerSecond × lifetimeSeconds`. Movement/controller может полностью изменить эту оценку. Минимальный event period берётся из registry, не из формулы дальности.
 
-Пример **частичных capability params**, не полный Author response: `configure_spawn` задаёт `velocity={"constantSpeedBlocksPerSecond":120}`, `count=1`, `spreadRadians=0`, `offsetBlocks=0.5`, `aim=cursor`, `position={"at":"owner_center"}`; `move_gravity_arc` — `accelerationYBlocksPerSecondSquared=900`; `set_projectile_lifetime` — `lifetimeSeconds=2.5`. Отдельный collision call явно задаёт N. При N=2 исполняемые wire speed=16 px/update, gravity increment=1 px/update², offset=8 px, lifetime=150 world ticks. Эти значения проверяет production compiler tracer; старые Author `constantSpeedPxPerUpdate/accelY/lifetimeTicks` не являются текущими keys.
+Пример **частичных capability params**, не полный Author response: `spawn` задаёт `velocity={"speed":120}`, `count=1`, `spreadRadians=0`, `offsetBlocks=0.5`, `aim=cursor`, `position={"at":"owner_center"}`; `accelerate_y` — `accelY=900`; `projectile_lifetime` — `lifetimeSeconds=2.5`. Отдельный collision call явно задаёт N. При N=2 исполняемые wire speed=16 px/update, gravity increment=1 px/update², offset=8 px, lifetime=150 world ticks. Эти значения проверяет production compiler tracer; старые Author `constantSpeedPxPerUpdate/accelY/lifetimeTicks` не являются текущими keys.
 
 <a id="gameplay"></a>
 ## Важные отличия единиц от обещаний
@@ -57,23 +57,23 @@ Native `extraUpdates` даёт `N=extraUpdates+1` AI/movement updates/world tick
 | Item use/animation | `useTimeSeconds` — базовый native use/reuse interval, `useAnimationSeconds` — независимая длина animation; отличия могут дать несколько uses, не обязательно один projectile/click. |
 | Item facts | `manaCost` — базовая Item.mana до player modifiers; `valueCopper` — exact Item.value, не inferred resale; `craftYield` — запрос, фактическая stack выдача capped maxStack. Loaded rarity/ProjectileID/BuffID/DamageClass копируются из соответствующих source facts, не угадываются из имени. |
 | Display/collision | Item scale, projectile `drawScale`, entity Visual scale — multipliers, не collision hitbox/radius. World pixels, tile radii и canvas pixels различны. |
-| Knockback/light/aggro/mana regen | Item/Projectile.knockBack — engine strength; Lighting strength — RGB coefficient, не radius; aggro — raw Player.aggro (может быть отрицательным), не probability; manaRegenBonusPoints — raw Player.manaRegenBonus, не mana/s. |
-| Ammo | `shootSpeedContributionBlocksPerSecond` — signed базовый Item.shootSpeed вклад в vanilla PickAmmo, не финальная скорость projectile. `usesPotionRules` — Item.potion/use eligibility/sickness gating flag, не duration. |
+| Knockback/light/aggro/mana regen | Item/Projectile.knockBack — engine strength; Lighting strength — RGB coefficient, не radius; aggro — raw Player.aggro (может быть отрицательным), не probability; manaRegen — raw Player.manaRegenBonus, не mana/s. |
+| Ammo | `speedBonus` — signed базовый Item.shootSpeed вклад в vanilla PickAmmo, не финальная скорость projectile. `usesPotionRules` — Item.potion/use eligibility/sickness gating flag, не duration. |
 | Equipment percentages | Уже объявленный /100 adapter; additive modifier, chance, percentage points и source-damage percent различны. Armor set требует полного matching set и head phase; equipment phase/damageClass — explicit selector, не router. Итог зависит от других Terraria modifiers/clamps. |
-| Mining / ore sense | Mining speed multiplier делит Player.pickSpeed: больший divisor даёт меньший pickSpeed и более быстрое копание. `oreSenseEnabled` включает Player.findTreasure; это bool→0/1, не произвольный исторический oreSenseRadiusTiles. |
-| Buff movement | `moveSpeedBonusPercent` — additive percent [−50,200]; `movementSpeed = percent/100`, как у equipment. `20` добавляет `0.2` к Player.moveSpeed до остальных modifiers. `jumpSpeedBonusBlocksPerSecond` — базовый вклад в Player.jumpSpeedBoost, не обещание итоговой высоты прыжка. |
-| Projectile sentinels | `pierce=-1` — unlimited; `localNpcHitCooldownEngineUnits=-1` — one-hit-per-NPC только local immunity; 0..600 raw cooldown counts, не world-tick duration. Owner immunity использует отдельный shared путь. |
-| Movement/controller coefficients | Boomerang returnSpeed — target after lerp; phaseStrength одновременно rotation/alpha, не collision phasing; waveVelocityCoefficient нормализуется при расчёте direction, не displacement. sameTargetBias насыщается на .9; target_and_fire range — soft score, не strict геометрическая граница. Charge powerMultiplier меняет и release velocity, не только damage/knockback. |
+| Mining / ore sense | Mining speed multiplier делит Player.pickSpeed: больший divisor даёт меньший pickSpeed и более быстрое копание. `treasureSense` включает Player.findTreasure; это bool→0/1, не произвольный исторический oreSenseRadiusTiles. |
+| Buff movement | `moveSpeedBonus` — additive percent [−50,200]; `movementSpeed = percent/100`, как у equipment. `20` добавляет `0.2` к Player.moveSpeed до остальных modifiers. `jumpSpeedBonus` — базовый вклад в Player.jumpSpeedBoost, не обещание итоговой высоты прыжка. |
+| Projectile sentinels | `pierce=-1` — unlimited; `immunity:"once_per_npc"` — one-hit-per-NPC только local immunity; 0..600 raw cooldown counts, не world-tick duration. Owner immunity использует отдельный shared путь. |
+| Movement/controller coefficients | `seek` lerp и `homing` angular cap — разные законы; `scale_velocity.scalePerUpdate` применяется на каждом AI update. `target_and_fire.sameTargetBias` меняет score, не вероятность; при soft range геометрическая граница не гарантируется. |
 | Event effects | Spawn count — children; chain count — max дополнительных NPC. damageMultiplier берёт authored **base damage источника**, rounded/minimum 1 до defense, не damageDone и не additive percent. heal damageFraction — доля фактического damageDone; maxHeal — HP/event. |
 | Pull / mobility | Pull strength — per-event/update velocity impulse с NPC knockBackResist, не displacement/second. radiusTiles ищет NPC только без directTarget и игнорируется owner_to_target. safeTileOnly — bounds/solid/lava checks, не universal hazard guarantee; recall_home его игнорирует. |
-| Visibility hint | `heldSpriteVisibilityHint` не задаёт gameplay release schedule: immediate скрывает; on_release/after_charge явно сохраняют custom root во время use и не различаются расписанием. Empty/omitted при declared renderSizePx следует hideUseGraphic; без этой метадаты сохраняет исторический keep. |
+| Held visibility | `item_use.hideUseGraphic` управляет native item body; PNG metadata не выбирает release schedule или gameplay. |
 
-Terminal owners: [GeneratedItemData.Apply](../../../ModSources/InfiniCrafterLocal/Common/Models/Runtime/GeneratedItemData.Apply.cs), [GeneratedItem](../../../ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.cs), [GeneratedProjectile executors](../../../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Executors.cs), [RuntimeProgramExecutor](../../../ModSources/InfiniCrafterLocal/Common/Runtime/RuntimeProgramExecutor.cs), [delayed scheduler](../../../ModSources/InfiniCrafterLocal/Common/Runtime/RuntimeDelayedActionScheduler.cs), [player mobility](../../../ModSources/InfiniCrafterLocal/Common/Players/InfiniCraftPlayer.Mobility.cs). Exact opcode/wire route — canonical registry/receipts; старая таблица consumer line numbers не authoritative.
+Terminal owners: [GeneratedItemData.Apply](../../../mod/InfiniCrafterLocal/Common/Models/Runtime/GeneratedItemData.Apply.cs), [GeneratedItem](../../../mod/InfiniCrafterLocal/Content/Items/GeneratedItem.cs), [GeneratedProjectile executors](../../../mod/InfiniCrafterLocal/Content/Projectiles/Motion/GeneratedProjectile.Executors.cs), [RuntimeProgramExecutor](../../../mod/InfiniCrafterLocal/Common/Runtime/RuntimeProgramExecutor.cs), [delayed scheduler](../../../mod/InfiniCrafterLocal/Common/Runtime/RuntimeDelayedActionScheduler.cs), [player mobility](../../../mod/InfiniCrafterLocal/Common/Players/InfiniCraftPlayer.Mobility.cs). Exact opcode/wire route — canonical registry/receipts; старая таблица consumer line numbers не authoritative.
 
 <a id="conversions"></a>
 ## Нули, нейтрали, nullable и доказуемые conversions
 
-Regen `lifeRegenHpPerSecond` у accessory/armor и `setBonusLifeRegenHpPerSecond`: authored [−50,100] с шагом .5, integer engine wire [−100,200], `wire=2×HP/s`, inverse `HP/s=wire/2`; сохраняются знак, 0 и endpoints. Generated buff regen имеет собственный registry domain [0,60] с тем же half-HP lattice; не расширять его до signed equipment domain.
+Regen `lifeRegen` у accessory/armor и `setBonusLifeRegenHpPerSecond`: authored [−50,100] с шагом .5, integer engine wire [−100,200], `wire=2×HP/s`, inverse `HP/s=wire/2`; сохраняются знак, 0 и endpoints. Generated buff regen имеет собственный registry domain [−50,60] с тем же half-HP lattice; не расширять его до signed equipment domain.
 
 Existing /100 или bool→0/1 projection доказана только на своём declared image. Процентный /100 — объявленный scale adapter с обычной IEEE-754 точностью, **не биекция всех JSON/binary64 представлений**: соседние обычные doubles могут дать один результат деления; условие `x/100*100==x` не вводится как новый фильтр обычных значений. Такая точность не разрешает молча превращать ненулевой эффект в нейтраль. Она также не гарантирует exact binary32 round-trip произвольного JSON decimal или восстановление каждого старого DTO. Например bool ore sense не восстанавливает старые radius 2..60. Физические единицы меняются только объявленной canonical проекцией с их sign/zero/sentinels и engine domains; duration quantization описана отдельно выше. Ни prose, ни category не дают права вводить другую проекцию.
 
@@ -93,24 +93,25 @@ Optional-null inverse допустим только для объявленны�
 <a id="vfx"></a>
 ## VFX: common controls не универсальная физика
 
-Source: [VFX semantics](../../../LocalGenerator/infini_local/core/vfx/contract.py) (`_VFX_NUMERIC_DESCRIPTIONS`, `_RENDERER_SEMANTICS`) и [Director/Repair schemas](../../../LocalGenerator/infini_local/core/vfx/schema.py) и [presentation guide](../presentation/PRESENTATION_CONSISTENCY_RU.md#legacy-vfx). Material payload ranges/units/zeros/profiles имеют отдельный [контракт](../presentation/VFX_MATERIAL_ELEMENTS_RU.md), а не старые knobs.
+Source: [VFX semantics](../../../generator/infini_local/core/vfx/contract.py), [Director/Repair schema](../../../generator/infini_local/core/vfx/schema.py), [presentation](../presentation/PRESENTATION_CONSISTENCY_RU.md#renderers) и [material contract](../presentation/VFX_MATERIAL_ELEMENTS_RU.md).
 
-VFX Director/Repair получают точный `acceptedGameplayReadOnly`: в частности base `useTime/useAnimation` и `itemScale` не восстанавливаются из realization. Для body sprite copies с declared `renderSizePx` коэффициент `q=R/max(actual final PNG frame)` берётся у выбранного texture owner. Projectile copies используют current P (уже D×E с последующим growth), slot scale и q; не повторно E/G. Dedicated impact, material world-pixel shapes и legacy absent-R ветки имеют отдельные правила в actual schema descriptions.
+VFX Director получает accepted gameplay read-only. World pixels, texture texels, normalized UV и RGB не взаимозаменяемы. У body copies коэффициент `q=renderSizePx/max(actual final PNG frame)` принадлежит выбранному texture owner; не умножай повторно уже применённые entity/item scales.
 
-| Common field | Текущее использование |
+| Поле / payload | Единицы и граница |
 |---|---|
-| scale | Renderer-specific multiplier: procedural dimensions, sprite pose/texture size, lighting/dust имеют разные clamps; не единый sizePx. |
-| density | Procedural tessellation/mote count и отдельный particle count/cadence coefficient, не particles/tick. |
-| duration | Legacy detached sprite/primitive lifetime + linear fade; periodic procedural period при repeatEvery=0. Active history/straight beam не consume duration; event rings имеют дополнительный phase fade. spriteElement — individual lifetime с opacityProfile без implicit linear fade; texturedPath не имеет `duration`. |
-| alpha | Sprite/primitive opacity; audio volume принадлежит только обязательному `sound.volume`, без alpha/phase fallback. Dust не использует slot alpha. Material alpha × opacityProfile один раз с отдельным RGB tint; explicit zero молчит. |
-| spread | Legacy particle-speed coefficient, не radians/full cone; material spreadRadians задаёт угол отдельно. |
-| startTick | Legacy projectile periodic particle/cue gate и procedural visibility delay; не item/detached lifetime, не active history/sprite/straight beam timing. Material: nonperiodic delay либо projectile age gate; item periodic=0; texturedPath sampling age gate. |
-| repeatEvery | Legacy positive cadence/procedural period; 0 выбирает auto particle cadence (projectile density-derived, item=10 global updates) и duration procedural period. Item имеет global clock + seed phase, projectile — state world ticks. Material periodic ≥1, event=0; texturedPath не имеет `repeatEvery`, без повторной detached emission. |
+| `duration` | Individual lifetime в world ticks только у renderers, которым он принадлежит. Shape имеет explicit opacity endpoints, spriteElement — opacityProfile, libraryParticle — endOpacity; общего дополнительного fade нет. |
+| `startTick` | Event delay либо projectile periodic age gate. Item periodic emitters требуют 0; historyTrail использует sample ages и не принимает это поле. |
+| `repeatEvery` | Явная world-tick cadence: periodic ≥1, event=0 у shape/material/library/native emitters. Event sound scheduling-поля не принимает; live path их не использует. |
+| `alpha` | Renderer-specific draw multiplier. Shape/contour имеют собственные opacity fields, Dust/light/sound не принимают common alpha. |
+| Geometry / motion | Явные `*Px`, radians, native world-tick velocity/acceleration либо normalized profile position по nested schema, не общие scale/density/spread knobs. |
+| Color | Локальные RGB objects с integer каналами 0…255; opacity отдельно. Sound/camera color не принимают. |
 
-Ordinary slots передают schema-required common fields и conditional renderer payload; assets optional. Local `color`, profile knots и library endpoints — RGB objects с integer каналами 0..255, alpha отдельно; sound/camera не имеют цвета. Repair использует slots/assets upsert, IDs и zero-based indices, без global metadata patch. Wire хранит только три реальные caps `maxParticlesPerTick/maxParticlesTotal/maxDrawCalls`, `slotSeed`/optional `phaseOffset` и `recipeId` для runtime/PNG identity. Это технические consumer fields, не дополнительные model choices. [Exact VFX contract](../presentation/VFX_MATERIAL_ELEMENTS_RU.md#runtime).
+Каждый renderer получает только свои consumed fields. Запрещённое поле не становится optional default. `texturedPath` не имеет `duration/repeatEvery`; sound требует exact sample и `volume/pitch/pitchVariance`, без alpha-derived громкости. Точные sound/shape/history/material payloads описаны у собственных owners.
+
+Wire caps `maxParticlesPerTick/maxParticlesTotal/maxDrawCalls`, `slotSeed`, optional `phaseOffset` и `recipeId` — технические runtime/identity поля, а не дополнительные творческие решения. Repair разрешает только exact invalid leaves; принятая пустота и нули frozen.
 
 <a id="verification"></a>
-## Проверка отдельно от старого census
+## Проверка
 
 ### Текущие numeric boundaries
 
@@ -121,5 +122,3 @@ Ordinary slots передают schema-required common fields и conditional ren
 - Global Lowery proof связывает source primary/entity/binding identity и type/representation-aware projection. Wire-only consistency не является source proof.
 
 Current owners: `test_registry_author_units.py`, `test_registry_wire_boundary.py`, `test_registry_receipt_identity.py`, `test_repair_frozen_contract.py`, `test_visual_presentation_metadata.py`, `test_vfx_packet_contracts.py`, `test_vfx_material_admission_contracts.py`; C# — existing `EngineRuntimeChecks`. [Test owners](../../development/TESTING_RU.md) задаёт команды и isolation. Инвентарный static trace, executable CPU test, native/GPU, live model и игровой/MP результат — разные доказательства.
-
-Старые 229-row census, rename decisions и verification counts сохранены в [units history](../../archive/VISUAL_AUDIT_HISTORY_RU.md#units-audit) и immutable source blobs. Это не утверждение, что все старые VFX consumer descriptions остаются верны после .242–.246, и не current-green stamp.

@@ -1,0 +1,1924 @@
+from __future__ import annotations
+
+import json
+import re
+from typing import Any, Iterable, Mapping
+
+from infini_local.core.runtime_authoring.capability_registry import (
+    CAPABILITY_REGISTRY,
+    CONTROLLER_OPCODE,
+    ENTITY_KIND_REGISTRY,
+    MOVEMENT_OPCODE,
+    PROJECTILE_MODIFIER_COMPONENTS,
+    RUNTIME_PROGRAM_SCHEMA,
+    VISUAL_ROLE_BY_ENTITY_KIND,
+    WIRE_EVENT_ACTION_OPCODE,
+    equipment_damage_wire_path,
+    target_updates_per_tick,
+)
+from infini_local.core.runtime_authoring.parameter_contract import ParamSpec
+from infini_local.core.runtime_authoring.program_schema import (
+    PRIMARY_ENTITY_AUTHOR_PATH,
+)
+from infini_local.core.runtime_authoring.receipt_input import (
+    prepare_receipt_rows,
+    receipt_param_spec,
+    receipt_path_segments,
+)
+
+TECHNICAL_LOWERING_SCHEMA = "infini.technical-lowering-manifest.v1"
+MIN_EXACT_REPETITION_COMPRESSION = 5
+PRIMARY_BINDING_ROLE_LOWERER_ID = "primary_entity_to_binding_role"
+PRIMARY_OWNER_LOWERER_ID = "primary_entity_kind_to_owner"
+PRIMARY_OWNER_FINAL_PATH = "runtimeProgram.primaryOwner"
+STACK_CHANCE_LOWERER_ID = "binding_stack_chance_identity"
+EFFECT_GROUP_BINDING_LOWERER_ID = "binding_effect_group_identity"
+EXACT_REPETITION_COMPRESSION_POLICY = {
+    "kind": "exact_repetition",
+    "minimumRepeatedPlacements": MIN_EXACT_REPETITION_COMPRESSION,
+    "requiresLiteralEquality": True,
+    "mayAddDesignChoice": False,
+}
+
+
+def primary_binding_role(primary_entity_id: str, binding_target: str) -> str:
+    return "primary" if binding_target == primary_entity_id else "secondary"
+
+
+def primary_owner_for_kind(entity_kind: str) -> str:
+    spec = ENTITY_KIND_REGISTRY.get(entity_kind)
+    if spec is None:
+        return ""
+    return "projectile" if spec.projectile else "item_body"
+
+
+def primary_binding_role_receipt(
+    *,
+    source_index: int,
+    final_index: int,
+    role: str,
+) -> dict[str, Any]:
+    return {
+        "lowererId": PRIMARY_BINDING_ROLE_LOWERER_ID,
+        "authoredPaths": [
+            PRIMARY_ENTITY_AUTHOR_PATH,
+            f"runtimeProgram.bindings[{source_index}].action.targetId",
+        ],
+        "finalPath": f"runtimeProgram.bindings[{final_index}].role",
+        "value": role,
+        "status": "technical_projection",
+    }
+
+
+def _placement_source_paths(source: Mapping[str, Any], call_index: int, binding_index: int) -> list[str]:
+    cb, bb = f"runtimeProgram.calls[{call_index}]", f"runtimeProgram.bindings[{binding_index}]"
+    entities = _final_value(source, "runtimeProgram.entities")
+    bodies = [i for i, row in enumerate(entities if isinstance(entities, list) else [])
+              if isinstance(row, Mapping) and row.get("kind") == "item_body"]
+    return [cb + ".fn", cb + ".id", cb + ".params.placementCallId", bb + ".id", bb + ".action.kind",
+            bb + ".action.placementCallId", *[f"runtimeProgram.entities[{bodies[0]}].{key}" for key in ("id", "kind")]] if len(bodies) == 1 else []
+
+
+def _binding_role_paths(source: Mapping[str, Any], index: int) -> list[str]:
+    base = f"runtimeProgram.bindings[{index}]"
+    if _final_value(source, base + ".action.targetId") is not _MISSING:
+        return [PRIMARY_ENTITY_AUTHOR_PATH, base + ".action.targetId"]
+    entities = _final_value(source, "runtimeProgram.entities")
+    bodies = [(i, row) for i, row in enumerate(entities if isinstance(entities, list) else [])
+              if isinstance(row, Mapping) and row.get("kind") == "item_body"]
+    if len(bodies) != 1:
+        return []
+    paths = [PRIMARY_ENTITY_AUTHOR_PATH, base + ".id", base + ".input"]
+    if _final_value(source, base + ".action.kind") is not _MISSING:
+        paths.append(base + ".action.kind")
+    return paths + [f"runtimeProgram.entities[{bodies[0][0]}].{key}" for key in ("id", "kind")]
+
+
+def primary_owner_receipt(*, source_index: int, owner: str) -> dict[str, Any]:
+    entity_path = f"runtimeProgram.entities[{source_index}]"
+    return {
+        "lowererId": PRIMARY_OWNER_LOWERER_ID,
+        "authoredPaths": [
+            PRIMARY_ENTITY_AUTHOR_PATH,
+            f"{entity_path}.id",
+            f"{entity_path}.kind",
+        ],
+        "finalPath": PRIMARY_OWNER_FINAL_PATH,
+        "value": owner,
+        "status": "technical_projection",
+    }
+
+
+def stack_chance_receipt(*, source_index: int, final_index: int, value: int) -> dict[str, Any]:
+    return {
+        "lowererId": STACK_CHANCE_LOWERER_ID,
+        "authoredPaths": [f"runtimeProgram.bindings[{source_index}].id",
+                          f"runtimeProgram.bindings[{source_index}].stackConsumeChancePercent"],
+        "finalPath": f"runtimeProgram.bindings[{final_index}].usePolicy.stackConsumeChancePercent",
+        "value": value, "status": "technical_projection",
+    }
+
+
+def effect_group_binding_receipt(*, source_index: int, final_index: int, value: str) -> dict[str, Any]:
+    return {
+        "lowererId": EFFECT_GROUP_BINDING_LOWERER_ID,
+        "authoredPaths": [f"runtimeProgram.bindings[{source_index}].id",
+                          f"runtimeProgram.bindings[{source_index}].action.effectGroupId"],
+        "finalPath": f"runtimeProgram.bindings[{final_index}].usePolicy.action.effectGroupId",
+        "value": value, "status": "technical_projection",
+    }
+
+# These are the only non-capability design-neutral projections. They serialize one
+# authored value into the tModLoader-facing DTO shape or derive an opcode/role from
+# an already-authored exact capability/entity kind. They never choose movement,
+# attachment, delivery, lifecycle, input, damage, or visual topology.
+_ITEM_TECHNICAL_OUTPUTS = tuple(dict.fromkeys(
+    path
+    for capability in CAPABILITY_REGISTRY.values()
+    if capability.target_kinds == ("item_body",)
+    for path in capability.final_wire_paths
+    if path.startswith(("gameplay.", "accessory.", "armor.", "runtimeProgram.itemUse.", "runtimeProgram.itemContact."))
+))
+
+GLOBAL_TECHNICAL_LOWERINGS: tuple[dict[str, Any], ...] = (
+    {
+        "id": "author_binding_lanes",
+        "inputs": ["runtimeProgram.bindings[].id", "runtimeProgram.bindings[].input", "runtimeProgram.bindings[].action.kind",
+                   "runtimeProgram.bindings[].action.targetId", "runtimeProgram.bindings[].stackCost", "runtimeProgram.bindings[].contactDamage",
+                   "runtimeProgram.bindings[].action.effectGroupId", "runtimeProgram.bindings[].action.fishing.power", "runtimeProgram.bindings[].action.fishing.castSpeed", "runtimeProgram.entities[].id", "runtimeProgram.entities[].kind", "runtimeProgram.primaryEntityId"],
+        "outputs": ["runtimeProgram.bindings[].id", "runtimeProgram.bindings[].input", "runtimeProgram.bindings[].usePolicy.action.kind",
+                    "runtimeProgram.bindings[].usePolicy.action.targetId", "runtimeProgram.bindings[].usePolicy.action.effectGroupId",
+                    "runtimeProgram.bindings[].usePolicy.action.fishing.power", "runtimeProgram.bindings[].usePolicy.action.fishing.castSpeedPxPerTick",
+                    "runtimeProgram.bindings[].usePolicy.stackCost", "runtimeProgram.bindings[].usePolicy.contactDamage",
+                    "runtimeProgram.entities[].id", "runtimeProgram.entities[].kind", "runtimeProgram.primaryEntityId", "runtimeProgram.itemEntityId"],
+        "equivalence": "exact current source lanes and uniquely declared fixed-branch/body dependencies; sorted outputs retain exact id association",
+        "preserves": ["input", "action", "target", "stack", "contact", "primary", "identity", "JSON type"],
+        "addsDesignChoice": False,
+    },
+    {
+        "id": STACK_CHANCE_LOWERER_ID,
+        "inputs": ["runtimeProgram.bindings[].id", "runtimeProgram.bindings[].stackConsumeChancePercent"],
+        "outputs": ["runtimeProgram.bindings[].usePolicy.stackConsumeChancePercent"],
+        "equivalence": "literal optional authored probability on the same exact binding identity",
+        "preserves": ["binding identity", "explicit zero", "probability", "absence", "placement escrow"],
+        "addsDesignChoice": False,
+    },
+    {
+        "id": EFFECT_GROUP_BINDING_LOWERER_ID,
+        "inputs": ["runtimeProgram.bindings[].id", "runtimeProgram.bindings[].action.effectGroupId"],
+        "outputs": ["runtimeProgram.bindings[].usePolicy.action.effectGroupId"],
+        "equivalence": "literal named effect group on the same exact authored binding",
+        "preserves": ["binding identity", "group identity", "group contents", "shared mobility cooldown"],
+        "addsDesignChoice": False,
+    },
+    {
+        "id": "entity_kind_to_visual_role",
+        "inputs": ["runtimeProgram.entities[].kind"],
+        "outputs": ["runtimeProgram.entities[].visualRole", "runtimeProgram.entities[].visual.role"],
+        "equivalence": "one canonical renderer role name for each explicitly authored entity kind",
+        "preserves": ["entity kind", "entity identity", "all gameplay components"],
+        "addsDesignChoice": False,
+    },
+    {
+        "id": PRIMARY_BINDING_ROLE_LOWERER_ID,
+        "inputs": [PRIMARY_ENTITY_AUTHOR_PATH, "runtimeProgram.bindings[].action.targetId", "runtimeProgram.bindings[].id", "runtimeProgram.bindings[].input", "runtimeProgram.bindings[].action.kind", "runtimeProgram.entities[].id", "runtimeProgram.entities[].kind"],
+        "outputs": ["runtimeProgram.bindings[].role"],
+        "equivalence": "primary exactly when the authored binding target equals the exact authored primary entity id; secondary otherwise",
+        "preserves": ["primary entity identity", "binding identity", "binding target", "input", "action"],
+        "addsDesignChoice": False,
+    },
+    {
+        "id": PRIMARY_OWNER_LOWERER_ID,
+        "inputs": [PRIMARY_ENTITY_AUTHOR_PATH, "runtimeProgram.entities[].id", "runtimeProgram.entities[].kind"],
+        "outputs": [PRIMARY_OWNER_FINAL_PATH],
+        "equivalence": "wire owner family for the exact kind of the exact authored primary entity id",
+        "preserves": ["primary entity identity", "entity kind"],
+        "addsDesignChoice": False,
+    },
+    {
+        "id": "capability_name_to_opcode",
+        "inputs": ["runtimeProgram.calls[].fn"],
+        "outputs": ["runtimeProgram.entities[].movement.code", "runtimeProgram.entities[].controller.code", "runtimeProgram.entities[].events[].actionCode"],
+        "equivalence": "finite numeric wire opcode for the exact authored capability name",
+        "preserves": ["capability identity", "target", "params", "event links"],
+        "addsDesignChoice": False,
+    },
+    {
+        "id": "item_fields_to_tml_projection",
+        "inputs": ["item_body capability params"],
+        "outputs": list(_ITEM_TECHNICAL_OUTPUTS),
+        "equivalence": "same authored semantic value copied into the exact DTO fields consumed by Terraria/tModLoader",
+        "preserves": ["all authored item values", "explicit zero", "units"],
+        "addsDesignChoice": False,
+    },
+)
+
+
+def _exact_mechanical_view(document: Mapping[str, Any]) -> dict[str, Any]:
+    """Private selected-branch expansion; never an admission/import/Repair writer."""
+    import copy
+
+    from infini_local.core.runtime_authoring.capability_registry import BINDING_ACTION_REGISTRY, INPUT_KIND_REGISTRY
+    out = copy.deepcopy(dict(document))
+    program = out.get("runtimeProgram")
+    if not isinstance(program, dict):
+        return out
+    entities = program.get("entities")
+    bodies = [row for row in entities if isinstance(row, Mapping) and row.get("kind") == "item_body"] if isinstance(entities, list) else []
+    body = bodies[0].get("id") if len(bodies) == 1 else None
+    if not isinstance(body, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,47}", body):
+        body = None
+    for call in program.get("calls", []) if isinstance(program.get("calls"), list) else []:
+        if not isinstance(call, dict):
+            continue
+        cap = CAPABILITY_REGISTRY.get(str(call["fn"])) if isinstance(call.get("fn"), str) else None
+        if cap is None:
+            continue
+        if cap.target_kinds == ("item_body",) and body is not None and "target" not in call:
+            call["target"] = body
+        if not cap.params and "params" not in call:
+            call["params"] = {}
+    for binding in program.get("bindings", []) if isinstance(program.get("bindings"), list) else []:
+        if not isinstance(binding, dict):
+            continue
+        inp = INPUT_KIND_REGISTRY.get(str(binding["input"])) if isinstance(binding.get("input"), str) else None
+        if inp is None:
+            # A valid explicit action still declares its unique body dependency;
+            # this does not choose/repair the unknown input selector.
+            raw_action = binding.get("action")
+            explicit = BINDING_ACTION_REGISTRY.get(str(raw_action["kind"])) if isinstance(raw_action, dict) and isinstance(raw_action.get("kind"), str) else None
+            if isinstance(raw_action, dict) and explicit is not None and explicit.target_kinds == ("item_body",) and body is not None and "targetId" not in raw_action:
+                raw_action["targetId"] = body
+            continue
+        if len(inp.allowed_actions) == 1:
+            if "action" not in binding:
+                binding["action"] = {}
+            if isinstance(binding["action"], dict) and "kind" not in binding["action"]:
+                binding["action"]["kind"] = inp.allowed_actions[0]
+        action = binding.get("action")
+        spec = BINDING_ACTION_REGISTRY.get(str(action["kind"])) if isinstance(action, dict) and isinstance(action.get("kind"), str) else None
+        if spec is None or not isinstance(action, dict) or spec.name not in inp.allowed_actions:
+            continue
+        if spec.target_kinds == ("item_body",) and body is not None and "targetId" not in action:
+            action["targetId"] = body
+        if binding["input"] not in {"primary_use", "alternate_use"} or spec.name in {"place_item", "native_fishing"}:
+            binding.setdefault("stackCost", 1 if spec.name == "place_item" else 0)
+            binding.setdefault("contactDamage", False)
+    return out
+
+
+def _author_binding_receipts(source: Mapping[str, Any], final: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """One typed proof chain for current source lanes, declarations and sorted identity."""
+    view = _exact_mechanical_view(source)
+    program = view.get("runtimeProgram", {})
+    raw_program = source.get("runtimeProgram", {})
+    wire = final.get("runtimeProgram", {})
+    if not isinstance(program, Mapping) or not isinstance(raw_program, Mapping) or not isinstance(wire, Mapping):
+        return []
+    rows: list[dict[str, Any]] = []
+    raw_entities = raw_program.get("entities", [])
+    bodies = [(i, entity) for i, entity in enumerate(raw_entities) if isinstance(entity, Mapping) and entity.get("kind") == "item_body"]
+    body_paths = [f"runtimeProgram.entities[{bodies[0][0]}].{key}" for key in ("id", "kind")] if len(bodies) == 1 else []
+    def emit(paths: list[str], destination: str, value: Any) -> None:
+        rows.append({"lowererId": "author_binding_lanes", "authoredPaths": paths,
+                     "finalPath": destination, "value": value, "status": "technical_projection"})
+    for bi, binding in enumerate(program.get("bindings", [])):
+        if not isinstance(binding, Mapping):
+            continue
+        matches = [(i, row) for i, row in enumerate(wire.get("bindings", [])) if isinstance(row, Mapping) and row.get("id") == binding.get("id")]
+        if len(matches) != 1:
+            continue
+        fi, _ = matches[0]
+        raw = raw_program["bindings"][bi]
+        base = f"runtimeProgram.bindings[{bi}]"
+        dest = f"runtimeProgram.bindings[{fi}]"
+        identity = [base + ".id"]
+        emit(identity, dest + ".id", binding["id"])
+        emit(identity + [base + ".input"], dest + ".input", binding["input"])
+        for key in ("kind", "targetId", "effectGroupId"):
+            if key not in binding.get("action", {}):
+                continue
+            raw_action = raw.get("action", {})
+            paths = identity + ([base + ".action." + key] if isinstance(raw_action, Mapping) and key in raw_action else
+                                [base + ".input"] if key == "kind" else
+                                [base + ".input", *([base + ".action.kind"] if isinstance(raw_action, Mapping) and "kind" in raw_action else []), *body_paths])
+            emit(paths, dest + ".usePolicy.action." + key, binding["action"][key])
+        if binding.get("action", {}).get("kind") == "native_fishing":
+            from infini_local.core.runtime_authoring.capability_registry import NATIVE_FISHING_PARAMETERS
+            for name, spec in NATIVE_FISHING_PARAMETERS.items():
+                emit(identity + [base + ".action.fishing." + name],
+                     dest + ".usePolicy.action.fishing." + (spec.wire_name or name),
+                     spec.to_wire(binding["action"]["fishing"][name]))
+        for key in ("stackCost", "contactDamage"):
+            paths = identity + ([base + "." + key] if key in raw else
+                                [base + ".input", *([base + ".action.kind"] if isinstance(raw.get("action"), Mapping) and "kind" in raw["action"] else [])])
+            emit(paths, dest + ".usePolicy." + key, binding[key])
+    for key in ("primaryEntityId", "itemEntityId"):
+        paths = ["runtimeProgram.primaryEntityId"] if key == "primaryEntityId" else body_paths
+        value = program.get("primaryEntityId") if key == "primaryEntityId" else bodies[0][1]["id"] if len(bodies) == 1 else None
+        if paths and value is not None:
+            emit(paths, "runtimeProgram." + key, value)
+    for ei, entity in enumerate(program.get("entities", [])):
+        if not isinstance(entity, Mapping):
+            continue
+        matches = [i for i, row in enumerate(wire.get("entities", [])) if isinstance(row, Mapping) and row.get("id") == entity.get("id")]
+        if len(matches) == 1:
+            for key in ("id", "kind"):
+                emit([f"runtimeProgram.entities[{ei}].id", f"runtimeProgram.entities[{ei}].{key}"],
+                     f"runtimeProgram.entities[{matches[0]}].{key}", entity[key])
+    return rows
+
+
+def _normalize(path: str) -> str:
+    return re.sub(r"\[\d+\]", "[]", path)
+
+
+def path_matches(pattern: str, path: str) -> bool:
+    normalized = _normalize(path)
+    expression = "^" + re.escape(pattern).replace(r"\*", ".*") + "$"
+    return re.fullmatch(expression, normalized) is not None
+
+
+def _declares_neutral_omission(spec: ParamSpec) -> bool:
+    return (not spec.required and spec.default is not None
+            and type(spec.default) is type(spec.neutral) and spec.default == spec.neutral)
+
+
+def declared_neutral_omissions(fn: str, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Only explicit optional registry defaults equal to their neutral may fill an absent leaf."""
+    cap = CAPABILITY_REGISTRY.get(fn)
+    if cap is None:
+        return {}
+    def walk(specs: Mapping[str, ParamSpec], values: Mapping[str, Any], prefix: str = "") -> dict[str, Any]:
+        omitted = {}
+        for name, spec in specs.items():
+            path = prefix + name
+            if name not in values and _declares_neutral_omission(spec) and (prefix or cap.neutral_omission_allowed(name, params)):
+                if spec.structured:
+                    omitted.update((leaf, value) for leaf, _, value in spec.leaf_values(spec.default, path))
+                else:
+                    omitted[path] = spec.default
+            elif name in values and spec.properties and isinstance(values[name], Mapping):
+                omitted.update(walk(spec.properties, values[name], path + "."))
+        return omitted
+    return walk(cap.params, params)
+
+
+def _completed_params(fn: str, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Private projection view; create an absent object only from its whole declared neutral."""
+    import copy
+    completed = copy.deepcopy(dict(params))
+    cap = CAPABILITY_REGISTRY.get(fn)
+    if cap is not None:
+        for name, spec in cap.params.items():
+            if name not in params and spec.structured and cap.neutral_omission_allowed(name, params):
+                completed[name] = copy.deepcopy(spec.default)
+    for path, value in declared_neutral_omissions(fn, params).items():
+        parts = path.split(".")
+        target = completed
+        for part in parts[:-1]:
+            target = target[part]
+        target[parts[-1]] = copy.deepcopy(value)
+    return completed
+
+
+def _omission_context_allows(
+    cap: Any, name: str, receipt: Mapping[str, Any], *,
+    authored_document: Mapping[str, Any] | None, final_document: Mapping[str, Any] | None,
+) -> bool:
+    spec = cap.params.get(name)
+    if spec is None:
+        return False
+    condition = spec.omission_condition
+    if condition is None and not spec.structured:
+        return True
+    # Conditional root neutrals must be checked against the source params or
+    # the actual sibling wire fields, never merely against receipt assertions.
+    if authored_document is not None:
+        calls = _final_value(authored_document, "runtimeProgram.calls")
+        sources = [row for row in calls if isinstance(row, Mapping)
+                   and row.get("id") == receipt.get("callId") and row.get("fn") == cap.name] if isinstance(calls, list) else []
+        if len(sources) != 1 or not isinstance(sources[0].get("params"), Mapping):
+            return False
+        scope_params = sources[0]["params"]
+    elif final_document is not None:
+        root_fields = spec.wire_field_names(name)
+        path = str(receipt.get("finalPath") or "")
+        fields = [field for field in root_fields if path.endswith("." + field)]
+        if len(fields) != 1:
+            return False
+        component_path = path[:-(len(fields[0]) + 1)]
+        scope_params = {key: value for key, child in cap.params.items()
+                        if (value := _final_value(final_document, component_path + "." + (child.wire_name or key))) is not _MISSING}
+    else:
+        return False
+    if not cap.neutral_omission_allowed(name, scope_params):
+        return False
+    if condition is None:
+        return True
+    if authored_document is not None:
+        program = authored_document.get("runtimeProgram", {})
+        if not isinstance(program, Mapping):
+            return False
+        calls = program.get("calls", [])
+        source = next((row for row in calls if isinstance(row, Mapping)
+                       and row.get("id") == receipt.get("callId") and row.get("fn") == cap.name), None)
+        if not isinstance(source, Mapping) or not isinstance(source.get("params"), Mapping):
+            return False
+        target = source.get("target")
+        kind = next((str(row.get("kind") or "") for row in program.get("entities", [])
+                     if isinstance(row, Mapping) and row.get("id") == target), "")
+        return condition.allows(source["params"], kind,
+                                (str(row.get("fn") or "") for row in calls
+                                 if isinstance(row, Mapping) and row.get("target") == target))
+    # Saved receipts have no Author source. Verify the same finite inactive
+    # consumer branch against delivered wire, without reconstructing Author.
+    if final_document is None:
+        return False
+    path = str(receipt.get("finalPath") or "")
+    entity_match = re.match(r"runtimeProgram\.entities\[\d+\]", path)
+    if entity_match is None:
+        return False
+    entity_path = entity_match.group(0)
+    if _final_value(final_document, entity_path + ".kind") in condition.target_kinds:
+        return True
+    field = spec.wire_name or name
+    component_path = path.removesuffix("." + field)
+    for selector, expected in condition.param_equals:
+        selector_spec = cap.params[selector]
+        wire_path = component_path + "." + (selector_spec.wire_name or selector)
+        if _same_receipt_value(_final_value(final_document, wire_path), selector_spec.to_wire(expected)):
+            return True
+    for capability in condition.target_capabilities:
+        owner = CAPABILITY_REGISTRY[capability]
+        for pattern in owner.final_wire_paths:
+            if pattern.startswith("runtimeProgram.entities[].") and pattern.endswith(".name"):
+                wire_path = pattern.replace("runtimeProgram.entities[]", entity_path, 1)
+                if _final_value(final_document, wire_path) == capability:
+                    return True
+    return False
+
+
+def _root_neutral_omission_matches(
+    cap: Any, source_name: str, receipt: Mapping[str, Any], *,
+    authored_document: Mapping[str, Any] | None, final_document: Mapping[str, Any] | None,
+) -> bool:
+    """A leaf receipt may prove only an exact projection of the declared whole default."""
+    root = source_name.split(".", 1)[0]
+    spec = cap.params.get(root)
+    if spec is None or not spec.structured or not cap.neutral_omission_allowed(root, {}):
+        return False
+    if not _omission_context_allows(cap, root, receipt,
+            authored_document=authored_document, final_document=final_document):
+        return False
+    updates = None
+    if spec.requires_update_context:
+        if authored_document is not None:
+            calls = _final_value(authored_document, "runtimeProgram.calls")
+            source = next((row for row in calls if isinstance(row, Mapping)
+                           and row.get("id") == receipt.get("callId") and row.get("fn") == cap.name), None) if isinstance(calls, list) else None
+            if isinstance(source, Mapping):
+                updates = _source_updates(spec, source, calls)
+        elif final_document is not None:
+            entity = re.match(r"runtimeProgram\.entities\[\d+\]", str(receipt.get("finalPath") or ""))
+            extra = _final_value(final_document, entity.group() + ".collision.extraUpdates") if entity else None
+            if type(extra) is int and 0 <= extra <= 5:
+                updates = extra + 1
+    try:
+        projections = spec.projected_fields(spec.default, root, updates_per_tick=updates)
+    except (ValueError, TypeError, OverflowError):
+        return False
+    matches = [row for row in projections if row.authored_path == source_name and not row.literal
+               and str(receipt.get("finalPath") or "").endswith("." + row.wire_path)
+               and _same_receipt_value(row.value, receipt.get("value"))]
+    if len(matches) != 1:
+        return False
+    if final_document is not None:
+        prefix = receipt["finalPath"][:-(len(matches[0].wire_path) + 1)]
+        delivered = _wire_projection_witness(spec, root, prefix, final_document)
+        expected_records = [(row.authored_path, row.wire_path, row.literal, row.value) for row in projections]
+        delivered_records = [(row.authored_path, row.wire_path, row.literal, row.value) for row in delivered]
+        if not _same_receipt_value(delivered_records, expected_records):
+            return False
+    return True
+
+
+def _parameter_outputs(fn: str, name: str, params: Mapping[str, Any] | None = None) -> tuple[str, ...]:
+    cap = CAPABILITY_REGISTRY[fn]
+    root = name.split(".", 1)[0]
+    spec = receipt_param_spec(cap, name)
+    if spec is None:
+        root_spec = cap.params.get(root)
+        if root_spec is None or not root_spec.structured:
+            return ()
+        names = tuple(destination for source, destination, _ in root_spec.projection_paths(root) if source == name)
+    else:
+        names = (name, *spec.wire_field_names(name))
+    return tuple(dict.fromkeys(
+        candidate for candidate in cap.final_wire_paths
+        if any(candidate.endswith("." + name) for name in names)
+        and (fn not in PROJECTILE_MODIFIER_COMPONENTS or candidate.startswith(
+            "runtimeProgram.entities[]." + cap.nested_components.get(root, PROJECTILE_MODIFIER_COMPONENTS[fn]) + ("[]" if cap.multiplicity == "many_per_target" else "") + "."))
+        and (params is None or not cap.effect_groupable
+             or candidate.startswith("runtimeProgram.effectGroups[]." if "effectGroupId" in params else "gameplay."))
+    ))
+
+
+def _source_updates(spec: ParamSpec, call: Mapping[str, Any], calls: list[Any]) -> int | None:
+    return target_updates_per_tick(calls, str(call.get("target") or "")) if spec.requires_update_context else None
+
+
+def _valid_source_projection(spec: Any, source: Any, projected: Any, *,
+                             call: Mapping[str, Any], calls: list[Any]) -> bool:
+    try:
+        rows = spec.projected_fields(source, "parameter", updates_per_tick=_source_updates(spec, call, calls))
+        return len(rows) == 1 and _same_receipt_value(rows[0].value, projected)
+    except (ValueError, TypeError, OverflowError):
+        return False
+
+
+def declared_outputs_for(fn: str) -> tuple[str, ...]:
+    cap = CAPABILITY_REGISTRY.get(fn)
+    if cap is None:
+        return ()
+    return tuple(dict.fromkeys((*cap.final_wire_paths, *cap.technical_lowering_outputs)))
+
+
+def capability_fixed_outputs(fn: str) -> dict[str, Any]:
+    """Fn-selected constants from canonical opcode and literal declarations.
+
+    This is proof of an explicitly selected executor, not a behavior router.
+    Parameters (including meaningful booleans) never become constants here.
+    """
+    cap = CAPABILITY_REGISTRY.get(fn)
+    if cap is None:
+        return {}
+    literals = dict(cap.fixed_wire_literals)
+    if fn in MOVEMENT_OPCODE:
+        literals.update({"movement.name": fn, "movement.code": MOVEMENT_OPCODE[fn]})
+    if fn in CONTROLLER_OPCODE:
+        literals.update({"controller.name": fn, "controller.code": CONTROLLER_OPCODE[fn]})
+    if cap.category == "event":
+        action = cap.wire_action or cap.persisted_name
+        literals.update({"action": action, "actionCode": WIRE_EVENT_ACTION_OPCODE[action]})
+    return {path: value for key, value in literals.items()
+            for path in cap.final_wire_paths if path.endswith("." + key)}
+
+
+def declared_global_outputs_for(lowerer_id: str) -> tuple[str, ...]:
+    for lowerer in GLOBAL_TECHNICAL_LOWERINGS:
+        if str(lowerer.get("id") or "") == lowerer_id:
+            return tuple(str(path) for path in lowerer.get("outputs") or ())
+    return ()
+
+
+def declared_global_inputs_for(lowerer_id: str) -> tuple[str, ...]:
+    for lowerer in GLOBAL_TECHNICAL_LOWERINGS:
+        if str(lowerer.get("id") or "") == lowerer_id:
+            return tuple(str(path) for path in lowerer.get("inputs") or ())
+    return ()
+
+
+_MISSING = object()
+
+
+def _same_receipt_value(actual: Any, expected: Any) -> bool:
+    """Preserve wire types and JSON representation, including signed zero."""
+    return (type(actual) is type(expected)
+            and json.dumps(actual, sort_keys=True, default=repr) == json.dumps(expected, sort_keys=True, default=repr))
+
+
+def _final_value(document: Mapping[str, Any], path: str) -> Any:
+    """Read a compiler receipt path without evaluating arbitrary expressions."""
+    segments = receipt_path_segments(path)
+    if segments is None:
+        return _MISSING
+    value: Any = document
+    for segment in segments:
+        if isinstance(segment, int):
+            if not isinstance(value, list) or segment >= len(value):
+                return _MISSING
+            value = value[segment]
+        else:
+            if not isinstance(value, Mapping) or segment not in value:
+                return _MISSING
+            value = value[segment]
+    return value
+
+
+def _present_wire_paths(document: Mapping[str, Any], pattern: str) -> tuple[str, ...]:
+    """Resolve registry array paths against present wire rows without inventing slots."""
+    if "[]" not in pattern:
+        return () if _final_value(document, pattern) is _MISSING else (pattern,)
+    prefix, suffix = pattern.split("[]", 1)
+    rows = _final_value(document, prefix)
+    return tuple(path for index in range(len(rows))
+                 for path in _present_wire_paths(document, f"{prefix}[{index}]{suffix}")) if isinstance(rows, list) else ()
+
+
+def _primary_receipt_source_error(
+    receipt: Mapping[str, Any], authored_document: Mapping[str, Any],
+    final_document: Mapping[str, Any] | None,
+) -> str:
+    """Check the actual source relation, not just declared path shapes."""
+    lowerer_id = receipt.get("lowererId")
+    if lowerer_id not in {PRIMARY_OWNER_LOWERER_ID, PRIMARY_BINDING_ROLE_LOWERER_ID}:
+        return ""
+    primary = _final_value(authored_document, PRIMARY_ENTITY_AUTHOR_PATH)
+    entities = _final_value(authored_document, "runtimeProgram.entities")
+    primary_rows = [(i, row) for i, row in enumerate(entities if isinstance(entities, list) else [])
+                    if isinstance(row, Mapping) and row.get("id") == primary]
+    if not isinstance(primary, str) or not primary or len(primary_rows) != 1:
+        return "global receipt lacks a unique authored primary entity"
+    source_index, entity = primary_rows[0]
+    if final_document is not None and _final_value(final_document, PRIMARY_ENTITY_AUTHOR_PATH) != primary:
+        return "global receipt primary identity differs from the authored source"
+    if lowerer_id == PRIMARY_OWNER_LOWERER_ID:
+        kind = entity.get("kind")
+        expected = primary_owner_receipt(source_index=source_index, owner=primary_owner_for_kind(kind if isinstance(kind, str) else ""))
+        if not expected["value"]:
+            return "global receipt has an undeclared primary entity kind"
+    else:
+        paths = receipt.get("authoredPaths", [])
+        binding_paths = [path for path in paths if re.fullmatch(r"runtimeProgram\.bindings\[\d+\]\.(?:action\.targetId|id)", path)]
+        match = re.match(r"runtimeProgram\.bindings\[(\d+)\]", binding_paths[0]) if len(binding_paths) == 1 else None
+        if match is None:
+            return "global receipt lacks exact declared binding inputs"
+        source_index = int(match.group(1))
+        binding = _final_value(authored_document, f"runtimeProgram.bindings[{source_index}]")
+        target = _final_value(_exact_mechanical_view(authored_document), f"runtimeProgram.bindings[{source_index}].action.targetId")
+        if not isinstance(binding, Mapping) or not isinstance(target, str) or not target:
+            return "global receipt lacks its originating authored binding"
+        final_index = 0
+        if final_document is not None:
+            bindings = _final_value(final_document, "runtimeProgram.bindings")
+            finals = [(i, row) for i, row in enumerate(bindings if isinstance(bindings, list) else [])
+                      if isinstance(row, Mapping) and row.get("id") == binding.get("id")]
+            if len(finals) != 1:
+                return "global receipt lacks a unique final binding identity"
+            final_index, _ = finals[0]
+            if _final_value(final_document, f"runtimeProgram.bindings[{final_index}].usePolicy.action.targetId") != target:
+                return "global receipt binding target differs from the authored source"
+        expected = primary_binding_role_receipt(
+            source_index=source_index, final_index=final_index, role=primary_binding_role(primary, target),
+        )
+    if lowerer_id == PRIMARY_BINDING_ROLE_LOWERER_ID:
+        expected["authoredPaths"] = _binding_role_paths(authored_document, source_index)
+    if any(receipt.get(key) != expected[key] for key in ("authoredPaths", "value", "status")):
+        return "global receipt is not the exact declared projection of its authored source"
+    if final_document is not None and receipt.get("finalPath") != expected["finalPath"]:
+        return "global receipt output is not bound to its authored identity"
+    return ""
+
+
+def _visual_receipt_source_error(
+    receipt: Mapping[str, Any], authored_document: Mapping[str, Any],
+    final_document: Mapping[str, Any] | None,
+) -> str:
+    paths = receipt.get("authoredPaths", [])
+    match = re.fullmatch(r"runtimeProgram\.entities\[(\d+)\]\.kind", paths[0]) if len(paths) == 1 else None
+    entity = _final_value(authored_document, paths[0].rsplit(".", 1)[0]) if match else None
+    kind = entity.get("kind") if isinstance(entity, Mapping) else None
+    expected = VISUAL_ROLE_BY_ENTITY_KIND.get(kind) if isinstance(kind, str) else None
+    if not isinstance(entity, Mapping) or expected is None or receipt.get("value") != expected:
+        return "global visual receipt is not the declared projection of its authored kind"
+    if final_document is not None:
+        entities = _final_value(final_document, "runtimeProgram.entities")
+        finals = [(i, row) for i, row in enumerate(entities if isinstance(entities, list) else [])
+                  if isinstance(row, Mapping) and row.get("id") == entity.get("id")]
+        if len(finals) != 1 or finals[0][1].get("kind") != kind or receipt.get("finalPath") not in {
+            f"runtimeProgram.entities[{finals[0][0]}].visualRole",
+            f"runtimeProgram.entities[{finals[0][0]}].visual.role",
+        }:
+            return "global visual receipt output is not bound to its authored entity identity/kind"
+    return ""
+
+
+def _global_receipt_wire_error(receipt: Mapping[str, Any], final_document: Mapping[str, Any]) -> str:
+    """Recompute from wire facts only; these cannot authenticate Author indices."""
+    lowerer_id = receipt.get("lowererId")
+    path = receipt.get("finalPath", "")
+    expected = _MISSING
+    if lowerer_id == PRIMARY_OWNER_LOWERER_ID:
+        primary = _final_value(final_document, PRIMARY_ENTITY_AUTHOR_PATH)
+        entities = _final_value(final_document, "runtimeProgram.entities")
+        rows = [row for row in entities if isinstance(row, Mapping) and row.get("id") == primary] if isinstance(entities, list) else []
+        kind = rows[0].get("kind") if len(rows) == 1 else None
+        expected = primary_owner_for_kind(kind) if isinstance(kind, str) else _MISSING
+    elif lowerer_id == PRIMARY_BINDING_ROLE_LOWERER_ID:
+        primary = _final_value(final_document, PRIMARY_ENTITY_AUTHOR_PATH)
+        target = _final_value(final_document, path.rsplit(".", 1)[0] + ".usePolicy.action.targetId")
+        if isinstance(primary, str) and primary and isinstance(target, str) and target:
+            expected = primary_binding_role(primary, target)
+    elif lowerer_id == "entity_kind_to_visual_role":
+        match = re.fullmatch(r"(runtimeProgram\.entities\[\d+\])\.(?:visualRole|visual\.role)", path)
+        kind = _final_value(final_document, match.group(1) + ".kind") if match else None
+        expected = VISUAL_ROLE_BY_ENTITY_KIND.get(kind, _MISSING) if isinstance(kind, str) else _MISSING
+    else:
+        return ""
+    return "global receipt is not the declared projection of final wire facts" if receipt.get("value") != expected else ""
+
+
+def _wire_projection_witness(spec: ParamSpec, name: str, prefix: str, final: Mapping[str, Any]) -> tuple[Any, ...]:
+    """Prove one complete typed projection without inventing inverse Author values."""
+    from infini_local.core.runtime_authoring.parameter_contract import ParamProjection
+    from infini_local.core.schema_validation import strict_schema_errors
+
+    # A nested DTO object is a closed wire variant, not just a bag of known
+    # leaves. Do not let unknown siblings disappear from its presence proof.
+    fields = spec.wire_field_names(name)
+    if spec.structured and fields and all(field.startswith(name + ".") for field in fields):
+        if strict_schema_errors(_final_value(final, prefix + "." + name), spec.wire_schema()):
+            return ()
+
+    def rows_for(node: ParamSpec, source: str) -> tuple[Any, ...] | None:
+        if node.alternatives:
+            present = {field for field in node.wire_field_names(source)
+                       if _final_value(final, prefix + "." + field) is not _MISSING}
+            candidates = [rows_for(branch, source) for branch in node.alternatives]
+            candidates = [rows for rows in candidates if rows is not None
+                          and {row.wire_path for row in rows} == present]
+            return candidates[0] if len(candidates) == 1 else None
+        rows = []
+        for field, literal in node.wire_literals.items():
+            value = _final_value(final, prefix + "." + field)
+            if not _same_receipt_value(value, literal):
+                return None
+            rows.append(ParamProjection(source, field, value, True))
+        if node.kind == "object":
+            for key, child in node.properties.items():
+                child_source = source + "." + key
+                present = any(_final_value(final, prefix + "." + field) is not _MISSING
+                              for field in child.wire_field_names(child_source))
+                if not present and not child.required:
+                    continue
+                child_rows = rows_for(child, child_source)
+                if child_rows is None:
+                    return None
+                rows.extend(child_rows)
+        elif not node.wire_literals or node.wire_name:
+            field = node.wire_name or source.rsplit(".", 1)[-1]
+            value = _final_value(final, prefix + "." + field)
+            if value is _MISSING or not node.matches_scalar_projection(value):
+                return None
+            rows.append(ParamProjection(source, field, value))
+        present = {field for field in node.wire_field_names(source)
+                   if _final_value(final, prefix + "." + field) is not _MISSING}
+        records = tuple((row.authored_path, row.wire_path, row.literal, row.value) for row in rows)
+        if present != {row.wire_path for row in rows} or not node.matches_projection_records(records, source):
+            return None
+        return tuple(rows)
+
+    rows = rows_for(spec, name)
+    return rows if rows is not None else ()
+
+
+def _audit_present_parameters(final: Mapping[str, Any], authored: Mapping[str, Any] | None,
+                              receipts: list[Mapping[str, Any]], violations: list[dict[str, Any]]) -> None:
+    required: dict[str, list[tuple[Any, Any]]] = {}
+    for fn, cap in CAPABILITY_REGISTRY.items():
+        for name, spec in cap.params.items():
+            if not spec.wire_presence_requires_receipt:
+                continue
+            prefixes = set()
+            fields = spec.wire_field_names(name)
+            # A composite's inactive-slot literals do not activate its new
+            # mechanics by themselves (e.g. an old event's spread=0). Its
+            # authored leaves or explicitly present nested container do.
+            activation_fields = set(fields) - (set(spec.wire_literals) if spec.properties else set())
+            # A new event alias has its own persisted provenance name even when
+            # it reuses an established opcode. That name requires its complete
+            # typed projection; removing the whole new component cannot turn
+            # those receipts into an old action silently.
+            if cap.wire_action and cap.category == "event":
+                for receipt in receipts:
+                    if receipt.get("fn") == fn:
+                        event = re.match(r"runtimeProgram\.entities\[\d+\]\.events\[\d+\]", str(receipt.get("finalPath") or ""))
+                        if event is not None:
+                            prefixes.add(event.group())
+            for pattern in _parameter_outputs(fn, name):
+                for field in activation_fields:
+                    if not pattern.endswith("." + field):
+                        continue
+                    for path in _present_wire_paths(final, pattern):
+                        prefixes.add(path[:-(len(field) + 1)])
+                    if "." in field:
+                        container = field.split(".", 1)[0]
+                        container_pattern = pattern[:-(len(field) + 1)] + "." + container
+                        for path in _present_wire_paths(final, container_pattern):
+                            prefixes.add(path[:-(len(container) + 1)])
+            for prefix in prefixes:
+                # Driver params share a DTO bag (e.g. durationTicks on code19).
+                # New movement provenance activates only on its exact selected
+                # name; foreign-field admission belongs to strict wire.
+                if cap.category == "movement" and _final_value(final, prefix.rsplit(".params", 1)[0] + ".name") != fn:
+                    continue
+                for field in fields:
+                    path = prefix + "." + field
+                    if _final_value(final, path) is not _MISSING:
+                        required.setdefault(path, [])
+                rows = _wire_projection_witness(spec, name, prefix, final)
+                if not rows and cap.wire_action:
+                    violations.append({"fn": fn, "finalPath": prefix,
+                                       "reason": "persisted event alias has no complete declared parameter projection"})
+                for projection in rows:
+                    required.setdefault(prefix + "." + projection.wire_path, []).append((cap, projection))
+    for path, candidates in required.items():
+        matching = [(receipt, cap) for receipt in receipts for cap, projection in candidates
+                    if receipt.get("fn") == cap.name and receipt.get("finalPath") == path
+                    and (receipt.get("status") == ("alias_lowering" if projection.literal else "delivered")
+                         or (not projection.literal and receipt.get("status") == "declared_neutral_omission"
+                             and (((omitted_spec := receipt_param_spec(cap, projection.authored_path)) is not None
+                                   and _declares_neutral_omission(omitted_spec))
+                                  or _root_neutral_omission_matches(cap, projection.authored_path, receipt,
+                                      authored_document=authored, final_document=final))))
+                    and not receipt.get("authoredPaths") and _same_receipt_value(receipt.get("value"), projection.value)
+                    and re.fullmatch(r"runtimeProgram\.calls\[\d+\]\.params\." + re.escape(projection.authored_path),
+                                     str(receipt.get("authoredPath") or ""))]
+        if len(matching) != 1:
+            violations.append({"finalPath": path, "reason": "present explicit wire parameter has no unique originating receipt"})
+            continue
+        receipt, cap = matching[0]
+        fn = cap.name
+        source_base = str(receipt["authoredPath"]).split(".params.", 1)[0]
+        entity_match = re.match(r"runtimeProgram\.entities\[\d+\]", path)
+        entity_base = entity_match.group() if entity_match else ""
+        event_match = re.match(r"runtimeProgram\.entities\[\d+\]\.events\[\d+\]", path)
+        if event_match is not None:
+            event_base = event_match.group()
+            wire_action = cap.wire_action or cap.persisted_name
+            code = _final_value(final, event_base + ".actionCode")
+            associated = (_final_value(final, event_base + ".id") == receipt.get("callId")
+                          and _final_value(final, event_base + ".action") == wire_action
+                          and type(code) is int and code == WIRE_EVENT_ACTION_OPCODE.get(wire_action))
+        elif cap.effect_groupable:
+            owner_match = re.match(r"(gameplay|runtimeProgram\.effectGroups\[\d+\])\.", path)
+            owner_prefix = owner_match.group(1) if owner_match else ""
+            group_match = re.fullmatch(r"runtimeProgram\.effectGroups\[\d+\]", owner_prefix)
+            associated = owner_prefix == "gameplay" or bool(group_match and sum(
+                row.get("fn") == fn and row.get("callId") == receipt.get("callId")
+                and row.get("authoredPath") == source_base + ".params.effectGroupId"
+                and row.get("finalPath") == owner_prefix + ".id"
+                and row.get("status") == "delivered"
+                and _same_receipt_value(row.get("value"), _final_value(final, owner_prefix + ".id"))
+                for row in receipts) == 1)
+            entity_base = next((f"runtimeProgram.entities[{index}]"
+                for index, entity in enumerate(final.get("runtimeProgram", {}).get("entities", []))
+                if entity.get("id") == final.get("runtimeProgram", {}).get("itemEntityId")), "")
+        elif cap.category == "equipment":
+            component = path.split(".", 1)[0]
+            associated = _same_receipt_value(_final_value(final, component + ".enabled"), True)
+            associated = associated and sum(row.get("fn") == fn and row.get("callId") == receipt.get("callId")
+                and row.get("authoredPath") == source_base + ".fn" and row.get("finalPath") == component + ".enabled"
+                and row.get("status") == "technical_projection" and row.get("value") is True
+                for row in receipts) == 1
+            entity_base = next((f"runtimeProgram.entities[{index}]"
+                for index, entity in enumerate(final.get("runtimeProgram", {}).get("entities", []))
+                if entity.get("id") == final.get("runtimeProgram", {}).get("itemEntityId")), "")
+        elif fn in PROJECTILE_MODIFIER_COMPONENTS:
+            # These are independent registry-owned DTO components, not controller
+            # selectors. An indexed component is one instance of one call; neither
+            # splitting its leaves across calls nor reusing a call for two instances
+            # is valid saved provenance. Author target authentication stays above.
+            source_param = str(receipt.get("authoredPath", "")).split(".params.", 1)[-1].split(".", 1)[0]
+            member = cap.nested_components.get(source_param, PROJECTILE_MODIFIER_COMPONENTS[fn])
+            suffix = r"\[\d+\]" if cap.multiplicity == "many_per_target" else ""
+            owner_pattern = re.escape(entity_base + "." + member) + suffix
+            owner_match = re.match(r"(" + owner_pattern + r")\.", path)
+            owner = owner_match.group(1) if owner_match else ""
+            component_rows = [row for row in receipts if row.get("fn") and not row.get("lowererId")
+                              and owner and row["finalPath"].startswith(owner + ".")]
+            origins = {(row.get("fn"), row.get("callId"), match.group())
+                       for row in component_rows
+                       if (match := re.match(r"runtimeProgram\.calls\[\d+\]", row["authoredPath"])) is not None}
+            call_rows = [row for row in receipts if row.get("fn") == fn
+                         and row.get("callId") == receipt.get("callId") and not row.get("lowererId")]
+            source_claims = {(row.get("fn"), row.get("callId")) for row in receipts
+                             if row.get("fn") and not row.get("lowererId")
+                             and row["authoredPath"].startswith(source_base + ".")}
+            allowed_owners = (tuple(entity_base + "." + member for member in
+                                    (PROJECTILE_MODIFIER_COMPONENTS[fn], *cap.nested_components.values()))
+                              if cap.nested_components else (owner,))
+            associated = (bool(owner) and isinstance(_final_value(final, owner), Mapping)
+                          and origins == {(fn, receipt.get("callId"), source_base)}
+                          and source_claims == {(fn, receipt.get("callId"))}
+                          and all(any(row["finalPath"].startswith(allowed + ".") for allowed in allowed_owners)
+                                  for row in call_rows))
+
+        elif cap.category == "movement":
+            code = _final_value(final, entity_base + ".movement.code")
+            associated = (_final_value(final, entity_base + ".movement.name") == fn
+                          and type(code) is int and code == MOVEMENT_OPCODE.get(fn))
+            associated = associated and sum(
+                row.get("fn") == fn and row.get("callId") == receipt.get("callId")
+                and row.get("authoredPath") == source_base + ".fn"
+                and row.get("finalPath") == entity_base + ".movement.code"
+                and row.get("status") == "technical_projection"
+                and type(row.get("value")) is int and row["value"] == code
+                for row in receipts) == 1
+        else:
+            field, expected = ("spawn.enabled", True) if fn == "spawn" else ("controller.name", fn)
+            associated = _same_receipt_value(_final_value(final, entity_base + "." + field), expected)
+            if fn in CONTROLLER_OPCODE:
+                code = _final_value(final, entity_base + ".controller.code")
+                associated = associated and type(code) is int and code == CONTROLLER_OPCODE[fn]
+            associated = associated and sum(row.get("fn") == fn and row.get("callId") == receipt.get("callId")
+                and row.get("authoredPath") == source_base + ".fn" and row.get("finalPath") == entity_base + "." + field
+                and row.get("status") == "technical_projection" and _same_receipt_value(row.get("value"), expected)
+                for row in receipts) == 1
+        if authored is not None:
+            associated = associated and _final_value(authored, source_base + ".target") == _final_value(final, entity_base + ".id")
+        if not associated:
+            violations.append({"fn": fn, "finalPath": path, "callId": receipt.get("callId"),
+                               "reason": "explicit wire parameter receipt has the wrong entity or event owner"})
+def _stack_chance_source_error(receipt: Mapping[str, Any], authored: Mapping[str, Any], final: Mapping[str, Any] | None) -> str:
+    paths = receipt.get("authoredPaths", [])
+    match = re.fullmatch(r"runtimeProgram\.bindings\[(\d+)\]\.id", paths[0]) if len(paths) == 2 else None
+    if not match or paths[1] != f"runtimeProgram.bindings[{match.group(1)}].stackConsumeChancePercent":
+        return "stack chance receipt lacks exact same-binding inputs"
+    binding_id = _final_value(authored, paths[0])
+    value = _final_value(authored, paths[1])
+    if type(value) is not int or not _same_receipt_value(value, receipt.get("value")):
+        return "stack chance receipt differs from the explicit authored probability"
+    if final is not None:
+        bindings = _final_value(final, "runtimeProgram.bindings")
+        matches = [i for i, binding in enumerate(bindings if isinstance(bindings, list) else [])
+                   if isinstance(binding, Mapping) and binding.get("id") == binding_id]
+        if len(matches) != 1 or receipt.get("finalPath") != f"runtimeProgram.bindings[{matches[0]}].usePolicy.stackConsumeChancePercent":
+            return "stack chance receipt differs from its exact binding identity"
+    return ""
+def _effect_group_binding_source_error(receipt: Mapping[str, Any], authored: Mapping[str, Any], final: Mapping[str, Any] | None) -> str:
+    paths = receipt.get("authoredPaths", [])
+    match = re.fullmatch(r"runtimeProgram\.bindings\[(\d+)\]\.id", paths[0]) if len(paths) == 2 else None
+    if not match or paths[1] != f"runtimeProgram.bindings[{match.group(1)}].action.effectGroupId":
+        return "effect-group receipt lacks exact same-binding inputs"
+    binding_id = _final_value(authored, paths[0])
+    value = _final_value(authored, paths[1])
+    if not isinstance(value, str) or not _same_receipt_value(value, receipt.get("value")):
+        return "effect-group receipt differs from the explicit authored identity"
+    if final is not None:
+        bindings = _final_value(final, "runtimeProgram.bindings")
+        matches = [i for i, binding in enumerate(bindings if isinstance(bindings, list) else [])
+                   if isinstance(binding, Mapping) and binding.get("id") == binding_id]
+        if len(matches) != 1 or receipt.get("finalPath") != f"runtimeProgram.bindings[{matches[0]}].usePolicy.action.effectGroupId":
+            return "effect-group receipt differs from its exact binding identity"
+    return ""
+def _capability_receipt_owner_error(
+    receipt: Mapping[str, Any], authored_document: Mapping[str, Any] | None,
+    final_document: Mapping[str, Any] | None,
+) -> str:
+    """Authenticate source target and final event identity, never array order."""
+    source_match = re.match(r"runtimeProgram\.calls\[(\d+)\]\.", receipt.get("authoredPath", ""))
+    source_call = None
+    if authored_document is not None:
+        source_call = _final_value(authored_document, f"runtimeProgram.calls[{source_match.group(1)}]") if source_match else None
+        calls = _final_value(authored_document, "runtimeProgram.calls")
+        if (not isinstance(source_call, Mapping) or source_call.get("fn") != receipt.get("fn")
+            or source_call.get("id") != receipt.get("callId")
+            or not isinstance(calls, list)
+            or sum(isinstance(c, Mapping) and c.get("id") == receipt.get("callId") for c in calls) != 1):
+            return "capability receipt lacks a unique originating source call"
+        cap = CAPABILITY_REGISTRY.get(receipt["fn"])
+        if cap is not None and cap.target_kinds == ("item_body",):
+            entities = _final_value(authored_document, "runtimeProgram.entities")
+            bodies = [e for e in entities if isinstance(e, Mapping) and e.get("kind") == "item_body"] if isinstance(entities, list) else []
+            identity = bodies[0].get("id") if len(bodies) == 1 else None
+            # The existing mechanical view resolves only a declared item-only omission.
+            # Present owners stay literal; global item outputs must authenticate them too.
+            if (not isinstance(identity, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,47}", identity)
+                or sum(isinstance(e, Mapping) and e.get("id") == identity for e in entities) != 1
+                or not _same_receipt_value(source_call.get("target"), identity)
+                or (final_document is not None and not _same_receipt_value(
+                    _final_value(final_document, "runtimeProgram.itemEntityId"), identity))):
+                return "capability receipt item owner differs from the unique declared body and final item identity"
+    if final_document is not None and source_call is not None and receipt.get("fn") == "use_condition":
+        gate = re.match(r"(gameplay\.useConditions\[\d+\])\.", receipt["finalPath"])
+        if gate is None or _final_value(final_document, gate.group(1) + ".input") != source_call.get("params", {}).get("input"):
+            return "use condition receipt differs from its exact authored input"
+    if final_document is None:
+        return ""
+    match = re.match(r"(runtimeProgram\.entities\[\d+\])(?:\.events\[\d+\])?\.", receipt["finalPath"])
+    if match is None:
+        return ""  # item source ownership is authenticated above; other projections have their own owners
+    entity = _final_value(final_document, match.group(1))
+    entities = _final_value(final_document, "runtimeProgram.entities")
+    identity = entity.get("id") if isinstance(entity, Mapping) else None
+    if (not isinstance(identity, str) or not identity or not isinstance(entities, list)
+        or sum(isinstance(e, Mapping) and e.get("id") == identity for e in entities) != 1):
+        return "capability receipt lacks a unique final entity identity"
+    if source_call is not None and source_call.get("target") != identity:
+        return "capability receipt final entity differs from its exact authored target"
+    event_match = re.match(r"(runtimeProgram\.entities\[\d+\]\.events\[\d+\])\.", receipt["finalPath"])
+    if event_match is not None:
+        event = _final_value(final_document, event_match.group(1))
+        events = []
+        for e in entities:
+            event_rows = e.get("events") if isinstance(e, Mapping) else None
+            if isinstance(event_rows, list):
+                events.extend(event_rows)
+        if (not isinstance(event, Mapping) or event.get("id") != receipt.get("callId")
+            or sum(isinstance(e, Mapping) and e.get("id") == receipt.get("callId") for e in events) != 1):
+            return "capability receipt lacks its unique exact final event/call identity"
+    return ""
+
+
+def audit_compiler_receipts(
+    receipts: Iterable[Any], *, authored_document: Mapping[str, Any] | None = None,
+    final_document: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Audit supplied evidence; without Author, success is wire consistency only."""
+    literal_source = authored_document
+    if literal_source is not None:
+        source_program = literal_source.get("runtimeProgram")
+        source_bindings = source_program.get("bindings", []) if isinstance(source_program, Mapping) else []
+        if (not isinstance(source_program, Mapping) or source_program.get("schema") != RUNTIME_PROGRAM_SCHEMA
+            or (isinstance(source_bindings, list) and any(
+                isinstance(binding, Mapping) and "usePolicy" in binding for binding in source_bindings))):
+            return {"schema": "infini.technical-lowering-audit.v1", "ok": False,
+                    "violations": [{"path": "$.runtimeProgram",
+                                    "reason": "source provenance requires the sole current Author grammar"}],
+                    "lowerers": list(GLOBAL_TECHNICAL_LOWERINGS)}
+    authored_document = _exact_mechanical_view(authored_document) if authored_document is not None else None
+    program = authored_document.get("runtimeProgram") if authored_document is not None else None
+    source_calls = program.get("calls") if isinstance(program, Mapping) else None
+    source_calls = source_calls if isinstance(source_calls, list) else []
+    receipt_rows, violations = prepare_receipt_rows(receipts)
+    if literal_source is not None and final_document is not None:
+        expected_rows = _author_binding_receipts(literal_source, final_document)
+        actual_rows = [row for row in receipt_rows if row.get("lowererId") == "author_binding_lanes"]
+        for expected in expected_rows:
+            matches = [row for row in actual_rows if row.get("finalPath") == expected["finalPath"]]
+            if len(matches) != 1 or not _same_receipt_value(dict(matches[0]), expected):
+                violations.append({"finalPath": expected["finalPath"], "reason": "current source lane lacks one exact typed provenance receipt"})
+        if len(expected_rows) != len(actual_rows):
+            violations.append({"reason": "current source lane receipt coverage differs from original source"})
+    delivered_equipment: dict[str, int] = {}
+    structured_groups: dict[tuple[str, str, str], list[Mapping[str, Any]]] = {}
+    for receipt in receipt_rows:
+        fn = str(receipt.get("fn") or "")
+        lowerer_id = str(receipt.get("lowererId") or "")
+        path = str(receipt.get("finalPath") or "")
+        authored_path = str(receipt.get("authoredPath") or "")
+        declared = declared_global_outputs_for(lowerer_id) if lowerer_id else declared_outputs_for(fn)
+        declared_inputs = declared_global_inputs_for(lowerer_id) if lowerer_id else ()
+        authored_paths = tuple(str(value) for value in receipt.get("authoredPaths") or ())
+        inputs_match = not lowerer_id or (
+            len(authored_paths) == len(declared_inputs)
+            and all(path_matches(pattern, value) for pattern, value in zip(declared_inputs, authored_paths))
+        )
+        if lowerer_id in {"author_binding_lanes", PRIMARY_BINDING_ROLE_LOWERER_ID}:
+            inputs_match = inputs_match or (bool(authored_paths) and all(any(path_matches(pattern, value) for pattern in declared_inputs) for value in authored_paths))
+        if lowerer_id == PRIMARY_BINDING_ROLE_LOWERER_ID:
+            inputs_match = inputs_match and bool(authored_paths) and authored_paths[0] == PRIMARY_ENTITY_AUTHOR_PATH and len(set(authored_paths)) == len(authored_paths)
+        if lowerer_id == PRIMARY_OWNER_LOWERER_ID and inputs_match:
+            inputs_match = authored_paths[1].rsplit(".", 1)[0] == authored_paths[2].rsplit(".", 1)[0]
+        if not declared or not any(path_matches(pattern, path) for pattern in declared) or not inputs_match:
+            violations.append({
+                "callId": str(receipt.get("callId") or ""),
+                "fn": fn,
+                "lowererId": lowerer_id,
+                "finalPath": path,
+                "authoredPaths": list(authored_paths),
+                "declaredInputs": list(declared_inputs),
+                "declaredOutputs": list(declared),
+                "reason": "compiler receipt used an undeclared input or output field",
+            })
+        if fn and not lowerer_id:
+            reason = _capability_receipt_owner_error(receipt, authored_document, final_document)
+            if reason:
+                violations.append({"fn": fn, "callId": receipt.get("callId"), "finalPath": path, "reason": reason})
+        if lowerer_id and receipt.get("status") != "technical_projection":
+            violations.append({"lowererId": lowerer_id, "finalPath": path,
+                               "reason": "global receipt has an unexpected status"})
+        if final_document is not None and not _same_receipt_value(_final_value(final_document, path), receipt.get("value")):
+            violations.append({
+                "callId": str(receipt.get("callId") or ""),
+                "fn": fn,
+                "finalPath": path,
+                "reason": "final wire value differs from compiler receipt",
+            })
+        if fn == "weapon_ammo" and receipt.get("status") == "technical_projection":
+            match = re.fullmatch(r"runtimeProgram\.calls\[(\d+)\]\.fn", authored_path)
+            source = source_calls[int(match.group(1))] if match and int(match.group(1)) < len(source_calls) else None
+            valid = bool(match) and path == "runtimeProgram.weaponAmmo"
+            if authored_document is not None:
+                valid = valid and isinstance(source, Mapping) and source.get("fn") == fn and source.get("id") == receipt.get("callId")
+            if not valid:
+                violations.append({"fn": fn, "finalPath": path, "reason": "weapon ammo semantics lack their exact originating capability selection"})
+        if authored_document is not None:
+            reason = (_stack_chance_source_error(receipt, authored_document, final_document)
+                      if lowerer_id == STACK_CHANCE_LOWERER_ID
+                      else _effect_group_binding_source_error(receipt, authored_document, final_document)
+                      if lowerer_id == EFFECT_GROUP_BINDING_LOWERER_ID
+                      else _visual_receipt_source_error(receipt, authored_document, final_document)
+                      if lowerer_id == "entity_kind_to_visual_role"
+                      else _primary_receipt_source_error(receipt, literal_source or authored_document, final_document))
+            if reason:
+                violations.append({"lowererId": lowerer_id, "finalPath": path, "reason": reason})
+        if final_document is not None and lowerer_id:
+            reason = _global_receipt_wire_error(receipt, final_document)
+            if reason:
+                violations.append({"lowererId": lowerer_id, "finalPath": path, "reason": reason})
+        literal_cap = CAPABILITY_REGISTRY.get(fn)
+        if literal_cap is not None and not literal_cap.author_visible:
+            violations.append({"fn": fn, "finalPath": path,
+                               "reason": "receipt requires a current Author capability, not a standalone nested component"})
+        fixed_matches = [(pattern, value) for pattern, value in capability_fixed_outputs(fn).items()
+                         if path_matches(pattern, path)]
+        if fixed_matches:
+            source_match = re.fullmatch(r"runtimeProgram\.calls\[(\d+)\]\.fn", authored_path)
+            valid_literal = (len(fixed_matches) == 1 and source_match is not None
+                             and receipt.get("status") == "technical_projection" and not authored_paths
+                             and _same_receipt_value(receipt.get("value"), fixed_matches[0][1]))
+            if authored_document is not None and source_match is not None:
+                index = int(source_match.group(1))
+                source_call = source_calls[index] if index < len(source_calls) else None
+                valid_literal = valid_literal and isinstance(source_call, Mapping) and (
+                    source_call.get("fn") == fn and source_call.get("id") == receipt.get("callId"))
+            if not valid_literal:
+                violations.append({"fn": fn, "callId": receipt.get("callId"), "finalPath": path,
+                                   "reason": "fn-selected fixed wire literal is not the exact projection of the originating capability"})
+        if literal_cap is not None and literal_cap.category == "item_placed_body" and receipt.get("status") == "technical_projection":
+            match = re.fullmatch(r"runtimeProgram\.calls\[(\d+)\]\.params\.placementCallId", authored_path)
+            source_call = source_calls[int(match.group(1))] if match and int(match.group(1)) < len(source_calls) else None
+            if authored_document is not None:
+                source_index = int(match.group(1)) if match else -1
+                source_bindings = program.get("bindings", []) if isinstance(program, Mapping) else []
+                source_bindings = source_bindings if isinstance(source_bindings, list) else []
+                source_params = source_call.get("params") if isinstance(source_call, Mapping) else None
+                matches = [(i, binding) for i, binding in enumerate(source_bindings)
+                           if isinstance(binding, Mapping) and isinstance(binding.get("action"), Mapping)
+                           and isinstance(source_call, Mapping) and isinstance(source_params, Mapping)
+                           and binding["action"].get("kind") == "place_item"
+                           and binding["action"].get("targetId") == source_call.get("target")
+                           and binding["action"].get("placementCallId") == source_params.get("placementCallId")]
+                expected_inputs = []
+                expected_path = ""
+                if len(matches) == 1:
+                    bi, binding = matches[0]
+                    cb = f"runtimeProgram.calls[{source_index}]"
+                    bb = f"runtimeProgram.bindings[{bi}].action"
+                    expected_inputs = _placement_source_paths(literal_source or authored_document, source_index, bi)
+                    final_bindings = final_document.get("runtimeProgram", {}).get("bindings", []) if final_document is not None else []
+                    finals = [i for i, b in enumerate(final_bindings) if isinstance(b, Mapping) and b.get("id") == binding.get("id")]
+                    if len(finals) == 1:
+                        expected_path = f"runtimeProgram.bindings[{finals[0]}].usePolicy.action.placement.{literal_cap.params['placementCallId'].wire_name}"
+                if (not isinstance(source_call, Mapping) or source_call.get("fn") != fn
+                    or source_call.get("id") != receipt.get("callId") or not expected_inputs
+                    or list(authored_paths) != expected_inputs or (final_document is not None and path != expected_path)):
+                    violations.append({"fn": fn, "callId": receipt.get("callId"), "finalPath": path,
+                                       "reason": "placed-body receipt lacks exact target/placement/binding association"})
+            else:
+                current_binding = re.fullmatch(r"runtimeProgram\.bindings\[(\d+)\]\.id", authored_paths[3]) if len(authored_paths) == 8 else None
+                current_body = re.fullmatch(r"runtimeProgram\.entities\[(\d+)\]\.id", authored_paths[6]) if len(authored_paths) == 8 else None
+                current_inputs = []
+                if match and current_binding and current_body:
+                    cb, bb, eb = (f"runtimeProgram.{name}[{index}]" for name, index in
+                                  (("calls", match.group(1)), ("bindings", current_binding.group(1)), ("entities", current_body.group(1))))
+                    current_inputs = [cb + ".fn", cb + ".id", cb + ".params.placementCallId", bb + ".id", bb + ".action.kind",
+                                      bb + ".action.placementCallId", eb + ".id", eb + ".kind"]
+                if not match or not current_inputs or list(authored_paths) != current_inputs:
+                    violations.append({"fn": fn, "finalPath": path, "reason": "placed-body association receipt missing exact declared source paths"})
+            continue
+        nested_match = re.fullmatch(
+            r"runtimeProgram\.calls\[(\d+)\]\.params\.([A-Za-z][A-Za-z0-9_]*)(?:\.[A-Za-z][A-Za-z0-9_]*)*", authored_path
+        ) if fn and not lowerer_id else None
+        cap = CAPABILITY_REGISTRY.get(fn)
+        if nested_match is not None and cap is not None and nested_match.group(2) in cap.params and cap.params[nested_match.group(2)].structured:
+            index, root_name = int(nested_match.group(1)), nested_match.group(2)
+            spec = cap.params[root_name]
+            structured_groups.setdefault((fn, receipt["callId"], f"runtimeProgram.calls[{index}].params.{root_name}"), []).append(receipt)
+            source_prefix = f"runtimeProgram.calls[{index}].params."
+            source_name = authored_path.removeprefix(source_prefix)
+            pairs = [(source, destination, literal) for source, destination, literal in spec.projection_paths(root_name)
+                     if source == source_name and path.endswith("." + destination)]
+            expected_statuses = {"alias_lowering" if literal else "delivered" for _, _, literal in pairs}
+            leaf_spec = receipt_param_spec(cap, source_name)
+            root_omission = _root_neutral_omission_matches(cap, source_name, receipt,
+                authored_document=authored_document, final_document=final_document)
+            if root_omission:
+                expected_statuses.add("declared_neutral_omission")
+            if leaf_spec is not None and _declares_neutral_omission(leaf_spec):
+                expected_statuses.add("declared_neutral_omission")
+                if receipt.get("status") == "declared_neutral_omission" and not _same_receipt_value(
+                        receipt.get("value"), leaf_spec.to_wire(leaf_spec.default)):
+                    violations.append({"fn": fn, "finalPath": path, "reason": "nested omission differs from declared neutral"})
+            if not pairs or receipt.get("status") not in expected_statuses or authored_paths:
+                violations.append({"fn": fn, "callId": receipt.get("callId"), "authoredPath": authored_path,
+                                   "finalPath": path, "reason": "structured parameter receipt is not a declared source/output pair"})
+            if authored_document is not None:
+                source_call = source_calls[index] if index < len(source_calls) else None
+                source_params = source_call.get("params") if isinstance(source_call, Mapping) else None
+                expected_rows = ()
+                if (isinstance(source_call, Mapping) and source_call.get("fn") == fn
+                    and source_call.get("id") == receipt.get("callId")
+                    and isinstance(source_params, Mapping)
+                    and (root_name in source_params or cap.neutral_omission_allowed(root_name, source_params))):
+                    try:
+                        expected_rows = spec.projected_fields(_completed_params(fn, source_params)[root_name], root_name, updates_per_tick=_source_updates(spec, source_call, source_calls))
+                    except (ValueError, TypeError, KeyError):
+                        pass
+                omissions = declared_neutral_omissions(fn, source_params) if isinstance(source_params, Mapping) else {}
+                matching = [row for row in expected_rows if row.authored_path == source_name
+                            and path.endswith("." + row.wire_path)
+                            and receipt.get("status") == ("alias_lowering" if row.literal else
+                                "declared_neutral_omission" if row.authored_path in omissions else "delivered")
+                            and _same_receipt_value(row.value, receipt.get("value"))]
+                if len(matching) != 1:
+                    violations.append({"fn": fn, "callId": receipt.get("callId"), "authoredPath": authored_path,
+                                       "finalPath": path, "reason": "structured receipt is not the exact authored variant projection"})
+            continue
+        parameter_match = re.fullmatch(
+            r"runtimeProgram\.calls\[(\d+)\]\.params\.([A-Za-z][A-Za-z0-9_]*)", authored_path
+        ) if fn and not lowerer_id else None
+        if fn and authored_paths and (fn != "equipment_damage_bonus" or receipt.get("status") != "delivered"):
+            violations.append({
+                "callId": str(receipt.get("callId") or ""), "fn": fn,
+                "authoredPath": authored_path, "finalPath": path,
+                "reason": "unexpected capability parameter source list or status",
+            })
+        if fn and not lowerer_id and (receipt.get("status") == "delivered" or parameter_match is not None):
+            match = parameter_match
+            cap = CAPABILITY_REGISTRY.get(fn)
+            is_omission = receipt.get("status") == "declared_neutral_omission"
+            if match is not None and receipt.get("status") != "delivered" and not is_omission and not (
+                fn == "native_buff_on_use" and receipt.get("status") == "technical_projection"
+            ):
+                violations.append({
+                    "callId": str(receipt.get("callId") or ""), "fn": fn,
+                    "authoredPath": authored_path, "finalPath": path,
+                    "reason": "capability parameter receipt has an unexpected status",
+                })
+            if match is not None and cap is not None and match.group(2) in cap.params and fn != "equipment_damage_bonus":
+                param = match.group(2)
+                spec = cap.params[param]
+                expected_paths = _parameter_outputs(fn, param)
+                if not expected_paths or not any(path_matches(candidate, path) for candidate in expected_paths):
+                    violations.append({
+                        "callId": str(receipt.get("callId") or ""),
+                        "fn": fn,
+                        "authoredPath": authored_path,
+                        "finalPath": path,
+                        "expectedPaths": list(expected_paths),
+                        "reason": "wrong capability output for authored parameter",
+                    })
+            if (match is not None and cap is not None and match.group(2) in cap.params
+                and authored_document is None and receipt.get("status") == "delivered"):
+                spec = cap.params[match.group(2)]
+                if not spec.matches_scalar_projection(receipt.get("value")):
+                    violations.append({"fn": fn, "callId": receipt.get("callId"), "finalPath": path,
+                                       "reason": "scalar receipt is outside its exact declared wire domain"})
+            if match is not None and cap is not None and match.group(2) in cap.params and is_omission:
+                name = match.group(2)
+                spec = cap.params[name]
+                declared_omission = (not spec.required and spec.default is not None
+                    and type(spec.default) is type(spec.neutral) and spec.default == spec.neutral)
+                omission_value = _MISSING
+                if declared_omission:
+                    try:
+                        updates = None
+                        if spec.requires_update_context:
+                            if authored_document is not None:
+                                index = int(match.group(1))
+                                source = source_calls[index] if index < len(source_calls) else None
+                                if isinstance(source, Mapping):
+                                    updates = _source_updates(spec, source, source_calls)
+                            elif final_document is not None:
+                                entity = re.match(r"runtimeProgram\.entities\[\d+\]", path)
+                                extra = _final_value(final_document, entity.group() + ".collision.extraUpdates") if entity else None
+                                if type(extra) is int and 0 <= extra <= 5:
+                                    updates = extra + 1
+                        omission_value = spec.to_wire(spec.default, updates_per_tick=updates)
+                    except (ValueError, TypeError, OverflowError):
+                        pass  # malformed/missing clock is refusal, never an invented clock
+                if (not declared_omission or omission_value is _MISSING or omission_value is None
+                    or not _same_receipt_value(receipt.get("value"), omission_value)):
+                    violations.append({
+                        "callId": str(receipt.get("callId") or ""), "fn": fn,
+                        "authoredPath": authored_path, "finalPath": path,
+                        "reason": "omission receipt lacks an exact declared neutral default/projection",
+                    })
+            if (match is not None and cap is not None and match.group(2) in cap.params and is_omission
+                    and not _omission_context_allows(cap, match.group(2), receipt,
+                        authored_document=authored_document, final_document=final_document)):
+                violations.append({"callId": str(receipt.get("callId") or ""), "fn": fn,
+                                   "authoredPath": authored_path, "finalPath": path,
+                                   "reason": "neutral omission is outside its declared inactive consumer branch"})
+            if match is None or cap is None or match.group(2) not in cap.params:
+                violations.append({
+                    "callId": str(receipt.get("callId") or ""),
+                    "fn": fn,
+                    "authoredPath": authored_path,
+                    "finalPath": path,
+                    "reason": "compiler receipt used an undeclared authored parameter",
+                })
+            elif authored_document is not None:
+                index = int(match.group(1))
+                source_call = source_calls[index] if index < len(source_calls) else None
+                source_params = source_call.get("params") if isinstance(source_call, Mapping) else None
+                if (not isinstance(source_call, Mapping)
+                    or source_call.get("fn") != fn
+                    or source_call.get("id") != receipt.get("callId")
+                    or not isinstance(source_params, Mapping)):
+                    violations.append({
+                        "callId": str(receipt.get("callId") or ""),
+                        "fn": fn,
+                        "authoredPath": authored_path,
+                        "finalPath": path,
+                        "reason": "authored parameter absent from originating call",
+                    })
+                elif is_omission:
+                    if match.group(2) in source_params:
+                        violations.append({
+                            "callId": str(receipt.get("callId") or ""), "fn": fn,
+                            "authoredPath": authored_path, "finalPath": path,
+                            "reason": "omission receipt points to an explicitly authored parameter",
+                        })
+                elif match.group(2) not in source_params:
+                    violations.append({
+                        "callId": str(receipt.get("callId") or ""), "fn": fn,
+                        "authoredPath": authored_path, "finalPath": path,
+                        "reason": "authored parameter absent from originating call",
+                    })
+                elif not _valid_source_projection(cap.params[match.group(2)], source_params[match.group(2)], receipt.get("value"), call=source_call, calls=source_calls):
+                    violations.append({
+                        "callId": str(receipt.get("callId") or ""),
+                        "fn": fn,
+                        "authoredPath": authored_path,
+                        "finalPath": path,
+                        "reason": "compiler receipt value is not the declared projection of its authored parameter",
+                    })
+                if cap.effect_groupable and isinstance(source_params, Mapping):
+                    group_id = source_params.get("effectGroupId")
+                    group_match = re.match(r"runtimeProgram\.effectGroups\[(\d+)\]\.", path)
+                    if group_id is None:
+                        valid_scope = path.startswith("gameplay.")
+                    else:
+                        valid_scope = bool(group_match)
+                        if group_match and final_document is not None:
+                            valid_scope = _final_value(final_document, f"runtimeProgram.effectGroups[{group_match.group(1)}].id") == group_id
+                    if not valid_scope:
+                        violations.append({"fn": fn, "callId": receipt.get("callId"), "finalPath": path,
+                                           "reason": "effect parameter is not projected into its exact authored group"})
+                if fn == "item_stats":
+                    param = match.group(2)
+                    expected = f"gameplay.{cap.params[param].wire_name or param}"
+                    if path != expected:
+                        violations.append({
+                            "callId": str(receipt.get("callId") or ""),
+                            "fn": fn,
+                            "authoredPath": authored_path,
+                            "finalPath": path,
+                            "expectedPath": expected,
+                            "reason": "wrong item stat output for authored parameter",
+                        })
+                if fn in {"accessory", "armor"}:
+                    prefix = fn.removeprefix("configure_")
+                    expected = f"{prefix}.{cap.params[match.group(2)].wire_name or match.group(2)}"
+                    if path != expected:
+                        violations.append({
+                            "callId": str(receipt.get("callId") or ""),
+                            "fn": fn,
+                            "authoredPath": authored_path,
+                            "finalPath": path,
+                            "expectedPath": expected,
+                            "reason": "wrong equipment output for authored parameter",
+                        })
+                    delivered_equipment[authored_path] = delivered_equipment.get(authored_path, 0) + 1
+                elif fn == "equipment_damage_bonus" and isinstance(source_params, Mapping):
+                    source_target = str(source_call.get("target") or "") if isinstance(source_call, Mapping) else ""
+                    configs = [row for row in source_calls
+                               if isinstance(row, Mapping) and row.get("target") == source_target
+                               and row.get("fn") in {"accessory", "armor"}]
+                    if len(configs) == 1 and match.group(2) == "bonusPercent":
+                        try:
+                            expected = equipment_damage_wire_path(
+                                str(source_params.get("phase") or ""),
+                                str(source_params.get("damageClass") or ""),
+                                armor=configs[0].get("fn") == "armor",
+                            )
+                        except ValueError:
+                            expected = ""
+                        base = f"runtimeProgram.calls[{index}].params"
+                        expected_sources = [f"{base}.phase", f"{base}.damageClass", f"{base}.bonusPercent"]
+                        if path != expected or receipt.get("authoredPaths") != expected_sources:
+                            violations.append({
+                                "callId": str(receipt.get("callId") or ""),
+                                "fn": fn,
+                                "finalPath": path,
+                                "expectedPath": expected,
+                                "reason": "wrong equipment output for authored parameter",
+                            })
+                        delivered_equipment[authored_path] = delivered_equipment.get(authored_path, 0) + 1
+                    else:
+                        violations.append({
+                            "callId": str(receipt.get("callId") or ""), "fn": fn,
+                            "finalPath": path, "reason": "equipment class modifier has no unique declared configuration",
+                        })
+    for (fn, call_id, source_root), rows in structured_groups.items():
+        root_name = source_root.rsplit(".", 1)[-1]
+        spec = CAPABILITY_REGISTRY[fn].params[root_name]
+        records = []
+        owners = set()
+        for row in rows:
+            source_name = root_name + row["authoredPath"][len(source_root):]
+            pairs = [(destination, literal) for source, destination, literal in spec.projection_paths(root_name)
+                     if source == source_name and row["finalPath"].endswith("." + destination)
+                     and (row["status"] == ("alias_lowering" if literal else "delivered")
+                          or not literal and row["status"] == "declared_neutral_omission"
+                          and (((leaf_spec := receipt_param_spec(CAPABILITY_REGISTRY[fn], source_name)) is not None
+                                and _declares_neutral_omission(leaf_spec))
+                               or _root_neutral_omission_matches(CAPABILITY_REGISTRY[fn], source_name, row,
+                                   authored_document=authored_document, final_document=final_document)))]
+            if len(pairs) != 1:
+                break
+            destination, literal = pairs[0]
+            owners.add(row["finalPath"][:-(len(destination) + 1)])
+            records.append((source_name, destination, literal, row["value"]))
+        if (len(records) != len(rows) or len(owners) != 1
+            or not spec.matches_projection_records(tuple(records), root_name)):
+            violations.append({"fn": fn, "callId": call_id, "authoredPath": source_root,
+                               "reason": "structured receipts lack one complete admitted variant output set"})
+    # A persisted group asserts one originating coordinate and output owner.
+    # These are claim-consistency checks; only the source path above authenticates
+    # the original target. Require coverage even when every typed row was removed.
+    final_claims: dict[str, int] = {}
+    for row in receipt_rows:
+        if row.get("fn") and not row.get("lowererId"):
+            final_claims[row["finalPath"]] = final_claims.get(row["finalPath"], 0) + 1
+    for output, count in final_claims.items():
+        if count != 1:
+            claims = [row for row in receipt_rows if row.get("fn") and not row.get("lowererId")
+                      and row["finalPath"] == output]
+            # Separate explicitly named effect components may share the same
+            # immutable group identity. Each exact source claim still passes
+            # scalar/domain/owner proof and per-call unique coverage below.
+            shared_identity = bool(re.fullmatch(r"runtimeProgram\.effectGroups\[\d+\]\.id", output)) and all(
+                CAPABILITY_REGISTRY[row["fn"]].effect_groupable
+                and re.fullmatch(r"runtimeProgram\.calls\[\d+\]\.params\.effectGroupId", row["authoredPath"])
+                and _same_receipt_value(row["value"], claims[0]["value"])
+                for row in claims
+            )
+            if not shared_identity:
+                violations.append({"finalPath": output, "reason": "final capability output is claimed by multiple receipts"})
+    call_groups: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
+    for row in receipt_rows:
+        if row.get("fn") and not row.get("lowererId"):
+            call_groups.setdefault((row["fn"], row["callId"]), []).append(row)
+    for (fn, call_id), rows in call_groups.items():
+        cap = CAPABILITY_REGISTRY.get(fn)
+        if cap is None:
+            continue
+        source_bases = {match.group(0) for row in rows
+                        if (match := re.match(r"runtimeProgram\.calls\[\d+\]", row["authoredPath"])) is not None}
+        if len(source_bases) != 1:
+            violations.append({"fn": fn, "callId": call_id, "reason": "call receipts lack one exact source coordinate"})
+        paths = [row["finalPath"] for row in rows]
+        if len(paths) != len(set(paths)):
+            violations.append({"fn": fn, "callId": call_id, "reason": "call outputs lack unique receipt coverage"})
+        if final_document is None:
+            continue
+        projection_params = None
+        if cap.effect_groupable:
+            identity_rows = [row for row in rows if row["authoredPath"].endswith(".params.effectGroupId")]
+            projection_params = {"effectGroupId": identity_rows[0]["value"]} if identity_rows else {}
+            scope_prefix = "gameplay."
+            if identity_rows:
+                identity_match = re.fullmatch(r"(runtimeProgram\.effectGroups\[\d+\])\.id", identity_rows[0]["finalPath"])
+                scope_prefix = identity_match.group(1) + "." if identity_match else ""
+            if not scope_prefix or any(not row["finalPath"].startswith(scope_prefix) for row in rows):
+                violations.append({"fn": fn, "callId": call_id,
+                                   "reason": "effect call lacks one exact default or named group output owner"})
+        for name, spec in cap.params.items():
+            if spec.structured:
+                patterns = list(_parameter_outputs(fn, name, projection_params))
+                # Current declared paths share finite output slots; every
+                # present slot still needs one exact originating row.
+            else:
+                patterns = list(_parameter_outputs(fn, name, projection_params))
+            for pattern in patterns:
+                concrete = {r["finalPath"] for r in rows if path_matches(pattern, r["finalPath"])}
+                if "[]" not in pattern:
+                    concrete.add(pattern)
+                else:
+                    # Instantiate indices from any receipt of this exact call,
+                    # rather than choosing an entity/event by position.
+                    for row in rows:
+                        indices = re.findall(r"\[\d+\]", row["finalPath"])
+                        if pattern.count("[]") == len(indices):
+                            candidate = pattern
+                            for index in indices:
+                                candidate = candidate.replace("[]", index, 1)
+                            concrete.add(candidate)
+                for output in concrete:
+                    if _final_value(final_document, output) is _MISSING:
+                        continue
+                    matching = [r for r in rows if r["finalPath"] == output]
+                    # A different explicitly declared capability can own this
+                    # shared DTO leaf through its current declared projection.
+                    # Authenticate that claim through the same audit, rather
+                    # than demanding a duplicate receipt from this call.
+                    foreign = [r for r in receipt_rows if r.get("fn") and not r.get("lowererId")
+                               and r["finalPath"] == output
+                               and (r["fn"], r["callId"]) != (fn, call_id)]
+                    if not matching and len(foreign) == 1:
+                        continue
+                    if len(matching) != 1:
+                        violations.append({"fn": fn, "callId": call_id, "finalPath": output,
+                                           "reason": "present parameter output lacks unique compiler receipt coverage"})
+    # A declared fn-selected literal is part of the full capability projection.
+    # Require coverage from actual Author calls, or from the persisted receipt
+    # group when no Author exists. Never fabricate a missing source document.
+    literal_calls = ({(str(row.get("fn") or ""), str(row.get("id") or ""))
+                      for row in source_calls if isinstance(row, Mapping)} if authored_document is not None
+                     else {(str(row.get("fn") or ""), str(row.get("callId") or "")) for row in receipt_rows})
+    for fn, call_id in literal_calls:
+        cap = CAPABILITY_REGISTRY.get(fn)
+        if cap is None:
+            continue
+        fixed_outputs = capability_fixed_outputs(fn)
+        if cap.effect_groupable:
+            source = next((call for call in source_calls if isinstance(call, Mapping)
+                           and call.get("fn") == fn and call.get("id") == call_id), None)
+            named = ("effectGroupId" in source.get("params", {}) if source is not None else any(
+                row.get("fn") == fn and row.get("callId") == call_id
+                and row["finalPath"].startswith("runtimeProgram.effectGroups[") for row in receipt_rows))
+            prefix = "runtimeProgram.effectGroups[]." if named else "gameplay."
+            fixed_outputs = {path: value for path, value in fixed_outputs.items() if path.startswith(prefix)}
+        for expected_path in fixed_outputs:
+            matching = [row for row in receipt_rows if row.get("fn") == fn and row.get("callId") == call_id
+                        and path_matches(expected_path, str(row.get("finalPath") or ""))]
+            if len(matching) != 1:
+                violations.append({"fn": fn, "callId": call_id, "finalPath": expected_path,
+                                   "reason": "fixed wire literal has no unique declared compiler receipt"})
+    if final_document is not None:
+        # A parameter-free executor (straight flight) can lose its entire call
+        # receipt group. Its stored selector still declares a proof obligation.
+        # Opcode registries, not another capability-family table, own identity.
+        for component, opcodes in (("movement", MOVEMENT_OPCODE), ("controller", CONTROLLER_OPCODE)):
+            pattern = f"runtimeProgram.entities[].{component}.name"
+            for selected_path in _present_wire_paths(final_document, pattern):
+                fn = _final_value(final_document, selected_path)
+                if not isinstance(fn, str) or fn not in opcodes or fn not in CAPABILITY_REGISTRY:
+                    continue
+                entity_base = selected_path.rsplit("." + component, 1)[0]
+                for fixed_path in capability_fixed_outputs(fn):
+                    output = fixed_path.replace("runtimeProgram.entities[]", entity_base, 1)
+                    matching = [row for row in receipt_rows if row.get("fn") == fn
+                                and row.get("finalPath") == output]
+                    if len(matching) != 1:
+                        violations.append({"fn": fn, "finalPath": output,
+                                           "reason": "fixed wire literal has no unique declared compiler receipt"})
+        # A component with only fn-selected literals (e.g. mana cadence) has
+        # no parameter witness to activate coverage. Its stored registry-owned
+        # instance still requires the exact originating selection receipt.
+        for fn, member in PROJECTILE_MODIFIER_COMPONENTS.items():
+            cap = CAPABILITY_REGISTRY[fn]
+            base_pattern = f"runtimeProgram.entities[].{member}" + ("[]" if cap.multiplicity == "many_per_target" else "")
+            for base in _present_wire_paths(final_document, base_pattern):
+                for pattern in capability_fixed_outputs(fn):
+                    output = pattern.replace(base_pattern, base, 1)
+                    matching = [row for row in receipt_rows if row.get("fn") == fn and row.get("finalPath") == output]
+                    if len(matching) != 1:
+                        violations.append({"fn": fn, "finalPath": output,
+                                           "reason": "fixed wire literal has no unique declared compiler receipt"})
+    # Require the existing primary receipts, never synthesize new provenance.
+    # Source and wire indices are separate: bindings may be sorted during compile.
+    if authored_document is not None:
+        if _final_value(authored_document, PRIMARY_ENTITY_AUTHOR_PATH) is not _MISSING:
+            matching = [r for r in receipt_rows if r.get("lowererId") == PRIMARY_OWNER_LOWERER_ID]
+            if len(matching) != 1:
+                violations.append({"lowererId": PRIMARY_OWNER_LOWERER_ID, "finalPath": PRIMARY_OWNER_FINAL_PATH,
+                                   "reason": "global projection has no unique compiler receipt"})
+        bindings = _final_value(authored_document, "runtimeProgram.bindings")
+        for bi, _ in enumerate(bindings if isinstance(bindings, list) else []):
+            source_path = f"runtimeProgram.bindings[{bi}].action.targetId"
+            matching = [r for r in receipt_rows if r.get("lowererId") == PRIMARY_BINDING_ROLE_LOWERER_ID
+                        and r.get("authoredPaths") == _binding_role_paths(literal_source or authored_document, bi)]
+            if len(matching) != 1:
+                violations.append({"lowererId": PRIMARY_BINDING_ROLE_LOWERER_ID, "authoredPath": source_path,
+                                   "reason": "global projection has no unique compiler receipt"})
+            chance_path = f"runtimeProgram.bindings[{bi}].stackConsumeChancePercent"
+            if _final_value(authored_document, chance_path) is not _MISSING:
+                matching = [r for r in receipt_rows if r.get("lowererId") == STACK_CHANCE_LOWERER_ID
+                            and r.get("authoredPaths") == [f"runtimeProgram.bindings[{bi}].id", chance_path]]
+                if len(matching) != 1:
+                    violations.append({"lowererId": STACK_CHANCE_LOWERER_ID, "authoredPath": chance_path,
+                                       "reason": "global projection has no unique compiler receipt"})
+            group_path = f"runtimeProgram.bindings[{bi}].action.effectGroupId"
+            if _final_value(authored_document, group_path) is not _MISSING:
+                matching = [r for r in receipt_rows if r.get("lowererId") == EFFECT_GROUP_BINDING_LOWERER_ID
+                            and r.get("authoredPaths") == [f"runtimeProgram.bindings[{bi}].id", group_path]]
+                if len(matching) != 1:
+                    violations.append({"lowererId": EFFECT_GROUP_BINDING_LOWERER_ID, "authoredPath": group_path,
+                                       "reason": "global projection has no unique compiler receipt"})
+        entities = _final_value(authored_document, "runtimeProgram.entities")
+        for ei, _ in enumerate(entities if isinstance(entities, list) else []):
+            source_path = f"runtimeProgram.entities[{ei}].kind"
+            for output in declared_global_outputs_for("entity_kind_to_visual_role"):
+                matching = [r for r in receipt_rows if r.get("lowererId") == "entity_kind_to_visual_role"
+                            and r.get("authoredPaths") == [source_path] and path_matches(output, r["finalPath"])]
+                if len(matching) != 1:
+                    violations.append({"lowererId": "entity_kind_to_visual_role", "authoredPath": source_path,
+                                       "reason": "global projection has no unique compiler receipt"})
+    if final_document is not None:
+        expected_globals = []
+        if _final_value(final_document, PRIMARY_OWNER_FINAL_PATH) is not _MISSING:
+            expected_globals.append((PRIMARY_OWNER_LOWERER_ID, PRIMARY_OWNER_FINAL_PATH))
+        bindings = _final_value(final_document, "runtimeProgram.bindings")
+        expected_globals.extend((PRIMARY_BINDING_ROLE_LOWERER_ID, f"runtimeProgram.bindings[{bi}].role")
+                                for bi, _ in enumerate(bindings if isinstance(bindings, list) else []))
+        expected_globals.extend((STACK_CHANCE_LOWERER_ID, f"runtimeProgram.bindings[{bi}].usePolicy.stackConsumeChancePercent")
+                                for bi, binding in enumerate(bindings if isinstance(bindings, list) else [])
+                                if isinstance(binding, Mapping) and isinstance(binding.get("usePolicy"), Mapping)
+                                and "stackConsumeChancePercent" in binding["usePolicy"])
+        expected_globals.extend((EFFECT_GROUP_BINDING_LOWERER_ID, f"runtimeProgram.bindings[{bi}].usePolicy.action.effectGroupId")
+                                for bi, binding in enumerate(bindings if isinstance(bindings, list) else [])
+                                if isinstance(binding, Mapping) and isinstance(binding.get("usePolicy"), Mapping)
+                                and isinstance(binding["usePolicy"].get("action"), Mapping)
+                                and "effectGroupId" in binding["usePolicy"]["action"])
+        entities = _final_value(final_document, "runtimeProgram.entities")
+        # Isolated capability projectors can supply partial entity DTOs without
+        # global fields; require coverage for each actual global output slot.
+        expected_globals.extend(("entity_kind_to_visual_role", output.replace("[]", f"[{ei}]"))
+                                for ei, _ in enumerate(entities if isinstance(entities, list) else [])
+                                for output in declared_global_outputs_for("entity_kind_to_visual_role")
+                                if _final_value(final_document, output.replace("[]", f"[{ei}]")) is not _MISSING)
+        for lowerer_id, path in expected_globals:
+            matching = [r for r in receipt_rows if r.get("lowererId") == lowerer_id and r.get("finalPath") == path]
+            if len(matching) != 1:
+                violations.append({"lowererId": lowerer_id, "finalPath": path,
+                                   "reason": "global projection has no unique compiler receipt"})
+    if authored_document is not None:
+        for index, call in enumerate(source_calls):
+            if not isinstance(call, Mapping) or call.get("fn") not in {"accessory", "armor", "equipment_damage_bonus"}:
+                continue
+            params = call.get("params")
+            if not isinstance(params, Mapping):
+                continue
+            param_names = params if call.get("fn") != "equipment_damage_bonus" else ("bonusPercent",)
+            for param in param_names:
+                cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
+                if cap is not None and param in cap.params and cap.params[param].structured:
+                    continue  # exact expanded leaf coverage below
+                authored_path = f"runtimeProgram.calls[{index}].params.{param}"
+                if delivered_equipment.get(authored_path, 0) != 1:
+                    violations.append({
+                        "callId": str(call.get("id") or ""),
+                        "fn": str(call.get("fn") or ""),
+                        "authoredPath": authored_path,
+                        "reason": "equipment parameter has no receipt or more than one receipt",
+                    })
+        delivered_sources = {
+            (str(receipt.get("fn") or ""), str(receipt.get("callId") or ""), str(source))
+            for receipt in receipt_rows
+            if receipt.get("fn") and receipt.get("callId")
+            for source in (receipt.get("authoredPath"), *(receipt.get("authoredPaths") or ()))
+            if source
+        }
+        for index, source_call in enumerate(source_calls):
+            if not isinstance(source_call, Mapping):
+                continue
+            source_params = source_call.get("params")
+            if not isinstance(source_params, Mapping):
+                continue
+            for name in source_params:
+                cap = CAPABILITY_REGISTRY.get(str(source_call.get("fn") or ""))
+                if cap is not None and name in cap.params and cap.params[name].structured:
+                    try:
+                        projections = cap.params[name].projected_fields(_completed_params(cap.name, source_params)[name], name, updates_per_tick=_source_updates(cap.params[name], source_call, source_calls))
+                    except (ValueError, TypeError, KeyError):
+                        projections = ()
+                    if not projections:
+                        violations.append({"fn": cap.name, "callId": source_call.get("id"),
+                                           "reason": "structured authored parameter has no projection"})
+                    for projection in projections:
+                        source_path = f"runtimeProgram.calls[{index}].params.{projection.authored_path}"
+                        matching = [row for row in receipt_rows
+                                    if row.get("fn") == cap.name and row.get("callId") == source_call.get("id")
+                                    and row.get("authoredPath") == source_path
+                                    and str(row.get("finalPath") or "").endswith("." + projection.wire_path)]
+                        if len(matching) != 1:
+                            violations.append({"fn": cap.name, "callId": source_call.get("id"), "authoredPath": source_path,
+                                               "reason": "structured parameter output has no unique compiler receipt"})
+                    continue
+                key = (str(source_call.get("fn") or ""), str(source_call.get("id") or ""),
+                       f"runtimeProgram.calls[{index}].params.{name}")
+                if key not in delivered_sources:
+                    violations.append({
+                        "callId": key[1], "fn": key[0], "authoredPath": key[2],
+                        "reason": "authored parameter has no compiler receipt",
+                    })
+        for index, source_call in enumerate(source_calls):
+            if not isinstance(source_call, Mapping):
+                continue
+            fn = str(source_call.get("fn") or "")
+            params = source_call.get("params")
+            if not isinstance(params, Mapping):
+                continue
+            for name in declared_neutral_omissions(fn, params):
+                source_path = f"runtimeProgram.calls[{index}].params.{name}"
+                for expected in _parameter_outputs(fn, name, params):
+                    spec = receipt_param_spec(CAPABILITY_REGISTRY[fn], name)
+                    if spec is not None and spec.wire_preserve_absence and final_document is not None:
+                        # Additive neutral leaves were absent from older compiler
+                        # output. Authenticate this exact target/component; a
+                        # present leaf still requires its unique omission proof.
+                        entities = _final_value(final_document, "runtimeProgram.entities")
+                        targets = [expected.replace("entities[]", f"entities[{ei}]")
+                                   for ei, entity in enumerate(entities if isinstance(entities, list) else [])
+                                   if isinstance(entity, Mapping) and entity.get("id") == source_call.get("target")]
+                        if (len(targets) == 1 and isinstance(_final_value(final_document, targets[0].rsplit(".", 1)[0]), Mapping)
+                                and _final_value(final_document, targets[0]) is _MISSING):
+                            continue
+                    matching = [row for row in receipt_rows
+                                if row.get("fn") == fn and row.get("callId") == source_call.get("id")
+                                and row.get("authoredPath") == source_path
+                                and path_matches(expected, str(row.get("finalPath") or ""))
+                                and row.get("status") == "declared_neutral_omission"]
+                    if len(matching) != 1:
+                        violations.append({
+                            "callId": str(source_call.get("id") or ""), "fn": fn,
+                            "authoredPath": source_path, "finalPath": expected,
+                            "reason": "declared neutral omission has no unique omission receipt",
+                        })
+    if final_document is not None:
+        _audit_present_parameters(final_document, authored_document, receipt_rows, violations)
+        # Optional registry-selected components have no legacy implicit owner.
+        # Audit their full presence here, even when every receipt was removed.
+        entities = _final_value(final_document, "runtimeProgram.entities")
+        for presence_fn, presence_cap in CAPABILITY_REGISTRY.items():
+            if not presence_cap.wire_presence_path:
+                continue
+            indices = (range(len(entities)) if isinstance(entities, list) else ()) if "[]" in presence_cap.wire_presence_path else (None,)
+            for index in indices:
+                base = presence_cap.wire_presence_path.replace("[]", f"[{index}]", 1) if index is not None else presence_cap.wire_presence_path
+                if _final_value(final_document, base) is _MISSING:
+                    continue
+                matching = [row for row in receipt_rows if row.get("fn") == presence_fn
+                            and (row["finalPath"] == base or row["finalPath"].startswith(base + "."))]
+                owners = {(row["callId"], source_match.group(0)) for row in matching
+                          if (source_match := re.match(r"runtimeProgram\.calls\[\d+\]", row["authoredPath"])) is not None}
+                if len(owners) != 1:
+                    violations.append({"fn": presence_fn, "finalPath": base,
+                                       "reason": "present optional component lacks one originating receipt owner"})
+                for pattern in presence_cap.final_wire_paths:
+                    output = pattern.replace("[]", f"[{index}]", 1)
+                    # Presence requires the original required projection, not
+                    # absent additive optional leaves (including phase windows).
+                    optional = any(not spec.required and pattern in _parameter_outputs(presence_fn, name)
+                                   for name, spec in presence_cap.params.items())
+                    if optional and _final_value(final_document, output) is _MISSING:
+                        continue
+                    rows = [row for row in matching if row["finalPath"] == output]
+                    if len(rows) != 1:
+                        violations.append({"fn": presence_fn, "finalPath": output,
+                                           "reason": "present optional component lacks unique full output coverage"})
+        if _final_value(final_document, "runtimeProgram.weaponAmmo") is not _MISSING:
+            selections = [row for row in receipt_rows if row.get("fn") == "weapon_ammo"
+                          and row.get("finalPath") == "runtimeProgram.weaponAmmo"
+                          and row.get("status") == "technical_projection"
+                          and re.fullmatch(r"runtimeProgram\.calls\[\d+\]\.fn", str(row.get("authoredPath") or ""))]
+            if len(selections) != 1:
+                violations.append({"finalPath": "runtimeProgram.weaponAmmo", "reason": "weapon ammo has no unique fn-selected semantics receipt"})
+            else:
+                selection = selections[0]
+                prefix = selection["authoredPath"].rsplit(".", 1)[0] + ".params."
+                for name in CAPABILITY_REGISTRY["weapon_ammo"].params:
+                    rows = [row for row in receipt_rows if row.get("fn") == "weapon_ammo"
+                            and row.get("callId") == selection.get("callId") and row.get("authoredPath") == prefix + name
+                            and row.get("finalPath") == "runtimeProgram.weaponAmmo." + name and row.get("status") == "delivered"]
+                    if len(rows) != 1:
+                        violations.append({"finalPath": "runtimeProgram.weaponAmmo." + name,
+                                           "reason": "weapon ammo choice has no unique originating parameter receipt"})
+        # Presence is an explicit root-PNG source selection. With provenance
+        # supplied, every body requires one exact association and each transform
+        # requires its own unique receipt from that association's source call.
+        runtime = final_document.get("runtimeProgram", {})
+        bindings = runtime.get("bindings", []) if isinstance(runtime, Mapping) else []
+        for bi, binding in enumerate(bindings):
+            policy = binding.get("usePolicy", {}) if isinstance(binding, Mapping) else {}
+            action = policy.get("action", {}) if isinstance(policy, Mapping) else {}
+            placement = action.get("placement", {}) if isinstance(action, Mapping) else {}
+            if not isinstance(placement, Mapping):
+                continue
+            for component_cap in (cap for cap in CAPABILITY_REGISTRY.values() if cap.category == "item_placed_body"):
+                component = component_cap.params["placementCallId"].wire_name
+                if component not in placement:
+                    continue
+                base = f"runtimeProgram.bindings[{bi}].usePolicy.action.placement.{component}"
+                associations = [r for r in receipt_rows if r.get("fn") == component_cap.name
+                                and r.get("finalPath") == base and r.get("status") == "technical_projection"
+                                and str(r.get("authoredPath") or "").endswith(".params.placementCallId")]
+                if len(associations) != 1:
+                    violations.append({"finalPath": base, "reason": "placed body has no unique association receipt"})
+                    continue
+                association = associations[0]
+                source_base = association["authoredPath"].rsplit(".", 1)[0]
+                for name, spec in component_cap.params.items():
+                    if name == "placementCallId":
+                        continue
+                    # Additive optional leaves may be absent in accepted historical
+                    # wire. Fresh neutral materialization still needs its own receipt.
+                    if not spec.required and isinstance(placement[component], Mapping) and name not in placement[component]:
+                        continue
+                    statuses = {"delivered"}
+                    if name in declared_neutral_omissions(component_cap.name, {}):
+                        statuses.add("declared_neutral_omission")
+                    matching = [r for r in receipt_rows if r.get("fn") == component_cap.name
+                                and r.get("callId") == association.get("callId")
+                                and r.get("authoredPath") == f"{source_base}.{name}"
+                                and r.get("finalPath") == f"{base}.{name}" and r.get("status") in statuses]
+                    if len(matching) != 1:
+                        violations.append({"finalPath": f"{base}.{name}", "reason": "placed transform has no unique originating receipt"})
+        # Wire-only auditing has no Author call list: require coverage of each
+        # present declared default slot, but do not claim whether it was omitted.
+        for fn, cap in CAPABILITY_REGISTRY.items():
+            for name in declared_neutral_omissions(fn, {}):
+                for expected in (path for pattern in _parameter_outputs(fn, name)
+                                 for path in _present_wire_paths(final_document, pattern)):
+                    if cap.category == "event":
+                        event_match = re.match(r"runtimeProgram\.entities\[\d+\]\.events\[\d+\]", expected)
+                        event_base = event_match.group() if event_match else ""
+                        if _final_value(final_document, event_base + ".action") != (cap.wire_action or cap.persisted_name):
+                            continue
+                        # An exact event alias may share this opcode and DTO
+                        # leaf without sharing the ordinary action's authored
+                        # parameter. Its own complete projection is audited
+                        # above; do not invent a second originating call here.
+                        claims = {row.get("fn") for row in receipt_rows
+                                  if row["finalPath"].startswith(event_base + ".") and row.get("fn")}
+                        if claims and fn not in claims:
+                            continue
+                    # A packaged property owns the same old DTO leaf. Its exact
+                    # nested source, value and component ownership were audited above.
+                    member = PROJECTILE_MODIFIER_COMPONENTS.get(fn)
+                    nested_claims = [row for row in receipt_rows if row.get("finalPath") == expected
+                        and (owner_cap := CAPABILITY_REGISTRY.get(row.get("fn"))) is not None
+                        and member in owner_cap.nested_components.values()]
+                    if len(nested_claims) == 1:
+                        continue
+                    source_pattern = r"runtimeProgram\.calls\[\d+\]\.params\." + re.escape(name)
+                    matching = [row for row in receipt_rows
+                                if row.get("fn") == fn and row.get("finalPath") == expected
+                                and re.fullmatch(source_pattern, str(row.get("authoredPath") or ""))]
+                    if len(matching) != 1:
+                        violations.append({
+                            "fn": fn, "finalPath": expected,
+                            "reason": "declared neutral wire slot has no unique parameter receipt",
+                        })
+    lowerers = [row for row in GLOBAL_TECHNICAL_LOWERINGS
+                if row["id"] not in {STACK_CHANCE_LOWERER_ID, EFFECT_GROUP_BINDING_LOWERER_ID}
+                or any(receipt.get("lowererId") == row["id"] for receipt in receipt_rows)]
+    return {
+        "schema": "infini.technical-lowering-audit.v1",
+        "ok": not violations,
+        "violations": violations,
+        "lowerers": lowerers,
+        # Keep source-backed compiler serialization unchanged. Only standalone
+        # audits need an explicit limit on what their successful check proves.
+        **({"authoredSourceChecked": False} if authored_document is None else {}),
+    }
+
+
+def technical_lowering_manifest() -> dict[str, Any]:
+    capability_rows = []
+    for name, cap in CAPABILITY_REGISTRY.items():
+        capability_rows.append({
+            "capability": name,
+            "outputs": list(declared_outputs_for(name)),
+            "authoredDecisionsPreserved": True,
+            "addsDesignChoice": False,
+            "compilerOwner": cap.compiler_owner,
+            "csharpOwner": cap.csharp_owner,
+            **({"technicalProjectionInputs": list(cap.technical_lowering_inputs)} if cap.technical_lowering_inputs else {}),
+            **({"wirePresencePath": cap.wire_presence_path} if cap.wire_presence_path else {}),
+        })
+    return {
+        "schema": TECHNICAL_LOWERING_SCHEMA,
+        "exactRepetitionCompressionPolicy": dict(EXACT_REPETITION_COMPRESSION_POLICY),
+        "globalLowerers": list(GLOBAL_TECHNICAL_LOWERINGS),
+        "capabilities": capability_rows,
+    }
+
+
+__all__ = [
+    "EXACT_REPETITION_COMPRESSION_POLICY",
+    "GLOBAL_TECHNICAL_LOWERINGS",
+    "MIN_EXACT_REPETITION_COMPRESSION",
+    "PRIMARY_BINDING_ROLE_LOWERER_ID",
+    "PRIMARY_OWNER_FINAL_PATH",
+    "PRIMARY_OWNER_LOWERER_ID",
+    "TECHNICAL_LOWERING_SCHEMA",
+    "audit_compiler_receipts",
+    "capability_fixed_outputs",
+    "declared_global_inputs_for",
+    "declared_global_outputs_for",
+    "declared_outputs_for",
+    "path_matches",
+    "primary_binding_role",
+    "primary_binding_role_receipt",
+    "primary_owner_for_kind",
+    "primary_owner_receipt",
+    "technical_lowering_manifest",
+]

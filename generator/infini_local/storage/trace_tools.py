@@ -1,0 +1,647 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import tempfile
+import threading
+import time
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Iterator
+from weakref import WeakValueDictionary
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows uses msvcrt below.
+    fcntl = None  # type: ignore[assignment]
+
+try:
+    import msvcrt
+except ImportError:  # pragma: no cover - POSIX uses fcntl above.
+    msvcrt = None  # type: ignore[assignment]
+
+
+# Each NDJSON target shares one in-process lock with its own recovery/rotation.
+# A stalled optional transport file must not block ordinary events elsewhere.
+_NDJSON_WRITE_LOCK = threading.RLock()
+_NDJSON_TARGET_LOCKS: WeakValueDictionary = WeakValueDictionary()
+_TRANSPORT_ARTIFACT_LOCK = threading.RLock()
+
+
+def _ndjson_thread_lock(path: Path):
+    key = os.path.normcase(os.path.abspath(path))
+    with _NDJSON_WRITE_LOCK:
+        lock = _NDJSON_TARGET_LOCKS.get(key)
+        if lock is None:
+            lock = threading.RLock()
+            _NDJSON_TARGET_LOCKS[key] = lock
+        return lock
+_NDJSON_MAX_BYTES = 16 * 1024 * 1024
+_NDJSON_BACKUP_COUNT = 2
+_TAIL_READ_CHUNK_BYTES = 64 * 1024
+
+
+@contextmanager
+def _ndjson_process_lock(path: Path) -> Iterator[None]:
+    """Serialize append/recovery/rotation across generator processes."""
+    lock_path = path.with_name(path.name + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+b") as handle:
+        if os.name == "nt":
+            if msvcrt is None:  # pragma: no cover - defensive platform guard.
+                raise RuntimeError("msvcrt is required for Windows trace locking")
+            handle.seek(0, 2)
+            if handle.tell() == 0:
+                handle.write(b"\0")
+                handle.flush()
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            if fcntl is None:  # pragma: no cover - defensive platform guard.
+                raise RuntimeError("fcntl is required for POSIX trace locking")
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _ndjson_backup_path(path: Path, index: int) -> Path:
+    return path.with_name(f"{path.name}.{index}")
+
+
+def _parse_ndjson_line(line: bytes) -> Any | None:
+    if not line or b"\x00" in line:
+        return None
+    try:
+        return json.loads(line.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+
+
+def _recover_ndjson_locked(path: Path) -> bool:
+    """Drop only a corrupt final suffix while keeping the normal append path O(tail)."""
+    if not path.exists():
+        return False
+    with path.open("r+b") as handle:
+        handle.seek(0, 2)
+        size = handle.tell()
+        if size == 0:
+            return False
+
+        position = size
+        buffered = b""
+        while position > 0:
+            start = max(0, position - _TAIL_READ_CHUNK_BYTES)
+            handle.seek(start)
+            buffered = handle.read(position - start) + buffered
+            pieces = buffered.splitlines(keepends=True)
+            offset = 0
+            candidates: list[tuple[int, bytes]] = []
+            for index, line in enumerate(pieces):
+                end = start + offset + len(line)
+                offset += len(line)
+                # The first line of a non-zero chunk may begin in the middle of a
+                # record. It becomes eligible after the preceding chunk is loaded.
+                if start > 0 and index == 0:
+                    continue
+                if not line.endswith((b"\n", b"\r")):
+                    continue
+                record = line.rstrip(b"\r\n")
+                if record and _parse_ndjson_line(record) is not None:
+                    candidates.append((end, record))
+            if candidates:
+                valid_end = candidates[-1][0]
+                if valid_end == size:
+                    return False
+                handle.truncate(valid_end)
+                return True
+            position = start
+
+        handle.truncate(0)
+        return True
+
+
+def recover_ndjson(path: str | Path) -> bool:
+    """Repair a trailing NDJSON corruption suffix without touching prior rows."""
+    try:
+        target = Path(path)
+        with _ndjson_thread_lock(target), _ndjson_process_lock(target):
+            return _recover_ndjson_locked(target)
+    except Exception:
+        return False
+
+
+def _rotate_ndjson_locked(path: Path, backup_count: int) -> None:
+    backups = max(0, int(backup_count))
+    if backups == 0:
+        path.unlink(missing_ok=True)
+        return
+    for index in range(backups, 1, -1):
+        previous = _ndjson_backup_path(path, index - 1)
+        if previous.exists():
+            os.replace(previous, _ndjson_backup_path(path, index))
+    os.replace(path, _ndjson_backup_path(path, 1))
+
+
+def append_ndjson(
+    path: str | Path,
+    record: Any,
+    *,
+    max_bytes: int = _NDJSON_MAX_BYTES,
+    backup_count: int = _NDJSON_BACKUP_COUNT,
+) -> None:
+    """Append one complete JSON record under process lock; max_bytes=0 disables rotation."""
+    target = Path(path)
+    encoded = (json.dumps(record, ensure_ascii=False, separators=(",", ":"), default=str) + "\n").encode("utf-8")
+    with _ndjson_thread_lock(target), _ndjson_process_lock(target):
+        target.parent.mkdir(parents=True, exist_ok=True)
+        _recover_ndjson_locked(target)
+        limit = max(0, int(max_bytes))
+        if limit and target.exists() and target.stat().st_size and target.stat().st_size + len(encoded) > limit:
+            _rotate_ndjson_locked(target, backup_count)
+        with target.open("ab") as handle:
+            handle.write(encoded)
+
+
+def clear_ndjson(path: str | Path) -> None:
+    """Clear one trace file under the same lock used by append and rotation."""
+    target = Path(path)
+    with _ndjson_thread_lock(target), _ndjson_process_lock(target):
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open("wb"):
+            pass
+
+
+def initialize_trace_storage(paths: list[str | Path] | tuple[str | Path, ...]) -> dict[str, bool]:
+    """Repair bounded trace tails once during application startup."""
+    return {str(Path(path)): recover_ndjson(path) for path in paths}
+
+
+def json_slim(obj: Any, max_chars: int = 40000) -> Any:
+    """Return JSON-safe diagnostics; max_chars=0 preserves the complete record."""
+    try:
+        text = json.dumps(obj, ensure_ascii=False, default=str)
+    except Exception:
+        text = str(obj)
+        return text if max_chars <= 0 else text[:max_chars]
+    if max_chars <= 0 or len(text) <= max_chars:
+        try:
+            return json.loads(text)
+        except Exception:
+            return text
+    return {"_truncated": True, "jsonPrefix": text[:max_chars]}
+
+
+def persist_transport_artifact(cache_dir: Path, raw: bytes, *, secrets: tuple[str, ...] = ()) -> dict[str, Any]:
+    """Publish complete sanitized wire bytes atomically; never persist headers."""
+    try:
+        from infini_local.services.codex_auth import redact_credentials
+        from infini_local.core.env_utils import env_credential_values
+        clean = redact_credentials(raw.decode("utf-8"), secrets + env_credential_values()).encode("utf-8")
+        digest = hashlib.sha256(clean).hexdigest()
+        directory = Path(cache_dir) / "transport_artifacts"
+        target = directory / (digest + ".txt")
+        if directory.is_symlink() or target.is_symlink() or (directory / "artifacts.lock").is_symlink():
+            raise ValueError("linked_storage")
+        receipt = {"status": "stored", "format": "infini.transport-artifact.v1",
+                   "path": target.relative_to(cache_dir).as_posix(),
+                   "sha256": digest, "bytes": len(clean), "sanitized": clean != raw}
+        with _TRANSPORT_ARTIFACT_LOCK, _ndjson_process_lock(directory / "artifacts"):
+            if target.exists():
+                if target.read_bytes() != clean:
+                    raise ValueError("immutable_artifact_mismatch")
+                return receipt
+            fd, name = tempfile.mkstemp(prefix=".transport-", dir=directory)
+            try:
+                with os.fdopen(fd, "wb") as handle:
+                    handle.write(clean)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(name, target)
+            finally:
+                Path(name).unlink(missing_ok=True)
+        return receipt
+    except Exception as exc:
+        return {"status": "refused", "reason": type(exc).__name__}
+
+
+def persist_transport_batch(cache_dir: Path, raws: list[bytes], *, secrets: tuple[str, ...] = ()) -> list[dict[str, Any]]:
+    """One immutable artifact per safe SSE attempt; ranges preserve event bytes.
+
+    sha256/bytes bind the complete artifact; offset/length/rangeSha256 bind each
+    event payload (not reconstructed SSE framing).
+    """
+    from infini_local.services.codex_auth import redact_credentials
+    from infini_local.core.env_utils import env_credential_values
+    secrets = secrets + env_credential_values()
+    clean = [redact_credentials(raw.decode("utf-8"), secrets).encode("utf-8") for raw in raws]
+    receipt = persist_transport_artifact(cache_dir, b"\n".join(clean), secrets=secrets)
+    if receipt.get("status") != "stored":
+        return [dict(receipt) for _ in raws]
+    offset = 0
+    receipts = []
+    for raw, saved in zip(raws, clean):
+        receipts.append({**receipt, "format": "infini.transport-ranges.v1", "offset": offset,
+                         "length": len(saved), "rangeSha256": hashlib.sha256(saved).hexdigest(),
+                         "sanitized": saved != raw})
+        offset += len(saved) + 1
+    return receipts
+
+
+def read_transport_artifact(cache_dir: Path, receipt: dict[str, Any]) -> bytes:
+    """Read explicitly typed whole-artifact or event-range receipts."""
+    if receipt.get("status") != "stored":
+        raise ValueError("artifact not stored")
+    root = Path(cache_dir).resolve()
+    target = (root / receipt["path"]).resolve()
+    if not target.is_relative_to(root):
+        raise ValueError("artifact outside cache")
+    raw = target.read_bytes()
+    if len(raw) != receipt["bytes"] or hashlib.sha256(raw).hexdigest() != receipt["sha256"]:
+        raise ValueError("artifact hash/size mismatch")
+    if receipt.get("format") == "infini.transport-artifact.v1":
+        return raw
+    if receipt.get("format") != "infini.transport-ranges.v1":
+        raise ValueError("unknown artifact format")
+    offset, length = receipt["offset"], receipt["length"]
+    if type(offset) is not int or type(length) is not int or min(offset, length) < 0 or offset + length > len(raw):
+        raise ValueError("invalid artifact range")
+    fragment = raw[offset:offset + length]
+    if hashlib.sha256(fragment).hexdigest() != receipt["rangeSha256"]:
+        raise ValueError("range hash mismatch")
+    return fragment
+
+
+def _redact_diagnostic(value: Any) -> Any:
+    """Sanitize every persisted/echoed member, preserving clean authored strings."""
+    from infini_local.services.codex_auth import redact_credentials
+
+    from infini_local.core.env_utils import env_credential_values
+
+    secrets = env_credential_values()
+    active: set[int] = set()
+
+    def visit(item: Any) -> Any:
+        if isinstance(item, str):
+            return redact_credentials(item, secrets)
+        if isinstance(item, (dict, list, tuple)):
+            if id(item) in active:
+                raise ValueError("cyclic_diagnostic")
+            active.add(id(item))
+            try:
+                if isinstance(item, dict):
+                    return {redact_credentials(str(key), secrets): visit(child) for key, child in item.items()}
+                return [visit(child) for child in item]
+            finally:
+                active.remove(id(item))
+        if item is None or isinstance(item, (bool, int, float)):
+            return item
+        return redact_credentials(str(item), secrets)
+
+    return visit(value)
+
+
+# Complete bodies live once in the existing immutable digest store. NDJSON and
+# Studio tails retain bounded previews; explicit readers can verify and expand
+# references without changing historical inline records.
+_TRACE_INLINE_CHARS = 4096
+_TRACE_PREVIEW_CHARS = 420
+
+
+def compact_trace_value(cache_dir: Path, value: Any, *, preview_chars: int = _TRACE_PREVIEW_CHARS) -> Any:
+    if isinstance(value, str) and len(value) > _TRACE_INLINE_CHARS:
+        receipt = persist_transport_artifact(cache_dir, value.encode("utf-8"))
+        return {"_traceText": receipt, "preview": value[:max(0, min(preview_chars, _TRACE_PREVIEW_CHARS))]}
+    if isinstance(value, dict):
+        return {key: compact_trace_value(cache_dir, item, preview_chars=preview_chars) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [compact_trace_value(cache_dir, item, preview_chars=preview_chars) for item in value]
+    return value
+
+
+def expand_trace_value(cache_dir: Path, value: Any, *, strict: bool = True) -> Any:
+    """Reconstruct exact sanitized text; UI reads label failures, replay refuses them."""
+    if isinstance(value, dict):
+        if set(value) == {"_traceText", "preview"}:
+            try:
+                receipt = value["_traceText"]
+                if not isinstance(receipt, dict):
+                    raise ValueError("invalid trace text receipt")
+                if receipt.get("format") == "infini.stage-request-prompt.v1":
+                    return trace_clip(read_stage_request(cache_dir, receipt)["messages"], default_max_chars=0)
+                return read_transport_artifact(cache_dir, receipt).decode("utf-8")
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                if strict:
+                    raise
+                # Never echo exception text: it can contain paths or private bytes.
+                return f"<trace text unavailable: {type(exc).__name__}>"
+        return {key: expand_trace_value(cache_dir, item, strict=strict) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [expand_trace_value(cache_dir, item, strict=strict) for item in value]
+    return value
+
+
+def preview_trace_value(value: Any) -> Any:
+    """Display compact receipts as explicitly partial text without reading bodies."""
+    if isinstance(value, dict):
+        if set(value) == {"_traceText", "preview"}:
+            receipt = value["_traceText"]
+            if not isinstance(receipt, dict):
+                return "<trace text unavailable: invalid receipt>"
+            status = receipt.get("status")
+            notice = ("Preview only; full text: /trace?full=1 or exported cache replay"
+                      if status == "stored" else f"Trace text unavailable: {status} ({receipt.get('reason', 'unknown')})")
+            return str(value["preview"]) + "\n[" + notice + "]"
+        return {key: preview_trace_value(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [preview_trace_value(item) for item in value]
+    return value
+
+
+def read_trace_tail(cache_dir: Path, path: str | Path, limit: int = 80, *, full: bool = False) -> list[dict[str, Any]]:
+    """Bound event count for polling; expand only an explicit full-detail read."""
+    rows = tail_ndjson(path, limit)
+    return expand_trace_value(cache_dir, rows, strict=False) if full else rows
+
+
+def log_event(
+    cache_dir: Path,
+    level: str,
+    message: str,
+    payload: Any = None,
+    *,
+    echo_levels: tuple[str, ...] = (),
+    echo_payload_keys: tuple[str, ...] = ("hint", "status", "provider", "stage", "was", "now"),
+) -> None:
+    """Append human-readable diagnostics to cache/events.ndjson.
+
+    The file stays the complete record.  ``echo_levels`` additionally mirrors the
+    listed levels to stdout so an operator watching the server window sees a
+    failure when it happens instead of discovering it in the log afterwards.
+    The echo is a strict subset of what is written, never a second source of truth.
+    """
+    normalized_level = str(level)
+    try:
+        message = _redact_diagnostic(str(message))
+        payload = _redact_diagnostic(payload)
+    except Exception:
+        return
+    try:
+        cache_dir = Path(cache_dir)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        event = {
+            "createdAt": time.time(),
+            "level": normalized_level,
+            "message": str(message),
+            "payload": compact_trace_value(cache_dir, json_slim(payload, 0)),
+        }
+        append_ndjson(cache_dir / "events.ndjson", event, max_bytes=0)
+    except Exception:
+        pass
+    if echo_levels and normalized_level in echo_levels:
+        _echo_event(normalized_level, str(message), payload, echo_payload_keys)
+
+
+def _echo_event(
+    level: str,
+    message: str,
+    payload: Any,
+    payload_keys: tuple[str, ...],
+) -> None:
+    """Print one compact console line for an already-recorded event."""
+    try:
+        stamp = time.strftime("%H:%M:%S")
+        details: list[str] = []
+        if isinstance(payload, dict):
+            for key in payload_keys:
+                if key not in payload:
+                    continue
+                value = payload.get(key)
+                if value is None or value == "":
+                    continue
+                text = str(value)
+                # Hints are full sentences; everything else stays a short token.
+                limit = 300 if key == "hint" else 80
+                if len(text) > limit:
+                    text = text[: limit - 1] + "…"
+                details.append(f"{key}={text}")
+        suffix = ("  " + " ".join(details)) if details else ""
+        print(f"[{stamp}] {level.upper()}: {message}{suffix}", flush=True)
+    except Exception:
+        pass
+
+
+def persist_stage_request(cache_dir: Path, stage: str, recipe_key: str | None, request: dict[str, Any], *, recipe_id: str | None = None) -> dict[str, Any]:
+    """Atomic complete sanitized stage messages, not an HTTP/auth snapshot."""
+    receipt: dict[str, Any] = {"stage": stage, "recipeKey": recipe_key}
+    if not any(type(value) is str and value for value in (recipe_key, recipe_id)):
+        return {**receipt, "status": "refused", "reason": "missing_recipe_join"}
+    try:
+        messages = []
+        for message in request["messages"]:
+            # Only authored message fields: never stringify private request objects.
+            if not isinstance(message, dict) or any(type(message.get(key)) is not str for key in ("role", "content")):
+                raise ValueError("unsupported_message")
+            row = {key: _redact_diagnostic(message[key]) for key in ("role", "name", "content") if key in message and type(message[key]) is str}
+            messages.append(row)
+        encoded_messages = json.dumps(messages, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        artifact = {
+            "schema": "infini.stage-request-messages.v1", "stage": stage, "recipeKey": recipe_key,
+            "recipeId": recipe_id, "messages": messages,
+            "messagesSha256": hashlib.sha256(encoded_messages).hexdigest(),
+            "sanitized": messages != [{key: message[key] for key in ("role", "name", "content") if key in message} for message in request["messages"]],
+            "scope": "Complete builder messages before provider conversion; excludes transport headers/configuration.",
+        }
+        encoded = json.dumps(artifact, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        receipt.update({"messagesSha256": artifact["messagesSha256"], "bytes": len(encoded)})
+        directory = Path(cache_dir) / "stage_requests"
+        digest = hashlib.sha256(encoded).hexdigest()
+        target = directory / (digest + ".json")
+        if directory.is_symlink() or target.is_symlink() or (directory / "artifacts.lock").is_symlink():
+            return {**receipt, "status": "refused", "reason": "linked_storage"}
+        with _NDJSON_WRITE_LOCK, _ndjson_process_lock(directory / "artifacts"):
+            fd, temporary_name = tempfile.mkstemp(prefix=".request-", dir=directory)
+            temporary = Path(temporary_name)
+            try:
+                with os.fdopen(fd, "wb") as handle:
+                    handle.write(encoded)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(temporary, target)
+            finally:
+                temporary.unlink(missing_ok=True)
+        return {**receipt, "status": "stored", "artifactSha256": digest, "path": target.relative_to(cache_dir).as_posix()}
+    except Exception as exc:
+        # Diagnostics cannot stop gameplay or disclose exception/request text.
+        return {**receipt, "status": "refused", "reason": type(exc).__name__}
+
+
+def read_stage_request(cache_dir: Path, receipt: dict[str, Any]) -> dict[str, Any]:
+    """Read the existing immutable builder artifact, validating body and owner join."""
+    if receipt.get("status") != "stored":
+        raise ValueError("stage request not stored")
+    root = Path(cache_dir).resolve()
+    target = (root / receipt["path"]).resolve()
+    if not target.is_relative_to(root / "stage_requests"):
+        raise ValueError("stage request outside storage")
+    raw = target.read_bytes()
+    if len(raw) != receipt["bytes"] or hashlib.sha256(raw).hexdigest() != receipt["artifactSha256"]:
+        raise ValueError("stage request hash/size mismatch")
+    artifact = json.loads(raw)
+    messages = json.dumps(artifact["messages"], ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    if (artifact.get("schema") != "infini.stage-request-messages.v1"
+            or any(artifact.get(key) != receipt.get(key) for key in ("stage", "recipeKey", "messagesSha256"))
+            or hashlib.sha256(messages).hexdigest() != receipt["messagesSha256"]):
+        raise ValueError("stage request owner/messages mismatch")
+    return artifact
+
+
+def stage_request_prompt(receipt: dict[str, Any], messages: Any, *, preview_chars: int = _TRACE_PREVIEW_CHARS) -> dict[str, Any]:
+    """Reference an already-persisted message list instead of writing it as text too."""
+    try:
+        limit = max(0, min(preview_chars, _TRACE_PREVIEW_CHARS))
+        preview = trace_clip(_redact_diagnostic(messages), default_max_chars=0)[:limit]
+    except Exception:
+        preview = ""  # A refused diagnostic must never interrupt the stage.
+    return {"_traceText": {**receipt, "format": "infini.stage-request-prompt.v1"}, "preview": preview}
+
+
+def trace_clip(value: Any, *, default_max_chars: int, max_chars: int | None = None) -> str:
+    limit = max(0, int(default_max_chars if max_chars is None else max_chars))
+    try:
+        text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=str, indent=2)
+    except Exception:
+        text = str(value)
+    if limit > 0 and len(text) > limit:
+        return text[:limit] + "\n...<clipped " + str(len(text) - limit) + " chars>"
+    return text
+
+
+def trace_message_summary(messages: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for i, m in enumerate(messages or []):
+        content = str((m or {}).get("content") or "")
+        out.append({
+            "index": i,
+            "role": str((m or {}).get("role") or ""),
+            "name": str((m or {}).get("name") or ""),
+            "chars": len(content),
+            "preview": content[:420],
+        })
+    return out
+
+
+def trace_event(
+    *,
+    cache_dir: Path,
+    trace_prompts_enabled: bool,
+    trace_max_prompt_chars: int,
+    trace_file: Path,
+    prompt_trace_file: Path,
+    kind: str,
+    stage: str,
+    title: str,
+    payload: Any = None,
+    prompt: Any = None,
+    negative: Any = None,
+    response: Any = None,
+    error: Any = None,
+) -> None:
+    if not trace_prompts_enabled:
+        return
+    try:
+        cache_dir = Path(cache_dir)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        event: dict[str, Any] = {"ts": int(time.time()), "kind": str(kind), "stage": str(stage), "title": str(title)}
+        if payload is not None:
+            event["payload"] = json_slim(payload, 0)
+        if prompt is not None:
+            event["prompt"] = prompt if isinstance(prompt, dict) and set(prompt) == {"_traceText", "preview"} else trace_clip(prompt, default_max_chars=0)
+        if negative is not None:
+            event["negative"] = trace_clip(negative, default_max_chars=0)
+        if response is not None:
+            event["response"] = trace_clip(response, default_max_chars=0)
+        if error is not None:
+            event["error"] = trace_clip(error, default_max_chars=0)
+        target = prompt_trace_file if kind in {"prompt", "response"} or prompt is not None else trace_file
+        preview_chars = min(trace_max_prompt_chars or _TRACE_PREVIEW_CHARS, _TRACE_PREVIEW_CHARS)
+        append_ndjson(target, compact_trace_value(cache_dir, _redact_diagnostic(event), preview_chars=preview_chars), max_bytes=0)
+    except Exception:
+        pass
+
+
+def tail_text_file(path: str | Path, max_chars: int = 16000) -> str:
+    try:
+        p = Path(path)
+        if not p.exists():
+            return ""
+        byte_limit = max(1, int(max_chars)) * 4 + 4
+        with p.open("rb") as handle:
+            handle.seek(0, 2)
+            start = max(0, handle.tell() - byte_limit)
+            handle.seek(start)
+            text = handle.read().decode("utf-8", errors="replace")
+        return text[-max_chars:]
+    except Exception as e:
+        return f"<tail failed: {e!r}>"
+
+
+def tail_ndjson(path: str | Path, limit: int = 80) -> list[dict[str, Any]]:
+    try:
+        p = Path(path)
+        if not p.exists():
+            return []
+        wanted = max(1, int(limit))
+        out: list[dict[str, Any]] = []
+        needs_recovery = False
+        with _ndjson_thread_lock(p), _ndjson_process_lock(p), p.open("rb") as handle:
+            handle.seek(0, 2)
+            position = handle.tell()
+            if position == 0:
+                return []
+            handle.seek(position - 1)
+            discard_final_fragment = handle.read(1) != b"\n"
+            needs_recovery = discard_final_fragment
+            buffered = b""
+            while position > 0 and len(out) < wanted:
+                start = max(0, position - _TAIL_READ_CHUNK_BYTES)
+                handle.seek(start)
+                buffered = handle.read(position - start) + buffered
+                pieces = buffered.split(b"\n")
+                if start > 0:
+                    buffered = pieces[0]
+                    complete = pieces[1:]
+                else:
+                    buffered = b""
+                    complete = pieces
+                for line in reversed(complete):
+                    if discard_final_fragment:
+                        discard_final_fragment = False
+                        continue
+                    if line.endswith(b"\r"):
+                        line = line[:-1]
+                    if not line.strip():
+                        continue
+                    if b"\x00" in line:
+                        needs_recovery = True
+                        continue
+                    try:
+                        obj = json.loads(line.decode("utf-8"))
+                    except (UnicodeDecodeError, json.JSONDecodeError):
+                        needs_recovery = True
+                        continue
+                    out.append(obj if isinstance(obj, dict) else {"raw": obj})
+                    if len(out) >= wanted:
+                        break
+                position = start
+        if needs_recovery:
+            recover_ndjson(p)
+        return list(reversed(out))
+    except Exception as e:
+        return [{"level": "error", "message": "trace read failed", "error": repr(e)}]

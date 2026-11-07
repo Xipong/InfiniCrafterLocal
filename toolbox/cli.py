@@ -6,7 +6,7 @@ import json
 import sys
 import subprocess
 
-from toolbox.infini_toolbox import BASE_ROOT
+from toolbox.project import BASE_ROOT
 
 
 
@@ -27,7 +27,7 @@ def main(argv: list[str] | None = None) -> int:
         # Keep caller-relative item/scenario/output paths and stream semantics.
         # The existing owner alone parses arguments and decides whether to execute.
         return subprocess.run(
-            [sys.executable, str(BASE_ROOT / 'tools/item-test-workbench/workbench.py'), *values[1:]],
+            [sys.executable, str(BASE_ROOT / 'tools/workbench/workbench.py'), *values[1:]],
         ).returncode
     if values[0] == 'panels':
         from toolbox.live.catalog import panel_catalog
@@ -55,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
         return child.returncode
     if values[0] == 'doctor':
         from pathlib import Path
-        from toolbox.infini_toolbox import discover_project
+        from toolbox.project import discover_project
         from toolbox.testing.doctor import doctor
         doctor_parser = argparse.ArgumentParser(description='Read-only dependencies and registered native command (no credentials).')
         doctor_parser.add_argument('--project', type=Path)

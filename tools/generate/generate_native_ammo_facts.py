@@ -10,7 +10,7 @@ from generate_native_hit_status import decode
 from native_ammo_fact_analysis import ammo_method_facts, default_ammo_selection, item_type_mentions
 
 ROOT = Path(__file__).resolve().parents[2]
-OUTPUT = ROOT / "ModSources/InfiniCrafterLocal/Common/Services/Generation/NativeAmmoFactsCatalog.g.cs"
+OUTPUT = ROOT / "mod/InfiniCrafterLocal/Common/Services/Generation/NativeAmmoFactsCatalog.g.cs"
 REPORT = ROOT / "contracts/reports/native_ammo_sources.generated.json"
 
 

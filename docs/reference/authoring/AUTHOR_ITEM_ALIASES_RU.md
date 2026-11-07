@@ -8,12 +8,12 @@
 
 | Author operation | Author params | Runtime placement |
 |---|---|---|
-| `configure_tile_placement` | `tileId`, `placeStyle` | выбранные поля и `wallId=-1` |
-| `configure_wall_placement` | `wallId`, `placeStyle` | выбранные поля и `tileId=-1` |
+| `place_tile` | `tileId`, `placeStyle` | выбранные поля и `wallId=-1` |
+| `place_wall` | `wallId`, `placeStyle` | выбранные поля и `tileId=-1` |
 
 Активный ID: целое 0…65535; style: целое 0…255. Выключающий −1 не является вариантом активного ID. Два включённых слоя нельзя выразить одной новой operation. Их общий exclusive component также не позволяет записать два placement payload на один item body.
 
-Binding сохраняет exact `placementCallId`, `stackCost=1`, `contactDamage=false` и прежнюю транзакцию accepted placement/возврата из ledger. `present_placed_item_sprite` ссылается только на `configure_tile_placement`. Wall operation не приобретает tile presentation.
+Binding сохраняет exact `placementCallId`, `stackCost=1`, `contactDamage=false` и прежнюю транзакцию accepted placement/возврата из ledger. `placed_sprite` ссылается только на `place_tile`. Wall operation не приобретает tile presentation.
 
 Неактивный ID — зарегистрированная `CapabilitySpec.fixed_wire_literals` константа. Receipt ссылается на реальный `.fn`, имеет статус `technical_projection` и проверяется по точному значению, output и originating call. Старый receipt owner `configure_placeable` удалён; обе текущие tile/wall операции и placement ledger сохраняются.
 
@@ -27,26 +27,26 @@ bodies продолжают управляться своими принятым
 ## Recall без параметров blink
 
 ```json
-{"id":"recall","fn":"recall_home_on_use","target":"item","params":{"cooldownTicks":60}}
+{"id":"recall","fn":"recall_home_on_use","target":"item","params":{"cooldown":1}}
 ```
 
 Проекция: `mobilityMode="recall_home"`, `mobilityCooldownTicks=60`, `mobilityRangeTiles=0`, `mobilitySafeTileOnly=false`. Последние два поля не исполняются в recall branch и имеют отдельные fn-selected receipts. Cooldown остаётся общим для player mobility, а не индивидуальным cooldown конкретного binding. Требуется явный `apply_item_effects` binding.
 
-Существующий `move_player_on_use` теперь допускает только `mode="blink_to_cursor"`, сохраняя range, safe-tile policy и cooldown. Общий exclusive slot не позволяет двум operations перезаписать один mobility component.
+Существующий `blink_on_use` теперь допускает только `mode="blink_to_cursor"`, сохраняя range, safe-tile policy и cooldown. Общий exclusive slot не позволяет двум operations перезаписать один mobility component.
 
 ## Бонусы комплекта брони
 
 ```json
-{"slot":"head","setKey":"coral","setBonuses":{"moveSpeedBonusPercent":25,"lifeRegenHpPerSecond":0.5,"minionSlotsBonus":1}}
+{"slot":"head","setKey":"coral","setBonuses":{"moveSpeedBonus":25,"lifeRegenHpPerSecond":0.5,"minionSlotsBonus":1}}
 ```
 
-В `configure_armor.params.setBonuses` находятся те же 11 independently authored stats с обычными именами. Все units, bounds, signed values, percent/100 и HP/s×2 проекции сохранены. Объект, если выбран, содержит хотя бы одно поле. Любой ненейтральный set bonus требует head slot и непустой exact setKey для реально надетых head/body/legs. Нулевые выбранные значения не превращаются в бонусы.
+В `armor.params.setBonuses` находятся те же 11 independently authored stats с обычными именами. Все units, bounds, signed values, percent/100 и HP/s×2 проекции сохранены. Объект, если выбран, содержит хотя бы одно поле. Любой ненейтральный set bonus требует head slot и непустой exact setKey для реально надетых head/body/legs. Нулевые выбранные значения не превращаются в бонусы.
 
-Compiler пишет отдельный receipt на каждый `params.setBonuses.<stat>`, а прежние `ArmorSpec.SetBonus…` поля сохраняются. Генератор equipment bounds и AST-проверка исполняемых DTO теперь разворачивают registry leaf paths; прежние C# safety clamps не исчезают из-за группировки Author.
+Compiler пишет отдельный receipt на каждый `params.setBonuses.<stat>`, а прежние `ArmorSpec.SetBonus…` поля сохраняются. Генератор equipment bounds разворачивает registry leaf paths; фактический C# domain проверяется через DTO/consumer round trip.
 
 ## Условия с включительной границей
 
-`require_use_condition.params.condition` — ровно один вариант:
+`use_condition.params.condition` — ровно один вариант:
 
 ```json
 "grounded"

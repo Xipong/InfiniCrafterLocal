@@ -1,0 +1,51 @@
+from __future__ import annotations
+
+"""Canonical bootstrap/config surface for the local generator runtime.
+
+This module owns process-env loading, root paths, cache directories, and public
+bootstrap constants. Pipeline and HTTP layers import these values instead of
+redeclaring bootstrap state locally.
+"""
+
+import os
+from infini_local.core.config_validation import reject_retired_config
+
+from infini_local.core.app_paths import CONFIG_PATH, ROOT, STATE_ROOT, persistent_filesystem_path
+from infini_local.core.env_utils import env_path, env_str, load_env_file
+
+from infini_local import APP_VERSION
+
+DATA_DIR = ROOT / "data"
+
+load_env_file(CONFIG_PATH)
+reject_retired_config(os.environ)
+
+RECIPE_IDENTITY_VERSION = env_str("INFINI_RECIPE_IDENTITY_VERSION", "recipe_v4_25_no_item_family_routing")
+CACHE_DIR = env_path("INFINI_CACHE_DIR", STATE_ROOT / "cache")
+# Final PNGs are persistent assets, not an expendable generator cache.
+SPRITE_DIR = persistent_filesystem_path(env_path("INFINI_IMAGE_DIR", STATE_ROOT / "images"))
+WORLD_RECIPES_DIR = env_path("INFINI_WORLD_RECIPES_DIR", CACHE_DIR / "world_recipes")
+
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+# The image store is created lazily by its write owner, never just on import.
+WORLD_RECIPES_DIR.mkdir(parents=True, exist_ok=True)
+
+# Public URL other Terraria clients should use to fetch generated assets from this generator.
+# Leave empty to let the tModLoader host advertise its own configured/guessed URL.
+ASSET_PUBLIC_BASE_URL = env_str("INFINI_ASSET_PUBLIC_BASE_URL", "").rstrip("/")
+ASSET_TRANSPORT = "http" if env_str("INFINI_MP_ASSET_TRANSPORT", "native").strip().lower() == "http" else "native"
+TERRARIA_PORT = env_str("INFINI_TERRARIA_PORT", "7777") or "7777"
+
+__all__ = [
+    "APP_VERSION",
+    "RECIPE_IDENTITY_VERSION",
+    "ROOT",
+    "CONFIG_PATH",
+    "DATA_DIR",
+    "CACHE_DIR",
+    "SPRITE_DIR",
+    "WORLD_RECIPES_DIR",
+    "ASSET_PUBLIC_BASE_URL",
+    "ASSET_TRANSPORT",
+    "TERRARIA_PORT",
+]
