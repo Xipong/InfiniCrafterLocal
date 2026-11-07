@@ -67,7 +67,7 @@ def _selected_import_paths(pythonpath: Path) -> list[Path]:
 
 
 def _overlay_config(import_paths: Sequence[Path]) -> dict[str, Any]:
-    extra_paths = [ROOT, ROOT / "LocalGenerator", ROOT / "tools", *import_paths]
+    extra_paths = [ROOT, ROOT / "generator", ROOT / "tools", *import_paths]
     return {
         "extends": str(ROOT / "pyproject.toml"),
         "extraPaths": [str(path) for path in extra_paths],

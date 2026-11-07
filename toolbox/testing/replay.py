@@ -9,7 +9,7 @@ from pathlib import Path
 import sys
 import tempfile
 
-from toolbox.infini_toolbox import discover_project
+from toolbox.project import discover_project
 from toolbox.testing.discovery import find_tool
 
 
@@ -36,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
                 del os.environ[key]
         os.environ.update(INFINI_SKIP_CONFIG_FILE='1', INFINI_USE_LLM='0', INFINI_SDCPP_SERVER_AUTOSTART='0',
                           INFINI_CACHE_DIR=str(Path(temporary) / 'cache'), INFINI_WORLD_RECIPES_DIR=str(Path(temporary) / 'worlds'))
-        sys.path.insert(0, str(project / 'LocalGenerator'))
+        sys.path.insert(0, str(project / 'generator'))
         spec = importlib.util.spec_from_file_location('_toolbox_canonical_replay', owner)
         if spec is None or spec.loader is None:
             raise RuntimeError('Cannot load canonical replay owner')

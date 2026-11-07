@@ -1,6 +1,6 @@
 # Native equipment: самостоятельные возможности аксессуаров
 
-`configure_accessory` расширен независимыми bounded листьями; provider shape/cards,
+`accessory` расширен независимыми bounded листьями; provider shape/cards,
 validator, compiler и receipts выводятся из registry. Нет preset для исходного предмета
 и нет routing по имени/категории. `equip_passive` / `equipped` остаётся явным binding.
 
@@ -36,7 +36,7 @@ Installed tML ItemID: MechanicalLens=3619, FrostsparkBoots=1862, ObsidianShield=
 В native equip code Frostspark boots задают accRunSpeed=6.75, rocketBoots=3,
 moveSpeed+=0.08, iceSkate=true. Obsidian shield задаёт noKnockback/fireWalk; Item.defense
 остаётся существующим `defensePoints`. Это read-only source trace, **не recipe/default**.
-Существующие `moveSpeedBonusPercent`, `maxRunSpeedBonusPxPerTick`, `fallDamageImmune`,
+Существующие `moveSpeedBonus`, `maxRunSpeedBonusPxPerTick`, `fallDamageImmune`,
 `lavaImmune`, `waterWalk` сохранены без дублей. Их выбор остаётся у Author;
 сами эти исходные предметы не получают все перечисленные effects.
 

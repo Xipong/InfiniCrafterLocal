@@ -5,7 +5,7 @@
 <a id="contract"></a>
 ## Условие разрешения
 
-Только optional `ParamSpec` с объявленным `default`, **тем же типом** и равным `neutral` разрешает отсутствие как точный выбор этой нейтрали. Owner — [capability_registry.py](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py); точный predicate — [declared_neutral_omissions](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py#L138). `neutral` без `default`, допустимый ноль и C# constructor default права не дают.
+Только optional `ParamSpec` с объявленным `default`, **тем же типом** и равным `neutral` разрешает отсутствие как точный выбор этой нейтрали. Owner — [capability_registry.py](../../../generator/infini_local/core/runtime_authoring/capability_registry.py); точный predicate — [declared_neutral_omissions](../../../generator/infini_local/core/runtime_authoring/technical_lowering.py#L138). `neutral` без `default`, допустимый ноль и C# constructor default права не дают.
 
 Это семантика **полного** Author JSON, не ремонт невалидного ответа и не classifier. После полной композиционной проверки compiler материализует объявленную нейтраль в прежний полный wire, не переписывая исходный Author. Explicit non-neutral value сохраняется; неверный type/range и недостающая dependency остаются RED.
 
@@ -16,20 +16,20 @@ Schema `default` — аннотация, не обещание provider constrai
 
 | Capability | Поля → объявленная нейтраль |
 |---|---|
-| `configure_item_stats` | `manaCost → 0` при любом explicit damageClass; melee может потреблять mana, magic может иметь нулевой cost |
-| `configure_item_use` | `holdoutOffsetX/holdoutOffsetY → 0` **независимо** друг от друга |
-| `present_placed_item_sprite` | `pivotSpace → frame`; только базис pivot, все десять прежних transform-полей обязательны. Explicit `alpha_bounds` — отдельный opt-in, не crop/default ground correction; [контракт](../presentation/PRESENT_PLACED_ITEM_SPRITE_RU.md) |
-| `apply_generated_buff_on_use` | `miningSpeedMultiplier → 1`; `oreSenseEnabled → false` (wire `oreSenseRadiusTiles=0`); `moveSpeedBonusPercent/jumpSpeedBonusPxPerTick/manaRegenBonusPoints/lifeRegenHpPerSecond → 0` |
-| `channel_beam` | `manaPayment → initial_use_only`; `initialDamageMultiplier/initialWidthMultiplier/damageStartProgress → 1.0`; `raycastTiles → false`; совместные сочетания и native semantics — [A7](../projectiles/CHANNEL_BEAM_SUSTAIN_GEOMETRY_RU.md) |
+| `item_stats` | `manaCost → 0` при любом explicit damageClass; melee может потреблять mana, magic может иметь нулевой cost |
+| `item_use` | `holdoutOffsetX/holdoutOffsetY → 0` **независимо** друг от друга |
+| `placed_sprite` | `pivotSpace → frame`; только базис pivot, все десять прежних transform-полей обязательны. Explicit `alpha_bounds` — отдельный opt-in, не crop/default ground correction; [контракт](../presentation/PRESENT_PLACED_ITEM_SPRITE_RU.md) |
+| `generated_buff_on_use` | `miningSpeedMultiplier → 1`; `treasureSense → false` (wire `oreSenseRadiusTiles=0`); `moveSpeedBonus/jumpSpeedBonus/manaRegen/lifeRegen → 0` |
+| `beam_geometry.ramp` | Внутри выбранного объекта `initialDamageMultiplier/initialWidthMultiplier → 1`, `damageStartProgress → 0`; warmup остаётся явным. [Контракт](../projectiles/CHANNEL_BEAM_SUSTAIN_GEOMETRY_RU.md) |
 
-Это конечный перечень объявленных параметров, не blanket optionality. Актуальные units, wire projections и executable перечень задаёт registry; сохранённые wire не переписываются. Для beam сохранённый wire без расширений остаётся без новых полей, а fresh Author получает явные нейтрали с omission receipts.
+Это конечный перечень объявленных параметров, не blanket optionality. Актуальные units, wire projections и executable перечень задаёт registry; сохранённые wire не переписываются. У beam optional ramp принадлежит текущему nested-property контракту; compiler материализует нейтрали только внутри явно выбранного объекта.
 
 <a id="dependencies"></a>
 ## Совместные зависимости важнее optionality
 
-Generated buff требует хотя бы один **ненейтральный исполняемый** эффект. Полностью отсутствующий/нейтральный набор с выключенным light — RED; цвет без light не эффект. `durationTicks/lightStrength/lightColor` и executable `apply_item_effects` binding остаются явными. Код не выбирает цвет.
+Generated buff требует хотя бы один **ненейтральный исполняемый** эффект. Полностью отсутствующий/нейтральный набор с выключенным light — RED; цвет без light не эффект. `duration/lightStrength/lightColor` и executable `apply_item_effects` binding остаются явными. Код не выбирает цвет.
 
-Обязательные damageClass/damage/useStyle/channel, базовая геометрия, refs/target, events, lifetime и cooldown/immunity не получают общего разрешения на пропуск. `channel_beam/charge_then_release` всё ещё требуют explicit channel; beam rangeTiles/widthPx/warmupTicks остаются обязательными. Пять новых beam-полей разрешены только своим явным default=neutral и отдельным совместным доказательством. Необъявленные группы требуют такого доказательства:
+Обязательные damageClass/damage/useStyle/channel, базовая геометрия, refs/target, events, lifetime и cooldown/immunity не получают общего разрешения на пропуск. `charge` у active input требует явного channel; `beam_geometry` не создаёт channel или mana sustain. Необъявленные группы требуют проверки:
 
 - healLife/healMana: sparse вызов должен отдельно гарантировать ненулевое восстановление;
 - pick/axe/hammer + mining multiplier: скорость без working tool power инертна;
@@ -44,7 +44,7 @@ Repair omission — **не менять**; accepted absence frozen. Repair со�
 
 `declared_neutral_omission` отличается от `delivered`: аудит проверяет declared default, точный output и происхождение. С исходным Author он доказывает факт отсутствия; standalone wire без Author лишь проверяет declaration/mapping/value и coverage присутствующих default fields, но не восстанавливает исходный omission. Если `runtimeContract` присутствует, пустой/повреждённый contract не освобождает от аудита. Delivery намеренно удаляет internal runtimeContract, поэтому final DTO не обязан содержать receipts.
 
-Source-free audit также сохраняет ранее выпущенный omission receipt, если `retained_receipt_params` явно хранит прежний optional `default=neutral` с совпадающим типом, точный prior domain/projection и допустимый omission context. Один wire slot требует ровно один receipt от текущего либо такого прежнего параметра; смешанные дубли не допускаются. В частности, старый buff `moveSpeedBonusFactor` сохраняет integer `movementSpeed=0`, а новый `moveSpeedBonusPercent/100` материализует `0.0`. Значения и сохранённые receipts не переписываются, старый Author не импортируется; source-aware proof принимает только текущие параметры.
+Source-free audit принимает только текущие registry source paths и exact typed projections. Старые omission receipts не являются альтернативными owners. Один wire slot требует единственного current receipt; дубли и смешение владельцев отвергаются.
 
 Regressions из [registry/test owners](../../development/TESTING_RU.md): все absent/zero/negative/positive XY combinations; 64 modifier-presence masks со working light и 64 полностью neutral masks (reject); каждый sole active effect; invalid-present/type/range boundaries; sparse/explicit-neutral wire equality; unapproved optional groups/dependencies; altered status/value/path, lost output/receipt и numeric type подмены (`0` ≠ `false` ≠ `0.0`).
 

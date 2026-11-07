@@ -15,7 +15,7 @@ from generate_native_hit_status import decode
 from native_buff_effect_analysis import buff_type_branches, npc_dot_fragments, npc_defense_fragments, npc_regen_unit_evidence, pairs
 
 ROOT = Path(__file__).resolve().parents[2]
-OUTPUT = ROOT / "ModSources/InfiniCrafterLocal/Common/Services/Generation/NativeBuffEffectCatalog.g.cs"
+OUTPUT = ROOT / "mod/InfiniCrafterLocal/Common/Services/Generation/NativeBuffEffectCatalog.g.cs"
 REPORT = ROOT / "contracts/reports/native_buff_effect_sources.generated.json"
 METHODS = (("Player", "UpdateBuffs"), ("NPC", "UpdateNPC_BuffSetFlags"),
            ("NPC", "UpdateNPC_BuffFlagsReset"), ("NPC", "UpdateNPC_BuffApplyDOTs"),

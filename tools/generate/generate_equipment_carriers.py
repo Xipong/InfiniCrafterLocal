@@ -27,7 +27,7 @@ def main() -> None:
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     for suffix, (width, height) in SIZES.items():
-        path = ROOT / "ModSources/InfiniCrafterLocal/Assets" / f"GeneratedItem_{suffix}.png"
+        path = ROOT / "mod/InfiniCrafterLocal/Assets" / f"GeneratedItem_{suffix}.png"
         expected = transparent_png(width, height)
         if args.check:
             if not path.is_file() or path.read_bytes() != expected:

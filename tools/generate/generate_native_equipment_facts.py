@@ -9,7 +9,7 @@ from native_hit_status_analysis import Instruction
 from native_equipment_fact_analysis import equipment_facts, armor_set_facts
 
 ROOT = Path(__file__).resolve().parents[2]
-OUTPUT = ROOT / "ModSources/InfiniCrafterLocal/Common/Services/Generation/NativeEquipmentFactsCatalog.g.cs"
+OUTPUT = ROOT / "mod/InfiniCrafterLocal/Common/Services/Generation/NativeEquipmentFactsCatalog.g.cs"
 REPORT = ROOT / "contracts/reports/native_equipment_sources.generated.json"
 
 

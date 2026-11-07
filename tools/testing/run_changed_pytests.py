@@ -22,7 +22,7 @@ def build_plan(base: str | None = None) -> dict[str, Any]:
     from tools.agentctl import changed_files, verification_plan
     files = changed_files(base)
     plan = verification_plan(files)
-    selected = ["LocalGenerator/tests", "toolbox/tests"] if plan["releaseScope"] else plan["tests"]
+    selected = ["tests/generator", "tests/toolbox"] if plan["releaseScope"] else plan["tests"]
     tests = [path for path in files if path in plan["tests"]]
     # Only standalone test edits are fully verified by this pytest-only helper.
     # Every production/docs/tooling surface has additional owner/final gates.
@@ -33,7 +33,7 @@ def build_plan(base: str | None = None) -> dict[str, Any]:
         "mode": "full_due_to_unmapped_change" if plan["releaseScope"] else "changed_modules" if tests == files else "owner_areas",
         "changedModules": tests,
         "fullSelectionTriggers": plan["unmappedPaths"],
-        "sharedTestChanges": [path for path in plan["unmappedPaths"] if path.startswith(("LocalGenerator/tests/", "toolbox/tests/"))],
+        "sharedTestChanges": [path for path in plan["unmappedPaths"] if path.startswith(("tests/generator/", "tests/toolbox/"))],
         "uncoveredChangePaths": uncovered,
         "selected": selected,
         "comparisonBase": base,
@@ -82,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
     env = dict(os.environ)
-    env["PYTHONPATH"] = str(ROOT / "LocalGenerator")
+    env["PYTHONPATH"] = str(ROOT / "generator")
     env["INFINI_FOCUSED_PYTEST"] = "1"
     env["INFINI_TEST_USE_PROJECT_CONFIG"] = "0"
     command = [sys.executable, "-m", "pytest", "-q", *(str(path) for path in selected)]

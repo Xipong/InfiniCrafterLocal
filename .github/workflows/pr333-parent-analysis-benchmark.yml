@@ -5,11 +5,14 @@ on:
     branches:
       - feat/parent-source-compression-main-20261106
     paths:
-      - 'ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.ParentAnalysis.cs'
-      - 'ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceMethod*.cs'
-      - 'ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceGraphCache.cs'
-      - 'ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.NativeCSharpSource.cs'
-      - 'tools/native/EngineRuntimeChecks.ParentAnalysisProfiling.cs'
+      - 'mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.ParentAnalysis.cs'
+      - 'mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceMethod*.cs'
+      - 'mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceGraphCache.cs'
+      - 'mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.NativeCSharpSource.cs'
+      - 'tests/native/context/EngineRuntimeChecks.ParentAnalysisProfiling.cs'
+      - 'tests/native/EngineRuntimeChecks.csproj'
+      - 'tests/native/EngineRuntimeChecks.cs'
+      - 'mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj'
       - '.github/workflows/pr333-parent-analysis-benchmark.yml'
   workflow_dispatch:
 
@@ -112,11 +115,11 @@ jobs:
       - name: Restore and locate tModLoader references
         shell: pwsh
         run: |
-          dotnet restore candidate/ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity minimal
+          dotnet restore candidate/mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet restore candidate/ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity minimal
+          dotnet restore candidate/mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $assets = Get-Content candidate/ModSources/InfiniCrafterLocal/obj/project.assets.json -Raw | ConvertFrom-Json
+          $assets = Get-Content candidate/mod/InfiniCrafterLocal/obj/project.assets.json -Raw | ConvertFrom-Json
           $tml = @($assets.libraries.PSObject.Properties | Where-Object { $_.Name -like 'tModLoader/*' })
           if ($tml.Count -ne 1) { throw 'Expected exactly one tModLoader package.' }
           $references = @($assets.packageFolders.PSObject.Properties.Name | ForEach-Object {
@@ -129,17 +132,20 @@ jobs:
       - name: Build baseline and candidate harnesses
         shell: pwsh
         run: |
-          foreach ($root in @('baseline', 'candidate')) {
-            $fixture = Join-Path $root 'tools/native/EngineRuntimeChecks.GeneratedItemReforge.cs'
-            $text = [System.IO.File]::ReadAllText($fixture)
-            $text = $text.Replace('scenarios.Concat(scenarios.Reverse())', 'scenarios.Concat(scenarios.AsEnumerable().Reverse())')
-            [System.IO.File]::WriteAllText($fixture, $text, [System.Text.UTF8Encoding]::new($false))
-          }
+          # Compile-only correction for the pinned historical baseline fixture;
+          # current candidate already calls Enumerable.Reverse explicitly.
+          # Neither change is part of the measured source-analysis code.
+          $fixture = Join-Path $env:GITHUB_WORKSPACE 'baseline/tools/native/EngineRuntimeChecks.GeneratedItemReforge.cs'
+          $text = [System.IO.File]::ReadAllText($fixture)
+          $before = 'scenarios.Concat(scenarios.Reverse())'
+          $after = 'scenarios.Concat(scenarios.AsEnumerable().Reverse())'
+          if ([regex]::Matches($text, [regex]::Escape($before)).Count -ne 1) { throw 'Pinned baseline reforge fixture did not match its expected source.' }
+          [System.IO.File]::WriteAllText($fixture, $text.Replace($before, $after), [System.Text.UTF8Encoding]::new($false))
           $baselineOut = Join-Path $env:RUNNER_TEMP 'ifc-profile-baseline'
           $candidateOut = Join-Path $env:RUNNER_TEMP 'ifc-profile-candidate'
           dotnet build baseline/tools/native/EngineRuntimeChecks.csproj --configuration Release --output $baselineOut "-p:InfiniTmlReferenceDir=$env:INFINI_TML_REFERENCE_DIR" "-p:InfiniExternalDepsRoot=$env:INFINI_TML_DEPS_SRC"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet build candidate/tools/native/EngineRuntimeChecks.csproj --configuration Release --output $candidateOut "-p:InfiniTmlReferenceDir=$env:INFINI_TML_REFERENCE_DIR" "-p:InfiniExternalDepsRoot=$env:INFINI_TML_DEPS_SRC"
+          dotnet build candidate/tests/native/EngineRuntimeChecks.csproj --configuration Release --output $candidateOut "-p:InfiniTmlReferenceDir=$env:INFINI_TML_REFERENCE_DIR" "-p:InfiniExternalDepsRoot=$env:INFINI_TML_DEPS_SRC"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "BASELINE_HARNESS=$baselineOut\EngineRuntimeChecks.dll" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "CANDIDATE_HARNESS=$candidateOut\EngineRuntimeChecks.dll" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -174,10 +180,21 @@ jobs:
           foreach ($scenario in @('plain', 'mixed', 'nebula-prism', 'eventide')) {
             $baseline = Get-Content (Join-Path $evidence "baseline-$scenario.json") -Raw | ConvertFrom-Json
             $candidate = Get-Content (Join-Path $evidence "candidate-$scenario.json") -Raw | ConvertFrom-Json
-            $b = @($baseline.measurements | Where-Object { $_.case -eq 'cold-first-request' })[0]
-            $c = @($candidate.measurements | Where-Object { $_.case -eq 'cold-first-request' })[0]
+            $baselineCold = @($baseline.measurements | Where-Object { $_.case -eq 'cold-first-request' })
+            $candidateCold = @($candidate.measurements | Where-Object { $_.case -eq 'cold-first-request' })
+            if ($baselineCold.Count -ne 1 -or $candidateCold.Count -ne 1) { throw "Expected one cold measurement per variant for $scenario" }
+            $b = $baselineCold[0]
+            $c = $candidateCold[0]
             if ($b.sha256 -ne $c.sha256) { throw "Cold packet hash mismatch for ${scenario}: $($b.sha256) != $($c.sha256)" }
-            if (-not [bool]$c.equalToFirstRequest) { throw "Candidate warm/reset parity failed for $scenario" }
+            # Cold compares with itself; inspect each later phase instead of
+            # accidentally accepting a warm/reset mismatch through that row.
+            foreach ($phase in @('cold-first-request', 'warm-1', 'warm-2', 'source-cache-reset')) {
+              $measurements = @($candidate.measurements | Where-Object { $_.case -eq $phase })
+              if ($measurements.Count -ne 1) { throw "Expected one candidate $phase measurement for $scenario" }
+              if ($measurements[0].equalToFirstRequest -isnot [bool] -or -not $measurements[0].equalToFirstRequest) {
+                throw "Candidate $phase parity failed for $scenario"
+              }
+            }
             $rows += [pscustomobject]@{
               scenario = $scenario
               packetSha256 = [string]$c.sha256

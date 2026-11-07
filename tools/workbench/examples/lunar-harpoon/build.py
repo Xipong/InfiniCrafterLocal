@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""Rebuild this assistant-authored demo through existing canonical owners, without an API."""
+from __future__ import annotations
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parents[3]
+sys.path.insert(0, str(REPO / "generator"))
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+from infini_local.pipelines.visual.contract import _validate_kit
+from infini_local.pipelines.visual.stage import _apply_kit
+from infini_local.pipelines.images.stage import _runtime_publication_identity
+from infini_local.core.vfx.materials import vfx_model_payload
+from infini_local.core.vfx.validation import validate_vfx_director_output, validate_vfx_manifest_wire
+from infini_local.core.vfx.projection import _compile_manifest
+from infini_local.storage.world_storage import sanitize_recipe_for_delivery
+from infini_local.storage.image_store import compact_delivery_paths, publish
+
+ASSET_SHA256 = "8e9bd54774fc16081d709d82c37cabd9c5b994c2d02dad0e3cf5ca5dd9018463"
+def read(path: Path):
+    return json.loads(path.read_text(encoding="utf-8"))
+def write(path: Path, value):
+    path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+def require(report):
+    if not report.get("ok"):
+        raise ValueError(json.dumps(report, indent=2))
+    return report
+
+def require_demo_world(source, scenario):
+    meta = source.get("recipeMeta") or {}
+    world = scenario.get("worldId")
+    if type(world) is not int or not 0 <= world <= 2147483647 or meta.get("worldScoped") is not True or meta.get("worldId") != str(world):
+        raise ValueError("Demo source and scenario must declare the same explicit Terraria world")
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--asset", type=Path, default=HERE / "assets" / "infini_asset_png_4a753935d470fa15fe74d5b8b4e87f63a8ef56060e8844a89b30e766fa0c8c2e.png", help="Exact published assistant imagegen PNG (default: bundled original demo art)")
+    parser.add_argument("--player-assets", required=True, type=Path, help="Fetched vanilla source PNG root with --include-dummy")
+    parser.add_argument("--out", required=True, type=Path)
+    args = parser.parse_args()
+    asset = args.asset.resolve(strict=True)
+    raw = asset.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != ASSET_SHA256:
+        raise ValueError("This demo's measured grip/forward axis require its exact supplied PNG")
+    source = read(HERE / "author-source.json")
+    scenario = read(HERE / "scenario.json")
+    require_demo_world(source, scenario)
+    identity = _runtime_publication_identity(source, "item", "", source["id"])
+    args.out.mkdir(parents=True, exist_ok=False)
+    write(args.out / "author-validation.json", require(validate_runtime_program(source)))
+    data = compile_runtime_program(source)
+    write(args.out / "compiler-audit.json", require(audit_compiler_receipts(data["runtimeContract"]["finalWireReceipts"], authored_document=source, final_document=data)))
+    write(args.out / "compiled-gameplay.json", data)
+    visual = read(HERE / "visual-author-source.json")
+    kit, errors = _validate_kit(visual, ["item", "harpoon"], "item", accepted_data=data)
+    if errors:
+        raise ValueError(json.dumps(errors, indent=2))
+    data = _apply_kit(data, kit)
+    asset = publish(args.out / "images", data, "item", identity, asset)
+    # External imagegen delivery only: no mechanics, axes or artwork are inferred here.
+    data["visual"].update(spritePath=str(asset), spriteUrl="", spriteStatus="generated", spriteTechnicalScore=0)
+    for entity in data["runtimeProgram"]["entities"]:
+        entity["visual"].update(spritePath=str(asset), spriteUrl="", spriteStatus="generated", spriteTechnicalScore=0)
+    vfx = vfx_model_payload(read(HERE / "vfx-author-source.json"), to_wire=True)
+    write(args.out / "vfx-author-validation.json", require(validate_vfx_director_output(vfx, data)))
+    data["vfxManifest"] = _compile_manifest(data, vfx, data["id"])
+    require(validate_vfx_manifest_wire(data))
+    compact_delivery_paths(args.out / "images", data)
+    final = sanitize_recipe_for_delivery(data)
+    write(args.out / "final-wire-validation.json", require(validate_runtime_wire(final)))
+    write(args.out / "item.json", final)
+    scenario["nativeRender"]["artworkFiles"] = [str(asset)]
+    scenario["nativeRender"]["playerAssetRoot"] = str(args.player_assets.resolve())
+    scenario["nativeRender"]["dummyAssetRoot"] = str(args.player_assets.resolve())
+    write(args.out / "scenario.json", scenario)
+    write(args.out / "build-receipt.json", {"authorship": "assistant-authored Author/Visual/VFX source; actual imagegen artwork", "llmApiUsed": False, "gameplayWireHandEdited": False, "assetByteSha256": ASSET_SHA256, "technicalScoreNotAssessed": True, "authorSha256": hashlib.sha256((HERE / "author-source.json").read_bytes()).hexdigest(), "itemSha256": hashlib.sha256((args.out / "item.json").read_bytes()).hexdigest()})
+    print(args.out / "item.json")
+if __name__ == "__main__":
+    main()

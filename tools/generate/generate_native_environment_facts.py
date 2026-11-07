@@ -11,7 +11,7 @@ from generate_native_hit_status import decode
 from native_environment_fact_analysis import aura_branches, scene_regen_additions, certified_placement_mapping
 
 ROOT = Path(__file__).resolve().parents[2]
-OUTPUT = ROOT / "ModSources/InfiniCrafterLocal/Common/Services/Generation/NativeEnvironmentFactsCatalog.g.cs"
+OUTPUT = ROOT / "mod/InfiniCrafterLocal/Common/Services/Generation/NativeEnvironmentFactsCatalog.g.cs"
 REPORT = ROOT / "contracts/reports/native_environment_sources.generated.json"
 
 

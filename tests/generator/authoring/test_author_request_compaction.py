@@ -1,0 +1,517 @@
+"""Lossless prompt metadata sharing and the real strict-provider inverse seam."""
+from __future__ import annotations
+from prompt_packet_helpers import request_dossier, dossier_text, expand_catalog_targets
+
+import copy
+import json
+from dataclasses import replace
+
+import pytest
+from jsonschema import Draft202012Validator
+
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+from infini_local.pipelines.author import item_contract as contract
+import infini_local.core.provider_schema as contract_provider_schema
+from infini_local.pipelines import combine_balance as balance
+from infini_local.pipelines.author import request as author
+from infini_local.pipelines.author import prompt
+from infini_local.qa.capability_witnesses import build_capability_witness
+from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from tests.generator.providers.test_codex_subscription_contract import _encode_nullable_fixture
+from tests.generator.authoring.test_gameplay_repair_readonly_context import _CapturedBeforeTransport, _offline_builder
+
+
+def _expand_constraint_references(value, profiles):
+    if isinstance(value, dict):
+        return {key: copy.deepcopy(profiles[child])
+                if key in {"consumerConstraint", "x-infini-consumerConstraint",
+                           "projectionConstraints", "x-infini-authorProjection"} and isinstance(child, str)
+                else _expand_constraint_references(child, profiles)
+                for key, child in value.items()}
+    if isinstance(value, list):
+        return [_expand_constraint_references(child, profiles) for child in value]
+    return copy.deepcopy(value)
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(monkeypatch, mode):
+    captured = []
+
+    def stop(request, **_kwargs):
+        captured.append(copy.deepcopy(request))
+        raise _CapturedBeforeTransport()
+
+    _offline_builder(monkeypatch, mode, stop)
+    parents = ({"name": "A", "damage": 52, "useTime": 10},
+               {"name": "B", "damage": 0, "useTime": 20})
+    before = copy.deepcopy(parents)
+    request, serialized, _ = author.build_initial_author_request(
+        *parents, "lifetime-guidance", model_name="offline-readonly-context")
+    assert request["response_format"]["type"] == mode
+    assert dossier_text(request) == serialized
+    packet = json.loads(serialized)
+    spec = CAPABILITY_REGISTRY["projectile_lifetime"].params["lifetimeSeconds"]
+    assert (spec.minimum, spec.maximum) == (spec.minimum, spec.maximum)
+    bounds = {"minimum": spec.minimum, "maximum": spec.maximum}
+    assert packet["balanceCorridor"]["broadEnvelope"]["lifetimeSeconds"] == bounds
+    card = next(row for row in packet["runtimeCapabilityContract"]["catalog"]["capabilities"]
+                if row["fn"] == "projectile_lifetime")
+    assert (card["params"]['lifetimeSeconds']["min"], card["params"]['lifetimeSeconds']["max"]) == (spec.minimum, spec.maximum)
+
+    item = build_runtime_fixture("workbench_blade")
+    index, lifetime = next((index, row) for index, row in enumerate(item["runtimeProgram"]["calls"])
+                           if row["fn"] == "projectile_lifetime")
+    lifetime["params"]['lifetimeSeconds'] = (36000) / 60
+    local_schema = contract.author_item_response_schema()
+    provider_schema = contract.author_item_provider_response_schema()
+    assert Draft202012Validator(local_schema).is_valid(item)
+    provider_item = _encode_nullable_fixture(item, local_schema)
+    assert Draft202012Validator(provider_schema).is_valid(provider_item)
+    assert validate_runtime_program(item)["ok"]
+    wire = compile_runtime_program(item)
+    assert validate_runtime_wire(wire)["ok"]
+    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+                                   authored_document=item, final_document=wire)["ok"]
+    entity = next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == lifetime["target"])
+    assert entity["lifetimeTicks"] == 36000
+    accepted_before = copy.deepcopy(item)
+    for ticks in (1, 21600):
+        lifetime["params"]['lifetimeSeconds'] = (ticks) / 60
+        retained = compile_runtime_program(item)
+        retained_entity = next(row for row in retained["runtimeProgram"]["entities"]
+                               if row["id"] == lifetime["target"])
+        assert retained_entity["lifetimeTicks"] == ticks
+        assert validate_runtime_wire(retained)["ok"]
+    lifetime["params"]['lifetimeSeconds'] = (36000) / 60
+    assert item == accepted_before
+
+    lifetime["params"]['lifetimeSeconds'] = (36001) / 60
+    assert not Draft202012Validator(local_schema).is_valid(item)
+    provider_item["runtimeProgram"]["calls"][index]["params"]['lifetimeSeconds'] = (36001) / 60
+    assert not Draft202012Validator(provider_schema).is_valid(provider_item)
+    invalid_before = copy.deepcopy(item)
+    failure = validate_runtime_program(item)
+    path = f"$.runtimeProgram.calls[{index}].params.lifetimeSeconds"
+    assert not failure["ok"]
+    assert any(row["path"] == path and row["code"] == "shape_maximum"
+               for row in failure["errors"]), failure
+    with pytest.raises(ValueError):
+        compile_runtime_program(item)
+    entity["lifetimeTicks"] = 36001
+    assert not validate_runtime_wire(wire)["ok"]
+    with pytest.raises(_CapturedBeforeTransport):
+        author.repair_author_item_after_failure(
+            item, *parents, "lifetime-guidance", failure_report=failure)
+    assert len(captured) == 1
+    repair_request = captured[0]
+    assert repair_request["response_format"]["type"] == mode
+    repair = request_dossier(repair_request)
+    repair_card = next(row for row in repair["existingBrokenCapabilityCards"]
+                       if row["fn"] == "projectile_lifetime")
+    assert (repair_card["params"]['lifetimeSeconds']["min"],
+            repair_card["params"]['lifetimeSeconds']["max"]) == (spec.minimum, spec.maximum)
+    assert repair["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
+    assert repair["repairScope"]["fieldPermissions"]["calls"] == [
+        {"id": lifetime["id"], "paths": ['params.lifetimeSeconds']}]
+    assert item == invalid_before and parents == before
+
+    # A different declared maximum must reach the real packet, not a copied cap.
+    cap = CAPABILITY_REGISTRY["projectile_lifetime"]
+    changed = replace(cap, params={**cap.params, "lifetimeSeconds": replace(spec, maximum=350)})
+    monkeypatch.setattr(balance, "CAPABILITY_REGISTRY", {**CAPABILITY_REGISTRY, cap.name: changed})
+    variant_request, variant_serialized, _ = author.build_initial_author_request(
+        *parents, "lifetime-guidance", model_name="offline-readonly-context")
+    variant_packet = json.loads(variant_serialized)
+    assert variant_packet["balanceCorridor"]["broadEnvelope"]["lifetimeSeconds"]["maximum"] == 350
+    variant_packet["balanceCorridor"]["broadEnvelope"]["lifetimeSeconds"]["maximum"] = spec.maximum
+    assert variant_packet == packet
+    variant_request["messages"][2]["content"] = request["messages"][2]["content"]
+    assert variant_request == request  # System, parents, other guidance and transport stay exact.
+
+
+def test_shared_constraints_expand_to_every_literal_registry_rule_without_mutation():
+    originals = {name: cap.author_prompt_card() for name, cap in CAPABILITY_REGISTRY.items()}
+    catalog = prompt.sharp_engine_fn_catalog_for_llm()
+    profiles = catalog["fieldGuide"]["consumerConstraints"]
+    references = []
+    for card in catalog["capabilities"]:
+        for name, param in card["params"].items():
+            source = originals[card["fn"]]["params"][name]
+            if "consumerConstraint" not in source:
+                assert "consumerConstraint" not in param
+                continue
+            references.append(param["consumerConstraint"])
+            assert profiles[param["consumerConstraint"]] == source["consumerConstraint"]
+    assert set(references) <= set(profiles)
+    assert len(profiles) < len(references)
+    assert originals == {name: cap.author_prompt_card() for name, cap in CAPABILITY_REGISTRY.items()}
+    # Structured params use the same numeric guard as scalar params, not a
+    # second literal copy hidden inside their schema annotations.
+    nested_references = []
+
+    def visit(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key in {"consumerConstraint", "x-infini-consumerConstraint", "projectionConstraints", "x-infini-authorProjection"}:
+                    assert isinstance(child, str)
+                    nested_references.append(child)
+                else:
+                    visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    visit(catalog["capabilities"])
+    assert nested_references and set(nested_references) <= set(profiles)
+    assert set(references + nested_references) == set(profiles)
+    expanded = _expand_constraint_references(catalog["capabilities"], profiles)
+    expanded = expand_catalog_targets(expanded, catalog["fieldGuide"]["targetKindSets"])
+    assert [{key: value for key, value in card.items() if key != "constructionMeaning"}
+            for card in expanded] == [cap.author_prompt_card() for cap in CAPABILITY_REGISTRY.values()
+                                      if cap.author_visible]
+    # The double rule is retained separately; it is not recast as a float32 guard.
+    doubles = [value for value in profiles.values() if value.get("storage") == "float64"]
+    assert len(doubles) == 1 and doubles[0]["rule"] == "finite_double_no_normalization"
+
+
+@pytest.mark.parametrize("field", ["consumerConstraint", "x-infini-consumerConstraint",
+                                  "projectionConstraints", "x-infini-authorProjection"])
+def test_new_constraint_metadata_gets_its_own_definition_without_profile_guessing(field):
+    first = {"storage": "future_storage", "neutral": 7, "wireProjection": {"divisor": 37},
+             "meaning": "A new literal rule which must not match an existing profile."}
+    second = {**first, "neutral": 8}
+    cards = [{"params": {"one": {field: copy.deepcopy(first)},
+                          "two": {field: copy.deepcopy(first)},
+                          "three": {"nested": {field: copy.deepcopy(second)}}}}]
+    profiles = prompt._share_consumer_constraints(cards)
+    params = cards[0]["params"]
+    assert len(profiles) == 2
+    assert params["one"][field] == params["two"][field]
+    assert profiles[params["one"][field]] == first
+    assert profiles[params["three"]["nested"][field]] == second
+
+
+def test_provider_omits_only_schema_annotations_and_preserves_literal_properties():
+    literal = {"description": "authored literal", "x-infini-units": "also literal", "if": {"const": 3}}
+    local = {
+        "type": "object", "additionalProperties": False, "description": "schema annotation",
+        "properties": {
+            "description": {"type": "string", "minLength": 2, "description": "field annotation"},
+            "x-infini-real-field": {"const": literal, "x-infini-reference": {"opaque": True}},
+        },
+        "required": ["description", "x-infini-real-field"],
+    }
+    before = copy.deepcopy(local)
+    provider = contract_provider_schema._provider_strict_projection(local, omit_annotations=True)
+    assert "description" not in provider
+    assert set(provider["properties"]) == {"description", "x-infini-real-field"}
+    assert provider["properties"]["description"] == {"type": "string", "minLength": 2}
+    assert provider["properties"]["x-infini-real-field"] == {"const": literal, "type": "object"}
+    for value in [{"description": "ok", "x-infini-real-field": literal},
+                  {"description": "x", "x-infini-real-field": literal},
+                  {"description": "ok", "x-infini-real-field": {}}]:
+        assert Draft202012Validator(local).is_valid(value) == Draft202012Validator(provider).is_valid(value)
+    assert local == before
+
+
+@pytest.mark.parametrize("omit_annotations", [False, True])
+def test_nullable_inverse_accepts_both_exact_projection_policies(omit_annotations):
+    local = {"type": "object", "additionalProperties": False, "required": [],
+             "properties": {"optional": {"type": "number", "minimum": 2,
+                                           "description": "Visual may use this guidance"}}}
+    provider = contract_provider_schema._provider_strict_projection(local, omit_annotations=omit_annotations)
+    wrapper = provider["properties"]["optional"]["anyOf"][0]
+    assert ("description" in wrapper) is not omit_annotations
+    response_format = {"type": "json_schema", "json_schema": {"schema": provider}}
+    assert contract_provider_schema.project_provider_nullable_optionals_to_local(
+        {"optional": None}, local, response_format=response_format) == {}
+    wrapper["minimum"] = 1
+    assert contract_provider_schema.project_provider_nullable_optionals_to_local(
+        {"optional": None}, local, response_format=response_format) == {"optional": None}
+
+
+# Capability execution belongs to registry_vertical_contract. This adapter is
+# recursive over schema shapes, so exercise those shapes instead of every fn.
+@pytest.mark.parametrize("fn,params,omitted", [
+    pytest.param("item_stats", {}, "manaCost", id="optional-item-leaf"),
+    pytest.param("move_straight", {}, None, id="omitted-noarg-params"),
+    pytest.param("projectile_collision", {"immunity": {"localCooldown": 37}}, None, id="typed-union"),
+    pytest.param("armor", {"setBonuses": {"minionSlotsBonus": 2}}, None, id="nested-optional-object"),
+    pytest.param("spawn_on_event", {"when": {"everySeconds": 0.5}}, None, id="event-object-branch"),
+])
+def test_compact_provider_roundtrips_structural_witnesses(fn, params, omitted):
+    item = build_capability_witness(fn)
+    call = next(row for row in item["runtimeProgram"]["calls"] if row["id"] == "witness_call")
+    if params:
+        call["params"].update(params)
+    if omitted:
+        call["params"].pop(omitted)
+    assert validate_runtime_program(item)["ok"]
+    local = contract.author_item_response_schema()
+    provider = contract.author_item_provider_response_schema()
+    encoded = _encode_nullable_fixture(item, local)
+    before = json.dumps(encoded, ensure_ascii=False, sort_keys=True)
+    assert Draft202012Validator(provider).is_valid(encoded)
+    restored = contract.project_provider_author_item_to_local(
+        encoded, response_format={"type": "json_schema", "json_schema": {"schema": provider}})
+    assert restored == item
+    assert json.dumps(encoded, ensure_ascii=False, sort_keys=True) == before
+
+
+def test_source_units_keep_zero_null_and_exact_namespaces_without_selecting_capabilities():
+    packets = [{"raw": {"item": {"axePower": 0}, "generatedParent": {
+        "accessory": {"movementSpeed": None}, "armor": {"lifeRegen": 0},
+        "gameplay": {"movementSpeed": 55, "generatedBuff": {"lifeRegen": 2}},
+    }}}]
+    before = copy.deepcopy(packets)
+    glossary = prompt.source_wire_units_for_llm(packets)
+    actual = {(row["source"], row["fn"], field) for row in glossary["scopes"] for field in row["fields"]}
+    assert actual == {
+        ("raw.item", "tool_stats", "axePower"),
+        ("raw.generatedParent.accessory", "accessory", "movementSpeed"),
+        ("raw.generatedParent.armor", "armor", "lifeRegen"),
+        ("raw.generatedParent.gameplay.generatedBuff", "generated_buff_on_use", "lifeRegen"),
+    }
+    assert prompt.source_wire_units_for_llm([])["scopes"] == []
+    assert packets == before
+    assert {row["fn"] for row in prompt.sharp_engine_fn_catalog_for_llm()["capabilities"]} == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible}
+
+
+def test_author_card_compaction_keeps_every_constraint_and_consumer_description():
+    """Only duplicated documentation may disappear; schema/operation facts stay exact."""
+    seconds_primer = "World duration (seconds); shared nearest-tick rounding applies. Native consumer: "
+    checked_descriptions = []
+    omitted_root_copies = []
+    guide = prompt.sharp_engine_fn_catalog_for_llm()["fieldGuide"]
+    shared_types = guide["types"]
+    checked_shared_types = set()
+
+    def consumer_text(text, metadata):
+        text = text.removeprefix(seconds_primer)
+        units = metadata.get("units", metadata.get("x-infini-units"))
+        return text.removeprefix(f"Author units: {units}. Native consumer: ") if units else text
+
+    def comparison_metadata(card):
+        result = copy.deepcopy({key: value for key, value in card.items() if key != "params"})
+        rules = []
+        for row in result.pop("requires", []):
+            if row["kind"] == "present_param_forbids_capability":
+                forbidden = CAPABILITY_REGISTRY.get(row.get("capability"))
+                if forbidden is not None and not forbidden.author_visible:
+                    continue
+            elif row["kind"] == "capability_absent" and "anyOf" in row:
+                row["anyOf"] = [fn for fn in row["anyOf"] if fn not in CAPABILITY_REGISTRY
+                                or CAPABILITY_REGISTRY[fn].author_visible]
+                if not row["anyOf"]:
+                    continue
+            rules.append({**guide["requirementNotation"]["omittedMetadata"], **row})
+        if rules:
+            result["requires"] = rules
+        if result.get("effectGroups") == {"$ref": "#/fieldGuide/effectGroups"}:
+            result["effectGroups"] = copy.deepcopy(guide["effectGroups"])
+        return result
+
+    def compare_shape(source, sent, path, root_meaning=None):
+        names = {"description": "meaning", "minimum": "min", "maximum": "max",
+                 "x-infini-units": "units", "x-infini-reference": "reference",
+                 "x-infini-neutral": "neutral", "x-infini-consumerConstraint": "consumerConstraint",
+                 "x-infini-authorProjection": "projectionConstraints"}
+        for key, value in source.items():
+            if key == "x-infini-semanticType":
+                continue  # Presentation-only label, just as at scalar roots.
+            if key == "required":
+                assert value == [name for name, row in sent["properties"].items() if not row.get("optional", False)], path
+            elif key == "properties":
+                assert set(value) == set(sent[key]), path
+                for name, child in value.items():
+                    compare_shape(child, sent[key][name], path + "." + name)
+            elif key == "oneOf":
+                assert len(value) == len(sent[key]), path
+                for index, child in enumerate(value):
+                    compare_shape(child, sent[key][index], path + f"[{index}]")
+            elif key == "description":
+                retained = sent.get("meaning", root_meaning)
+                properties = sent.get("properties", {})
+                if retained is None and len(properties) == 1:
+                    retained = next(iter(properties.values())).get("meaning")
+                    omitted_root_copies.append(path)
+                assert consumer_text(retained, source) == consumer_text(value, source), path
+                checked_descriptions.append(path)
+            else:
+                assert sent[names.get(key, key)] == value, (path, key)
+
+    for name, cap in CAPABILITY_REGISTRY.items():
+        if not cap.author_visible:
+            continue  # Full machine/saved-wire coverage is not a fresh Author projection.
+        raw = cap.prompt_card()
+        sent = cap.author_prompt_card()
+        assert comparison_metadata(raw) == comparison_metadata(sent)
+        assert set(raw["params"]) == set(sent["params"])
+        for param, source in raw["params"].items():
+            target = sent["params"][param]
+            if "paramRef" in target:
+                owner, leaf = target["paramRef"].split(".")
+                assert leaf == param and CAPABILITY_REGISTRY[owner].params[leaf] == cap.params[param]
+                target = CAPABILITY_REGISTRY[owner].author_prompt_card()["params"][leaf]
+                assert "paramRef" not in target
+            spec = cap.params[param]
+            if spec.shared_type:
+                # Sharing replaces repeated metadata, not any branch, operator,
+                # units, description or latch dependency of the source schema.
+                expected: dict[str, object] = {"typeRef": spec.shared_type}
+                if not spec.required:
+                    expected["optional"] = True
+                expected.update({key: source[key] for key in ("default", "neutral", "omissionAllowedOnlyWhen") if key in source})
+                assert target == expected, (name, param)
+                expanded_shape = copy.deepcopy(shared_types[spec.shared_type])
+                if "default" in target:
+                    expanded_shape["default"] = target["default"]
+                if "neutral" in target:
+                    expanded_shape["neutral"] = target["neutral"]
+                compare_shape(spec.schema(), expanded_shape, name + "." + param)
+                assert source["meaning"] == shared_types[spec.shared_type]["meaning"]
+                checked_shared_types.add(spec.shared_type)
+                continue
+            # Previously documented card notation controls these presentation
+            # columns; all actual domain/reference/storage/projection rules remain.
+            for key in source.keys() - {"meaning", "required", "semanticType", "neutral", "units", "shape"}:
+                assert target[key] == source[key], (name, param, key)
+            meaning = consumer_text(source["meaning"], source)
+            if name == "armor" and "meaning" not in target:
+                # Armor borrows only an identical accessory effect description.
+                assert CAPABILITY_REGISTRY["accessory"].params[param].description == spec.description
+                assert CAPABILITY_REGISTRY["accessory"].author_prompt_card()["params"][param]["meaning"] == meaning
+            else:
+                if name == "armor" and param.startswith("setBonus"):
+                    meaning = meaning.removeprefix("Matching armor set (head piece only; matching head, body and legs must actually be equipped): ")
+                assert target["meaning"] == meaning, (name, param)
+            checked_descriptions.append(name + "." + param)
+            if "units" in source:
+                if "units" in target:
+                    assert target["units"] == source["units"], (name, param)
+                else:
+                    assert any(param.endswith(suffix) and source["units"] == units
+                               for suffix, units in (("Seconds", "seconds"), ("Tiles", "blocks (tiles)"),
+                                                     ("Px", "pixels"), ("Radians", "radians"))), (name, param)
+            assert target.get("optional", False) is not spec.required
+            if "neutral" in source and "neutral" not in target:
+                assert not spec.required and source["neutral"] == 0, (name, param)
+            elif "neutral" in source:
+                assert target["neutral"] == source["neutral"], (name, param)
+            if "shape" in source:
+                compare_shape(source["shape"], target, name + "." + param,
+                              root_meaning=target.get("meaning"))
+    assert checked_descriptions and omitted_root_copies
+    assert checked_shared_types == set(shared_types)
+
+
+@pytest.mark.parametrize('required', [[], ['fixed']])
+def test_provider_object_presence_is_enforced_locally_after_nullable_transport(required):
+    from infini_local.core.schema_validation import strict_schema_errors
+    local = {'type': 'object', 'additionalProperties': False, 'minProperties': len(required) + 1,
+             'properties': {'left': {'type': 'number', 'minimum': 0}, 'right': {'type': 'number', 'minimum': 0}},
+             'required': required}
+    if required:
+        local['properties']['fixed'] = {'type': 'string'}
+    before = copy.deepcopy(local)
+    provider = contract_provider_schema._provider_strict_projection(local)
+    response_format = {'type': 'json_schema', 'json_schema': {'schema': provider}}
+    prefix = {'fixed': 'kept'} if required else {}
+    for authored, valid in [({}, False), ({'left': 0}, True), ({'right': 2}, True),
+                            ({'left': 0, 'right': 2}, True), ({'left': -1}, False)]:
+        authored = {**prefix, **authored}
+        encoded = {key: authored.get(key) for key in local['properties']}
+        assert Draft202012Validator(provider).is_valid(encoded) is (authored.get('left', 0) >= 0)
+        restored = contract_provider_schema.project_provider_nullable_optionals_to_local(encoded, local, response_format=response_format)
+        assert restored == authored
+        assert (not strict_schema_errors(restored, local)) is valid
+    if required:
+        assert not Draft202012Validator(provider).is_valid({'fixed': None, 'left': 1, 'right': None})
+    assert local == before
+
+
+def test_armor_set_bonus_nonempty_constraint_survives_full_provider_roundtrip():
+    item = build_capability_witness('armor')
+    call = next(row for row in item['runtimeProgram']['calls'] if row['id'] == 'witness_call')
+    local = contract.author_item_response_schema()
+    provider = contract.author_item_provider_response_schema()
+    response_format = {'type': 'json_schema', 'json_schema': {'schema': provider}}
+    for bonuses in ({'minionSlotsBonus': 2}, {'minionSlotsBonus': 2, 'sentrySlotsBonus': 1}, {}):
+        call['params']['setBonuses'] = bonuses or {'minionSlotsBonus': 2}
+        encoded = _encode_nullable_fixture(item, local)
+        if not bonuses:
+            encoded_call = next(row for row in encoded['runtimeProgram']['calls'] if row['id'] == 'witness_call')
+            encoded_call['params']['setBonuses'] = dict.fromkeys(encoded_call['params']['setBonuses'])
+        # Provider cannot express this presence constraint without large unions.
+        assert Draft202012Validator(provider).is_valid(encoded)
+        restored = contract.project_provider_author_item_to_local(encoded, response_format=response_format)
+        restored_call = next(row for row in restored['runtimeProgram']['calls'] if row['id'] == 'witness_call')
+        assert restored_call['params']['setBonuses'] == bonuses
+        assert validate_runtime_program(restored)['ok'] is bool(bonuses)
+
+
+def test_redundant_minimum_is_removed_without_changing_required_values():
+    local = {'type': 'object', 'additionalProperties': False, 'minProperties': 1,
+             'properties': {'value': {'type': 'number'}}, 'required': ['value']}
+    provider = contract_provider_schema._provider_strict_projection(local)
+    assert 'minProperties' not in provider and 'anyOf' not in provider
+    for value in ({}, {'value': 0}, {'value': None}):
+        assert Draft202012Validator(provider).is_valid(value) == Draft202012Validator(local).is_valid(value)
+
+
+def test_provider_projection_keeps_cardinality_owner_unchanged_and_literal_data_intact():
+    local = {'type': 'object', 'additionalProperties': False, 'minProperties': 1,
+             'properties': {'value': {'const': {'minProperties': 7}}}, 'required': []}
+    before = copy.deepcopy(local)
+    provider = contract_provider_schema._provider_strict_projection(local)
+    assert 'minProperties' not in provider
+    assert provider['properties']['value']['anyOf'][0]['const'] == {'minProperties': 7}
+    assert local == before
+    assert not Draft202012Validator(local).is_valid({})
+
+
+@pytest.mark.parametrize('pattern,valid,invalid', [
+    (r'^(?!Terraria/)[A-Za-z]+/[A-Za-z]+$', 'Example/Custom', 'Terraria/Melee'),
+    (r'^(?=ab)ab$', 'ab', 'ac'),
+    (r'^.(?<=a)b$', 'ab', 'cb'),
+    (r'^.(?<!a)b$', 'cb', 'ab'),
+    (r'^(a)\1$', 'aa', 'ab'),
+])
+def test_unsupported_regex_constraint_remains_local_not_rewritten(pattern, valid, invalid):
+    from infini_local.core.schema_validation import strict_schema_errors
+    local = {'type': 'string', 'pattern': pattern}
+    before = copy.deepcopy(local)
+    provider = contract_provider_schema._provider_strict_projection(local)
+    assert provider == {'type': 'string'}
+    assert Draft202012Validator(provider).is_valid(valid)
+    assert Draft202012Validator(provider).is_valid(invalid)
+    assert not strict_schema_errors(valid, local)
+    assert strict_schema_errors(invalid, local)
+    assert local == before
+
+
+@pytest.mark.parametrize('pattern', [r'^[a-z][a-z0-9_]{0,47}$', r'^[a-z0-9_]{0,48}$', r'^\(\?!literal$', r'^\\1$'])
+def test_simple_regex_and_escaped_literals_keep_provider_constraints(pattern):
+    local = {'type': 'string', 'pattern': pattern}
+    assert contract_provider_schema._provider_strict_projection(local) == local
+
+
+def test_damage_class_provider_gap_cannot_admit_reserved_or_unknown_local_values():
+    item = build_capability_witness('item_stats')
+    call = next(row for row in item['runtimeProgram']['calls'] if row['id'] == 'witness_call')
+    local = contract.author_item_response_schema()
+    provider = contract.author_item_provider_response_schema()
+    call['params']['damageClass'] = 'melee'
+    encoded = _encode_nullable_fixture(item, local)
+    encoded_call = next(row for row in encoded['runtimeProgram']['calls'] if row['id'] == 'witness_call')
+    for damage_class, valid in [('melee', True), ('Terraria/Melee', False), ('unknown_class', False)]:
+        encoded_call['params']['damageClass'] = damage_class
+        assert Draft202012Validator(provider).is_valid(encoded)
+        restored = contract.project_provider_author_item_to_local(encoded, response_format={'type': 'json_schema', 'json_schema': {'schema': provider}})
+        restored_call = next(row for row in restored['runtimeProgram']['calls'] if row['id'] == 'witness_call')
+        assert restored_call['params']['damageClass'] == damage_class
+        assert validate_runtime_program(restored)['ok'] is valid

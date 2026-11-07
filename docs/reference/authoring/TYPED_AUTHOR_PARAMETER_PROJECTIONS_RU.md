@@ -1,6 +1,6 @@
 # Типизированные параметры Author: точная проекция
 
-Canonical owner типа и точной проекции — [parameter_contract.py::ParamSpec](../../../LocalGenerator/infini_local/core/runtime_authoring/parameter_contract.py); конкретные capability/parameter declarations остаются в [capability_registry.py](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py), форма всего документа — в `program_schema.py`. Эта инфраструктура сама не добавляет новых gameplay операций и не принимает прежние Author spelling как aliases.
+Canonical owner типа и точной проекции — [parameter_contract.py::ParamSpec](../../../generator/infini_local/core/runtime_authoring/parameter_contract.py); конкретные capability/parameter declarations остаются в [capability_registry.py](../../../generator/infini_local/core/runtime_authoring/capability_registry.py), форма всего документа — в `program_schema.py`. Эта инфраструктура сама не добавляет новых gameplay операций и не принимает прежние Author spelling как aliases.
 
 `ParamSpec.properties` описывает группу явных полей; `alternatives` — конечный взаимоисключающий выбор. В schema это строгие object/oneOf с `additionalProperties=false`. Отсутствующий либо неоднозначный вариант отвергается. Неизвестные поля, неправильные значения и отсутствующие обязательные листья не заполняются.
 
@@ -31,12 +31,12 @@ Numeric/consumer validation идёт по присутствующим реал�
 
 Для известной union-ветки shape validator сообщает точную невалидную leaf. Общая ошибка oneOf не расширяет Repair permissions, когда есть точный descendant. Уже корректные соседи и принятое отсутствие остаются frozen; omission в patch означает «не менять».
 
-Проверки: `LocalGenerator/tests/test_registry_structured_params.py` использует реальный compiler существующего C# collision DTO, проверяет все источники receipts, отрицательные варианты и leaf-local Repair scope. Production vocabulary и прежние scalar projections не меняются этим foundation.
+Проверки: `tests/generator/authoring/test_registry_structured_params.py` использует реальный compiler существующего C# collision DTO, проверяет все источники receipts, отрицательные варианты и leaf-local Repair scope. Production vocabulary и прежние scalar projections не меняются этим foundation.
 
 ## Сохранённые receipts
 
 Прежние parameter source paths и четыре retired internal capability owners удалены из executable audit. Source-aware и source-free проверки принимают только текущие registry projections; отсутствие Author не превращается в `authoredSourceChecked=true`. Неизменённые архивные JSON/hashes остаются отрицательными fixtures. Stored recipes и saves не удаляются и не мигрируются. Current typed aliases, neutral omissions и точное полное покрытие receipts сохраняются.
 
-`CapabilitySpec.fixed_wire_literals` описывает constants, выбранные самим canonical `fn`, например неиспользуемый радиус конкретного owner-only pull. Keys — пути относительно component prefix. Compiler обязан писать их через `write_derived`, source — точный `.fn`, status — `technical_projection`. Audit проверяет значение, конечный declared output, originating call id/fn и уникальную полную coverage. Этот механизм не определяет новые constants автоматически.
+`CapabilitySpec.fixed_wire_literals` описывает constants, выбранные самим canonical `fn`, например `kill_on_arrival.action=kill`. Keys — пути относительно component prefix. Compiler обязан писать их через `write_derived`, source — точный `.fn`, status — `technical_projection`. Audit проверяет значение, конечный declared output, originating call id/fn и уникальную полную coverage. Этот механизм не определяет новые constants автоматически.
 
 `core/schema_validation.py` — единственный нижний owner строгой проверки JSON shape. `program_schema.py` экспортирует этот же валидатор для полного Author и Repair; `ParamSpec.selected_variant` вызывает его напрямую без обратной зависимости parameter contract → program_schema.

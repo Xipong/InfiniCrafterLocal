@@ -2,7 +2,7 @@
 # https://github.com/tModLoader/tModLoader/blob/stable/patches/tModLoader/Terraria/release_extras/tMLMod.targets
 $ErrorActionPreference = 'Stop'
 $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-$project = Join-Path $root 'ModSources/InfiniCrafterLocal'
+$project = Join-Path $root 'mod/InfiniCrafterLocal'
 $output = Join-Path $root 'artifacts/package'
 New-Item -ItemType Directory -Force $output | Out-Null
 # Assemble the private interpreter, pinned wheels and Studio/generator resources.

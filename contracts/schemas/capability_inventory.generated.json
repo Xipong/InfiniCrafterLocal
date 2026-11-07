@@ -5,7 +5,7 @@
       "capability": "set_owner_control",
       "componentSlot": "ownerControl",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionOwnerControl",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionOwnerControl",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -115,7 +115,7 @@
       "capability": "charge",
       "componentSlot": "charge",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge|Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge/ReleaseCharge",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge|Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge/ReleaseCharge",
       "dependencies": [
         "item_use"
       ],
@@ -201,7 +201,7 @@
       "capability": "apply_projectile_charge_release",
       "componentSlot": "chargeRelease",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge/ReleaseCharge",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge/ReleaseCharge",
       "dependencies": [
         "charge"
       ],
@@ -296,7 +296,7 @@
       "capability": "gate_contact",
       "componentSlot": "contactGate",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.DamageGate.cs::CanDamage",
+      "csharpOwner": "Content/Projectiles/Combat/GeneratedProjectile.DamageGate.cs::CanDamage",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -354,7 +354,7 @@
       "capability": "beam_geometry",
       "componentSlot": "beamGeometry",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry|Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::BeamWarmupProgress|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
+      "csharpOwner": "Content/Projectiles/Combat/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry|Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.Lifecycle.cs::BeamWarmupProgress|Content/Projectiles/Combat/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
       "dependencies": [
         "set_aim"
       ],
@@ -470,7 +470,7 @@
       "capability": "set_projectile_beam_ramp",
       "componentSlot": "beamRamp",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::BeamWarmupProgress|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.Lifecycle.cs::BeamWarmupProgress|Content/Projectiles/Combat/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
       "dependencies": [
         "beam_geometry"
       ],
@@ -554,7 +554,7 @@
       "capability": "sustain_mana",
       "componentSlot": "manaSustain",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::PaySustainedMana",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.Lifecycle.cs::PaySustainedMana",
       "dependencies": [
         "set_owner_control"
       ],
@@ -596,7 +596,7 @@
       "capability": "lash_geometry",
       "componentSlot": "lashGeometry",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion|Content/Projectiles/GeneratedProjectile.ComposableMotion.Geometry.cs::BuildLashPoints",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion|Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.Geometry.cs::BuildLashPoints",
       "dependencies": [
         "set_aim"
       ],
@@ -781,7 +781,7 @@
       "capability": "set_aim",
       "componentSlot": "aim",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -839,7 +839,7 @@
       "capability": "attach",
       "componentSlot": "attachment",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [
         "set_aim"
       ],
@@ -949,7 +949,7 @@
       "capability": "front_arm_pose",
       "componentSlot": "armPose",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [
         "set_aim",
         "item_use"
@@ -1097,7 +1097,7 @@
       "capability": "set_projectile_reach_curve",
       "componentSlot": "reach",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [
         "attach"
       ],
@@ -1206,7 +1206,7 @@
       "capability": "orbit",
       "componentSlot": "orbit",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -1310,7 +1310,7 @@
       "capability": "seek",
       "componentSlot": "seek",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -1492,7 +1492,7 @@
       "capability": "return_when",
       "componentSlot": "returnTrigger",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::ApplyMotionReturnTrigger|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::OnTileCollide",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.cs::ApplyMotionReturnTrigger|Content/Projectiles/Combat/GeneratedProjectile.RuntimeEvents.cs::OnTileCollide",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -1590,7 +1590,7 @@
       "capability": "kill_on_arrival",
       "componentSlot": "arrival",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -1663,7 +1663,7 @@
       "capability": "proximity_action",
       "componentSlot": "proximity",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -1755,7 +1755,7 @@
       "capability": "accelerate_y",
       "componentSlot": "verticalAcceleration",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -1808,66 +1808,10 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "multiply_projectile_velocity",
-      "componentSlot": "velocityRetention",
-      "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].velocityRetention.multiplierPerUpdate",
-        "runtimeProgram.entities[].velocityRetention.window.phase",
-        "runtimeProgram.entities[].velocityRetention.window.clock",
-        "runtimeProgram.entities[].velocityRetention.window.startDelayTicks",
-        "runtimeProgram.entities[].velocityRetention.window.durationTicks"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_request_server_execute",
-      "parameters": {
-        "scalePerUpdate": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1.2,
-          "minimum": 0,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "unitless"
-        },
-        "window": {
-          "enum": [],
-          "kind": "union",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": false,
-          "semanticType": "bounded_text",
-          "units": ""
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Multiply velocity independently; explicit zero stops velocity, never normalizes to one.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": []
-    },
-    {
-      "authorityByEffect": {},
       "capability": "scale_velocity",
       "componentSlot": "velocityScale",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
+      "csharpOwner": "Content/Projectiles/Combat/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -1917,17 +1861,7 @@
       "positionOwnership": "velocity_or_position_controller",
       "purpose": "After turn and before homing, multiply velocity per update and optionally cap its magnitude. Supports two provably disjoint timing windows.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [
-        {
-          "anyOf": [
-            "multiply_projectile_velocity",
-            "set_projectile_speed_modifier"
-          ],
-          "kind": "capability_absent",
-          "message": "New late scaling cannot coexist with historical velocity scalers.",
-          "target": "same_target"
-        }
-      ],
+      "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
       "targetKinds": [
         "owner_attached_projectile",
@@ -1944,7 +1878,7 @@
       "capability": "rotate_sprite",
       "componentSlot": "rotation",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::ApplyMotionRotation",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.cs::ApplyMotionRotation",
       "dependencies": [
         "set_aim"
       ],
@@ -2054,7 +1988,7 @@
       "capability": "oscillate_velocity",
       "componentSlot": "oscillation",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -2133,7 +2067,7 @@
       "capability": "add_sprite_scale",
       "componentSlot": "visualScaleRate",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -2200,7 +2134,7 @@
       "capability": "set_opacity",
       "componentSlot": "opacity",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -4400,7 +4334,6 @@
         "accessory.endurance",
         "accessory.armorPenetration",
         "accessory.whipRange",
-        "accessory.summonTagDamage",
         "accessory.lightStrength",
         "accessory.lightColorName",
         "accessory.fallDamageImmune",
@@ -4721,16 +4654,6 @@
           "semanticType": "blocks/s",
           "units": "blocks/s"
         },
-        "taggedSummonDamageBonus": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 300,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "source_damage_percent",
-          "units": "source_damage_percent"
-        },
         "treasureSense": {
           "enum": [],
           "kind": "boolean",
@@ -4819,7 +4742,6 @@
             "damageReduction",
             "armorPenetration",
             "whipRangeBonusPercent",
-            "taggedSummonDamageBonus",
             "lightStrength",
             "fallDamageImmune",
             "lavaImmune",
@@ -4922,7 +4844,6 @@
         "armor.endurance",
         "armor.armorPenetration",
         "armor.whipRange",
-        "armor.summonTagDamage",
         "armor.lightStrength",
         "armor.lightColorName",
         "armor.fallDamageImmune",
@@ -5231,16 +5152,6 @@
           "required": true,
           "semanticType": "bounded_text",
           "units": ""
-        },
-        "taggedSummonDamageBonus": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 300,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "source_damage_percent",
-          "units": "source_damage_percent"
         },
         "treasureSense": {
           "enum": [],
@@ -5634,70 +5545,6 @@
           "target": "same_target"
         },
         {
-          "capability": "charge_then_release",
-          "equals": null,
-          "kind": "present_param_forbids_capability",
-          "message": "This controller owns launch velocity; select the explicit constant-speed variant.",
-          "param": "velocity.fanSpeed",
-          "target": "same_target"
-        },
-        {
-          "capability": "channel_beam",
-          "equals": null,
-          "kind": "present_param_forbids_capability",
-          "message": "This controller owns launch velocity; select the explicit constant-speed variant.",
-          "param": "velocity.fanSpeed",
-          "target": "same_target"
-        },
-        {
-          "capability": "charge_then_release",
-          "equals": null,
-          "kind": "present_param_forbids_capability",
-          "message": "This controller owns launch velocity; select the explicit constant-speed variant.",
-          "param": "velocity.radial",
-          "target": "same_target"
-        },
-        {
-          "capability": "channel_beam",
-          "equals": null,
-          "kind": "present_param_forbids_capability",
-          "message": "This controller owns launch velocity; select the explicit constant-speed variant.",
-          "param": "velocity.radial",
-          "target": "same_target"
-        },
-        {
-          "capability": "charge_then_release",
-          "equals": null,
-          "kind": "present_param_forbids_capability",
-          "message": "This controller owns launch velocity; select the explicit constant-speed variant.",
-          "param": "velocity.disk",
-          "target": "same_target"
-        },
-        {
-          "capability": "channel_beam",
-          "equals": null,
-          "kind": "present_param_forbids_capability",
-          "message": "This controller owns launch velocity; select the explicit constant-speed variant.",
-          "param": "velocity.disk",
-          "target": "same_target"
-        },
-        {
-          "capability": "charge_then_release",
-          "equals": null,
-          "kind": "present_param_forbids_capability",
-          "message": "This controller owns launch velocity; select the explicit constant-speed variant.",
-          "param": "velocity.cone",
-          "target": "same_target"
-        },
-        {
-          "capability": "channel_beam",
-          "equals": null,
-          "kind": "present_param_forbids_capability",
-          "message": "This controller owns launch velocity; select the explicit constant-speed variant.",
-          "param": "velocity.cone",
-          "target": "same_target"
-        },
-        {
           "anyOf": [
             "velocity.fanSpeed",
             "velocity.radial",
@@ -6069,7 +5916,7 @@
       "capability": "hitbox_curve",
       "componentSlot": "hitbox_curve",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::ModifyDamageHitbox|Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyHitboxCurveVisual",
+      "csharpOwner": "Content/Projectiles/Combat/GeneratedProjectile.RuntimeEvents.cs::ModifyDamageHitbox|Content/Projectiles/Motion/GeneratedProjectile.Executors.cs::ApplyHitboxCurveVisual",
       "dependencies": [
         "projectile_hitbox"
       ],
@@ -6163,8 +6010,8 @@
         },
         {
           "anyOf": [
-            "channel_beam",
-            "move_whip_lash"
+            "beam_geometry",
+            "lash_geometry"
           ],
           "kind": "capability_absent",
           "message": "Rectangular hitbox curves cannot coexist with a beam/whip line-collision driver; choose the geometry explicitly.",
@@ -6172,7 +6019,7 @@
         },
         {
           "anyOf": [
-            "move_expanding_wave",
+            "add_sprite_scale",
             "sprite_scale_curve"
           ],
           "equals": true,
@@ -6198,7 +6045,7 @@
       "capability": "turn_velocity",
       "componentSlot": "turnModifier",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
+      "csharpOwner": "Content/Projectiles/Combat/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -6274,141 +6121,6 @@
         },
         {
           "anyOf": [
-            "channel_beam",
-            "charge_then_release"
-          ],
-          "kind": "capability_absent",
-          "message": "Explicit trajectory owns motion throughout the interval.",
-          "target": "same_target"
-        },
-        {
-          "anyOf": [
-            "accelerate_y",
-            "attach",
-            "lash_geometry",
-            "move_straight",
-            "orbit",
-            "oscillate_velocity",
-            "scale_velocity",
-            "seek"
-          ],
-          "kind": "capability_group_present",
-          "message": "Trajectory required, even with target_and_fire.",
-          "target": "same_target"
-        }
-      ],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": []
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "set_projectile_speed_modifier",
-      "componentSlot": "speedModifier",
-      "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].speedModifier.speedMultiplierPerUpdate",
-        "runtimeProgram.entities[].speedModifier.maxSpeed",
-        "runtimeProgram.entities[].speedModifier.startDelayTicks",
-        "runtimeProgram.entities[].speedModifier.durationTicks",
-        "runtimeProgram.entities[].speedModifier.window.phase",
-        "runtimeProgram.entities[].speedModifier.window.clock",
-        "runtimeProgram.entities[].speedModifier.window.startDelayTicks",
-        "runtimeProgram.entities[].speedModifier.window.durationTicks"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "duration": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 360.0,
-          "minimum": 0.008333333333333333,
-          "reference": null,
-          "required": false,
-          "semanticType": "seconds",
-          "units": "seconds"
-        },
-        "maxSpeed": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1800.0,
-          "minimum": 0.375,
-          "reference": null,
-          "required": true,
-          "semanticType": "blocks/s",
-          "units": "blocks/s"
-        },
-        "speedMultiplierPerUpdate": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1.2,
-          "minimum": 0.8,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "dimensionless multiplier/update"
-        },
-        "startDelay": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 360.0,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "seconds",
-          "units": "seconds"
-        },
-        "window": {
-          "enum": [],
-          "kind": "union",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": false,
-          "semanticType": "bounded_text",
-          "units": ""
-        }
-      },
-      "positionOwnership": "none",
-      "purpose": "After movement/turn, multiply velocity per update, then cap speed. Below 1 slows; above 1 accelerates. World-time timing.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [
-        {
-          "allowAbsent": true,
-          "anyOf": [
-            "window"
-          ],
-          "equals": null,
-          "kind": "timing_pair_or_window",
-          "message": "Omit all timing for the whole active lifetime; otherwise use window or both scalar times. Both forms intersect.",
-          "otherParam": "duration",
-          "param": "startDelay",
-          "target": "same_target"
-        },
-        {
-          "anyOf": [
-            "channel_beam",
-            "charge_then_release"
-          ],
-          "kind": "capability_absent",
-          "message": "Explicit trajectory owns motion throughout the interval.",
-          "target": "same_target"
-        },
-        {
-          "anyOf": [
             "accelerate_y",
             "attach",
             "lash_geometry",
@@ -6439,7 +6151,7 @@
       "capability": "homing",
       "componentSlot": "homingModifier",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyHomingModifier",
+      "csharpOwner": "Content/Projectiles/Combat/GeneratedProjectile.Modifiers.cs::ApplyHomingModifier",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -6537,15 +6249,6 @@
         },
         {
           "anyOf": [
-            "channel_beam",
-            "charge_then_release"
-          ],
-          "kind": "capability_absent",
-          "message": "Explicit trajectory owns motion throughout the interval.",
-          "target": "same_target"
-        },
-        {
-          "anyOf": [
             "accelerate_y",
             "attach",
             "lash_geometry",
@@ -6576,7 +6279,7 @@
       "capability": "attract_npcs",
       "componentSlot": "npcAttraction",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyNpcAttraction",
+      "csharpOwner": "Content/Projectiles/Combat/GeneratedProjectile.Modifiers.cs::ApplyNpcAttraction",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -6703,7 +6406,7 @@
       "capability": "sprite_scale_curve",
       "componentSlot": "visualScaleCurve",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyVisualScaleCurve",
+      "csharpOwner": "Content/Projectiles/Combat/GeneratedProjectile.Modifiers.cs::ApplyVisualScaleCurve",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -6792,9 +6495,9 @@
       "requirements": [
         {
           "anyOf": [
-            "move_expanding_wave",
-            "channel_beam",
-            "move_whip_lash"
+            "add_sprite_scale",
+            "beam_geometry",
+            "lash_geometry"
           ],
           "kind": "capability_absent",
           "message": "A visual scale curve excludes another scale owner and special beam/whip line geometry that does not consume sprite scale.",
@@ -6814,55 +6517,10 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "orient_whip_to_owner_gravity",
-      "componentSlot": "whip_gravity",
-      "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::BuildWhipPoints",
-      "dependencies": [
-        "move_whip_lash"
-      ],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].whipUsesOwnerGravity"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {},
-      "positionOwnership": "none",
-      "purpose": "Mirror the existing whip sweep and bend around its explicitly aimed axis when owner.gravDir is inverted. Does not change authored aim, range or damage; collision and body use the same whip points. Choosing this fn supplies the sole true wire marker.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [
-        {
-          "capability": "move_whip_lash",
-          "kind": "capability_present",
-          "message": "Owner-gravity orientation requires the same entity's explicit whip geometry.",
-          "target": "same_target"
-        },
-        {
-          "anyOf": [
-            "channel_beam"
-          ],
-          "kind": "capability_absent",
-          "message": "Beam geometry takes precedence and would leave whip gravity orientation unconsumed.",
-          "target": "same_target"
-        }
-      ],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].whipUsesOwnerGravity"
-      ]
-    },
-    {
-      "authorityByEffect": {},
       "capability": "projectile_collision",
       "componentSlot": "collision",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::OnTileCollide",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure|Content/Projectiles/Combat/GeneratedProjectile.RuntimeEvents.cs::OnTileCollide",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -6981,7 +6639,7 @@
       "conflicts": [
         "exclusive_group:movement"
       ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -7013,1554 +6671,12 @@
     },
     {
       "authorityByEffect": {},
-      "capability": "move_slow_homing",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.rangeTiles",
-        "runtimeProgram.entities[].movement.params.homingStrength"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "homingStrength": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1,
-          "minimum": 0.001,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "engine units: velocity lerp fraction"
-        },
-        "range": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 120,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "tiles",
-          "units": "blocks (tiles)"
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Steer gradually toward a valid NPC.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_gravity_arc",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.gravityPerTick"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "accelY": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 16200.0,
-          "minimum": -16200.0,
-          "reference": null,
-          "required": true,
-          "semanticType": "blocks/s²",
-          "units": "blocks/s²"
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Movement adds gravity as signed vertical acceleration per projectile update after activation, with no horizontal friction: negative accelerates upward, positive downward, zero preserves vertical velocity. Tile collision uses the separate bounceCount. No terminal-speed cap, rolling, resting or explosion is implied.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_drift",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.velocityRetention"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "velocityRetention": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1.05,
-          "minimum": 0.8,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "engine units: velocity multiplier per update"
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Multiply velocity by authored retention per projectile update.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_orbit",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.rangeTiles",
-        "runtimeProgram.entities[].movement.params.orbitRadiansPerUpdate"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "radius": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 80,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "tiles",
-          "units": "blocks (tiles)"
-        },
-        "turnRadiansPerSecond": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 180.0,
-          "minimum": -180.0,
-          "reference": null,
-          "required": true,
-          "semanticType": "radians/s",
-          "units": "radians/s"
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Orbit the owner at the authored radius and signed world-time angular rate, with an identity-based starting offset. Positive rotates clockwise on screen; negative counterclockwise; zero keeps the angle fixed while following the owner. Launch speed does not set orbit rate. This controller forces tileCollide=false.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_boomerang",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.returnAfterTicks",
-        "runtimeProgram.entities[].movement.params.returnSpeed"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "returnAfterSeconds": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 10.0,
-          "minimum": 0.008333333333333333,
-          "reference": null,
-          "required": true,
-          "semanticType": "seconds",
-          "units": "seconds"
-        },
-        "returnSpeedBlocksPerSecond": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1800.0,
-          "minimum": 3.75,
-          "reference": null,
-          "required": true,
-          "semanticType": "blocks/s",
-          "units": "blocks/s"
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Fly out, then return to owner. A wall collision starts return and disables tileCollide; does not kill or spend tile bounces. NPC penetration is authored separately.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_sine_homing",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.rangeTiles",
-        "runtimeProgram.entities[].movement.params.homingStrength",
-        "runtimeProgram.entities[].movement.params.waveAmplitude"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "homingStrength": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1,
-          "minimum": 0.001,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "engine units: velocity lerp fraction"
-        },
-        "range": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 120,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "tiles",
-          "units": "blocks (tiles)"
-        },
-        "waveVelocityCoefficient": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 64,
-          "minimum": 0,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "engine units: lateral velocity coefficient"
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Combine sinusoidal drift with bounded homing.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_phase",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.phaseStrength"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "phaseStrength": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1,
-          "minimum": 0,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "engine units: coupled rotation/alpha coefficient"
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Couple a sinusoidal velocity-direction wobble with reduced opacity. This does not itself disable tile collision; tile collision is controlled separately.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_accelerate",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.acceleration",
-        "runtimeProgram.entities[].movement.params.maxSpeed"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "maxSpeed": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1800.0,
-          "minimum": 3.75,
-          "reference": null,
-          "required": true,
-          "semanticType": "blocks/s",
-          "units": "blocks/s"
-        },
-        "speedMultiplierPerUpdate": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1.2,
-          "minimum": 1.0,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "engine units: velocity multiplier per update"
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Multiply speed up to an explicit cap.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_spiral",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.turnRadiansPerTick"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "turnRadiansPerSecond": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 180.0,
-          "minimum": -180.0,
-          "reference": null,
-          "required": true,
-          "semanticType": "radians/s",
-          "units": "radians/s"
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Rotate velocity by an authored angle per projectile update.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_vortex_orb",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.pullStrength",
-        "runtimeProgram.entities[].movement.params.rangeTiles"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "accel": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 5400.0,
-          "minimum": 0.0,
-          "reference": null,
-          "required": true,
-          "semanticType": "blocks/s² (NPC world-tick velocity)",
-          "units": "blocks/s² (NPC world-tick velocity)"
-        },
-        "range": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 80,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "tiles",
-          "units": "blocks (tiles)"
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Pull nearby chaseable NPCs toward the projectile and multiply projectile velocity by 0.99 per projectile update. Pull respects knockback resistance and affects at most 16 NPCs per update.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_blackhole_pull",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.pullStrength",
-        "runtimeProgram.entities[].movement.params.rangeTiles"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "accel": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 5400.0,
-          "minimum": 0.0,
-          "reference": null,
-          "required": true,
-          "semanticType": "blocks/s² (NPC world-tick velocity)",
-          "units": "blocks/s² (NPC world-tick velocity)"
-        },
-        "range": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 80,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "tiles",
-          "units": "blocks (tiles)"
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Pull nearby chaseable NPCs toward the projectile and multiply projectile velocity by 0.985 per projectile update. Pull respects knockback resistance and affects at most 16 NPCs per update.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_proximity_missile",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.rangeTiles",
-        "runtimeProgram.entities[].movement.params.homingStrength",
-        "runtimeProgram.entities[].movement.params.proximityRadiusPx"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "homingStrength": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1,
-          "minimum": 0.001,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "engine units: velocity lerp fraction"
-        },
-        "range": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 120,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "tiles",
-          "units": "blocks (tiles)"
-        },
-        "triggerRadiusTiles": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 32,
-          "minimum": 0.25,
-          "reference": null,
-          "required": true,
-          "semanticType": "tiles",
-          "units": "blocks (tiles)"
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Home; proximity inside triggerRadiusTiles triggers on_expire then on_kill and kills the missile. on_hit requires an actual hit, not mere proximity.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_returning_glaive",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.returnAfterTicks",
-        "runtimeProgram.entities[].movement.params.returnSpeed"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "returnAfterSeconds": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 10.0,
-          "minimum": 0.008333333333333333,
-          "reference": null,
-          "required": true,
-          "semanticType": "seconds",
-          "units": "seconds"
-        },
-        "returnSpeedBlocksPerSecond": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1800.0,
-          "minimum": 3.75,
-          "reference": null,
-          "required": true,
-          "semanticType": "blocks/s",
-          "units": "blocks/s"
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Fly, spin and return to the owner.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_expanding_wave",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.scalePerTick",
-        "runtimeProgram.entities[].movement.params.maxScale"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "maxScale": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 4,
-          "minimum": 0.25,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": ""
-        },
-        "scaleGrowthPerUpdate": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 0.5,
-          "minimum": 0.001,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "engine units: scale increment per update"
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Add to the projectile's visual scale, then clamp it to the authored cap. Collision size and damage do not grow with this scale; use an independent hitbox curve for growing contact geometry.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_flail_tether",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [
-        "item_use"
-      ],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.rangeTiles",
-        "runtimeProgram.entities[].movement.params.returnSpeed"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "range": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 60,
-          "minimum": 2,
-          "reference": null,
-          "required": true,
-          "semanticType": "tiles",
-          "units": "blocks (tiles)"
-        },
-        "returnSpeedBlocksPerSecond": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1800.0,
-          "minimum": 3.75,
-          "reference": null,
-          "required": true,
-          "semanticType": "blocks/s",
-          "units": "blocks/s"
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Tether to owner; outbound flight ends at the leash or when owner.channel becomes false, then return is latched. An active spawn root requires item_use.channel=true: native StartChanneling(Item) otherwise leaves an idle owner unchannelled and return begins on the first AI. Passive/event-driven copies only observe the owner channel established by another active source; this controller does not start channeling.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [
-        {
-          "capability": "item_use",
-          "equals": true,
-          "kind": "item_capability_param",
-          "message": "An active flail spawn requires explicit item channel=true so native StartChanneling(Item) supplies owner.channel; release or reaching the leash latches return. Passive/event producers only observe existing owner channel.",
-          "param": "channel",
-          "target": "item_body",
-          "whenSpawnedByInputs": [
-            "primary_use",
-            "alternate_use"
-          ]
-        }
-      ],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_yoyo_hover",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [
-        "item_use"
-      ],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.rangeTiles",
-        "runtimeProgram.entities[].movement.params.returnSpeed"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "range": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 60,
-          "minimum": 2,
-          "reference": null,
-          "required": true,
-          "semanticType": "tiles",
-          "units": "blocks (tiles)"
-        },
-        "speedBlocksPerSecond": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1800.0,
-          "minimum": 3.75,
-          "reference": null,
-          "required": true,
-          "semanticType": "blocks/s",
-          "units": "blocks/s"
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Follow the owner's cursor inside a leash and return on release. The same authored speed controls both cursor tracking and return, with velocity smoothing. This movement rotates the body by 0.35 radians per projectile update and does not turn the player toward the cursor; a child aiming by facing still uses the player's direction, not the rotating body. An active spawn root requires item_use.channel=true: native StartChanneling(Item) otherwise leaves an idle owner unchannelled and return is latched on the first AI. Passive/event-driven copies observe existing owner channel; this movement does not start channeling.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [
-        {
-          "capability": "item_use",
-          "equals": true,
-          "kind": "item_capability_param",
-          "message": "An active yoyo spawn requires explicit item channel=true so native StartChanneling(Item) supplies owner.channel; release latches return. Passive/event producers only observe existing owner channel.",
-          "param": "channel",
-          "target": "item_body",
-          "whenSpawnedByInputs": [
-            "primary_use",
-            "alternate_use"
-          ]
-        }
-      ],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_whip_lash",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.rangeTiles",
-        "runtimeProgram.entities[].movement.params.segments"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "range": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 60,
-          "minimum": 2,
-          "reference": null,
-          "required": true,
-          "semanticType": "tiles",
-          "units": "blocks (tiles)"
-        },
-        "segments": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 48,
-          "minimum": 3,
-          "reference": null,
-          "required": true,
-          "semanticType": "collision_segment_count",
-          "units": ""
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Execute the bounded owner-attached curved polyline from hand to tip; collision checks every segment, while Projectile.Center is the terminal point. Lash progress follows the owner's current itemAnimation/itemAnimationMax; the projectile remains active only while that animation is positive, including when an activation delay ends. A baked/reused PNG draws once at that tip, not along the curve. runtime_geometry draws the exact collision curve; a separately authored VFX texturedPath source=whip can accompany a baked tip. A channel_beam controller takes collision/geometry precedence. No automatic sprite stretching or representation selection.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_forward_then_retract",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.rangeTiles",
-        "runtimeProgram.entities[].movement.params.durationTicks"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "duration": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 4.0,
-          "minimum": 0.025,
-          "reference": null,
-          "required": true,
-          "semanticType": "seconds",
-          "units": "seconds"
-        },
-        "range": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 20,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "tiles",
-          "units": "blocks (tiles)"
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Move the body center from owner center + aimed axis * (18px + triangular range displacement), extending then retracting during the cycle. The axis follows the live owner cursor (bounded synced aim for remote owners) every AI update, rotating both body and hitbox; not a fixed initial launch axis. spawn.aim controls launch only, not this ongoing aim. This is not hand-attached: no native arm control, grip consumption or PNG stretching. It remains an independent legal movement choice.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "move_front_hand",
-      "componentSlot": "movement",
-      "conflicts": [
-        "exclusive_group:movement"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
-      "dependencies": [
-        "projectile_limit",
-        "spawn",
-        "projectile_collision",
-        "item_use"
-      ],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "movement",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.aimMode",
-        "runtimeProgram.entities[].movement.params.durationTicks",
-        "runtimeProgram.entities[].movement.params.startStretch",
-        "runtimeProgram.entities[].movement.params.peakStretch",
-        "runtimeProgram.entities[].movement.params.hitboxOffsetPx"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "aimMode": {
-          "enum": [
-            "initial",
-            "cursor"
-          ],
-          "kind": "string",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": true,
-          "semanticType": "bounded_text",
-          "units": ""
-        },
-        "duration": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 4.0,
-          "minimum": 0.025,
-          "reference": null,
-          "required": true,
-          "semanticType": "seconds",
-          "units": "seconds"
-        },
-        "hitboxOffsetPx": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 192,
-          "minimum": -192,
-          "reference": null,
-          "required": true,
-          "semanticType": "pixels",
-          "units": "pixels"
-        },
-        "peakStretch": {
-          "enum": [
-            "none",
-            "quarter",
-            "three_quarters",
-            "full"
-          ],
-          "kind": "string",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": true,
-          "semanticType": "bounded_text",
-          "units": ""
-        },
-        "startStretch": {
-          "enum": [
-            "none",
-            "quarter",
-            "three_quarters",
-            "full"
-          ],
-          "kind": "string",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": true,
-          "semanticType": "bounded_text",
-          "units": ""
-        }
-      },
-      "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Attach this explicit body's pose and collision center to the native front hand. Initial aim keeps the spawn axis; cursor aim follows synced live owner aim. No damage, lifecycle, visibility, asset or item-use choice is inserted. Collision center = native hand + aimed axis * hitboxOffsetPx, independent of PNG metadata; the existing axis-aligned rectangle is not pixel-matched blade collision. none-to-full stretch moves the hand only 6px; hitboxOffsetPx is a fixed center offset, not thrust reach or an extra sprite shift. Compare source use/collision geometry and resulting hand-to-damage coverage before deliberately choosing a short jab; sprite length alone adds no reach.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [
-        {
-          "anyOf": [
-            "none",
-            "quarter",
-            "three_quarters",
-            "full"
-          ],
-          "equals": null,
-          "kind": "ordered_params",
-          "message": "Native startStretch must not exceed peakStretch.",
-          "otherParam": "peakStretch",
-          "param": "startStretch",
-          "target": "same_target"
-        },
-        {
-          "kind": "primary_target",
-          "message": "This shared native front hand may be owned only by the exact primary entity.",
-          "target": "same_target"
-        },
-        {
-          "anyOf": [
-            "primary_use|spawn_entity",
-            "alternate_use|spawn_entity"
-          ],
-          "kind": "binding_tuple_present",
-          "message": "The hand owner requires an active spawn binding on this exact target, not a hold lane or another entity's active binding.",
-          "target": "same_target"
-        },
-        {
-          "capability": "projectile_limit",
-          "equals": 1,
-          "kind": "item_capability_param",
-          "message": "The hand owner requires explicit same-item/entity maxActive=1; count=1 is not a concurrency cap.",
-          "param": "maxActive",
-          "target": "same_target"
-        },
-        {
-          "anyOf": [
-            "cursor",
-            "facing",
-            "velocity"
-          ],
-          "capability": "spawn",
-          "kind": "item_capability_param",
-          "message": "The hand owner requires an explicit launch axis: spawn aim must be cursor, facing or velocity, never none, even when aimMode=cursor.",
-          "param": "aim",
-          "target": "same_target"
-        },
-        {
-          "capability": "spawn",
-          "equals": 1,
-          "kind": "item_capability_param",
-          "message": "The hand owner requires explicit spawn count=1.",
-          "param": "count",
-          "target": "same_target"
-        },
-        {
-          "capability": "spawn",
-          "equals": 0,
-          "kind": "item_capability_param",
-          "message": "The hand owner requires explicit zero spawn fan spread.",
-          "param": "spreadRadians",
-          "target": "same_target"
-        },
-        {
-          "capability": "spawn",
-          "equals": {
-            "speed": 0
-          },
-          "kind": "item_capability_param",
-          "message": "The hand owner requires constant zero translational launch speed, not a sampled distribution.",
-          "param": "velocity",
-          "target": "same_target"
-        },
-        {
-          "capability": "projectile_collision",
-          "equals": false,
-          "kind": "item_capability_param",
-          "message": "The hand-driven body requires explicit tileCollide=false.",
-          "param": "tileCollide",
-          "target": "same_target"
-        },
-        {
-          "allowAbsent": true,
-          "capability": "item_use",
-          "equals": "",
-          "kind": "item_capability_param",
-          "message": "Another item handPose cannot own the same arm; leave handPose empty or absent.",
-          "param": "handPose",
-          "target": "item_body"
-        },
-        {
-          "anyOf": [
-            "channel_beam",
-            "charge_then_release",
-            "target_and_fire"
-          ],
-          "kind": "capability_absent",
-          "message": "Another position controller or over-target transform cannot own this hand-driven body.",
-          "target": "same_target"
-        },
-        {
-          "capability": "spawn",
-          "equals": null,
-          "kind": "capability_param_absent",
-          "message": "The hand-driven body cannot use an over-target spawn displacement.",
-          "param": "position.above",
-          "target": "same_target"
-        }
-      ],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].movement.name",
-        "runtimeProgram.entities[].movement.code"
-      ]
-    },
-    {
-      "authorityByEffect": {
-        "NPC_source_damage": "native_projectile_hit_authority",
-        "beam_geometry": "native_local_collision_and_visual",
-        "sustain_mana": "owner_execute_sync"
-      },
-      "capability": "channel_beam",
-      "componentSlot": "controller",
-      "conflicts": [
-        "exclusive_group:controller"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyChannelBeam/TryPayChannelBeamMana|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
-      "dependencies": [
-        "item_use"
-      ],
-      "emittedEvents": [],
-      "events": [],
-      "exclusiveGroup": "controller",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].controller.name",
-        "runtimeProgram.entities[].controller.code",
-        "runtimeProgram.entities[].controller.params.rangeTiles",
-        "runtimeProgram.entities[].controller.params.widthPx",
-        "runtimeProgram.entities[].controller.params.warmupTicks",
-        "runtimeProgram.entities[].controller.params.manaPayment",
-        "runtimeProgram.entities[].controller.params.initialDamageMultiplier",
-        "runtimeProgram.entities[].controller.params.initialWidthMultiplier",
-        "runtimeProgram.entities[].controller.params.damageStartProgress",
-        "runtimeProgram.entities[].controller.params.raycastTiles"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "damageStartProgress": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "unitless_scalar",
-          "units": "fraction of warmup"
-        },
-        "initialDamageMultiplier": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1,
-          "minimum": 0.01,
-          "reference": null,
-          "required": false,
-          "semanticType": "unitless_scalar",
-          "units": "source damage multiplier"
-        },
-        "initialWidthMultiplier": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 1,
-          "minimum": 0.01,
-          "reference": null,
-          "required": false,
-          "semanticType": "unitless_scalar",
-          "units": "beam width multiplier"
-        },
-        "manaPayment": {
-          "enum": [
-            "initial_use_only",
-            "each_use_time"
-          ],
-          "kind": "string",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": false,
-          "semanticType": "bounded_text",
-          "units": "native mana payment cadence"
-        },
-        "range": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 120,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "tiles",
-          "units": "blocks (tiles)"
-        },
-        "raycastTiles": {
-          "enum": [],
-          "kind": "boolean",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": false,
-          "semanticType": "tiles",
-          "units": "tile clipping enabled"
-        },
-        "warmupSeconds": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 10.0,
-          "minimum": 0,
-          "reference": null,
-          "required": true,
-          "semanticType": "seconds",
-          "units": "seconds"
-        },
-        "widthPx": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 128,
-          "minimum": 2,
-          "reference": null,
-          "required": true,
-          "semanticType": "pixels",
-          "units": "pixels"
-        }
-      },
-      "positionOwnership": "owns_position_while_active",
-      "purpose": "Keep an owner-attached line entity aimed at the cursor; collision is the explicit beam segment, taking precedence over movement collision. Sustain mana, warmup ramps and tile raycast are independent explicit params. ownerHitCheck remains a separate native owner-to-target hit check, not beam clipping. A baked/reused PNG draws once at Projectile.Center, not over the full segment. runtime_geometry and VFX texturedPath source=beam share the exact clipped collision line; no automatic representation selection.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [
-        {
-          "capability": "item_use",
-          "equals": true,
-          "kind": "item_capability_param",
-          "message": "channel controller requires channel=true on item_body",
-          "param": "channel",
-          "target": "item_body"
-        }
-      ],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].controller.name",
-        "runtimeProgram.entities[].controller.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "charge_then_release",
-      "componentSlot": "controller",
-      "conflicts": [
-        "exclusive_group:controller"
-      ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyChargeThenRelease",
-      "dependencies": [
-        "item_use"
-      ],
-      "emittedEvents": [
-        "on_release",
-        "channel_complete"
-      ],
-      "events": [],
-      "exclusiveGroup": "controller",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].controller.name",
-        "runtimeProgram.entities[].controller.code",
-        "runtimeProgram.entities[].controller.params.chargeTicks",
-        "runtimeProgram.entities[].controller.params.chargeDamageMultiplier",
-        "runtimeProgram.entities[].controller.params.knockbackMultiplier",
-        "runtimeProgram.entities[].controller.params.speedMultiplier"
-      ],
-      "multiplicity": "single_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "chargeSeconds": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 10.0,
-          "minimum": 0.008333333333333333,
-          "reference": null,
-          "required": true,
-          "semanticType": "seconds",
-          "units": "seconds"
-        },
-        "damageMultiplier": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 4,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": ""
-        },
-        "knockbackMultiplier": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 4,
-          "minimum": 0,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": ""
-        },
-        "speedMultiplier": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 4,
-          "minimum": 0.1,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": ""
-        }
-      },
-      "positionOwnership": "owns_position_until_release",
-      "purpose": "Accumulate bounded charge while held, then release this entity using authored movement. Charging pauses the native lifetime countdown; the authored lifetime is available for flight after release. Other active-age clocks are not reset.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [
-        {
-          "capability": "item_use",
-          "equals": true,
-          "kind": "item_capability_param",
-          "message": "channel controller requires channel=true on item_body",
-          "param": "channel",
-          "target": "item_body"
-        },
-        {
-          "anyOf": [
-            "move_accelerate",
-            "move_blackhole_pull",
-            "move_boomerang",
-            "move_drift",
-            "move_expanding_wave",
-            "move_flail_tether",
-            "move_forward_then_retract",
-            "move_front_hand",
-            "move_gravity_arc",
-            "move_orbit",
-            "move_phase",
-            "move_proximity_missile",
-            "move_returning_glaive",
-            "move_sine_homing",
-            "move_slow_homing",
-            "move_spiral",
-            "move_straight",
-            "move_vortex_orb",
-            "move_whip_lash",
-            "move_yoyo_hover"
-          ],
-          "kind": "capability_group_present",
-          "message": "released projectile needs an explicit post-release movement",
-          "target": "same_target"
-        }
-      ],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile"
-      ],
-      "technicalLoweringOutputs": [
-        "runtimeProgram.entities[].controller.name",
-        "runtimeProgram.entities[].controller.code"
-      ]
-    },
-    {
-      "authorityByEffect": {},
       "capability": "target_and_fire",
       "componentSlot": "controller",
       "conflicts": [
         "exclusive_group:controller"
       ],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyTargetAndFire",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.Executors.cs::ApplyTargetAndFire",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -9726,209 +7842,6 @@
     },
     {
       "authorityByEffect": {
-        "on_crit": "owner_execute_sync",
-        "on_enemy_kill": "owner_execute_sync",
-        "on_hit": "owner_execute_sync",
-        "on_hurt": "owner_execute_sync"
-      },
-      "capability": "damage_area_on_event",
-      "componentSlot": "event_action",
-      "conflicts": [],
-      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [
-        "on_hit",
-        "on_crit",
-        "on_tile_collision",
-        "on_expire",
-        "on_kill",
-        "on_hurt",
-        "on_enemy_kill"
-      ],
-      "exclusiveGroup": "",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].events[].event",
-        "runtimeProgram.entities[].events[].action",
-        "runtimeProgram.entities[].events[].actionCode",
-        "runtimeProgram.entities[].events[].reactionCooldownTicks",
-        "runtimeProgram.entities[].events[].radiusPx",
-        "runtimeProgram.entities[].events[].damageMultiplier",
-        "runtimeProgram.entities[].events[].delayTicks"
-      ],
-      "multiplicity": "many_per_target",
-      "networkAuthority": "server_execute",
-      "parameters": {
-        "damageMultiplier": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 4,
-          "minimum": 0.05,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": ""
-        },
-        "delay": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 10.0,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "seconds",
-          "units": "seconds"
-        },
-        "radius": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 48,
-          "minimum": 0.5,
-          "reference": null,
-          "required": true,
-          "semanticType": "tiles",
-          "units": "blocks (tiles)"
-        },
-        "when": {
-          "enum": [],
-          "kind": "union",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": true,
-          "semanticType": "runtime_event_trigger",
-          "units": ""
-        }
-      },
-      "positionOwnership": "none",
-      "purpose": "Deal bounded AoE damage at the event position. Exclude the event's direct target only for on_hit/on_crit. For other events, including on_expire/on_kill, ignore direct-target exclusion; a previously hit NPC is not excluded by hit history. An additional hit is not guaranteed: native NPC eligibility/damage rules still apply.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [
-        {
-          "equals": null,
-          "kind": "event_available",
-          "message": "target entity must actually emit the selected event",
-          "param": "when",
-          "target": "same_target"
-        }
-      ],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "item_body",
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": []
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "damage_nearest_on_event",
-      "componentSlot": "event_action",
-      "conflicts": [],
-      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [
-        "on_hit",
-        "on_crit"
-      ],
-      "exclusiveGroup": "",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].events[].event",
-        "runtimeProgram.entities[].events[].action",
-        "runtimeProgram.entities[].events[].actionCode",
-        "runtimeProgram.entities[].events[].count",
-        "runtimeProgram.entities[].events[].rangeTiles",
-        "runtimeProgram.entities[].events[].damageMultiplier",
-        "runtimeProgram.entities[].events[].delayTicks"
-      ],
-      "multiplicity": "many_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "damageMultiplier": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 2,
-          "minimum": 0.05,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": ""
-        },
-        "delay": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 10.0,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "seconds",
-          "units": "seconds"
-        },
-        "maxTargets": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 12,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "spawn_or_target_count",
-          "units": ""
-        },
-        "range": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 60,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "tiles",
-          "units": "blocks (tiles)"
-        },
-        "when": {
-          "enum": [
-            "on_hit",
-            "on_crit"
-          ],
-          "kind": "string",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": true,
-          "semanticType": "runtime_event_trigger",
-          "units": ""
-        }
-      },
-      "positionOwnership": "none",
-      "purpose": "Damage up to maxTargets nearest chaseable NPCs within one radius of the recorded event center, excluding the directly hit NPC. Every target is ranked from that same center and receives the same authored base-damage multiplier; no sequential hopping or distance falloff.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [
-        {
-          "equals": null,
-          "kind": "event_available",
-          "message": "target entity must actually emit the selected event",
-          "param": "when",
-          "target": "same_target"
-        }
-      ],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "item_body",
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": []
-    },
-    {
-      "authorityByEffect": {
         "both": "owner_request_server_execute",
         "on_crit:target_to_entity": "owner_request_server_execute",
         "on_crit:target_to_owner": "owner_request_server_execute",
@@ -10113,87 +8026,6 @@
           "param": "mode",
           "target": "same_target"
         },
-        {
-          "equals": null,
-          "kind": "event_available",
-          "message": "target entity must actually emit the selected event",
-          "param": "when",
-          "target": "same_target"
-        }
-      ],
-      "safetyLimits": "bounded by runtime program limits",
-      "targetKinds": [
-        "owner_attached_projectile",
-        "free_projectile",
-        "stationary_projectile",
-        "temporary_helper",
-        "field",
-        "child_projectile"
-      ],
-      "technicalLoweringOutputs": []
-    },
-    {
-      "authorityByEffect": {},
-      "capability": "pull_owner_to_event_target",
-      "componentSlot": "event_action",
-      "conflicts": [],
-      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
-      "dependencies": [],
-      "emittedEvents": [],
-      "events": [
-        "on_hit",
-        "periodic",
-        "on_expire"
-      ],
-      "exclusiveGroup": "",
-      "finalWirePaths": [
-        "runtimeProgram.entities[].events[].event",
-        "runtimeProgram.entities[].events[].action",
-        "runtimeProgram.entities[].events[].actionCode",
-        "runtimeProgram.entities[].events[].periodTicks",
-        "runtimeProgram.entities[].events[].strength",
-        "runtimeProgram.entities[].events[].delayTicks",
-        "runtimeProgram.entities[].events[].mode",
-        "runtimeProgram.entities[].events[].radiusTiles"
-      ],
-      "multiplicity": "many_per_target",
-      "networkAuthority": "owner_execute_sync",
-      "parameters": {
-        "delay": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 10.0,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "seconds",
-          "units": "seconds"
-        },
-        "impulseBlocksPerSecond": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 15.0,
-          "minimum": 0.0375,
-          "reference": null,
-          "required": true,
-          "semanticType": "blocks/s (one-off velocity impulse)",
-          "units": "blocks/s (one-off velocity impulse)"
-        },
-        "when": {
-          "enum": [],
-          "kind": "union",
-          "maximum": null,
-          "minimum": null,
-          "reference": null,
-          "required": true,
-          "semanticType": "runtime_event_trigger",
-          "units": ""
-        }
-      },
-      "positionOwnership": "none",
-      "purpose": "Pull the owning player toward the active direct target recorded by the event. No target means no movement; it never searches for a replacement NPC.",
-      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [
         {
           "equals": null,
           "kind": "event_available",
@@ -10496,7 +8328,7 @@
       "capability": "projectile_light",
       "componentSlot": "light",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::AI",
+      "csharpOwner": "Content/Projectiles/Motion/GeneratedProjectile.Executors.cs::AI",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],

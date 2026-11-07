@@ -39,15 +39,15 @@ class TmlWorkflowTests(unittest.TestCase):
             tools.mkdir()
             # The CLI registers probe options before parsing doctor/build commands.
             for name in ("build/build_tml_windows.ps1", "build/parse_tml_build_log.py", "validate_release.py",
-                         "item-test-workbench/workbench.py", "item-test-workbench/probe.py",
-                         "item-test-workbench/native_environment.py",
-                         "item-test-workbench/campaign.py", "item-test-workbench/agent_evidence.py"):
+                         "workbench/workbench.py", "workbench/python/probe.py",
+                         "workbench/python/native_environment.py",
+                         "workbench/python/campaign.py", "workbench/python/agent_evidence.py"):
                 target = tools / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ROOT / "tools" / name, target)
             (root / ".agent").mkdir()
             shutil.copy2(ROOT / ".agent/manifest.json", root / ".agent/manifest.json")
-            project = root / "ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj"
+            project = root / "mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj"
             project.parent.mkdir(parents=True)
             project.write_text('<Project Sdk="Tomat.Terraria.ModLoader.Sdk" />', encoding="utf-8")
             if deps:

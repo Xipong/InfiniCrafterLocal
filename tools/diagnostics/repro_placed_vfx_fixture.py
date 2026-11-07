@@ -1,6 +1,6 @@
 """Reproduce the checked-in final-wire CPU fixture; never calls inference/images/network.
 
-Run with the workspace Python, PYTHONPATH=LocalGenerator, INFINI_SKIP_CONFIG_FILE=1.
+Run with the workspace Python, PYTHONPATH=generator, INFINI_SKIP_CONFIG_FILE=1.
 Only --write updates the repo fixture. Temporary deterministic QA pixels are not art.
 """
 from __future__ import annotations
@@ -11,11 +11,11 @@ import sys
 import tempfile
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / 'LocalGenerator' / 'tests'))
-from test_placed_vfx_capability import authored, light_slot
-from test_low_level_three_stage_pipeline import _visual_kit
+sys.path[:0] = [str(ROOT), str(ROOT / "tests" / "generator")]
+from tests.generator.world.test_placed_vfx_capability import authored, light_slot
+from tests.generator.authoring.test_low_level_three_stage_pipeline import _visual_kit
 from vfx_material_fixtures import _with_asset
-from test_vfx_material_admission_contracts import _library_particle
+from tests.generator.vfx.test_vfx_material_admission_contracts import _library_particle
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
@@ -50,8 +50,9 @@ def build_fixture():
             data=synthetic_no_image_execution_control(data,fixture)
             assert data['visual']['spriteStatus']=='generated', data.get('debug',{}).get('noImageExecutionControl')
             assert all(a['spriteStatus']=='generated' for a in data['vfxManifest']['assets'])
-            assert is_deliverable_recipe_payload(data,check_assets=False)
+            assert is_deliverable_recipe_payload(data)
             delivered=sanitize_recipe_for_delivery(data)
+            assert gate.visual_delivery_report(delivered,check_backend_config=False)['ok']
             evidence=data['debug']['noImageExecutionControl']
             delivered['debug']={'placedVfxCpuFixture':{'kind':evidence['kind'],'synthetic':True,'realImageGeneration':False,
                 'fixtureSha256':evidence['fixture']['sha256']}}
@@ -74,7 +75,7 @@ def build_fixture():
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--write',action='store_true');args=parser.parse_args()
-    data=build_fixture();target=ROOT/'LocalGenerator/tests/fixtures/placed_vfx_final_wire.json'
+    data=build_fixture();target=ROOT/'tests/fixtures/placed-vfx-current-delivered.json'
     encoded=json.dumps(data,ensure_ascii=False,sort_keys=True,indent=2)+'\n'
     if args.write: target.write_text(encoded,encoding='utf-8')
     else:
