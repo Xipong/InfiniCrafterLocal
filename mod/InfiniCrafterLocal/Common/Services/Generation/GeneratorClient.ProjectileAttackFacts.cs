@@ -179,6 +179,18 @@ public sealed partial class GeneratorClient
 
     private static ProjectileAttackCapture BuildProjectileAttackSource(int type, int style)
     {
+        var profilePhases = string.Equals(Environment.GetEnvironmentVariable("INFINI_PARENT_ANALYSIS_PROFILE"), "1", StringComparison.Ordinal);
+        long phaseStarted = profilePhases ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        long phaseAllocated = profilePhases ? GC.GetAllocatedBytesForCurrentThread() : 0;
+        void ProfilePhase(string phase)
+        {
+            if (!profilePhases) return;
+            long now = System.Diagnostics.Stopwatch.GetTimestamp();
+            long allocated = GC.GetAllocatedBytesForCurrentThread();
+            Console.Error.WriteLine(FormattableString.Invariant(
+                $"PARENT_SOURCE type={type} style={style} phase={phase} ms={System.Diagnostics.Stopwatch.GetElapsedTime(phaseStarted, now).TotalMilliseconds:F3} allocated={allocated - phaseAllocated}"));
+            phaseStarted = now; phaseAllocated = allocated;
+        }
         var spawnReferences = new JsonArray();
         var result = new JsonObject { ["source"] = "read_only_native_attack_source", ["version"] = 1,
             ["identityPredicates"] = new JsonObject { ["Projectile.type"] = type, ["Projectile.aiStyle"] = style },
@@ -195,6 +207,18 @@ public sealed partial class GeneratorClient
         JsonObject Observe(MethodBase method, string role, List<AmmoIl>? slice = null, bool boundActor = false, List<JsonObject>? helperSpawns = null, List<JsonObject>? sourceEffects = null)
         {
             Certify(method);
+            var observeProfile = profilePhases;
+            long observeStarted = observeProfile ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+            long observeAllocated = observeProfile ? GC.GetAllocatedBytesForCurrentThread() : 0;
+            void ObservePhase(string phase)
+            {
+                if (!observeProfile) return;
+                long now = System.Diagnostics.Stopwatch.GetTimestamp();
+                long allocated = GC.GetAllocatedBytesForCurrentThread();
+                Console.Error.WriteLine(FormattableString.Invariant(
+                    $"PARENT_OBSERVE type={type} style={style} method={SourceMember(method)} role={role} phase={phase} ms={System.Diagnostics.Stopwatch.GetElapsedTime(observeStarted, now).TotalMilliseconds:F3} allocated={allocated - observeAllocated}"));
+                observeStarted = now; observeAllocated = allocated;
+            }
             if (boundActor) mechanicsBoundReceivers.Add(method);
             else mechanicsUnboundReceivers.Add(method);
             try
@@ -202,6 +226,7 @@ public sealed partial class GeneratorClient
                 var next = slice is null ? null : AttackCode(method).Zip(AttackCode(method).Skip(1), (a, b) => (a.Offset, b.Offset))
                     .ToDictionary(p => p.Item1, p => p.Item2);
                 var body = slice is null ? ReadCompleteSourceMethod(method) : new ParentSourceMethod(method, slice, next);
+                ObservePhase("decode_il_cfg");
                 JsonObject? specialized = null;
                 AttackSourceObservation? selectedObservation = null;
                 ParentSourceMethod? selectedBody = null;
@@ -227,6 +252,7 @@ public sealed partial class GeneratorClient
                     catch (Exception error) when (error is not OutOfMemoryException)
                     { selectionFailure = error is NotSupportedException ? error.Message : error.GetType().Name; }
                 }
+                ObservePhase("identity_selection");
                 var observation = new AttackSourceObservation(body, role);
                 JsonObject program;
                 try { program = observation.Finish(); }
@@ -236,6 +262,7 @@ public sealed partial class GeneratorClient
                     program["coverage"] = "unknown";
                     program["unresolved"] = error is NotSupportedException ? error.Message : error.GetType().Name;
                 }
+                ObservePhase("raw_observation");
                 if (specialized is not null) program["identitySelected"] = specialized;
                 if (selectionFailure is not null) program["identitySelectionUnavailable"] = selectionFailure;
                 // AI helpers use the motion view, but their projectile effects are
@@ -249,6 +276,7 @@ public sealed partial class GeneratorClient
                     foreach (var reference in effects.References) spawnReferences.Add(reference!.DeepClone());
                     foreach (var called in effects.Methods.Where(m => m.Module == typeof(Projectile).Module && m.GetMethodBody() is not null)) Certify(called);
                 }
+                ObservePhase("spawn_effects");
                 if (sourceEffects is not null && role is "motion" or "dispatch")
                 {
                     // Keep the established motion/dispatch slice even when an
@@ -258,16 +286,19 @@ public sealed partial class GeneratorClient
                         if (!TryMergeProjectileSourcePrograms(program, effect)) sourceEffects.Add(effect);
                     foreach (var called in effects.Methods.Where(m => m.Module == typeof(Projectile).Module && m.GetMethodBody() is not null)) Certify(called);
                 }
+                ObservePhase("additional_effects");
                 var exposed = specialized ?? program;
                 if (exposed["observations"] is JsonArray)
                     foreach (var reference in (specialized is not null ? selectedObservation! : observation).LiteralProjectileSpawns(exposed))
                         spawnReferences.Add(reference!.DeepClone());
                 foreach (var call in observation.ReferencedMethods.Concat(selectedObservation?.ReferencedMethods ?? new HashSet<MethodBase>())
                     .Where(m => m.Module == typeof(Projectile).Module && m.GetMethodBody() is not null)) Certify(call);
+                ObservePhase("source_and_spawn_refs");
                 return program;
             }
             catch (Exception error) when (error is not OutOfMemoryException)
-            { return new JsonObject { ["method"] = SourceMember(method), ["coverage"] = "unknown", ["unresolved"] = error is NotSupportedException ? error.Message : error.GetType().Name }; }
+            { ObservePhase("refused");
+                return new JsonObject { ["method"] = SourceMember(method), ["coverage"] = "unknown", ["unresolved"] = error is NotSupportedException ? error.Message : error.GetType().Name }; }
         }
         MethodInfo? Native(Type owner, string name) => owner.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
             .FirstOrDefault(m => m.Name == name);
@@ -333,6 +364,7 @@ public sealed partial class GeneratorClient
             }
             catch (Exception error) when (error is not OutOfMemoryException) { gaps.Add(root + ":" + (error is NotSupportedException ? error.Message : error.GetType().Name)); }
         }
+        ProfilePhase("ai_and_collision_dispatch");
         // Draw dispatch is selected only from actual source type comparisons or
         // integer switch selectors. No item name, controller label or ID roster.
         MethodInfo? drawRoot = Native(typeof(Main), "DrawProj_DrawSpecialProjs");
@@ -356,6 +388,7 @@ public sealed partial class GeneratorClient
             }
             catch (Exception error) when (error is not OutOfMemoryException) { gaps.Add("draw_source:" + error.GetType().Name); }
         }
+        ProfilePhase("draw_dispatch");
         if ((result["motion"] is not null || result["motionDispatch"] is not null) && Native(typeof(Projectile), "UpdatePosition") is { } integration)
         {
             // This is a direct entry-point source conditioned on the captured
@@ -374,7 +407,9 @@ public sealed partial class GeneratorClient
             }
             result["positionIntegration"] = program;
         }
+        ProfilePhase("position_integration");
         result["lifecycle"] = CaptureProjectileLifecycleSource(type, style, spawnReferences);
+        ProfilePhase("lifecycle");
         // Keep method identity as a native fact outside the optional readable
         // view, including when every conditional region was refused.
         if (Native(typeof(Projectile), "Kill") is { } lifecycleRoot) Certify(lifecycleRoot);
@@ -382,7 +417,10 @@ public sealed partial class GeneratorClient
         result["coverage"] = new JsonObject { ["proved"] = "bounded_native_source_observations_only", ["unresolved"] = gaps,
             ["boundaries"] = "ProjectileLoader.Colliding/ShouldUpdatePosition and all other hooks remain unevaluated; no source fact is absence of a mechanic; damage may stop before visual lifetime; held-item draw is separate and not inferred from noMelee" };
         AttachNativeCSharpSource(result, certified, spawnReferences, type, style, mechanicsBoundReceivers.Except(mechanicsUnboundReceivers).ToHashSet());
-        return new ProjectileAttackCapture(result, spawnReferences);
+        ProfilePhase("decompiler_and_mechanics");
+        var captured = new ProjectileAttackCapture(result, spawnReferences);
+        ProfilePhase("immutable_source_capture");
+        return captured;
     }
 
     // This is a syntax recognizer for immutable identity selectors, NOT an IL
