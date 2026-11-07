@@ -251,6 +251,9 @@ public sealed class VfxSlotSpec
         if (rendererKind == InfiniVfxRendererKind.None)
             throw new InvalidDataException($"unknown VFX renderer '{RendererKind}'");
         RendererKind = VfxRendererRegistry.ToWireName(rendererKind);
+        Anchor = ExactEnumText(Anchor, "anchor", "self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field");
+        if (!RuntimeEventKind.SupportsVfxAnchor(Event,Anchor))
+            throw new InvalidDataException("jump VFX requires player center, motion axis or captured jump-point anchors");
         if (PlacementBindingId is not null)
         {
             if (RuntimeId(PlacementBindingId,"placement binding id") != PlacementBindingId
@@ -373,7 +376,6 @@ public sealed class VfxSlotSpec
             throw new InvalidDataException("impactSprite requires textureRole=impact");
         if (VfxRendererRegistry.ConsumesSpriteTexture(rendererKind) && TextureRole == "none")
             throw new InvalidDataException("sprite renderer requires a non-none textureRole");
-        Anchor = ExactEnumText(Anchor, "anchor", "self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field");
         if (!cadenceOnly && StartTick is null) throw new InvalidDataException("VFX renderer requires startTick");
         if (StartTick is { } startTick) StartTick = Math.Clamp(startTick, 0, 120);
         _phaseOffset = Math.Clamp(_phaseOffset, -1f, 1f);

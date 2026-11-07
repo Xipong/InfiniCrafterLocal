@@ -57,6 +57,26 @@ _ACCEPTED_GAMEPLAY_CONTEXT_RULE = (
 )
 
 
+_AIR_JUMP_RULE = (
+    "on_jump is emitted once at the native ExtraJump start of an authored airJump, by its granting equipment or "
+    "active generated buff, never for ground jumps, landings or vanilla extra jumps. Read exact airJump mechanics "
+    "from acceptedPlayerEffectsReadOnly, acceptedGameplayReadOnly.generatedBuff or "
+    "acceptedRuntimeProgramReadOnly.effectGroups: speed is pixels per world tick and hold duration is world ticks (60/s). "
+    "Jump frame: origin=player.Center, not feet; hitPoint captures that jump-start center. "
+    "forward=(0,-player.gravDir), opposite gravity; normal=(-forward.Y,forward.X), so positive side is "
+    "normal gravity +X, inverted gravity -X. self/owner/field/hitPoint use this frame, independent of "
+    "facing, itemRotation and itemLocation. velocity instead uses actual captured/live player velocity, normalized; "
+    "zero velocity falls back to jump forward, with the same perpendicular normal rule. "
+    "For attached primitives, world attachment freezes the event-time frame, including delayed emissions; "
+    "source attachment follows the exact live grant and current gravity, retiring with that source. "
+    "Offsets and rotations remain authored. In the gravity-relative jump frame, negative forward offsets point toward the feet; source-relative "
+    "rotations use jump forward (or the explicitly selected velocity axis). Explicit world rotation frames remain "
+    "world-relative. No automatic foot offset or image-axis correction; tip/tipHistory are forbidden. "
+    "Compose visual and sound independently from ordinary renderer primitives; world-attached elements finish "
+    "their bounded lifetime. Read-only mechanics never open Repair permissions."
+)
+
+
 _PLACED_VFX_RULE = "Optional placementBindingId selects only an exact runtimeSurface.placementBindings entry of this item_body: periodic/self spriteElement/libraryParticle/nativeLight. Omit selector for ordinary item/projectile effects; placed-selected slots never emit in hand/equipment. Bounds are read-only actual top-left native TileFrameY, not animation age. self is footprint center, forward=right, side=down, velocity=0. Offset separate flame ingredients with element.offsetForwardPx/offsetSidePx; reuse existing assets for live flames while root PNG stays stable physical furniture. Source attachment retires on off/removal; world particles finish bounded life. Only this placed-selected cohort uses maxParticlesTotal as a fresh allowance per due emission burst, not a cumulative lifetime cap; maxParticlesPerTick and global live-instance/draw caps remain. Light emits only on due world ticks: repeatEvery=1 means steady light; no automatic cadence rewrite. No new gameplay or automatic slot insertion."
 
 
@@ -104,6 +124,11 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
         if isinstance(entity, dict):
             entity.pop("visual", None)
     surface = vfx_director_surface(data)
+    player_effects = {
+        field: copy.deepcopy(data[field]["playerEffect"])
+        for field in ("accessory", "armor")
+        if isinstance(data.get(field), Mapping) and isinstance(data[field].get("playerEffect"), Mapping)
+    }
     packet = {
         "schema": "infini.vfx-director-input.runtime-events.v1",
         "item": {
@@ -114,6 +139,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
         **parent_context,
         "acceptedVisualKit": copy.deepcopy(data.get("visualKit") or {}),
         **({"acceptedGameplayReadOnly": copy.deepcopy(data["gameplay"])} if "gameplay" in data else {}),
+        **({"acceptedPlayerEffectsReadOnly": player_effects} if player_effects else {}),
         "acceptedRuntimeProgramReadOnly": mechanics,
         "runtimeVocabulary": {key: surface[key] for key in _VFX_RUNTIME_VOCABULARY_KEYS},
         "runtimeSurface": {key: value for key, value in surface.items() if key not in _VFX_RUNTIME_VOCABULARY_KEYS},
@@ -122,6 +148,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             "Bind every slot to one exact runtimeSurface.runtimePairs entityId+event pair.",
             "Do not add gameplay, entities, events, hitboxes, damage, movement, child spawning, or status effects.",
             _ACCEPTED_GAMEPLAY_CONTEXT_RULE,
+            _AIR_JUMP_RULE,
             _READABILITY_RULE,
             "acceptedRuntimeProgramReadOnly contains the actual accepted mechanics, not another design request. Read its exact movement, controller, lifetime, collision, bindings and event parameters when composing presentation; runtimePairs still owns event availability. Do not invent missing geometry from names or the prose summary. Visual attachment and particle motion never change the source entity's gameplay.",
             "shape composes explicit bounded line/arc/wave/orbit/sector instances. Duration is lifetime and repeatEvery is emission cadence, never geometric animation period. Only authored color/opacity/radius endpoints and angular speeds animate them; no extra fade or Dust accompaniment. Each segment/mote consumes one shared draw call. nativeDust and nativeLight are independent slots with explicit emission controls.",
@@ -170,6 +197,8 @@ def build_vfx_repair_packet(
         "item": copy.deepcopy(packet.get("item") or {}),
         "acceptedVisualKitReadOnly": copy.deepcopy(packet.get("acceptedVisualKit") or {}),
         **({"acceptedGameplayReadOnly": copy.deepcopy(packet["acceptedGameplayReadOnly"])} if "acceptedGameplayReadOnly" in packet else {}),
+        **({"acceptedPlayerEffectsReadOnly": copy.deepcopy(packet["acceptedPlayerEffectsReadOnly"])}
+           if "acceptedPlayerEffectsReadOnly" in packet else {}),
         "acceptedRuntimeProgramReadOnly": copy.deepcopy(packet.get("acceptedRuntimeProgramReadOnly") or {}),
         "runtimeVocabularyReadOnly": copy.deepcopy(packet.get("runtimeVocabulary") or {}),
         "runtimeSurfaceReadOnly": copy.deepcopy(packet.get("runtimeSurface") or {}),
@@ -189,6 +218,7 @@ def build_vfx_repair_packet(
             "presentation only; gameplay is immutable",
             _PLACED_VFX_RULE,
             _ACCEPTED_GAMEPLAY_CONTEXT_RULE,
+            _AIR_JUMP_RULE,
             _READABILITY_RULE,
             "acceptedRuntimeProgramReadOnly contains the actual accepted mechanics, not another design request. Read its exact movement, controller, lifetime, collision, bindings and event parameters when composing presentation; runtimePairs still owns event availability. Do not invent missing geometry from names or the prose summary. Visual attachment and particle motion never change the source entity's gameplay.",
         ],
@@ -218,6 +248,7 @@ def build_vfx_repair_packet(
             "presentation only; gameplay is immutable",
             _PLACED_VFX_RULE,
             _ACCEPTED_GAMEPLAY_CONTEXT_RULE,
+            _AIR_JUMP_RULE,
         ]
     user = {
         **{key: user[key] for key in VFX_REPAIR_PROMPT_STATIC_KEYS},

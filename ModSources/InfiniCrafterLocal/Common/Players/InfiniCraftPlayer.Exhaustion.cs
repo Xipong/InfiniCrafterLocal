@@ -107,6 +107,7 @@ public sealed partial class InfiniCraftPlayer
 
     internal void ClearGeneratedUtilityState(bool syncNetwork = false)
     {
+        ClearAirJumpState();
         bool changed = _generatedItemExhaustion.Count > 0 || _activeGeneratedUtilityBuffs.Count > 0 || _generatedBuffTicks > 0;
         ClearGeneratedItemExhaustion();
         _activeGeneratedUtilityBuffs.Clear();
@@ -117,6 +118,7 @@ public sealed partial class InfiniCraftPlayer
     public override void UpdateDead()
     {
         ResetDepartedNativeUseProjection();
+        ClearAirJumpState();
         // Keep the last dead tick: queued activations from this life must not revive buffs.
         _generatedUtilityDeathTick = Main.GameUpdateCount;
         RetireGeneratedUtilityOnDeath(syncNetwork: true);

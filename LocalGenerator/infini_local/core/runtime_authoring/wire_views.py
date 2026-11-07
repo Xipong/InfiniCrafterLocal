@@ -17,6 +17,43 @@ def _dict(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else {}
 
 
+def _player_effect_event_produced(data: Mapping[str, Any], member: str) -> bool:
+    """Read explicit reachable player effects; never invent an equip/use producer."""
+    runtime = _dict(data.get("runtimeProgram"))
+    bindings = tuple(_dict(row) for row in runtime.get("bindings") or [] if isinstance(row, Mapping))
+
+    def grants(owner: Mapping[str, Any]) -> bool:
+        return isinstance(_dict(owner.get("playerEffect")).get(member), Mapping)
+
+    if any(row.get("input") == "equipped"
+           and _dict(_dict(row.get("usePolicy")).get("action")).get("kind") == "equip_passive"
+           for row in bindings):
+        if any(_dict(data.get(field)).get("enabled") is True and grants(_dict(data.get(field)))
+               for field in ("accessory", "armor")):
+            return True
+    used_groups: set[str] = set()
+    for row in bindings:
+        action = _dict(_dict(row.get("usePolicy")).get("action"))
+        if action.get("kind") != "apply_item_effects":
+            continue
+        group = action.get("effectGroupId")
+        if isinstance(group, str):
+            used_groups.add(group)
+        elif grants(_dict(_dict(data.get("gameplay")).get("generatedBuff"))):
+            return True
+    held = runtime.get("heldEffectGroupId")
+    if isinstance(held, str):
+        used_groups.add(held)
+    for entity in runtime.get("entities") or []:
+        for event in _dict(entity).get("events") or []:
+            event = _dict(event)
+            if event.get("action") == "apply_generated_buff_on_event" and isinstance(event.get("effectGroupId"), str):
+                used_groups.add(event["effectGroupId"])
+    return any(_dict(group).get("id") in used_groups
+               and grants(_dict(_dict(group).get("generatedBuff")))
+               for group in runtime.get("effectGroups") or [])
+
+
 def runtime_event_inventory(data: Mapping[str, Any]) -> list[dict[str, Any]]:
     runtime = _dict(data.get("runtimeProgram"))
     rows: list[dict[str, Any]] = []
@@ -59,6 +96,10 @@ def runtime_event_inventory(data: Mapping[str, Any]) -> list[dict[str, Any]]:
             for event_name, producers in item_producers.items():
                 if producers and EVENT_KIND_REGISTRY[event_name].producer_binding_contact_damage is True:
                     rows.append({"entityId": entity_id, "event": event_name})
+            for event_name, event_spec in EVENT_KIND_REGISTRY.items():
+                if (entity_kind in event_spec.source_kinds and event_spec.producer_player_effect_member
+                        and _player_effect_event_produced(data, event_spec.producer_player_effect_member)):
+                    rows.append({"entityId": entity_id, "event": event_name})
         elif _dict(entity.get("damage")).get("enabled"):
             rows.extend(({"entityId": entity_id, "event": "on_hit"}, {"entityId": entity_id, "event": "on_crit"}))
         if _dict(entity.get("collision")).get("tileCollide"):
@@ -66,6 +107,8 @@ def runtime_event_inventory(data: Mapping[str, Any]) -> list[dict[str, Any]]:
         for event in entity.get("events") or []:
             if isinstance(event, Mapping):
                 event_name = str(event.get("event") or "")
+                if EVENT_KIND_REGISTRY.get(event_name) is not None and EVENT_KIND_REGISTRY[event_name].presentation_only:
+                    continue  # Real mechanical grants alone publish presentation-only events.
                 if entity_kind == "item_body" and event_name in item_producers and not item_producers[event_name]:
                     continue
                 rows.append({"entityId": entity_id, "event": event_name})
