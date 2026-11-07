@@ -87,10 +87,15 @@ public sealed partial class GeneratorClient
                 if (disposed || entries.ContainsKey(method)) return;
                 if (shared)
                 {
-                    // Account for values plus worst-case lazy CFG sets. Large mod
-                    // hooks remain cacheable; eviction only changes work, never facts.
+                    // Account for the immutable value/CFG IR plus the largest
+                    // lazy compact postdominator matrix plus the separately
+                    // bounded compact reachability/control-region memo. Large
+                    // methods remain cacheable without unpriced quadratic sets.
                     const long limit = 128L * 1024 * 1024;
-                    long cost = 1024L + codeCount * 256L + blocks * (long)blocks * 80;
+                    long postdomWords = ((long)blocks + 64L) / 64L;
+                    long cost = 4096L + codeCount * 512L + blocks * 1024L
+                        + (blocks + 1L) * postdomWords * sizeof(ulong)
+                        + ParentSourceMethod.ReachabilityMemoByteLimit(blocks);
                     if (cost > limit) return;
                     while (order.Count > 0 && (entries.Count >= MethodLimit || weight + cost > limit))
                     {

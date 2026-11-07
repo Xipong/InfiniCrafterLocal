@@ -200,6 +200,7 @@ internal static partial class EngineRuntimeChecks
             ("runtime dump writer exact UTF8 byte and row bounds", RuntimeDumpWriterExactByteAndRowBounds),
             ("parent deferred craft complete synchronous parity", ParentDeferredCraftMatchesSynchronousFacts),
             ("parent shared source cache bounds and invalidation", ParentSharedSourceCacheBoundsAndInvalidation),
+            ("parent source memo budget and projection parity", ParentSourceMemoBudgetBoundsRetainedControlFacts),
             ("runtime dump resolves complete source before publication", RuntimeDumpResolvesSourceBeforePublication),
             ("runtime dump incremental capture main thread bounded queue and publication", RuntimeDumpIncrementalCaptureAndPublication),
             ("runtime dump incremental budget cancellation and IO failure", RuntimeDumpIncrementalBudgetCancellationAndFailure),

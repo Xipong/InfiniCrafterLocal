@@ -50,7 +50,9 @@ internal static partial class EngineRuntimeChecks
     private static void ParentSourceSparseLocalsMatchDenseOracle()
     {
         Type sourceType = typeof(GeneratorClient).GetNestedType("ParentSourceMethod", BindingFlags.NonPublic)!;
-        var constructor = sourceType.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Single();
+        var constructor = sourceType.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Single(candidate => candidate.GetParameters() is { Length: 4 } parameters
+                && parameters[0].ParameterType == typeof(MethodBase));
         MethodInfo method = SparseLocalFixture();
         object Build(object? code = null, object? next = null, Dictionary<int, int>? selection = null)
             => constructor.Invoke(new object?[] { method, code, next, selection });
@@ -97,7 +99,7 @@ internal static partial class EngineRuntimeChecks
             il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Brtrue, entry);
             il.Emit(OpCodes.Ldloc, local); il.Emit(OpCodes.Ret);
         }));
-        foreach (int count in new[] { 8, 9 })
+        foreach (int count in new[] { 8, 9, 63, 64, 65, 127, 128, 129 })
         {
             var fixture = SharedLocalFixture("SharedDefinitionBound" + count, (il, local) =>
             {
@@ -113,8 +115,8 @@ internal static partial class EngineRuntimeChecks
             object source = VerifySharing(fixture);
             var values = ((IDictionary)SparseLocalMember(source, "Values")).Values.Cast<object>();
             object load = values.Single(v => (string)SparseLocalMember(v, "Op") is "ldloc" or "unresolved_local_definition_bound");
-            Equal(count == 8 ? "ldloc" : "unresolved_local_definition_bound", (string)SparseLocalMember(load, "Op"), "eight/nine definition boundary opcode");
-            Equal(count == 8 ? 8 : 0, ((List<string>)SparseLocalMember(load, "Inputs")).Count, "eight/nine definition boundary inputs");
+            Equal(count == 8 ? "ldloc" : "unresolved_local_definition_bound", (string)SparseLocalMember(load, "Op"), "definition count/word boundary opcode");
+            Equal(count == 8 ? 8 : 0, ((List<string>)SparseLocalMember(load, "Inputs")).Count, "definition count/word boundary inputs");
         }
 
         object VerifySharing(MethodInfo fixture)
@@ -180,11 +182,9 @@ internal static partial class EngineRuntimeChecks
             foreach (object block in reachable)
             {
                 int key = Start(block);
-                foreach (var pair in new[] { ("Incoming", incoming[key]), ("Outgoing", outgoing[key]) })
-                {
-                    var expected = pair.Item2.Where(row => referenced.Contains(row.Key)).ToDictionary(row => row.Key, row => row.Value);
-                    Equal(true, Same(expected, (Dictionary<int, HashSet<string>>)SparseLocalMember(block, pair.Item1)), "dense/sparse " + pair.Item1 + " at " + key);
-                }
+                // Production may retain dictionaries, compact rows or no block-local
+                // state. Compare the actual load evidence and refusal diagnostics
+                // against the independent dense solver, not its storage format.
                 var state = Copy(incoming[key]);
                 foreach (object instruction in (IEnumerable)SparseLocalMember(block, "Code"))
                 {

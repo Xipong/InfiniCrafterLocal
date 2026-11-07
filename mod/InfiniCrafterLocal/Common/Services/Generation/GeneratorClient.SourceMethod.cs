@@ -14,7 +14,7 @@ public sealed partial class GeneratorClient
     // A read-only source decompiler. Values are IL definitions, not runtime
     // values. No instruction, getter, constructor, operator or hook is invoked.
     // CFG joins retain every reaching definition; loops are never unrolled.
-    private sealed class ParentSourceMethod
+    private sealed partial class ParentSourceMethod
     {
         internal sealed class Value
         {
@@ -29,7 +29,6 @@ public sealed partial class GeneratorClient
             internal List<int> Next = new();
             internal List<AmmoIl> Code = new();
             internal List<string> Exit = new();
-            internal Dictionary<int, HashSet<string>> Incoming = new(), Outgoing = new();
         }
         internal readonly MethodBase Method;
         private readonly bool completeSource;
@@ -44,9 +43,63 @@ public sealed partial class GeneratorClient
         private readonly Dictionary<int, List<Block>> predecessors = new();
         private static readonly Dictionary<string, OpCode> OpcodesByName = AmmoOpcodes.Values
             .Where(op => op.Name is not null).ToDictionary(op => op.Name!, StringComparer.Ordinal);
-        private readonly Dictionary<int, HashSet<int>> reachable = new();
-        private Dictionary<int, HashSet<int>>? postdominators;
-        private readonly Dictionary<int, HashSet<int>> controlRegions = new();
+        private readonly Dictionary<int, BlockSet> reachable = new();
+        private PostdominatorFacts? postdominators;
+        private readonly Dictionary<int, BlockSet> controlRegions = new();
+        private long reachabilityMemoBytes;
+        private int[]? blockSetNodes;
+        private Dictionary<int, int>? blockSetIndices;
+
+        // Each possible start block has at most one reachability and one control
+        // row. Budget both complete compact tables and their shared index map.
+        internal static long ReachabilityMemoByteLimit(int blocks)
+            => blocks * 64L + 2L * blocks * (192L + ((blocks + 63L) / 64L) * sizeof(ulong));
+
+        internal sealed class BlockSet : IEnumerable<int>
+        {
+            private readonly int[] nodes;
+            private readonly Dictionary<int, int> indices;
+            private readonly ulong[] words;
+
+            internal BlockSet(int[] nodes, Dictionary<int, int> indices, HashSet<int> facts)
+            {
+                this.nodes = nodes;
+                this.indices = indices;
+                words = new ulong[(nodes.Length + 63) / 64];
+                foreach (int node in facts)
+                {
+                    int bit = indices[node];
+                    words[bit >> 6] |= 1UL << (bit & 63);
+                }
+            }
+
+            internal bool Contains(int node)
+                => indices.TryGetValue(node, out int bit) && (words[bit >> 6] & (1UL << (bit & 63))) != 0;
+
+            public IEnumerator<int> GetEnumerator()
+            {
+                for (int bit = 0; bit < nodes.Length; bit++)
+                    if ((words[bit >> 6] & (1UL << (bit & 63))) != 0) yield return nodes[bit];
+            }
+            System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+        }
+
+        private BlockSet RetainReachability(Dictionary<int, BlockSet> memo, int start, HashSet<int> facts)
+        {
+            // Called only under memoGate. Construction and failed CFG analysis
+            // cannot publish partial sets; every retained row is immutable.
+            if (blockSetNodes is null)
+            {
+                blockSetNodes = Blocks.Keys.ToArray();
+                blockSetIndices = blockSetNodes.Select((node, index) => (node, index))
+                    .ToDictionary(pair => pair.node, pair => pair.index);
+                reachabilityMemoBytes = Blocks.Count * 64L;
+            }
+            var retained = new BlockSet(blockSetNodes, blockSetIndices!, facts);
+            memo.Add(start, retained);
+            reachabilityMemoBytes += 192L + ((Blocks.Count + 63L) / 64L) * sizeof(ulong);
+            return retained;
+        }
 
         internal readonly HashSet<int> CompleteCallPrefixes = new();
 
@@ -87,9 +140,9 @@ public sealed partial class GeneratorClient
         }
 
         private readonly object memoGate = new();
-        internal HashSet<int> Reach(int start)
+        internal BlockSet Reach(int start)
         { lock (memoGate) return ReachCore(start); }
-        private HashSet<int> ReachCore(int start)
+        private BlockSet ReachCore(int start)
         {
             if (reachable.TryGetValue(start, out var cached)) return cached;
             var reached = new HashSet<int>(); var pending = new Stack<int>(); pending.Push(start);
@@ -98,42 +151,21 @@ public sealed partial class GeneratorClient
                 int next = pending.Pop(); if (!reached.Add(next)) continue;
                 foreach (int target in Blocks[next].Next) pending.Push(target);
             }
-            return reachable[start] = reached;
+            return RetainReachability(reachable, start, reached);
         }
 
-        internal HashSet<int> ControlledRegion(int start)
+        internal BlockSet ControlledRegion(int start)
         { lock (memoGate) return ControlledRegionCore(start); }
-        private HashSet<int> ControlledRegionCore(int start)
+        private BlockSet ControlledRegionCore(int start)
         {
             if (controlRegions.TryGetValue(start, out var cached)) return cached;
             Block block = Blocks[start];
             var region = new HashSet<int> { start };
-            if (block.Next.Distinct().Count() < 2) return region;
-            if (postdominators is null)
-            {
-                var all = Blocks.Values.Where(b => b.Height >= 0).Select(b => b.Start).Append(-1).ToHashSet();
-                // Publish memoized control facts only after convergence. A
-                // refusal/exception must not make a later projection consume a
-                // partially solved CFG (including another row in an export).
-                var solved = all.ToDictionary(b => b, b => b == -1 ? new HashSet<int> { -1 } : new HashSet<int>(all));
-                bool changed = true; int passes = 0;
-                while (changed)
-                {
-                    currentParentAnalysis?.ThrowIfCancelled();
-                    if (++passes > 2048) throw new NotSupportedException("control_dependency_bound");
-                    changed = false;
-                    foreach (Block current in Blocks.Values.Reverse().Where(b => b.Height >= 0))
-                    {
-                        var next = current.Next.Count == 0 ? new[] { -1 } : current.Next.ToArray();
-                        var common = new HashSet<int>(solved[next[0]]);
-                        foreach (int successor in next.Skip(1)) common.IntersectWith(solved[successor]);
-                        common.Add(current.Start);
-                        if (!common.SetEquals(solved[current.Start])) { solved[current.Start] = common; changed = true; }
-                    }
-                }
-                postdominators = solved;
-            }
-            int join = postdominators[start].Where(b => b != start).OrderByDescending(b => postdominators[b].Count).FirstOrDefault(-1);
+            if (block.Next.Distinct().Count() < 2) return RetainReachability(controlRegions, start, region);
+            // The solver publishes one immutable compact matrix only after
+            // convergence, so a refusal cannot leak partially solved facts.
+            postdominators ??= SolvePostdominators();
+            int join = postdominators.Join(start);
             var pending = new Stack<int>(block.Next);
             while (pending.Count > 0)
             {
@@ -141,7 +173,7 @@ public sealed partial class GeneratorClient
                 if (next == join || !region.Add(next)) continue;
                 foreach (int successor in Blocks[next].Next) pending.Push(successor);
             }
-            return controlRegions[start] = region;
+            return RetainReachability(controlRegions, start, region);
         }
 
         internal ParentSourceMethod(MethodBase method, List<AmmoIl>? sourceSlice = null, Dictionary<int, int>? sourceNext = null, Dictionary<int, int>? selectedSuccessors = null)
@@ -320,76 +352,7 @@ public sealed partial class GeneratorClient
             block.Exit = stack;
         }
 
-        // Definition sets are immutable after publication. Transfers replace a
-        // slot; joins copy only when a predecessor adds a new definition. This
-        // retains exact reaching definitions without cloning every local's set
-        // for every block and fixed-point pass (including singleton transfers).
-        private static Dictionary<int, HashSet<string>> CopyDefinitions(Dictionary<int, HashSet<string>> values)
-            => new(values);
-        private static bool SameDefinitions(Dictionary<int, HashSet<string>> a, Dictionary<int, HashSet<string>> b)
-            => a.Count == b.Count && a.All(pair => b.TryGetValue(pair.Key, out var other) && pair.Value.SetEquals(other));
-
-        private void LinkLocals()
-        {
-            // A dispatcher slice keeps the original method's local metadata,
-            // often thousands of slots which never occur in this source region.
-            // Those slots cannot feed a decoded value or a local transfer. Keep
-            // the exact reaching-definition solver over the referenced domain.
-            var referenced = Code.Where(i => i.Op is "ldloc" or "stloc" or "ldloca")
-                .Select(i => i.Arg).OfType<int>().ToHashSet();
-            var locals = Method.GetMethodBody()!.LocalVariables.Where(local => referenced.Contains(local.LocalIndex)).ToArray();
-            var entryDefinitions = locals.ToDictionary(local => local.LocalIndex,
-                local => new HashSet<string> { "local_entry:" + local.LocalIndex });
-            foreach (var local in locals)
-                Values["local_entry:" + local.LocalIndex] = new Value { Id = "local_entry:" + local.LocalIndex,
-                    Op = "unresolved_local_entry", Operand = local.LocalType, At = 0, Block = 0 };
-            bool changed = true;
-            int passes = 0;
-            while (changed)
-            {
-                currentParentAnalysis?.ThrowIfCancelled();
-                if (++passes > 512) throw new NotSupportedException("local_dataflow_bound");
-                changed = false;
-                foreach (Block block in Blocks.Values.Where(b => b.Height >= 0))
-                {
-                    var incoming = sliceEntries.Contains(block.Start) ? CopyDefinitions(entryDefinitions) : new Dictionary<int, HashSet<string>>();
-                    foreach (Block predecessor in predecessors[block.Start].Where(p => p.Height >= 0))
-                        foreach (var pair in predecessor.Outgoing)
-                        {
-                            if (!incoming.TryGetValue(pair.Key, out var defs)) incoming[pair.Key] = pair.Value;
-                            else if (!pair.Value.IsSubsetOf(defs))
-                            {
-                                var merged = new HashSet<string>(defs);
-                                merged.UnionWith(pair.Value);
-                                incoming[pair.Key] = merged;
-                            }
-                        }
-                    var outgoing = CopyDefinitions(incoming);
-                    foreach (AmmoIl i in block.Code)
-                        if (i.Op == "stloc" && i.Arg is int local) outgoing[local] = new HashSet<string> { i.Offset.ToString(CultureInfo.InvariantCulture) };
-                    changed |= !SameDefinitions(outgoing, block.Outgoing);
-                    block.Incoming = incoming; block.Outgoing = outgoing;
-                }
-            }
-            foreach (Block block in Blocks.Values.Where(b => b.Height >= 0))
-            {
-                var definitions = CopyDefinitions(block.Incoming);
-                foreach (AmmoIl i in block.Code)
-                {
-                    string id = i.Offset.ToString(CultureInfo.InvariantCulture);
-                    if (i.Op == "ldloc" && i.Arg is int local)
-                    {
-                        if (EscapedLocals.Contains(local)) Values[id].Op = "address_exposed_local";
-                        else if (definitions.TryGetValue(local, out var defs))
-                        {
-                            if (defs.Count <= 8) Values[id].Inputs.AddRange(defs.OrderBy(s => s, StringComparer.Ordinal));
-                            else { Values[id].Op = "unresolved_local_definition_bound"; Unknown.Add("local_" + local + "_has_" + defs.Count + "_reaching_definitions"); }
-                        }
-                    }
-                    if (i.Op == "stloc" && i.Arg is int stored) definitions[stored] = new HashSet<string> { id };
-                }
-            }
-        }
+        private void LinkLocals() => LinkLocalsBitsets();
 
         internal IEnumerable<Value> Definitions(string id)
         {

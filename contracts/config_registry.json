@@ -2968,6 +2968,22 @@
       "gui": false,
       "maximum": null,
       "minimum": null,
+      "name": "INFINI_PARENT_ANALYSIS_PROFILE",
+      "owners": [
+        "mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.ParentAnalysis.cs"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
       "name": "INFINI_PARTICLE_ASSET_DIR",
       "owners": [
         "tools/workbench/python/verify_contours.py",
@@ -5082,8 +5098,8 @@
     }
   ],
   "errors": [],
-  "fieldCount": 206,
-  "fingerprint": "727027a5c62d4696240a34125ddecd4518ced7753400e4bd8551099c43ad4af5",
+  "fieldCount": 207,
+  "fingerprint": "9e6436b01e07555cd5a010d95ae835d24b73a5b0d6ab08562e7381ca9085b888",
   "generatedFrom": [
     "env_* calls in generator/infini_local and tools",
     "generator/infini_local/desktop/settings_schema.py",

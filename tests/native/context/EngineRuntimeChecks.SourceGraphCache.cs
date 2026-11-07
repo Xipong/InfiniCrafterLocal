@@ -55,7 +55,8 @@ internal static partial class EngineRuntimeChecks
         successors[0] = int.MaxValue;
         bool failed = false;
         try { control.Invoke(first, new object[] { start }); }
-        catch (TargetInvocationException error) when (error.InnerException is System.Collections.Generic.KeyNotFoundException) { failed = true; }
+        catch (TargetInvocationException error) when (error.InnerException is NotSupportedException
+            { Message: "control_dependency_invalid_successor" }) { failed = true; }
         Equal(true, failed, "fixture interrupts the control-dependency solver");
         Equal<object?>(null, sourceType.GetField("postdominators", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(first),
             "failed CFG solve never publishes partial memoized facts");
