@@ -105,9 +105,11 @@ public sealed partial class GeneratorClient
         }
     }
 
-    private sealed class ParentSourceGraph
+    private sealed partial class ParentSourceGraph
     {
-        private const int NodeLimit = 48, EdgeLimit = 192, DepthLimit = 6, CharacterLimit = 16000;
+        private const int NodeLimit = 48, EdgeLimit = 192, DepthLimit = 6, CharacterLimit = 40000;
+        private const int DiscoveryNodeLimit = 256, DiscoveryEdgeLimit = 1024;
+        private const int CatalogCoverageReserve = 320;
         private readonly JsonArray nodes = new(), edges = new(), roots = new(), gaps = new();
         private readonly JsonArray members = new(), modules = new();
         private readonly Dictionary<string, int> memberIndices = new(StringComparer.Ordinal);
@@ -119,14 +121,14 @@ public sealed partial class GeneratorClient
         private readonly Queue<(MethodBase Method, int Node, int Depth, HashSet<FieldInfo>? Focus)> pending = new();
         private readonly HashSet<(int Id, string Receiver)> buffs = new();
         private readonly HashSet<int> projectiles = new();
-        private readonly HashSet<FieldInfo> watched = new();
+        private readonly HashSet<FieldInfo> watched = new(), specificState = new();
         private readonly HashSet<string> reasons = new(StringComparer.Ordinal);
         private readonly Dictionary<MethodBase, ParentSourceMethod?> inspected = new();
         private readonly Dictionary<MethodBase, string> readFailures = new();
-        private readonly Dictionary<MethodBase, List<AmmoIl>> nativeSlices = new(), nativeCode = new();
+        private readonly Dictionary<MethodBase, List<AmmoIl>> nativeCode = new();
         private readonly Dictionary<MethodBase, Dictionary<int, int>> nativeNext = new();
         private readonly HashSet<MethodBase> nativeProjectileMethods = new();
-        private readonly Dictionary<MethodBase, List<(ParentSourceMethod Body, ParentSourceMethod.Value Call)>> callers = new();
+        private readonly Dictionary<string, List<(ParentSourceMethod Body, ParentSourceMethod.Value Call, SourceInvocation Invocation)>> callers = new();
         private readonly HashSet<string> edgeKeys = new(StringComparer.Ordinal);
         private readonly List<(Type Type, Type Base)> consumers = new();
         private bool rosterRead;
@@ -152,25 +154,6 @@ public sealed partial class GeneratorClient
         }
         private JsonObject CompactMethod(JsonObject row, MethodBase method, ParentSourceMethod? body = null)
             => CompactSourceMethod(row, method, body, Member);
-        private void PruneMembers()
-        {
-            var used = nodes.OfType<JsonObject>().Where(n => n["method"] is JsonValue).Select(n => n["method"]!.GetValue<int>()).ToHashSet();
-            foreach (var node in nodes.OfType<JsonObject>())
-                if (node["values"] is JsonObject values)
-                    foreach (var value in values)
-                        if (value.Value?[1] is JsonObject operand && operand["member"] is JsonNode id) used.Add(id.GetValue<int>());
-            var mapping = used.OrderBy(n => n).Select((old, next) => (old, next)).ToDictionary(pair => pair.old, pair => pair.next);
-            var retained = used.OrderBy(n => n).Select(n => members[n]!.DeepClone()).ToArray();
-            members.Clear(); foreach (var member in retained) members.Add(member);
-            foreach (var node in nodes.OfType<JsonObject>())
-            {
-                if (node["method"] is JsonValue method) node["method"] = mapping[method.GetValue<int>()];
-                if (node["values"] is JsonObject values)
-                    foreach (var value in values)
-                        if (value.Value?[1] is JsonObject operand && operand["member"] is JsonNode id) operand["member"] = mapping[id.GetValue<int>()];
-            }
-        }
-
         private static readonly HashSet<string> ItemEvents = new(StringComparer.Ordinal)
         {
             "AltFunctionUse", "CanUseItem", "CanShoot", "UseItem", "UseStyle", "HoldItem", "HoldStyle", "UseAnimation",
@@ -201,8 +184,7 @@ public sealed partial class GeneratorClient
             if (++scanCount > 1024) { Gap("source_scan_method_limit"); return null; }
             // Only complete method bodies are reusable. Native identity slices
             // and their CFG boundaries are specific to this graph/parent.
-            bool sliced = nativeSlices.TryGetValue(method, out var slice);
-            ParentSourceGraphCache? cache = sliced ? null : activeParentSourceGraphCache ?? currentParentAnalysis?.SourceCache;
+            ParentSourceGraphCache? cache = activeParentSourceGraphCache ?? currentParentAnalysis?.SourceCache;
             if (cache is not null && cache.TryGet(method, out object? cached, out string? refusal))
             {
                 if (refusal is not null) readFailures[method] = refusal;
@@ -210,7 +192,7 @@ public sealed partial class GeneratorClient
             }
             try
             {
-                var body = sliced ? new ParentSourceMethod(method, slice, nativeNext[method]) : new ParentSourceMethod(method);
+                var body = new ParentSourceMethod(method);
                 cache?.Remember(method, body, null, body.Code.Count, body.Blocks.Count);
                 return inspected[method] = body;
             }
@@ -227,7 +209,7 @@ public sealed partial class GeneratorClient
         }
         private void Edge(int? from, int? to, string kind, int? at = null, JsonNode? context = null, string? unresolved = null)
         {
-            if (edges.Count >= EdgeLimit) { Gap("edge_limit"); return; }
+            if (edges.Count >= DiscoveryEdgeLimit) { Gap("discovery_edge_limit"); return; }
             var edge = new JsonObject { ["kind"] = kind };
             if (from is not null) edge["from"] = from;
             if (to is not null) edge["to"] = to;
@@ -236,11 +218,13 @@ public sealed partial class GeneratorClient
             if (unresolved is not null) edge["unresolved"] = unresolved;
             if (edgeKeys.Add(edge.ToJsonString())) edges.Add(edge);
         }
-        private int? Add(MethodBase method, int depth, HashSet<FieldInfo>? focus = null)
+        private int? Add(MethodBase method, int depth, HashSet<FieldInfo>? focus = null, SourceInvocation invocation = default)
         {
-            string key = MethodKey(method);
+            string key = InvocationKey(method, invocation);
             if (admitted.TryGetValue(key, out int existing))
             {
+                priorities[existing] = Math.Min(priorities[existing], currentPriority);
+                RememberPath(existing);
                 if (focuses[key] is { } prior)
                 {
                     int count = prior.Count;
@@ -251,8 +235,16 @@ public sealed partial class GeneratorClient
                 return existing;
             }
             if (depth > DepthLimit) { Gap("helper_depth_limit"); return null; }
-            if (nodes.Count >= NodeLimit) { Gap("node_limit"); return null; }
+            if (nodes.Count >= DiscoveryNodeLimit) { Gap("discovery_node_limit"); return null; }
+            string methodKey = MethodKey(method);
+            if (!methodInvocations.TryGetValue(methodKey, out var contexts)) methodInvocations[methodKey] = contexts = new();
+            if (contexts.Count >= 16 && !contexts.Contains(invocation)) { Gap("invocation_context_limit"); return null; }
+            contexts.Add(invocation);
             int id = nodes.Count;
+            invocations[id] = invocation;
+            methodByNode[id] = method;
+            priorities[id] = currentPriority;
+            RememberPath(id);
             admitted[key] = id;
             focuses[key] = focus is null ? null : new HashSet<FieldInfo>(focus);
             nodes.Add(new JsonObject { ["id"] = id, ["method"] = SourceMember(method), ["coverage"] = "pending" });
@@ -268,8 +260,10 @@ public sealed partial class GeneratorClient
         {
             foreach (MethodInfo method in Overrides(type, baseType).Where(m => events.Contains(m.Name)))
             {
-                int? node = Add(method, 0);
-                if (node is null) continue;
+                int? node = Add(method, 0, invocation: Captured(type));
+                if (node is null) { omittedDiscoveryRoots++; continue; }
+                if (baseType == typeof(ModItem) || baseType == typeof(ModProjectile) || baseType == typeof(ModBuff) || baseType == typeof(ModTile))
+                    principalNodes.Add(node.Value);
                 roots.Add(new JsonObject { ["node"] = node, ["event"] = method.Name, ["owner"] = owner,
                     ["receiver"] = receiver });
             }
@@ -292,18 +286,19 @@ public sealed partial class GeneratorClient
         internal void Item(SourceGraphItem item)
         {
             if (item.ModItem is not null) Hooks(item.ModItem, typeof(ModItem), ItemEvents, "parent_ModItem", "event_signature");
-            foreach (Type global in item.Globals) Hooks(global, typeof(GlobalItem), ItemEvents, "attached_GlobalItem", "event_signature");
+            foreach (Type global in item.Globals.OrderBy(t => t.FullName, StringComparer.Ordinal))
+                Defer(() => Hooks(global, typeof(GlobalItem), ItemEvents, "attached_GlobalItem", "event_signature"));
             if (item.GlobalsUnavailable) Gap("attached_GlobalItem_roster_unavailable");
             ReadRoster();
-            foreach (var owner in consumers.Where(o => o.Base == typeof(ModPlayer)))
-                Hooks(owner.Type, owner.Base, PlayerEvents, "registered_ModPlayer_candidate", "event_signature");
+            foreach (var owner in consumers.Where(o => o.Base == typeof(ModPlayer)).OrderBy(o => o.Type.FullName, StringComparer.Ordinal))
+                Defer(() => Hooks(owner.Type, owner.Base, PlayerEvents, "registered_ModPlayer_candidate", "event_signature"));
             if (item.Shoot > ProjectileID.None) Projectile(item.Shoot, null, null, "item.shoot_field_candidate");
             if (item.Buff > InfiniTerrariaSentinels.NoBuffType) Buff(item.Buff, "player", null, null);
             if (item.Tile is not null) Hooks(item.Tile, typeof(ModTile), new HashSet<string>(StringComparer.Ordinal)
                 { "NearbyEffects", "RightClick", "HitWire", "PlaceInWorld", "CanPlace", "KillMultiTile", "FloorVisuals" }, "parent_placed_tile", "placed_tile_conditions_not_evaluated");
-            foreach (Type global in item.GlobalTiles)
-                Hooks(global, typeof(GlobalTile), new HashSet<string>(StringComparer.Ordinal)
-                    { "NearbyEffects", "PlaceInWorld", "HitWire", "CanPlace" }, "registered_GlobalTile_candidate", "placed_tile_conditions_not_evaluated");
+            foreach (Type global in item.GlobalTiles.OrderBy(t => t.FullName, StringComparer.Ordinal))
+                Defer(() => Hooks(global, typeof(GlobalTile), new HashSet<string>(StringComparer.Ordinal)
+                    { "NearbyEffects", "PlaceInWorld", "HitWire", "CanPlace" }, "registered_GlobalTile_candidate", "placed_tile_conditions_not_evaluated"));
             if (item.TilesUnavailable) Gap("registered_GlobalTile_roster_unavailable");
             if (nodes.Count == 0 && item.ModItem is null) Gap("no_parent_mod_override_observed; native_catalog_coverage_is_separate");
         }
@@ -356,8 +351,14 @@ public sealed partial class GeneratorClient
             foreach (var owner in owners.Distinct())
                 foreach (var method in Overrides(owner.Type, owner.Base).Where(m => ProjectileEvents.Contains(m.Name)))
                 {
-                    int? node = Add(method, 0);
-                    Edge(from, node, kind, at, new JsonObject { ["projectileId"] = id, ["event"] = method.Name }, node is null ? "graph_limit" : null);
+                    void Admit()
+                    {
+                        int? node = Add(method, 0, invocation: Captured(owner.Type));
+                        if (node is int primary && owner.Base == typeof(ModProjectile)) principalNodes.Add(primary);
+                        Edge(from, node, kind, at, new JsonObject { ["projectileId"] = id, ["event"] = method.Name }, node is null ? "graph_limit" : null);
+                    }
+                    if (owner.Base == typeof(GlobalProjectile)) Defer(Admit);
+                    else Admit();
                 }
             if (snapshot.Vanilla) NativeProjectile(snapshot.Type, snapshot.Style, from, at);
         }
@@ -384,14 +385,18 @@ public sealed partial class GeneratorClient
                         foreach (var instruction in window.Code) selected[instruction.Offset] = instruction;
                     if (selected.Count == 0)
                     { Edge(from, null, "native_projectile_source", at, JsonValue.Create(type), windowRefused ? "native_identity_window_refused_in_" + name : "no_supported_type_or_aiStyle_equality_window_in_" + name); continue; }
-                    if (nativeSlices.TryGetValue(method, out var prior)) foreach (var instruction in prior) selected[instruction.Offset] = instruction;
+                    var invocation = new SourceInvocation(typeof(Projectile), typeof(Projectile), type, style);
+                    string invocationKey = InvocationKey(method, invocation);
+                    nativeInvocationSlices.TryGetValue(invocationKey, out var prior);
+                    if (prior is not null) foreach (var instruction in prior) selected[instruction.Offset] = instruction;
                     if (selected.Count > 4096) { Gap("native_projectile_source_window_limit"); continue; }
                     bool changed = prior is null || prior.Count != selected.Count;
-                    nativeSlices[method] = selected.Values.OrderBy(i => i.Offset).ToList();
+                    nativeInvocationSlices[invocationKey] = selected.Values.OrderBy(i => i.Offset).ToList();
                     nativeProjectileMethods.Add(method);
-                    if (changed) inspected.Remove(method);
-                    bool existing = admitted.TryGetValue(MethodKey(method), out int existingNode);
-                    int? node = Add(method, 0);
+                    if (changed) invocationBodies.Remove(invocationKey);
+                    bool existing = admitted.TryGetValue(invocationKey, out int existingNode);
+                    int? node = Add(method, 0, invocation: invocation);
+                    if (node is int primary) principalNodes.Add(primary);
                     if (changed && existing) pending.Enqueue((method, existingNode, 0, null));
                     Edge(from, node, "certified_native_projectile_source_windows", at, new JsonObject
                         { ["projectileId"] = type, ["aiStyle"] = style, ["entryAndOmittedFlow"] = "unresolved" }, node is null ? "graph_limit" : null);
@@ -421,7 +426,8 @@ public sealed partial class GeneratorClient
                 foreach (var method in Overrides(snapshot.Owner, typeof(ModBuff)).Where(m => BuffEvents.Contains(m.Name)))
                 {
                     if (method.Name != "SetStaticDefaults" && !method.GetParameters().Any(p => p.ParameterType == (receiver == "npc" ? typeof(NPC) : typeof(Player)))) continue;
-                    int? node = Add(method, 0);
+                    int? node = Add(method, 0, invocation: Captured(snapshot.Owner));
+                    if (node is int primary) principalNodes.Add(primary);
                     Edge(from, node, "requested_buff_implementation", at, new JsonObject { ["buffId"] = id, ["receiver"] = receiver }, node is null ? "graph_limit" : null);
                 }
             else NativeBuff(id, receiver, from);
@@ -430,17 +436,26 @@ public sealed partial class GeneratorClient
                 Type target = receiver == "npc" ? typeof(NPC) : typeof(Player);
                 MethodInfo? admission = target.GetMethods(BindingFlags.Instance | BindingFlags.Public).FirstOrDefault(m => m.Name == "AddBuff");
                 if (admission is not null)
-                    Edge(from, Add(admission, 0, new HashSet<FieldInfo>(target.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                        .Where(f => f.Name is "buffImmune" or "buffType" or "buffTime"))), "native_buff_admission_and_refresh_source", at,
+                {
+                    int priorPriority = currentPriority;
+                    currentPriority = Math.Max(currentPriority, 2);
+                    int? admissionNode = Add(admission, 0, new HashSet<FieldInfo>(target.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                        .Where(f => f.Name is "buffImmune" or "buffType" or "buffTime")));
+                    currentPriority = priorPriority;
+                    Edge(from, admissionNode, "native_buff_admission_and_refresh_source", at,
                         new JsonObject { ["buffId"] = id, ["receiver"] = receiver });
+                }
             }
             ReadRoster();
             foreach (var owner in consumers.Where(o => o.Base == typeof(GlobalBuff)))
                 foreach (var method in Overrides(owner.Type, owner.Base).Where(m => m.Name is "Update" or "ReApply"))
                 {
                     if (!method.GetParameters().Any(p => p.ParameterType == (receiver == "npc" ? typeof(NPC) : typeof(Player)))) continue;
-                    int? node = Add(method, 0);
-                    Edge(from, node, "loaded_GlobalBuff_candidate", at, new JsonObject { ["buffId"] = id, ["receiver"] = receiver }, node is null ? "graph_limit" : null);
+                    Defer(() =>
+                    {
+                        int? node = Add(method, 0);
+                        Edge(from, node, "loaded_GlobalBuff_candidate", at, new JsonObject { ["buffId"] = id, ["receiver"] = receiver }, node is null ? "graph_limit" : null);
+                    });
                 }
             // Read only this buff's registered relationship, never the registry.
             try
@@ -467,7 +482,8 @@ public sealed partial class GeneratorClient
             // consumer discovery, including modifications of vanilla buffs.
             string knownJson = known.ToJsonString();
             foreach (var field in target.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-                if (knownJson.Contains("\"" + target.FullName + "." + field.Name + "\"", StringComparison.Ordinal)) watched.Add(field);
+                if (knownJson.Contains("\"" + target.FullName + "." + field.Name + "\"", StringComparison.Ordinal))
+                { watched.Add(field); if (currentPriority < 2) specificState.Add(field); }
             if (known["fragments"] is JsonArray knownFragments && knownFragments.Count > 0) return;
             string name = receiver == "npc" ? "UpdateNPC_BuffSetFlags" : "UpdateBuffs";
             MethodInfo? method = target.GetMethod(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -493,8 +509,9 @@ public sealed partial class GeneratorClient
             if (offsets.Count == 0) { Gap("native_buff_branch_has_no_resolved_statement_slice"); return; }
             if (!nativeStatements.TryGetValue(method, out var prior)) nativeStatements[method] = prior = new();
             int previousCount = prior.Count; prior.UnionWith(offsets);
-            foreach (FieldInfo field in selected) watched.Add(field);
+            foreach (FieldInfo field in selected) { watched.Add(field); if (currentPriority < 2) specificState.Add(field); }
             int? node = Add(method, 0, selected);
+            if (node is int primary) principalNodes.Add(primary);
             if (node is int updated && previousCount > 0 && previousCount != prior.Count)
                 pending.Enqueue((method, updated, 0, focuses[MethodKey(method)]));
             Edge(from, node, "certified_native_buff_source_slice", context: new JsonObject { ["buffId"] = id, ["receiver"] = receiver }, unresolved: node is null ? "graph_limit" : null);
@@ -502,7 +519,9 @@ public sealed partial class GeneratorClient
                 foreach (string consumer in new[] { "UpdateNPC_BuffApplyDOTs", "GetIncomingStrikeModifiers" })
                 {
                     var candidate = typeof(NPC).GetMethod(consumer, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                    if (candidate is not null) Add(candidate, 0, selected);
+                    if (candidate is not null)
+                        Edge(from, Add(candidate, 0, selected), "native_buff_field_consumer_source",
+                            context: new JsonObject { ["buffId"] = id, ["receiver"] = receiver });
                 }
         }
 
@@ -526,12 +545,14 @@ public sealed partial class GeneratorClient
 
         private void Inspect(int node, MethodBase method, int depth, HashSet<FieldInfo>? focus)
         {
-            var body = Read(method);
+            var body = ReadInvocation(method);
             if (body is null)
             {
                 var refused = CompactMethod(MethodSourceIdentitySafe(method), method);
                 refused["id"] = node; refused["coverage"] = "unsupported_method_body_or_source_bound";
-                refused["reason"] = readFailures.GetValueOrDefault(method, "source_scan_method_limit");
+                refused["reason"] = nativeIdentityReceipts.GetValueOrDefault(InvocationKey(method, currentInvocation))?["selectionUnavailable"]?.GetValue<string>()
+                    ?? readFailures.GetValueOrDefault(method, "source_scan_method_limit");
+                AddInvocation(refused, node);
                 nodes[node] = refused; Gap("unsupported_method_body_or_source_bound"); return;
             }
             var statements = body.Statements.Where(v => v.Op != "stloc").ToArray();
@@ -557,74 +578,54 @@ public sealed partial class GeneratorClient
                 statements = statements.Where(v => reached.Contains(v.Block)).ToArray();
                 }
             }
-            // Bound individual slices too, so one large method cannot erase
-            // every other node in the parent graph. Refusal is explicit.
-            var selectedStatements = statements;
-            var projection = body.ProjectForGraph(selectedStatements);
-            var bound = projection.Bind(Member);
-            if (bound.Characters > SourceGraphProjection.CharacterLimit) { projection = body.ProjectForGraph(selectedStatements, controlLimit: 8); bound = projection.Bind(Member); }
-            if (bound.Characters > SourceGraphProjection.CharacterLimit) { projection = body.ProjectForGraph(selectedStatements, controlLimit: 0); bound = projection.Bind(Member); }
-            while (bound.Characters > SourceGraphProjection.CharacterLimit && selectedStatements.Length > 1)
-            {
-                int Priority(ParentSourceMethod.Value value) => value.Operand is MethodInfo call
-                    && (call.DeclaringType == typeof(Projectile) && call.Name is "NewProjectile" or "NewProjectileDirect"
-                        || (call.DeclaringType == typeof(NPC) || call.DeclaringType == typeof(Player)) && call.Name == "AddBuff") ? 0
-                    : value.Op.StartsWith("stind", StringComparison.Ordinal) || value.Op is "stfld" or "stsfld" or "stobj" or "stelem.ref" ? 1
-                    : value.Op == "ret" ? 2 : value.Op is "call" or "callvirt" ? 3 : 4;
-                selectedStatements = selectedStatements.OrderBy(Priority).ThenBy(v => v.At)
-                    .Take(Math.Max(1, selectedStatements.Length / 2)).OrderBy(v => v.At).ToArray();
-                projection = body.ProjectForGraph(selectedStatements, controlLimit: 0); bound = projection.Bind(Member);
-            }
-            JsonObject row;
-            if (bound.Characters > SourceGraphProjection.CharacterLimit)
-            {
-                row = CompactMethod(MethodSourceIdentitySafe(method), method);
-                row["coverage"] = "source_slice_exceeds_method_character_bound";
-                Gap("method_character_bound");
-            }
-            else
-            {
-                row = projection.Materialize(bound.Members);
-                if (selectedStatements.Length != statements.Length)
-                {
-                    row["omittedStatementCount"] = statements.Length - selectedStatements.Length;
-                    Gap("method_statement_slice_bound");
-                }
-            }
-            if (row["unresolvedEnclosingBranchCount"] is not null) Gap("control_dependency_slice_bound");
-            row["id"] = node;
-            nodes[node] = row;
-            var selectedValues = row["values"]?.AsObject().Select(pair => pair.Key).ToHashSet() ?? new HashSet<string>();
-            foreach (var value in body.Values.Values.Where(v => selectedValues.Contains(v.Id)))
+            // Discovery sees the source dependency closure, not a transport-sized
+            // projection. Otherwise a large caller can hide every child before
+            // the export budget has even selected which evidence to retain.
+            // Each invocation has its own certified identity CFG. Keep that
+            // CFG's reaching definitions too: mapping them back into the raw
+            // dispatcher would reintroduce unrelated actor branches. Only the
+            // existing strict selector may remove identity predicates; live
+            // conditions and blocked identity reads remain source evidence.
+            projections[node] = (body, statements);
+            var identity = CompactMethod(MethodSourceIdentitySafe(method), method);
+            identity["id"] = node; identity["coverage"] = "pending_export";
+            AddInvocation(identity, node);
+            nodes[node] = identity;
+            foreach (var value in DiscoveryValues(body, statements))
             {
                 if (value.Operand is FieldInfo field && (value.Op is "stfld" or "stsfld" or "ldflda" or "ldsflda" || value.Op.StartsWith("ldsfld", StringComparison.Ordinal)))
                 {
-                    watched.Add(field);
+                    bool modOwned = field.DeclaringType?.Assembly is { } ownerAssembly && ownerAssembly != typeof(NPC).Assembly
+                        && ownerAssembly != typeof(Microsoft.Xna.Framework.Vector2).Assembly;
+                    // A mutable mod static read can depend on a lifecycle updater,
+                    // not just its initializer. Do not expand common engine reads
+                    // or let unrelated general hooks promote their own state.
+                    if (value.Op != "ldsfld" || currentPriority < 2 && modOwned && !field.IsInitOnly && !field.IsLiteral)
+                    {
+                        watched.Add(field);
+                        // A specific mod-owned state slot is a stronger link
+                        // than common engine storage such as Entity.velocity.
+                        if (currentPriority < 2 && modOwned) specificState.Add(field);
+                    }
                     if (value.Op == "ldsfld" && field.DeclaringType?.Assembly != typeof(NPC).Assembly && field.DeclaringType?.TypeInitializer is { } initializer)
                         Edge(node, Add(initializer, depth + 1, new HashSet<FieldInfo> { field }), "static_initializer_source; current_static_value_not_read", value.At);
                 }
                 if (value.Operand is not MethodBase call) continue;
                 if (call is MethodInfo info && info.DeclaringType == typeof(Projectile) && info.Name is "NewProjectile" or "NewProjectileDirect")
-                    FollowIdentity(body, value, info, "Type", "projectile", node);
-                else if (call is MethodInfo addBuff && addBuff.Name == "AddBuff" && (addBuff.DeclaringType == typeof(NPC) || addBuff.DeclaringType == typeof(Player)))
-                    FollowIdentity(body, value, addBuff, "type", addBuff.DeclaringType == typeof(NPC) ? "npc" : "player", node);
-                else if ((call.DeclaringType?.Assembly == method.DeclaringType?.Assembly && call.DeclaringType?.Assembly != typeof(NPC).Assembly
-                    || nativeProjectileMethods.Contains(method) && call.DeclaringType == typeof(Projectile))
-                    && !call.ContainsGenericParameters && call.GetMethodBody() is not null)
                 {
-                    if (nativeProjectileMethods.Contains(method)) nativeProjectileMethods.Add(call);
-                    // Virtual targets may be overridden at runtime. Keep the
-                    // declared body as a candidate and preserve callsite inputs.
-                    if (!callers.TryGetValue(call, out var contexts)) callers[call] = contexts = new();
-                    bool newContext = !contexts.Any(c => c.Body.Method == body.Method && c.Call.At == value.At);
-                    if (newContext) contexts.Add((body, value));
-                    bool alreadyInspected = admitted.TryGetValue(MethodKey(call), out int priorNode);
-                    int? destination = Add(call, depth + 1);
-                    if (newContext && alreadyInspected && depth < DepthLimit)
-                        pending.Enqueue((call, priorNode, depth + 1, focuses[MethodKey(call)]));
-                    Edge(node, destination, value.Op == "callvirt" ? "declared_virtual_helper_candidate" : "helper_source",
-                        value.At, new JsonArray(value.Inputs.Select(s => (JsonNode?)JsonValue.Create(s)).ToArray()));
+                    if (currentInvocation.NativeIdentityUnbound || nativeIdentityUnavailable.Contains(InvocationKey(method, currentInvocation)))
+                        Edge(node, null, "projectile_spawn", value.At, unresolved: "native_actor_identity_unbound; source_only_candidate");
+                    else FollowIdentity(body, value, info, "Type", "projectile", node);
                 }
+                else if (call is MethodInfo addBuff && addBuff.Name == "AddBuff" && (addBuff.DeclaringType == typeof(NPC) || addBuff.DeclaringType == typeof(Player)))
+                {
+                    if (currentInvocation.NativeIdentityUnbound || nativeIdentityUnavailable.Contains(InvocationKey(method, currentInvocation)))
+                        Edge(node, null, "buff_request", value.At, unresolved: "native_actor_identity_unbound; source_only_candidate");
+                    else FollowIdentity(body, value, addBuff, "type", addBuff.DeclaringType == typeof(NPC) ? "npc" : "player", node);
+                }
+                else if (call.DeclaringType?.Assembly == method.DeclaringType?.Assembly && call.DeclaringType?.Assembly != typeof(NPC).Assembly
+                    || nativeProjectileMethods.Contains(method) && call.DeclaringType == typeof(Projectile))
+                    FollowSourceCall(body, value, call, depth, node);
             }
         }
 
@@ -634,7 +635,7 @@ public sealed partial class GeneratorClient
             int slot = parameter + (method.IsStatic ? 0 : 1);
             if (parameter < 0 || slot >= call.Inputs.Count) { Edge(node, null, "identity_request", call.At, unresolved: "unsupported_request_signature"); return; }
             bool resolved = false, unknownAlternative = false;
-            foreach (var definition in IdentityDefinitions(body, call.Inputs[slot], new HashSet<string>(), 0))
+            foreach (var definition in IdentityDefinitions(body, call.Inputs[slot], new HashSet<string>(), 0, currentInvocation))
             {
                 int? id = definition.Op == "const" && definition.Operand is int literal ? literal : null;
                 if (definition.Operand is MethodInfo generic && generic.DeclaringType == typeof(ModContent) && generic.IsGenericMethod
@@ -663,23 +664,23 @@ public sealed partial class GeneratorClient
         }
 
         private IEnumerable<ParentSourceMethod.Value> IdentityDefinitions(ParentSourceMethod body, string id, HashSet<string> seen, int depth,
-            (ParentSourceMethod Body, ParentSourceMethod.Value Call)? binding = null)
+            SourceInvocation invocation, (ParentSourceMethod Body, ParentSourceMethod.Value Call, SourceInvocation Invocation)? binding = null)
         {
-            string bindingKey = binding is { } caller ? MethodKey(caller.Body.Method) + ":" + caller.Call.At : "root";
-            if (depth > DepthLimit || !seen.Add(MethodKey(body.Method) + ":" + id + ":" + bindingKey))
+            string bindingKey = binding is { } caller ? InvocationKey(caller.Body.Method, caller.Invocation) + ":" + caller.Call.At : "root";
+            if (depth > DepthLimit || !seen.Add(InvocationKey(body.Method, invocation) + ":" + id + ":" + bindingKey))
             { yield return new ParentSourceMethod.Value { Op = "unresolved_identity_dependency_bound" }; yield break; }
             foreach (var value in body.Definitions(id))
             {
                 if (value.Op == "ldarg" && value.Operand is int argument)
                 {
                     var contexts = binding is { } bound ? new[] { bound }
-                        : callers.TryGetValue(body.Method, out var calls) ? calls.ToArray() : Array.Empty<(ParentSourceMethod Body, ParentSourceMethod.Value Call)>();
+                        : callers.TryGetValue(InvocationKey(body.Method, invocation), out var calls) ? calls.ToArray() : Array.Empty<(ParentSourceMethod Body, ParentSourceMethod.Value Call, SourceInvocation Invocation)>();
                     // A root hook argument is runtime data, not an absent arm.
                     // Keep it even when a sibling definition resolves to a literal.
                     if (contexts.Length == 0) yield return value;
                     foreach (var context in contexts)
                         if (argument < context.Call.Inputs.Count)
-                            foreach (var origin in IdentityDefinitions(context.Body, context.Call.Inputs[argument], seen, depth + 1)) yield return origin;
+                            foreach (var origin in IdentityDefinitions(context.Body, context.Call.Inputs[argument], seen, depth + 1, context.Invocation)) yield return origin;
                         else yield return value;
                 }
                 else if (value.Operand is MethodInfo helper && value.Op == "call" && helper.DeclaringType != typeof(ModContent)
@@ -687,7 +688,8 @@ public sealed partial class GeneratorClient
                     && Read(helper) is { } source)
                 {
                     foreach (var ret in source.Statements.Where(v => v.Op == "ret" && v.Inputs.Count == 1))
-                        foreach (var origin in IdentityDefinitions(source, ret.Inputs[0], seen, depth + 1, (body, value))) yield return origin;
+                        foreach (var origin in IdentityDefinitions(source, ret.Inputs[0], seen, depth + 1,
+                            invocation with { Receiver = !helper.IsStatic && CallsCapturedThis(body, value) ? invocation.Receiver : null }, (body, value, invocation))) yield return origin;
                 }
                 else yield return value;
             }
@@ -702,20 +704,52 @@ public sealed partial class GeneratorClient
             foreach (var owner in consumers.Where(o => o.Base != typeof(GlobalBuff)).Distinct())
                 foreach (MethodInfo method in Overrides(owner.Type, owner.Base))
                 {
-                    if (admitted.ContainsKey(MethodKey(method))) continue;
+                    SourceInvocation invocation = Captured(owner.Type);
+                    string key = InvocationKey(method, invocation);
+                    if (admitted.ContainsKey(key) && focuses[key] is null) continue;
                     var body = Read(method);
                     if (body is null) { Gap("consumer_roster_contains_unreadable_source"); continue; }
-                    var references = body.Values.Values.Where(v => v.Op is "ldfld" or "ldsfld" or "ldflda" or "ldsflda")
-                        .Select(v => v.Operand).OfType<FieldInfo>().Where(watched.Contains).ToHashSet();
-                    if (references.Count == 0)
+                    // A direct common-field read does not exclude a specific
+                    // state read reached through a helper in the same hook.
+                    var references = ReferencedFields(method, watched, new HashSet<MethodBase>(), 0, method.Module.Assembly);
+                    if (references.Count == 0) continue;
+                    void AdmitConsumer()
                     {
-                        if (!ReadsFields(method, watched, new HashSet<MethodBase>(), 0, method.Module.Assembly)) continue;
-                        references.UnionWith(watched);
+                        int? node = Add(method, 0, references, invocation);
+                        Edge(null, node, "registered_field_consumer_candidate", context: new JsonArray(references.OrderBy(SourceMember).Select(f => (JsonNode?)JsonValue.Create(SourceMember(f))).ToArray()),
+                            unresolved: node is null ? "graph_limit" : null);
                     }
-                    int? node = Add(method, 0, references);
-                    Edge(null, node, "registered_field_consumer_candidate", context: new JsonArray(references.OrderBy(SourceMember).Select(f => (JsonNode?)JsonValue.Create(SourceMember(f))).ToArray()),
-                        unresolved: node is null ? "graph_limit" : null);
+                    if (references.Overlaps(specificState))
+                    {
+                        int priorPriority = currentPriority;
+                        currentPriority = Math.Min(currentPriority, 1);
+                        AdmitConsumer();
+                        currentPriority = priorPriority;
+                    }
+                    else if (admitted.ContainsKey(key)) AdmitConsumer();
+                    else if (deferredConsumerFocus.TryGetValue(key, out var queued)) queued.UnionWith(references);
+                    else
+                    {
+                        deferredConsumerFocus[key] = references;
+                        Defer(AdmitConsumer);
+                    }
+
                 }
+        }
+
+        private HashSet<FieldInfo> ReferencedFields(MethodBase method, HashSet<FieldInfo> fields, HashSet<MethodBase> seen, int depth, Assembly assembly)
+        {
+            var references = new HashSet<FieldInfo>();
+            if (depth > DepthLimit || method.Module.Assembly != assembly || method.Module.Assembly == typeof(NPC).Assembly
+                || !seen.Add(method) || Read(method) is not { } body) return references;
+            foreach (var value in body.Values.Values)
+            {
+                if (value.Operand is FieldInfo field && fields.Contains(field)
+                    && value.Op is "ldfld" or "ldsfld" or "ldflda" or "ldsflda") references.Add(field);
+                else if (value.Operand is MethodBase helper)
+                    references.UnionWith(ReferencedFields(helper, fields, seen, depth + 1, assembly));
+            }
+            return references;
         }
 
         private bool ReadsFields(MethodBase method, HashSet<FieldInfo> fields, HashSet<MethodBase> seen, int depth, Assembly assembly)
@@ -730,64 +764,32 @@ public sealed partial class GeneratorClient
 
         internal JsonObject Finish()
         {
-            int previous = -1;
-            while (previous != watched.Count || pending.Count > 0)
+            int previous = -1, previousSpecific = -1;
+            bool generalDispatch = false;
+            // Reach a fixed point over all three sources of work. A late field
+            // consumer may itself discover a projectile's general hooks.
+            while (pending.Count > 0 || deferred.Count > 0 || previous != watched.Count || previousSpecific != specificState.Count)
             {
-                while (pending.Count > 0)
+                Drain();
+                if (previous != watched.Count || previousSpecific != specificState.Count)
                 {
-                    currentParentAnalysis?.ThrowIfCancelled();
-                    var next = pending.Dequeue();
-                    try { Inspect(next.Node, next.Method, next.Depth, next.Focus); }
-                    catch (Exception error) when (error is not OutOfMemoryException)
-                    {
-                        var failure = CompactMethod(MethodSourceIdentitySafe(next.Method), next.Method);
-                        failure["id"] = next.Node; failure["coverage"] = "unsupported_source_projection";
-                        nodes[next.Node] = failure; Gap("unsupported_source_projection");
-                    }
+                    previous = watched.Count;
+                    previousSpecific = specificState.Count;
+                    currentPriority = generalDispatch ? 2 : 1;
+                    Consumers();
+                    continue;
                 }
-                previous = watched.Count;
-                Consumers();
+                if (deferred.Count == 0) continue;
+                generalDispatch = true;
+                currentPriority = 2;
+                var next = deferred.Dequeue();
+                currentNode = next.Parent;
+                next.Admit();
+                currentNode = null;
             }
-            var result = new JsonObject
-            {
-                ["source"] = "parent_reachable_compiled_source_graph", ["version"] = 1,
-                ["roots"] = roots, ["nodes"] = nodes, ["members"] = members, ["modules"] = modules, ["edges"] = edges, ["unresolved"] = gaps,
-                ["scope"] = "Read-only source, never inherited execution or final stats/DPS. values: [IL opcode, operand, input IDs, block]. {member:N}/node.method reference members[N]; module references modules[N]. blocks: [offset, successors, branch-value ID, required enclosing branch IDs]; targets outside this slice stay unresolved. ldloc/predecessor definitions are alternatives, not independent rolls. Helpers bind caller inputs to argument slots (instance this=0). All statements require control to reach their offsets. Roots, virtual bodies and registered globals/players are dispatch candidates; current immunity registrations are not target admission. Native units/operators are not final stat multipliers. No hooks/helpers/getters/constructors ran. Runtime detours, missing edges and omitted source remain unknown.",
-                ["limits"] = new JsonObject { ["nodes"] = NodeLimit, ["edges"] = EdgeLimit, ["helperDepth"] = DepthLimit, ["characters"] = CharacterLimit },
-            };
-            int removed = 0;
-            // Compact metadata identities too: observations reference one exact
-            // member, not repeated signatures or a loaded-content registry.
-            PruneMembers();
-            while (result.ToJsonString().Length > CharacterLimit)
-            {
-                // Preserve the identity and refusal of a large optional source
-                // node before dropping small parent/helper observations.
-                var candidate = nodes.OfType<JsonObject>().Where(n => n["values"] is JsonObject)
-                    .OrderByDescending(n => members[n["method"]!.GetValue<int>()]!["module"]!.GetValue<int>() == Module(typeof(NPC).Module))
-                    .ThenByDescending(n => n.ToJsonString().Length).FirstOrDefault();
-                if (candidate is null) break;
-                int id = candidate["id"]!.GetValue<int>();
-                nodes[id] = new JsonObject { ["id"] = id, ["method"] = candidate["method"]!.DeepClone(),
-                    ["sha256"] = candidate["sha256"]?.DeepClone(), ["coverage"] = "source_character_bound" };
-                foreach (JsonObject edge in edges.OfType<JsonObject>().Where(e => e["from"]?.GetValue<int>() == id).ToArray()) edges.Remove(edge);
-                removed++; PruneMembers();
-            }
-            while (result.ToJsonString().Length > CharacterLimit && nodes.Count > 0)
-            {
-                int last = nodes.Count - 1;
-                nodes.RemoveAt(last); removed++;
-                foreach (JsonObject edge in edges.OfType<JsonObject>().Where(e => e["to"]?.GetValue<int>() == last).ToArray())
-                { edge.Remove("to"); edge["unresolved"] = "source_character_bound"; }
-                foreach (JsonObject edge in edges.OfType<JsonObject>().Where(e => e["from"]?.GetValue<int>() == last).ToArray()) edges.Remove(edge);
-                foreach (JsonObject root in roots.OfType<JsonObject>().Where(r => r["node"]?.GetValue<int>() == last).ToArray())
-                { root.Remove("node"); root["unresolved"] = "source_character_bound"; }
-                PruneMembers();
-            }
-            if (removed > 0) { Gap("source_character_bound"); result["omittedNodeCount"] = removed; }
-            result["completeness"] = gaps.Count == 0 ? "bounded_source_graph; runtime_dispatch_unknown" : "partial_source_graph";
-            return result;
+            return SelectExport();
         }
+
     }
 
     private static JsonObject MethodSourceIdentitySafe(MethodBase method)

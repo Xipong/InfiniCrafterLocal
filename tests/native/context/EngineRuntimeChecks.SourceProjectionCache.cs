@@ -156,10 +156,10 @@ internal static partial class EngineRuntimeChecks
             }
         const string prefix = "{\"method\":0,\"values\":{},\"padding\":\"";
         const string suffix = "\"}";
-        string atLimit = prefix + new string('x', 6500 - prefix.Length - suffix.Length) + suffix;
+        string atLimit = prefix + new string('x', GeneratorClient.SourceGraphProjection.CharacterLimit - prefix.Length - suffix.Length) + suffix;
         var boundary = new GeneratorClient.SourceGraphProjection(atLimit, new MemberInfo[] { method }, new[] { 1 });
-        Equal(6500L, boundary.Bind(_ => 9).Characters, "exact accepted character bound");
-        Equal(6501L, boundary.Bind(_ => 10).Characters, "next graph index can cross the refused character bound");
+        Equal((long)GeneratorClient.SourceGraphProjection.CharacterLimit, boundary.Bind(_ => 9).Characters, "exact accepted character bound");
+        Equal((long)GeneratorClient.SourceGraphProjection.CharacterLimit + 1, boundary.Bind(_ => 10).Characters, "next graph index can cross the refused character bound");
         var rejected = new GeneratorClient.SourceGraphProjection(prefix + new string('x', 100000) + suffix,
             new MemberInfo[] { method }, new[] { 1 });
         Equal(true, rejected.RetainedBytes < 1024, "rejected oversized JSON does not evict useful projections");
@@ -176,13 +176,13 @@ internal static partial class EngineRuntimeChecks
         localValues["repeat"] = new JsonArray(JsonValue.Create("call"), new JsonObject { ["member"] = 10 });
         localUses[10]++;
         var localRow = new JsonObject { ["method"] = 0, ["values"] = localValues, ["padding"] = "" };
-        localRow["padding"] = new string('x', 6501 - localRow.ToJsonString().Length);
+        localRow["padding"] = new string('x', GeneratorClient.SourceGraphProjection.CharacterLimit + 1 - localRow.ToJsonString().Length);
         var narrower = new GeneratorClient.SourceGraphProjection(localRow.ToJsonString(), localMembers, localUses);
         var existingIds = localMembers.Select((member, index) => (member, Id: 10 - index)).ToDictionary(pair => pair.member, pair => pair.Id);
         var narrowerBound = narrower.Bind(member => existingIds[member]);
-        Equal(6500L, narrowerBound.Characters, "negative digit delta can turn a 6501-character template into an accepted row");
+        Equal((long)GeneratorClient.SourceGraphProjection.CharacterLimit, narrowerBound.Characters, "negative digit delta can turn an over-bound template into an accepted row");
         JsonObject narrowerRow = narrower.Materialize(narrowerBound.Members);
-        Equal(6500, narrowerRow.ToJsonString().Length, "negative delta matches actual serialized JSON");
+        Equal(GeneratorClient.SourceGraphProjection.CharacterLimit, narrowerRow.ToJsonString().Length, "negative delta matches actual serialized JSON");
         Equal(10, narrowerRow["method"]!.GetValue<int>(), "root method can rebind to a wider existing graph ID");
         Equal(0, narrowerRow["values"]!["10"]![1]!["member"]!.GetValue<int>(), "wide local member can rebind to narrow existing graph ID");
     }

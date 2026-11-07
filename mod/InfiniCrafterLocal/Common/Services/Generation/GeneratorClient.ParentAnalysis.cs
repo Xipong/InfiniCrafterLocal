@@ -4,6 +4,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 
@@ -24,6 +26,41 @@ public sealed partial class GeneratorClient
         private readonly List<DeferredJob> jobs = new();
         private readonly Dictionary<int, JsonNode?> completed = new();
         private readonly HashSet<int> omitNull = new();
+        // Scoped to one analysis; exact complete method object and role only.
+        // No actor state, identity selection, or mutable JSON node is retained.
+        private sealed record RawObservationEntry(WeakReference<object> Body, string Role,
+            JsonElement Program, MethodBase[] References, long Characters);
+        private readonly List<RawObservationEntry> rawObservations = new();
+        private long rawObservationCharacters;
+        private void PruneRawObservations()
+        {
+            for (int i = rawObservations.Count - 1; i >= 0; i--)
+                if (!rawObservations[i].Body.TryGetTarget(out _))
+                { rawObservationCharacters -= rawObservations[i].Characters; rawObservations.RemoveAt(i); }
+        }
+        internal bool TryRawObservation(object body, string role, out JsonObject? program, out MethodBase[]? references)
+        {
+            lifetime.Token.ThrowIfCancellationRequested();
+            PruneRawObservations();
+            foreach (var entry in rawObservations)
+                if (entry.Role == role && entry.Body.TryGetTarget(out var target) && ReferenceEquals(target, body))
+                { program = JsonObject.Create(entry.Program); references = (MethodBase[])entry.References.Clone(); return true; }
+            program = null; references = null; return false;
+        }
+        internal void RememberRawObservation(object body, string role, JsonObject program, IEnumerable<MethodBase> references)
+        {
+            lifetime.Token.ThrowIfCancellationRequested();
+            PruneRawObservations();
+            if (rawObservations.Count >= 8 || rawObservationCharacters >= 1024 * 1024) return;
+            foreach (var entry in rawObservations)
+                if (entry.Role == role && entry.Body.TryGetTarget(out var target) && ReferenceEquals(target, body)) return;
+            JsonElement element = JsonSerializer.SerializeToElement(program);
+            long characters = element.GetRawText().Length;
+            if (characters > 256 * 1024 || rawObservationCharacters + characters > 1024 * 1024) return;
+            lifetime.Token.ThrowIfCancellationRequested();
+            rawObservations.Add(new RawObservationEntry(new WeakReference<object>(body), role, element, references.ToArray(), characters));
+            rawObservationCharacters += characters;
+        }
         private readonly CancellationTokenSource lifetime;
         private static CancellationTokenSource worldLifetime = new();
         private static readonly ConcurrentQueue<Action> mainWork = new();
@@ -166,7 +203,7 @@ public sealed partial class GeneratorClient
             if (Environment.CurrentManagedThreadId == captureThread)
                 throw new InvalidOperationException("Deferred parent analysis must run on a worker.");
         }
-        public void Dispose() { lifetime.Cancel(); lifetime.Dispose(); jobs.Clear(); completed.Clear(); omitNull.Clear(); }
+        public void Dispose() { lifetime.Cancel(); lifetime.Dispose(); jobs.Clear(); completed.Clear(); omitNull.Clear(); rawObservations.Clear(); }
         private sealed class ExitScope(Action exit) : IDisposable { public void Dispose() => exit(); }
     }
 

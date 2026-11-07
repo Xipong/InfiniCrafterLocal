@@ -465,6 +465,11 @@ def parent_context_for_stage(parents: dict[str, Any] | list[dict[str, Any]], *, 
         if isinstance(generated, dict):
             brief["behavior"] = copy.deepcopy(generated.get("summary", {}))
             brief["appearance"] = copy.deepcopy(generated.get("visual", {}))
+        elif stage != "author":
+            # This producer-derived gameplay view is only needed by Author.
+            # Visual and VFX retain their previous source presentation.
+            for _, profile in _stage_projectile_profiles(raw, related=True):
+                profile.pop("strictIdentitySelections", None)
         projectile = raw.get("directProjectile", {})
         if isinstance(projectile, dict) and "sameAs" not in projectile:
             brief["behavior"]["projectileFields"] = {
@@ -513,11 +518,26 @@ def parent_context_for_stage(parents: dict[str, Any] | list[dict[str, Any]], *, 
         if "spriteReference" in raw:
             brief["appearance"]["spriteReference"] = copy.deepcopy(raw["spriteReference"])
         if stage == "author":
-            from infini_local.pipelines.context.mechanics_context import mechanics_context
+            from infini_local.pipelines.context.mechanics_context import (
+                _author_source_graph, _graph_local_writes_reading, mechanics_context,
+            )
+            from infini_local.pipelines.context.mechanics_selection import _identity_unresolved
             mechanics = mechanics_context(raw)
             if mechanics is not None:
                 packet["raw"] = mechanics
                 brief["behavior"] = {"reading": "Selected mechanics and explicit uncertainty are in packet.raw.mechanics."}
+            elif not isinstance(generated, dict) and isinstance(item, dict) and "parentSourceGraph" in item:
+                # Modded parents often have no optional native mechanics view.
+                # Their graph still needs the same bounded Author projection.
+                graph = _author_source_graph(item["parentSourceGraph"])
+                if graph is not None:
+                    item["parentSourceGraph"] = graph
+                    if reading := _graph_local_writes_reading(graph):
+                        item["parentSourceGraphReading"] = reading
+                else:
+                    refusal = _identity_unresolved(item["parentSourceGraph"])
+                    item.pop("parentSourceGraph")
+                    raw["parentSourceGraphOmission"] = {"reason": "unrecognized_parent_source_graph_omitted", **refusal}
         briefs[label] = brief
     # Author already has the shared-fact transport contract. Presentation stages
     # keep their existing literal wire rather than acquiring another decoding seam.

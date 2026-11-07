@@ -13,9 +13,10 @@ import re
 from typing import Any
 
 from infini_local.pipelines.context.mechanics_expression import MechanicsRenderer
-from infini_local.pipelines.context.attack_tables import unpack_attack_tables
+from infini_local.pipelines.context.attack_tables import pack_attack_tables, unpack_attack_tables
 from infini_local.pipelines.context.csharp_source_view import _REFERENCE_FIELDS
 from infini_local.pipelines.context.attack_namespaces import _identifier
+from infini_local.pipelines.context.mechanics_selection import _gameplay_identity_program, _identity_unresolved
 
 _ROOTS = ("nativeShootReference", "nativeContactHitStatusReference", "nativeEquipmentReference",
           "nativeEnvironmentReference", "nativeBuffEffectReference", "nativeItemDispatchReference")
@@ -23,7 +24,85 @@ _PROFILE_FIELDS = ("directProjectile", "effectiveProjectile")
 _AMMO_PROFILES = ("projectileRaw", "weaponShootFieldProjectileRaw", "nativeReplacementProjectileRaw",
                   "playerInventoryProjectileRaw", "fallbackProjectileRaw")
 _DIAGNOSTICS = {"attackReference", "referencedProjectiles", "mechanicsSource", "sourceReferences",
-                "runtimeDumpProvenance", "spriteReference", "engineMetrics", "textureMetrics"}
+                "runtimeDumpProvenance", "spriteReference", "engineMetrics", "textureMetrics", "strictIdentitySelections"}
+
+_GRAPH_FIELDS = {"source", "version", "roots", "nodes", "members", "modules", "edges", "unresolved", "scope", "limits",
+                 "omittedNodeCount", "omittedRootCount", "omittedBodyCount", "omittedEdgeCount", "completeness",
+                 "nativeCatalogCoverage", "selection", "selectedEdgeCount"}
+_GRAPH_ROW_FIELDS = {
+    "roots": {"event", "node", "owner", "receiver", "receiverType", "originReceiverType"},
+    "nodes": {"static", "arguments", "values", "statements", "blocks", "coverage", "unresolved", "method", "sha256",
+              "id", "omittedStatementCount", "unresolvedEnclosingBranchCount", "unresolvedLocalDependencyCount", "reason",
+              "nativeIdentity", "blockedIdentityReadCount", "blockedIdentityReads", "blockedIdentityReadsOmitted",
+              "selectionUnavailable", "fragments", "receiverType", "originReceiverType", "sourceSelection", "possibleLocalWrites"},
+    "members": {"module", "name", "returns", "type"},
+    "modules": {"assembly", "mvid"},
+    "edges": {"at", "context", "from", "kind", "sourceCoverage", "to", "unresolved"},
+}
+_GRAPH_NESTED_FIELDS = {"member", "projectileId", "projectileType", "aiStyle", "buffId", "event", "entryAndOmittedFlow",
+                        "receiver", "receiverType", "originReceiverType", "coverage", "unresolved", "source", "version",
+                        "reason", "at", "kind", "scope", "id", "offset", "field", "value", "node", "method",
+                        "admission", "grantImmunityWith", "shoot", "contactStatus", "equipment", "environment", "nodes",
+                        "edges", "helperDepth", "characters", "allocatedCharacters", "reservedCatalogCoverageCharacters", "discoveryNodes", "discoveryEdges", "sourceModuleVersionId",
+                        "selection", "selectedEdgeCount", "selectionUnavailable", "blockedIdentityReadCount", "blockedIdentityReads",
+                        "blockedIdentityReadsOmitted", "fragments"}
+
+_LOCAL_WRITES_READING = (
+    "possibleLocalWrites are candidate source writes to an address-exposed local, not reaching definitions or executed values. "
+    "They may be conditional, overwritten or from other iterations; missing candidates do not prove no writes."
+)
+
+
+def _graph_local_writes_reading(graph: dict[str, Any]) -> str | None:
+    nodes = graph.get("nodes")
+    return _LOCAL_WRITES_READING if isinstance(nodes, list) and any(
+        isinstance(node, dict) and "possibleLocalWrites" in node for node in nodes) else None
+
+
+def _author_source_graph(graph: Any) -> dict[str, Any] | None:
+    """Keep the bounded producer graph's known gameplay schema, not diagnostics."""
+    if (not isinstance(graph, dict) or graph.get("source") != "parent_reachable_compiled_source_graph"
+            or type(graph.get("version")) is not int or graph["version"] != 1):
+        return None
+    omitted = 0
+    def clean(value: Any) -> Any:
+        nonlocal omitted
+        if isinstance(value, dict):
+            out = {}
+            for key, child in value.items():
+                if isinstance(key, str) and (key in _GRAPH_NESTED_FIELDS or key.isdecimal()
+                                             or re.fullmatch(r"in[0-9]+:[0-9]+", key)):
+                    out[key] = clean(child)
+                else:
+                    omitted += 1
+            return out
+        if isinstance(value, list):
+            return [clean(child) for child in value]
+        return copy.deepcopy(value)
+    result = {}
+    for key, value in graph.items():
+        if key not in _GRAPH_FIELDS:
+            omitted += 1
+        elif key in _GRAPH_ROW_FIELDS and isinstance(value, list):
+            rows = []
+            for row in value:
+                if not isinstance(row, dict):
+                    omitted += 1
+                    continue
+                filtered = {}
+                for field, child in row.items():
+                    if field in _GRAPH_ROW_FIELDS[key]:
+                        filtered[field] = clean(child)
+                    else:
+                        omitted += 1
+                rows.append(filtered)
+            result[key] = rows
+        else:
+            result[key] = clean(value)
+    if omitted:
+        result["transportOmissions"] = {"unknownFieldCount": omitted,
+            "scope": "Unrecognized graph fields omitted by Author projection; absence is not evidence of absent behavior."}
+    return result
 _SOURCE_RECEIPTS = {
     "id", "sourceMethodSha256", "sourceModuleVersionId", "metadataToken", "assemblySha256",
     "decompiler", "codeSha256", "graphPaths", "locations", "coveredWindows", "excludedCallOffsets",
@@ -134,6 +213,7 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
     source_facts: list[dict[str, Any]] = []
     code: list[dict[str, Any]] = []
     slices: list[dict[str, Any]] = []
+    strict_selections: list[dict[str, Any]] = []
     profiles: list[dict[str, Any]] = []
     omitted: list[dict[str, Any]] = []
     seen_code: dict[str, dict[str, Any]] = {}
@@ -194,6 +274,10 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
         return False
 
     def visit(path: str, profile: dict[str, Any]) -> None:
+        if "strictIdentitySelections" in profile:
+            # These retain producer graphs that a readable C# view replaced,
+            # using the established Author projection when it is recognized.
+            strict_selections.append({"sourcePath": path, "selections": copy.deepcopy(profile["strictIdentitySelections"])})
         defaults = {key: value for key, value in profile.items() if key not in _DIAGNOSTICS}
         if "sameAs" in defaults:
             # Capture aliases are renamed and point to the sourcePath rows below,
@@ -333,9 +417,26 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
             programs += [("motion", row) for row in _rows(motion.get("programs"))]
         for role, program in programs:
             if (not isinstance(program, dict) or not isinstance(program.get("method"), str)
-                    or method_name(program["method"], program.get("nativeNames") == 1) in available_methods
-                    or not any(key in program for key in ("observations", "dependencies", "predicates", "operations"))):
+                    or (method_name(program["method"], program.get("nativeNames") == 1) in available_methods
+                        and "identitySelected" not in program and "identitySelection" not in program)
+                    or not any(key in program for key in ("observations", "dependencies", "predicates", "operations",
+                                                          "identitySelected", "identitySelection"))):
                 continue
+            if "identitySelected" in program:
+                # An unrecognized selected producer shape is not safe to send
+                # as arbitrary diagnostic JSON or to represent as certified.
+                nested_unresolved = _identity_unresolved(program["identitySelected"])
+                outer_unresolved = _identity_unresolved(program)
+                if any(key in program and key not in outer_unresolved for key in ("coverage", "unresolved")):
+                    outer_unresolved["unknownRefusalEntriesOmitted"] = True
+                program = {"method": program["method"], **outer_unresolved}
+                if nested_unresolved:
+                    program["identitySelectionRefusal"] = nested_unresolved
+                program["unresolvedIdentitySelection"] = "unrecognized_identity_selection_omitted"
+            elif "identitySelection" in program:
+                program, omitted_fields = _gameplay_identity_program(program)
+                if omitted_fields:
+                    program["omittedProgramFields"] = omitted_fields
             row = {"role": role, "program": bind_source_refs(program),
                    **{key: copy.deepcopy(reference[key]) for key in
                       ("scope", "units", "expressionNotation", "behaviorView", "identityPredicates", "admission",
@@ -409,6 +510,7 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
     ammo = raw.get("ammo")
     ammo = {k: v for k, v in ammo.items() if k not in _AMMO_PROFILES} if isinstance(ammo, dict) else {}
     mechanical_roots = {key: renderer.render(item[key], source_path="item." + key) for key in _ROOTS if key in item}
+    graph = _author_source_graph(item.get("parentSourceGraph"))
     result = {
         "item": copy.deepcopy({key: value for key, value in item.items() if key not in {*_ROOTS, "parentSourceGraph"}}),
         "mechanics": {"reading": _READING, "projectiles": profiles, "source": code,
@@ -416,8 +518,25 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
                       "uncertainty": {**_source_gaps(gaps),
                                       "excludedChildProfiles": omitted}},
     }
+    if graph is not None:
+        result["item"]["parentSourceGraph"] = graph
+        if reading := _graph_local_writes_reading(graph):
+            result["item"]["parentSourceGraphReading"] = reading
+    elif "parentSourceGraph" in item:
+        result["mechanics"]["uncertainty"]["parentSourceGraphOmission"] = {
+            "reason": "unrecognized_parent_source_graph_omitted", **_identity_unresolved(item["parentSourceGraph"])}
     if slices:
         result["mechanics"]["sourceSlices"] = slices
+    if strict_selections:
+        result["mechanics"]["strictIdentitySelections"] = pack_attack_tables({
+            "source": "read_only_native_attack_source", "version": 1, "selections": strict_selections})
+        result["mechanics"]["reading"] += (
+            " Strict identity selections are partial source facts, not execution. Source order is in step; "
+            "requiredPredicates refer to reached branch IDs, not necessarily their true arms. dN are local definitions; "
+            "alternatives are reaching definitions. T=Terraria; Xna=Microsoft.Xna.Framework. "
+            "f32_at/ref_at and readFloat are source array reads; writeFloat checks the address before evaluating its value. "
+            "Fields and calls are live, and unknowns and omitted effects remain unresolved."
+        )
     if source_facts:
         result["mechanics"]["uncertainty"]["sourceFacts"] = source_facts
     metadata = renderer.finish()

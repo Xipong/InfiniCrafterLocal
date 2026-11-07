@@ -74,12 +74,18 @@ internal static partial class EngineRuntimeChecks
             Equal(true, cache.TryGet(method, out object? retained, out string? reason), "successful source is cached");
             Equal(true, ReferenceEquals(cached, retained), "cache retains only the analyzer body");
             object sliced = Graph();
-            var slices = (IDictionary)graphType.GetField("nativeSlices", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(sliced)!;
+            Type invocationType = graphType.GetNestedType("SourceInvocation", BindingFlags.NonPublic)!;
+            object invocation = Activator.CreateInstance(invocationType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null, args: new object?[] { null, typeof(Terraria.Projectile), 1234, 1, false }, culture: null)!;
+            graphType.GetField("currentInvocation", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(sliced, invocation);
+            string invocationKey = (string)graphType.GetMethod("InvocationKey", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, new[] { (object)method, invocation })!;
+            var slices = (IDictionary)graphType.GetField("nativeInvocationSlices", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(sliced)!;
             object code = cached.GetType().GetField("Code", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(cached)!;
-            slices.Add(method, Activator.CreateInstance(code.GetType())!);
+            slices.Add(invocationKey, Activator.CreateInstance(code.GetType())!);
             var next = (IDictionary)graphType.GetField("nativeNext", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(sliced)!;
             next.Add(method, new System.Collections.Generic.Dictionary<int, int>());
-            Equal<object?>(null, Read(sliced, method), "parent-specific native slices cannot borrow a cached full method");
+            Equal<object?>(null, graphType.GetMethod("ReadInvocation", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(sliced, new object[] { method }),
+                "parent-specific native slices cannot borrow a cached full method");
             Equal<string?>(null, reason, "valid source is not labeled unavailable");
             object refusalGraph = Graph();
             Equal<object?>(null, Read(refusalGraph, refused), "exception region remains unavailable");

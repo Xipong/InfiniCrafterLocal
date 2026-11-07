@@ -414,6 +414,55 @@ public sealed partial class GeneratorClient
         {
             var selected = new HashSet<string>();
             var opaqueLocals = new HashSet<string>();
+            var localEvidence = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+            var inspectedLocalReads = new HashSet<string>(StringComparer.Ordinal);
+            var localEvidenceUnknown = new HashSet<string>(StringComparer.Ordinal);
+            // These are possible source writes, not reaching SSA definitions.
+            // In particular a ref call remains opaque and is never evaluated.
+            HashSet<int> AddressSlots(string id)
+            {
+                var result = new HashSet<int>();
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                var pending = new Stack<string>(); pending.Push(id);
+                while (pending.Count > 0 && seen.Count < 128)
+                {
+                    string next = pending.Pop();
+                    if (!seen.Add(next) || !Values.TryGetValue(next, out var value)) continue;
+                    if (value.Op == "ldloca" && value.Operand is int slot) result.Add(slot);
+                    else if (value.Op is "ldloc" or "stloc" or "predecessor_stack_alternatives")
+                        foreach (string input in value.Inputs) pending.Push(input);
+                    else if (value.Op == "ldflda" && value.Inputs.Count > 0) pending.Push(value.Inputs[0]);
+                }
+                if (pending.Count > 0) localEvidenceUnknown.Add("possible_local_address_bound");
+                return result;
+            }
+            var writesByLocal = new Dictionary<int, List<Value>>();
+            foreach (var statement in Statements)
+            {
+                var slots = new HashSet<int>();
+                if (statement.Op == "stloc" && statement.Operand is int slot) slots.Add(slot);
+                if (statement.Inputs.Count > 0 && (statement.Op.StartsWith("stind", StringComparison.Ordinal)
+                    || statement.Op is "stobj" or "initobj" or "cpobj" or "stfld"))
+                    slots.UnionWith(AddressSlots(statement.Inputs[0]));
+                if (statement.Op is "call" or "callvirt" or "newobj" && statement.Operand is MethodBase call)
+                {
+                    var parameters = call.GetParameters();
+                    for (int index = 0; index < statement.Inputs.Count; index++)
+                    {
+                        int parameter = index - (call.IsStatic || statement.Op == "newobj" ? 0 : 1);
+                        if (parameter < 0 || parameter < parameters.Length && parameters[parameter].ParameterType.IsByRef)
+                            slots.UnionWith(AddressSlots(statement.Inputs[index]));
+                    }
+                }
+                foreach (int local in slots)
+                {
+                    if (!writesByLocal.TryGetValue(local, out var list)) writesByLocal[local] = list = new();
+                    list.Add(statement);
+                }
+            }
+            bool CanPrecede(Value write, Value read)
+                => write.Id != read.Id && (write.Block != read.Block ? Reach(write.Block).Contains(read.Block)
+                    : write.At < read.At || Blocks[write.Block].Next.Any(next => Reach(next).Contains(write.Block)));
             bool ExceedsDependencyBound(Value value)
             {
                 if (value.Op is not ("ldloc" or "predecessor_stack_alternatives")) return false;
@@ -450,6 +499,22 @@ public sealed partial class GeneratorClient
             do
             {
                 previous = selected.Count;
+                // Follow only the same proved local address. Unrelated ref
+                // writes (often rendering temporaries) are not dependencies.
+                // Include the writes before closing controls, and keep the read
+                // opaque: this is provenance, not a fabricated mutation result.
+                foreach (var read in selected.Select(id => Values[id]).Where(value =>
+                    value.Op is "address_exposed_local" or "ldloca").ToArray())
+                {
+                    if (!inspectedLocalReads.Add(read.Id) || read.Operand is not int local) continue;
+                    var candidates = writesByLocal.TryGetValue(local, out var writes)
+                        ? writes.Where(write => CanPrecede(write, read)).Take(129).ToArray() : Array.Empty<Value>();
+                    if (candidates.Length > 128) localEvidenceUnknown.Add("possible_local_write_bound");
+                    var evidence = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (var write in candidates.Take(128)) { evidence.Add(write.Id); Include(write.Id); }
+                    if (evidence.Count > 0) localEvidence[read.Id] = evidence;
+                    if (read.Op == "address_exposed_local") localEvidenceUnknown.Add("address_exposed_local_value_unresolved");
+                }
                 var selectedBlocks = selected.Select(id => Values[id].Block).ToHashSet();
                 foreach (var branch in orderedBranches)
                 {
@@ -462,10 +527,6 @@ public sealed partial class GeneratorClient
                     }
                 }
             } while (selected.Count != previous);
-            // A by-ref local cannot be assigned a guessed dominating constant.
-            // Keep its possible writes as source evidence alongside the refusal.
-            if (selected.Any(id => Values[id].Op == "address_exposed_local"))
-                foreach (var write in Statements.Where(v => v.Op.StartsWith("stind", StringComparison.Ordinal) || v.Op is "stobj" or "initobj")) Include(write.Id);
             var values = new JsonObject();
             foreach (var value in Values.Values.Where(v => selected.Contains(v.Id)))
             {
@@ -497,9 +558,17 @@ public sealed partial class GeneratorClient
                     .Select(v => (JsonNode?)JsonValue.Create(v.Id)).ToArray())
             )).ToArray());
             result["coverage"] = "source_slice";
+            if (localEvidence.Count > 0)
+            {
+                var evidence = new JsonObject();
+                foreach (var (read, writes) in localEvidence)
+                    evidence[read] = new JsonArray(writes.OrderBy(id => Values[id].At).Select(id => (JsonNode?)JsonValue.Create(id)).ToArray());
+                result["possibleLocalWrites"] = evidence;
+            }
             if (omittedControls.Count > 0) result["unresolvedEnclosingBranchCount"] = omittedControls.Count;
             if (opaqueLocals.Count > 0) result["unresolvedLocalDependencyCount"] = opaqueLocals.Count;
-            if (Unknown.Count > 0) result["unresolved"] = new JsonArray(Unknown.Distinct().Select(s => (JsonNode?)JsonValue.Create(s)).ToArray());
+            if (Unknown.Count > 0 || localEvidenceUnknown.Count > 0)
+                result["unresolved"] = new JsonArray(Unknown.Concat(localEvidenceUnknown).Distinct().Select(s => (JsonNode?)JsonValue.Create(s)).ToArray());
             return result;
         }
     }
@@ -522,7 +591,7 @@ public sealed partial class GeneratorClient
     // candidates. Every candidate still registers its members in original order.
     internal sealed class SourceGraphProjection
     {
-        internal const int CharacterLimit = 6500;
+        internal const int CharacterLimit = 18000;
         private readonly string? json;
         private readonly MemberInfo[] members;
         private readonly int[] uses;

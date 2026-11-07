@@ -13,6 +13,9 @@ from infini_local.pipelines.context.attack_behavior import project_attack_behavi
 from infini_local.pipelines.context.attack_tables import pack_attack_tables
 from infini_local.pipelines.context.native_references import known_projectile_references
 from infini_local.pipelines.context.native_csharp_source import native_csharp_source_for_llm
+from infini_local.pipelines.context.mechanics_selection import (
+    _gameplay_identity_program, _identity_unresolved, select_gameplay_roots,
+)
 from infini_local.pipelines.context.csharp_source_view import _records as _verified_csharp_records
 from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_AMMO_ITEM_KEYS,
@@ -21,6 +24,64 @@ from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_PROJECTILE_RAW_KEYS,
 )
 from infini_local.services import runtime_dump_service
+
+
+def _replaced_identity_selections(original: Any, projected: Any, path: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
+    """Retain producer graphs only where a C# reference replaced that graph."""
+    if isinstance(original, dict) and isinstance(projected, dict):
+        selected = original.get("identitySelected")
+        if isinstance(selected, dict) and isinstance(projected.get("nativeCSharpSourceRef"), str):
+            refusal = _identity_unresolved(original)
+            if any(key in original and key not in refusal for key in ("coverage", "unresolved")):
+                refusal["unknownRefusalEntriesOmitted"] = True
+            return [{"path": list(path), "selectedProgram": copy.deepcopy(selected), **refusal}]
+        return [row for key in original if key in projected
+                for row in _replaced_identity_selections(original[key], projected[key], (*path, key))]
+    if isinstance(original, list) and isinstance(projected, list):
+        return [row for index, (a, b) in enumerate(zip(original, projected))
+                for row in _replaced_identity_selections(a, b, (*path, index))]
+    return []
+
+
+def _present_replaced_identity_selections(original: dict[str, Any], projected: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = _replaced_identity_selections(original, projected)
+    if not rows:
+        return rows
+    # Reuse the existing producer-validated Author projection. Unknown shapes
+    # contribute their explicit refusal only, not arbitrary diagnostic payloads.
+    behavior = project_attack_behavior(original)
+    # This is a gameplay projection, not a second copy of the entire producer
+    # capture. Keep source order, conditions and linked expressions intact.
+    notation = {key: copy.deepcopy(behavior[key]) for key in ("identityPredicates", "units") if key in behavior}
+    for row in rows:
+        value: Any = behavior
+        for part in row["path"]:
+            if isinstance(value, dict) and part in value:
+                value = value[part]
+            elif isinstance(value, list) and type(part) is int and 0 <= part < len(value):
+                value = value[part]
+            else:
+                value = None
+                break
+        receipt = value.get("identitySelection") if isinstance(value, dict) else None
+        if isinstance(receipt, dict) and receipt.get("forCapturedIdentity") is True:
+            row["selectedProgram"], omitted = _gameplay_identity_program(value)
+            row["selectedProgram"], row["selectionScope"] = select_gameplay_roots(row["selectedProgram"])
+            alternatives = value.get("identityAlternatives")
+            if isinstance(alternatives, dict) and isinstance(alternatives.get("cases"), list):
+                row["selectionScope"]["omittedAlternativeIdentityCases"] = len(alternatives["cases"])
+            if omitted:
+                row["omittedProgramFields"] = omitted
+            row["projection"] = "gameplay_source_conditions_allowlist"
+            if notation:
+                row["notation"] = copy.deepcopy(notation)
+        else:
+            # Unknown future producer shapes are not certified source views.
+            # Keep the refusal, not an unbounded diagnostic payload.
+            nested = _identity_unresolved(row["selectedProgram"])
+            row["selectedProgram"] = {**nested, "projectionUnresolved": "identity_selection_shape_not_projected"}
+            row["projection"] = "unrecognized_identity_selection_omitted"
+    return rows
 
 
 def _observed_parent_field(item: dict[str, Any], name: str) -> tuple[bool, Any]:
@@ -278,6 +339,11 @@ def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool
                 reference = copy.deepcopy(proj["attackReference"])
                 reference.pop("nativeCSharpSource")
                 linked_calls = None
+            if (isinstance(mechanics, dict) and mechanics.get("source") == "native_mechanics_source"
+                    and type(mechanics.get("version")) is int and mechanics["version"] == 1):
+                selected = _present_replaced_identity_selections(proj["attackReference"], reference)
+                if selected:
+                    out["strictIdentitySelections"] = selected
         source = project_attack_behavior(reference)
         out["attackReference"] = pack_attack_tables(source)
     # The native producer owns verification and scope. Never infer a trajectory

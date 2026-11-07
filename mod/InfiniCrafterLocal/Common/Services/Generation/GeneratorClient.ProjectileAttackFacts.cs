@@ -255,12 +255,24 @@ public sealed partial class GeneratorClient
                 ObservePhase("identity_selection");
                 var observation = new AttackSourceObservation(body, role);
                 JsonObject program;
-                try { program = observation.Finish(); }
-                catch (Exception error) when (error is not OutOfMemoryException)
+                MethodBase[]? rawReferences = null;
+                var analysis = currentParentAnalysis;
+                if (slice is null && analysis is not null
+                    && analysis.TryRawObservation(body, role, out var cachedProgram, out rawReferences))
+                    program = cachedProgram!;
+                else
                 {
-                    program = MethodSourceIdentity(method);
-                    program["coverage"] = "unknown";
-                    program["unresolved"] = error is NotSupportedException ? error.Message : error.GetType().Name;
+                    bool cacheable = true;
+                    try { program = observation.Finish(); }
+                    catch (Exception error) when (error is not OutOfMemoryException)
+                    {
+                        program = MethodSourceIdentity(method);
+                        program["coverage"] = "unknown";
+                        program["unresolved"] = error is NotSupportedException ? error.Message : error.GetType().Name;
+                        cacheable = IsDeterministicRawObservationRefusal(error);
+                    }
+                    if (cacheable && slice is null && analysis is not null)
+                        analysis.RememberRawObservation(body, role, program, observation.ReferencedMethods);
                 }
                 ObservePhase("raw_observation");
                 if (specialized is not null) program["identitySelected"] = specialized;
@@ -291,7 +303,7 @@ public sealed partial class GeneratorClient
                 if (exposed["observations"] is JsonArray)
                     foreach (var reference in (specialized is not null ? selectedObservation! : observation).LiteralProjectileSpawns(exposed))
                         spawnReferences.Add(reference!.DeepClone());
-                foreach (var call in observation.ReferencedMethods.Concat(selectedObservation?.ReferencedMethods ?? new HashSet<MethodBase>())
+                foreach (var call in (rawReferences ?? observation.ReferencedMethods.ToArray()).Concat(selectedObservation?.ReferencedMethods ?? new HashSet<MethodBase>())
                     .Where(m => m.Module == typeof(Projectile).Module && m.GetMethodBody() is not null)) Certify(call);
                 ObservePhase("source_and_spawn_refs");
                 return program;
@@ -480,6 +492,12 @@ public sealed partial class GeneratorClient
         result["identitySelection"] = selection.Receipt;
         return result;
     }
+
+    // Only deterministic limits of this exact observation are reusable. Other
+    // resolver/reflection failures may change and must be retried on next use.
+    internal static bool IsDeterministicRawObservationRefusal(Exception error)
+        => error is NotSupportedException && (error.Message.StartsWith("connected_source_dependency_count_bound:", StringComparison.Ordinal)
+            || error.Message.StartsWith("connected_source_expression_work_bound:", StringComparison.Ordinal));
 
     private sealed class AttackSourceObservation
     {
