@@ -116,8 +116,27 @@ def share_exact_native_parent_facts(parents: dict[str, Any]) -> dict[str, Any]:
     shared: list[Any] = []
     indices: dict[int, int] = {}
 
+    # Preserve the old exclusion BEFORE attempting canonical JSON/fingerprints.
+    # In particular, a foreign mapping can contain nested literal tooltips or
+    # accepted generated packets which must not be interned or serialized.
+    # Object-identity memoization makes this at most one pass over containers.
+    literal_presence: dict[int, bool] = {}
+
+    def contains_literal(value: Any) -> bool:
+        if not isinstance(value, (dict, list)):
+            return False
+        identity = id(value)
+        if identity in literal_presence:
+            return literal_presence[identity]
+        if isinstance(value, dict):
+            found = bool(literal_keys.intersection(value)) or any(contains_literal(child) for child in value.values())
+        else:
+            found = any(contains_literal(child) for child in value)
+        literal_presence[identity] = found
+        return found
+
     def candidate(value: Any) -> int | None:
-        if not isinstance(value, (dict, list, str)):
+        if not isinstance(value, (dict, list, str)) or contains_literal(value):
             return None
         key = fingerprint(value)
         return key if not protected[key] and not forbidden[key] and lengths[key] >= 128 else None

@@ -150,6 +150,7 @@ internal static partial class EngineRuntimeChecks
         var rebuiltEnds = (IDictionary)conditionalEnds.Invoke(null, new object[] { method })!;
         Equal(false, ReferenceEquals(ends, rebuiltEnds), "source invalidation cannot reuse the retired decode index");
         foreach (var pair in expectedEnds) Equal(pair.Value, (int)rebuiltEnds[pair.Key]!, "rebuilt conditional index retains source offsets");
+        SourcePerformanceIntervalPruning();
     }
 
     private static object SourcePerformanceGetDocument(MethodInfo method, CancellationToken cancellation = default)
@@ -192,8 +193,10 @@ internal static partial class EngineRuntimeChecks
                 Equal(false, cache.Values.Cast<object>().Contains(documents[1]), "least recently used rather than oldest-created document is evicted");
                 Equal(true, ReferenceEquals(typeSystem, CSharpFixtureMember(module, "typeSystem")), "eviction preserves shared type system");
                 Equal(true, mainFile.Reader.GetMetadata().Length > 0, "eviction preserves main PE reader");
-                Equal(true, cache.Values.Cast<object>().Sum(document => (int)CSharpFixtureMember(document, "Nodes")) <= 200000, "retained nodes stay within original budget");
-                Equal(true, cache.Values.Cast<object>().Sum(document => (int)CSharpFixtureMember(document, "Characters")) <= 1500000, "retained characters stay within original budget");
+                Equal(true, cache.Values.Cast<object>().Sum(document => (int)CSharpFixtureMember(document, "Nodes")) <=
+                    (int)CSharpOwner.GetField("NativeCSharpResidentNodes", CSharpFlags)!.GetRawConstantValue()!, "retained nodes stay within declared residency budget");
+                Equal(true, cache.Values.Cast<object>().Sum(document => (int)CSharpFixtureMember(document, "Characters")) <=
+                    (int)CSharpOwner.GetField("NativeCSharpResidentCharacters", CSharpFlags)!.GetRawConstantValue()!, "retained characters stay within declared residency budget");
                 Equal(true, cache.Values.Cast<object>().All(document => (int)CSharpFixtureMember(document, "Characters") <= 750000), "individual document bound unchanged");
                 using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
                 var order = ((IEnumerable)CSharpOwner.GetField("nativeCSharpOrder", CSharpFlags)!.GetValue(null)!).Cast<string>().ToArray();
@@ -220,6 +223,7 @@ internal static partial class EngineRuntimeChecks
             Equal(0, (int)CSharpOwner.GetField("nativeCSharpCharacters", CSharpFlags)!.GetValue(null)!, "clear resets character accounting");
         }
         finally { clear?.GetAwaiter().GetResult(); SourcePerformanceClearDocuments(); }
+        SourcePerformanceWeightedResidency();
     }
 
     private static void SourcePerformanceDocumentsVerifyCacheHits()

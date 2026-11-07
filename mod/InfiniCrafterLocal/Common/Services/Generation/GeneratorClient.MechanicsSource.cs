@@ -303,9 +303,9 @@ public sealed partial class GeneratorClient
         var removedInvocations = new HashSet<InvocationExpression>();
         if (refusal is null)
         {
-            // Postorder keeps selected children rewritten before an outer arm is
-            // cloned. Switch containers remain in place: a break still targets
-            // its original switch, never an enclosing loop.
+            // Postorder rewrites retained children before their parent. The
+            // tree is private: move the selected arm instead of cloning it again.
+            // Switch containers stay in place, so break targets do not change.
             foreach (var node in tree.Descendants.Reverse().ToArray())
             {
                 cancellation.ThrowIfCancellationRequested();
@@ -319,7 +319,7 @@ public sealed partial class GeneratorClient
                     var discarded = condition.Value ? branch.FalseStatement : branch.TrueStatement;
                     removedInvocations.UnionWith(discarded.DescendantsAndSelf.OfType<InvocationExpression>());
                     removedInvocations.UnionWith(branch.Condition.DescendantsAndSelf.OfType<InvocationExpression>());
-                    branch.ReplaceWith(selected.IsNull ? new EmptyStatement() : (Statement)selected.Clone()); removed++;
+                    ReplaceOwnedCSharpStatement(branch, selected); removed++;
                 }
                 else if (node is SwitchStatement switched)
                 {

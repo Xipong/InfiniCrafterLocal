@@ -232,7 +232,7 @@ public sealed partial class GeneratorClient
         public void Dispose() { foreach (var resolved in files) resolved.Dispose(); files.Clear(); }
     }
 
-    private sealed class NativeCSharpDocument : IDisposable
+    private sealed partial class NativeCSharpDocument : IDisposable
     {
         internal readonly MethodInfo Method;
         internal readonly NativeCSharpModule Module;
@@ -645,35 +645,32 @@ public sealed partial class GeneratorClient
         var selectedOffsets = selection.Receipt["selectedEdges"]!.AsArray().OfType<JsonObject>()
             .Where(edge => selection.Reachable.Contains(edge["block"]!.GetValue<int>()))
             .Select(edge => edge["at"]!.GetValue<int>()).ToHashSet();
+        // With no certified selected edge the old loop could not remove an arm.
+        cancellation.ThrowIfCancellationRequested();
+        if (selectedOffsets.Count == 0) return;
         var reachableOffsets = body.Blocks.Values.Where(block => selection.Reachable.Contains(block.Start))
-            .SelectMany(block => block.Code).Select(instruction => instruction.Offset).ToHashSet();
+            .SelectMany(block => block.Code).Select(instruction => instruction.Offset).Order().ToArray();
+        var allOffsets = body.Code.Select(instruction => instruction.Offset).Order().ToArray();
         var tree = (SyntaxTree)document.Tree.Clone();
         var removed = new JsonArray();
         var excludedOffsets = new HashSet<int>();
-        foreach (var branch in tree.Descendants.OfType<IfElseStatement>().ToArray())
+        PruneOwnedCSharpIdentityBranches(tree, (branch, branchIndex) =>
         {
-            cancellation.ThrowIfCancellationRequested();
-            if (!branch.Ancestors.Contains(tree)) continue;
             var guard = ReadCSharpGuard(branch, ends);
             if (guard is null || !selectedOffsets.Contains(guard.Offset)
-                || guard.Literal == (guard.Field == "type" ? type : style)) continue;
-            // A cloned branch must carry complete instruction evidence for its
-            // deleted body. Shared ret offsets can be reachable: keep that arm
-            // rather than treating a min/max IL crop as a lexical proof.
-            var ranges = branch.TrueStatement.DescendantsAndSelf.SelectMany(node => node.Annotations.OfType<ILInstruction>())
-                .SelectMany(instruction => instruction.ILRanges).Where(range => range.End > range.Start).ToArray();
-            if (ranges.Length == 0 || reachableOffsets.Any(offset => ranges.Any(range => range.Start <= offset && offset < range.End))) continue;
-            foreach (var instruction in body.Code.Where(instruction => ranges.Any(range => range.Start <= instruction.Offset && instruction.Offset < range.End)))
-                excludedOffsets.Add(instruction.Offset);
-            foreach (var instruction in branch.Condition.DescendantsAndSelf.SelectMany(node => node.Annotations.OfType<ILInstruction>()))
-                foreach (var range in instruction.ILRanges)
-                    foreach (var native in body.Code.Where(native => range.Start <= native.Offset && native.Offset < range.End))
-                        excludedOffsets.Add(native.Offset);
+                || guard.Literal == (guard.Field == "type" ? type : style)) return false;
+            // Keep the exact union of annotated half-open ranges, including
+            // holes and shared returns. A reachable instruction still vetoes
+            // removal. This changes only the intersection/search algorithm.
+            var ranges = document.IdentityRanges(branchIndex, condition: false, cancellation: cancellation);
+            if (ranges.IsEmpty || ranges.Intersects(reachableOffsets)) return false;
+            ranges.AddOffsets(allOffsets, excludedOffsets, cancellation);
+            document.IdentityRanges(branchIndex, condition: true, cancellation: cancellation)
+                .AddOffsets(allOffsets, excludedOffsets, cancellation);
             excludedOffsets.Add(guard.Offset);
             removed.Add(guard.Offset);
-            if (branch.FalseStatement.IsNull) branch.ReplaceWith(new EmptyStatement());
-            else branch.ReplaceWith((Statement)branch.FalseStatement.Clone());
-        }
+            return true;
+        }, cancellation);
         if (removed.Count == 0) return;
         // Tree is a private, already-mutated copy. Preserve exact IL locations
         // without another full AST clone solely for token writer coordinates.
