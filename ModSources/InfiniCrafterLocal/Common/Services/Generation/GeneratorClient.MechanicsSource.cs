@@ -275,7 +275,7 @@ public sealed partial class GeneratorClient
         string? refusal;
         if (conditionalRegions)
         {
-            var offsets = conditionalRecord["entryGuards"]!.AsArray().OfType<JsonObject>()
+            var offsets = conditionalRecord!["entryGuards"]!.AsArray().OfType<JsonObject>()
                 .Select(guard => guard["ilOffset"]!.GetValue<int>()).ToHashSet();
             var ends = CSharpConditionalEnds(document.Method);
             var candidates = document.Tree.Descendants.OfType<IfElseStatement>()

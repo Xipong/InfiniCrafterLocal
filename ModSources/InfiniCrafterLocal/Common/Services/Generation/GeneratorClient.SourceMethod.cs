@@ -492,7 +492,7 @@ public sealed partial class GeneratorClient
                         else if (localDefinitions.TryGetValue(local, out var bits))
                         {
                             int count = 0;
-                            foreach (int bit in bits) if (Has(state, bit)) count++;
+                            foreach (int definitionBit in bits) if (Has(state, definitionBit)) count++;
                             if (count <= 8)
                             {
                                 var ids = bits.Where(bit => Has(state, bit)).Select(bit => definitionIds[bit]).ToList();
