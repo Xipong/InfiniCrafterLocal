@@ -1,0 +1,48 @@
+name: Apply cold analysis compile fix
+
+on:
+  push:
+    branches:
+      - perf/pr333-cold-under-5s
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fix nullable and local naming errors
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          mechanics = Path('ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.MechanicsSource.cs')
+          text = mechanics.read_text(encoding='utf-8')
+          old = 'var offsets = conditionalRecord["entryGuards"]!.AsArray()'
+          assert text.count(old) == 1
+          mechanics.write_text(text.replace(old, 'var offsets = conditionalRecord!["entryGuards"]!.AsArray()', 1), encoding='utf-8', newline='')
+
+          source = Path('ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceMethod.cs')
+          text = source.read_text(encoding='utf-8')
+          replacements = {
+              'foreach (int bit in bits) if (Has(state, bit)) count++;': 'foreach (int definitionBit in bits) if (Has(state, definitionBit)) count++;',
+              'bits.Where(bit => Has(state, bit)).Select(bit => definitionIds[bit])': 'bits.Where(definitionBit => Has(state, definitionBit)).Select(definitionBit => definitionIds[definitionBit])',
+              'storeBits.TryGetValue(instruction.Offset, out int bit))': 'storeBits.TryGetValue(instruction.Offset, out int storedDefinitionBit))',
+              'ClearLocal(state, localMasks[stored]); Set(state, bit);': 'ClearLocal(state, localMasks[stored]); Set(state, storedDefinitionBit);',
+          }
+          for old, new in replacements.items():
+              assert text.count(old) == 1, old
+              text = text.replace(old, new, 1)
+          source.write_text(text, encoding='utf-8', newline='')
+          PY
+          git rm .github/workflows/apply-compile-fix.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: compile compact parent analysis'
+          git push origin HEAD:perf/pr333-cold-under-5s
