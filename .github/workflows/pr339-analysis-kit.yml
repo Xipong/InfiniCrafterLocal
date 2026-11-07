@@ -1,0 +1,60 @@
+name: PR339 offline analysis kit
+on:
+  push:
+    branches: [perf/pr339-analysis-lab-20261107]
+    paths: ['.github/workflows/pr339-analysis-kit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  kit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Export tracked source and pinned analysis dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          kit="$RUNNER_TEMP/kit"
+          mkdir -p "$kit/source" "$kit/deps/ParticleLibrary" "$kit/deps/Luminance/bin/Debug/net8.0" "$RUNNER_TEMP/evidence"
+          git archive HEAD | tar -x -C "$kit/source"
+          git rev-parse HEAD > "$kit/source-commit.txt"
+          curl --fail -L --retry 3 -o "$kit/deps/ParticleLibrary/ParticleLibrary.dll" https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/ParticleLibrary.dll
+          curl --fail -L --retry 3 -o "$kit/deps/Luminance/bin/Debug/net8.0/Luminance.dll" https://github.com/LucilleKarma/Luminance/releases/latest/download/Luminance.dll
+          dotnet restore mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj -p:TmlVersion=2026.08.3.0
+          dotnet restore mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj -p:TmlVersion=2026.08.3.0
+          KIT="$kit" python - <<'PY'
+          import json, os, shutil
+          from pathlib import Path
+          data = json.loads(Path('mod/InfiniCrafterLocal/obj/project.assets.json').read_text())
+          packs = [entry for name, entry in data['libraries'].items() if name.lower().startswith('tmodloader/')]
+          if len(packs) != 1:
+              raise SystemExit('Expected exactly one reference package')
+          refs = [Path(root) / packs[0]['path'] / 'lib/net8.0' for root in data['packageFolders']]
+          refs = [p.resolve() for p in refs if (p / 'tModLoader.dll').is_file()]
+          if len(refs) != 1:
+              raise SystemExit('Expected exactly one reference directory')
+          shutil.copytree(refs[0], Path(os.environ['KIT']) / 'references')
+          PY
+          dotnet build tests/native/EngineRuntimeChecks.csproj -c Release --output "$kit/harness" \
+            -p:InfiniTmlReferenceDir="$kit/references" -p:InfiniExternalDepsRoot="$kit/deps"
+          curl --fail -L --retry 3 -o "$RUNNER_TEMP/dotnet-install.sh" https://dot.net/v1/dotnet-install.sh
+          bash "$RUNNER_TEMP/dotnet-install.sh" --channel 8.0 --install-dir "$kit/dotnet" --no-path
+          git clone --depth 1 --branch v8.2 https://github.com/icsharpcode/ILSpy.git "$kit/ilspy-source"
+          rm -rf "$kit/ilspy-source/.git"
+          dotnet --info > "$kit/runner-dotnet.txt"
+          find "$kit/references" "$kit/deps" -type f -name '*.dll' -print0 | sort -z | xargs -0 sha256sum > "$kit/dependencies.sha256"
+          cd "$kit"
+          tar -czf "$RUNNER_TEMP/evidence/analysis-kit.tar.gz" source source-commit.txt references deps harness dotnet ilspy-source runner-dotnet.txt dependencies.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr339-offline-analysis-kit
+          path: ${{ runner.temp }}/evidence/analysis-kit.tar.gz
+          retention-days: 3
+          compression-level: 0
