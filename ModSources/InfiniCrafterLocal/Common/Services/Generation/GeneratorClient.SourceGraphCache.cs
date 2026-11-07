@@ -22,7 +22,7 @@ public sealed partial class GeneratorClient
         try
         {
             var body = new ParentSourceMethod(method);
-            cache?.Remember(method, body, null, body.Code.Count, body.Blocks.Count);
+            cache?.Remember(method, body, null, body.Code.Count, body.Blocks.Count, body.RetainedBytesEstimate);
             return body;
         }
         catch (NotSupportedException error)
@@ -79,7 +79,7 @@ public sealed partial class GeneratorClient
             }
         }
 
-        internal void Remember(MethodBase method, object? body, string? refusal, int codeCount, int blocks)
+        internal void Remember(MethodBase method, object? body, string? refusal, int codeCount, int blocks, long retainedBytes = -1)
         {
             CheckThread();
             lock (gate)
@@ -87,10 +87,14 @@ public sealed partial class GeneratorClient
                 if (disposed || entries.ContainsKey(method)) return;
                 if (shared)
                 {
-                    // Account for values plus worst-case lazy CFG sets. Large mod
-                    // hooks remain cacheable; eviction only changes work, never facts.
+                    // The old blocks^2 * HashSet accounting matched the former
+                    // postdominator representation and rejected exactly the large
+                    // methods worth reusing. The dense relation now costs one bit
+                    // per pair; use the producer estimate when available.
                     const long limit = 128L * 1024 * 1024;
-                    long cost = 1024L + codeCount * 256L + blocks * (long)blocks * 80;
+                    long densePostdomBytes = (blocks + 1L) * (blocks + 1L + 7L) / 8L;
+                    long cost = retainedBytes >= 0 ? retainedBytes
+                        : 4096L + codeCount * 256L + blocks * 512L + densePostdomBytes;
                     if (cost > limit) return;
                     while (order.Count > 0 && (entries.Count >= MethodLimit || weight + cost > limit))
                     {

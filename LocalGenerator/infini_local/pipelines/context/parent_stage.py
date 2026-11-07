@@ -30,24 +30,75 @@ def share_exact_native_parent_facts(parents: dict[str, Any]) -> dict[str, Any]:
 
     Scalar kinds/presence, source/scope and list order/multiplicity are unchanged.
     Literal tooltips and complete accepted generated packets are never interned.
+    Structural IDs are built bottom-up so equality/size checks never serialize
+    every overlapping subtree merely to discover that it was seen before.
     """
-    counts: dict[str, int] = {}
-    indices: dict[str, int] = {}
+    counts: dict[int, int] = {}
+    indices: dict[int, int] = {}
     shared: list[Any] = []
     literal_keys = {"tooltipLines", "tooltipSource", "generatedParent"}
+    # descriptor -> stable structural ID. Child IDs make descriptors compact;
+    # the dict itself resolves hash collisions through exact descriptor equality.
+    interned: dict[tuple[Any, ...], int] = {}
+    cached: dict[int, tuple[int, int, bool]] = {}
 
-    def contains_literal(value: Any) -> bool:
-        if isinstance(value, dict):
-            return bool(literal_keys.intersection(value)) or any(contains_literal(child) for child in value.values())
-        return isinstance(value, list) and any(contains_literal(child) for child in value)
+    def scalar_json(value: Any) -> str:
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 
-    def candidate(value: Any) -> str | None:
-        if not isinstance(value, (dict, list, str)) or contains_literal(value):
+    def intern(descriptor: tuple[Any, ...]) -> int:
+        found = interned.get(descriptor)
+        if found is not None:
+            return found
+        result = len(interned) + 1  # zero is never a structural value ID
+        interned[descriptor] = result
+        return result
+
+    def structure(value: Any) -> tuple[int, int, bool]:
+        # All values in a parsed dossier stay alive for the two passes, making
+        # object identity a safe memo key for this function invocation.
+        identity = id(value)
+        known = cached.get(identity)
+        if known is not None:
+            return known
+        if value is None:
+            result = (intern(("none",)), 4, False)
+        elif type(value) is bool:
+            result = (intern(("bool", value)), 4 if value else 5, False)
+        elif type(value) is int:
+            text = str(value)
+            result = (intern(("int", value)), len(text), False)
+        elif type(value) is float:
+            text = scalar_json(value)
+            result = (intern(("float", text)), len(text), False)
+        elif isinstance(value, str):
+            text = scalar_json(value)
+            result = (intern(("str", value)), len(text), False)
+        elif isinstance(value, list):
+            children = [structure(child) for child in value]
+            size = 2 + max(0, len(children) - 1) + sum(child[1] for child in children)
+            result = (intern(("list", *(child[0] for child in children))), size,
+                      any(child[2] for child in children))
+        elif isinstance(value, dict) and all(isinstance(name, str) for name in value):
+            rows = [(name, structure(value[name])) for name in sorted(value)]
+            size = 2 + max(0, len(rows) - 1) + sum(
+                len(scalar_json(name)) + 1 + child[1] for name, child in rows)
+            contains_literal = bool(literal_keys.intersection(value)) or any(child[2] for _, child in rows)
+            result = (intern(("dict", *((name, child[0]) for name, child in rows))), size, contains_literal)
+        else:
+            # This path should not occur for JSON-derived packets. Preserve the
+            # former json.dumps equality exactly rather than guessing a type rule.
+            text = scalar_json(value)
+            result = (intern(("json", type(value).__qualname__, text)), len(text), False)
+        cached[identity] = result
+        return result
+
+    def candidate(value: Any) -> int | None:
+        if not isinstance(value, (dict, list, str)):
             return None
         if isinstance(value, dict) and ("sameAs" in value or "sourceSameAs" in value):
             return None
-        encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-        return encoded if len(encoded) >= 128 else None
+        structural_id, characters, contains_literal = structure(value)
+        return structural_id if not contains_literal and characters >= 128 else None
 
     def count(value: Any) -> None:
         key = candidate(value)

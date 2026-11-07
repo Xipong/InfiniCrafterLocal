@@ -73,27 +73,28 @@ def native_csharp_source_for_llm(reference: dict[str, Any], source_calls: list[d
             out.pop("nativeCSharpSource")
         return out
 
-    def view_size(value: dict[str, Any], selection: dict[str, dict[str, Any]]) -> int:
+    def measured_view(value: dict[str, Any], selection: dict[str, dict[str, Any]]) -> tuple[int, dict[str, Any], list[dict[str, Any]] | None]:
         # Use the real stage/exact-sharing owner, rather than summing duplicate
         # graph costs. This already-captured packet cannot re-enter compaction.
-        value, linked = _compact_model_view(value, _linked_calls(calls, selection, predicates), selection)
-        profile = {"attackReference": pack_attack_tables(project_attack_behavior(value))}
+        compact, linked = _compact_model_view(value, _linked_calls(calls, selection, predicates), selection)
+        profile = {"attackReference": pack_attack_tables(project_attack_behavior(compact))}
         if calls is not None:
             profile["referencedProjectiles"] = {"source": "native_single_hop_projectile_references", "version": 1,
                 "sourceCalls": linked, "references": []}
         context = parent_context_for_stage({"A": {"packet": {"raw": {"directProjectile": profile}}}}, stage="author")
-        return len(json.dumps(context, ensure_ascii=False, separators=(",", ":")))
+        size = len(json.dumps(context, ensure_ascii=False, separators=(",", ":")))
+        return size, compact, linked
 
     chosen = {}
     original = candidate(chosen)
-    best_size = view_size(original, chosen)
+    best_size, best_compact, best_linked = measured_view(original, chosen)
     for record in records.values():
         for alternative in (record, _specialized_record(reference, record)):
             if alternative is None:
                 continue
             selection = {**chosen, record["id"]: alternative}
             proposed = candidate(selection)
-            size = view_size(proposed, selection)
+            size, compact, linked = measured_view(proposed, selection)
             # The graph contract captures connected slices, not the complete
             # method. A certified whole body (or its proved identity variant)
             # therefore takes priority even when a partial graph is smaller.
@@ -102,4 +103,5 @@ def native_csharp_source_for_llm(reference: dict[str, Any], source_calls: list[d
             fuller_source = record["coverage"] == "whole_method" and record["id"] not in chosen
             if fuller_source or size < best_size:
                 chosen, original, best_size = selection, proposed, size
-    return _compact_model_view(original, _linked_calls(calls, chosen, predicates), chosen)
+                best_compact, best_linked = compact, linked
+    return best_compact, best_linked

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Numerics;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Text.Json.Nodes;
@@ -29,7 +30,10 @@ public sealed partial class GeneratorClient
             internal List<int> Next = new();
             internal List<AmmoIl> Code = new();
             internal List<string> Exit = new();
-            internal Dictionary<int, HashSet<string>> Incoming = new(), Outgoing = new();
+            // Numeric reaching-definition state. IDs are converted back to the
+            // established string contract only when a load is published.
+            internal ulong[] DefinitionIncoming = Array.Empty<ulong>();
+            internal ulong[] DefinitionOutgoing = Array.Empty<ulong>();
         }
         internal readonly MethodBase Method;
         private readonly bool completeSource;
@@ -45,7 +49,12 @@ public sealed partial class GeneratorClient
         private static readonly Dictionary<string, OpCode> OpcodesByName = AmmoOpcodes.Values
             .Where(op => op.Name is not null).ToDictionary(op => op.Name!, StringComparer.Ordinal);
         private readonly Dictionary<int, HashSet<int>> reachable = new();
-        private Dictionary<int, HashSet<int>>? postdominators;
+        // Postdominators are dense by nature. Store their N x N relation as
+        // bits instead of thousands of HashSet<int> objects.
+        private ulong[]? postdominatorBits;
+        private int[]? postdominatorNodes;
+        private Dictionary<int, int>? postdominatorIndices;
+        private int postdominatorWords;
         private readonly Dictionary<int, HashSet<int>> controlRegions = new();
 
         internal readonly HashSet<int> CompleteCallPrefixes = new();
@@ -109,31 +118,18 @@ public sealed partial class GeneratorClient
             Block block = Blocks[start];
             var region = new HashSet<int> { start };
             if (block.Next.Distinct().Count() < 2) return region;
-            if (postdominators is null)
+            EnsurePostdominators();
+            int startIndex = postdominatorIndices![start];
+            int row = startIndex * postdominatorWords;
+            int join = -1, bestCount = -1;
+            // Preserve the old insertion-order tie break: reachable blocks in
+            // method order followed by the synthetic exit node.
+            for (int candidate = 0; candidate < postdominatorNodes!.Length; candidate++)
             {
-                var all = Blocks.Values.Where(b => b.Height >= 0).Select(b => b.Start).Append(-1).ToHashSet();
-                // Publish memoized control facts only after convergence. A
-                // refusal/exception must not make a later projection consume a
-                // partially solved CFG (including another row in an export).
-                var solved = all.ToDictionary(b => b, b => b == -1 ? new HashSet<int> { -1 } : new HashSet<int>(all));
-                bool changed = true; int passes = 0;
-                while (changed)
-                {
-                    currentParentAnalysis?.ThrowIfCancelled();
-                    if (++passes > 2048) throw new NotSupportedException("control_dependency_bound");
-                    changed = false;
-                    foreach (Block current in Blocks.Values.Reverse().Where(b => b.Height >= 0))
-                    {
-                        var next = current.Next.Count == 0 ? new[] { -1 } : current.Next.ToArray();
-                        var common = new HashSet<int>(solved[next[0]]);
-                        foreach (int successor in next.Skip(1)) common.IntersectWith(solved[successor]);
-                        common.Add(current.Start);
-                        if (!common.SetEquals(solved[current.Start])) { solved[current.Start] = common; changed = true; }
-                    }
-                }
-                postdominators = solved;
+                if (candidate == startIndex || !Bit(postdominatorBits!, row, candidate)) continue;
+                int count = PopCount(postdominatorBits!, candidate * postdominatorWords, postdominatorWords);
+                if (count > bestCount) { bestCount = count; join = postdominatorNodes[candidate]; }
             }
-            int join = postdominators[start].Where(b => b != start).OrderByDescending(b => postdominators[b].Count).FirstOrDefault(-1);
             var pending = new Stack<int>(block.Next);
             while (pending.Count > 0)
             {
@@ -142,6 +138,66 @@ public sealed partial class GeneratorClient
                 foreach (int successor in Blocks[next].Next) pending.Push(successor);
             }
             return controlRegions[start] = region;
+        }
+
+        private void EnsurePostdominators()
+        {
+            if (postdominatorBits is not null) return;
+            Block[] active = Blocks.Values.Where(block => block.Height >= 0).ToArray();
+            int[] nodes = active.Select(block => block.Start).Append(-1).ToArray();
+            var indices = nodes.Select((node, index) => (node, index)).ToDictionary(pair => pair.node, pair => pair.index);
+            int words = (nodes.Length + 63) >> 6;
+            var solved = new ulong[nodes.Length * words];
+            ulong tailMask = nodes.Length % 64 == 0 ? ulong.MaxValue : (1UL << (nodes.Length % 64)) - 1;
+            for (int index = 0; index < active.Length; index++)
+            {
+                int offset = index * words;
+                for (int word = 0; word < words; word++) solved[offset + word] = ulong.MaxValue;
+                solved[offset + words - 1] &= tailMask;
+            }
+            int exit = nodes.Length - 1;
+            solved[exit * words + (exit >> 6)] |= 1UL << (exit & 63);
+            var scratch = new ulong[words];
+            bool changed = true; int passes = 0;
+            while (changed)
+            {
+                currentParentAnalysis?.ThrowIfCancelled();
+                if (++passes > 2048) throw new NotSupportedException("control_dependency_bound");
+                changed = false;
+                for (int blockIndex = active.Length - 1; blockIndex >= 0; blockIndex--)
+                {
+                    Block current = active[blockIndex];
+                    int first = current.Next.Count == 0 ? exit : indices[current.Next[0]];
+                    Array.Copy(solved, first * words, scratch, 0, words);
+                    for (int successorIndex = 1; successorIndex < current.Next.Count; successorIndex++)
+                    {
+                        int successor = indices[current.Next[successorIndex]] * words;
+                        for (int word = 0; word < words; word++) scratch[word] &= solved[successor + word];
+                    }
+                    scratch[blockIndex >> 6] |= 1UL << (blockIndex & 63);
+                    int row = blockIndex * words;
+                    bool different = false;
+                    for (int word = 0; word < words; word++)
+                        if (solved[row + word] != scratch[word]) { different = true; break; }
+                    if (!different) continue;
+                    Array.Copy(scratch, 0, solved, row, words); changed = true;
+                }
+            }
+            // Publish only a fully converged matrix. Cancellation/refusal never
+            // leaves a partially solved relation visible to another projection.
+            postdominatorNodes = nodes;
+            postdominatorIndices = indices;
+            postdominatorWords = words;
+            postdominatorBits = solved;
+        }
+
+        private static bool Bit(ulong[] bits, int row, int index)
+            => (bits[row + (index >> 6)] & (1UL << (index & 63))) != 0;
+        private static int PopCount(ulong[] bits, int row, int words)
+        {
+            int count = 0;
+            for (int word = 0; word < words; word++) count += BitOperations.PopCount(bits[row + word]);
+            return count;
         }
 
         internal ParentSourceMethod(MethodBase method, List<AmmoIl>? sourceSlice = null, Dictionary<int, int>? sourceNext = null, Dictionary<int, int>? selectedSuccessors = null)
@@ -320,74 +376,150 @@ public sealed partial class GeneratorClient
             block.Exit = stack;
         }
 
-        // Definition sets are immutable after publication. Transfers replace a
-        // slot; joins copy only when a predecessor adds a new definition. This
-        // retains exact reaching definitions without cloning every local's set
-        // for every block and fixed-point pass (including singleton transfers).
-        private static Dictionary<int, HashSet<string>> CopyDefinitions(Dictionary<int, HashSet<string>> values)
-            => new(values);
-        private static bool SameDefinitions(Dictionary<int, HashSet<string>> a, Dictionary<int, HashSet<string>> b)
-            => a.Count == b.Count && a.All(pair => b.TryGetValue(pair.Key, out var other) && pair.Value.SetEquals(other));
-
+        // Reaching definitions are a monotone bitset problem. String IDs are
+        // presentation only; keeping them in the fixed point previously made
+        // every join allocate dictionaries/HashSets and repeatedly hash strings.
         private void LinkLocals()
         {
-            // A dispatcher slice keeps the original method's local metadata,
-            // often thousands of slots which never occur in this source region.
-            // Those slots cannot feed a decoded value or a local transfer. Keep
-            // the exact reaching-definition solver over the referenced domain.
             var referenced = Code.Where(i => i.Op is "ldloc" or "stloc" or "ldloca")
                 .Select(i => i.Arg).OfType<int>().ToHashSet();
             var locals = Method.GetMethodBody()!.LocalVariables.Where(local => referenced.Contains(local.LocalIndex)).ToArray();
-            var entryDefinitions = locals.ToDictionary(local => local.LocalIndex,
-                local => new HashSet<string> { "local_entry:" + local.LocalIndex });
+            if (locals.Length == 0) return;
+
+            var definitionIds = new List<string>();
+            var localDefinitions = locals.ToDictionary(local => local.LocalIndex, _ => new List<int>());
+            var entryBits = new Dictionary<int, int>();
+            int AddDefinition(int local, string id)
+            {
+                int bit = definitionIds.Count;
+                definitionIds.Add(id); localDefinitions[local].Add(bit);
+                return bit;
+            }
             foreach (var local in locals)
-                Values["local_entry:" + local.LocalIndex] = new Value { Id = "local_entry:" + local.LocalIndex,
-                    Op = "unresolved_local_entry", Operand = local.LocalType, At = 0, Block = 0 };
-            bool changed = true;
-            int passes = 0;
-            while (changed)
+            {
+                string id = "local_entry:" + local.LocalIndex;
+                entryBits[local.LocalIndex] = AddDefinition(local.LocalIndex, id);
+                Values[id] = new Value { Id = id, Op = "unresolved_local_entry", Operand = local.LocalType, At = 0, Block = 0 };
+            }
+            var storeBits = new Dictionary<int, int>();
+            foreach (AmmoIl instruction in Code.Where(i => i.Op == "stloc" && i.Arg is int))
+            {
+                int local = (int)instruction.Arg!;
+                if (localDefinitions.ContainsKey(local))
+                    storeBits[instruction.Offset] = AddDefinition(local, instruction.Offset.ToString(CultureInfo.InvariantCulture));
+            }
+
+            int words = (definitionIds.Count + 63) >> 6;
+            var localMasks = localDefinitions.ToDictionary(pair => pair.Key, pair => new ulong[words]);
+            foreach (var pair in localDefinitions)
+                foreach (int bit in pair.Value) localMasks[pair.Key][bit >> 6] |= 1UL << (bit & 63);
+            var entryState = new ulong[words];
+            foreach (int bit in entryBits.Values) entryState[bit >> 6] |= 1UL << (bit & 63);
+
+            Block[] active = Blocks.Values.Where(block => block.Height >= 0).ToArray();
+            var blockIndices = active.Select((block, index) => (block.Start, index)).ToDictionary(pair => pair.Start, pair => pair.index);
+            var finalStores = new Dictionary<int, (int Local, int Bit)[]>();
+            foreach (Block block in active)
+            {
+                block.DefinitionIncoming = new ulong[words];
+                block.DefinitionOutgoing = new ulong[words];
+                var stores = new Dictionary<int, int>();
+                foreach (AmmoIl instruction in block.Code)
+                    if (instruction.Op == "stloc" && instruction.Arg is int local && storeBits.TryGetValue(instruction.Offset, out int bit))
+                        stores[local] = bit;
+                finalStores[block.Start] = stores.Select(pair => (pair.Key, pair.Value)).ToArray();
+            }
+
+            static void Or(ulong[] target, ulong[] source)
+            {
+                for (int word = 0; word < target.Length; word++) target[word] |= source[word];
+            }
+            static bool EqualBits(ulong[] left, ulong[] right)
+            {
+                for (int word = 0; word < left.Length; word++) if (left[word] != right[word]) return false;
+                return true;
+            }
+            static void ClearLocal(ulong[] state, ulong[] mask)
+            {
+                for (int word = 0; word < state.Length; word++) state[word] &= ~mask[word];
+            }
+            static void Set(ulong[] state, int bit) => state[bit >> 6] |= 1UL << (bit & 63);
+            static bool Has(ulong[] state, int bit) => (state[bit >> 6] & (1UL << (bit & 63))) != 0;
+
+            var incoming = new ulong[words];
+            var outgoing = new ulong[words];
+            var queue = new Queue<Block>(active);
+            var queued = Enumerable.Repeat(true, active.Length).ToArray();
+            long work = 0, workBound = Math.Max(4096L, active.Length * 1024L);
+            while (queue.Count > 0)
             {
                 currentParentAnalysis?.ThrowIfCancelled();
-                if (++passes > 512) throw new NotSupportedException("local_dataflow_bound");
-                changed = false;
-                foreach (Block block in Blocks.Values.Where(b => b.Height >= 0))
+                if (++work > workBound) throw new NotSupportedException("local_dataflow_bound");
+                Block block = queue.Dequeue(); queued[blockIndices[block.Start]] = false;
+                Array.Clear(incoming);
+                if (sliceEntries.Contains(block.Start)) Or(incoming, entryState);
+                foreach (Block predecessor in predecessors[block.Start].Where(p => p.Height >= 0))
+                    Or(incoming, predecessor.DefinitionOutgoing);
+                if (!EqualBits(incoming, block.DefinitionIncoming)) Array.Copy(incoming, block.DefinitionIncoming, words);
+                Array.Copy(incoming, outgoing, words);
+                foreach (var store in finalStores[block.Start])
                 {
-                    var incoming = sliceEntries.Contains(block.Start) ? CopyDefinitions(entryDefinitions) : new Dictionary<int, HashSet<string>>();
-                    foreach (Block predecessor in predecessors[block.Start].Where(p => p.Height >= 0))
-                        foreach (var pair in predecessor.Outgoing)
-                        {
-                            if (!incoming.TryGetValue(pair.Key, out var defs)) incoming[pair.Key] = pair.Value;
-                            else if (!pair.Value.IsSubsetOf(defs))
-                            {
-                                var merged = new HashSet<string>(defs);
-                                merged.UnionWith(pair.Value);
-                                incoming[pair.Key] = merged;
-                            }
-                        }
-                    var outgoing = CopyDefinitions(incoming);
-                    foreach (AmmoIl i in block.Code)
-                        if (i.Op == "stloc" && i.Arg is int local) outgoing[local] = new HashSet<string> { i.Offset.ToString(CultureInfo.InvariantCulture) };
-                    changed |= !SameDefinitions(outgoing, block.Outgoing);
-                    block.Incoming = incoming; block.Outgoing = outgoing;
+                    ClearLocal(outgoing, localMasks[store.Local]);
+                    Set(outgoing, store.Bit);
+                }
+                if (EqualBits(outgoing, block.DefinitionOutgoing)) continue;
+                Array.Copy(outgoing, block.DefinitionOutgoing, words);
+                foreach (int successorStart in block.Next)
+                {
+                    Block successor = Blocks[successorStart];
+                    if (successor.Height < 0) continue;
+                    int index = blockIndices[successorStart];
+                    if (queued[index]) continue;
+                    queued[index] = true; queue.Enqueue(successor);
                 }
             }
-            foreach (Block block in Blocks.Values.Where(b => b.Height >= 0))
+
+            var state = new ulong[words];
+            foreach (Block block in active)
             {
-                var definitions = CopyDefinitions(block.Incoming);
-                foreach (AmmoIl i in block.Code)
+                Array.Copy(block.DefinitionIncoming, state, words);
+                foreach (AmmoIl instruction in block.Code)
                 {
-                    string id = i.Offset.ToString(CultureInfo.InvariantCulture);
-                    if (i.Op == "ldloc" && i.Arg is int local)
+                    string id = instruction.Offset.ToString(CultureInfo.InvariantCulture);
+                    if (instruction.Op == "ldloc" && instruction.Arg is int local)
                     {
                         if (EscapedLocals.Contains(local)) Values[id].Op = "address_exposed_local";
-                        else if (definitions.TryGetValue(local, out var defs))
+                        else if (localDefinitions.TryGetValue(local, out var bits))
                         {
-                            if (defs.Count <= 8) Values[id].Inputs.AddRange(defs.OrderBy(s => s, StringComparer.Ordinal));
-                            else { Values[id].Op = "unresolved_local_definition_bound"; Unknown.Add("local_" + local + "_has_" + defs.Count + "_reaching_definitions"); }
+                            int count = 0;
+                            foreach (int bit in bits) if (Has(state, bit)) count++;
+                            if (count <= 8)
+                            {
+                                var ids = bits.Where(bit => Has(state, bit)).Select(bit => definitionIds[bit]).ToList();
+                                ids.Sort(StringComparer.Ordinal); Values[id].Inputs.AddRange(ids);
+                            }
+                            else
+                            {
+                                Values[id].Op = "unresolved_local_definition_bound";
+                                Unknown.Add("local_" + local + "_has_" + count + "_reaching_definitions");
+                            }
                         }
                     }
-                    if (i.Op == "stloc" && i.Arg is int stored) definitions[stored] = new HashSet<string> { id };
+                    if (instruction.Op == "stloc" && instruction.Arg is int stored && storeBits.TryGetValue(instruction.Offset, out int bit))
+                    {
+                        ClearLocal(state, localMasks[stored]); Set(state, bit);
+                    }
                 }
+            }
+        }
+
+        internal long RetainedBytesEstimate
+        {
+            get
+            {
+                long flow = Blocks.Values.Sum(block => (block.DefinitionIncoming.Length + (long)block.DefinitionOutgoing.Length) * sizeof(ulong));
+                long postdom = (Blocks.Count + 1L) * (Blocks.Count + 1L + 7L) / 8L;
+                return 4096L + Code.Count * 192L + Values.Count * 192L + Blocks.Count * 384L + flow + postdom;
             }
         }
 

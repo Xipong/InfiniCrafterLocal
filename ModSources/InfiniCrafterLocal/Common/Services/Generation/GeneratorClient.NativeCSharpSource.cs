@@ -259,11 +259,18 @@ public sealed partial class GeneratorClient
     private static string CSharpHash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
     private static CSharpRendered RenderCSharp(AstNode source, bool includeLocations = true)
+        => RenderCSharpCore(source, includeLocations, privateTree: false);
+
+    // The caller owns this detached clone and will never reuse its source
+    // coordinates. Assign locations in-place instead of cloning the clone again.
+    private static CSharpRendered RenderPrivateCSharp(AstNode source, bool includeLocations = true)
+        => RenderCSharpCore(source, includeLocations, privateTree: true);
+
+    private static CSharpRendered RenderCSharpCore(AstNode source, bool includeLocations, bool privateTree)
     {
-        // Only location assignment needs a clone; the plain writer is read-only.
-        // Coordinates are per record, never mutable cached AST state. The empty
+        // Only location assignment needs isolated mutable AST state. The empty
         // indentation string avoids whitespace bloat in both identical outputs.
-        var node = includeLocations ? source.Clone() : source;
+        var node = includeLocations && !privateTree ? source.Clone() : source;
         using var output = new StringWriter(CultureInfo.InvariantCulture) { NewLine = "\n" };
         var writer = new TextWriterTokenWriter(output) { IndentationString = "" };
         node.AcceptVisitor(new CSharpOutputVisitor(includeLocations ? TokenWriter.WrapInWriterThatSetsLocationsInAST(writer) : writer,
@@ -279,6 +286,23 @@ public sealed partial class GeneratorClient
         }
         return new(output.ToString(), locations.Distinct().ToArray());
     }
+
+    // NativeCSharpSource serializes access through nativeCSharpGate. Borrow the
+    // cached declaration briefly without its body so a signature/skeleton never
+    // clones the huge dispatcher body it is about to discard.
+    private static T WithoutCSharpMethodBody<T>(NativeCSharpDocument document, Func<T> action)
+    {
+        BlockStatement body = document.Declaration.Body;
+        document.Declaration.Body = BlockStatement.Null;
+        try { return action(); }
+        finally { document.Declaration.Body = body; }
+    }
+
+    private static string NativeCSharpSignature(NativeCSharpDocument document)
+        => WithoutCSharpMethodBody(document, () => RenderCSharp(document.Declaration, includeLocations: false).Code);
+
+    private static SyntaxTree CloneNativeCSharpSkeleton(NativeCSharpDocument document)
+        => WithoutCSharpMethodBody(document, () => (SyntaxTree)document.Tree.Clone());
 
     private static NativeCSharpDocument GetNativeCSharpDocument(MethodInfo method, CancellationToken cancellation)
     {
@@ -456,7 +480,7 @@ public sealed partial class GeneratorClient
                 string? refusal = CSharpRegionRefusal(candidate.Branch.TrueStatement, method);
                 if (refusal is not null) { unresolved.Add(refusal + "@" + candidate.Offset); continue; }
                 var excerpt = (IfElseStatement)candidate.Branch.Clone(); excerpt.FalseStatement = Statement.Null;
-                guards.Add(candidate); rendered.Add(RenderCSharp(excerpt));
+                guards.Add(candidate); rendered.Add(RenderPrivateCSharp(excerpt));
             }
             // Cover every original identity window represented by this graph.
             // Matching one method hash or the first useful guard is insufficient.
@@ -480,9 +504,8 @@ public sealed partial class GeneratorClient
         string header = "";
         if (coverage == "conditional_ast_regions")
         {
-            var signature = (MethodDeclaration)document.Declaration.Clone(); signature.Body = BlockStatement.Null;
             header = string.Concat(document.Tree.Children.Where(node => node is UsingDeclaration or UsingAliasDeclaration).Select(node => RenderCSharp(node, includeLocations: false).Code));
-            header += "// Source method on " + method.DeclaringType!.FullName + ": " + RenderCSharp(signature, includeLocations: false).Code.Trim().Replace("\r", "").Replace("\n", " ") + "\n";
+            header += "// Source method on " + method.DeclaringType!.FullName + ": " + NativeCSharpSignature(document).Trim().Replace("\r", "").Replace("\n", " ") + "\n";
         }
         string code = header + string.Join("\n", rendered.Select(row => row.Code));
         if (code.Length > NativeCSharpRecordLimit) throw new NotSupportedException("csharp_record_character_bound");
@@ -540,7 +563,7 @@ public sealed partial class GeneratorClient
         if (AttackActorArgument(method) < 0 || method.GetMethodBody()!.ExceptionHandlingClauses.Count != 0) return;
         if (document.Tree.Descendants.Any(node => node is GotoStatement or GotoCaseStatement or LabelStatement
             or LambdaExpression or AnonymousMethodExpression or LocalFunctionDeclarationStatement)) return;
-        var body = new ParentSourceMethod(method, AttackCode(method));
+        var body = ReadCompleteSourceMethod(method);
         var selection = new AttackIdentitySelection(body, type, style);
         var ends = CSharpConditionalEnds(method);
         var selectedOffsets = selection.Receipt["selectedEdges"]!.AsArray().OfType<JsonObject>()
@@ -576,7 +599,7 @@ public sealed partial class GeneratorClient
             else branch.ReplaceWith((Statement)branch.FalseStatement.Clone());
         }
         if (removed.Count == 0) return;
-        var rendered = RenderCSharp(tree);
+        var rendered = RenderPrivateCSharp(tree);
         if (rendered.Code.Length >= record["code"]!.GetValue<string>().Length) return;
         var mapped = new JsonArray();
         foreach (var original in record["locations"]!.AsArray().OfType<JsonObject>())

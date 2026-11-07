@@ -266,10 +266,14 @@ public sealed partial class GeneratorClient
         CancellationToken cancellation, bool capturedReceiverBound, JsonObject? conditionalRecord)
     {
         cancellation.ThrowIfCancellationRequested();
-        var tree = (SyntaxTree)document.Tree.Clone(); var gaps = new JsonArray();
+        bool conditionalRegions = conditionalRecord?["coverage"]?.GetValue<string>() == "conditional_ast_regions";
+        // Conditional source immediately replaces the method body. Clone the
+        // type/usings/signature skeleton only, not the discarded dispatcher.
+        var tree = conditionalRegions ? CloneNativeCSharpSkeleton(document) : (SyntaxTree)document.Tree.Clone();
+        var gaps = new JsonArray();
         var retainedGuards = new HashSet<IfElseStatement>();
         string? refusal;
-        if (conditionalRecord?["coverage"]?.GetValue<string>() == "conditional_ast_regions")
+        if (conditionalRegions)
         {
             var offsets = conditionalRecord["entryGuards"]!.AsArray().OfType<JsonObject>()
                 .Select(guard => guard["ilOffset"]!.GetValue<int>()).ToHashSet();

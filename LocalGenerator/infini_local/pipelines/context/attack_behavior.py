@@ -157,7 +157,8 @@ def _program(value: dict) -> dict:
     if any(not isinstance(row, dict) or not set(row) <= known_row for row in rows):
         return copy.deepcopy(value)
     removed_literals = set()
-    if not any(re.search(r"(?<![A-Za-z0-9_])" + re.escape(name) + r"(?![A-Za-z0-9_])", str(out))
+    original_text = str(out)
+    if not any(re.search(r"(?<![A-Za-z0-9_])" + re.escape(name) + r"(?![A-Za-z0-9_])", original_text)
                          for name in names.values()):
         renamed = copy.deepcopy(out)
         try:

@@ -10,6 +10,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using Terraria;
 using Terraria.ID;
@@ -218,12 +219,19 @@ public sealed partial class GeneratorClient
         public CancellationToken CancellationToken => _lifetime.Token;
         public void Cancel() => _lifetime.Cancel();
 
-        private string payloadJson = "{}";
+        private string? payloadJson = "{}";
+        private JsonNode? payloadNode;
         public string PayloadJson
         {
-            get => Analysis is null && analysisFailure is null ? payloadJson : throw new InvalidOperationException("Parent source analysis has not completed on the generation worker.");
-            set => payloadJson = value;
+            get
+            {
+                if (Analysis is not null || analysisFailure is not null)
+                    throw new InvalidOperationException("Parent source analysis has not completed on the generation worker.");
+                return payloadJson ??= payloadNode?.ToJsonString(WireJsonOptions) ?? "{}";
+            }
+            set { payloadJson = value; payloadNode = null; }
         }
+        internal void SetPayloadNode(JsonNode node) { payloadNode = node; payloadJson = null; }
         internal ParentAnalysis? Analysis { get; set; }
         private Exception? analysisFailure;
         internal void CompleteAnalysis()
@@ -231,7 +239,13 @@ public sealed partial class GeneratorClient
             if (analysisFailure is not null) throw new InvalidOperationException("Parent source analysis failed.", analysisFailure);
             if (Analysis is not { } analysis) return;
             analysis.RequireWorker();
-            try { payloadJson = analysis.Resolve(System.Text.Json.Nodes.JsonNode.Parse(payloadJson), CancellationToken)!.ToJsonString(WireJsonOptions); }
+            try
+            {
+                JsonNode root = payloadNode ?? JsonNode.Parse(payloadJson ?? "{}")
+                    ?? throw new JsonException("Prepared craft payload must be a JSON value.");
+                payloadNode = analysis.Resolve(root, CancellationToken);
+                payloadJson = null; // Encode exactly once, when transport actually needs it.
+            }
             catch (Exception error) { analysisFailure = error; throw; }
             finally { Analysis = null; analysis.Dispose(); }
         }
@@ -259,7 +273,7 @@ public sealed partial class GeneratorClient
         string parentA = CraftParentName(a);
         string parentB = CraftParentName(b);
 
-        string payload = JsonSerializer.Serialize(new
+        JsonNode payload = JsonSerializer.SerializeToNode(new
         {
             itemA = ToWireItem(a, player, clientTooltipA),
             itemB = ToWireItem(b, player, clientTooltipB),
@@ -271,16 +285,17 @@ public sealed partial class GeneratorClient
             craftInputPolicy = "base_item_stats_ignore_prefixes",
             multiDevCraft,
             llmProfileId = multiDevCraft ? (llmProfileId ?? "").Trim().ToLowerInvariant() : ""
-        }, WireJsonOptions);
+        }, WireJsonOptions)!;
 
-        return new PreparedGenerationRequest
+        var request = new PreparedGenerationRequest
         {
-            PayloadJson = payload,
             ParentA = parentA,
             ParentB = parentB,
             RefundA = refundA,
             RefundB = refundB
         };
+        request.SetPayloadNode(payload);
+        return request;
     }
 
     // Live craft keeps admission/refunds and all native hooks on the game thread.
