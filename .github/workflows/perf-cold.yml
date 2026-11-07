@@ -42,8 +42,9 @@ jobs:
           $entries = @()
           foreach ($release in $releases) {
             $version = $null
-            if (-not [Version]::TryParse(([string]$release.tag_name) -replace '^v','', [ref]$version)) { continue }
-            $asset = @($release.assets | Where-Object name -eq 'tModLoader.zip' | Select-Object -First 1)
+            $versionText = ([string]$release.tag_name) -replace '^v', ''
+            if (-not [Version]::TryParse($versionText, [ref]$version)) { continue }
+            $asset = @($release.assets | Where-Object { $_.name -eq 'tModLoader.zip' } | Select-Object -First 1)
             if ($asset.Count -eq 0) { continue }
             $entries += [pscustomobject]@{ Version=$version; DownloadUrl=[string]$asset[0].browser_download_url; PreRelease=[bool]$release.prerelease }
           }
