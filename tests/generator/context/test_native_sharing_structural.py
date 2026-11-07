@@ -148,5 +148,5 @@ def test_literal_tooltips_generated_parents_and_existing_reference_markers_remai
         "b": {"sourceSameAs": 0, "facts": source},
         "c": {"sameAs": 2, "facts": source},
         "d": [source, copy.deepcopy(source)],
-    }}}
+    }}}}
     assert share_exact_native_parent_facts(parents) == _legacy_share(parents)
