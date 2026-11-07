@@ -425,7 +425,7 @@ public sealed partial class GeneratorClient
                 block.DefinitionOutgoing = new ulong[words];
                 var stores = new Dictionary<int, int>();
                 foreach (AmmoIl instruction in block.Code)
-                    if (instruction.Op == "stloc" && instruction.Arg is int local && storeBits.TryGetValue(instruction.Offset, out int bit))
+                    if (instruction.Op == "stloc" && instruction.Arg is int local && storeBits.TryGetValue(instruction.Offset, out int storedDefinitionBit))
                         stores[local] = bit;
                 finalStores[block.Start] = stores.Select(pair => (pair.Key, pair.Value)).ToArray();
             }
@@ -495,7 +495,7 @@ public sealed partial class GeneratorClient
                             foreach (int definitionBit in bits) if (Has(state, definitionBit)) count++;
                             if (count <= 8)
                             {
-                                var ids = bits.Where(bit => Has(state, bit)).Select(bit => definitionIds[bit]).ToList();
+                                var ids = bits.Where(definitionBit => Has(state, definitionBit)).Select(definitionBit => definitionIds[definitionBit]).ToList();
                                 ids.Sort(StringComparer.Ordinal); Values[id].Inputs.AddRange(ids);
                             }
                             else
@@ -507,7 +507,7 @@ public sealed partial class GeneratorClient
                     }
                     if (instruction.Op == "stloc" && instruction.Arg is int stored && storeBits.TryGetValue(instruction.Offset, out int bit))
                     {
-                        ClearLocal(state, localMasks[stored]); Set(state, bit);
+                        ClearLocal(state, localMasks[stored]); Set(state, storedDefinitionBit);
                     }
                 }
             }
