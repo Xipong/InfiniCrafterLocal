@@ -12,7 +12,7 @@
     <!-- Compile the canonical implementation, never a copied/extracted method. -->
     <Compile Include="$(InfiniModSourceRoot)/**/*.cs" Exclude="$(InfiniModSourceRoot)/obj/**;$(InfiniModSourceRoot)/bin/**" />
     <!-- Source discovery is automatic; RunChecks still explicitly registers execution. -->
-    <Compile Include="**/EngineRuntimeChecks*.cs" />
+    <Compile Include="**/EngineRuntimeChecks*.cs" Exclude="**/obj/**;**/bin/**" />
     <Reference Include="ICSharpCode.Decompiler" HintPath="$(InfiniModSourceRoot)/lib/ICSharpCode.Decompiler.dll" />
     <Content Include="$(InfiniModSourceRoot)/lib/ICSharpCode.Decompiler.LICENSE.txt" Link="ICSharpCode.Decompiler.LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
     <EmbeddedResource Include="fixtures/AtlasMouseTextMetrics.json" />

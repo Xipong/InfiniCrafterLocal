@@ -291,9 +291,9 @@ render is an error, not a successful capture.
 
 The artwork observer verifies current `role--digest.png` publications with the
 same world/item/role + request-identity + exact-PNG digest as
-`generator/infini_local/storage/image_store.py`. Historical
-`infini_asset_png_` / `infini_vfx_png_` names retain their original identity/byte
-check; neither arbitrary filenames nor renamed/tampered PNGs are accepted.
+`generator/infini_local/storage/image_store.py`. Only current indexed publications
+are staged and certified for native loading; historical names, arbitrary filenames
+and renamed/tampered PNGs are refused.
 
 ## Fast agent workflow
 
@@ -775,8 +775,8 @@ Every captured PNG's frame record includes `scene`: the camera, native-transform
 The original current renderers admit `spriteElement` and `texturedPath` when
 `drawArtwork=true`. Supply the exact selected VFX PNG files alongside item/entity
 files in `artworkFiles`; unrelated files still refuse. VFX files are checked
-against the canonical `[recipeId, assetId]` + NUL + PNG identity
-(`infini_vfx_png_`). Missing, substituted or incorrectly named bytes do not pass
+against the current world/item/`vfx_<assetId>` scope, exact `[recipeId, assetId]`
+request identity and PNG bytes (`vfx_<assetId>--digest.png`). Missing, substituted or incorrectly named bytes do not pass
 admission. On-hit sprites use an explicitly authored `spriteElement`; a ring is an
 explicit world-attached arc `shape`, not a separate renderer or legacy texture role.
 

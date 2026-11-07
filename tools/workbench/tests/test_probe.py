@@ -159,6 +159,61 @@ class ProbeTests(unittest.TestCase):
             self.assertEqual([c["displayName"] for c in probe_plan["cases"]],
                              ["Item from one", "Item from one", "Item from two", "Item from two"])
 
+    def test_probe_resolves_current_lunar_publication_without_raw_path(self):
+        builder = w.HERE / 'examples/lunar-harpoon/build.py'
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory) / 'lunar'
+            result = subprocess.run([sys.executable, str(builder), '--player-assets', directory,
+                                     '--out', str(out)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            item = out / 'item.json'
+            original = item.read_bytes()
+            definition = w.read_json(item)
+            self.assertEqual(Path(definition['visual']['spritePath']).name, definition['visual']['spritePath'])
+            plan = probe.plan_probe(arguments('--item', item, '--gif'))
+            files = plan['scenes']['001-primary']['nativeRender']['artworkFiles']
+            self.assertEqual(files, w.read_json(out / 'scenario.json')['nativeRender']['artworkFiles'])
+            self.assertEqual(item.read_bytes(), original)
+            publication = Path(files[0])
+            publication.write_bytes(b'corrupt indexed bytes')
+            with self.assertRaisesRegex(ValueError, 'Missing selected artwork'):
+                probe.artwork_files(item, definition, [])
+
+    def test_indexed_item_and_hit_asset_keep_explicit_resolution_and_ambiguity(self):
+        import io
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data = dict(id='fixture', recipeMeta=dict(worldId='0'),
+                        runtimeProgram=dict(entities=[]))
+            stream = io.BytesIO(); Image.new('RGBA', (16, 16), (80, 200, 255, 255)).save(stream, format='PNG')
+            raw = stream.getvalue()
+            item_art = w.publish_artwork(root / 'source', data, 'item', b'["fixture","item","","fixture"]', raw)
+            hit_art = w.publish_artwork(root / 'hit', data, 'vfx_hit', b'["fixture","hit"]', raw)
+            data.update(visual=dict(spritePath=item_art.name), vfxManifest=dict(
+                slots=[dict(element=dict(texture=dict(source='asset', assetId='hit')))],
+                assets=[dict(id='hit', spritePath=hit_art.name)]))
+            item = root / 'hit' / 'item.json'; item.write_text(json.dumps(data))
+            # A moved definition needs explicit provenance for the sibling item art.
+            with self.assertRaisesRegex(ValueError, 'Missing selected artwork'):
+                probe.artwork_files(item, data, [])
+            self.assertEqual(probe.artwork_files(item, data, [item_art.parent]), [str(item_art), str(hit_art)])
+            from python.verify_hit_feedback import probe_asset_arguments
+            source = root / 'source/item.json'
+            source_data = dict(id='fixture', visual=dict(spritePath=item_art.name), runtimeProgram=dict(entities=[]))
+            source.write_text(json.dumps(source_data))
+            asset_args = probe_asset_arguments(source, source_data, hit_art)
+            self.assertEqual(asset_args, ['--asset-dir', str(item_art.parent), '--asset-dir', str(hit_art.parent)])
+            self.assertEqual(probe.artwork_files(item, data, asset_args[1::2]), [str(item_art), str(hit_art)])
+
+            shadow = item.parent / hit_art.name; shadow.write_bytes(b'conflicting bytes')
+            with self.assertRaisesRegex(ValueError, 'Conflicting artwork files'):
+                probe.artwork_files(item, data, [item_art.parent])
+            self.assertEqual(probe.artwork_files(item, data, [item_art.parent, hit_art.parent]),
+                             [str(item_art), str(hit_art)])
+            self.assertEqual(probe.artwork_files(item, data, [root / 'source/images', root / 'hit/images']),
+                             [str(item_art), str(hit_art)])
+
     def test_native_capture_discovers_art_and_keeps_explicit_world_copy(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

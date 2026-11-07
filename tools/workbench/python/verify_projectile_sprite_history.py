@@ -6,7 +6,7 @@ if __package__ in (None, ""):
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import argparse,copy,hashlib,io,json,os,subprocess,sys
+import argparse,copy,io,json,os,subprocess,sys
 from pathlib import Path
 from PIL import Image
 import workbench as w
@@ -20,7 +20,7 @@ def main():
     item['vfxManifest']['slots']=[]
     buf=io.BytesIO();Image.new('RGBA',(16,16),(240,200,50,255)).save(buf,format='PNG');raw=buf.getvalue()
     identity=json.dumps([item['id'],'item','',item['id']],separators=(',',':')).encode('ascii')
-    png=out/('infini_asset_png_'+hashlib.sha256(identity+b'\0'+raw).hexdigest()+'.png');png.write_bytes(raw)
+    png=w.publish_artwork(out,item,'item',identity,raw)
     item['visual'].update(spritePath=png.name,spriteStatus='generated',renderSizePx=24,forwardAngleDegrees=0)
     for e in item['runtimeProgram']['entities']:
         e['visual'].update(assetMode='baked_sprite' if e['kind']=='item_body' else 'reuse_item_icon',spritePath=png.name,spriteStatus='generated')

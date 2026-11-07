@@ -9,7 +9,6 @@ if __package__ in (None, ""):
 import argparse
 import copy
 import json
-import hashlib
 import io
 import os
 from pathlib import Path
@@ -28,7 +27,7 @@ def main():
     # Explicit synthetic publication solely to exercise native player drawing, not fallback art.
     buffer=io.BytesIO();Image.new('RGBA',(32,32),(255,255,255,255)).save(buffer,format='PNG');raw=buffer.getvalue()
     identity=json.dumps([item['id'],'item','',item['id']],separators=(',',':')).encode('ascii')
-    publication=out/('infini_asset_png_'+hashlib.sha256(identity+b'\0'+raw).hexdigest()+'.png');publication.write_bytes(raw)
+    publication=w.publish_artwork(out,item,'item',identity,raw)
     item['visual'].update(spritePath=publication.name,spriteStatus='generated',renderSizePx=32,forwardAngleDegrees=0)
     entity=next(e for e in item['runtimeProgram']['entities'] if e['id']=='root')
     entity['spawn']['speedPxPerTick']=0;entity['lifetimeTicks']=24

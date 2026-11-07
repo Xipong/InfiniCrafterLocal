@@ -66,16 +66,18 @@ def particle_scene() -> dict[str, Any]:
                           capture=True, lightingMode='viewport_fill'))
 
 
-def resource_checks(render: dict[str, Any], texture: str) -> dict[str, bool]:
+def resource_checks(render: dict[str, Any], texture: str, *, selected: bool = True) -> dict[str, bool]:
     path, expected = TEXTURES[texture]
     selected_hash = (render.get('starSha256') if texture == 'star' else
                     render.get('luminanceResources', {}).get('selectedTextureSha256', {}).get(path))
     return {
         'original-library-resources': render.get('resourceReady') is True
             and render.get('originalParticleLibraryEffect') is True
-            and render.get('libraryBuffers') == 4 and render.get('effectSha256') == EFFECT_SHA256,
-        'selected-original-texture': selected_hash == expected
-            and path in render.get('readyLibraryTexturePaths', []),
+            and render.get('libraryBuffers') == (4 if selected else 0)
+            and render.get('effectSha256') == EFFECT_SHA256,
+        'selected-original-texture': (selected_hash == expected
+            and path in render.get('readyLibraryTexturePaths', [])) if selected else
+            render.get('readyLibraryTexturePaths') == [],
         'original-magicpixel': render.get('magicPixelResource', {}).get('sha256') == MAGIC_PIXEL_SHA256
             and render.get('magicPixelResource', {}).get('playerArtworkLoaded') is False,
         'explicit-vfx-only-scope': all(render.get(k) is False for k in
@@ -174,10 +176,9 @@ def main() -> int:
         check(name + '-unchanged-input', (out / name / 'item.json').is_file()
               and w.digest(ip) == w.digest(out / name / 'item.json'))
         render = trace.get('nativeRender', {})
-        for key, value in resource_checks(render, args.texture).items():
-            # VFX-off intentionally selects no library texture.
-            if name != 'vfx-off' or key != 'selected-original-texture':
-                check(name + '-' + key, value)
+        # Empty authored slots do not prewarm a replacement texture or allocate buffers.
+        for key, value in resource_checks(render, args.texture, selected=name != 'vfx-off').items():
+            check(name + '-' + key, value)
         if name == 'no-capture':
             check('no-capture-no-fabricated-frames', render.get('capture') is False and render.get('frames') == [])
             continue

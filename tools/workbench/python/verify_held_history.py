@@ -8,7 +8,6 @@ if __package__ in (None, ""):
 
 import argparse
 import copy
-import hashlib
 import io
 import json
 import math
@@ -80,8 +79,7 @@ def main():
     ImageDraw.Draw(image).polygon([(0, 6), (48, 6), (48, 0), (63, 8), (48, 15), (48, 10), (0, 10)], fill=(240, 220, 80, 255))
     buffer = io.BytesIO(); image.save(buffer, format='PNG'); raw = buffer.getvalue()
     identity = json.dumps([item['id'], 'item', '', item['id']], separators=(',', ':')).encode('ascii')
-    publication = out/('infini_asset_png_'+hashlib.sha256(identity+b'\0'+raw).hexdigest()+'.png')
-    publication.write_bytes(raw)
+    publication = w.publish_artwork(out, item, 'item', identity, raw)
     item['visual'].update(spritePath=publication.name, spriteStatus='generated', renderSizePx=64, forwardAngleDegrees=0)
     for entity in item['runtimeProgram']['entities']:
         if entity['kind'] == 'item_body':

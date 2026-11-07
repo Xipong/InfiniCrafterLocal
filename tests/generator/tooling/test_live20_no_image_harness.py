@@ -680,7 +680,7 @@ def test_explicit_shape_needs_no_texture(tmp_path: Path) -> None:
     data["vfxManifest"] = _compile_manifest(data, report["normalized"], "no_image_shape_probe")
 
     hydrate_no_image_fixture_assets(data, fixture)
-    assert data["vfxManifest"]["assets"] == []
+    assert data["vfxManifest"].get("assets", []) == []
     from infini_local.qa.live_no_image_fixture import synthetic_no_image_execution_control
     ring_control = synthetic_no_image_execution_control(data, fixture)
     ring_report = visual_delivery_report(ring_control, check_backend_config=False)

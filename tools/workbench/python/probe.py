@@ -8,6 +8,7 @@ import json
 import math
 from pathlib import Path
 import re
+import sys
 
 import workbench as w
 from python.campaign import expected_result, run_suite
@@ -103,15 +104,26 @@ def artwork_files(item_path, definition, extra_dirs):
         paths.append(visual.get("equipOverlayPath"))
     if any(not isinstance(path, str) or not path.strip() for path in paths):
         raise ValueError("Item has a selected artwork with no sprite path; cannot render it")
+    generator = str(w.ROOT / "generator")
+    if generator not in sys.path:
+        sys.path.insert(0, generator)
+    from infini_local.storage.image_store import resolve
+
     explicit_dirs = [Path(p).expanduser().resolve() for p in extra_dirs]
     dirs = []
-    for ancestor in [item_path.parent, *item_path.parents]:
+    stores = []
+    for ancestor in dict.fromkeys([item_path.parent, *item_path.parents]):
         dirs.extend((ancestor, ancestor / "art/game_ready", ancestor / "sprites", ancestor / "cache/sprites"))
+        stores.append(ancestor / "images")
     result = []
     for raw in dict.fromkeys(paths):
         name = raw.replace("\\", "/").rsplit("/", 1)[-1]
         explicit = [directory / name for directory in explicit_dirs]
+        explicit += [path for directory in explicit_dirs if (path := resolve(directory, name)) is not None]
         candidates = [Path(raw).expanduser()] + [directory / name for directory in dirs]
+        # A current index names and verifies immutable bytes. Do not scan nested
+        # image directories or infer a replacement from a matching filename.
+        candidates += [path for store in stores if (path := resolve(store, name)) is not None]
         # An explicit directory resolves ambiguity deliberately. If it has no match,
         # retain the normal nearby lookup and report all conflicting bytes.
         selected = [p for p in explicit if p.is_file()] or [p for p in candidates if p.is_file()]

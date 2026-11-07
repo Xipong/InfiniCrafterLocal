@@ -8,7 +8,6 @@ if __package__ in (None, ""):
 
 import argparse
 import copy
-import hashlib
 import io
 import json
 import os
@@ -34,8 +33,8 @@ def main():
     item=w.read_json(fixtures/'synthetic-world-owned.json')
     buf=io.BytesIO();Image.new('RGBA',(16,16),(80,180,240,255)).save(buf,format='PNG');raw=buf.getvalue()
     identity=[item['id'],'item','',item['id']]
-    name='infini_asset_png_'+hashlib.sha256(json.dumps(identity,separators=(',',':')).encode()+b'\0'+raw).hexdigest()+'.png'
-    asset=out/name;asset.write_bytes(raw)
+    asset=w.publish_artwork(out,item,'item',json.dumps(identity,separators=(',',':')).encode('ascii'),raw)
+    name=asset.name
     item['visual'].update(spritePath=name,spriteStatus='generated',renderSizePx=24,preferredCanvasSize=24,forwardAngleDegrees=0)
     for entity in item['runtimeProgram']['entities']:entity['visual'].update(assetMode='baked_sprite',spritePath=name,spriteStatus='generated')
     path=out/'synthetic-placed-art.json';path.write_text(json.dumps(item))

@@ -472,6 +472,9 @@ public sealed partial class GeneratorClient
             StampAssetTransportMetadata(data, refreshBaseUrl: true, cancellationToken: request.CancellationToken);
             request.CancellationToken.ThrowIfCancellationRequested();
             data.RecipeMeta.AssetFiles = GeneratedAssetSyncService.AssetFilesFromData(data).ToArray();
+            if (Main.netMode == NetmodeID.Server && data.RecipeMeta.AssetFiles.Length > 0)
+                (InfiniCrafterLocalMod.AssetSync ?? throw new InvalidOperationException("Server asset store is unavailable."))
+                    .PrepareServerAssetsAsync(data, Endpoint, cts.Token).GetAwaiter().GetResult();
             return data;
         }
         catch (Exception ex)
@@ -572,6 +575,9 @@ public sealed partial class GeneratorClient
             StampAssetTransportMetadata(data, refreshBaseUrl: true, cancellationToken: request.CancellationToken);
             request.CancellationToken.ThrowIfCancellationRequested();
             data.RecipeMeta.AssetFiles = GeneratedAssetSyncService.AssetFilesFromData(data).ToArray();
+            if (Main.netMode == NetmodeID.Server && data.RecipeMeta.AssetFiles.Length > 0)
+                (InfiniCrafterLocalMod.AssetSync ?? throw new InvalidOperationException("Server asset store is unavailable."))
+                    .PrepareServerAssetsAsync(data, Endpoint, cts.Token).GetAwaiter().GetResult();
             return new GenerationAttemptResult { Data = data, FailureKind = GenerationFailureKind.None, StatusCode = 200 };
         }
         catch (OperationCanceledException) when (request.CancellationToken.IsCancellationRequested)

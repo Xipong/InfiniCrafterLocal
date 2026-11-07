@@ -542,6 +542,79 @@ public sealed class GeneratedAssetSyncService : IDisposable
         return result;
     }
 
+    // The generation worker must finish this before the main-thread MP commit.
+    // A standalone current generator has its own indexed image root; its accepted
+    // absolute paths are selectors, never permission to import arbitrary files.
+    internal async Task PrepareServerAssetsAsync(GeneratedItemData data, string generatorEndpoint, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        string[] files = AssetFilesFromData(data).ToArray();
+        if (files.Length == 0) return;
+        string origin = SanitizeBaseUrl(generatorEndpoint);
+        if (origin.Length == 0) throw new InvalidDataException("Invalid generator asset origin.");
+        StorageScope scope;
+        CancellationToken serviceToken;
+        lock (_lock)
+        {
+            if (_disposed) throw new ObjectDisposedException(nameof(GeneratedAssetSyncService));
+            if (Main.netMode != NetmodeID.Server || !GeneratedItemRegistryService.IsCurrentWorldData(data))
+                throw new InvalidOperationException("Server asset preparation requires the current authoritative world.");
+            scope = new(_storageEpoch, data.RecipeMeta.WorldId, Main.worldName, data.Id, data.Name, "");
+            serviceToken = _downloadCancellation.Token;
+            _activeHttpDownloads++;
+        }
+        try
+        {
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, serviceToken);
+            CancellationToken token = linked.Token;
+            var ready = BuildServerAssetDescriptors(data).ToDictionary(row => row.FileName, StringComparer.OrdinalIgnoreCase);
+            long total = ready.Values.Sum(row => (long)row.Length);
+            foreach (string file in files)
+            {
+                token.ThrowIfCancellationRequested();
+                if (ready.ContainsKey(file)) continue;
+                byte[] bytes;
+                await HttpSlots.WaitAsync(token).ConfigureAwait(false);
+                try
+                {
+                    lock (_lock) _downloadStartedCount++;
+                    string url = origin + "/get_asset?file=" + Uri.EscapeDataString(file);
+                    bytes = await DownloadAssetBytesWithBoundedStreamAsync(url, token).ConfigureAwait(false);
+                }
+                finally { HttpSlots.Release(); }
+                token.ThrowIfCancellationRequested();
+                if (!IsCompletePng(bytes) || (total += bytes.Length) > MaxAssetBundleBytes)
+                    throw new InvalidDataException("Generator asset is not a complete PNG within the transfer budget.");
+                string hash = ComputeSha256Hex(bytes);
+                lock (_lock)
+                {
+                    token.ThrowIfCancellationRequested();
+                    if (_disposed || scope.Epoch != _storageEpoch || scope.WorldId != GeneratedItemRegistryService.CurrentWorldIdString())
+                        throw new OperationCanceledException("Server asset world retired.", token);
+                    if (!CommitVerifiedAssetInScope(data.Id, file, bytes, hash, scope with { Role = AssetRole(data, file) }))
+                        throw new IOException("Generator asset could not be published to the current indexed store.");
+                }
+            }
+            token.ThrowIfCancellationRequested();
+            lock (_lock)
+            {
+                if (_disposed || scope.Epoch != _storageEpoch || scope.WorldId != GeneratedItemRegistryService.CurrentWorldIdString())
+                    throw new OperationCanceledException("Server asset world retired.", token);
+                if (!HasCompleteServerAssetRoster(data))
+                    throw new InvalidDataException("Generator asset roster is not ready for MP transport.");
+            }
+        }
+        finally
+        {
+            lock (_lock)
+            {
+                _activeHttpDownloads--;
+                if (_disposed && _downloadCancellationCompleted && _activeHttpDownloads == 0)
+                    _downloadCancellation.Dispose();
+            }
+        }
+    }
+
     internal bool HasCompleteServerAssetRoster(GeneratedItemData data)
     {
         string[] files = AssetFilesFromData(data).ToArray();
@@ -1288,7 +1361,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
                     && string.Equals(x.Value.FileName, file, StringComparison.OrdinalIgnoreCase)).Select(x => x.Key).ToArray())
                     _pendingPacketAssets.Remove(key);
             }
-            Main.QueueMainThreadAction(() => InfiniCrafterLocalMod.Sprites?.Invalidate(local));
+            if (!Main.dedServ) Main.QueueMainThreadAction(() => InfiniCrafterLocalMod.Sprites?.Invalidate(local));
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException or System.Text.Json.JsonException or KeyNotFoundException or FormatException)
@@ -1385,8 +1458,9 @@ public sealed class GeneratedAssetSyncService : IDisposable
         foreach (string path in RuntimeAssetPaths(data))
         {
             string file = FileNameFromPath(path);
-            if (!string.IsNullOrWhiteSpace(file) && file.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
-                seen.Add(file);
+            if (!string.IsNullOrWhiteSpace(path) && string.IsNullOrWhiteSpace(file))
+                throw new InvalidDataException("generated asset selector does not name a supported PNG");
+            if (!string.IsNullOrWhiteSpace(file)) seen.Add(file);
         }
         if (seen.Count > MaxAssetFiles)
             throw new InvalidDataException($"generated asset roster exceeds {MaxAssetFiles} files");

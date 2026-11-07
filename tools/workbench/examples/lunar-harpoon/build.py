@@ -21,6 +21,7 @@ from infini_local.core.vfx.materials import vfx_model_payload
 from infini_local.core.vfx.validation import validate_vfx_director_output, validate_vfx_manifest_wire
 from infini_local.core.vfx.projection import _compile_manifest
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
+from infini_local.storage.image_store import compact_delivery_paths, publish
 
 ASSET_SHA256 = "8e9bd54774fc16081d709d82c37cabd9c5b994c2d02dad0e3cf5ca5dd9018463"
 def read(path: Path):
@@ -44,9 +45,6 @@ def main():
         raise ValueError("This demo's measured grip/forward axis require its exact supplied PNG")
     source = read(HERE / "author-source.json")
     identity = _runtime_publication_identity(source, "item", "", source["id"])
-    expected = "infini_asset_png_" + hashlib.sha256(identity + b"\0" + raw).hexdigest() + ".png"
-    if asset.name != expected:
-        raise ValueError("Expected exact canonical publication basename: " + expected)
     args.out.mkdir(parents=True, exist_ok=False)
     write(args.out / "author-validation.json", require(validate_runtime_program(source)))
     data = compile_runtime_program(source)
@@ -57,6 +55,7 @@ def main():
     if errors:
         raise ValueError(json.dumps(errors, indent=2))
     data = _apply_kit(data, kit)
+    asset = publish(args.out / "images", data, "item", identity, asset)
     # External imagegen delivery only: no mechanics, axes or artwork are inferred here.
     data["visual"].update(spritePath=str(asset), spriteUrl="", spriteStatus="generated", spriteTechnicalScore=0)
     for entity in data["runtimeProgram"]["entities"]:
@@ -65,6 +64,7 @@ def main():
     write(args.out / "vfx-author-validation.json", require(validate_vfx_director_output(vfx, data)))
     data["vfxManifest"] = _compile_manifest(data, vfx, data["id"])
     require(validate_vfx_manifest_wire(data))
+    compact_delivery_paths(args.out / "images", data)
     final = sanitize_recipe_for_delivery(data)
     write(args.out / "final-wire-validation.json", require(validate_runtime_wire(final)))
     write(args.out / "item.json", final)

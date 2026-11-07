@@ -132,27 +132,29 @@ internal sealed partial class WNativeArtwork:IDisposable {
    string name=GeneratedAssetSyncService.FileNameFromPath(alias);if(name.Length==0||!supplied.ContainsKey(name))throw new FileNotFoundException("Missing explicit artwork file for selected publication: "+name);
    if(!string.Equals(Path.GetFileName(supplied[name]),name,StringComparison.Ordinal))throw new InvalidDataException("Selected/supplied publication basename must match exact case");
    required.Add(name);
-   // RuntimeSpriteCache gives an existing raw local alias precedence; admit it only if explicitly supplied.
-   if(File.Exists(alias)) {string full=Path.GetFullPath(alias);RejectSymlink(full);if(!string.Equals(full,supplied[name],StringComparison.Ordinal))throw new InvalidDataException("Existing raw artwork alias is outside explicitly supplied files: "+alias);}
   }
   if(required.Count!=supplied.Count)throw new InvalidDataException("Unused artwork files are not admitted; provide exactly the selected PNG publications");
   var receipts=new JsonArray();var hashes=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+  var descriptors=new List<GeneratedAssetWireDescriptor>();
   foreach(var pair in supplied) {
    var info=new FileInfo(pair.Value);if(!info.Exists||info.Length<33||info.Length>8*1024*1024)throw new InvalidDataException("Artwork PNG missing or exceeds8MiB: "+pair.Key);
    byte[] bytes=File.ReadAllBytes(pair.Value);if(!bytes.AsSpan(0,8).SequenceEqual(new byte[]{137,80,78,71,13,10,26,10}))throw new InvalidDataException("Artwork must be actual PNG bytes: "+pair.Key);
    foreach(var publication in selected.Where(x=>GeneratedAssetSyncService.FileNameFromPath(x.Selection.Path)==pair.Key)) {
-    var names=PublicationNames(data,publication.Role,publication.Identity,bytes);
-    if(!string.Equals(pair.Key,names.Legacy,StringComparison.Ordinal) && !string.Equals(pair.Key,names.Scoped,StringComparison.Ordinal))throw new InvalidDataException("Artwork publication identity/content mismatch; custom logical asset IDs and non-publication filenames are not certified by this bounded mode: "+pair.Key);
+    RequirePublicationName(data,publication.Role,publication.Identity,bytes,pair.Key);
    }
    if(System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(8,4))!=13 || !bytes.AsSpan(12,4).SequenceEqual(new byte[]{73,72,68,82})) throw new InvalidDataException("Artwork PNG must start with canonical IHDR");
    uint width=System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16,4)),height=System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(20,4));
    if(width==0||height==0||width>4096||height>4096||(ulong)width*height>16UL*1024*1024) throw new InvalidDataException("Artwork PNG dimensions exceed admission limit: positive dimensions <=4096 and <=16M pixels");
-   string destination=Path.Combine(sync.CacheRoot,pair.Key);RejectSymlink(destination);File.WriteAllBytes(destination,bytes);string sha=Hash(File.ReadAllBytes(destination));hashes[pair.Key]=sha;
-   receipts.Add(new JsonObject{["publicationFileName"]=pair.Key,["suppliedPath"]=pair.Value,["stagedPath"]=destination,["bytes"]=bytes.Length,["copiedBytesSha256"]=sha,["publicationVerified"]=true,["publicationAlgorithm"]="Current image_store.publish: compact [world,item,role] JSON + NUL + exact request identity JSON + NUL + PNG bytes; historical identity + NUL + PNG aliases also verified",["publicationScope"]="Root/runtime/equip_overlay default logical asset IDs; current VFX element/path asset references use exact recipeId/assetId identity; safe ASCII identities only"});
+   var publicationOwner=selected.First(x=>GeneratedAssetSyncService.FileNameFromPath(x.Selection.Path)==pair.Key);
+   string destination=StagePublication(sync,data,publicationOwner.Role,publicationOwner.Identity,bytes,pair.Key);
+   string sha=Hash(File.ReadAllBytes(destination));hashes[pair.Key]=sha;
+   descriptors.Add(new GeneratedAssetWireDescriptor{FileName=pair.Key,Length=bytes.Length,Sha256=sha});
+   receipts.Add(new JsonObject{["publicationFileName"]=pair.Key,["suppliedPath"]=pair.Value,["stagedPath"]=destination,["bytes"]=bytes.Length,["copiedBytesSha256"]=sha,["publicationVerified"]=true,["publicationAlgorithm"]="Current image_store.publish: compact [world,item,role] JSON + NUL + exact request identity JSON + NUL + PNG bytes; current indexed immutable publication only",["publicationScope"]="Root/runtime/equip_overlay default logical asset IDs; current VFX element/path asset references use exact recipeId/assetId identity; safe ASCII identities only"});
   }
   typeof(InfiniCrafterLocalMod).GetProperty("Sprites")!.SetValue(null,cache);typeof(InfiniCrafterLocalMod).GetProperty("AssetSync")!.SetValue(null,sync);
   bool old=Main.dedServ;Main.dedServ=false;
   try {
+   CertifyPublications(sync,data,descriptors);
    foreach(var group in selected.GroupBy(p=>p.Selection.Path,StringComparer.Ordinal)) {
     string alias=group.Key;string name=GeneratedAssetSyncService.FileNameFromPath(alias);Texture2D texture=cache.TryGet(alias)??throw new FileNotFoundException("Native RuntimeSpriteCache rejected selected PNG: "+alias);
     if(Hash(File.ReadAllBytes(supplied[name]))!=hashes[name])throw new IOException("Artwork source changed during native load: "+name);
@@ -164,13 +166,11 @@ internal sealed partial class WNativeArtwork:IDisposable {
   }catch {Dispose();throw;}finally{Main.dedServ=old;}
   Report=new JsonObject{["scope"]="Original authored PNG core, native held layer and separate inventory preview; not full PreDraw or Terraria world rendering",["descriptorMutated"]=false,["admissionLimits"]=new JsonObject{["maxFileBytes"]=8*1024*1024,["maxWidth"]=4096,["maxHeight"]=4096,["maxPixels"]=16*1024*1024},["assetReceipts"]=receipts,["entrypoints"]=Entrypoints(),["fullProjectilePreDrawExecuted"]=false,["missingFullPreDrawAsset"]="Terraria Content/Images/MagicPixel.xnb",["inventoryPreviewAnchor"]=PreviewAnchor()};geometryObserver=new WNativeVisualGeometry();EnableVisualObserver();BeginFrame();
  }
- internal static (string Legacy,string Scoped) PublicationNames(GeneratedItemData data,string selectedRole,string[] identity,byte[] bytes) {
+ internal static string PublicationName(GeneratedItemData data,string selectedRole,string[] identity,byte[] bytes) {
   bool vfx=selectedRole.StartsWith("vfx:",StringComparison.Ordinal);
   string role=vfx?"vfx_"+selectedRole[4..]:identity[1];
   byte[] encodedIdentity=Encoding.ASCII.GetBytes(JsonSerializer.Serialize(identity));
   using var digest=IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-  digest.AppendData(encodedIdentity);digest.AppendData(new byte[]{0});digest.AppendData(bytes);
-  string legacy=(vfx?"infini_vfx_png_":"infini_asset_png_")+Convert.ToHexString(digest.GetHashAndReset()).ToLowerInvariant()+".png";
   // Current storage/image_store.publish: world/item/role scope, exact request
   // identity and PNG bytes. The readable role label is not the asset identity.
   string world=string.IsNullOrEmpty(data.RecipeMeta.WorldId)?"unscoped":data.RecipeMeta.WorldId;
@@ -179,7 +179,34 @@ internal sealed partial class WNativeArtwork:IDisposable {
   digest.AppendData(new byte[]{0});digest.AppendData(encodedIdentity);digest.AppendData(new byte[]{0});digest.AppendData(bytes);
   string label=System.Text.RegularExpressions.Regex.Replace(role.ToLowerInvariant(),"[^a-z0-9_-]+","_").Trim('_');
   if(label.Length>24)label=label[..24];if(label.Length==0)label="asset";
-  return (legacy,label+"--"+Convert.ToHexString(digest.GetHashAndReset()).ToLowerInvariant()+".png");
+  return label+"--"+Convert.ToHexString(digest.GetHashAndReset()).ToLowerInvariant()+".png";
+ }
+ internal static void RequirePublicationName(GeneratedItemData data,string role,string[] identity,byte[] bytes,string name) {
+  if(!string.Equals(name,PublicationName(data,role,identity,bytes),StringComparison.Ordinal))
+   throw new InvalidDataException("Artwork publication identity/content mismatch; custom logical asset IDs and non-publication filenames are not certified by this bounded mode: "+name);
+ }
+ internal static string StagePublication(GeneratedAssetSyncService sync,GeneratedItemData data,string role,string[] identity,byte[] bytes,string name) {
+  RequirePublicationName(data,role,identity,bytes,name);
+  return new SharedImageStore(sync.CacheRoot).Publish(name,bytes,data.RecipeMeta.WorldId,Main.worldName,data.Id,data.Name,
+   role.StartsWith("vfx:",StringComparison.Ordinal)?"vfx_"+role[4..]:identity[1]);
+ }
+ internal static void CertifyPublications(GeneratedAssetSyncService sync,GeneratedItemData data,IEnumerable<GeneratedAssetWireDescriptor> descriptors) {
+  var publications=descriptors.ToArray();
+  // Every selected transport name must already have its exact indexed PNG.
+  // Refuse before EnsureAssetsForData can request any missing asset.
+  foreach(string name in GeneratedAssetSyncService.AssetFilesFromData(data)) {
+   var matches=publications.Where(p=>p.FileName==name).ToArray();
+   if(matches.Length!=1||sync.ResolveLocalPath(name) is not { } path)
+    throw new FileNotFoundException("Missing explicit indexed artwork publication: "+name);
+   var proof=matches[0];var bytes=File.ReadAllBytes(path);
+   if(bytes.Length!=proof.Length||!GeneratedAssetSyncService.IsCompletePng(bytes)||Hash(bytes)!=proof.Sha256)
+    throw new InvalidDataException("Indexed artwork bytes disagree with explicit publication: "+name);
+  }
+  sync.RegisterRemoteAssetDescriptors(data.Id,publications);
+  sync.EnsureAssetsForData(data);
+  foreach(var publication in publications)
+   if(sync.ResolveCertifiedLocalPath(publication.FileName) is null)
+    throw new InvalidDataException("Native asset lifecycle refused artwork publication: "+publication.FileName);
  }
  static string Hash(byte[] bytes)=>Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
  static void RejectSymlink(string path) {for(FileSystemInfo? p=new FileInfo(path);p is not null;p=p is FileInfo file?file.Directory:((DirectoryInfo)p).Parent)if(p.LinkTarget is not null||(p.Exists&&(p.Attributes&FileAttributes.ReparsePoint)!=0))throw new InvalidDataException("Artwork symlink/reparse path is not admitted: "+p.FullName);}

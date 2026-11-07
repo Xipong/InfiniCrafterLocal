@@ -181,21 +181,70 @@ internal static partial class EngineRuntimeChecks
         var published=new GeneratedItemData{Id="fixture"};published.RecipeMeta.WorldId="0";
         byte[] png=System.Text.Encoding.ASCII.GetBytes("native-test");
         var itemIdentity=new[]{"fixture","item","","fixture"};
-        var itemNames=WNativeArtwork.PublicationNames(published,"item",itemIdentity,png);
-        if(itemNames.Scoped!="item--4563e2fc133e5c692798bbc2e95937dbc3f0d074689f9ef33ef5da3e8768ed2e.png"
-            ||itemNames.Legacy!="infini_asset_png_52d48cd476c157d6aae8bb40a8922adafba051b82c32a96c6bf3db07cc83566d.png"
-            ||WNativeArtwork.PublicationNames(published,"equip_overlay",new[]{"fixture","equip_overlay","","fixture_equip_overlay"},png).Scoped!="equip_overlay--39930cdda62f00654dd47acb8399629d62ce9ecc0dc0c6e9a3592bc14003db3c.png"
-            ||WNativeArtwork.PublicationNames(published,"vfx:cloud",new[]{"recipe","cloud"},png).Scoped!="vfx_cloud--4158c616a8d2e90f6f964697d846b08f85ca0f63ead4b0da2610f7e0cf5b9a83.png")
-            throw new Exception("Current/historical publication hash contract differs from image store");
-        if(WNativeArtwork.PublicationNames(published,"item",itemIdentity,new byte[]{1}).Scoped==itemNames.Scoped)
+        var itemName=WNativeArtwork.PublicationName(published,"item",itemIdentity,png);
+        if(itemName!="item--4563e2fc133e5c692798bbc2e95937dbc3f0d074689f9ef33ef5da3e8768ed2e.png"
+            ||WNativeArtwork.PublicationName(published,"equip_overlay",new[]{"fixture","equip_overlay","","fixture_equip_overlay"},png)!="equip_overlay--39930cdda62f00654dd47acb8399629d62ce9ecc0dc0c6e9a3592bc14003db3c.png"
+            ||WNativeArtwork.PublicationName(published,"vfx:cloud",new[]{"recipe","cloud"},png)!="vfx_cloud--4158c616a8d2e90f6f964697d846b08f85ca0f63ead4b0da2610f7e0cf5b9a83.png")
+            throw new Exception("Current publication hash contract differs from image store");
+        if(WNativeArtwork.PublicationName(published,"item",itemIdentity,new byte[]{1})==itemName)
             throw new Exception("Changed PNG content preserved its publication identity");
+        bool historicalRefused=false;
+        try{WNativeArtwork.RequirePublicationName(published,"item",itemIdentity,png,"infini_asset_png_52d48cd476c157d6aae8bb40a8922adafba051b82c32a96c6bf3db07cc83566d.png");}
+        catch(InvalidDataException){historicalRefused=true;}
+        if(!historicalRefused)throw new Exception("Historical filename admitted as a current publication");
         published.RecipeMeta.WorldId="1";
-        if(WNativeArtwork.PublicationNames(published,"item",itemIdentity,png).Scoped==itemNames.Scoped)
+        if(WNativeArtwork.PublicationName(published,"item",itemIdentity,png)==itemName)
             throw new Exception("Changed world preserved its scoped publication identity");
         published.RecipeMeta.WorldId="0";published.Id="other";
-        if(WNativeArtwork.PublicationNames(published,"item",itemIdentity,png).Scoped==itemNames.Scoped)
+        if(WNativeArtwork.PublicationName(published,"item",itemIdentity,png)==itemName)
             throw new Exception("Changed item preserved its scoped publication identity");
-        Console.WriteLine("PASS: workbench exact scoped/historical item, overlay and VFX publication hashes plus changed-byte/world/item controls");
+        CheckWorkbenchPublicationStaging();
+        Console.WriteLine("PASS: workbench exact scoped item, overlay and VFX publication hashes plus changed-byte/world/item controls");
         Console.WriteLine("PASS: workbench trail admission, exact selected texture readiness/queue controls and controlled NPC dedicated-scope restoration (not GPU/gameplay)");
     }
+    private static void CheckWorkbenchPublicationStaging()
+    {
+        WithLighting((_,_)=>{
+            using var peers=new ReviewPeers();
+            using var sync=new InfiniCrafterLocal.Common.Services.GeneratedAssetSyncService();
+            var data=AssetOwnerData("workbench-publication","explicit-staging-input.png");
+            string[] identity={data.Id,"item","",data.Id};
+            string name=WNativeArtwork.PublicationName(data,"item",identity,AssetOwnerCanonical);
+            data.Visual.SpritePath=name;
+            string path=WNativeArtwork.StagePublication(sync,data,"item",identity,AssetOwnerCanonical,name);
+            if(sync.ResolveLocalPath(name)!=path||!File.ReadAllBytes(path).SequenceEqual(AssetOwnerCanonical))
+                throw new Exception("Workbench staging bypassed exact indexed PNG publication");
+            if(sync.ResolveCertifiedLocalPath(name) is not null)
+                throw new Exception("Index entry alone incorrectly certified rendering");
+            var descriptor=new InfiniCrafterLocal.Common.Services.GeneratedAssetWireDescriptor {
+                FileName=name,Length=AssetOwnerCanonical.Length,Sha256=ImageHash(AssetOwnerCanonical)};
+            var sprites=typeof(InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("Sprites")!;
+            var previous=sprites.GetValue(null);
+            try {
+                sprites.SetValue(null,null);
+                var hostile=new InfiniCrafterLocal.Common.Services.GeneratedAssetWireDescriptor {
+                    FileName=name,Length=AssetOwnerCanonical.Length,Sha256=ImageHash(AssetOwnerOtherColor)};
+                bool hostileRefused=false;
+                try{WNativeArtwork.CertifyPublications(sync,data,new[]{hostile});}
+                catch(InvalidDataException){hostileRefused=true;}
+                if(!hostileRefused||sync.ResolveCertifiedLocalPath(name) is not null)
+                    throw new Exception("Hostile descriptor certified unrelated artwork bytes");
+                WNativeArtwork.CertifyPublications(sync,data,new[]{descriptor});
+                if(sync.ResolveCertifiedLocalPath(name)!=path)throw new Exception("Workbench did not use native lifecycle certification");
+                File.SetLastWriteTimeUtc(path,File.GetLastWriteTimeUtc(path).AddSeconds(2));
+                if(sync.ResolveCertifiedLocalPath(name) is not null)throw new Exception("Changed staged file retained certification");
+                bool changedRefused=false;
+                try{WNativeArtwork.StagePublication(sync,data,"item",identity,AssetOwnerOtherColor,name);}
+                catch(InvalidDataException){changedRefused=true;}
+                if(!changedRefused)throw new Exception("Changed bytes admitted under original publication name");
+                bool missingRefused=false;
+                try{WNativeArtwork.CertifyPublications(sync,data,Array.Empty<InfiniCrafterLocal.Common.Services.GeneratedAssetWireDescriptor>());}
+                catch(FileNotFoundException){missingRefused=true;}
+                if(!missingRefused||sync.GetDebugSnapshot().DownloadStartedCount!=0)
+                    throw new Exception("Missing artwork triggered fallback acquisition");
+            }finally{sprites.SetValue(null,previous);}
+        });
+        Console.WriteLine("PASS: workbench current indexed publication, native certification, hostile descriptors, changed bytes/stat and missing controls");
+    }
+
 }

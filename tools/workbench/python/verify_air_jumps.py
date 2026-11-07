@@ -42,16 +42,14 @@ def prepare(out: Path, render: bool) -> tuple[dict[str, Any], dict[str, Any]]:
         scene['actions'].append(dict(kind='controls', tick=tick, left=False, right=False, jump=jump))
     if render:
         from PIL import Image, ImageDraw
-        import hashlib
         files = []
         for role, suffix, size in [('item', '', (16, 16)), ('equip_overlay', '_equip_overlay', (8, 8))]:
             image = Image.new('RGBA', size)
             ImageDraw.Draw(image).ellipse((0, 0, size[0]-1, size[1]-1), outline=(80, 200, 255, 255), width=2)
             buffer = io.BytesIO(); image.save(buffer, format='PNG'); raw = buffer.getvalue()
             identity = json.dumps([item['id'], role, '', item['id']+suffix], separators=(',', ':')).encode('ascii')
-            scope = json.dumps([item['recipeMeta']['worldId'], item['id'], role], separators=(',', ':')).encode('ascii')
-            path = out / (role+'--'+hashlib.sha256(scope+b'\0'+identity+b'\0'+raw).hexdigest()+'.png')
-            path.write_bytes(raw); files.append(str(path))
+            path = w.publish_artwork(out, item, role, identity, raw)
+            files.append(str(path))
         item['visual'].update(spritePath=Path(files[0]).name, spriteStatus='generated', renderSizePx=16,
                               forwardAngleDegrees=0, equipOverlayPath=Path(files[1]).name, equipOverlayStatus='generated')
         from python.verify_history_trail import current_vfx_slots

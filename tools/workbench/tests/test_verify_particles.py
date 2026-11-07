@@ -75,6 +75,18 @@ class ParticleObserverTests(unittest.TestCase):
                 invalid = copy.deepcopy(render); del invalid[key]
                 self.assertFalse(all(particles.resource_checks(invalid, texture).values()), key)
 
+    def test_vfx_off_keeps_original_effect_without_inventing_selected_resources(self):
+        render = dict(resourceReady=True, originalParticleLibraryEffect=True, libraryBuffers=0,
+            effectSha256=particles.EFFECT_SHA256, readyLibraryTexturePaths=[],
+            magicPixelResource=dict(sha256=particles.MAGIC_PIXEL_SHA256, playerArtworkLoaded=False),
+            itemArtworkRendered=False, projectileArtworkRendered=False, worldRendered=False, soundValidated=False)
+        self.assertTrue(all(particles.resource_checks(render, 'star', selected=False).values()))
+        self.assertFalse(all(particles.resource_checks(render, 'star').values()))
+        for key, value in [('libraryBuffers', 4), ('readyLibraryTexturePaths', [particles.TEXTURES['star'][0]]),
+                           ('effectSha256', 'changed'), ('resourceReady', False)]:
+            invalid = copy.deepcopy(render); invalid[key] = value
+            self.assertFalse(all(particles.resource_checks(invalid, 'star', selected=False).values()), key)
+
     def test_lifecycle_requires_real_hit_exact_count_and_retirement(self):
         states = [dict(tick=t, particleCount=5 if 2 <= t < 16 else 0,
                        materialRecordCount=1 if 2 <= t < 16 else 0,

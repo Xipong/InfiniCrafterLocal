@@ -12,6 +12,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
@@ -49,6 +50,20 @@ def digest(path):
     with Path(path).open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
+
+
+def publish_artwork(out: Path, data: dict, role: str, identity: bytes, raw: bytes) -> Path:
+    """Publish explicitly supplied PNG bytes through the generator's current store."""
+    generator = str(ROOT / "generator")
+    if generator not in sys.path:
+        sys.path.insert(0, generator)
+    from infini_local.storage.image_store import publish
+
+    out.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".artwork-source-", dir=out) as directory:
+        source = Path(directory) / "source.png"
+        source.write_bytes(raw)
+        return publish(out / "images", data, role, identity, source)
 
 
 def drawable(actor):

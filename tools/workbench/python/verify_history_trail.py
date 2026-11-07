@@ -8,7 +8,6 @@ if __package__ in (None, ""):
 
 import argparse
 import copy
-import hashlib
 import io
 import json
 import os
@@ -92,7 +91,7 @@ def main():
     # All generated artwork here belongs only to the explicit synthetic controls.
     buffer=io.BytesIO();Image.new('RGBA',(16,16),(220,220,220,255)).save(buffer,format='PNG')
     raw=buffer.getvalue();identity=json.dumps([item['id'],'item','',item['id']],separators=(',',':')).encode('ascii')
-    png=out/('infini_asset_png_'+hashlib.sha256(identity+b'\0'+raw).hexdigest()+'.png');png.write_bytes(raw)
+    png=w.publish_artwork(out,item,'item',identity,raw)
     artwork_item=copy.deepcopy(item)
     artwork_item['visual'].update(spritePath=png.name,spriteStatus='generated',renderSizePx=24,forwardAngleDegrees=0)
     for entity in artwork_item['runtimeProgram']['entities']:

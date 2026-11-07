@@ -13,7 +13,7 @@
     <Content Include="$(InfiniModSourceRoot)/build.txt" Link="native-mod/build.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="$(InfiniModSourceRoot)/Localization/**/*" Link="native-mod/Localization/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="$(InfiniModSourceRoot)/Assets/**/*" Link="native-mod/asset-content/Assets/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <Compile Include="../../../tests/native/**/EngineRuntimeChecks*.cs" /><Compile Include="*.cs" />
+    <Compile Include="../../../tests/native/**/EngineRuntimeChecks*.cs" Exclude="../../../tests/native/**/obj/**;../../../tests/native/**/bin/**" /><Compile Include="*.cs" />
     <EmbeddedResource Include="../../../tests/native/fixtures/AtlasMouseTextMetrics.json" Link="fixtures/AtlasMouseTextMetrics.json" />
     <ProjectReference Include="production-mod/InfiniCrafterWorkbenchMod.csproj" />
     <Reference Include="ICSharpCode.Decompiler" HintPath="$(InfiniModSourceRoot)/lib/ICSharpCode.Decompiler.dll" />

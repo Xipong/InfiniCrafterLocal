@@ -9,7 +9,9 @@ sanitizer. It does not call an LLM/image API or edit compiled gameplay wire.
 
 The exact imagegen PNG is bundled under `assets/` and selected by default:
 `infini_asset_png_4a753935d470fa15fe74d5b8b4e87f63a8ef56060e8844a89b30e766fa0c8c2e.png`.
-The builder verifies both its byte hash and canonical publication identity.
+The builder verifies the immutable input byte hash and publishes those exact bytes
+through the current indexed image store under the output directory. The historical
+bundled input name is not a runtime publication name.
 The raw original image is not accepted: it has not undergone the recorded canonical
 normalization/publication. `--out` must be a new directory; existing evidence is
 never overwritten.

@@ -8,7 +8,6 @@ if __package__ in (None, ""):
 
 import argparse
 import copy
-import hashlib
 import io
 import json
 import os
@@ -41,14 +40,13 @@ def main():
     item = w.read_json(fixtures/'synthetic-straight.json')
     files = []
 
-    def publication(identity, color, prefix='infini_asset_png_'):
+    def publication(identity, color, role='item'):
         # Explicit synthetic control, never substituted for an authored PNG.
         buffer = io.BytesIO()
         Image.new('RGBA', (16, 16), color).save(buffer, format='PNG')
         raw = buffer.getvalue()
-        digest = hashlib.sha256(json.dumps(identity, separators=(',', ':')).encode('ascii') + b'\0' + raw).hexdigest()
-        path = out/(prefix + digest + '.png')
-        path.write_bytes(raw)
+        path = w.publish_artwork(out, item, role,
+            json.dumps(identity, separators=(',', ':')).encode('ascii'), raw)
         files.append(str(path))
         return path.name
 
@@ -56,7 +54,7 @@ def main():
     item['visual'].update(spritePath=root, spriteStatus='generated', renderSizePx=24, forwardAngleDegrees=0)
     for entity in item['runtimeProgram']['entities']:
         entity['visual'].update(assetMode='reuse_item_icon' if entity['kind']!='item_body' else 'baked_sprite', spritePath=root, spriteStatus='generated')
-    texture = publication(['synthetic-material-scene', 'test_strip'], (230, 120, 30, 255), 'infini_vfx_png_')
+    texture = publication(['synthetic-material-scene', 'test_strip'], (230, 120, 30, 255), 'vfx_test_strip')
     ramp = {'start':1, 'middle':1, 'end':1, 'curve':'linear'}
     color = {'r':255, 'g':255, 'b':255}
     color_ramp = {'start':color, 'middle':color, 'end':color, 'curve':'linear'}

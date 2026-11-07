@@ -14,7 +14,6 @@ if __package__ in (None, ""):
 
 import argparse
 import copy
-import hashlib
 import io
 import json
 import math
@@ -73,6 +72,15 @@ def hit_effect_records(snapshots: list[dict[str, Any]], texture_name: str) -> tu
     return sprites, rings
 
 
+def probe_asset_arguments(item_path: Path, definition: dict[str, Any], additional: Path) -> list[str]:
+    from python.probe import artwork_files
+    # Preserve exact source provenance before the definition is copied into a
+    # different output tree. Current DTO basenames contain no private store path.
+    originals = artwork_files(item_path.resolve(), definition, [])
+    directories = dict.fromkeys(Path(path).parent for path in [*originals, str(additional)])
+    return [value for directory in directories for value in ('--asset-dir', str(directory))]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--item', type=Path, required=True, help='Built public lunar-harpoon item')
@@ -95,12 +103,12 @@ def main():
     raw = buffer.getvalue()
     asset_id = 'hit_feedback_sprite'
     identity = [positive['vfxManifest']['recipeId'], asset_id]
-    digest = hashlib.sha256(json.dumps(identity, separators=(',', ':')).encode('ascii') + b'\0' + raw).hexdigest()
-    art = out / ('infini_vfx_png_' + digest + '.png')
-    art.write_bytes(raw)
+    art = w.publish_artwork(out, positive, 'vfx_' + asset_id,
+        json.dumps(identity, separators=(',', ':')).encode('ascii'), raw)
+    asset_arguments = probe_asset_arguments(args.item, original, art)
     positive['vfxManifest'].setdefault('assets', []).append(dict(
         id=asset_id, prompt='Synthetic uniform hit-feedback cutout', negativePrompt='', canvasSize=32,
-        layout='cutout', spritePath=str(art), spriteUrl='', spriteStatus='generated', spriteTechnicalScore=1))
+        layout='cutout', spritePath=art.name, spriteUrl='', spriteStatus='generated', spriteTechnicalScore=1))
     positive['vfxManifest']['slots'] += hit_effect_slots(entity['id'], asset_id)
     hit_item = out / 'hit-impact.json'
     hit_item.write_text(json.dumps(positive), encoding='utf-8')
@@ -118,7 +126,7 @@ def main():
             cmd += ['--set', 'nativeRender.drawZombie=false']
         if args.no_build:
             cmd.append('--no-build')
-        proc = subprocess.run(cmd, cwd=w.ROOT, capture_output=True, text=True, timeout=360)
+        proc = subprocess.run(cmd + asset_arguments, cwd=w.ROOT, capture_output=True, text=True, timeout=360)
         (out / (name + '.log')).write_text(proc.stdout + '\n' + proc.stderr, encoding='utf-8')
         if proc.returncode != 0:
             raise RuntimeError(name + ' native probe failed: ' + proc.stderr[-2000:])
@@ -139,7 +147,7 @@ def main():
            '--ticks', '85', '--hold', '35', '--out', str(missing_case), '--target', 'zombie']
     if args.no_build:
         cmd.append('--no-build')
-    proc = subprocess.run(cmd, cwd=w.ROOT, capture_output=True, text=True, timeout=360,
+    proc = subprocess.run(cmd + asset_arguments, cwd=w.ROOT, capture_output=True, text=True, timeout=360,
                           env={**os.environ, 'INFINI_PLAYER_ASSET_DIR': str(missing_assets)})
     (out / 'missing-zombie.log').write_text(proc.stdout + '\n' + proc.stderr, encoding='utf-8')
     missing_traces = list(missing_case.glob('runs/*/native.json'))
@@ -155,7 +163,7 @@ def main():
            '--set', 'dummy.nativeType="target_dummy"']
     if args.no_build:
         cmd.append('--no-build')
-    proc = subprocess.run(cmd, cwd=w.ROOT, capture_output=True, text=True, timeout=360)
+    proc = subprocess.run(cmd + asset_arguments, cwd=w.ROOT, capture_output=True, text=True, timeout=360)
     (out / 'wrong-target.log').write_text(proc.stdout + '\n' + proc.stderr, encoding='utf-8')
     wrong_traces = list(wrong_target.glob('runs/*/native.json'))
     if proc.returncode == 0 or len(wrong_traces) != 1:

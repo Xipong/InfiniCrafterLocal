@@ -20,21 +20,18 @@ internal static partial class EngineRuntimeChecks
 {
     // Baseline-compilable observers: actual independent Player/ModPlayer peers,
     // production source writers/readers and packet handler. Only socket Send and
-    // the final lightCue renderer are intercepted, not source/event admission.
+    // the final native light submission are intercepted, not source/event admission.
     private sealed record AirJumpNetworkPeer(Player Player, InfiniCraftPlayer Effects);
     private sealed class AirJumpEmissionProbe : IDisposable
     {
-        internal readonly List<Player> Emitted = new();
+        internal readonly List<Vector2> Emitted = new();
         private readonly MonoMod.RuntimeDetour.ILHook hook;
         internal AirJumpEmissionProbe()
         {
-            hook = new(typeof(InfiniItemVfxRuntime).GetMethod("EmitLocal", BindingFlags.Static | BindingFlags.NonPublic)!, il => {
+            hook = new(typeof(Lighting).GetMethod(nameof(Lighting.AddLight), new[] { typeof(Vector2), typeof(Vector3) })!, il => {
                 var cursor = new ILCursor(il);
                 cursor.Emit(Mono.Cecil.Cil.OpCodes.Ldarg_0);
-                cursor.Emit(Mono.Cecil.Cil.OpCodes.Ldarg_3);
-                cursor.EmitDelegate<Action<Player, string>>((player, ev) => {
-                    if (ev == RuntimeEventKind.OnJump) Emitted.Add(player);
-                });
+                cursor.EmitDelegate<Action<Vector2>>(point => Emitted.Add(point));
                 cursor.Emit(Mono.Cecil.Cil.OpCodes.Ret);
             });
         }

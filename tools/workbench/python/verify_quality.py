@@ -7,7 +7,6 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import argparse
-import hashlib
 import io
 import json
 import os
@@ -30,7 +29,7 @@ def main():
     draw.rectangle((1,2,14,9),fill=(90,160,210,255));draw.rectangle((7,10,8,15),fill=(100,200,90,255))
     buffer=io.BytesIO();image.save(buffer,format='PNG');raw=buffer.getvalue()
     identity=json.dumps([item['id'],'item','',item['id']],separators=(',',':')).encode()
-    name='infini_asset_png_'+hashlib.sha256(identity+b'\0'+raw).hexdigest()+'.png';asset=out/name;asset.write_bytes(raw)
+    asset=w.publish_artwork(out,item,'item',identity,raw);name=asset.name
     item['visual']['spritePath']=name
     for entity in item['runtimeProgram']['entities']:entity['visual']['spritePath']=name
     ip=out/'synthetic-support.json';ip.write_text(json.dumps(item))
