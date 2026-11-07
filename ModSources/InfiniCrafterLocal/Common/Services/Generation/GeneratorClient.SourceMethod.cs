@@ -320,8 +320,12 @@ public sealed partial class GeneratorClient
             block.Exit = stack;
         }
 
+        // Definition sets are immutable after publication. Transfers replace a
+        // slot; joins copy only when a predecessor adds a new definition. This
+        // retains exact reaching definitions without cloning every local's set
+        // for every block and fixed-point pass (including singleton transfers).
         private static Dictionary<int, HashSet<string>> CopyDefinitions(Dictionary<int, HashSet<string>> values)
-            => values.ToDictionary(pair => pair.Key, pair => new HashSet<string>(pair.Value));
+            => new(values);
         private static bool SameDefinitions(Dictionary<int, HashSet<string>> a, Dictionary<int, HashSet<string>> b)
             => a.Count == b.Count && a.All(pair => b.TryGetValue(pair.Key, out var other) && pair.Value.SetEquals(other));
 
@@ -352,8 +356,13 @@ public sealed partial class GeneratorClient
                     foreach (Block predecessor in predecessors[block.Start].Where(p => p.Height >= 0))
                         foreach (var pair in predecessor.Outgoing)
                         {
-                            if (!incoming.TryGetValue(pair.Key, out var defs)) incoming[pair.Key] = defs = new HashSet<string>();
-                            defs.UnionWith(pair.Value);
+                            if (!incoming.TryGetValue(pair.Key, out var defs)) incoming[pair.Key] = pair.Value;
+                            else if (!pair.Value.IsSubsetOf(defs))
+                            {
+                                var merged = new HashSet<string>(defs);
+                                merged.UnionWith(pair.Value);
+                                incoming[pair.Key] = merged;
+                            }
                         }
                     var outgoing = CopyDefinitions(incoming);
                     foreach (AmmoIl i in block.Code)
