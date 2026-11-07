@@ -28,7 +28,7 @@ public sealed partial class GeneratorClient
         private static CancellationTokenSource worldLifetime = new();
         private static readonly ConcurrentQueue<Action> mainWork = new();
         private readonly int captureThread = Environment.CurrentManagedThreadId;
-        private static bool ProfileJobs => string.Equals(
+        internal static bool ProfileJobs => string.Equals(
             Environment.GetEnvironmentVariable("INFINI_PARENT_ANALYSIS_PROFILE"), "1", StringComparison.Ordinal);
 
         internal ParentAnalysis(CancellationToken cancellation = default)

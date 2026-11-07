@@ -31,6 +31,9 @@ obj/
 *.tmod
 mod/InfiniCrafterLocal/Studio/manifest.json
 mod/InfiniCrafterLocal/Studio/runtime-*.zip
+mod/InfiniCrafterLocal/Data/native-source-pack.zip
+mod/InfiniCrafterLocal/Data/native-source-pack.zip.report.json
+mod/InfiniCrafterLocal/Data/native-source-pack.zip.*.tmp
 TestResults/
 
 # Local generator/runtime outputs

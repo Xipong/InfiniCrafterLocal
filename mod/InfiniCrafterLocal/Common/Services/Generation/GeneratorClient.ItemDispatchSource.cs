@@ -45,7 +45,24 @@ public sealed partial class GeneratorClient
                 try
                 {
                     while (!Monitor.TryEnter(nativeCSharpGate, 50)) timeout.Token.ThrowIfCancellationRequested();
-                    try { BuildNativeItemDispatchRegions(GetNativeCSharpDocument(method, timeout.Token), itemType, root, timeout.Token); }
+                    try
+                    {
+                        var input = new JsonObject { ["type"] = itemType };
+                        if (TryReadNativeSourceProjection("item_dispatch", method, input, timeout.Token, out var projection)
+                            && projection["root"] is JsonValue packedRoot && packedRoot.TryGetValue<string>(out string? packedName) && packedName == name
+                            && projection["records"] is JsonArray && projection["unknowns"] is JsonArray
+                            && JsonNode.DeepEquals(projection["rootCertificate"], root["rootCertificate"]))
+                        {
+                            timeout.Token.ThrowIfCancellationRequested();
+                            foreach (var property in projection) root[property.Key] = property.Value?.DeepClone();
+                        }
+                        else
+                        {
+                            BuildNativeItemDispatchRegions(GetNativeCSharpDocument(method, timeout.Token), itemType, root, timeout.Token);
+                            timeout.Token.ThrowIfCancellationRequested();
+                            RecordNativeSourceProjection("item_dispatch", method, input, root, timeout.Token);
+                        }
+                    }
                     finally { Monitor.Exit(nativeCSharpGate); }
                 }
                 catch (OperationCanceledException) { currentParentAnalysis?.ThrowIfCancelled(); root["unknowns"]!.AsArray().Add("dispatcher_decompilation_time_bound"); }

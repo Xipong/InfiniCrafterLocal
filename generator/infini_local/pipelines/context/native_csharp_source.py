@@ -73,33 +73,44 @@ def native_csharp_source_for_llm(reference: dict[str, Any], source_calls: list[d
             out.pop("nativeCSharpSource")
         return out
 
-    def view_size(value: dict[str, Any], selection: dict[str, dict[str, Any]]) -> int:
+    def measured_view(value: dict[str, Any], selection: dict[str, dict[str, Any]]) -> tuple[int, dict[str, Any], list[dict[str, Any]] | None]:
         # Use the real stage/exact-sharing owner, rather than summing duplicate
         # graph costs. This already-captured packet cannot re-enter compaction.
-        value, linked = _compact_model_view(value, _linked_calls(calls, selection, predicates), selection)
-        profile = {"attackReference": pack_attack_tables(project_attack_behavior(value))}
+        compact, linked = _compact_model_view(value, _linked_calls(calls, selection, predicates), selection)
+        profile = {"attackReference": pack_attack_tables(project_attack_behavior(compact))}
         if calls is not None:
             profile["referencedProjectiles"] = {"source": "native_single_hop_projectile_references", "version": 1,
                 "sourceCalls": linked, "references": []}
         context = parent_context_for_stage({"A": {"packet": {"raw": {"directProjectile": profile}}}}, stage="author")
-        return len(json.dumps(context, ensure_ascii=False, separators=(",", ":")))
+        return len(json.dumps(context, ensure_ascii=False, separators=(",", ":"))), compact, linked
 
     chosen = {}
     original = candidate(chosen)
-    best_size = view_size(original, chosen)
+    # Full-method evidence wins regardless of size. Defer the expensive Author
+    # projection until a genuine size comparison is needed; every comparison
+    # still uses the exact-sharing stage, never a guessed sum of records.
+    best_size: int | None = None
+    best_view: tuple[dict[str, Any], list[dict[str, Any]] | None] | None = None
     for record in records.values():
         for alternative in (record, _specialized_record(reference, record)):
             if alternative is None:
                 continue
             selection = {**chosen, record["id"]: alternative}
             proposed = candidate(selection)
-            size = view_size(proposed, selection)
             # The graph contract captures connected slices, not the complete
             # method. A certified whole body (or its proved identity variant)
             # therefore takes priority even when a partial graph is smaller.
-            # Compare size only within that coverage: never drop the body to
-            # satisfy a context budget, or treat opaque callee effects as proved.
             fuller_source = record["coverage"] == "whole_method" and record["id"] not in chosen
-            if fuller_source or size < best_size:
+            if fuller_source:
+                chosen, original, best_size, best_view = selection, proposed, None, None
+                continue
+            if best_size is None:
+                best_size, compact, linked = measured_view(original, chosen)
+                best_view = compact, linked
+            size, compact, linked = measured_view(proposed, selection)
+            if size < best_size:
                 chosen, original, best_size = selection, proposed, size
-    return _compact_model_view(original, _linked_calls(calls, chosen, predicates), chosen)
+                best_view = compact, linked
+    if best_view is None:
+        return _compact_model_view(original, _linked_calls(calls, chosen, predicates), chosen)
+    return best_view

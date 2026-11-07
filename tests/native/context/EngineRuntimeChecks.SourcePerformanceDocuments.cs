@@ -60,6 +60,55 @@ internal static partial class EngineRuntimeChecks
         Equal(true, nodes.Select((node, i) => node.Annotations.SequenceEqual(annotations[i])).All(value => value),
             "rendering preserves original annotations");
 
+        // Differential oracles for the old deep-clone-then-drop AST paths.
+        var declaration = (MethodDeclaration)CSharpFixtureMember(document, "Declaration");
+        var originalSignature = (MethodDeclaration)declaration.Clone();
+        originalSignature.Body = BlockStatement.Null;
+        var signature = (MethodDeclaration)CSharpOwner.GetMethod("CloneCSharpWithoutBody", CSharpFlags)!
+            .MakeGenericMethod(typeof(MethodDeclaration)).Invoke(null, new object[] { declaration, declaration })!;
+        Equal((string)CSharpFixtureMember(SourcePerformanceRender(originalSignature, false), "Code"),
+            (string)CSharpFixtureMember(SourcePerformanceRender(signature, false), "Code"),
+            "signature shell is byte-equal without copying the original body");
+
+        var firstBranch = tree.Descendants.OfType<IfElseStatement>().First();
+        var originalExcerpt = (IfElseStatement)firstBranch.Clone();
+        originalExcerpt.FalseStatement = Statement.Null;
+        var excerpt = (IfElseStatement)CSharpOwner.GetMethod("CloneCSharpTrueArm", CSharpFlags)!
+            .Invoke(null, new object[] { firstBranch })!;
+        var owned = CSharpOwner.GetMethod("RenderOwnedCSharp", CSharpFlags)!.Invoke(null, new object[] { excerpt })!;
+        var baselineExcerpt = SourcePerformanceRender(originalExcerpt, true);
+        Equal((string)CSharpFixtureMember(baselineExcerpt, "Code"), (string)CSharpFixtureMember(owned, "Code"),
+            "closed excerpt C# remains byte-equal");
+        Equal(true, ((Array)CSharpFixtureMember(baselineExcerpt, "Locations")).Cast<object>().SequenceEqual(
+            ((Array)CSharpFixtureMember(owned, "Locations")).Cast<object>()), "closed excerpt IL spans remain identical");
+
+        var originalShell = (SyntaxTree)tree.Clone();
+        originalShell.Descendants.OfType<MethodDeclaration>().Single().Body = new BlockStatement();
+        var shell = (SyntaxTree)CSharpOwner.GetMethod("CloneCSharpWithoutBody", CSharpFlags)!
+            .MakeGenericMethod(typeof(SyntaxTree)).Invoke(null, new object[] { tree, declaration })!;
+        shell.Descendants.OfType<MethodDeclaration>().Single().Body = new BlockStatement();
+        Equal((string)CSharpFixtureMember(SourcePerformanceRender(originalShell, false), "Code"),
+            (string)CSharpFixtureMember(SourcePerformanceRender(shell, false), "Code"),
+            "mechanics shell renders exactly like the legacy whole-tree clone");
+
+        var privateTree = (SyntaxTree)tree.Clone();
+        var ownedTree = (SyntaxTree)tree.Clone();
+        var ownedRender = CSharpOwner.GetMethod("RenderOwnedCSharp", CSharpFlags)!
+            .Invoke(null, new object[] { ownedTree })!;
+        var legacyRender = SourcePerformanceRender(privateTree, true);
+        Equal((string)CSharpFixtureMember(legacyRender, "Code"),
+            (string)CSharpFixtureMember(ownedRender, "Code"),
+            "owned full tree renders byte-for-byte like legacy second clone");
+        Equal(true, ((Array)CSharpFixtureMember(legacyRender, "Locations")).Cast<object>().SequenceEqual(
+            ((Array)CSharpFixtureMember(ownedRender, "Locations")).Cast<object>()),
+            "owned tree maps the same IL locations as previous double clone");
+
+        Equal(true, nodes.SequenceEqual(tree.DescendantsAndSelf), "scoped clones restore the complete shared AST");
+        Equal(true, positions.SequenceEqual(nodes.Select(node => (node.StartLocation, node.EndLocation, node.Parent))),
+            "scoped clones preserve original locations and parents");
+        Equal(true, nodes.Select((node, i) => node.Annotations.SequenceEqual(annotations[i])).All(value => value),
+            "scoped clones preserve every original IL annotation");
+
         // Compare actual old per-document setup against the shared type system,
         // not just two renderers over the same already-decompiled tree.
         using var legacyFile = new PEFile(method.Module.FullyQualifiedName);
@@ -101,6 +150,7 @@ internal static partial class EngineRuntimeChecks
         var rebuiltEnds = (IDictionary)conditionalEnds.Invoke(null, new object[] { method })!;
         Equal(false, ReferenceEquals(ends, rebuiltEnds), "source invalidation cannot reuse the retired decode index");
         foreach (var pair in expectedEnds) Equal(pair.Value, (int)rebuiltEnds[pair.Key]!, "rebuilt conditional index retains source offsets");
+        SourcePerformanceIntervalPruning();
     }
 
     private static object SourcePerformanceGetDocument(MethodInfo method, CancellationToken cancellation = default)
@@ -143,8 +193,10 @@ internal static partial class EngineRuntimeChecks
                 Equal(false, cache.Values.Cast<object>().Contains(documents[1]), "least recently used rather than oldest-created document is evicted");
                 Equal(true, ReferenceEquals(typeSystem, CSharpFixtureMember(module, "typeSystem")), "eviction preserves shared type system");
                 Equal(true, mainFile.Reader.GetMetadata().Length > 0, "eviction preserves main PE reader");
-                Equal(true, cache.Values.Cast<object>().Sum(document => (int)CSharpFixtureMember(document, "Nodes")) <= 200000, "retained nodes stay within original budget");
-                Equal(true, cache.Values.Cast<object>().Sum(document => (int)CSharpFixtureMember(document, "Characters")) <= 1500000, "retained characters stay within original budget");
+                Equal(true, cache.Values.Cast<object>().Sum(document => (int)CSharpFixtureMember(document, "Nodes")) <=
+                    (int)CSharpOwner.GetField("NativeCSharpResidentNodes", CSharpFlags)!.GetRawConstantValue()!, "retained nodes stay within declared residency budget");
+                Equal(true, cache.Values.Cast<object>().Sum(document => (int)CSharpFixtureMember(document, "Characters")) <=
+                    (int)CSharpOwner.GetField("NativeCSharpResidentCharacters", CSharpFlags)!.GetRawConstantValue()!, "retained characters stay within declared residency budget");
                 Equal(true, cache.Values.Cast<object>().All(document => (int)CSharpFixtureMember(document, "Characters") <= 750000), "individual document bound unchanged");
                 using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
                 var order = ((IEnumerable)CSharpOwner.GetField("nativeCSharpOrder", CSharpFlags)!.GetValue(null)!).Cast<string>().ToArray();
@@ -171,6 +223,7 @@ internal static partial class EngineRuntimeChecks
             Equal(0, (int)CSharpOwner.GetField("nativeCSharpCharacters", CSharpFlags)!.GetValue(null)!, "clear resets character accounting");
         }
         finally { clear?.GetAwaiter().GetResult(); SourcePerformanceClearDocuments(); }
+        SourcePerformanceWeightedResidency();
     }
 
     private static void SourcePerformanceDocumentsVerifyCacheHits()

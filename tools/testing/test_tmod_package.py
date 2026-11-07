@@ -175,6 +175,23 @@ class FullVerificationTests(unittest.TestCase):
         # Info carries the same declared loader dependency as build.txt.
         self.files['Info'] = self.files['Info'][:-1] + string('dllReferences') + string('Fixture.Dependency') + b'\0\0'
 
+    def test_native_source_pack_is_exact_official_resource(self):
+        payload = b'fixture generated source pack bytes'
+        source_pack = self.source / 'Data/native-source-pack.zip'
+        source_pack.parent.mkdir()
+        source_pack.write_bytes(payload)
+        self.files['Data/native-source-pack.zip'] = payload
+        self.assertEqual(self.check()['nativeSourcePack'],
+                         {'sha256': hashlib.sha256(payload).hexdigest(), 'bytes': len(payload)})
+        for corrupted in (None, b'different source pack bytes'):
+            with self.subTest(corrupted=corrupted):
+                if corrupted is None:
+                    self.files.pop('Data/native-source-pack.zip', None)
+                else:
+                    self.files['Data/native-source-pack.zip'] = corrupted
+                with self.assertRaisesRegex(ValueError, 'Native source pack missing or changed'):
+                    self.check()
+
     def test_managed_dependency_and_license_are_exact(self):
         self.add_managed_dependency()
         self.assertEqual(self.check()['dllReferences'], ['Fixture.Dependency'])

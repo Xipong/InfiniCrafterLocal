@@ -28,13 +28,40 @@ Author получает исходники с guards, alias scopes, child-profil
 
 `NativeCSharpModule` владеет одним PE snapshot, resolver, dependency readers и type system ILSpy. Документы используют общую модульную подготовку, но отдельные decompiler transforms и cancellation. Перед каждым получением документа, включая cache hit, сохраняется полная проверка PE/reflection. Очистка освобождает readers под тем же lock, которым защищены работающие потребители.
 
-Document cache использует LRU с прежними пределами: 8 документов, 200000 AST nodes, 1500000 символов суммарно и 750000 на метод. Подсчёт размера и code-only представления не клонируют AST для назначения coordinates; карта whole-method locations строится лениво и повторно используется только для неизменённого исходного дерева. Индекс концов conditional instructions живёт вместе с соответствующим immutable IL decode и не удерживает его после сброса source cache.
+Document cache сохраняет до 8 документов, 650000 AST nodes и 3000000 символов суммарно; admission одного метода ограничен 200000 nodes и 750000 символов. При вытеснении сначала выбирается старый дешёвый документ, чтобы короткий helper не заставлял повторно декомпилировать большой dispatcher. Подсчёт размера и code-only представления не клонируют AST для назначения coordinates; карта whole-method locations строится лениво и повторно используется только для неизменённого исходного дерева. Индекс концов conditional instructions живёт вместе с соответствующим immutable IL decode и не удерживает его после сброса source cache.
 
 Для mechanics и lifecycle индекс `call/callvirt` строится один раз на проекцию. Поиск сохраняет точные token/type/name и реальные полуинтервалы IL annotations; пропуски между ними не становятся допустимыми offsets. Lifecycle дополнительно проверяет native `Projectile`, `MethodInfo` и число параметров. Неоднозначность не превращается в доказанное исключение вызова.
 
 Projectile program cache также использует LRU: до 256 identities и 16 Mi символов сериализованного JSON. При давлении вытесняются только необходимые старые entries. Завершившийся после invalidation или eviction старый build не возвращается в кеш; живой потребитель может повторить отменённый build в своём контексте. Готовый source хранится как immutable `JsonElement`; strict reference, mechanics и spawn consumers получают независимые lazy JSON wrappers без повторного разбора полного текста. Изменение одной проекции не меняет остальные или кеш.
 
 Эти пределы ограничивают сохраняемые документы и программы, а не transient allocations всего craft. Для затрат отдельно измеряются cold request, warm hits и source-cache-reset через `PrepareDeferred → CompleteAnalysis`; накопленные managed allocations и длительность headless-прогона не равны peak RAM и игровому frame time.
+
+### Пакет source-проекций при сборке
+
+`Data/native-source-pack.zip` переносит повторяемую декомпиляцию native-методов в сборку выпуска. Он содержит точные результаты существующих source builders для методов с IL от 2048 байтов. Генератор перечисляет все положительные `ProjectileID` с реальными `SetDefaults` и все положительные `ItemID` для item dispatch. Пар предметов, имён оружия и предустановок механики в ключах нет. Обычный craft не запускает генератор каталога и не прогревает анализ скрытым предварительным запросом.
+
+Пакет хранит strict source вместе с optional identity specialization, mechanics source и их отдельными отказами. Lifecycle-запись включает также упорядоченные ссылки на дочерние снаряды. Ключ одного projectile method включает native method identity, captured type/style, receiver binding, полный ordered-distinct список identity windows и точное множество используемых IL offsets. `graphPaths` принадлежат текущему графу: они заполняются при чтении, в прежней позиции JSON-свойства. Пакет не хранит готовый parent payload, состояние игрока, inventory, результаты mod hooks или выбранную моделью механику.
+
+Перед каждым hit выполняется прежняя проверка live PE/reflection: MVID, metadata, IL, local signature, InitLocals, MaxStack и EH. Manifest дополнительно фиксирует SHA native PE, pinned ILSpy, настройки, fingerprint исходников проекции и фактические пары «запрошенная dependency → разрешённый PE» с SHA. Архив и отдельные записи ограничены по размеру; читается только нужная запись, проверяются её размер и SHA, а отмена проверяется до публикации результата. Сброс source cache освобождает reader пакета вместе с native module snapshot.
+
+Отсутствующий, устаревший, повреждённый или несовместимый пакет, другая identity/style либо другой вход проекции дают обычный cache miss: исполняется полный прежний анализ. В user payload не добавляется искусственный отказ из-за отсутствия ускоряющего ресурса. Генератор останавливается при конфликтующих результатах одного ключа и не публикует частично записанный архив. Timeout, отмена и недетерминированные ошибки разрешения сборок не становятся сохранёнными source-результатами.
+
+Полная сборка на целевой платформе:
+
+```bash
+python tools/generate/build_native_source_pack.py --build \
+  --tml-references <tModLoader-lib/net8.0> --external-deps <ParticleLibrary-and-Luminance> \
+  --harness-output <temporary-bootstrap-directory> \
+  --runtime-dotnet <private-tML-dotnet> --runtimeconfig <official-tModLoader.runtimeconfig.json> \
+  --target-rid <win-x64-or-linux-x64>
+python tools/generate/build_native_source_pack.py --check --tml-references <tModLoader-lib/net8.0>
+```
+
+После генерации native harness пересобирается, чтобы скопировать ресурс в output; официальный release wrapper делает подготовку пакета перед сборкой `.tmod`. SDK нужен для компиляции, а collector и холодные прогоны используют отдельный private runtime точной версии из официального `tModLoader.runtimeconfig.json` с `--roll-forward Disable`, как launcher игры. Release wrapper готовит его автоматически. Архив создаётся для конкретных native/runtime dependency bytes. Пакет другой платформы или версии .NET не считается совместимым автоматически. Изменение `GeneratorClient*.cs` требует нового fingerprint и пакета; `--check` выявляет устаревшее сочетание. Обычная compile-only проверка не обязана пересобирать каталог.
+
+Для этого режима compiler references и исполняемые зависимости выбираются из официального `tModLoader.deps.json` с учётом RID. DLL из вложенных MSBuild/BuildHost-каталогов не подмешиваются. После каждой сборки восстанавливается точный набор runtime assets и проверяется фактическое связывание CLR по SHA. Native resolver использует выбранные host-ом `TRUSTED_PLATFORM_ASSEMBLIES`, включая вложенные `Libraries`; неоднозначная ссылка не считается допустимой. Ресурс `.tmod` копируется в ограниченный буфер перед ZIP-чтением, поскольку нестандартный stream может сообщать `CanSeek=true` без обычной семантики `SeekOrigin.End`.
+
+Холодный A/B запускает каждую пару в отдельном процессе уже собранного продукта, без предварительного capture. В измерение входят загрузка пакета, его проверки, capture, анализ и получение полного JSON. Сверяются исходные payload bytes всех четырёх фаз каждой пары; прохождение parity и достижение пятисекундной цели — отдельные условия.
 
 ## Размеры
 
