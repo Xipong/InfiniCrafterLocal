@@ -638,15 +638,57 @@ public sealed partial class GeneratorClient
         };
     }
 
+    private static bool CSharpDispatchAlreadyCoveredByGraph(CSharpProgram[] owned, MethodInfo[] certified)
+    {
+        // Pure captured-identity dispatch contributes only an already-certified
+        // guard -> helper call -> return. In that case the IL graph owns the
+        // exact edge/guard and the helper is independently certified; eagerly
+        // decompiling the huge dispatcher adds presentation, not a source fact.
+        if (owned.Length == 0 || owned.Any(program => program.Row["identityWindows"] is not JsonArray { Count: > 0 })) return false;
+        bool delegated = false;
+        foreach (var program in owned)
+        {
+            JsonObject view = program.Row["identitySelected"] as JsonObject ?? program.Row;
+            if (view["observations"] is not JsonArray observations || observations.Count == 0
+                || observations.Any(node => node is not JsonObject)
+                || view["predicates"] is JsonArray predicates && predicates.Count > 0
+                || view["dependencies"] is JsonObject dependencies && dependencies.Count > 0)
+                return false;
+            foreach (var observation in observations.OfType<JsonObject>())
+            {
+                string? kind = observation["kind"]?.GetValue<string>();
+                if (kind == "return") continue;
+                if (kind != "dispatch_call" || observation["call"] is not JsonValue callValue
+                    || !callValue.TryGetValue<string>(out string? call) || call is null) return false;
+                if (!certified.Any(helper => helper.DeclaringType is not null
+                    && call == helper.DeclaringType.Name + "." + helper.Name)) return false;
+                delegated = true;
+            }
+        }
+        return delegated;
+    }
+
     private static void AttachNativeCSharpSource(JsonObject attack, IEnumerable<MethodBase> methods, JsonArray calls, int type, int style, ISet<MethodBase> mechanicsBoundReceivers)
     {
         var records = new JsonArray(); var refusals = new JsonArray();
         var mechanics = new JsonArray(); var mechanicsRefusals = new JsonArray();
         var programs = CSharpPrograms(attack, Array.Empty<object>()).ToArray();
-        foreach (var method in methods.OfType<MethodInfo>().Distinct())
+        var certified = methods.OfType<MethodInfo>().Distinct().ToArray();
+        foreach (var method in certified)
         {
             var owned = programs.Where(program => CSharpProgramMatches(program.Row, method)).ToArray();
             if (owned.Length == 0) continue;
+            if (CSharpDispatchAlreadyCoveredByGraph(owned, certified))
+            {
+                var omitted = new JsonObject
+                {
+                    ["method"] = SourceMember(method),
+                    ["unresolved"] = "csharp_dispatch_only_identity_region_omitted; certified_il_graph_and_helper_retained",
+                };
+                refusals.Add(omitted);
+                mechanicsRefusals.Add(omitted.DeepClone());
+                continue;
+            }
             currentParentAnalysis?.ThrowIfCancelled();
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(currentParentAnalysis?.Cancellation ?? CancellationToken.None);
             timeout.CancelAfter(TimeSpan.FromSeconds(20));

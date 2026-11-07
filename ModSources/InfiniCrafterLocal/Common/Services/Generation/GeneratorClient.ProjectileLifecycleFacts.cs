@@ -29,6 +29,23 @@ public sealed partial class GeneratorClient
         var result = LifecycleEnvelope(type, style);
         if (method is null) { result["unresolved"]!.AsArray().Add("Kill_root_missing"); return result; }
         result["rootCertificate"] = MethodSourceIdentity(method);
+        currentParentAnalysis?.ThrowIfCancelled();
+        // The lifecycle AST owner only admits typed equality guards using the
+        // captured Projectile.type/aiStyle literal. A missing field/literal pair
+        // in exact IL is a conservative negative proof for this query, not a
+        // positive gameplay inference.
+        var code = AttackCode(method);
+        bool MayMatch(string fieldName, int literal)
+        {
+            bool hasField = code.Any(instruction => instruction.Op == "ldfld"
+                && instruction.Arg is FieldInfo field && field.DeclaringType == typeof(Projectile) && field.Name == fieldName);
+            return hasField && code.Any(instruction => instruction.Op == "const" && Equals(instruction.Arg, literal));
+        }
+        if (!MayMatch("type", type) && !MayMatch("aiStyle", style))
+        {
+            result["unresolved"]!.AsArray().Add("Kill_no_admitted_matching_spawn_region; absence_not_proved");
+            return result;
+        }
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(currentParentAnalysis?.Cancellation ?? CancellationToken.None);
         timeout.CancelAfter(TimeSpan.FromSeconds(20));
         try
