@@ -17,15 +17,19 @@ public sealed partial class GeneratorClient
     [ThreadStatic] private static ParentAnalysis? currentParentAnalysis;
     internal sealed class ParentAnalysis : IDisposable
     {
+        private sealed record DeferredJob(Func<JsonNode?> Analyze, string Label);
+
         private readonly string markerKey = "$infiniSourceAnalysis:" + Guid.NewGuid().ToString("N");
         internal readonly ParentSourceGraphCache SourceCache = SharedParentSourceGraphCache;
-        private readonly List<Func<JsonNode?>> jobs = new();
+        private readonly List<DeferredJob> jobs = new();
         private readonly Dictionary<int, JsonNode?> completed = new();
         private readonly HashSet<int> omitNull = new();
         private readonly CancellationTokenSource lifetime;
         private static CancellationTokenSource worldLifetime = new();
         private static readonly ConcurrentQueue<Action> mainWork = new();
         private readonly int captureThread = Environment.CurrentManagedThreadId;
+        private static bool ProfileJobs => string.Equals(
+            Environment.GetEnvironmentVariable("INFINI_PARENT_ANALYSIS_PROFILE"), "1", StringComparison.Ordinal);
 
         internal ParentAnalysis(CancellationToken cancellation = default)
             => lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellation, worldLifetime.Token);
@@ -40,7 +44,9 @@ public sealed partial class GeneratorClient
         internal JsonObject Defer(Func<JsonNode?> analyze, bool omitIfNull = false)
         {
             lifetime.Token.ThrowIfCancellationRequested();
-            int id = jobs.Count; jobs.Add(analyze);
+            int id = jobs.Count;
+            string label = (analyze.Method.DeclaringType?.FullName ?? "<unknown>") + "." + analyze.Method.Name;
+            jobs.Add(new DeferredJob(analyze, label));
             if (omitIfNull) omitNull.Add(id);
             return new JsonObject { [markerKey] = id };
         }
@@ -62,7 +68,24 @@ public sealed partial class GeneratorClient
                 {
                     int id = marker.GetValue<int>();
                     if (!completed.TryGetValue(id, out var result))
-                        completed[id] = result = ResolveNode(jobs[id]());
+                    {
+                        DeferredJob job = jobs[id];
+                        JsonNode? produced;
+                        if (ProfileJobs)
+                        {
+                            long before = GC.GetTotalAllocatedBytes(precise: true);
+                            var elapsed = Stopwatch.StartNew();
+                            produced = job.Analyze();
+                            elapsed.Stop();
+                            long allocated = GC.GetTotalAllocatedBytes(precise: true) - before;
+                            Console.Error.WriteLine("PARENT_JOB id=" + id
+                                + " ms=" + elapsed.Elapsed.TotalMilliseconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)
+                                + " allocated=" + allocated
+                                + " label=" + job.Label);
+                        }
+                        else produced = job.Analyze();
+                        completed[id] = result = ResolveNode(produced);
+                    }
                     var copy = result?.DeepClone();
                     // Callers may attach coverage/texture observations to the
                     // placeholder after capture. Keep those exact observations.
