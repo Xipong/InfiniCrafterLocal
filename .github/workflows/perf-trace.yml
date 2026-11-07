@@ -38,12 +38,14 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           $headers = @{ Accept='application/vnd.github+json'; Authorization="Bearer $env:GITHUB_TOKEN"; 'X-GitHub-Api-Version'='2022-11-28' }
-          $releases = @(Invoke-RestMethod -Uri 'https://api.github.com/repos/tModLoader/tModLoader/releases?per_page=100' -Headers $headers)
+          $releases = Invoke-RestMethod -Uri 'https://api.github.com/repos/tModLoader/tModLoader/releases?per_page=100' -Headers $headers
+          $releases = @($releases | Sort-Object { [DateTimeOffset]::Parse($_.published_at) } -Descending)
           $entries = @()
-          foreach ($release in ($releases | Sort-Object { [DateTimeOffset]::Parse($_.published_at) } -Descending)) {
+          foreach ($release in $releases) {
             $version = $null
-            if (-not [Version]::TryParse(([string]$release.tag_name) -replace '^v','', [ref]$version)) { continue }
-            $asset = @($release.assets | Where-Object name -eq 'tModLoader.zip' | Select-Object -First 1)
+            $versionText = ([string]$release.tag_name) -replace '^v', ''
+            if (-not [Version]::TryParse($versionText, [ref]$version)) { continue }
+            $asset = @($release.assets | Where-Object { $_.name -eq 'tModLoader.zip' } | Select-Object -First 1)
             if ($asset.Count -eq 0) { continue }
             $entries += [pscustomobject]@{ Version=$version; DownloadUrl=[string]$asset[0].browser_download_url; PreRelease=[bool]$release.prerelease }
           }
@@ -80,7 +82,7 @@ jobs:
       - name: Build profiler
         shell: pwsh
         run: |
-          dotnet build tools/native/EngineRuntimeChecks.csproj -c Release --no-restore -p:InfiniTmlReferenceDir="$env:INFINI_TML_REFERENCE_DIR" -p:InfiniExternalDepsRoot="$env:INFINI_TML_DEPS_SRC"
+          dotnet build tools/native/EngineRuntimeChecks.csproj -c Release -p:InfiniTmlReferenceDir="$env:INFINI_TML_REFERENCE_DIR" -p:InfiniExternalDepsRoot="$env:INFINI_TML_DEPS_SRC"
           exit $LASTEXITCODE
       - name: Trace Nebula Blaze and Last Prism
         shell: pwsh
