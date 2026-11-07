@@ -5,6 +5,7 @@ on:
     branches:
       - feat/parent-source-compression-main-20261106
     paths:
+      - 'ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.ParentAnalysis.cs'
       - 'ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceMethod*.cs'
       - 'ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceGraphCache.cs'
       - 'ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.NativeCSharpSource.cs'
@@ -26,6 +27,7 @@ jobs:
     timeout-minutes: 120
     env:
       BASELINE_SHA: 3c092e34403eefceea47665123be888a261cd820
+      INFINI_PARENT_ANALYSIS_PROFILE: 1
     steps:
       - name: Preserve Git bytes
         shell: pwsh
@@ -127,9 +129,6 @@ jobs:
       - name: Build baseline and candidate harnesses
         shell: pwsh
         run: |
-          # Newer SDKs prefer MemoryExtensions.Reverse(array), whose return type
-          # is void. Keep both historical trees on the same explicit LINQ call;
-          # this compatibility patch is outside the measured source-analysis code.
           foreach ($root in @('baseline', 'candidate')) {
             $fixture = Join-Path $root 'tools/native/EngineRuntimeChecks.GeneratedItemReforge.cs'
             $text = [System.IO.File]::ReadAllText($fixture)
@@ -177,7 +176,7 @@ jobs:
             $candidate = Get-Content (Join-Path $evidence "candidate-$scenario.json") -Raw | ConvertFrom-Json
             $b = @($baseline.measurements | Where-Object { $_.case -eq 'cold-first-request' })[0]
             $c = @($candidate.measurements | Where-Object { $_.case -eq 'cold-first-request' })[0]
-            if ($b.sha256 -ne $c.sha256) { throw "Cold packet hash mismatch for $scenario: $($b.sha256) != $($c.sha256)" }
+            if ($b.sha256 -ne $c.sha256) { throw "Cold packet hash mismatch for ${scenario}: $($b.sha256) != $($c.sha256)" }
             if (-not [bool]$c.equalToFirstRequest) { throw "Candidate warm/reset parity failed for $scenario" }
             $rows += [pscustomobject]@{
               scenario = $scenario
