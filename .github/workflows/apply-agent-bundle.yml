@@ -27,7 +27,6 @@ jobs:
           git apply --check "$RUNNER_TEMP/perf.patch"
           git apply "$RUNNER_TEMP/perf.patch"
           rm -rf .perf-patch
-          git rm .github/workflows/apply-agent-bundle.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
