@@ -476,3 +476,18 @@ def test_compact_selection_diagnostics_do_not_admit_unknown_shapes(capture):
     projected, _ = native_csharp_source_for_llm(reference, calls)
     projected["motion"]["programs"][0]["graphCapture"] = capture
     assert not known_native_csharp_context(projected)
+
+
+def test_single_whole_source_skips_unneeded_author_stage_size_build(monkeypatch):
+    import importlib
+
+    picker = importlib.import_module("infini_local.pipelines.context.native_csharp_source")
+    reference, calls = _parts(_parent())
+
+    def forbidden_projection(*args, **kwargs):
+        raise AssertionError("full-method evidence wins independently of projected dossier size")
+
+    monkeypatch.setattr(picker, "parent_context_for_stage", forbidden_projection)
+    projected, linked = native_csharp_source_for_llm(reference, calls)
+    assert projected["motion"]["programs"] == [{"nativeCSharpSourceRef": "s0"}]
+    assert linked[0]["sourceLocation"]["sourceRecord"] == "s0"
