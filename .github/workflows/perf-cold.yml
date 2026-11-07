@@ -82,7 +82,7 @@ jobs:
       - name: Build native profiler
         shell: pwsh
         run: |
-          dotnet build tools/native/EngineRuntimeChecks.csproj -c Release --no-restore -p:InfiniTmlReferenceDir="$env:INFINI_TML_REFERENCE_DIR" -p:InfiniExternalDepsRoot="$env:INFINI_TML_DEPS_SRC"
+          dotnet build tools/native/EngineRuntimeChecks.csproj -c Release -p:InfiniTmlReferenceDir="$env:INFINI_TML_REFERENCE_DIR" -p:InfiniExternalDepsRoot="$env:INFINI_TML_DEPS_SRC"
           exit $LASTEXITCODE
       - name: Run fresh-process cold profiles
         shell: pwsh
