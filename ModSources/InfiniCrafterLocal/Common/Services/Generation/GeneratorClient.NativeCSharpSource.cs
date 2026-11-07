@@ -46,7 +46,10 @@ public sealed partial class GeneratorClient
         return true;
     });
     private const int NativeCSharpPeLimit = 64 * 1024 * 1024, NativeCSharpCodeLimit = 750000;
-    private const int NativeCSharpNodeLimit = 200000, NativeCSharpRecordLimit = 120000;
+    // Heavy vanilla parent analysis needs Kill + VanillaAI + one AI method alive
+    // together. Their measured immutable AST working set is already >200k nodes;
+    // the old budget therefore guaranteed same-request decompile thrashing.
+    private const int NativeCSharpNodeLimit = 400000, NativeCSharpDocumentLimit = 16, NativeCSharpRecordLimit = 120000;
     private static readonly object nativeCSharpGate = new();
     private static readonly Dictionary<string, NativeCSharpDocument> nativeCSharpDocuments = new(StringComparer.Ordinal);
     private static readonly LinkedList<string> nativeCSharpOrder = new();
@@ -340,7 +343,7 @@ public sealed partial class GeneratorClient
             $"nodes={created.Nodes} characters={created.Characters}");
         try { cancellation.ThrowIfCancellationRequested(); }
         catch { created.Dispose(); throw; }
-        while (nativeCSharpOrder.Count > 0 && (nativeCSharpDocuments.Count >= 8
+        while (nativeCSharpOrder.Count > 0 && (nativeCSharpDocuments.Count >= NativeCSharpDocumentLimit
             || nativeCSharpNodes + created.Nodes > NativeCSharpNodeLimit
             || nativeCSharpCharacters + created.Characters > 2 * NativeCSharpCodeLimit))
         {
