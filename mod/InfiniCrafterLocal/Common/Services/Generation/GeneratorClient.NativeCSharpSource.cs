@@ -102,6 +102,10 @@ public sealed partial class GeneratorClient
         private NativeCSharpResolver? resolver;
         private DecompilerTypeSystem? typeSystem;
         private bool disposed;
+        internal IEnumerable<PEFile> DependencyFiles => resolver?.Files ?? Enumerable.Empty<PEFile>();
+        internal IEnumerable<(IAssemblyReference Reference, PEFile? File)> DependencyResolutions
+            => resolver?.Resolutions ?? Enumerable.Empty<(IAssemblyReference, PEFile?)>();
+        internal bool DependencyResolutionsStable => resolver?.ResolutionsStable == true;
 
         // Initialized under nativeCSharpGate, and owned by the module rather
         // than its evictable documents. ILSpy's type system has no cancellation
@@ -205,7 +209,12 @@ public sealed partial class GeneratorClient
     private sealed class NativeCSharpResolver : IAssemblyResolver, IDisposable
     {
         private readonly UniversalAssemblyResolver resolver;
+        private readonly Dictionary<string, string?> platformAssemblies = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<PEFile> files = new();
+        internal IEnumerable<PEFile> Files => files;
+        private readonly Dictionary<string, (IAssemblyReference Reference, PEFile? File)> resolutions = new(StringComparer.Ordinal);
+        internal IEnumerable<(IAssemblyReference Reference, PEFile? File)> Resolutions => resolutions.Values;
+        internal bool ResolutionsStable { get; private set; } = true;
         internal CancellationToken Cancellation;
 
         internal NativeCSharpResolver(string path, CancellationToken cancellation)
@@ -214,6 +223,39 @@ public sealed partial class GeneratorClient
             resolver = new UniversalAssemblyResolver(path, false, ".NETCoreApp,Version=v8.0");
             resolver.AddSearchDirectory(System.IO.Path.GetDirectoryName(path));
             resolver.AddSearchDirectory(RuntimeEnvironment.GetRuntimeDirectory());
+            // The host has already selected these exact assets from deps.json,
+            // probing paths and RID rules. tML keeps them in nested Libraries;
+            // guessing directories also lets a framework copy shadow a package.
+            // Read the host's paths only: do not load assemblies or run hooks.
+            if (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is string paths)
+                foreach (string file in paths.Split(System.IO.Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    cancellation.ThrowIfCancellationRequested();
+                    if (!System.IO.Path.IsPathFullyQualified(file)) continue;
+                    string name = System.IO.Path.GetFileNameWithoutExtension(file);
+                    if (platformAssemblies.TryGetValue(name, out string? prior))
+                    {
+                        if (!string.Equals(prior, file, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                            platformAssemblies[name] = null;
+                    }
+                    else platformAssemblies.Add(name, file);
+                }
+        }
+
+        private PEFile? ResolveAssembly(IAssemblyReference reference)
+        {
+            if (!platformAssemblies.TryGetValue(reference.Name, out string? path)) return resolver.Resolve(reference);
+            if (path is null) throw new NotSupportedException("csharp_platform_assembly_binding_ambiguous");
+            var stream = System.IO.File.OpenRead(path);
+            PEFile? file = null;
+            try
+            {
+                file = new PEFile(path, stream, PEStreamOptions.Default);
+                if (!file.IsAssembly || !string.Equals(file.Name, reference.Name, StringComparison.OrdinalIgnoreCase))
+                    throw new NotSupportedException("csharp_platform_assembly_identity_mismatch");
+                return file;
+            }
+            catch { file?.Dispose(); stream.Dispose(); throw; }
         }
 
         private PEFile? ResolveFile(Func<PEFile?> resolve)
@@ -225,11 +267,33 @@ public sealed partial class GeneratorClient
             return result;
         }
 
-        public PEFile? Resolve(IAssemblyReference reference) => ResolveFile(() => resolver.Resolve(reference));
-        public PEFile? ResolveModule(PEFile mainModule, string name) => ResolveFile(() => resolver.ResolveModule(mainModule, name));
+        public PEFile? Resolve(IAssemblyReference reference)
+        {
+            PEFile? result;
+            try { result = ResolveFile(() => ResolveAssembly(reference)); }
+            catch { ResolutionsStable = false; throw; }
+            if (resolutions.TryGetValue(reference.FullName, out var prior))
+            {
+                if (prior.File?.FullName != result?.FullName
+                    || prior.Reference.IsWindowsRuntime != reference.IsWindowsRuntime
+                    || prior.Reference.IsRetargetable != reference.IsRetargetable)
+                    ResolutionsStable = false;
+            }
+            else if (resolutions.Count < NativeSourcePackDependencyLimit)
+                resolutions.Add(reference.FullName, (reference, result));
+            else ResolutionsStable = false;
+            return result;
+        }
+        public PEFile? ResolveModule(PEFile mainModule, string name)
+        {
+            // Assembly-reference pins do not describe multi-module binding.
+            // Keep live resolution unchanged, but do not record such a pack.
+            ResolutionsStable = false;
+            return ResolveFile(() => resolver.ResolveModule(mainModule, name));
+        }
         public Task<PEFile?> ResolveAsync(IAssemblyReference reference) => Task.FromResult(Resolve(reference));
         public Task<PEFile?> ResolveModuleAsync(PEFile mainModule, string name) => Task.FromResult(ResolveModule(mainModule, name));
-        public void Dispose() { foreach (var resolved in files) resolved.Dispose(); files.Clear(); }
+        public void Dispose() { foreach (var resolved in files) resolved.Dispose(); files.Clear(); resolutions.Clear(); }
     }
 
     private sealed partial class NativeCSharpDocument : IDisposable
@@ -352,7 +416,7 @@ public sealed partial class GeneratorClient
         return new(output.ToString(), locations.Distinct().ToArray());
     }
 
-    private static NativeCSharpDocument GetNativeCSharpDocument(MethodInfo method, CancellationToken cancellation)
+    private static NativeCSharpModule GetVerifiedNativeCSharpModule(MethodInfo method, CancellationToken cancellation)
     {
         // The immutable module snapshot is tied to the actual loaded Module and
         // MVID. Every requested method separately matches reflection IL, local
@@ -369,6 +433,13 @@ public sealed partial class GeneratorClient
             nativeCSharpModule = new(path, System.IO.File.ReadAllBytes(path), method.Module.ModuleVersionId);
         }
         nativeCSharpModule.Verify(method);
+        cancellation.ThrowIfCancellationRequested();
+        return nativeCSharpModule;
+    }
+
+    private static NativeCSharpDocument GetNativeCSharpDocument(MethodInfo method, CancellationToken cancellation)
+    {
+        var module = GetVerifiedNativeCSharpModule(method, cancellation);
         string key = method.Module.ModuleVersionId + ":" + method.MetadataToken + ":" + CSharpHash(method.GetMethodBody()!.GetILAsByteArray()!);
         cancellation.ThrowIfCancellationRequested();
         if (nativeCSharpDocuments.TryGetValue(key, out var retained))
@@ -381,7 +452,7 @@ public sealed partial class GeneratorClient
         if (nativeCSharpStableRefusals.TryGetValue(key, out var stableRefusal))
             throw new NotSupportedException(stableRefusal);
         NativeCSharpDocument created;
-        try { created = new NativeCSharpDocument(method, nativeCSharpModule, cancellation, methodAlreadyVerified: true); }
+        try { created = new NativeCSharpDocument(method, module, cancellation, methodAlreadyVerified: true); }
         catch (NotSupportedException error) when (error.Message is
             "csharp_ast_node_bound" or "csharp_method_character_bound" or
             "csharp_decompiler_warnings" or "csharp_open_generic_method_unsupported")
@@ -423,6 +494,7 @@ public sealed partial class GeneratorClient
             foreach (var document in nativeCSharpDocuments.Values) document.Dispose();
             nativeCSharpDocuments.Clear(); nativeCSharpOrder.Clear(); nativeCSharpNodes = nativeCSharpCharacters = 0;
             nativeCSharpStableRefusals.Clear(); nativeCSharpRefusalOrder.Clear();
+            nativeSourcePackReader?.Dispose(); nativeSourcePackReader = null; nativeSourcePackReadAttempted = false;
             nativeCSharpModule?.Dispose(); nativeCSharpModule = null;
         }
     }
@@ -530,14 +602,62 @@ public sealed partial class GeneratorClient
         => body.DescendantsAndSelf.OfType<IfElseStatement>().Any(branch => branch.Condition.DescendantsAndSelf.Prepend(branch)
             .SelectMany(node => node.Annotations.OfType<ILInstruction>()).Any(instruction => ExactCSharpConditional(instruction, offset, ends)));
 
+    private static JsonObject[] CSharpIdentityWindows(CSharpProgram[] programs)
+        => programs.SelectMany(program => program.Row["identityWindows"] is JsonArray values ? values.OfType<JsonObject>() : Enumerable.Empty<JsonObject>())
+            .GroupBy(window => window.ToJsonString(), StringComparer.Ordinal).Select(group => group.First()).ToArray();
+
+    private static HashSet<int> CSharpLinkOffsets(MethodInfo method, JsonArray calls)
+    {
+        var offsets = new HashSet<int>();
+        foreach (var call in calls.OfType<JsonObject>().Where(call => CSharpProgramMatches(call, method)))
+        {
+            if (call["at"] is JsonValue at) offsets.Add(at.GetValue<int>());
+            if (call["requiredPredicates"] is JsonArray predicates)
+                foreach (var predicate in predicates)
+                    if (predicate is JsonValue id && id.TryGetValue<string>(out string? name) && name is not null && name.StartsWith('b')
+                        && int.TryParse(name.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out int offset)) offsets.Add(offset);
+        }
+        return offsets;
+    }
+
+    private static JsonArray CSharpGraphPaths(CSharpProgram[] programs)
+        => new(programs.Select(program => (JsonNode?)new JsonArray(program.Path
+            .Select(part => part is string key ? (JsonNode?)JsonValue.Create(key) : JsonValue.Create((int)part)).ToArray())).ToArray());
+
+    private static JsonObject CSharpProjectionInput(MethodInfo method, CSharpProgram[] programs,
+        JsonArray calls, int type, int style, bool capturedReceiverBound)
+        => new()
+        {
+            ["type"] = type, ["style"] = style, ["capturedReceiverBound"] = capturedReceiverBound,
+            ["windows"] = new JsonArray(CSharpIdentityWindows(programs).Select(window => (JsonNode?)window.DeepClone()).ToArray()),
+            ["linkOffsets"] = new JsonArray(CSharpLinkOffsets(method, calls).Order().Select(offset => (JsonNode?)JsonValue.Create(offset)).ToArray()),
+        };
+
+    private static bool CompleteCSharpProjection(JsonObject value, MethodInfo method)
+    {
+        bool Outcome(string recordName, string refusalName)
+        {
+            bool hasRecord = value[recordName] is JsonObject;
+            bool hasRefusal = value[refusalName] is JsonValue refusal && refusal.TryGetValue<string>(out _);
+            if (hasRecord == hasRefusal) return false;
+            if (!hasRecord) return value[recordName] is null;
+            var record = value[recordName]!.AsObject();
+            return value[refusalName] is null && record.ContainsKey("graphPaths") && record["graphPaths"] is null
+                && CSharpProgramMatches(record, method) && record["code"] is JsonValue code && code.TryGetValue<string>(out _)
+                && record["coverage"] is JsonValue coverage && coverage.TryGetValue<string>(out _);
+        }
+        return value.Count == 4 && value.ContainsKey("strict") && value.ContainsKey("strictRefusal")
+            && value.ContainsKey("mechanics") && value.ContainsKey("mechanicsRefusal")
+            && Outcome("strict", "strictRefusal") && Outcome("mechanics", "mechanicsRefusal");
+    }
+
     private static JsonObject BuildNativeCSharpRecord(NativeCSharpDocument document, CSharpProgram[] programs,
         JsonArray calls, int type, int style, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
         var method = document.Method;
         var conditionalEnds = CSharpConditionalEnds(method);
-        var windows = programs.SelectMany(program => program.Row["identityWindows"] is JsonArray values ? values.OfType<JsonObject>() : Enumerable.Empty<JsonObject>())
-            .GroupBy(window => window.ToJsonString(), StringComparer.Ordinal).Select(group => group.First()).ToArray();
+        var windows = CSharpIdentityWindows(programs);
         var guards = new List<CSharpGuard>(); var rendered = new List<CSharpRendered>();
         var unresolved = new JsonArray(); string coverage;
         if (windows.Length > 0)
@@ -589,15 +709,7 @@ public sealed partial class GeneratorClient
             locations.AddRange(row.Locations.Select(location => location with { StartLine = location.StartLine + lineOffset, EndLine = location.EndLine + lineOffset }));
             lineOffset += row.Code.Count(character => character == '\n') + 1;
         }
-        var linkOffsets = new HashSet<int>();
-        foreach (var call in calls.OfType<JsonObject>().Where(call => CSharpProgramMatches(call, method)))
-        {
-            if (call["at"] is JsonValue at) linkOffsets.Add(at.GetValue<int>());
-            if (call["requiredPredicates"] is JsonArray predicates)
-                foreach (var predicate in predicates)
-                    if (predicate is JsonValue id && id.TryGetValue<string>(out string? name) && name is not null && name.StartsWith('b')
-                        && int.TryParse(name.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out int offset)) linkOffsets.Add(offset);
-        }
+        var linkOffsets = CSharpLinkOffsets(method, calls);
         var mapped = new JsonArray();
         foreach (int offset in linkOffsets.Order())
         {
@@ -616,7 +728,7 @@ public sealed partial class GeneratorClient
         record["decompiler"] = new JsonObject { ["name"] = "ICSharpCode.Decompiler", ["version"] = NativeCSharpVersion,
             ["assemblySha256"] = NativeCSharpDecompilerSha256, ["settings"] = "csharp_default_no_indentation_v1" };
         record["coverage"] = coverage;
-        record["graphPaths"] = new JsonArray(programs.Select(program => (JsonNode?)new JsonArray(program.Path.Select(part => part is string key ? (JsonNode?)JsonValue.Create(key) : JsonValue.Create((int)part)).ToArray())).ToArray());
+        record["graphPaths"] = CSharpGraphPaths(programs);
         record["code"] = code; record["codeSha256"] = CSharpHash(System.Text.Encoding.UTF8.GetBytes(code));
         record["entryGuards"] = new JsonArray(guards.Select(guard => (JsonNode?)new JsonObject { ["field"] = "Terraria.Projectile." + guard.Field,
             ["operator"] = "==", ["literal"] = guard.Literal, ["ilOffset"] = guard.Offset,
@@ -732,9 +844,31 @@ public sealed partial class GeneratorClient
                 while (!Monitor.TryEnter(nativeCSharpGate, 50)) timeout.Token.ThrowIfCancellationRequested();
                 try
                 {
+                    var input = CSharpProjectionInput(method, owned, calls, type, style, mechanicsBoundReceivers.Contains(method));
+                    if (TryReadNativeSourceProjection("projectile_method", method, input, timeout.Token, out var cached)
+                        && CompleteCSharpProjection(cached, method))
+                    {
+                        if (cached["strict"] is JsonObject strict)
+                        {
+                            cached.Remove("strict"); strict["graphPaths"] = CSharpGraphPaths(owned); records.Add(strict);
+                        }
+                        if (cached["strictRefusal"] is JsonValue strictFailure)
+                            refusals.Add(new JsonObject { ["method"] = SourceMember(method), ["unresolved"] = strictFailure.DeepClone() });
+                        if (cached["mechanics"] is JsonObject readable)
+                        {
+                            cached.Remove("mechanics"); readable["graphPaths"] = CSharpGraphPaths(owned); mechanics.Add(readable);
+                        }
+                        if (cached["mechanicsRefusal"] is JsonValue readableFailure)
+                            mechanicsRefusals.Add(new JsonObject { ["method"] = SourceMember(method), ["unresolved"] = readableFailure.DeepClone() });
+                        Mark(method, "verified_source_pack");
+                        continue;
+                    }
                     var document = GetNativeCSharpDocument(method, timeout.Token);
                     Mark(method, "verified_decompile");
                     JsonObject? strictRecord = null;
+                    JsonObject? readableRecord = null;
+                    string? strictError = null, mechanicsError = null;
+                    bool recordable = true;
                     try
                     {
                         var record = BuildNativeCSharpRecord(document, owned, calls, type, style, timeout.Token);
@@ -746,7 +880,7 @@ public sealed partial class GeneratorClient
                         records.Add(record); strictRecord = record;
                     }
                     catch (NotSupportedException error)
-                    { refusals.Add(new JsonObject { ["method"] = SourceMember(method), ["unresolved"] = error.Message }); }
+                    { strictError = error.Message; refusals.Add(new JsonObject { ["method"] = SourceMember(method), ["unresolved"] = error.Message }); }
                     try
                     {
                         JsonObject mechanicsRecord;
@@ -756,12 +890,29 @@ public sealed partial class GeneratorClient
                         {
                             mechanicsRecord = BuildMechanicsSourceView(document, type, style, timeout.Token, mechanicsBoundReceivers.Contains(method), strictRecord);
                         }
-                        mechanicsRecord["graphPaths"] = new JsonArray(owned.Select(program => (JsonNode?)new JsonArray(program.Path
-                            .Select(part => part is string key ? (JsonNode?)JsonValue.Create(key) : JsonValue.Create((int)part)).ToArray())).ToArray());
-                        mechanics.Add(mechanicsRecord);
+                        mechanicsRecord["graphPaths"] = CSharpGraphPaths(owned);
+                        mechanics.Add(mechanicsRecord); readableRecord = mechanicsRecord;
                     }
                     catch (Exception error) when (error is not OutOfMemoryException && error is not OperationCanceledException)
-                    { mechanicsRefusals.Add(new JsonObject { ["method"] = SourceMember(method), ["unresolved"] = error is NotSupportedException ? error.Message : error.GetType().Name }); }
+                    {
+                        recordable = error is NotSupportedException;
+                        mechanicsError = error is NotSupportedException ? error.Message : error.GetType().Name;
+                        mechanicsRefusals.Add(new JsonObject { ["method"] = SourceMember(method), ["unresolved"] = mechanicsError });
+                    }
+                    if (recordable && nativeSourcePackRecorder is not null)
+                    {
+                        var strictTemplate = strictRecord?.DeepClone().AsObject();
+                        var readableTemplate = readableRecord?.DeepClone().AsObject();
+                        // Keep this property's position: exact wire byte order
+                        // matters, but paths belong to the current source graph.
+                        if (strictTemplate is not null) strictTemplate["graphPaths"] = null;
+                        if (readableTemplate is not null) readableTemplate["graphPaths"] = null;
+                        RecordNativeSourceProjection("projectile_method", method, input, new JsonObject
+                        {
+                            ["strict"] = strictTemplate, ["strictRefusal"] = strictError,
+                            ["mechanics"] = readableTemplate, ["mechanicsRefusal"] = mechanicsError,
+                        }, timeout.Token);
+                    }
                     Mark(method, "mechanics_source");
                 }
                 finally { Monitor.Exit(nativeCSharpGate); }

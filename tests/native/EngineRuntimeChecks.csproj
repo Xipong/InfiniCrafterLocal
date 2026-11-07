@@ -15,6 +15,8 @@
     <Compile Include="**/EngineRuntimeChecks*.cs" Exclude="**/obj/**;**/bin/**" />
     <Reference Include="ICSharpCode.Decompiler" HintPath="$(InfiniModSourceRoot)/lib/ICSharpCode.Decompiler.dll" />
     <Content Include="$(InfiniModSourceRoot)/lib/ICSharpCode.Decompiler.LICENSE.txt" Link="ICSharpCode.Decompiler.LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="$(InfiniModSourceRoot)/Data/native-source-pack.zip" Link="Data/native-source-pack.zip"
+             CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(InfiniModSourceRoot)/Data/native-source-pack.zip')" />
     <EmbeddedResource Include="fixtures/AtlasMouseTextMetrics.json" />
     <Reference Include="$(InfiniTmlReferenceDir)/*.dll" />
     <Reference Include="$(InfiniExternalDepsRoot)/ParticleLibrary/ParticleLibrary.dll" />

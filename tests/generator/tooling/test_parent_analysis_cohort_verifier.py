@@ -8,6 +8,8 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+from types import SimpleNamespace
+import zipfile
 
 import pytest
 
@@ -125,6 +127,55 @@ def test_changed_dependency_bytes_are_not_accepted(tmp_path):
     pins["candidate"]["dependencies"]["tModLoader.dll"] = "f" * 64
     write(tmp_path / "input-pins.json", pins)
     assert not verifier.verify(tmp_path, require_pins=True)["parityPass"]
+
+
+def source_pack_fixture(path: Path, projection: str = "e" * 64) -> dict:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(zipfile.ZipInfo("manifest.json", date_time=(2000, 1, 1, 0, 0, 0)), json.dumps({"projectionSha256": projection,
+                         "scope": "unit-test archive provenance; not native projections"}))
+    return {"sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "bytes": path.stat().st_size,
+            "projectionSha256": projection}
+
+
+def test_candidate_native_source_pack_is_optional_but_pins_actual_bytes(tmp_path, monkeypatch):
+    fixture(tmp_path)
+    archive = tmp_path / "native-source-pack.zip"
+    expected = source_pack_fixture(archive)
+    pins = verifier.load_json(tmp_path / "input-pins.json")
+    pins["candidate"]["nativeSourcePack"] = expected
+    write(tmp_path / "input-pins.json", pins)
+    assert verifier.verify(tmp_path, require_pins=True)["parityPass"]
+    harness = tmp_path / "bin/EngineRuntimeChecks.dll"
+    harness.parent.mkdir()
+    harness.write_bytes(b"unit-test harness bytes; not executable")
+    harness.with_name("tModLoader.dll").write_bytes(b"unit-test native dependency bytes")
+    source_pack_fixture(harness.parent / "Data/native-source-pack.zip")
+    monkeypatch.setattr(verifier.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(stdout="a" * 40))
+    emitted = verifier.pin_inputs(tmp_path, harness)
+    assert emitted["nativeSourcePack"] == expected
+    (harness.parent / "Data/native-source-pack.zip").unlink()
+    assert "nativeSourcePack" not in verifier.pin_inputs(tmp_path, harness)
+
+
+@pytest.mark.parametrize("mutation", ["missing", "bytes", "projection"])
+def test_pinned_native_source_pack_missing_or_changed_is_rejected(tmp_path, mutation):
+    fixture(tmp_path)
+    archive = tmp_path / "native-source-pack.zip"
+    pins = verifier.load_json(tmp_path / "input-pins.json")
+    pins["candidate"]["nativeSourcePack"] = source_pack_fixture(archive)
+    if mutation == "missing":
+        archive.unlink()
+    elif mutation == "bytes":
+        archive.write_bytes(archive.read_bytes() + b"changed bytes")
+    else:
+        changed = source_pack_fixture(archive, "f" * 64)
+        # Even matching container bytes cannot excuse a different source pin.
+        pins["candidate"]["nativeSourcePack"].update(sha256=changed["sha256"], bytes=changed["bytes"])
+    write(tmp_path / "input-pins.json", pins)
+    result = verifier.verify(tmp_path, require_pins=True)
+    assert not result["parityPass"]
+    assert any("native source pack" in error for error in result["errors"])
 
 
 @pytest.mark.parametrize("ms, expected", [(4999.0, True), (5000.0, False), (5001.0, False)])

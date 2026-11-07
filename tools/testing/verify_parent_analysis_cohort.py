@@ -16,6 +16,7 @@ import re
 import subprocess
 import sys
 from typing import Any
+import zipfile
 
 SCENARIOS = ("plain", "mixed", "nebula-prism", "eventide")
 PHASES = ("cold-first-request", "warm-1", "warm-2", "source-cache-reset")
@@ -86,6 +87,18 @@ def _measurements(report: dict[str, Any], scenario: str) -> dict[str, dict[str, 
     return result
 
 
+def native_source_pack_pin(path: Path) -> dict[str, Any]:
+    with zipfile.ZipFile(path) as archive:
+        entry = archive.getinfo("manifest.json")
+        if entry.file_size > 4 * 1024 * 1024:
+            raise ValueError("native source pack manifest exceeds the runtime bound")
+        manifest = json.loads(archive.read(entry), parse_constant=_reject_constant)
+    if not isinstance(manifest, dict) or not SHA256.fullmatch(str(manifest.get("projectionSha256", ""))):
+        raise ValueError("native source pack has an invalid projection SHA-256")
+    return {"sha256": digest(path), "bytes": path.stat().st_size,
+            "projectionSha256": manifest["projectionSha256"]}
+
+
 def _pins(root: Path, required: bool) -> tuple[dict[str, Any], list[str]]:
     path = root / "input-pins.json"
     if not path.is_file():
@@ -107,6 +120,24 @@ def _pins(root: Path, required: bool) -> tuple[dict[str, Any], list[str]]:
             errors.append(f"{variant}: empty dependency byte roster")
         elif any(not isinstance(k, str) or not SHA256.fullmatch(str(v)) for k, v in dependencies.items()):
             errors.append(f"{variant}: malformed dependency hashes")
+        pack = item.get("nativeSourcePack")
+        if pack is not None:
+            if (not isinstance(pack, dict) or not SHA256.fullmatch(str(pack.get("sha256", "")))
+                    or not SHA256.fullmatch(str(pack.get("projectionSha256", "")))
+                    or type(pack.get("bytes")) is not int or pack["bytes"] <= 0):
+                errors.append(f"{variant}: malformed native source pack pin")
+                continue
+            archive = root / ("native-source-pack.zip" if variant == "candidate" else "baseline-native-source-pack.zip")
+            if not archive.is_file():
+                errors.append(f"{variant}: pinned native source pack archive missing")
+                continue
+            try:
+                actual = native_source_pack_pin(archive)
+                for field in ("sha256", "bytes", "projectionSha256"):
+                    if actual[field] != pack[field]:
+                        errors.append(f"{variant}: native source pack {field} differs from input pin")
+            except (OSError, ValueError, KeyError, zipfile.BadZipFile) as error:
+                errors.append(f"{variant}: invalid native source pack archive: {error}")
     if pins.get("baseline", {}).get("dependencies") != pins.get("candidate", {}).get("dependencies"):
         errors.append("baseline/candidate dependency bytes differ")
     return {"status": "matched" if not errors else "failed", "inputs": pins}, errors
@@ -209,7 +240,11 @@ def pin_inputs(repository: Path, harness: Path) -> dict[str, Any]:
                     for path in sorted(harness.parent.rglob("*.dll")) if path.resolve() != harness}
     if not dependencies:
         raise ValueError("No runtime dependency DLLs alongside the harness")
-    return {"sourceSha": source_sha, "harnessSha256": digest(harness), "dependencies": dependencies}
+    result: dict[str, Any] = {"sourceSha": source_sha, "harnessSha256": digest(harness), "dependencies": dependencies}
+    source_pack = harness.parent / "Data/native-source-pack.zip"
+    if source_pack.is_file():
+        result["nativeSourcePack"] = native_source_pack_pin(source_pack)
+    return result
 
 
 def main() -> int:
@@ -249,7 +284,7 @@ def main() -> int:
             args.out.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(json.dumps({key: value for key, value in result.items() if key not in ("phases", "inputPins")}, ensure_ascii=False))
         return 0 if result["parityPass"] and (result["targetPass"] or not args.require_target) else 1
-    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, zipfile.BadZipFile) as error:
         print(json.dumps({"status": "invalid_or_incomplete_evidence", "error": str(error)}), file=sys.stderr)
         return 2
 

@@ -123,6 +123,13 @@ def verify(path: Path, source: Path, assembly: Path, expected_tml: str, *, studi
             raise ValueError(f'Bundled managed dependency notice missing or changed: {key}')
     if files[f'{name}.dll'] != assembly.read_bytes() or not files[f'{name}.dll'].startswith(b'MZ'):
         raise ValueError('Packaged assembly differs from the Release build')
+    source_pack = source / 'Data/native-source-pack.zip'
+    source_pack_receipt = None
+    if source_pack.is_file():
+        source_pack_bytes = source_pack.read_bytes()
+        if files.get('Data/native-source-pack.zip') != source_pack_bytes:
+            raise ValueError('Native source pack missing or changed in the official package')
+        source_pack_receipt = {'sha256': hashlib.sha256(source_pack_bytes).hexdigest(), 'bytes': len(source_pack_bytes)}
     for resource in source.rglob('*'):
         relative = resource.relative_to(source)
         if not resource.is_file() or any(part.startswith('.') or part in {'bin', 'obj'} for part in relative.parts):
@@ -142,6 +149,7 @@ def verify(path: Path, source: Path, assembly: Path, expected_tml: str, *, studi
             'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data),
             'fileCount': len(files), 'modReferences': refs, 'dllReferences': dll_refs, 'files': sorted(files),
             'studio': studio,
+            'nativeSourcePack': source_pack_receipt,
             'runtimeSmoke': 'notRun: container validation is not an in-game test'}
 
 

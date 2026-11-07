@@ -14,19 +14,27 @@ internal static partial class EngineRuntimeChecks
 {
     private static class SourceIntervalFixture
     {
+        private static volatile int observed;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void Observe(int value) => observed = value;
+
         [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
         public static int Branches(int kind, bool active, int value)
         {
+            // Keep ordered effects on both arms: Release ILSpy can turn the
+            // arithmetic-only fixture into ?: expressions, removing the exact
+            // retained false subtree that the clone/move oracle must exercise.
             if (kind == 1)
             {
-                if (active) value += 11;
-                else value += 12;
+                if (active) { value += 11; Observe(value); }
+                else { Observe(value); value += 12; }
             }
             else if (kind == 2)
             {
-                if (active) value += 21;
-                else if (value > 10) value += 22;
-                else value += 23;
+                if (active) { value += 21; Observe(value); }
+                else if (value > 10) { Observe(value); value += 22; }
+                else { value += 23; Observe(value); }
             }
             else if (kind == 3) value += 30;
             else
@@ -83,6 +91,9 @@ internal static partial class EngineRuntimeChecks
         var originalAnnotations = originalNodes.Select(node => node.Annotations.ToArray()).ToArray();
         Equal(true, original.Descendants.OfType<IfElseStatement>().Any(branch => !branch.FalseStatement.IsNull),
             "fixture includes a real false arm, not only empty replacements");
+        Equal(true, original.Descendants.OfType<IfElseStatement>().Any(branch =>
+            branch.FalseStatement.DescendantsAndSelf.OfType<IfElseStatement>().Any()),
+            "fixture retains a nested false-arm branch for preorder visitation parity");
         var prune = CSharpOwner.GetMethod("PruneOwnedCSharpIdentityBranches", CSharpFlags)!;
         var move = CSharpOwner.GetMethod("ReplaceOwnedCSharpStatement", CSharpFlags)!;
         string Condition(IfElseStatement branch)

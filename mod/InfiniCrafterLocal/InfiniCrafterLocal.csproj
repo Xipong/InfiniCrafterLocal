@@ -34,4 +34,8 @@
     <Error Condition="!Exists('$(MSBuildProjectDirectory)/Studio/manifest.json') or !Exists('$(MSBuildProjectDirectory)/Studio/runtime-win-x64.zip')"
            Text="Studio runtime is missing. Run python tools/build/build_studio_bundle.py from the repository root before packaging, or use tools/build/package_tmod.ps1. For a compile-only check use /p:TmlBuildMod=false." />
   </Target>
+  <Target Name="InfiniRequireNativeSourcePack" BeforeTargets="PackageMod" Condition="'$(TmlBuildPackageMod)' == 'true'">
+    <Error Condition="!Exists('$(MSBuildProjectDirectory)/Data/native-source-pack.zip')"
+           Text="Native source projections are missing. Build the release with tools/build/package_tmod.ps1 so the pack matches its tModLoader and runtime dependencies. For a compile-only check use /p:TmlBuildMod=false." />
+  </Target>
 </Project>

@@ -28,6 +28,16 @@ internal static partial class EngineRuntimeChecks
             typeof(Terraria.Program).GetProperty("SavePathShared", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!
                 .SetValue(null, sandbox);
             Terraria.Main.dedServ = true;
+            if (args.Length == 2 && args[0] == "--verify-native-target")
+            {
+                VerifyNativeSourcePackTarget(args[1]);
+                return 0;
+            }
+            if (args.Length == 2 && args[0] == "--build-native-source-pack")
+            {
+                BuildNativeSourcePack(args[1]);
+                return 0;
+            }
             if (args.Length == 3 && args[0] == "--capture-parent-panel")
             {
                 CaptureParentPanel(args[1], args[2]);
@@ -58,7 +68,7 @@ internal static partial class EngineRuntimeChecks
                 return 0;
             }
             if (args.Length != 0)
-                throw new ArgumentException("Expected --check-filter <filter>, --replay-contracts <jsonl-path>, --capture-vfx-preview <json-path>, --profile-parent-analysis or --profile-parent-craft <plain|mixed|ammo>");
+                throw new ArgumentException("Expected --check-filter <filter>, --replay-contracts <jsonl-path>, --capture-vfx-preview <json-path>, --verify-native-target <manifest.json>, --build-native-source-pack <output.zip>, --profile-parent-analysis or --profile-parent-craft <plain|mixed|ammo|nebula-prism|eventide>");
             return RunChecks();
         }
         finally { System.IO.Directory.Delete(sandbox, recursive: true); }
@@ -89,6 +99,11 @@ internal static partial class EngineRuntimeChecks
             ("source performance documents rendering", SourcePerformanceDocumentsRendering),
             ("source performance documents LRU and lifetime", SourcePerformanceDocumentsLruAndLifetime),
             ("source performance documents verify cache hits", SourcePerformanceDocumentsVerifyCacheHits),
+            ("native source pack complete projection input keys", NativeSourcePackKeysCoverProjectionInputs),
+            ("native source pack exact renderer bytes and cancellation", NativeSourcePackReaderPreservesBytesAndCancellation),
+            ("native source pack manifest identity and entry integrity", NativeSourcePackReaderRejectsIdentityAndCorruption),
+            ("native source pack verified hits reject method header mismatch", NativeSourcePackHitsVerifyMethodHeaders),
+            ("native source pack recording conflicts fail atomically", NativeSourcePackRecorderRejectsConflictsAtomically),
             ("source programs incremental LRU count and characters", SourceProgramsEvictLeastRecentlyUsed),
             ("source programs late completion invalidation and eviction", SourceProgramsFenceLateCompletion),
             ("source programs cancelled owner retry and borrower isolation", SourceProgramsRetryCancelledOwnersAndBorrowers),

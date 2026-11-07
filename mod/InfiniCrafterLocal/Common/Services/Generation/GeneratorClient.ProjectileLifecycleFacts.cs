@@ -46,13 +46,30 @@ public sealed partial class GeneratorClient
                 stageStart = now; stageAllocated = bytes;
             }
             var pendingReferences = new JsonArray();
+            var input = new JsonObject { ["type"] = type, ["style"] = style };
             while (!Monitor.TryEnter(nativeCSharpGate, 50)) timeout.Token.ThrowIfCancellationRequested();
             try
             {
-                var document = GetNativeCSharpDocument(method, timeout.Token);
-                Mark("verified_decompile");
-                result = BuildProjectileLifecycleSource(document, type, style, pendingReferences, timeout.Token);
-                Mark("conditional_lifecycle_regions");
+                if (TryReadNativeSourceProjection("projectile_lifecycle", method, input, timeout.Token, out var projection)
+                    && projection["result"] is JsonObject packedResult && projection["references"] is JsonArray packedReferences
+                    && packedResult["records"] is JsonArray && packedResult["unresolved"] is JsonArray
+                    && JsonNode.DeepEquals(packedResult["rootCertificate"], result["rootCertificate"]))
+                {
+                    result = packedResult.DeepClone().AsObject();
+                    pendingReferences = packedReferences;
+                    Mark("verified_source_pack");
+                }
+                else
+                {
+                    var document = GetNativeCSharpDocument(method, timeout.Token);
+                    Mark("verified_decompile");
+                    result = BuildProjectileLifecycleSource(document, type, style, pendingReferences, timeout.Token);
+                    Mark("conditional_lifecycle_regions");
+                    timeout.Token.ThrowIfCancellationRequested();
+                    RecordNativeSourceProjection("projectile_lifecycle", method, input,
+                        new JsonObject { ["result"] = result.DeepClone(), ["references"] = pendingReferences.DeepClone() }, timeout.Token);
+                }
+                timeout.Token.ThrowIfCancellationRequested();
             }
             finally { Monitor.Exit(nativeCSharpGate); }
             foreach (var reference in pendingReferences) references.Add(reference!.DeepClone());
