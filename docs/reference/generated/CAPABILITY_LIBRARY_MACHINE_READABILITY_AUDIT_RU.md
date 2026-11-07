@@ -26,9 +26,9 @@
 ## Измеренные свойства
 
 - capabilities: **74**; parameters: **395**; numeric: **232/232 bounded**;
-- entity kinds: **7**; inputs: **4**; actions: **6**; events: **12**;
+- entity kinds: **7**; inputs: **4**; actions: **6**; events: **13**;
 - typed entity references: **4**; requirements: **102**; binding dependency edges: **9**;
-- exact wire paths: **660**; global technical lowerer outputs: **237**;
+- exact wire paths: **724**; global technical lowerer outputs: **285**;
 - Python vertical witnesses: **71**; native execution: **notRun**;
 - errors: **0**; warnings: **0**.
 

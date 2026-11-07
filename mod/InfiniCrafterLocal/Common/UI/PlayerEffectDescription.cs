@@ -33,6 +33,25 @@ internal static class PlayerEffectDescription
         if ((effect.HealingPotionCooldownOnHitReductionTicks ?? 0) != 0) lines.Add((ru ? "Сокращение оставшегося КД лечения за удар: " : "Remaining healing cooldown removed per hit: ") + Number((effect.HealingPotionCooldownOnHitReductionTicks ?? 0) / 60d) + (ru ? " с" : " s"));
         if ((effect.AutoManaPotionBelowPercent ?? 0) != 0) lines.Add((ru ? "Маназелье при запасе маны ниже: " : "Use mana potion below: ") + Number((effect.AutoManaPotionBelowPercent ?? 0) / 1d) + (ru ? " %" : " %"));
         if ((effect.HurtInvulnerabilityBonusTicks ?? 0) != 0) lines.Add((ru ? "Дополнительная неуязвимость после урона: " : "Extra immunity after hurt: ") + Number((effect.HurtInvulnerabilityBonusTicks ?? 0) / 60d) + (ru ? " с" : " s"));
+        if (effect.AutoJump == true) lines.Add(ru ? "Повтор прыжков при удержании" : "Repeat jumps while held");
+        if (effect.GravityControl == true) lines.Add(ru ? "Управление направлением гравитации" : "Gravity-direction control");
+        if ((effect.GravityMultiplier ?? 1f) != 1f) lines.Add((ru ? "Гравитация ×" : "Gravity ×") + Number(effect.GravityMultiplier ?? 1f));
+        if ((effect.MaxFallSpeedPxPerTick ?? 0) != 0) lines.Add((ru ? "Максимальная скорость падения: " : "Maximum fall speed: ") + Number((effect.MaxFallSpeedPxPerTick ?? 0) * 60d / 16d) + (ru ? " блок/с" : " blocks/s"));
+        if ((effect.SafeFallDistanceBlocks ?? 0) != 0) lines.Add((ru ? "Дополнительное безопасное падение: " : "Extra safe fall distance: ") + Number(effect.SafeFallDistanceBlocks ?? 0) + (ru ? " блоков" : " blocks"));
+        if (effect.WaterBreathing == true) lines.Add(ru ? "Дыхание в воде" : "Water breathing");
+        if (effect.SwimJump == true) lines.Add(ru ? "Плавательные прыжки" : "Swimming jumps");
+        if (effect.WaterBuoyancy == true) lines.Add(ru ? "Плавучесть в воде" : "Water buoyancy");
+        if (effect.WallSlideAndJump == true) lines.Add(ru ? "Скольжение и прыжки от стен" : "Wall sliding and jumps");
+        if (effect.WallCling == true) lines.Add(ru ? "Сцепление со стенами" : "Wall clinging");
+        if ((effect.BreathCapacityBonus ?? 0) != 0) lines.Add((ru ? "Дополнительный запас дыхания: " : "Extra breath capacity: ") + Number(effect.BreathCapacityBonus ?? 0));
+        if (effect.AirJump is { } jump)
+        {
+            lines.Add((ru ? "Дополнительные прыжки: " : "Extra jumps: ") + jump.Count
+                + (ru ? ", скорость " : ", speed ") + Number(jump.LaunchSpeedPxPerTick * 60d / 16d)
+                + (ru ? " блок/с, удержание " : " blocks/s, hold ") + Number(jump.HoldDurationTicks / 60d) + (ru ? " с" : " s"));
+            if (jump.HorizontalAccelerationMultiplier != 1f) lines.Add((ru ? "Ускорение в прыжке ×" : "Jump acceleration ×") + Number(jump.HorizontalAccelerationMultiplier));
+            if (jump.HorizontalSpeedMultiplier != 1f) lines.Add((ru ? "Горизонтальная скорость в прыжке ×" : "Jump horizontal speed ×") + Number(jump.HorizontalSpeedMultiplier));
+        }
         if (effect.Condition == "stationary" && lines.Count > 0) lines.Insert(0, ru ? "В покое, без использования предмета:" : "While stationary, without using an item:");
         return string.Join("; ", lines);
     }

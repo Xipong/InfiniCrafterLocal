@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from infini_local.core.runtime_authoring.capability_registry import EVENT_KIND_REGISTRY
 from infini_local.core.vfx import config
 from infini_local.core.vfx.contours import (
     contour_schema,
@@ -109,6 +110,10 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
             "rendererKind": {"enum": ["spriteElement", "libraryParticle", "nativeLight"]},
             "repeatEvery": {"minimum": 1}}},
     })
+    slot["allOf"].extend({
+        "if": {"properties": {"event": {"const": name}}, "required": ["event"]},
+        "then": {"properties": {"anchor": {"enum": list(spec.vfx_anchors)}}},
+    } for name, spec in EVENT_KIND_REGISTRY.items() if spec.vfx_anchors and name in events)
     slot["allOf"].extend({
         "if": {"properties": {"placementBindingId": {"const": row["id"]}}, "required": ["placementBindingId"]},
         "then": {"properties": {"entityId": {"const": row["entityId"]}}},

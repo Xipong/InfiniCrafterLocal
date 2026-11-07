@@ -25,6 +25,7 @@ internal static partial class EngineRuntimeChecks
     private static void CheckWorkbenchVfxRecorder()
     {
         WNativeActiveVfx.CheckRecorderContract();
+        WAirJumpObserver.CheckRecorderContract();
         WithLighting((_,_)=>{
             var system=new InfiniDetachedVfxSystem();
             try {
@@ -176,6 +177,25 @@ internal static partial class EngineRuntimeChecks
                 if(Terraria.Main.dedServ!=previous)throw new Exception("Failed NPC update leaked dedServ into damage/render phase");
             }
         }finally{Terraria.Main.dedServ=saved;}
+        // Independent Python image_store.publish hash vectors, not private PNGs.
+        var published=new GeneratedItemData{Id="fixture"};published.RecipeMeta.WorldId="0";
+        byte[] png=System.Text.Encoding.ASCII.GetBytes("native-test");
+        var itemIdentity=new[]{"fixture","item","","fixture"};
+        var itemNames=WNativeArtwork.PublicationNames(published,"item",itemIdentity,png);
+        if(itemNames.Scoped!="item--4563e2fc133e5c692798bbc2e95937dbc3f0d074689f9ef33ef5da3e8768ed2e.png"
+            ||itemNames.Legacy!="infini_asset_png_52d48cd476c157d6aae8bb40a8922adafba051b82c32a96c6bf3db07cc83566d.png"
+            ||WNativeArtwork.PublicationNames(published,"equip_overlay",new[]{"fixture","equip_overlay","","fixture_equip_overlay"},png).Scoped!="equip_overlay--39930cdda62f00654dd47acb8399629d62ce9ecc0dc0c6e9a3592bc14003db3c.png"
+            ||WNativeArtwork.PublicationNames(published,"vfx:cloud",new[]{"recipe","cloud"},png).Scoped!="vfx_cloud--4158c616a8d2e90f6f964697d846b08f85ca0f63ead4b0da2610f7e0cf5b9a83.png")
+            throw new Exception("Current/historical publication hash contract differs from image store");
+        if(WNativeArtwork.PublicationNames(published,"item",itemIdentity,new byte[]{1}).Scoped==itemNames.Scoped)
+            throw new Exception("Changed PNG content preserved its publication identity");
+        published.RecipeMeta.WorldId="1";
+        if(WNativeArtwork.PublicationNames(published,"item",itemIdentity,png).Scoped==itemNames.Scoped)
+            throw new Exception("Changed world preserved its scoped publication identity");
+        published.RecipeMeta.WorldId="0";published.Id="other";
+        if(WNativeArtwork.PublicationNames(published,"item",itemIdentity,png).Scoped==itemNames.Scoped)
+            throw new Exception("Changed item preserved its scoped publication identity");
+        Console.WriteLine("PASS: workbench exact scoped/historical item, overlay and VFX publication hashes plus changed-byte/world/item controls");
         Console.WriteLine("PASS: workbench trail admission, exact selected texture readiness/queue controls and controlled NPC dedicated-scope restoration (not GPU/gameplay)");
     }
 }

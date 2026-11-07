@@ -14,6 +14,10 @@ internal readonly record struct InfiniItemVfxSnapshot(Vector2 Center,Vector2 Tip
 {
     internal static InfiniItemVfxSnapshot Capture(Player player)=>new(player.Center,player.itemLocation,
         player.itemRotation.ToRotationVector2()*(player.direction<0?-1:1),player.velocity);
+    // ExtraJump is player movement, not an action of the currently held item.
+    // Keep its origin/velocity literal and its forward opposite native gravity.
+    internal static InfiniItemVfxSnapshot CaptureAirJump(Player player)=>new(player.Center,player.Center,
+        new Vector2(0,-player.gravDir),player.velocity);
     internal bool Valid=>Finite(Center)&&Finite(Tip)&&Finite(Forward)&&Finite(Velocity)&&Math.Abs(Forward.LengthSquared()-1)<0.001f;
     private static bool Finite(Vector2 p)=>float.IsFinite(p.X)&&float.IsFinite(p.Y);
     internal VfxSourceFrame Frame(string anchor,Vector2 point)=>new(anchor=="hitPoint"?point:anchor is "tip" or "tipHistory"?Tip:Center,

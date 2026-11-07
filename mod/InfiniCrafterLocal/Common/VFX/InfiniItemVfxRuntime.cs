@@ -157,6 +157,7 @@ public static partial class InfiniItemVfxRuntime
 
     public static void EmitAndSyncEvent(Player player, GeneratedItemData? data, string entityId, string eventName, Vector2? eventPosition = null)
     {
+        if (eventName == RuntimeEventKind.OnJump) return; // exact live grant owns this producer
         if (player is null || !player.active || data is null || !HasExactSlot(data, entityId, eventName)) return;
         if (eventPosition.HasValue && !Finite(eventPosition.Value)) return;
         if(eventName=="on_use")BeginHeldHistory(player,data,entityId);
@@ -194,8 +195,9 @@ public static partial class InfiniItemVfxRuntime
         {
             // Earlier payloads had no event identity and cannot distinguish
             // two genuine hits from a replay. They are refused, not guessed.
-            if (reader.ReadByte() == MaterialItemPacketVersion)
-                HandleMaterialItemEvent(reader, whoAmI);
+            byte version = reader.ReadByte();
+            if (version == MaterialItemPacketVersion) HandleMaterialItemEvent(reader, whoAmI);
+            else if (version == AirJumpPacketVersion) HandleAirJumpEvent(reader, whoAmI);
         }
         catch { }
     }
@@ -207,7 +209,7 @@ public static partial class InfiniItemVfxRuntime
         return false;
     }
 
-    private static void EmitLocal(Player player, GeneratedItemData data, string entityId, string eventName, bool cadence = false, Vector2? eventPosition = null,bool includeMaterials=true,MaterialEventAllowance? sharedAllowance=null, bool allowLightCue=true)
+    private static void EmitLocal(Player player, GeneratedItemData data, string entityId, string eventName, bool cadence = false, Vector2? eventPosition = null,bool includeMaterials=true,MaterialEventAllowance? sharedAllowance=null, bool allowLightCue=true, VfxSourceBinding? sourceBinding=null, InfiniItemVfxSnapshot? capturedSnapshot=null)
     {
         if (Main.dedServ) return;
         // One synchronous event call owns its total across matching slots. Periodic
@@ -217,9 +219,11 @@ public static partial class InfiniItemVfxRuntime
         {
             if (slot.PlacementBindingId is not null || !string.Equals(slot.EntityId, entityId, StringComparison.Ordinal) || !string.Equals(slot.Event, eventName, StringComparison.Ordinal)) continue;
             if(slot.Trail is not null)continue; // exact-use history is drawn with the native held body
+            VfxSourceFrame? eventFrame=capturedSnapshot is {} snapshot
+                ?snapshot.Frame(slot.Anchor,eventPosition??snapshot.Center):null;
             if(InfiniDetachedVfxSystem.HasSnapshotVfx(slot)) {
                 if(!cadence&&includeMaterials)InfiniDetachedVfxSystem.EnqueueSnapshotVfx(data,entityId,slot,$"item:{player.whoAmI}:{data.Id}:{entityId}",
-                    VfxSourceBinding.ItemFrame(player,slot.Anchor,eventPosition),VfxSourceBinding.Capture(player,EventSourceItem(player,data.Id,eventName)?.Item,data),itemBudget:true,allowance:eventAllowance);
+                    eventFrame??VfxSourceBinding.ItemFrame(player,slot.Anchor,eventPosition),sourceBinding??VfxSourceBinding.Capture(player,EventSourceItem(player,data.Id,eventName)?.Item,data),itemBudget:true,allowance:eventAllowance);
                 continue;
             }
             int repeat = cadence ? slot.RepeatEvery!.Value : 1;
@@ -227,8 +231,8 @@ public static partial class InfiniItemVfxRuntime
             // Item periodic cadence uses the world clock, not an invented item age.
             if (cadence && (Main.GameUpdateCount + (ulong)Math.Abs((long)slot.SlotSeed)) % (ulong)Math.Max(1, repeat) != 0) continue;
             if (slot.Anchor == "hitPoint" && !eventPosition.HasValue) continue;
-            Vector2 center = slot.Anchor == "hitPoint" ? eventPosition!.Value
-                : slot.Anchor is "tip" or "tipHistory" ? player.itemLocation : player.Center;
+            Vector2 center = eventFrame?.Position ?? (slot.Anchor == "hitPoint" ? eventPosition!.Value
+                : slot.Anchor is "tip" or "tipHistory" ? player.itemLocation : player.Center);
             if (!Finite(center)) continue;
             InfiniVfxRendererKind kind = VfxRendererRegistry.Resolve(slot);
             // Mark only after cadence and anchor eligibility: an invalid held pose
@@ -240,7 +244,6 @@ public static partial class InfiniItemVfxRuntime
                 if (sound.Volume > 0f) SoundEngine.PlaySound(sound, center);
                 continue;
             }
-
         }
     }
 }

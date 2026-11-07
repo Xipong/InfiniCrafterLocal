@@ -253,7 +253,7 @@ internal static partial class EngineRuntimeChecks
                 if(!(drawPlayer||drawProjectileVfx) || slot.Light is null || slot.Event!="periodic" || slot.Anchor!="self")
                     throw new NotSupportedException("nativeLight requires proven periodic/self source and full native draw/lighting");
             if(data.VfxManifest.Slots.Any(s=>s.RendererKind is "spriteElement" or "texturedPath") && !drawArtwork)
-                throw new NotSupportedException("Authored material/impact VFX require drawArtwork=true with every exact publication PNG");
+                throw new NotSupportedException("Authored material VFX require drawArtwork=true with every exact publication PNG");
         }
         if(clientPlayer && data?.RuntimeProgram.BindingForInput(RuntimeInputKind.Hold)?.UsePolicy.Action.Kind==RuntimeBindingAction.SpawnEntity) throw new NotSupportedException("Client item contact mode currently refuses held projectile spawning");
         if(data is not null) {
@@ -347,7 +347,10 @@ internal static partial class EngineRuntimeChecks
                 int x=WInt(rect,"x",0)/16,y=WInt(rect,"y",0)/16,w=WInt(rect,"width",0)/16,h=WInt(rect,"height",0)/16;
                 for(int tx=x;tx<x+w;tx++) for(int ty=y;ty<y+h;ty++) { var tile=Terraria.Main.tile[tx,ty]; tile.HasTile=true; tile.TileType=TileID.Dirt; }
             }
+            using var airJumps=fullPlayer?new WAirJumpBootstrap():null;
+            if(airJumps is not null)report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create("GeneratedAirJump registered before Player construction; production GeneratedAirJumpLifecycleSystem.Load/Unload owns JumpMovement hook"));
             WithPlayer((owner, modPlayer) => {
+                using var airJumpObserver=fullPlayer?new WAirJumpObserver(owner,e=>events.Add(e)):null;
                 Terraria.Main.player[0] = owner; owner.whoAmI = 0; owner.active = true; owner.direction = initialDirection; owner.gravDir=initialGravity; if(gravityPotion)owner.AddBuff(BuffID.Gravitation,ticks+1);
                 report["scene"]!["activePlayerCount"]=Terraria.Main.player.Count(p=>p.active);
                 if(Terraria.Main.player.Count(p=>p.active)!=1) throw new InvalidOperationException("Workbench must contain exactly one active player");

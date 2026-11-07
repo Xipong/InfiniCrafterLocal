@@ -591,6 +591,7 @@ public sealed partial class InfiniCraftPlayer
         if (_generatedAccRunSpeedFloor > 0f)
             Player.accRunSpeed = Math.Max(Player.accRunSpeed, _generatedAccRunSpeedFloor);
         ApplyGeneratedUtilityBuffEffects();
+        ApplyGeneratedTraversalEquipment();
         EmitGeneratedUtilityBuffLight();
         // ItemCheck/HoldItem follows this hook. Consume an effect tick only
         // after its stat/light samples, so a new one-tick application survives until

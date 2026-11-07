@@ -289,6 +289,12 @@ Luminance textures in the discovered dependency root; an explicit
 resources in the native graphics section. A missing dependency or unsupported
 render is an error, not a successful capture.
 
+The artwork observer verifies current `role--digest.png` publications with the
+same world/item/role + request-identity + exact-PNG digest as
+`generator/infini_local/storage/image_store.py`. Historical
+`infini_asset_png_` / `infini_vfx_png_` names retain their original identity/byte
+check; neither arbitrary filenames nor renamed/tampered PNGs are accepted.
+
 ## Fast agent workflow
 
 For your own item, start with `probe`. It prepares the scene and suite and invokes
@@ -545,6 +551,48 @@ it does not change movement physics. `python/verify_accessory_movement.py` check
 Hermes/Frostspark equip, vanity/inventory equivalence, actual acceleration/plateau/
 braking, unchanged default width and invalid-width/input refusals. No shoe-art,
 full world, ice/flight or multiplayer parity is implied.
+
+## Authored native air jumps
+
+Full-player modes register the production `GeneratedAirJump` **before** creating
+`Player`, then load/unload the original `GeneratedAirJumpLifecycleSystem` around
+the scene. Native `Player.Update` owns equipment grants, grounded refresh,
+`ExtraJumpLoader` consumption, `JumpMovement`, held duration and downstream
+physics. The stand does not refill charges, assign jump velocity or emit VFX.
+The separate full-mod-loader mode retains its own normal content autoload.
+
+Use explicit `controls` press/release actions after `equip` (or the item's actual
+buff activation). An ordinary ground jump is not an authored extra jump.
+Snapshots now distinguish these observations:
+
+- `native_jump_movement`: original movement entry/exit, ground-start detection,
+  actual extra-start flag, and shared native jump-speed restoration;
+- `native_extra_jump_started`: returned production `GeneratedAirJump.OnStarted`,
+  native duration, impulse and remaining availability;
+- `native_air_jump_vfx_dispatch`: returned production `EmitAndSyncJump`. This is
+  a dispatch observation, **not** proof of emitted particles or visible pixels.
+  Use `nativeRender.snapshots`, native PNGs and a no-VFX control for that claim.
+
+Leave real headroom: the native world's top player margin is 656px, so the short
+probe floor at tile47 can clip a multi-jump capture. The synthetic regression uses
+floor tile100, player top Y1558 and camera Y1150, without overriding native bounds.
+Adapt framing to the generated item's actual motion rather than changing it.
+
+```sh
+# CPU registration/hold/ground-only/no-input/vanity controls.
+python tools/workbench/python/verify_air_jumps.py --out /new/cpu --no-build
+# Authorized offscreen original native player + on_jump libraryParticle draw;
+# adds an otherwise identical no-VFX control and exact PNG difference checks.
+python tools/workbench/python/verify_air_jumps.py --out /new/render --no-build --render
+```
+
+`--native-dll /private/build/ItemTestWorkbench.dll --no-build` selects an isolated
+build; retain its independent source-build receipt. Ordinary runs should use the
+normal wrapper's build-state checks. The regression creates explicitly synthetic
+fixture PNGs and no model calls; it never rewrites the user's generated item.
+Ground-only, no-input and vanity controls must emit zero jump particles; the two
+extra jumps must produce native callbacks and visible original VFX, then expire.
+This is standalone native scene evidence, not a full game or multiplayer test.
 
 ## Actual pixels versus schematic replay
 

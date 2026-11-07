@@ -15,6 +15,8 @@ public partial class GeneratedItem
         &&s.EntityId==Data.RuntimeProgram.ItemEntityId&&s.Event!=RuntimeEventKind.Periodic);
     private object _itemPresentationGeneration=new();
     internal object PresentationGeneration=>_itemPresentationGeneration;
+    // Admission reads the native synchronized identity; it never allocates one.
+    internal long ExistingPresentationToken=>_itemPresentationToken;
     internal long PresentationToken {
         get {
             if(_itemPresentationToken==0){

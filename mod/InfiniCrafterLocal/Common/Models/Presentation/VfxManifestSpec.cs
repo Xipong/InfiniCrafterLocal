@@ -228,6 +228,9 @@ public sealed class VfxSlotSpec
         if (rendererKind == InfiniVfxRendererKind.None)
             throw new InvalidDataException($"unknown VFX renderer '{RendererKind}'");
         RendererKind = VfxRendererRegistry.ToWireName(rendererKind);
+        Anchor = ExactEnumText(Anchor, "anchor", "self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field");
+        if (!RuntimeEventKind.SupportsVfxAnchor(Event,Anchor))
+            throw new InvalidDataException("jump VFX requires player center, motion axis or captured jump-point anchors");
         if (PlacementBindingId is not null)
         {
             if (RuntimeId(PlacementBindingId,"placement binding id") != PlacementBindingId
@@ -299,10 +302,8 @@ public sealed class VfxSlotSpec
             if (Duration is null || Duration < minimumDuration || Duration > 120 || RepeatEvery is null or < 0 or > 120)
                 throw new InvalidDataException("invalid VFX timing");
         }
-        Anchor = ExactEnumText(Anchor, "anchor", "self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field");
         if ((!sound && StartTick is null) || StartTick is < 0 or > 120)
             throw new InvalidDataException("invalid VFX startTick");
-
     }
 
     // Shared playback projection for item, projectile and detached occurrences.
