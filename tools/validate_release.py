@@ -43,7 +43,7 @@ def _host_path(executable: str, value: str, root: Path) -> str:
 def run_check(name: str, command: list[str], *, root: Path = ROOT, env: dict[str, str] | None = None) -> dict[str, Any]:
     start = time.monotonic()
     environment = dict(os.environ if env is None else env)
-    environment.update(PYTHONPATH=str(root / 'LocalGenerator'), PYTHONUTF8='1', INFINI_SKIP_CONFIG_FILE='1', INFINI_TEST_USE_PROJECT_CONFIG='0')
+    environment.update(PYTHONPATH=str(root / 'generator'), PYTHONUTF8='1', INFINI_SKIP_CONFIG_FILE='1', INFINI_TEST_USE_PROJECT_CONFIG='0')
     command = list(command)
 
     def result(status: str, output: str = '', code: int | None = None) -> dict[str, Any]:
@@ -62,7 +62,7 @@ def run_check(name: str, command: list[str], *, root: Path = ROOT, env: dict[str
         for variable in ('INFINI_TML_REFERENCE_DIR', 'INFINI_TML_DEPS_SRC'):
             if environment.get(variable):
                 environment[variable] = str((root / Path(environment[variable]).expanduser()).resolve())
-        readiness = _execute([sys.executable, 'tools/item-test-workbench/workbench.py', 'doctor'], root, environment)
+        readiness = _execute([sys.executable, 'tools/workbench/workbench.py', 'doctor'], root, environment)
         try:
             state = json.loads(readiness.stdout)
         except (ValueError, TypeError):
@@ -78,7 +78,7 @@ def run_check(name: str, command: list[str], *, root: Path = ROOT, env: dict[str
         deps = environment.get('INFINI_TML_DEPS_SRC', '')
         if deps:
             deps = str((root / Path(deps).expanduser()).resolve())
-        project = environment.get('INFINI_VALIDATION_PROJECT', 'ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj')
+        project = environment.get('INFINI_VALIDATION_PROJECT', 'mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj')
         project_path = root / project
         if name == 'tml_build' and not project_path.is_file():
             return result('failed', f'Project not found: {project_path}', 2)
@@ -108,12 +108,12 @@ def run_check(name: str, command: list[str], *, root: Path = ROOT, env: dict[str
             if not refs or not (Path(refs) / 'tModLoader.dll').is_file():
                 return result('notRun', 'Native CPU checks need INFINI_TML_REFERENCE_DIR containing tModLoader.dll')
             filters = command[command.index('--check-filter'):] if '--check-filter' in command else []
-            command = [dotnet, 'build', _host_path(dotnet, 'tools/native/EngineRuntimeChecks.csproj', root), '-c', 'Debug', '--nologo', '-v:minimal',
+            command = [dotnet, 'build', _host_path(dotnet, 'tests/native/EngineRuntimeChecks.csproj', root), '-c', 'Debug', '--nologo', '-v:minimal',
                        f'/p:InfiniTmlReferenceDir={_host_path(dotnet, refs, root)}', f'/p:InfiniExternalDepsRoot={_host_path(dotnet, deps, root)}']
             build = _execute(command, root, environment)
             if build.returncode:
                 return result('failed', build.stdout, build.returncode)
-            run = _execute([dotnet, _host_path(dotnet, 'tools/native/bin/Debug/net8.0/EngineRuntimeChecks.dll', root), *filters], root, environment)
+            run = _execute([dotnet, _host_path(dotnet, 'tests/native/bin/Debug/net8.0/EngineRuntimeChecks.dll', root), *filters], root, environment)
             return result('passed' if run.returncode == 0 else 'failed', build.stdout + run.stdout, run.returncode)
         command = [dotnet, 'build', _host_path(dotnet, str(project_path), root), '-c', 'Debug', '--nologo', '-v:minimal', '-warnaserror',
                    f'/p:InfiniExternalDepsRoot={_host_path(dotnet, deps, root)}']

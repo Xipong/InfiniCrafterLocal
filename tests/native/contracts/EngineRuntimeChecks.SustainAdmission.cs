@@ -27,7 +27,10 @@ internal static partial class EngineRuntimeChecks
             var body = FrontHandEntity(wire);
             foreach (string key in new[] { "beamGeometry", "beamRamp", "ownerControl", "manaSustain" }) body.Remove(key);
             body["movement"] = System.Text.Json.Nodes.JsonNode.Parse("{\"name\":\"move_straight\",\"code\":0}");
-            data = GeneratedItemData.FromJson(wire.ToJsonString())!;
+            body["visual"]!["assetMode"] = "no_asset";
+            body["visual"]!.AsObject().Remove("geometry");
+            data = GeneratedItemData.FromJson(wire.ToJsonString())
+                ?? throw new InvalidOperationException("sustain fixture refused: " + ContractJsonDiagnostics.LastError);
             entity = data.RuntimeProgram.TryGetEntity("root")!;
             if (sustain) entity.ManaSustain = new() { Cadence = "held_item_use_time" };
             if (controlled) entity.OwnerControl = new RuntimeOwnerControlSpec {

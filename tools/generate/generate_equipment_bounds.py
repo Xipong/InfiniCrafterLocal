@@ -7,12 +7,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "LocalGenerator"))
+sys.path.insert(0, str(ROOT / "generator"))
 from infini_local.core.runtime_authoring.capability_registry import (  # noqa: E402
     CAPABILITY_REGISTRY, EQUIPMENT_CLASS_DAMAGE_RUNTIME_BOUNDS,
 )
 
-OUTPUT = ROOT / "ModSources/InfiniCrafterLocal/Common/Models/Runtime/GeneratedEquipmentBounds.g.cs"
+OUTPUT = ROOT / "mod/InfiniCrafterLocal/Common/Models/Runtime/GeneratedEquipmentBounds.g.cs"
 
 
 def _literal(value: int | float, *, integer: bool) -> str:

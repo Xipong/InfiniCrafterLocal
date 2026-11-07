@@ -14,7 +14,7 @@
    weapon presets, скрытые fallback или переавторство сохранённых рецептов.
 3. Делай узкий diff: опиши исходную проблему, изменение и реально выполненные
    проверки. Команды — [AGENTS.md](AGENTS.md#обязательный-vertical-slice),
-   сборка — [BUILD_QOL_RU.md](docs/development/BUILD_RU.md). Не объявляй offline checks
+   сборка — [BUILD_RU.md](docs/development/BUILD_RU.md). Не объявляй offline checks
    доказательством world/GPU/MP или live-модели.
 4. Не включай личные config.env, OAuth/API credentials, cache, модели и saves.
    Новые сторонние материалы обозначь вместе с оригинальной лицензией.

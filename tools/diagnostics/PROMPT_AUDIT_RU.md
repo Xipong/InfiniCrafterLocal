@@ -22,7 +22,7 @@ python tools/diagnostics/prompt_audit.py "request.json" --out "craft-audit.html"
 
 ## Какой JSON открыть
 
-- Полный реальный крафт: `LocalGenerator/cache/stage_requests/*.json` (при нестандартном `INFINI_CACHE_DIR` — соответствующий каталог). Сопоставить `recipeKey`, `stage` и `recipeId`. Запись содержит **sanitized сообщения до provider conversion**, не HTTP-запрос. `sanitized: true` означает, что диагностика заменила часть данных; читатель не восстанавливает удалённые значения. Для нового крафта запись зависит от `INFINI_TRACE_PROMPTS`.
+- Полный реальный крафт: `generator/cache/stage_requests/*.json` (при нестандартном `INFINI_CACHE_DIR` — соответствующий каталог). Сопоставить `recipeKey`, `stage` и `recipeId`. Запись содержит **sanitized сообщения до provider conversion**, не HTTP-запрос. `sanitized: true` означает, что диагностика заменила часть данных; читатель не восстанавливает удалённые значения. Для нового крафта запись зависит от `INFINI_TRACE_PROMPTS`.
 - Офлайн-захват `tools/diagnostics/measure_llm_request_sizes.py`: `*.builder.json` или `*.http-body.json`. В builder-обёртке `evidence` — дополнительный контекст, не обязательно переданный модели. HTTP body показывает транспортную форму, включая schema/response-format, если они сохранены.
 - Поддерживается самостоятельный dossier JSON, Chat Completions `messages`, Responses `input` / `instructions` и JSON внутри `content` / `text`.
 

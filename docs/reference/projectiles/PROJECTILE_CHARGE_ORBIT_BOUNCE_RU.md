@@ -1,33 +1,29 @@
 # Зарядка, орбита и отскоки
 
-Новые параметры — точные scalar/unit projections (Alias Lowering), без выбора механики кодом и дополнительных LLM-стадий. Registry формирует одинаковые Author/Repair cards и provider schemas.
+Это независимые current primitives. Их композицию выбирает Author; код не восстанавливает weapon family. Формы параметров и точные диапазоны принадлежат registry и [generated inventory](../generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md).
 
-## Независимая зарядка
+## Зарядка
 
-`charge_then_release.params` задаёт `chargeSeconds`, `damageMultiplier`, `knockbackMultiplier`, `speedMultiplier`. Все три коэффициента явные: частичная зарядка линейно интерполирует каждый от 1 к его значению на полном заряде. Урон допускает 1–4, отбрасывание 0–4, скорость 0.1–4. Пример: 3 / 0.25 / 0.5 даёт сильный, медленный выстрел со слабым отбрасыванием. Полёт, столкновения и события по-прежнему задаются отдельно.
+`charge.duration` задаёт секунды до полного заряда; optional `autoReleaseAge` — active age автоматического release. Active use требует явно выбранного `item_use.channel=true`. `charge.releaseEffect` независимо выбирает усиления и обязательную `launchSpeed` в блоках/с.
 
-`damageMultiplier` без потерь проецируется в новое nullable wire-поле `chargeDamageMultiplier`. Все три nullable wire-поля обязаны присутствовать вместе и принадлежать точному контроллеру зарядки. Они проверяются до исторической normalization; present null, выход за точные raw-границы и ненейтральное значение, округляющееся во float32 к 1, отклоняются. Отсутствие всех трёх у сохранённого v5 оставляет прежнее совместное усиление через `powerMultiplier`; свежий Author его не пишет. При новых контролах старое поле может быть только отсутствующим либо нулевым bag-полем. Чтение не дописывает поля. Rehydrate/ExtraAI не применяет усиление повторно.
+`damageMultiplier` 1…4, `knockbackMultiplier` 0…4 и `speedMultiplier` 0.1…4 интерполируются от 1 к выбранному значению. Объявленный пропуск multiplier означает 1 с receipt. Присутствующий releaseEffect всё равно устанавливает launch velocity даже при единичных коэффициентах; отсутствие объекта не создаёт этот эффект. Пауза lifetime выбирается отдельным `pauseLifetimeWhileCharging`; без неё обычный countdown продолжается.
 
-При удержании заряжаемого предмета возле прицела показывается процент фактического заряда. Полный заряд отмечается золотой полоской, надписью «Готово» и одним коротким звуком. Индикатор читает существующий controller counter с учётом `extraUpdates`; не изменяет урон, момент отпускания или gameplay-событие `channel_complete`. Сигнал привязан к физическому поколению снаряда: повторные чтения, hydration и ExtraAI того же экземпляра не воспроизводят его заново. После отпускания, смены предмета или смерти индикатор скрывается. Меню, карта и скрытый UI не показывают индикатор и не воспроизводят отложенный звук после закрытия.
+Damage/knockback масштабируются один раз по фактическим значениям projectile. Нулевая база остаётся нулевой, hydration/ExtraAI не усиливает повторно. Контактный урон и owner guards не выводятся из charge: для них есть `gate_contact` и `set_owner_control`.
+
+Индикатор возле прицела читает текущий charge component физического снаряда. Полный заряд помечает готовность; повторное чтение/hydration не повторяет сигнал того же поколения. UI не меняет gameplay release и `channel_complete`; меню, карта и hidden UI не накапливают отложенный сигнал.
 
 ## Орбита
 
-`move_orbit.params.turnRadiansPerSecond` — signed мировая угловая скорость, независимо от скорости запуска. Положительное значение вращает по часовой стрелке на экране, отрицательное против неё, 0 сохраняет угол относительно владельца. 6.283185307179586 рад/с — один оборот в секунду. `radiusTiles` остаётся расстоянием от владельца; индивидуальная начальная фаза по projectile identity сохраняется.
+`orbit` явно задаёт anchor, `radius` в блоках, signed `radiansPerSecond`, `anglePhase` и `identityAnglePhase`. Positive rate вращает по часовой стрелке на экране; 0 сохраняет фазу. Lowering делит angular rate на `60 × updatesPerTick`. Это мировая скорость, не зависимость от launch velocity.
 
-Lowering: `orbitRadiansPerUpdate = turnRadiansPerSecond / 60 / updatesPerTick`. `updatesPerTick` берётся из явно выбранного collision call, поэтому дополнительные AI updates не ускоряют орбиту. В native executor угол = active update age × выбранный increment + initial phase. У сохранённого wire без нового поля остаётся прежние 0.055 радиана за update. Драйвер, как и прежде, отключает tile collision.
+Anchor выбирается из owner center/mounted center/front hand. Орбита не включает terrain avoidance, arm pose, lifetime или owner cancellation. Tile collision задаётся отдельно и должна быть допустима для выбранной композиции.
 
 ## Отскоки
 
-`set_projectile_collision.params.bounceSpeedRetention` — коэффициент 0–1 **только столкнувшейся компоненты скорости**. 1 отражает её без потерь, 0 останавливает эту ось. Касательная компонента не меняется; трение, качение, гравитация и взрыв не подразумеваются. Пропуск в свежем Author — объявленная точная нейтраль 1 с отдельным omission receipt.
+`projectile_collision.bounceSpeedRetention` — коэффициент 0…1 только столкнувшейся компоненты скорости. 1 отражает без потерь, 0 останавливает эту ось; касательная компонента не меняется. Пропуск — объявленная нейтраль 1. `bounceCount=N` разрешает N отражений; следующий контакт отдаёт native уничтожение. Возврат, friction, gravity и explosion не выводятся из bounce.
 
-`bounceCount=N` допускает N отражений; следующее столкновение отдаёт native уничтожение. Boomerang/returning-glaive/flail по-прежнему переходят в возврат до проверки bounce count и не используют коэффициент. Старый сохранённый wire без нового поля сохраняет исторические 0.78; отсутствующая метка не материализуется.
+`OnTileCollide(oldVelocity)` получает скорость до столкновения; native velocity уже содержит collision result. Отражение сравнивает изменившиеся оси. Явный `return_when.onTileCollision` — отдельный latch, не сохранённый bundled early-return opcode.
 
-## Проверенная граница tModLoader 1.4.4
+## Проверка
 
-- [`ModProjectile.OnTileCollide`](https://docs.tmodloader.net/docs/stable/class_mod_projectile.html) получает скорость **до** столкновения; `Projectile.velocity` уже изменена native collision. Возврат false отменяет стандартное уничтожение. [`ExampleBullet`](https://github.com/tModLoader/tModLoader/blob/1.4.4/ExampleMod/Content/Projectiles/ExampleBullet.cs) показывает отражение изменившихся осей через `oldVelocity`.
-- [`SparklingBall`](https://github.com/tModLoader/tModLoader/blob/1.4.4/ExampleMod/Content/Projectiles/SparklingBall.cs) дополнительно тормозит весь вектор; IFC намеренно сохраняет собственную точную collided-axis семантику, которая явно описана модели.
-- [`Projectile.extraUpdates`](https://docs.tmodloader.net/docs/stable/class_projectile.html) повторяет AI и уменьшение `timeLeft`; готовых native-полей orbit rate/restitution нет. Прямые `Vector2`/collision hooks сохраняют композицию IFC, без переключения на чужой `aiStyle`.
-
-Найденные возможности для отдельных будущих задач: `TileCollideStyle` задаёт прохождение платформ и collision-only хитбокс; [`Utils.GetChaseResults`](https://docs.tmodloader.net/docs/stable/class_utils.html) вычисляет перехват движущейся цели. Они не включаются автоматически этим изменением. `FlailStats`/`FlailSpinCollisionRange` вызываются только native AI flail, поэтому были бы инертны у custom IFC AI.
-
-Проверки: Python actual outgoing Author cards/schema, compiler receipts, strict wire/retained absence и frozen Repair; source-linked native CPU checks — full/partial charge, hydration, signed orbit при N=1/3/6, отражения осей и exact nullable DTO. Реальная игра/GPU/host-client smoke — отдельная граница.
+Проверяй outgoing Author schema/cards, compiler receipts, strict DTO, frozen Repair и actual native hooks: charge release/hydration, signed orbit при разных N, collided-axis reflection. Native API: [ModProjectile.OnTileCollide](https://docs.tmodloader.net/docs/stable/class_mod_projectile.html), [Projectile.extraUpdates](https://docs.tmodloader.net/docs/stable/class_projectile.html). Build/CPU, GPU и host-client игра — разные результаты по [TESTING](../../development/TESTING_RU.md).

@@ -1,35 +1,8 @@
 # Выбор последовательности NPC и выпуск физических снарядов
 
-Категория аудита A10. Новая `select_targets_and_emit_on_event` явно задаёт
-поиск NPC и начальный transform отдельного дочернего projectile для каждого
-найденного звена. Источником механики служит Author call; название предмета,
-damage class, цвет и описание эффекта не выбирают этот consumer.
+`emit_to_targets_on_event` явно задаёт последовательный поиск NPC и начальный transform отдельного child projectile для каждого найденного звена. Весь bounded plan строится в одном dispatch, а не после будущих попаданий children. Дальнейшие flight/collision/lifetime/damage принадлежат child entity.
 
-## Отличие, которое восстанавливает категория
-
-В историческом `ChainProjectiles` весь цикл работал внутри одного callback:
-поиск начинался с `last.Center`, очередной child создавался там же, затем
-`last` становился выбранным NPC. Следующего попадания для продолжения цикла
-он не ждал. Источник: [f04ee02, GeneratedProjectile.Impact.cs](https://github.com/Xipong/InfiniCrafterLocal/blob/f04ee02b456947379bdebc82047237069715ecce/ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Impact.cs).
-
-Сохранённый opcode 4 `chain_damage_on_event` выполняет другую операцию:
-мгновенно наносит урон нескольким целям около одного event position. В этом
-PR он сохраняет своё прежнее поведение. Новая операция имеет opcode 8 и
-создаёт настоящие движущиеся projectile; дальнейшие movement, collision,
-lifetime, penetration и damage принадлежат явно указанной child entity.
-
-Например, исходная цель находится в x=0, следующие — в x=300 и x=550.
-При radius 360 px и `selectionAnchor=previous_target` второй поиск идёт
-из x=300 и может выбрать x=550. Поиск с фиксированным центром x=0 эту цель
-не видит. Оба children создаются в момент dispatch: первый в x=0 с начальным
-направлением на x=300, второй в x=300 с направлением на x=550. Второй не ждёт,
-попадёт ли первый в цель.
-
-У старого цикла не было visited-set: он исключал лишь текущий anchor и мог
-вернуться к более ранней цели. Author теперь выбирает repeat policy явно.
-Выбранный NPC задаёт начальное направление, а не гарантированное попадание.
-Child может встретить стену, промахнуться или столкнуться с другим NPC по
-своим отдельным native collision/immunity rules.
+`selectionAnchor=previous_target` переносит центр поиска к очередной NPC; `event_target` сохраняет исходный центр. `repeatPolicy` явно разрешает либо исключает revisits. Выбранная цель задаёт только начальное направление, не гарантированное попадание. Direct nearby damage — другая операция из [event contract](../authoring/AUTHOR_EVENT_DOMAINS_RU.md).
 
 ## Author API
 
@@ -45,8 +18,8 @@ Child может встретить стену, промахнуться или 
 | `selectionAnchor` | `previous_target`, `event_target` | Перемещать search/emission origin к очередной цели либо сохранять dispatch-time event NPC |
 | `repeatPolicy` | `allow_revisits`, `exclude_visited` | Разрешать более ранние NPC либо исключать source и все уже выбранные цели |
 | `requireLineOfSight` | boolean | Native `Collision.CanHit` от hitbox anchor до hitbox candidate |
-| `initialIgnoreCountdownUpdates` | integer 0…600 | Начальный native AI countdown исключения точного emission-anchor NPC; 0 отключает |
-| `delayTicks` | integer 0…600 | Задержка dispatch в world ticks |
+| `ignoreTargetUpdates` | integer 0…600 | Начальный native AI countdown исключения точного emission-anchor NPC; 0 отключает |
+| `delay` | Секунды, registry domain | Задержка dispatch с проекцией в world ticks |
 
 Радиус и порядок nearest сравниваются по точным квадратам расстояний фактических binary32 NPC Center. Координаты и разрешённый binary64 radius переводятся на общую dyadic решётку `2^-149`, после чего integer comparison сохраняет inclusive equality и различает любой положительный ортогональный компонент. Это не epsilon/расширение радиуса; слот разрешает только математически точную ничью.
 
@@ -55,7 +28,7 @@ Child может встретить стену, промахнуться или 
 ```json
 {
   "id": "emit_arcs",
-  "fn": "select_targets_and_emit_on_event",
+  "fn": "emit_to_targets_on_event",
   "target": "bolt",
   "params": {
     "when": "on_hit",
@@ -65,8 +38,8 @@ Child может встретить стену, промахнуться или 
     "selectionAnchor": "previous_target",
     "repeatPolicy": "exclude_visited",
     "requireLineOfSight": false,
-    "initialIgnoreCountdownUpdates": 10,
-    "delayTicks": 0
+    "ignoreTargetUpdates": 10,
+    "delay": 0
   }
 }
 ```
@@ -98,7 +71,7 @@ origin, ненулевой direction и exclusion snapshot своего anchor. 
 или ownerHitCheck и не гарантирует свободный путь во время полёта.
 
 Referenced child должен иметь явные `position={at:activation_origin}`,
-`aim=velocity`, `offsetPx=0`, без `spawn_over_target`. Иначе его отдельный
+`aim=velocity`, `offsetBlocks=0`. Иначе его отдельный
 origin adapter спорил бы с выбранной операцией. Registry requirements,
 строгий wire и C# boundary отвергают такую композицию. Compiler не меняет
 уже принятую child, чтобы сделать ссылку подходящей.
@@ -159,7 +132,6 @@ budget: этот предел отличается от отдельного liv
 низкоуровневой операции. Registry владеет параметрами, dependencies и
 budget metadata; compiler проецирует их в opcode 8 и выдаёт source receipts.
 Пропущенные choices, null, неверный enum, тип или диапазон дают RED.
-Сохранённые opcode 1…7 не получают новый selection protocol автоматически.
 
 Frozen Repair различает shared child и exact dependency единственного ошибочного
 consumer. При независимом binding, primary identity или другой typed reference
@@ -170,7 +142,7 @@ consumer. При независимом binding, primary identity или дру�
 Если единственная incoming typed graph reference принадлежит ошибочному call,
 а child не primary и не используется binding, Repair открывает только конфликтующие
 params существующей capability, перечисленные в registry exact requirement.
-Например, `configure_spawn.params.aim/position/offsetPx` — только несовпадающие
+Например, `spawn.params.aim/position/offsetBlocks` — только несовпадающие
 leaves. Уже совместимые значения, скорость, урон, movement, lifetime, IDs, kind
 и исходная reference остаются frozen; создание замены не предлагается, чтобы
 не осиротить старую child. Никакое значение не вставляется автоматически:
@@ -179,14 +151,7 @@ validator/compiler/wire gates. Удаление отдельной valid capabil
 parameter-only путём не разрешается. Логика общая по registry requirements,
 без маршрутизации по family/event имени.
 
-Композиция с A11 использует общий transform/exact-NPC-exclusion helper.
-ExtraAI writer версии 4 и reader версий 2/3/4 сохраняют общий v3 exclusion
-segment и owner replay guard, затем optional A11 sampled-velocity state.
-Отсутствие нового состояния в historical constant wire не дополняется.
-Выбор всего старшего по git времени файла
-`GeneratedProjectile.NetSync.cs` не является проверкой этого protocol.
-Общий spawn context/exception boundary должен остаться в одном экземпляре.
-Opcode A10=8 отличается от A11 alias для event-spawn opcode 1.
+Velocity distribution и hit-target geometry используют общий transform/exact-NPC-exclusion owner. NetSync передаёт только текущие поддержанные protocol branches; отсутствие состояния не разрешает угадывать sampling или NPC incarnation. Shared spawn context/exception boundary остаётся одним владельцем.
 
 ## Проверка исполнения
 
@@ -194,12 +159,4 @@ Portable проверки охватывают registry/schema, Author request, 
 receipt identity, referenced-entity Repair, budget/graph и исходный C#
 consumer. Точные результаты фиксируются в описании PR на проверенном commit.
 
-При локальной композиции #27/#25/#22/#12 родитель отдельно выполнил linked
-canonical C#/tModLoader/FNA headless build и полный `EngineRuntimeChecks`:
-329 PASS, 0 FAIL, 0 compiler warnings/errors. Первый build отказал на
-byte-identical auto-merge duplicate `HasExactTargetEmissionOrigin`; удалена
-только вторая копия, затем fresh build и полный native rerun прошли.
-Receipt: `pr-27/native/combined25-parent/rerun-1/verified.json` в review
-artifacts; точные 184 compile inputs закреплены отдельным SHA256 manifest.
-Это не Terraria world loop, GPU, SP/MP game smoke или network-delivery
-проверка: эти режимы и Live LLM/image quality остаются **notRun**.
+Native checks должны пройти actual DTO/executor/scheduler/spawn seams на проверяемом дереве. Исторический PASS и source pattern не являются текущей приёмкой. World loop, GPU, MP delivery и live LLM/image quality проверяются отдельно по [TESTING](../../development/TESTING_RU.md).

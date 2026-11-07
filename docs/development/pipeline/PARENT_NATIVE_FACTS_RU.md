@@ -162,7 +162,7 @@ ID, proc probability и duration не теряются, если downstream де
 Author явно составляет бафф/дебафф из зарегистрированных generated-effect
 примитивов: выбирает получателя, характеристики, триггер, длительность и
 поддержанный шанс. Знаковые player modifiers выражают также штрафы и обмены;
-`apply_npc_effect_on_event` выражает временные NPC эффекты без нативного
+`npc_effect_on_event` выражает временные NPC эффекты без нативного
 buff-ID. Код не переводит имя родителя или source-reference в автоматически
 выбранную механику. Точные значения нового эффекта — решение Author,
 а не исправление факта о родителе. См. [construction contract](../../reference/authoring/LOW_LEVEL_RUNTIME_AUTHORING_RU.md#полезная-композиция-баффов-и-дебаффов).

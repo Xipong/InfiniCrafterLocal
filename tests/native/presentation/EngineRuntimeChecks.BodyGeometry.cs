@@ -41,8 +41,8 @@ internal static partial class EngineRuntimeChecks
             minAlong = Math.Min(minAlong, along); maxAlong = Math.Max(maxAlong, along);
             minAcross = Math.Min(minAcross, across); maxAcross = Math.Max(maxAcross, across);
         }
-        Equal(true, Math.Abs(minAlong) < 0.002f && Math.Abs(maxAlong - Vector2.Distance(start, end)) < 0.002f, "body endpoints match collision segment");
-        Equal(true, Math.Abs(minAcross + width * 0.5f) < 0.002f && Math.Abs(maxAcross - width * 0.5f) < 0.002f, "body width matches collision width");
+        Equal(true, Math.Abs(minAlong) < 0.002f && Math.Abs(maxAlong - Vector2.Distance(start, end)) < 0.002f, "body endpoints match expected segment");
+        Equal(true, Math.Abs(minAcross + width * 0.5f) < 0.002f && Math.Abs(maxAcross - width * 0.5f) < 0.002f, "body width matches authored presentation width");
     }
 
     private static void TexturedBodyUsesDeclaredAxisAndPreservesNativeSpin()

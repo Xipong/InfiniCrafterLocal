@@ -14,11 +14,11 @@
 
 После **трёх текстовых стадий**: asset runtime gates → image generation → visual delivery → parent summary → final normalize/runtime/VFX gates → stage accounting → world metadata/health → sanitize → final cached-payload check → atomic recipe commit. VFX asset ID, общий нескольким элементам, не требует отдельной image job на каждый элемент. Required PNG нельзя заменить placeholder. Visual/VFX не добавляют gameplay и не выбирают weapon family.
 
-Stage-level Gameplay admission/compile/wire/conditional Repair находится в [gameplay_stage](../../../LocalGenerator/infini_local/pipelines/author/stage.py); VFX transport — в [vfx_generation_pipeline](../../../LocalGenerator/infini_local/pipelines/vfx/request.py). Их внутренние imports не являются compatibility API.
+Stage-level Gameplay admission/compile/wire/conditional Repair находится в [gameplay_stage](../../../generator/infini_local/pipelines/author/stage.py); VFX transport — в [vfx_generation_pipeline](../../../generator/infini_local/pipelines/vfx/request.py). Их внутренние imports не являются compatibility API.
 
 Parent context: `context/cards.py.raw_parent_card_for_llm` собирает Author/Visual packets из source facts и exact accepted generated runtime. `context/parents.py` извлекает current native numeric/projectile/ammo facts, generated parents сохраняют полный exact graph без single-projectile compatibility projection; identity primitives принадлежат `core.item_identity_tools`. Parent prose — advisory context, не authority или отдельная knowledge/category/power стадия. Provenance, zeros/false и Visual-only appearance сохраняются в соответствующем handoff.
 
-Orchestration owner — [combine_pipeline.combine](../../../LocalGenerator/infini_local/pipelines/combine_pipeline.py); assets — [image lifecycle](IMAGE_ASSET_LIFECYCLE_RU.md) / [VFX materials](../../reference/presentation/VFX_MATERIAL_ELEMENTS_RU.md). Cache/dev path отдельно от fresh LLM craft.
+Orchestration owner — [combine_pipeline.combine](../../../generator/infini_local/pipelines/combine_pipeline.py); assets — [image lifecycle](IMAGE_ASSET_LIFECYCLE_RU.md) / [VFX materials](../../reference/presentation/VFX_MATERIAL_ELEMENTS_RU.md). Cache/dev path отдельно от fresh LLM craft.
 
 ## Сохранение принятых стадий
 
@@ -35,7 +35,7 @@ Executable Gameplay rejection открывает только Gameplay Repair; r
 
 [Frozen-first protocol](TARGETED_REPAIR_PROTOCOL_RU.md#frozen-first) применяется во всех трёх доменах: exact invalid leaves/dependencies, read-only accepted context, audit проигнорированных лишних правок, полная повторная валидация. Repair предыдущий валидный stage не перезапускает; обязательного judge/critic нет.
 
-`llmStageAccounting`: `gameplayAuthorCalls`, `gameplayRepairCalls`, `visualDirectorCalls`, `visualRepairCalls`, `vfxDirectorCalls`, `vfxRepairCalls`. Fresh happy path — `1/0/1/0/1/0`; каждый repair count не более одного. [Topology gate](../../../LocalGenerator/infini_local/pipelines/combine_pipeline.py) проверяет это перед commit. Это logical stage calls, не обещание ровно трёх HTTP attempts: transport compatibility retries считают отдельно.
+`llmStageAccounting`: `gameplayAuthorCalls`, `gameplayRepairCalls`, `visualDirectorCalls`, `visualRepairCalls`, `vfxDirectorCalls`, `vfxRepairCalls`. Fresh happy path — `1/0/1/0/1/0`; каждый repair count не более одного. [Topology gate](../../../generator/infini_local/pipelines/combine_pipeline.py) проверяет это перед commit. Это logical stage calls, не обещание ровно трёх HTTP attempts: transport compatibility retries считают отдельно.
 
 ## Статические инструкции и provider cache
 

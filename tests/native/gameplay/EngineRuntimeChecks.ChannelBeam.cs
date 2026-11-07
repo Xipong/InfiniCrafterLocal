@@ -128,6 +128,7 @@ internal static partial class EngineRuntimeChecks
             }
             var tiny = BeamFixture(); var tinyEntity = tiny.RuntimeProgram.TryGetEntity("root")!;
             tinyEntity.BeamGeometry!.WidthPx = 2; tinyEntity.BeamRamp!.InitialWidthMultiplier = 0.01;
+            tinyEntity.Visual.Geometry!.WidthPx = .02f;
             var thin = BeamHost(tiny); BeamAge(thin, 0);
             var narrow = BeamGeometry(thin); BeamNear(0.02f, narrow.Width, "explicit subpixel width reaches geometry");
             int index = count(); DrawBodyGeometry(thin);
@@ -244,7 +245,7 @@ internal static partial class EngineRuntimeChecks
                 Equal(true, host.TryCapturePresentationGeometry("beam", out var path), "production VFX path captures active beam");
                 Equal(geometry.Start, path[0], "VFX path begins at exact collision anchor"); Equal(geometry.End, path[1], "VFX path ends at exact wall-clipped endpoint");
                 int before = count(); DrawBodyGeometry(host);
-                AssertBodySegment(positions(before), geometry.Start, geometry.End, geometry.Width);
+                AssertBodySegment(positions(before), geometry.Start, geometry.End, 6);
                 stop = 48; var moved = BeamGeometry(host);
                 BeamNear(48, Vector2.Distance(moved.Start, moved.End), "new closer wall is immediate without overshooting smoothing");
                 stop = 0;

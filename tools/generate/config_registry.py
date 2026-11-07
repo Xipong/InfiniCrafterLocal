@@ -19,7 +19,7 @@ import re
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-LOCAL = ROOT / "LocalGenerator"
+LOCAL = ROOT / "generator"
 OUT = ROOT / "contracts" / "config_registry.json"
 NAME_RE = re.compile(r"\bINFINI_[A-Z0-9_]+\b")
 CSHARP_ENV_RE = re.compile(r"(?:System\.)?Environment\.GetEnvironmentVariable\(\s*\"(INFINI_[A-Z0-9_]+)\"")
@@ -156,7 +156,7 @@ def _extract_python() -> tuple[list[Declaration], dict[str, set[str]]]:
 
 
 def _extract_csharp_refs(references: dict[str, set[str]]) -> None:
-    for path in (ROOT / "ModSources").rglob("*.cs"):
+    for path in (ROOT / "mod").rglob("*.cs"):
         source = path.read_text(encoding="utf-8-sig", errors="replace")
         for name in CSHARP_ENV_RE.findall(source):
             references[name].add(_rel(path))
@@ -276,9 +276,9 @@ def build_registry() -> dict[str, Any]:
     return {
         "schema": "infini.config-registry.v1",
         "generatedFrom": [
-            "env_* calls in LocalGenerator/infini_local and tools",
-            "LocalGenerator/infini_local/desktop/settings_schema.py",
-            "LocalGenerator/config.example.env",
+            "env_* calls in generator/infini_local and tools",
+            "generator/infini_local/desktop/settings_schema.py",
+            "generator/config.example.env",
             "C# INFINI_* references",
         ],
         "authority": "derived-evidence-only",

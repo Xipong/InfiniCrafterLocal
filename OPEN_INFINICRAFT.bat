@@ -8,9 +8,9 @@ if not "%~1"=="" set "ACTION=%~1"
 echo Infinicraft: %ACTION%
 where py >nul 2>nul
 if %ERRORLEVEL% EQU 0 (
-  py -3 LocalGenerator\scripts\bootstrap.py "%ACTION%"
+  py -3 generator\scripts\bootstrap.py "%ACTION%"
 ) else (
-  python LocalGenerator\scripts\bootstrap.py "%ACTION%"
+  python generator\scripts\bootstrap.py "%ACTION%"
 )
 set "RESULT=%ERRORLEVEL%"
 if not "%RESULT%"=="0" (

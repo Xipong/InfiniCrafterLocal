@@ -21,7 +21,7 @@
 
 Diagnostic manifest и `debug.visualAssetPlan` остаются наблюдениями; изменение этих отчётов не меняет фактический roster или разрешения.
 
-Source owners: [executor](../../../LocalGenerator/infini_local/pipelines/images/stage.py), [backend adapters](../../../LocalGenerator/infini_local/pipelines/images/backends.py), [plan](../../../LocalGenerator/infini_local/pipelines/visual/assets.py), [delivery](../../../LocalGenerator/infini_local/pipelines/visual/delivery.py), [storage admission](../../../LocalGenerator/infini_local/storage/world_storage.py), [AssetSync](../../../ModSources/InfiniCrafterLocal/Common/Services/Assets/GeneratedAssetSyncService.cs), [texture cache](../../../ModSources/InfiniCrafterLocal/Common/Services/Assets/RuntimeSpriteCache.cs).
+Source owners: [executor](../../../generator/infini_local/pipelines/images/stage.py), [backend adapters](../../../generator/infini_local/pipelines/images/backends.py), [plan](../../../generator/infini_local/pipelines/visual/assets.py), [delivery](../../../generator/infini_local/pipelines/visual/delivery.py), [storage admission](../../../generator/infini_local/storage/world_storage.py), [AssetSync](../../../mod/InfiniCrafterLocal/Common/Services/Assets/GeneratedAssetSyncService.cs), [texture cache](../../../mod/InfiniCrafterLocal/Common/Services/Assets/RuntimeSpriteCache.cs).
 
 sd.cpp: `core/images/config.py` читает настройки и владеет process state/cleanup; единственный `_sdcpp_config()` в `pipelines/images/backends.py` собирает effective runtime config (включая LoRA file → directory/tags). `services/sdcpp_backend.py` владеет command/payload primitives, `sdcpp_service.py` — процессом. Не добавлять параллельный config builder или forwarding helpers без consumer: неиспользуемые command/argv facades удалены. Provider routing, deadlines, retries, cancellation и private output остаются в прежнем рабочем пути.
 
@@ -34,13 +34,13 @@ sd.cpp: `core/images/config.py` читает настройки и владее�
 
 У каждой invocation и попытки свой private `output_dir` в `images/worlds/<мир>/<предмет>/diagnostics`, вне индексируемой папки `final`. Этот путь явно передаётся backend/postprocess/stages/refit; module-global directories не переключаются. Backend gate не расширяется на CPU/postprocess/publication.
 
-Legacy logical IDs и retry suffixes, ComfyUI `{{SPRITE_ID}}`, authored prompts и seed policy не меняются ради изоляции файлов. У VFX сохраняется прежний nonce/digest, уже передававшийся backend. Custom ComfyUI workflow может сам выбирать remote SaveImage filenames: локальная изоляция не обещает изменить его remote storage.
+Backend logical IDs и retry suffixes, ComfyUI `{{SPRITE_ID}}`, authored prompts и seed policy не меняются ради изоляции файлов. У VFX сохраняется прежний nonce/digest, уже передававшийся backend. Custom ComfyUI workflow может сам выбирать remote SaveImage filenames: локальная изоляция не обещает изменить его remote storage.
 
 Raw/stages остаются **private diagnostic files**, а не публичными ассетами. Их private каталог находится рядом с `final` внутри папки предмета; HTTP не обходит дерево картинок и не раздаёт диагностику. Конкретный путь и `retained_private` записываются в debug receipt. Принятый bake переносится в постоянное хранилище, а JSON receipt указывает на этот единственный финал. При включённых промежуточных этапах байтовый дубль `30_baked_final` также не остаётся. Raw, master и неудачные попытки сохраняются. Автоматическая очистка/квота диагностики не добавлена.
 
 ## Постоянное хранилище на каждом ПК
 
-Встроенная Studio и игра используют один `<Main.SavePath>/InfiniCrafterLocal/images`. Native launcher передаёт уже выбранный image root в Studio; managed restart сохраняет его при запуске Python, даже если в `config.env` остался прежний standalone override. Внешний standalone-генератор по умолчанию использует `<INFINI_DATA_DIR или LocalGenerator>/images`. Если standalone запущен на том же ПК и должен разделять файлы с игрой, укажи его `INFINI_IMAGE_DIR` равным `<Main.SavePath>/InfiniCrafterLocal/images`; при собственном другом расположении задай одинаковый `INFINI_IMAGE_DIR` обоим процессам.
+Встроенная Studio и игра используют один `<Main.SavePath>/InfiniCrafterLocal/images`. Native launcher передаёт уже выбранный image root в Studio; managed restart сохраняет его при запуске Python, даже если в `config.env` остался прежний standalone override. Внешний standalone-генератор по умолчанию использует `<INFINI_DATA_DIR или generator>/images`. Если standalone запущен на том же ПК и должен разделять файлы с игрой, укажи его `INFINI_IMAGE_DIR` равным `<Main.SavePath>/InfiniCrafterLocal/images`; при собственном другом расположении задай одинаковый `INFINI_IMAGE_DIR` обоим процессам.
 
 Структура:
 
@@ -61,11 +61,9 @@ images/
 
 Owners диска: `storage/image_store.py` и native `SharedImageStore`. Byte-range lock `.store.lock` сериализует файловые изменения между Python/C#. PNG записывается через уникальный `.part`, flush/fsync, atomic replace; alias публикуется только после PNG. Повреждённый indexed identity не разрешает выбрать shadow из старого cache. Диагностика никогда не индексируется как final.
 
-### Переход существующих данных
+### Admission файлов
 
-Миграция ленивая: при чтении принятого world recipe/гидратации native item переносятся только его известные complete PNG из `cache/sprites` и `asset_cache`. Исходные DTO и gameplay schema не преобразуются. Старое basename сохраняется как alias, поэтому прежний абсолютный путь/URL продолжает разрешаться через AssetSync. Исходный файл убирается лишь после записи и проверки canonical bytes + alias; byte-identical копии объединяются. Иные bytes, неизвестные файлы и каталоги не удаляются. Повторный проход не создаёт PNG-дублей. Сбой записи оставляет исходные данные доступными для следующей попытки.
-
-Записанные legacy `image-*` diagnostic directories переносят известные raw/stage/master PNG в папку соответствующего предмета. Совпавшие с принятым финалом bytes заменяются `.final.json` receipt. Неопознанные файлы остаются на прежнем месте. Никакой массовой очистки старого cache или автоматического удаления истории нет.
+Resolver обслуживает только indexed PNG в `final`, с совпадающими length/SHA и безопасным относительным путём. `diagnostics` не раздаётся. Неиндексированный файл, старый image root или прежний absolute path не создают нового alias и не запускают adoption. Старые каталоги и их неизвестные файлы не изменяются. Для резервной копии сохраняй весь image store вместе с `.index`, а не только PNG.
 
 VFX ID сохраняется буквально, включая регистр. `Glow/glow` и `spark/spark_refit` не должны сталкиваться при case-insensitive sync/refit. Конечный ASCII digest учитывает exact identity и окончательные PNG bytes; raw ID не становится filename, новое содержимое не перезаписывает ранее распределённое имя. Это техническое именование, не дополнительная integrity authority.
 
@@ -80,9 +78,9 @@ Local filesystem/write/commit failure — `failed`, пустые public paths и
 
 При fit-only refit исполнитель сохраняет приватный `refit-source/master.png` до финального уменьшения и берёт пиксели из него. Отдельный подкаталог не пересекается с именами logical assets: даже ID `refit-master` не может перезаписать retained master финальным bake. Область crop определяется прежней геометрией валидированного final и отображается в координаты master; уже потерявшие детали 7–8 пикселей не растягиваются повторно. Это явно lossy техническая normalization, не новая картинка, не выбор дизайна и не принудительная непрозрачность. Receipt `samplingSource=pre_bake_master` отличает её от совместимого low-resolution refit; существующие сохранённые PNG не переписываются. При аварийном minimal bake без master остаётся прежний путь с честным receipt. `vfx_strip` не сохраняет refit-master и по-прежнему не допускает refit.
 
-Nonfatal validation может быть принята как `generated_warn_invalid`; допустимый technical refit не является новым дизайном. `vfx_strip` запрещает crop/recenter/rotation/silhouette-refit: keying/resize сохраняют full frame/UV. Legacy late-warning recovery разрешён только в своей nonterminal publication policy, не превращает disk/VFX failure в успех.
+Nonfatal validation может быть принята как `generated_warn_invalid`; допустимый technical refit не является новым дизайном. `vfx_strip` запрещает crop/recenter/rotation/silhouette-refit: keying/resize сохраняют full frame/UV. Late-warning recovery разрешён только в своей nonterminal publication policy, не превращает disk/VFX failure в успех.
 
-Explicit dev-only procedural policy отдельно требует `VISUAL_ALLOW_PROCEDURAL_FALLBACK` и отключённый `VISUAL_STRICT_AI_AUTHORSHIP`; она не действует для required VFX или `openai_codex` и не маскирует terminal local I/O. Required authored PNG при ошибке блокирует delivery; stock mask, белый quad и Dust его не заменяют. Пока валидный PNG ещё загружается клиентом, соответствующий texture consumer временно молчит.
+Required authored PNG при ошибке блокирует delivery; stock mask, белый quad и Dust его не заменяют. Пока валидный PNG ещё загружается клиентом, соответствующий texture consumer временно молчит.
 
 <a id="dependencies"></a>
 ## Одна PNG dependency projection и ready-domain
@@ -91,28 +89,28 @@ Explicit dev-only procedural policy отдельно требует `VISUAL_ALLO
 
 - `item` выбирает inventory image.
 - `entity` требует того же exact entity с `baked_sprite` либо `reuse_item_icon`.
-- `impact` требует same-entity `impactSprite` producer с explicit `spritePrompt`, `spriteNegativePrompt`, `spriteCanvasSize` (24/32/48/64/96/128). Они losslessly проецируются в `entity.visual.impactPrompt/impactNegativePrompt/impactCanvasSize`; planner не выбирает canvas из hitbox.
+- `library` выбирает exact встроенную текстуру и не создаёт image job.
 - `asset` ссылается на точный объявленный ingredient ID; несколько consumers не создают несколько jobs.
 - Primitive/Dust/cue renderer не получает PNG requirement только из проигнорированного texture hint.
 
 Некорректная ссылка становится exact selector-leaf error для прежнего frozen-first Repair. Код не меняет Visual mode, не выбирает inventory icon и не создаёт compensating artwork. Уже валидные поля, gameplay и Visual остаются frozen. При неизвестном target сначала исправляется его identity; зависимая диагностика не должна размораживать корректный selector по отсутствующему контексту.
 
-Current selectors проверяются exact schema; неизвестные и старые spellings отвергаются без alias/migration. Невложенные sprite slots выбирают `textureRole=item|entity|impact|none`; nested material consumers имеют собственный selector.
+Current nested texture selectors проверяются exact schema; неизвестные spellings и неподдерживаемые ветви отвергаются.
 
-Material `{source,assetId}` требует пустой assetId при `item|entity|impact` и точный declared ID при `asset`. Дубликаты IDs, dangling references и unused requests отвергаются; один ingredient request даёт одну job независимо от числа consumers. Null не означает отсутствие optional `assets`. Подробнее о layout/движении — [material contract](../../reference/presentation/VFX_MATERIAL_ELEMENTS_RU.md#assets).
+Material `{source,assetId}` требует пустой assetId при `item|entity`, точный declared ID при `asset`, exact library texture ID при `library`. Дубликаты IDs, dangling references и unused requests отвергаются; один ingredient request даёт одну job независимо от числа consumers. Null не означает отсутствие optional `assets`. Подробнее о layout/движении — [material contract](../../reference/presentation/VFX_MATERIAL_ELEMENTS_RU.md#assets).
 
 Fresh requests требуют непустого prompt. Полный локальный cache сохраняет captions; network projection обнуляет обе строки prompt/negativePrompt и оставляет asset identity, размер/layout, render references и готовые технические metadata. Runtime admission принимает этот объявленный stripped-вид, не применяет к нему правило нового image-запроса. Storage/delivery отдельно проверяют готовность ассетов, даже если проверка промежуточного compiled wire допускает pending records. Полный C# `GeneratedItemData.FromJson` принимает каждый объявленный VFX-ассет только с непустым PNG-path и точным `spriteStatus=generated|generated_warn_invalid` — и с captions, и в stripped network-виде. `pending`, `skipped`, `not_required`, `failed`, `prompt_only`, иной регистр или произвольный status не означают готовность. Это admission metadata; реальные PNG bytes по-прежнему проверяет существующий AssetSync.
 
 <a id="bytes"></a>
 ## Serving bytes и единственный texture owner
 
-Delivery/cache проверяют безопасное PNG-имя и реальные файлы из тех же roots, которые обслуживает `/get_asset`, а не только существование произвольного локального пути. Проверяется весь непустой runtime PNG-roster, включая сохранённые overlay/entity/impact entries: complete PNG, до 8 МиБ на файл, до 16 МиБ суммарно и не более 32 файлов. Необязательное отсутствие картинки отличается от присутствующего, но неготового пути.
+Delivery/cache проверяют безопасное PNG-имя и реальные файлы через тот же indexed final resolver, который обслуживает `/get_asset`, а не только существование произвольного локального пути. Проверяется весь непустой runtime PNG-roster, включая сохранённые overlay/entity/material entries: complete PNG, до 8 МиБ на файл, до 16 МиБ суммарно и не более 32 файлов. Необязательное отсутствие картинки отличается от присутствующего, но неготового пути.
 
 `GeneratedAssetSyncService` сертифицирует canonical cache PNG/length/SHA на lifecycle boundary, proof живёт на существующем descriptor. `RuntimeSpriteCache.TryGet` предпочитает certified cache path local shadow **только** при непротиворечивой declared identity. Любой retained descriptor того же filename с другим length/hash отменяет priority независимо от registration order/proof; equal identities могут разделять proof. Без priority сохраняется прежний local-only путь. Descriptor-reference index обновляется на manifest replacement, validation/commit и disposal; Draw делает O(1) lookup и обычную length/mtime проверку без roster scan, PNG decode или SHA. Изменённые file stats/disposal отзывают priority; DTO paths/captions/network definition hash не переписываются.
 
 Hydration использует тот же descriptor proof при неизменных path/length/mtime; 60 instances одного certified PNG не повторяют PNG/SHA body reads. `forceRetry`, changed stat/descriptor и world registry reload отзывают reuse. Полная проверка сравнивает stat до/после чтения и перед публикацией proof; это обычная freshness boundary, не защита от умышленной same-stat подмены. Server descriptors проверяют world, exact filename roster, authored selector, resolved source и stat; equal-size roster replacement не наследует старые файлы. Definition notify парсит bounded UTF-8 header/descriptors/chunk и отказывает truncated/unknown version до transfer mutation, не скрывая исключения runtime регистрации.
 
-Player-save/NetReceive reference может hydrate/request/present canonical definition только после current-world проверки **входящего** reference. Literal world `0` сохраняет существующую identity-семантику. Registry записывает full current-schema local definitions в `generated_items/<SHA256(worldId)>/<SHA256(itemId)>.json`; valid same-world historical flat files остаются read-only fallback после ownership/schema validation, scoped record имеет приоритет. Это не importer, migration или удаление старых архивов.
+Player-save/NetReceive reference может hydrate/request/present canonical definition только после current-world проверки **входящего** reference. Literal world `0` сохраняет существующую identity-семантику. Registry записывает full current-schema local definitions в `generated_items/<SHA256(worldId)>/<SHA256(itemId)>.json`. Flat historical files и другие root caches не используются для восстановления.
 
 Один normalized selected key используется lookup, catch/backoff и lifecycle invalidation, а не исходный alias. Load failure не открывает файл вновь до истечения backoff или explicit invalidation. Invalidation сразу прекращает выдачу stale texture; неизвестный key не создаёт запись.
 
@@ -125,7 +123,7 @@ Debug snapshot сохраняет resident `TextureCount`/`EstimatedTextureBytes
 <a id="configuration"></a>
 ## Где менять настройку, а не контракт
 
-Полный живой inventory — [core/images/config.py](../../../LocalGenerator/infini_local/core/images/config.py), [core/vfx/config.py](../../../LocalGenerator/infini_local/core/vfx/config.py), [settings_schema.py](../../../LocalGenerator/infini_local/desktop/settings_schema.py), [config registry](../../../contracts/config_registry.json) и [config example](../../../LocalGenerator/config.example.env). Это не копия старой таблицы defaults/строк аудита.
+Полный живой inventory — [core/images/config.py](../../../generator/infini_local/core/images/config.py), [core/vfx/config.py](../../../generator/infini_local/core/vfx/config.py), [settings_schema.py](../../../generator/infini_local/desktop/settings_schema.py), [config registry](../../../contracts/config_registry.json) и [config example](../../../generator/config.example.env). Это не копия старой таблицы defaults/строк аудита.
 
 - `INFINI_IMAGE_PARALLEL=1` включает параллельную генерацию по умолчанию; галочка в Studio → Изображения отключает её для локальных моделей с ограниченной видеопамятью. После сохранения нужен перезапуск сервера. При `0` backend gate всегда равен 1, независимо от сохранённого лимита. `INFINI_IMAGE_MAX_CONCURRENCY` задаёт лимит при включённой галочке, default 4, range 1..4; endpoint combine/multidev semaphores не заменяют его. Gate не охватывает CPU/postprocess/publication.
 - `INFINI_VISUAL_ASSET_MODE` ограничивает materialization; обязательный authored asset, отключённый настройкой, не становится optional для delivery. Exact `assetMode`/Visual project выбирает Director, не старый GUI role toggle.

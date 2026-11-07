@@ -1,7 +1,7 @@
 # Low-level authoring и Lowery — канонический контракт
 
 > Generated: [`tools/generate/generate_lowery.py`](../../../tools/generate/generate_lowery.py). Не редактировать вручную; менять canonical owner и [обновлять projection](#refresh).
-> Sources: [registry](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py), [Author shape](../../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py), [lowering](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py), [tModLoader vocabulary](../../../LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py), [Author/Repair prose](../../../LocalGenerator/infini_local/pipelines/author/item_contract.py), [unit guide](../../../LocalGenerator/infini_local/pipelines/author/prompt.py).
+> Sources: [registry](../../../generator/infini_local/core/runtime_authoring/capability_registry.py), [Author shape](../../../generator/infini_local/core/runtime_authoring/program_schema.py), [lowering](../../../generator/infini_local/core/runtime_authoring/technical_lowering.py), [tModLoader vocabulary](../../../generator/infini_local/core/runtime_authoring/terraria_vocabulary.py), [Author/Repair prose](../../../generator/infini_local/pipelines/author/item_contract.py), [unit guide](../../../generator/infini_local/pipelines/author/prompt.py).
 
 Schemas: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v7` / `infini.runtime-program.wire.v3`.
 
@@ -32,7 +32,7 @@ Schemas: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v7` / `
 | validation truth | runtime_authoring/validator.py | Repair requirements and final acceptance |
 | Repair scope/permissions/filter | runtime_authoring/repair/{schema,scope,filter,validation,fragments}.py | conditional Repair dossier and merge report |
 | wire materialization | runtime_authoring/compiler.py | RuntimeProgram wire + finalWireReceipts |
-| runtime execution | ModSources/.../RuntimeProgramSpec.cs + executors | tModLoader behavior |
+| runtime execution | mod/.../RuntimeProgramSpec.cs + executors | tModLoader behavior |
 
 Правило меняется у owner-а. Нельзя создавать facade, shadow constant, prose-router или второй event/primary contract рядом. Generated projections обновляются командами в [«Обновление и проверка»](#refresh).
 
@@ -60,8 +60,8 @@ Schemas: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v7` / `
 | on_expire | projectile_lifetime | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | — |
 | on_kill | — | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | — |
 | periodic | — | — | item_body, owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — | — |
-| on_release | charge_then_release, charge | — | — | — | — |
-| channel_complete | charge_then_release, charge | — | — | — | — |
+| on_release | charge | — | — | — | — |
+| channel_complete | charge | — | — | — | — |
 | on_hurt | — | equipped | — | — | — |
 | on_enemy_kill | — | equipped | — | — | — |
 
@@ -80,7 +80,7 @@ Exact-repetition policy: `{'kind': 'exact_repetition', 'minimumRepeatedPlacement
 | primary_entity_to_binding_role | runtimeProgram.primaryEntityId, runtimeProgram.bindings[].action.targetId, runtimeProgram.bindings[].id, runtimeProgram.bindings[].input, runtimeProgram.bindings[].action.kind, runtimeProgram.entities[].id, runtimeProgram.entities[].kind | runtimeProgram.bindings[].role | false |
 | primary_entity_kind_to_owner | runtimeProgram.primaryEntityId, runtimeProgram.entities[].id, runtimeProgram.entities[].kind | runtimeProgram.primaryOwner | false |
 | capability_name_to_opcode | runtimeProgram.calls[].fn | runtimeProgram.entities[].movement.code, runtimeProgram.entities[].controller.code, runtimeProgram.entities[].events[].actionCode | false |
-| item_fields_to_tml_projection | item_body capability params | gameplay.damageClass, gameplay.damage, gameplay.knockback, gameplay.useTime, gameplay.useAnimation, gameplay.manaCost, gameplay.manaCostInput, gameplay.rarity, gameplay.value, gameplay.maxStack, gameplay.craftYield, gameplay.width, gameplay.height, gameplay.itemScale, gameplay.useStyleName, gameplay.autoReuse, gameplay.useTurn, gameplay.holdoutOffsetX, gameplay.holdoutOffsetY, gameplay.handPose, runtimeProgram.itemUse.configured, runtimeProgram.itemUse.useStyle, runtimeProgram.itemUse.hideUseGraphic, runtimeProgram.itemUse.disableMeleeHitbox, runtimeProgram.itemUse.channel, runtimeProgram.itemUse.handPose, runtimeProgram.itemUse.holdoutOffsetX, runtimeProgram.itemUse.holdoutOffsetY, gameplay.collectSeedsFromGrass, runtimeProgram.itemContact.hitboxScale, runtimeProgram.itemContact.contactForgivenessPx, gameplay.ammoCategory, gameplay.ammoProjectileId, gameplay.ammoShootSpeedPxPerTick, gameplay.notAmmo, gameplay.healLife, gameplay.healMana, gameplay.potion, gameplay.extraBuffs[].buffCode, gameplay.extraBuffs[].buffTime, gameplay.generatedBuff.playerEffect.condition, gameplay.generatedBuff.playerEffect.fishingPowerPoints, gameplay.generatedBuff.playerEffect.preventLineBreak, gameplay.generatedBuff.playerEffect.allowLavaFishing, gameplay.generatedBuff.playerEffect.revealHookedCatch, gameplay.generatedBuff.playerEffect.extraCrateChancePercent, gameplay.generatedBuff.playerEffect.itemPickupRangePx, gameplay.generatedBuff.playerEffect.heartPickupRangePx, gameplay.generatedBuff.playerEffect.manaPickupRangePx, gameplay.generatedBuff.playerEffect.coinPickupRangePx, gameplay.generatedBuff.playerEffect.highlightDanger, gameplay.generatedBuff.playerEffect.highlightCreatures, gameplay.generatedBuff.playerEffect.nightVision, gameplay.generatedBuff.playerEffect.healingPotionCooldownReductionPercent, gameplay.generatedBuff.playerEffect.healingPotionCooldownReductionTicks, gameplay.generatedBuff.playerEffect.autoManaPotionBelowPercent, gameplay.generatedBuff.playerEffect.healingPotionCooldownOnHitReductionTicks, gameplay.generatedBuff.playerEffect.hurtInvulnerabilityBonusTicks, gameplay.generatedBuff.durationTicks, gameplay.generatedBuff.exhaustionTicks, gameplay.generatedBuff.miningSpeedMultiplier, gameplay.generatedBuff.emitLightStrength, gameplay.generatedBuff.lightColorName, gameplay.generatedBuff.oreSenseRadiusTiles, gameplay.generatedBuff.movementSpeed, gameplay.generatedBuff.jumpBoost, gameplay.generatedBuff.manaRegen, gameplay.generatedBuff.lifeRegen, gameplay.generatedBuff.lifeRegenCondition, gameplay.generatedBuff.treasureSenseCondition, gameplay.generatedBuff.combat.defensePoints, gameplay.generatedBuff.combat.attackSpeedPercent, gameplay.generatedBuff.combat.critChancePoints, gameplay.generatedBuff.combat.damagePercent, gameplay.generatedBuff.combat.damageClass, gameplay.pickPower, gameplay.axePower, gameplay.hammerPower, gameplay.miningSpeedScale, gameplay.useConditions[].input, gameplay.useConditions[].useConditionMode, gameplay.useConditions[].useConditionMinLife, gameplay.useConditions[].useConditionMinMana, gameplay.holdLightStrength, gameplay.holdLightColorName, gameplay.mobilityMode, gameplay.mobilityRangeTiles, gameplay.mobilityCooldownTicks, gameplay.mobilitySafeTileOnly, accessory.enabled, accessory.playerEffect.condition, accessory.playerEffect.fishingPowerPoints, accessory.playerEffect.preventLineBreak, accessory.playerEffect.allowLavaFishing, accessory.playerEffect.revealHookedCatch, accessory.playerEffect.extraCrateChancePercent, accessory.playerEffect.itemPickupRangePx, accessory.playerEffect.heartPickupRangePx, accessory.playerEffect.manaPickupRangePx, accessory.playerEffect.coinPickupRangePx, accessory.playerEffect.highlightDanger, accessory.playerEffect.highlightCreatures, accessory.playerEffect.nightVision, accessory.playerEffect.healingPotionCooldownReductionPercent, accessory.playerEffect.healingPotionCooldownReductionTicks, accessory.playerEffect.autoManaPotionBelowPercent, accessory.playerEffect.healingPotionCooldownOnHitReductionTicks, accessory.playerEffect.hurtInvulnerabilityBonusTicks, accessory.lifeRegenCondition, accessory.treasureSense, accessory.treasureSenseCondition, accessory.defense, accessory.maxLife, accessory.maxMana, accessory.lifeRegen, accessory.manaRegen, accessory.movementSpeed, accessory.maxRunSpeed, accessory.jumpSpeed, accessory.genericCrit, accessory.attackSpeed, accessory.knockback, accessory.minionSlots, accessory.sentrySlots, accessory.manaCostReduction, accessory.ammoSaveChance, accessory.aggro, accessory.endurance, accessory.armorPenetration, accessory.whipRange, accessory.summonTagDamage, accessory.lightStrength, accessory.lightColorName, accessory.fallDamageImmune, accessory.lavaImmune, accessory.waterWalk, accessory.iceSkate, accessory.noKnockback, accessory.fireWalk, accessory.accRunSpeed, accessory.rocketBoots, accessory.wireVision, armor.enabled, armor.slot, armor.setKey, armor.playerEffect.condition, armor.playerEffect.fishingPowerPoints, armor.playerEffect.preventLineBreak, armor.playerEffect.allowLavaFishing, armor.playerEffect.revealHookedCatch, armor.playerEffect.extraCrateChancePercent, armor.playerEffect.itemPickupRangePx, armor.playerEffect.heartPickupRangePx, armor.playerEffect.manaPickupRangePx, armor.playerEffect.coinPickupRangePx, armor.playerEffect.highlightDanger, armor.playerEffect.highlightCreatures, armor.playerEffect.nightVision, armor.playerEffect.healingPotionCooldownReductionPercent, armor.playerEffect.healingPotionCooldownReductionTicks, armor.playerEffect.autoManaPotionBelowPercent, armor.playerEffect.healingPotionCooldownOnHitReductionTicks, armor.playerEffect.hurtInvulnerabilityBonusTicks, armor.lifeRegenCondition, armor.treasureSense, armor.treasureSenseCondition, armor.defense, armor.maxLife, armor.maxMana, armor.lifeRegen, armor.manaRegen, armor.movementSpeed, armor.maxRunSpeed, armor.jumpSpeed, armor.genericCrit, armor.attackSpeed, armor.knockback, armor.minionSlots, armor.sentrySlots, armor.manaCostReduction, armor.ammoSaveChance, armor.aggro, armor.endurance, armor.armorPenetration, armor.whipRange, armor.summonTagDamage, armor.lightStrength, armor.lightColorName, armor.fallDamageImmune, armor.lavaImmune, armor.waterWalk, armor.setBonusGenericCrit, armor.setBonusMovementSpeed, armor.setBonusLifeRegen, armor.setBonusManaRegen, armor.setBonusMinionSlots, armor.setBonusSentrySlots, armor.setBonusManaCostReduction, armor.setBonusAmmoSaveChance, armor.setBonusAggro, armor.setBonusEndurance, armor.setBonusArmorPenetration, accessory.genericDamage, accessory.meleeDamage, accessory.rangedDamage, accessory.magicDamage, accessory.summonDamage, armor.genericDamage, armor.meleeDamage, armor.rangedDamage, armor.magicDamage, armor.summonDamage, armor.setBonusGenericDamage, armor.setBonusMeleeDamage, armor.setBonusRangedDamage, armor.setBonusMagicDamage, armor.setBonusSummonDamage | false |
+| item_fields_to_tml_projection | item_body capability params | gameplay.damageClass, gameplay.damage, gameplay.knockback, gameplay.useTime, gameplay.useAnimation, gameplay.manaCost, gameplay.manaCostInput, gameplay.rarity, gameplay.value, gameplay.maxStack, gameplay.craftYield, gameplay.width, gameplay.height, gameplay.itemScale, gameplay.useStyleName, gameplay.autoReuse, gameplay.useTurn, gameplay.holdoutOffsetX, gameplay.holdoutOffsetY, gameplay.handPose, runtimeProgram.itemUse.configured, runtimeProgram.itemUse.useStyle, runtimeProgram.itemUse.hideUseGraphic, runtimeProgram.itemUse.disableMeleeHitbox, runtimeProgram.itemUse.channel, runtimeProgram.itemUse.handPose, runtimeProgram.itemUse.holdoutOffsetX, runtimeProgram.itemUse.holdoutOffsetY, gameplay.collectSeedsFromGrass, runtimeProgram.itemContact.hitboxScale, runtimeProgram.itemContact.contactForgivenessPx, gameplay.ammoCategory, gameplay.ammoProjectileId, gameplay.ammoShootSpeedPxPerTick, gameplay.notAmmo, gameplay.healLife, gameplay.healMana, gameplay.potion, gameplay.extraBuffs[].buffCode, gameplay.extraBuffs[].buffTime, gameplay.generatedBuff.playerEffect.condition, gameplay.generatedBuff.playerEffect.fishingPowerPoints, gameplay.generatedBuff.playerEffect.preventLineBreak, gameplay.generatedBuff.playerEffect.allowLavaFishing, gameplay.generatedBuff.playerEffect.revealHookedCatch, gameplay.generatedBuff.playerEffect.extraCrateChancePercent, gameplay.generatedBuff.playerEffect.itemPickupRangePx, gameplay.generatedBuff.playerEffect.heartPickupRangePx, gameplay.generatedBuff.playerEffect.manaPickupRangePx, gameplay.generatedBuff.playerEffect.coinPickupRangePx, gameplay.generatedBuff.playerEffect.highlightDanger, gameplay.generatedBuff.playerEffect.highlightCreatures, gameplay.generatedBuff.playerEffect.nightVision, gameplay.generatedBuff.playerEffect.healingPotionCooldownReductionPercent, gameplay.generatedBuff.playerEffect.healingPotionCooldownReductionTicks, gameplay.generatedBuff.playerEffect.autoManaPotionBelowPercent, gameplay.generatedBuff.playerEffect.healingPotionCooldownOnHitReductionTicks, gameplay.generatedBuff.playerEffect.hurtInvulnerabilityBonusTicks, gameplay.generatedBuff.durationTicks, gameplay.generatedBuff.exhaustionTicks, gameplay.generatedBuff.miningSpeedMultiplier, gameplay.generatedBuff.emitLightStrength, gameplay.generatedBuff.lightColorName, gameplay.generatedBuff.oreSenseRadiusTiles, gameplay.generatedBuff.movementSpeed, gameplay.generatedBuff.jumpBoost, gameplay.generatedBuff.manaRegen, gameplay.generatedBuff.lifeRegen, gameplay.generatedBuff.lifeRegenCondition, gameplay.generatedBuff.treasureSenseCondition, gameplay.generatedBuff.combat.defensePoints, gameplay.generatedBuff.combat.attackSpeedPercent, gameplay.generatedBuff.combat.critChancePoints, gameplay.generatedBuff.combat.damagePercent, gameplay.generatedBuff.combat.damageClass, gameplay.pickPower, gameplay.axePower, gameplay.hammerPower, gameplay.miningSpeedScale, gameplay.useConditions[].input, gameplay.useConditions[].useConditionMode, gameplay.useConditions[].useConditionMinLife, gameplay.useConditions[].useConditionMinMana, gameplay.holdLightStrength, gameplay.holdLightColorName, gameplay.mobilityMode, gameplay.mobilityRangeTiles, gameplay.mobilityCooldownTicks, gameplay.mobilitySafeTileOnly, accessory.enabled, accessory.playerEffect.condition, accessory.playerEffect.fishingPowerPoints, accessory.playerEffect.preventLineBreak, accessory.playerEffect.allowLavaFishing, accessory.playerEffect.revealHookedCatch, accessory.playerEffect.extraCrateChancePercent, accessory.playerEffect.itemPickupRangePx, accessory.playerEffect.heartPickupRangePx, accessory.playerEffect.manaPickupRangePx, accessory.playerEffect.coinPickupRangePx, accessory.playerEffect.highlightDanger, accessory.playerEffect.highlightCreatures, accessory.playerEffect.nightVision, accessory.playerEffect.healingPotionCooldownReductionPercent, accessory.playerEffect.healingPotionCooldownReductionTicks, accessory.playerEffect.autoManaPotionBelowPercent, accessory.playerEffect.healingPotionCooldownOnHitReductionTicks, accessory.playerEffect.hurtInvulnerabilityBonusTicks, accessory.lifeRegenCondition, accessory.treasureSense, accessory.treasureSenseCondition, accessory.defense, accessory.maxLife, accessory.maxMana, accessory.lifeRegen, accessory.manaRegen, accessory.movementSpeed, accessory.maxRunSpeed, accessory.jumpSpeed, accessory.genericCrit, accessory.attackSpeed, accessory.knockback, accessory.minionSlots, accessory.sentrySlots, accessory.manaCostReduction, accessory.ammoSaveChance, accessory.aggro, accessory.endurance, accessory.armorPenetration, accessory.whipRange, accessory.lightStrength, accessory.lightColorName, accessory.fallDamageImmune, accessory.lavaImmune, accessory.waterWalk, accessory.iceSkate, accessory.noKnockback, accessory.fireWalk, accessory.accRunSpeed, accessory.rocketBoots, accessory.wireVision, armor.enabled, armor.slot, armor.setKey, armor.playerEffect.condition, armor.playerEffect.fishingPowerPoints, armor.playerEffect.preventLineBreak, armor.playerEffect.allowLavaFishing, armor.playerEffect.revealHookedCatch, armor.playerEffect.extraCrateChancePercent, armor.playerEffect.itemPickupRangePx, armor.playerEffect.heartPickupRangePx, armor.playerEffect.manaPickupRangePx, armor.playerEffect.coinPickupRangePx, armor.playerEffect.highlightDanger, armor.playerEffect.highlightCreatures, armor.playerEffect.nightVision, armor.playerEffect.healingPotionCooldownReductionPercent, armor.playerEffect.healingPotionCooldownReductionTicks, armor.playerEffect.autoManaPotionBelowPercent, armor.playerEffect.healingPotionCooldownOnHitReductionTicks, armor.playerEffect.hurtInvulnerabilityBonusTicks, armor.lifeRegenCondition, armor.treasureSense, armor.treasureSenseCondition, armor.defense, armor.maxLife, armor.maxMana, armor.lifeRegen, armor.manaRegen, armor.movementSpeed, armor.maxRunSpeed, armor.jumpSpeed, armor.genericCrit, armor.attackSpeed, armor.knockback, armor.minionSlots, armor.sentrySlots, armor.manaCostReduction, armor.ammoSaveChance, armor.aggro, armor.endurance, armor.armorPenetration, armor.whipRange, armor.lightStrength, armor.lightColorName, armor.fallDamageImmune, armor.lavaImmune, armor.waterWalk, armor.setBonusGenericCrit, armor.setBonusMovementSpeed, armor.setBonusLifeRegen, armor.setBonusManaRegen, armor.setBonusMinionSlots, armor.setBonusSentrySlots, armor.setBonusManaCostReduction, armor.setBonusAmmoSaveChance, armor.setBonusAggro, armor.setBonusEndurance, armor.setBonusArmorPenetration, accessory.genericDamage, accessory.meleeDamage, accessory.rangedDamage, accessory.magicDamage, accessory.summonDamage, armor.genericDamage, armor.meleeDamage, armor.rangedDamage, armor.magicDamage, armor.summonDamage, armor.setBonusGenericDamage, armor.setBonusMeleeDamage, armor.setBonusRangedDamage, armor.setBonusMagicDamage, armor.setBonusSummonDamage | false |
 
 ### Точные выбранные проекции capabilities
 
@@ -107,51 +107,8 @@ Exact-repetition policy: `{'kind': 'exact_repetition', 'minimumRepeatedPlacement
 | armor | fresh Author | armor.enabled | True |
 | spawn | fresh Author | runtimeProgram.entities[].spawn.enabled | True |
 | projectile_damage | fresh Author | runtimeProgram.entities[].damage.enabled | True |
-| orient_whip_to_owner_gravity | retained runtime | runtimeProgram.entities[].whipUsesOwnerGravity | True |
 | move_straight | fresh Author | runtimeProgram.entities[].movement.name | 'move_straight' |
 | move_straight | fresh Author | runtimeProgram.entities[].movement.code | 0 |
-| move_slow_homing | retained runtime | runtimeProgram.entities[].movement.name | 'move_slow_homing' |
-| move_slow_homing | retained runtime | runtimeProgram.entities[].movement.code | 1 |
-| move_gravity_arc | retained runtime | runtimeProgram.entities[].movement.name | 'move_gravity_arc' |
-| move_gravity_arc | retained runtime | runtimeProgram.entities[].movement.code | 2 |
-| move_drift | retained runtime | runtimeProgram.entities[].movement.name | 'move_drift' |
-| move_drift | retained runtime | runtimeProgram.entities[].movement.code | 3 |
-| move_orbit | retained runtime | runtimeProgram.entities[].movement.name | 'move_orbit' |
-| move_orbit | retained runtime | runtimeProgram.entities[].movement.code | 4 |
-| move_boomerang | retained runtime | runtimeProgram.entities[].movement.name | 'move_boomerang' |
-| move_boomerang | retained runtime | runtimeProgram.entities[].movement.code | 5 |
-| move_sine_homing | retained runtime | runtimeProgram.entities[].movement.name | 'move_sine_homing' |
-| move_sine_homing | retained runtime | runtimeProgram.entities[].movement.code | 7 |
-| move_phase | retained runtime | runtimeProgram.entities[].movement.name | 'move_phase' |
-| move_phase | retained runtime | runtimeProgram.entities[].movement.code | 8 |
-| move_accelerate | retained runtime | runtimeProgram.entities[].movement.name | 'move_accelerate' |
-| move_accelerate | retained runtime | runtimeProgram.entities[].movement.code | 9 |
-| move_spiral | retained runtime | runtimeProgram.entities[].movement.name | 'move_spiral' |
-| move_spiral | retained runtime | runtimeProgram.entities[].movement.code | 10 |
-| move_vortex_orb | retained runtime | runtimeProgram.entities[].movement.name | 'move_vortex_orb' |
-| move_vortex_orb | retained runtime | runtimeProgram.entities[].movement.code | 11 |
-| move_blackhole_pull | retained runtime | runtimeProgram.entities[].movement.name | 'move_blackhole_pull' |
-| move_blackhole_pull | retained runtime | runtimeProgram.entities[].movement.code | 12 |
-| move_proximity_missile | retained runtime | runtimeProgram.entities[].movement.name | 'move_proximity_missile' |
-| move_proximity_missile | retained runtime | runtimeProgram.entities[].movement.code | 13 |
-| move_returning_glaive | retained runtime | runtimeProgram.entities[].movement.name | 'move_returning_glaive' |
-| move_returning_glaive | retained runtime | runtimeProgram.entities[].movement.code | 14 |
-| move_expanding_wave | retained runtime | runtimeProgram.entities[].movement.name | 'move_expanding_wave' |
-| move_expanding_wave | retained runtime | runtimeProgram.entities[].movement.code | 15 |
-| move_flail_tether | retained runtime | runtimeProgram.entities[].movement.name | 'move_flail_tether' |
-| move_flail_tether | retained runtime | runtimeProgram.entities[].movement.code | 16 |
-| move_yoyo_hover | retained runtime | runtimeProgram.entities[].movement.name | 'move_yoyo_hover' |
-| move_yoyo_hover | retained runtime | runtimeProgram.entities[].movement.code | 17 |
-| move_whip_lash | retained runtime | runtimeProgram.entities[].movement.name | 'move_whip_lash' |
-| move_whip_lash | retained runtime | runtimeProgram.entities[].movement.code | 18 |
-| move_forward_then_retract | retained runtime | runtimeProgram.entities[].movement.name | 'move_forward_then_retract' |
-| move_forward_then_retract | retained runtime | runtimeProgram.entities[].movement.code | 19 |
-| move_front_hand | retained runtime | runtimeProgram.entities[].movement.name | 'move_front_hand' |
-| move_front_hand | retained runtime | runtimeProgram.entities[].movement.code | 20 |
-| channel_beam | retained runtime | runtimeProgram.entities[].controller.name | 'channel_beam' |
-| channel_beam | retained runtime | runtimeProgram.entities[].controller.code | 1 |
-| charge_then_release | retained runtime | runtimeProgram.entities[].controller.name | 'charge_then_release' |
-| charge_then_release | retained runtime | runtimeProgram.entities[].controller.code | 2 |
 | target_and_fire | fresh Author | runtimeProgram.entities[].controller.name | 'target_and_fire' |
 | target_and_fire | fresh Author | runtimeProgram.entities[].controller.code | 3 |
 | spawn_on_event | fresh Author | runtimeProgram.entities[].events[].action | 'spawn_entity_on_event' |
@@ -168,16 +125,8 @@ Exact-repetition policy: `{'kind': 'exact_repetition', 'minimumRepeatedPlacement
 | apply_status_on_event | fresh Author | runtimeProgram.entities[].events[].actionCode | 2 |
 | damage_nearby_on_event | fresh Author | runtimeProgram.entities[].events[].action | 'damage_nearby_on_event' |
 | damage_nearby_on_event | fresh Author | runtimeProgram.entities[].events[].actionCode | 10 |
-| damage_area_on_event | retained runtime | runtimeProgram.entities[].events[].action | 'damage_area_on_event' |
-| damage_area_on_event | retained runtime | runtimeProgram.entities[].events[].actionCode | 3 |
-| damage_nearest_on_event | retained runtime | runtimeProgram.entities[].events[].action | 'chain_damage_on_event' |
-| damage_nearest_on_event | retained runtime | runtimeProgram.entities[].events[].actionCode | 4 |
 | pull_on_event | fresh Author | runtimeProgram.entities[].events[].action | 'pull_on_event' |
 | pull_on_event | fresh Author | runtimeProgram.entities[].events[].actionCode | 5 |
-| pull_owner_to_event_target | retained runtime | runtimeProgram.entities[].events[].mode | 'owner_to_target' |
-| pull_owner_to_event_target | retained runtime | runtimeProgram.entities[].events[].radiusTiles | 1 |
-| pull_owner_to_event_target | retained runtime | runtimeProgram.entities[].events[].action | 'pull_on_event' |
-| pull_owner_to_event_target | retained runtime | runtimeProgram.entities[].events[].actionCode | 5 |
 | reduce_heal_cooldown_on_event | fresh Author | runtimeProgram.entities[].events[].action | 'reduce_healing_potion_cooldown_on_event' |
 | reduce_heal_cooldown_on_event | fresh Author | runtimeProgram.entities[].events[].actionCode | 12 |
 | heal_owner_on_event | fresh Author | runtimeProgram.entities[].events[].action | 'heal_owner_on_event' |
@@ -193,8 +142,6 @@ Exact-repetition policy: `{'kind': 'exact_repetition', 'minimumRepeatedPlacement
 | capability | availability | wire action | fixed outputs |
 |---|---|---|---|
 | spawn_at_hit | fresh Author | spawn_entity_on_event | {'action': 'spawn_entity_on_event', 'actionCode': 1} |
-| damage_nearest_on_event | retained runtime | chain_damage_on_event | {'action': 'chain_damage_on_event', 'actionCode': 4} |
-| pull_owner_to_event_target | retained runtime | pull_on_event | {'mode': 'owner_to_target', 'radiusTiles': 1, 'action': 'pull_on_event', 'actionCode': 5} |
 | reduce_heal_cooldown_on_event | fresh Author | reduce_healing_potion_cooldown_on_event | {'action': 'reduce_healing_potion_cooldown_on_event', 'actionCode': 12} |
 
 ### Structured и enum projections
@@ -215,7 +162,6 @@ Typed structured choices и конечные enum-отображения так�
 | kill_on_arrival.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
 | proximity_action.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
 | accelerate_y.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
-| multiply_projectile_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
 | scale_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
 | rotate_sprite.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
 | oscillate_velocity.law | (('law', 'law', True), ('law.angular_sine.amplitudeRadiansPerSecond', 'amplitude', False), ('law.lateral_velocity_sine.amplitudeBlocksPerSecond', 'amplitude', False)) |
@@ -231,7 +177,6 @@ Typed structured choices и конечные enum-отображения так�
 | spawn.velocity | (('velocity.speed', 'speedPxPerTick', False), ('velocity.fanSpeed', 'velocityDistribution.kind', True), ('velocity.fanSpeed', 'speedPxPerTick', True), ('velocity.fanSpeed.minSpeed', 'velocityDistribution.minSpeedPxPerUpdate', False), ('velocity.fanSpeed.maxSpeed', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.radial', 'velocityDistribution.kind', True), ('velocity.radial', 'speedPxPerTick', True), ('velocity.radial.minSpeed', 'velocityDistribution.minSpeedPxPerUpdate', False), ('velocity.radial.maxSpeed', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.disk', 'velocityDistribution.kind', True), ('velocity.disk', 'speedPxPerTick', True), ('velocity.disk.maxSpeed', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.cone', 'velocityDistribution.kind', True), ('velocity.cone', 'speedPxPerTick', True), ('velocity.cone.minSpeed', 'velocityDistribution.minSpeedPxPerUpdate', False), ('velocity.cone.maxSpeed', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.cone.halfAngleRadians', 'velocityDistribution.halfAngleRadians', False)) |
 | spawn.position | (('position', 'overTarget.heightTiles', True), ('position', 'overTarget.delayTicks', True), ('position.at', 'placement', False), ('position.above', 'placement', False), ('position.heightTiles', 'overTarget.heightTiles', False), ('position.activationDelay', 'overTarget.delayTicks', False)) |
 | turn_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
-| set_projectile_speed_modifier.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
 | homing.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
 | attract_npcs.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
 | sprite_scale_curve.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelay', 'window.startDelayTicks', False), ('window.duration', 'window.durationTicks', False)) |
@@ -240,9 +185,7 @@ Typed structured choices и конечные enum-отображения так�
 | spawn_at_hit.geometry | (('geometry', 'spreadRadians', True), ('geometry.beforeProbability', 'hitTargetSpawn.beforeProbability', False), ('geometry.hitboxMaxSideFactor', 'hitTargetSpawn.hitboxMaxSideFactor', False), ('geometry.clearanceBlocks', 'hitTargetSpawn.clearancePx', False), ('geometry.beforeJitterRadius', 'hitTargetSpawn.beforePositionJitterRadiusPx', False), ('geometry.beforeAngleJitter', 'hitTargetSpawn.beforeDirectionJitterRadians', False), ('geometry.afterFanSpread', 'hitTargetSpawn.afterFanSpreadRadians', False), ('geometry.ignoreTargetUpdates', 'hitTargetSpawn.initialIgnoreCountdownUpdates', False)) |
 | generated_buff_on_event.when | (('when.on', 'event', False), ('when.cooldown', 'reactionCooldownTicks', False)) |
 | damage_nearby_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.cooldown', 'reactionCooldownTicks', False)) |
-| damage_area_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.cooldown', 'reactionCooldownTicks', False)) |
 | pull_on_event.when | (('when', 'event', False), ('when', 'event', True), ('when.everySeconds', 'periodTicks', False)) |
-| pull_owner_to_event_target.when | (('when', 'event', False), ('when', 'event', True), ('when.everySeconds', 'periodTicks', False)) |
 
 ### Разрешённые neutral omissions
 
@@ -292,16 +235,10 @@ Typed structured choices и конечные enum-отображения так�
 | spawn.count | 1 | {'targetKinds': ('child_projectile',), 'paramEquals': (), 'targetCapabilities': ()} |
 | spawn.spreadRadians | 0 | {'targetKinds': ('child_projectile',), 'paramEquals': (('count', 1),), 'targetCapabilities': ()} |
 | turn_velocity.window.phase | 'always' | all timing absent: startDelay, duration, window |
-| set_projectile_speed_modifier.window.phase | 'always' | all timing absent: startDelay, duration, window |
 | homing.window.phase | 'always' | all timing absent: startDelay, duration, window |
 | attract_npcs.window.phase | 'always' | all timing absent: startDelay, duration, window |
 | projectile_collision.bounceCount | 0 | {'targetKinds': (), 'paramEquals': (('tileCollide', False),), 'targetCapabilities': ('move_boomerang', 'move_returning_glaive', 'move_flail_tether')} |
 | projectile_collision.bounceSpeedRetention | 1 | unconditional declared neutral |
-| channel_beam.manaPayment | 'initial_use_only' | unconditional declared neutral |
-| channel_beam.initialDamageMultiplier | 1.0 | unconditional declared neutral |
-| channel_beam.initialWidthMultiplier | 1.0 | unconditional declared neutral |
-| channel_beam.damageStartProgress | 1.0 | unconditional declared neutral |
-| channel_beam.raycastTiles | False | unconditional declared neutral |
 | target_and_fire.count | 1 | unconditional declared neutral |
 | target_and_fire.spreadRadians | 0.0 | unconditional declared neutral |
 | target_and_fire.targetPolicy | 'distance_score' | unconditional declared neutral |
@@ -421,33 +358,12 @@ Movement:
 | capability | opcode |
 |---|---|
 | move_straight | 0 |
-| move_slow_homing | 1 |
-| move_gravity_arc | 2 |
-| move_drift | 3 |
-| move_orbit | 4 |
-| move_boomerang | 5 |
-| move_sine_homing | 7 |
-| move_phase | 8 |
-| move_accelerate | 9 |
-| move_spiral | 10 |
-| move_vortex_orb | 11 |
-| move_blackhole_pull | 12 |
-| move_proximity_missile | 13 |
-| move_returning_glaive | 14 |
-| move_expanding_wave | 15 |
-| move_flail_tether | 16 |
-| move_yoyo_hover | 17 |
-| move_whip_lash | 18 |
-| move_forward_then_retract | 19 |
-| move_front_hand | 20 |
 
 Controllers:
 
 | capability | opcode |
 |---|---|
 | none | 0 |
-| channel_beam | 1 |
-| charge_then_release | 2 |
 | target_and_fire | 3 |
 
 Event actions:
@@ -456,8 +372,6 @@ Event actions:
 |---|---|
 | spawn_on_event | 1 |
 | apply_status_on_event | 2 |
-| damage_area_on_event | 3 |
-| chain_damage_on_event | 4 |
 | pull_on_event | 5 |
 | heal_owner_on_event | 6 |
 | move_owner_on_event | 7 |
@@ -534,14 +448,13 @@ Whole-pattern aliases и archetype routers не входят в текущий �
 
 ## Обновление и проверка
 
-Из корня репозитория, с Python окружения проекта. Без `--check` этот generator записывает **только `docs/reference/generated/LOWERY_RU.md`**. [Inventory и audit](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh) и [primitive parity](PRIMITIVE_PARITY_RU.md#refresh) обновляются своими generators.
+Из корня репозитория, с Python окружения проекта. Без `--check` этот generator записывает **только `docs/reference/generated/LOWERY_RU.md`**. [Inventory и audit](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh) обновляются своим generator.
 
 ```bash
-PYTHONPATH=LocalGenerator python tools/generate/generate_lowery.py
-PYTHONPATH=LocalGenerator python tools/generate/generate_lowery.py --check
-PYTHONPATH=LocalGenerator python tools/generate/generate_low_level_runtime_docs.py --check
-PYTHONPATH=LocalGenerator python tools/generate/generate_primitive_parity.py --check
-PYTHONPATH=LocalGenerator python -m pytest -q LocalGenerator/tests/test_registry_*.py LocalGenerator/tests/test_low_level_three_stage_pipeline.py LocalGenerator/tests/test_pipeline_repair_contract.py
+PYTHONPATH=generator python tools/generate/generate_lowery.py
+PYTHONPATH=generator python tools/generate/generate_lowery.py --check
+PYTHONPATH=generator python tools/generate/generate_low_level_runtime_docs.py --check
+PYTHONPATH=generator python -m pytest -q tests/generator/**/test_registry_*.py tests/generator/authoring/test_low_level_three_stage_pipeline.py tests/generator/authoring/test_pipeline_repair_contract.py
 ```
 
 Type check: `python tools/testing/run_pyright.py --pythonpath "$(python -c 'import sys; print(sys.executable)')"`. Полные delivery gates: [AGENTS.md](../../../AGENTS.md).

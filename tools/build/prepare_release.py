@@ -28,9 +28,9 @@ def digest(data: bytes) -> str:
 def validate_package(root: Path, artifact: Path, version: str, sha: str) -> dict:
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) or not re.fullmatch(r"[0-9a-f]{40}", sha):
         raise ValueError("Invalid release identity")
-    owners = (("LocalGenerator/infini_local/__init__.py", r'APP_VERSION = "([^"]+)"'),
-              ("ModSources/InfiniCrafterLocal/InfiniCrafterLocal.cs", r'ModVersion = "([^"]+)"'),
-              ("ModSources/InfiniCrafterLocal/build.txt", r'(?m)^version = (\S+)$'))
+    owners = (("generator/infini_local/__init__.py", r'APP_VERSION = "([^"]+)"'),
+              ("mod/InfiniCrafterLocal/InfiniCrafterLocal.cs", r'ModVersion = "([^"]+)"'),
+              ("mod/InfiniCrafterLocal/build.txt", r'(?m)^version = (\S+)$'))
     for name, pattern in owners:
         match = re.search(pattern, root.joinpath(name).read_text(encoding="utf-8"))
         if not match or match[1] != version:
@@ -51,7 +51,7 @@ def validate_package(root: Path, artifact: Path, version: str, sha: str) -> dict
     assembly = files.get("InfiniCrafterLocal.dll", b"")
     if not assembly.startswith(b"MZ") or digest(assembly) != provenance.get("assemblySha256"):
         raise ValueError("Packaged assembly differs from CI build")
-    manifest = root.joinpath("ModSources/InfiniCrafterLocal/build.txt").read_text()
+    manifest = root.joinpath("mod/InfiniCrafterLocal/build.txt").read_text()
     refs = next(line.split("=", 1)[1].strip().split(",") for line in manifest.splitlines() if line.startswith("modReferences ="))
     if info.get("modReferences") != [ref.strip() for ref in refs]:
         raise ValueError("Package dependencies differ from source")

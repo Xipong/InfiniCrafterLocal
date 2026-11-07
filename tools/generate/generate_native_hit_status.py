@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from native_hit_status_analysis import Instruction, analyze
 
 ROOT = Path(__file__).resolve().parents[2]
-OUTPUT = ROOT / "ModSources/InfiniCrafterLocal/Common/Services/Generation/NativeHitStatusCatalog.g.cs"
+OUTPUT = ROOT / "mod/InfiniCrafterLocal/Common/Services/Generation/NativeHitStatusCatalog.g.cs"
 REPORT = ROOT / "contracts/reports/native_hit_status_sources.generated.json"
 
 

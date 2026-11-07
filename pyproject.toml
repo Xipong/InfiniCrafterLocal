@@ -5,8 +5,8 @@ exclude = [
   ".git",
   ".pytest_cache",
   "**/__pycache__",
-  "LocalGenerator/cache",
-  "LocalGenerator/data",
+  "generator/cache",
+  "generator/data",
   "build_logs",
   "artifacts",
 ]
@@ -19,16 +19,15 @@ select = ["E9", "F63", "F7", "F82"]
 pythonVersion = "3.10"
 typeCheckingMode = "strict"
 include = [
-  "LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py",
-  "LocalGenerator/infini_local/core/runtime_authoring/compiler.py",
-  "LocalGenerator/infini_local/core/runtime_authoring/program_schema.py",
-  "LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py",
-  "LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py",
+  "generator/infini_local/core/runtime_authoring/capability_registry.py",
+  "generator/infini_local/core/runtime_authoring/compiler.py",
+  "generator/infini_local/core/runtime_authoring/program_schema.py",
+  "generator/infini_local/core/runtime_authoring/technical_lowering.py",
+  "generator/infini_local/core/runtime_authoring/terraria_vocabulary.py",
   "tools/agentctl.py",
   "tools/checks/check_code_health.py",
   "tools/generate/config_registry.py",
   "tools/diagnostics/replay_generation_case.py",
-  "tools/checks/mutation_contract_gate.py",
   "tools/generate/export_contract_schemas.py",
   "tools/validate_release.py",
   "tools/diagnostics/render_validation_report.py",
@@ -38,9 +37,9 @@ include = [
 ]
 exclude = [
   "**/__pycache__",
-  "LocalGenerator/cache",
+  "generator/cache",
 ]
-extraPaths = [".", "LocalGenerator"]
+extraPaths = [".", "generator"]
 reportMissingTypeStubs = "none"
 reportUnknownArgumentType = "none"
 reportUnknownMemberType = "none"
@@ -48,6 +47,6 @@ reportUnknownVariableType = "none"
 reportUnknownParameterType = "none"
 
 [tool.pytest.ini_options]
-testpaths = ["LocalGenerator/tests", "toolbox/tests"]
-pythonpath = ["LocalGenerator"]
+testpaths = ["tests/generator", "tests/toolbox"]
+pythonpath = ["generator", "tests/generator", "."]
 addopts = "-ra"

@@ -1,12 +1,11 @@
 # Явный рост игровой области столкновения
 
-Категория A12 исторического аудита. Это новое явное runtime правило, восстанавливающее
-потерянную динамическую collision expressivity. Оно не является alias прежнего
-`move_expanding_wave`: этот movement продолжает менять только sprite scale.
+Явное правило динамической collision geometry. Оно не является alias
+`add_sprite_scale`: этот component меняет только sprite scale.
 
 ## Контракт
 
-`set_projectile_hitbox_curve` применяется к явно выбранному projectile entity и
+`hitbox_curve` применяется к явно выбранному projectile entity и
 создаёт optional `runtimeProgram.entities[].hitboxCurve`. Все шесть параметров
 обязательны при наличии capability:
 
@@ -14,18 +13,18 @@
 |---|---|---|
 | startScale | 0.25…8 | Множитель исходного gameplay hitbox до начала кривой |
 | endScale | 0.25…8 | Множитель после окончания кривой |
-| startDelayTicks | 0…21600 | Задержка начала кривой в active world ticks |
-| durationTicks | 1…21600 | Продолжительность перехода |
+| startDelay | Секунды, проекция в 0…21600 ticks | Задержка начала кривой |
+| duration | Секунды, проекция в 1…21600 ticks | Продолжительность перехода |
 | curve | linear / exponential | Линейный или геометрический переход |
 | mirrorToSprite | boolean | Явно показать ту же кривую на базовом спрайте |
 
-Например, `startScale=1`, `endScale=4`, `startDelayTicks=5`, `durationTicks=60`,
+Например, wire с `startScale=1`, `endScale=4`, `startDelayTicks=5`, `durationTicks=60`,
 `curve=exponential`, `mirrorToSprite=false` удерживает исходный размер первые
 пять active ticks, затем увеличивает его вдвое к tick35 и вчетверо к tick65.
-Существующий статический `set_projectile_hitbox.hitboxScale` остаётся независимым
+Существующий статический `projectile_hitbox.hitboxScale` остаётся независимым
 базовым множителем. Модель может явно задать и уменьшение размера.
 
-Для active age `a` в world ticks используется
+После секундного lowering для active age `a` в world ticks используется
 `t=clamp((a-startDelayTicks)/durationTicks,0,1)`. Линейная кривая равна
 `startScale+(endScale-startScale)*t`; экспоненциальная —
 `startScale*(endScale/startScale)^t`.
@@ -58,7 +57,7 @@ multiplier определяют длину/толщину без старых mi
 При отсутствии curve либо `mirrorToSprite=false` остаются прежние visual
 clamps/floors. `no_asset` по-прежнему не рисует body; mirror не создаёт asset.
 VFX body-copy slots имеют собственные опубликованные scale rules: mirror
-базового body не переопределяет их slot scale или legacy copy clamps.
+базового body не переопределяет их slot scale или renderer-specific copy rules.
 Gameplay всегда берёт кривую и static hitboxScale, никогда `Projectile.scale`,
 PNG dimensions или VFX artist scale. Поэтому замена визуального представления
 не меняет damage geometry.
@@ -73,7 +72,7 @@ Reuse не создаёт дополнительного image job; старое
 Beam и whip имеют специальные line-collision owners, поэтому их сочетание с
 этой **прямоугольной** кривой отклоняется в Author и strict wire/C# DTO. Длины и
 толщины этих линий остаются их собственными решениями. Mirrored curve также
-не может одновременно владеть sprite scale с `move_expanding_wave`: нужно явно
+не может одновременно владеть sprite scale с `add_sprite_scale`: нужно явно
 отключить mirror либо удалить/заменить один из конфликтующих calls.
 
 ## Admission, receipts и Repair
@@ -121,8 +120,7 @@ extraUpdates1/3/6, неизменный центр, независимость �
 `DrawAuthoredEntityVisual`/`DrawRuntimeGeometry`: PNG и reuse, с/без frame size,
 product 0.015625/12/128, сохранённый absent/independent режим и generic segment
 0.0625px. Только GPU flush перехвачен; это не имитация формулы renderer.
-Portable source mutations отдельно доказывают чувствительность к возврату
-каждого clamp/floor и потере optional exact-width policy.
+Current compiler/DTO/executor controls проверяют domain, scale ownership и frozen Repair. Source snapshots не заменяют native исполнение.
 
 Native C# build, исполнение EngineRuntimeChecks и игровой SP/MP smoke здесь
 **notRun**: среда не содержит dotnet/tModLoader/dependency assemblies. Portable

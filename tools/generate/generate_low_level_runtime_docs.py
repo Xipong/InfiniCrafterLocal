@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "LocalGenerator"))
+sys.path.insert(0, str(ROOT / "generator"))
 
 from infini_local.core.runtime_authoring.capability_registry import (  # noqa: E402
     BINDING_ACTION_REGISTRY,
@@ -114,9 +114,9 @@ def inventory_markdown(audit: dict[str, Any]) -> str:
         "# Низкоуровневый capability inventory InfiniCrafterLocal",
         "",
         "> Generated: [`tools/generate/generate_low_level_runtime_docs.py`](../../../tools/generate/generate_low_level_runtime_docs.py). Не редактировать вручную; [refresh/check](#refresh).",
-        "> Sources: [capability_registry.py](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) и "
-        "[capability_library_audit.py](../../../LocalGenerator/infini_local/qa/capability_library_audit.py). "
-        "[Lowery](LOWERY_RU.md) задаёт Author/Repair boundary и owners; [primitive parity](PRIMITIVE_PARITY_RU.md) — текущее Author ↔ C# сопоставление, единицы и исключения.",
+        "> Sources: [capability_registry.py](../../../generator/infini_local/core/runtime_authoring/capability_registry.py) и "
+        "[capability_library_audit.py](../../../generator/infini_local/qa/capability_library_audit.py). "
+        "[Lowery](LOWERY_RU.md) задаёт Author/Repair boundary и owners. Native behavior проверяется исполняемыми C# tests, не source scan.",
         "",
         f"Контракты: `{RUNTIME_PROGRAM_API_VERSION}` / `{RUNTIME_PROGRAM_SCHEMA}` / `{RUNTIME_WIRE_SCHEMA}`.",
         "",
@@ -124,7 +124,7 @@ def inventory_markdown(audit: dict[str, Any]) -> str:
         f"**{len(CAPABILITY_REGISTRY) - author_count} saved-wire-only capabilities**, "
         f"**{len(ENTITY_KIND_REGISTRY)} entity kinds**, "
         f"**{len(INPUT_KIND_REGISTRY)} inputs**, **{len(BINDING_ACTION_REGISTRY)} binding actions**, "
-        f"**{len(EVENT_KIND_REGISTRY)} events**. Machine audit: **{audit['score']}/{audit['scoreMax']}**, "
+        f"**{len(EVENT_KIND_REGISTRY)} events**. Registry/Python audit: "
         f"errors={audit['errorCount']}, warnings={audit['warningCount']}.",
         "",
         "**Навигация:** [каталог](#classification) · [entities](#entities) · [inputs/actions](#bindings) · "
@@ -250,14 +250,14 @@ def inventory_markdown(audit: dict[str, Any]) -> str:
         "Из корня репозитория, с Python окружения проекта:",
         "",
         "```bash",
-        "PYTHONPATH=LocalGenerator python tools/generate/generate_low_level_runtime_docs.py",
-        "PYTHONPATH=LocalGenerator python tools/generate/generate_low_level_runtime_docs.py --check",
+        "PYTHONPATH=generator python tools/generate/generate_low_level_runtime_docs.py",
+        "PYTHONPATH=generator python tools/generate/generate_low_level_runtime_docs.py --check",
         "```",
         "",
         "Без `--check` generator записывает ровно три Markdown-файла: этот inventory, "
         "[machine-readability audit](CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md) и "
         "[technical lowering audit](TECHNICAL_LOWERING_AUDIT_RU.md). Он не обновляет JSON/schema/registry. "
-        "`--check` сравнивает все три projections без записи; [Lowery](LOWERY_RU.md#refresh) и [primitive parity](PRIMITIVE_PARITY_RU.md#refresh) имеют отдельные generators.",
+        "`--check` сравнивает все три projections без записи; [Lowery](LOWERY_RU.md#refresh) имеет отдельный generator.",
         "",
     ]
     return "\n".join(lines)
@@ -269,8 +269,8 @@ def audit_markdown(audit: dict[str, Any]) -> str:
         "# Аудит машиночитаемости библиотеки компонентов",
         "",
         "> Generated: [`tools/generate/generate_low_level_runtime_docs.py`](../../../tools/generate/generate_low_level_runtime_docs.py) из "
-        "[registry](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) и "
-        "[audit-кода](../../../LocalGenerator/infini_local/qa/capability_library_audit.py). Не редактировать вручную; "
+        "[registry](../../../generator/infini_local/core/runtime_authoring/capability_registry.py) и "
+        "[audit-кода](../../../generator/infini_local/qa/capability_library_audit.py). Не редактировать вручную; "
         "[refresh/check всех трёх outputs](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh).",
         "> Architecture/owners: [Lowery](LOWERY_RU.md). Полный каталог: [inventory](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md).",
         "",
@@ -279,19 +279,15 @@ def audit_markdown(audit: dict[str, Any]) -> str:
         "",
         '<a id="verdict"></a>',
         "",
-        f"## Вердикт: {audit['score']}/{audit['scoreMax']}",
+        "## Registry metadata и Python wire witnesses",
         "",
-        "Это **структурная оценка контракта**, а не заявление, что реализован весь Terraria runtime.",
+        "Проверяются declarations и исполнение Author→validator→compiler→wire в Python. C# execution/range preservation здесь **не проверены**; owner names — навигационные metadata.",
         "",
-        "| критерий | вес | результат |",
-        "|---|---:|---:|",
+        "| критерий | результат |",
+        "|---|---:|",
     ]
-    weights = {
-        "registryIdentity": 10, "typedParameters": 15, "compositionMetadata": 15, "exactDelivery": 15,
-        "runtimeOwnership": 15, "rangeParity": 10, "projectionParity": 10, "verticalSlices": 10,
-    }
-    for key, weight in weights.items():
-        lines.append(f"| `{key}` | {weight} | {'PASS' if audit['criteria'][key] else 'FAIL'} |")
+    for key, passed in audit["criteria"].items():
+        lines.append(f"| `{key}` | {'PASS' if passed else 'FAIL'} |")
     lines += [
         "",
         '<a id="metrics"></a>',
@@ -302,7 +298,7 @@ def audit_markdown(audit: dict[str, Any]) -> str:
         f"- entity kinds: **{m['entityKinds']}**; inputs: **{m['inputs']}**; actions: **{m['bindingActions']}**; events: **{m['events']}**;",
         f"- typed entity references: **{m['typedEntityReferences']}**; requirements: **{m['requirements']}**; binding dependency edges: **{m['bindingDependencyEdges']}**;",
         f"- exact wire paths: **{m['exactWirePaths']}**; global technical lowerer outputs: **{m['globalTechnicalLowererOutputs']}**;",
-        f"- Python↔C# range parity rows: **{m['rangeParityRows']}**; vertical witnesses: **{m['verticalSliceCount']}**;",
+        f"- Python vertical witnesses: **{m['verticalSliceCount']}**; native execution: **notRun**;",
         f"- errors: **{audit['errorCount']}**; warnings: **{audit['warningCount']}**.",
         "",
         '<a id="proof"></a>',
@@ -314,7 +310,7 @@ def audit_markdown(audit: dict[str, Any]) -> str:
         "3. Entity kinds, inputs, binding actions и events имеют отдельные registries, а validator использует их, а не дублирующий набор `if`-маршрутов.",
         "4. Capability указывает component slot, exclusivity, position ownership, requirements, emitted/accepted events и authority.",
         "5. Delivery перечисляет точные wire-path; wildcard-output запрещён audit-gate.",
-        "6. Owner — не просто имя файла: audit импортирует Python callable и ищет конкретные C# method symbols.",
+        "6. Audit разрешает Python compiler callable; C# owner указан для навигации, без проверки method spelling.",
         "7. Для каждой capability исполняется author→validate→compile→strict-wire witness; неизвестные поля/refs/opcodes fail closed.",
         "",
         '<a id="limits"></a>',
@@ -324,7 +320,7 @@ def audit_markdown(audit: dict[str, Any]) -> str:
         "- На entity допускается один movement slot и один controller slot. Это намеренная bounded-композиция, не arbitrary ECS/VM.",
         "- Cross-entity references доступны только там, где runtime реально их исполняет (`target_and_fire`, event child spawn).",
         "- Authority metadata проверяется статическими контрактами, но реальный host/client smoke требует tModLoader runtime.",
-        "- Статический vertical witness доказывает доставку Python→C# contract surface, но не заменяет успешный C# build и игровой smoke.",
+        "- Исполняемый Python witness проверяет validator/compiler/strict-wire, но не C# consumer, игровой smoke или native bounds.",
         "- Author получает self-contained catalog без retrieval/tool loop. Исторические оценки около 71k/83k символов при лимите 96k из прежнего аудита не являются текущими размерами или верхней границей. "
         "Текущий размер **компактного полного Author user payload** (без system text/provider envelope/schema), configured limit и headroom измеряет "
         "[`tools/checks/check_planner_prompt_usability.py`](../../../tools/checks/check_planner_prompt_usability.py); catalog-only size — другая величина.",
@@ -334,9 +330,6 @@ def audit_markdown(audit: dict[str, Any]) -> str:
         "",
         "## Практическая оценка",
         "",
-        "- **Структура и проверяемость: 10/10** — все объявленные проекции замкнуты и проверяются машиной.",
-        "- **Однозначность для LLM: 9/10** — API не содержит weapon families и semantic defaults; некоторые item-body calls длинные из-за широких typed DTO.",
-        "- **Выразительность текущего runtime: 8/10** — странные multi-entity композиции поддерживаются, но controller layering и произвольная world interaction намеренно ограничены.",
         "- **Доказанность в игре: неполная** до C# build/tModLoader singleplayer/host-client smoke.",
         "",
     ]
@@ -352,7 +345,7 @@ def lowering_markdown() -> str:
         "# TECHNICAL LOWERING AUDIT",
         "",
         "> Generated: [`tools/generate/generate_low_level_runtime_docs.py`](../../../tools/generate/generate_low_level_runtime_docs.py) из "
-        "[technical_lowering.py](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py). Не редактировать вручную; "
+        "[technical_lowering.py](../../../generator/infini_local/core/runtime_authoring/technical_lowering.py). Не редактировать вручную; "
         "[refresh/check всех трёх outputs](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh).",
         "> Policy/owners: [Lowery](LOWERY_RU.md). Полные wire outputs каждого lowerer: [manifest](LOWERY_RU.md#lowering).",
         "",

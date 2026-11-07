@@ -57,8 +57,8 @@ def _ignored_repository_path(path: str) -> bool:
         ".ruff_cache", ".hypothesis", "bin", "obj",
     }
     ignored_prefixes = (
-        "artifacts/", "build_logs/", "LocalGenerator/cache/",
-        "LocalGenerator/data/Runtime_dumps/",
+        "artifacts/", "build_logs/", "generator/cache/",
+        "generator/data/Runtime_dumps/",
     )
     return (
         not normalized
@@ -140,7 +140,7 @@ def changed_files(base: str | None = None) -> list[str]:
 
 def _matches(path: str, pattern: str) -> bool:
     # fnmatch treats ** adequately for the repository paths used here; also test
-    # a collapsed form so patterns such as ModSources/**/*.cs match direct files.
+    # a collapsed form so patterns such as mod/**/*.cs match direct files.
     return fnmatch(path, pattern) or fnmatch(path, pattern.replace("**/", ""))
 
 
@@ -152,7 +152,7 @@ def impacted(files: list[str], *, areas: list[str] | None = None) -> tuple[list[
     matched = [rule for rule in rules if rule["area"] in (areas or []) or any(
         _matches(path, pattern) for path in files for pattern in rule.get("patterns", []))]
     checks = {check for rule in matched for check in rule.get("checks", [])}
-    requires_build = any(path.startswith("ModSources/") and path.endswith((".cs", ".csproj")) for path in files)
+    requires_build = any(path.startswith("mod/") and path.endswith((".cs", ".csproj")) for path in files)
     requires_build = requires_build or any(bool(rule.get("requiresBuild")) for rule in matched)
     return matched, sorted(checks), requires_build
 
@@ -174,7 +174,7 @@ def _test_module(path: str) -> bool:
     candidate = ROOT / path
     return any(path.startswith(prefix) and candidate.name.startswith("test_") and candidate.suffix == ".py"
                and candidate.is_file() and candidate.resolve().is_relative_to((ROOT / prefix).resolve())
-               for prefix in ("LocalGenerator/tests/", "toolbox/tests/"))
+               for prefix in ("tests/generator/", "tests/toolbox/"))
 
 
 def verification_plan(files: list[str], *, final: bool = False, areas: list[str] | None = None) -> dict[str, Any]:
@@ -209,7 +209,7 @@ def verification_plan(files: list[str], *, final: bool = False, areas: list[str]
 
 def _environment() -> dict[str, str]:
     env = dict(os.environ)
-    env["PYTHONPATH"] = str(ROOT / "LocalGenerator")
+    env["PYTHONPATH"] = str(ROOT / "generator")
     env["PYTHONUTF8"] = "1"
     env["INFINI_SKIP_CONFIG_FILE"] = "1"
     env["INFINI_TEST_USE_PROJECT_CONFIG"] = "0"
@@ -229,7 +229,7 @@ def _dotnet_executable() -> str | None:
 
 def command_doctor(_: argparse.Namespace) -> int:
     modules = {name: importlib.util.find_spec(name) is not None for name in ("pydantic", "hypothesis", "pytest")}
-    project = ROOT / "ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj"
+    project = ROOT / "mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj"
     deps_root = os.environ.get("INFINI_TML_DEPS_SRC", "")
     report = {
         "schema": "infini.agent-doctor.v1",

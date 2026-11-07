@@ -104,11 +104,11 @@ internal static partial class EngineRuntimeChecks
     private static void DocxNativeItemReadyDomainRejectsUnfinishedProducer()
     {
         var wire = System.Text.Json.Nodes.JsonNode.Parse(DocxImageReadinessWire())!;
-        foreach (string status in new[] { "pending", "generating", "skipped_disabled_by_settings", "not_required", "future_unknown" }) {
+        foreach (string status in new[] { "pending", "generating", "skipped_disabled_by_settings", "not_required", "future_unknown", "fallback", "fallback_after_failed_generation" }) {
             wire["visual"]!["spriteStatus"] = status;
             Equal(true, GeneratedItemData.FromJson(wire.ToJsonString()) is null, "unfinished root producer refused: " + status);
         }
-        foreach (string status in new[] { "generated", "generated_warn_invalid", "fallback", "fallback_after_failed_generation" }) {
+        foreach (string status in new[] { "generated", "generated_warn_invalid" }) {
             wire["visual"]!["spriteStatus"] = status;
             var data = GeneratedItemData.FromJson(wire.ToJsonString());
             Equal(true, data is not null, "existing completed producer admitted: " + status);
@@ -120,7 +120,7 @@ internal static partial class EngineRuntimeChecks
         string json = DocxImageReadinessWire();
         foreach (string status in new[] { "generated", "generated_warn_invalid", "fallback", "fallback_after_failed_generation", "pending", "generating", "not_required", "future_unknown", "" })
         {
-            bool expected = status is "generated" or "generated_warn_invalid" or "fallback" or "fallback_after_failed_generation";
+            bool expected = status is "generated" or "generated_warn_invalid";
             var wire = System.Text.Json.Nodes.JsonNode.Parse(json)!;
             var visual = wire["runtimeProgram"]!["entities"]!.AsArray()
                 .Single(entity => entity!["id"]!.GetValue<string>() == "root")!["visual"]!;

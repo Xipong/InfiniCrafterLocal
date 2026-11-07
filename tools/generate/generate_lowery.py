@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "LocalGenerator"))
+sys.path.insert(0, str(ROOT / "generator"))
 
 from infini_local.core.runtime_authoring.capability_registry import (  # noqa: E402
     CAPABILITY_REGISTRY,
@@ -58,12 +58,12 @@ def render() -> str:
         "# Low-level authoring и Lowery — канонический контракт",
         "",
         "> Generated: [`tools/generate/generate_lowery.py`](../../../tools/generate/generate_lowery.py). Не редактировать вручную; менять canonical owner и [обновлять projection](#refresh).",
-        "> Sources: [registry](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py), "
-        "[Author shape](../../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py), "
-        "[lowering](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py), "
-        "[tModLoader vocabulary](../../../LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py), "
-        "[Author/Repair prose](../../../LocalGenerator/infini_local/pipelines/author/item_contract.py), "
-        "[unit guide](../../../LocalGenerator/infini_local/pipelines/author/prompt.py).",
+        "> Sources: [registry](../../../generator/infini_local/core/runtime_authoring/capability_registry.py), "
+        "[Author shape](../../../generator/infini_local/core/runtime_authoring/program_schema.py), "
+        "[lowering](../../../generator/infini_local/core/runtime_authoring/technical_lowering.py), "
+        "[tModLoader vocabulary](../../../generator/infini_local/core/runtime_authoring/terraria_vocabulary.py), "
+        "[Author/Repair prose](../../../generator/infini_local/pipelines/author/item_contract.py), "
+        "[unit guide](../../../generator/infini_local/pipelines/author/prompt.py).",
         "",
         f"Schemas: `{RUNTIME_PROGRAM_API_VERSION}` / `{RUNTIME_PROGRAM_SCHEMA}` / `{RUNTIME_WIRE_SCHEMA}`.",
         "",
@@ -99,7 +99,7 @@ def render() -> str:
         ("validation truth", "runtime_authoring/validator.py", "Repair requirements and final acceptance"),
         ("Repair scope/permissions/filter", "runtime_authoring/repair/{schema,scope,filter,validation,fragments}.py", "conditional Repair dossier and merge report"),
         ("wire materialization", "runtime_authoring/compiler.py", "RuntimeProgram wire + finalWireReceipts"),
-        ("runtime execution", "ModSources/.../RuntimeProgramSpec.cs + executors", "tModLoader behavior"),
+        ("runtime execution", "mod/.../RuntimeProgramSpec.cs + executors", "tModLoader behavior"),
     ])
     lines += [
         "",
@@ -342,14 +342,13 @@ def render() -> str:
         "## Обновление и проверка",
         "",
         "Из корня репозитория, с Python окружения проекта. Без `--check` этот generator записывает **только `docs/reference/generated/LOWERY_RU.md`**. "
-        "[Inventory и audit](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh) и [primitive parity](PRIMITIVE_PARITY_RU.md#refresh) обновляются своими generators.",
+        "[Inventory и audit](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh) обновляются своим generator.",
         "",
         "```bash",
-        "PYTHONPATH=LocalGenerator python tools/generate/generate_lowery.py",
-        "PYTHONPATH=LocalGenerator python tools/generate/generate_lowery.py --check",
-        "PYTHONPATH=LocalGenerator python tools/generate/generate_low_level_runtime_docs.py --check",
-        "PYTHONPATH=LocalGenerator python tools/generate/generate_primitive_parity.py --check",
-        "PYTHONPATH=LocalGenerator python -m pytest -q LocalGenerator/tests/test_registry_*.py LocalGenerator/tests/test_low_level_three_stage_pipeline.py LocalGenerator/tests/test_pipeline_repair_contract.py",
+        "PYTHONPATH=generator python tools/generate/generate_lowery.py",
+        "PYTHONPATH=generator python tools/generate/generate_lowery.py --check",
+        "PYTHONPATH=generator python tools/generate/generate_low_level_runtime_docs.py --check",
+        "PYTHONPATH=generator python -m pytest -q tests/generator/**/test_registry_*.py tests/generator/authoring/test_low_level_three_stage_pipeline.py tests/generator/authoring/test_pipeline_repair_contract.py",
         "```",
         "",
         'Type check: `python tools/testing/run_pyright.py --pythonpath "$(python -c \'import sys; print(sys.executable)\')"`. Полные delivery gates: [AGENTS.md](../../../AGENTS.md).',

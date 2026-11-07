@@ -9,7 +9,7 @@
 | BAT не находит `py`/`python`, версия ниже 3.11 | Установи Python 3.11+ с Python Launcher, затем снова открой BAT |
 | Ошибка `tkinter` / Tcl/Tk | Запущена старая копия Studio: обнови файлы проекта. Текущей браузерной Studio Tcl/Tk не нужен. |
 | Не удаётся создать `.venv` или записать файл | Полностью распакуй ZIP в папку с правом записи; не запускай внутри ZIP |
-| Ошибка установки пакетов | Проверь интернет и точный вывод установки; затем повтори `OPEN_INFINICRAFT.bat`. Если среда повреждена, переименуй только `LocalGenerator/.venv` и повтори запуск — не cache и не config |
+| Ошибка установки пакетов | Проверь интернет и точный вывод установки; затем повтори `OPEN_INFINICRAFT.bat`. Если среда повреждена, переименуй только `generator/.venv` и повтори запуск — не cache и не config |
 | Окно есть, браузер не открылся | Скопируй адрес `Infinicraft Studio: …` целиком из окна запуска |
 | Браузер показывает `403` или «Сессия недоступна» | Открой Studio новым запуском BAT; старый адрес с ключом сессии больше не подходит |
 | «Нет связи» в уже открытой Studio | Проверь окно запуска, нажми «Повторить»; не закрывай черновик, пока можешь восстановить соединение |
@@ -110,7 +110,7 @@
 Для передачи не обязательно упаковывать весь cache обычным ZIP. Останови генератор и из корня исходников выполни:
 
 ```bash
-python tools/diagnostics/export_support_bundle.py --cache LocalGenerator/cache --image-store LocalGenerator/images --out support-core.tar.xz
+python tools/diagnostics/export_support_bundle.py --cache generator/cache --image-store generator/images --out support-core.tar.xz
 python tools/diagnostics/export_support_bundle.py --verify support-core.tar.xz
 ```
 

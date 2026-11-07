@@ -9,15 +9,14 @@
 
 | Решение | Владелец | Граница |
 |---|---|---|
-| Entities, bindings, calls, ссылки и форма Author | [`program_schema.py`](../../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py) | Author выбирает композицию. Имя, категория, DamageClass и prose не выбирают movement, controller, delivery или lifecycle. |
-| Capability params, units, dependencies, event/authority facts | [`capability_registry.py`](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) | Новый параметр требует полного vertical slice, а не одной карточки prompt. |
-| Producer/source/target compatibility | [`event_producer_validation.py`](../../../LocalGenerator/infini_local/core/runtime_authoring/event_producer_validation.py) | Binding target и event source — разные вещи. VFX использует тот же фактический event surface, но не меняет gameplay. |
-| Exact lowering, omissions и receipts | [`technical_lowering.py`](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py), [`wire_validator.py`](../../../LocalGenerator/infini_local/core/runtime_authoring/wire_validator.py) | Каждому authored selector/value соответствует точный wire path; наличие пути среди outputs capability недостаточно. |
-| Реальные инструкции модели и transport projection | [`pipelines/author/item_contract.py`](../../../LocalGenerator/infini_local/pipelines/author/item_contract.py) | Проверять сериализованный system/user packet, не только helper или schema. |
-| Strict DTO и исполнение | [`RuntimeProgramSpec.cs`](../../../ModSources/InfiniCrafterLocal/Common/Models/Contracts/RuntimeProgramSpec.cs), [`GeneratedItem.cs`](../../../ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.cs), [`GeneratedProjectile.cs`](../../../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.cs), [`RuntimeProgramExecutor.cs`](../../../ModSources/InfiniCrafterLocal/Common/Runtime/RuntimeProgramExecutor.cs) | Finite typed dispatch, не arbitrary VM, generated C# или reflection scripting. |
-| Completeness audit | [`primitive_loss_audit.py`](../../../LocalGenerator/infini_local/qa/primitive_loss_audit.py) | DTO declarations и reads конкретных consumers сопоставляются с Author; hidden/legacy fields требуют явной классификации. AST не доказывает весь game loop. |
+| Entities, bindings, calls, ссылки и форма Author | [`program_schema.py`](../../../generator/infini_local/core/runtime_authoring/program_schema.py) | Author выбирает композицию. Имя, категория, DamageClass и prose не выбирают movement, controller, delivery или lifecycle. |
+| Capability params, units, dependencies, event/authority facts | [`capability_registry.py`](../../../generator/infini_local/core/runtime_authoring/capability_registry.py) | Новый параметр требует полного vertical slice, а не одной карточки prompt. |
+| Producer/source/target compatibility | [`event_producer_validation.py`](../../../generator/infini_local/core/runtime_authoring/event_producer_validation.py) | Binding target и event source — разные вещи. VFX использует тот же фактический event surface, но не меняет gameplay. |
+| Exact lowering, omissions и receipts | [`technical_lowering.py`](../../../generator/infini_local/core/runtime_authoring/technical_lowering.py), [`wire_validator.py`](../../../generator/infini_local/core/runtime_authoring/wire_validator.py) | Каждому authored selector/value соответствует точный wire path; наличие пути среди outputs capability недостаточно. |
+| Реальные инструкции модели и transport projection | [`pipelines/author/item_contract.py`](../../../generator/infini_local/pipelines/author/item_contract.py) | Проверять сериализованный system/user packet, не только helper или schema. |
+| Strict DTO и исполнение | [`RuntimeProgramSpec.cs`](../../../mod/InfiniCrafterLocal/Common/Models/Contracts/RuntimeProgramSpec.cs), [`GeneratedItem.cs`](../../../mod/InfiniCrafterLocal/Content/Items/GeneratedItem.cs), [`GeneratedProjectile.cs`](../../../mod/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.cs), [`RuntimeProgramExecutor.cs`](../../../mod/InfiniCrafterLocal/Common/Runtime/RuntimeProgramExecutor.cs) | Finite typed dispatch, не arbitrary VM, generated C# или reflection scripting. |
 
-Полные карточки и exact mappings не дублируются здесь: [generated inventory](../../reference/generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md), [parity](../../reference/generated/PRIMITIVE_PARITY_RU.md), [lowery](../../reference/generated/LOWERY_RU.md). Правила преобразований и маршруты расширения — в [AGENTS](../../../AGENTS.md), [authoring](../../reference/authoring/LOW_LEVEL_RUNTIME_AUTHORING_RU.md) и [capability workflow](../ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md).
+Полные карточки и exact mappings не дублируются здесь: [generated inventory](../../reference/generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md), [lowery](../../reference/generated/LOWERY_RU.md). Правила преобразований и маршруты расширения — в [AGENTS](../../../AGENTS.md), [authoring](../../reference/authoring/LOW_LEVEL_RUNTIME_AUTHORING_RU.md) и [capability workflow](../ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md).
 
 Baseline craft: Gameplay Author → Visual Director → VFX Director; Repair условен и leaf-local для своей стадии. Frozen siblings не меняются, optional additions вне permission игнорируются с audit, после merge проверяется полный stage output. Registry/runtime defect не исправляется моделью. [Repair protocol](../pipeline/TARGETED_REPAIR_PROTOCOL_RU.md) владеет правами, read-only handoff и create/delete policy.
 
@@ -26,7 +25,7 @@ Baseline craft: Gameplay Author → Visual Director → VFX Director; Repair у�
 <a id="authority"></a>
 ## Authority и hit trust
 
-Основные guards — [`InfiniRuntimeAuthority.cs`](../../../ModSources/InfiniCrafterLocal/Common/Services/Networking/InfiniRuntimeAuthority.cs); различие NPC event roles — `RuntimeProgramExecutor.ShouldRunNpcEvent`. Общий `HasActionAuthority` используется перед delayed admission и при immediate/delayed dispatch. Enqueue не выдаёт вечное разрешение: execution перепроверяет роль и при отказе возвращает spawn reservation. Phase/peer authority остаётся обязанностью runtime, не новым выбором LLM; target/damage/depth preconditions сохраняются у effect consumers.
+Основные guards — [`InfiniRuntimeAuthority.cs`](../../../mod/InfiniCrafterLocal/Common/Services/Networking/InfiniRuntimeAuthority.cs); различие NPC event roles — `RuntimeProgramExecutor.ShouldRunNpcEvent`. Общий `HasActionAuthority` используется перед delayed admission и при immediate/delayed dispatch. Enqueue не выдаёт вечное разрешение: execution перепроверяет роль и при отказе возвращает spawn reservation. Phase/peer authority остаётся обязанностью runtime, не новым выбором LLM; target/damage/depth preconditions сохраняются у effect consumers.
 
 | Путь | Исполнитель | Чего не делать |
 |---|---|---|
@@ -37,9 +36,9 @@ Baseline craft: Gameplay Author → Visual Director → VFX Director; Repair у�
 | `owner_to_target` pull | Local owner при активной direct target | Отказ не переходит в NPC/area pull другого режима. |
 | Presentation | Client-only | Косметический relay не повторяет gameplay/spawn. |
 
-[`RuntimeHitPullBridge.cs`](../../../ModSources/InfiniCrafterLocal/Common/Runtime/RuntimeHitPullBridge.cs) сохраняет **vanilla owner-authoritative hit trust**, а не независимое доказательство server collision. Projectile lookup использует `owner + network identity`, не peer-local slot. Принимаются только известные item/entity/world identities, правильный sender, sequence и NPC generation; item source берётся из ограниченного недавнего server-observed activation, включая исходный input. Retired projectile grace и recent item source ограничены 60 world ticks. Admission — до 32 claims на sender/tick; delayed receipt actions — до 32 на owner в общей bounded queue. Сервер ставит `NPC.netUpdate` после velocity change.
+[`RuntimeHitPullBridge.cs`](../../../mod/InfiniCrafterLocal/Common/Runtime/RuntimeHitPullBridge.cs) сохраняет **vanilla owner-authoritative hit trust**, а не независимое доказательство server collision. Projectile lookup использует `owner + network identity`, не peer-local slot. Принимаются только известные item/entity/world identities, правильный sender, sequence и NPC generation; item source берётся из ограниченного недавнего server-observed activation, включая исходный input. Retired projectile grace и recent item source ограничены 60 world ticks. Admission — до 32 claims на sender/tick; delayed receipt actions — до 32 на owner в общей bounded queue. Сервер ставит `NPC.netUpdate` после velocity change.
 
-[`RuntimeHitNpcGeneration.cs`](../../../ModSources/InfiniCrafterLocal/Common/Runtime/RuntimeHitNpcGeneration.cs) выдаёт NPC incarnation token на сервере и передаёт его через ExtraAI. Slot reuse не перенаправляет действие; `NPC.Transform` может сохранить ту же сущность. Без полученного token, вне source lifetime или при ambiguous identity receipt отвергается. Sender/generation/replay guards ограничивают claims, **не являются anti-cheat collision proof**. Native packet send observer и socket-free sender/receiver проверяют разные seams; ни один не подтверждает доставку в живом MP match. Custom whip tags и remote hit-VFX имеют отдельных потребителей, не принимаются автоматически этим gameplay bridge.
+[`RuntimeHitNpcGeneration.cs`](../../../mod/InfiniCrafterLocal/Common/Runtime/RuntimeHitNpcGeneration.cs) выдаёт NPC incarnation token на сервере и передаёт его через ExtraAI. Slot reuse не перенаправляет действие; `NPC.Transform` может сохранить ту же сущность. Без полученного token, вне source lifetime или при ambiguous identity receipt отвергается. Sender/generation/replay guards ограничивают claims, **не являются anti-cheat collision proof**. Native packet send observer и socket-free sender/receiver проверяют разные seams; ни один не подтверждает доставку в живом MP match. Custom whip tags и remote hit-VFX имеют отдельных потребителей, не принимаются автоматически этим gameplay bridge.
 
 <a id="spawn"></a>
 ## Spawn: activation ledger, reservations и engine caps
@@ -51,18 +50,18 @@ Baseline craft: Gameplay Author → Visual Director → VFX Director; Repair у�
 3. Dispatch использует только reservation; children получают тот же ledger. Неиспользованные slots возвращаются; rejected enqueue, cancellation и clear не создают/не теряют allowance.
 4. Для item-use общий `_itemEventBudget` живёт на Item activation; periodic item producer создаёт отдельный budget своей emission. Не объявлять этот clock универсальным lifetime предмета.
 
-Consumers: `GeneratedItem.RootBindingSpawnCapacity/Shoot`, `GeneratedProjectile.SpawnRuntimeEntity/Configure`, [`GeneratedProjectile.Executors.cs`](../../../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Executors.cs), scheduler. [`GeneratedProjectile.NetSync.cs`](../../../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.NetSync.cs) передаёт **наблюдаемый** remaining count; remote scratch ledger не должен затирать полученный snapshot при terminal hooks.
+Consumers: `GeneratedItem.RootBindingSpawnCapacity/Shoot`, `GeneratedProjectile.SpawnRuntimeEntity/Configure`, [`GeneratedProjectile.Executors.cs`](../../../mod/InfiniCrafterLocal/Content/Projectiles/Motion/GeneratedProjectile.Executors.cs), scheduler. [`GeneratedProjectile.NetSync.cs`](../../../mod/InfiniCrafterLocal/Content/Projectiles/Networking/GeneratedProjectile.NetSync.cs) передаёт **наблюдаемый** remaining count; remote scratch ledger не должен затирать полученный snapshot при terminal hooks.
 
 [Распределение начальной скорости и hit-target geometry](../../reference/projectiles/SPAWN_DISTRIBUTIONS_AND_TARGET_GEOMETRY_RU.md) выбираются явно в Author. Owner сохраняет sampled velocity в native instance/ExtraAI v4, а delayed target action — geometry и seed на admission. Exact NPC exclusion использует remaining countdown до collision; `0` отключает также incarnation cancellation guard. Multi-emission передаёт каждую reservation callee до spawn; exception callee возвращает attempted остаток, caller возвращает только unattempted. Constant-speed spawn остаётся текущим выбором без sampled distribution. Старые ExtraAI v2/v3 отвергаются; текущие writers/readers используют v4 и v5, без миграции или перестановки movement opcodes.
 
-Точные hard ceilings принадлежат [`InfiniRuntimeLimits.cs`](../../../ModSources/InfiniCrafterLocal/Common/InfiniRuntimeLimits.cs), не этой таблице:
+Точные hard ceilings принадлежат [`InfiniRuntimeLimits.cs`](../../../mod/InfiniCrafterLocal/Common/InfiniRuntimeLimits.cs), не этой таблице:
 
 | Лимит | Текущий ceiling / scope |
 |---|---|
 | Program shape | 12 entities, 8 bindings, 16 events/entity; declared lower limits также проверяются |
 | Child depth / event allowance | 3 / 32 на activation |
 | Одна spawn group / активные generated projectiles | 12 / 96 на owner |
-| Runtime lifetime / range | 21 600 world ticks / 120 tiles |
+| Runtime lifetime / range | 36 000 world ticks / 120 tiles |
 | Pending delayed actions / due dispatch | 256 в общей очереди / 64 за world tick, совместно для всех scheduler visits |
 | Delay / receipt subset | 1…600 world ticks при scheduling / 32 pending owner-hit actions на owner |
 | Periodic action loop | Constant 16 ограничивает due-action loop projectile producer; это не доказательство общего per-owner rate limit |
@@ -72,7 +71,7 @@ Python graph/spawn validation, runtime ledger и active-projectile cap — ра�
 <a id="delay"></a>
 ## Delayed actions: identity, source lineage и terminal events
 
-Владелец — [`RuntimeDelayedActionScheduler.cs`](../../../ModSources/InfiniCrafterLocal/Common/Runtime/RuntimeDelayedActionScheduler.cs), обновление через `PostUpdateEverything`; `OnWorldUnload`/`Unload` очищают очередь и возвращают reservations. Enqueue сохраняет `Main.GameUpdateCount` и authored due tick с wrap-safe сравнением bounded delay. Повторный scheduler visit в том же world tick не продвигает delay и не пополняет dispatch allowance. При pressure исходный due tick сохраняется, а не заменяется новым countdown.
+Владелец — [`RuntimeDelayedActionScheduler.cs`](../../../mod/InfiniCrafterLocal/Common/Runtime/RuntimeDelayedActionScheduler.cs), обновление через `PostUpdateEverything`; `OnWorldUnload`/`Unload` очищают очередь и возвращают reservations. Enqueue сохраняет `Main.GameUpdateCount` и authored due tick с wrap-safe сравнением bounded delay. Повторный scheduler visit в том же world tick не продвигает delay и не пополняет dispatch allowance. При pressure исходный due tick сохраняется, а не заменяется новым countdown.
 
 | Captured fact | Проверка / сохранённая семантика |
 |---|---|
@@ -87,7 +86,7 @@ Python graph/spawn validation, runtime ledger и active-projectile cap — ра�
 
 Charge-release controller — другая операция: один раз масштабирует **текущие** `Projectile.damage` и `knockBack`, уже включающие spawn/combat modifiers, не восстанавливает их из definition/`originalDamage`. Нулевая база остаётся нулевой; released-generation guard не допускает повторного scaling после AI/ExtraAI hydration.
 
-[`GeneratedProjectile.RuntimeEvents.cs`](../../../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs) разделяет `on_expire` и `on_kill`: natural/final-AI expiry не должна повторить expire при OnKill; early kill не создаёт expiry. Два authored terminal actions с разными delay сохраняются независимо. Прежние headless матрицы проходили **последовательности mod hooks**, не vanilla `Projectile.Kill`/collision-driven game loop и не modded damage hooks.
+[`GeneratedProjectile.RuntimeEvents.cs`](../../../mod/InfiniCrafterLocal/Content/Projectiles/Combat/GeneratedProjectile.RuntimeEvents.cs) разделяет `on_expire` и `on_kill`: natural/final-AI expiry не должна повторить expire при OnKill; early kill не создаёт expiry. Два authored terminal actions с разными delay сохраняются независимо. Headless последовательность mod hooks не равна vanilla `Projectile.Kill`/collision-driven game loop или modded damage hooks.
 
 <a id="units"></a>
 ## Единицы, нейтрали и precision
@@ -96,10 +95,10 @@ Charge-release controller — другая операция: один раз м�
 
 | Author / смысл | Доставка и ограничения |
 |---|---|
-| `configure_tool.axePowerTooltipPercent` | Целое 0…500, шаг 5 → прежний integer `gameplay.axePower = value / 5`. Старое Author-имя не становится alias. |
-| `apply_generated_buff_on_use.lifeRegenHpPerSecond` | 0…60, шаг 0.5 → integer `gameplay.generatedBuff.lifeRegen = value × 2`. Equipment regen имеет собственный signed domain в registry. |
+| `tool_stats.axePower` | Целое 0…500, шаг 5 → прежний integer `gameplay.axePower = value / 5`. Author tooltip percent и внутреннее Item.axe имеют разные единицы. |
+| `generated_buff_on_use.lifeRegen` | −50…60, шаг 0.5 → integer `gameplay.generatedBuff.lifeRegen = value × 2`. Equipment regen имеет собственный signed domain в registry. |
 | Equipment bonus percent | `/100` в fraction там, где это объявлено; crit и damage-reduction percentage points не смешиваются с additive damage multiplier. |
-| `taggedSummonSourceDamageBonusPercent` | Multiplier source damage против same-owner generated whip tag, не vanilla flat tag damage. |
+| `taggedSummonDamageBonus` | Multiplier source damage против same-owner generated whip tag, не vanilla flat tag damage. |
 | `periodTicks`, delays и duration | World ticks; `periodic` требует явный period, runtime minimum не разрешает отсутствующее authored значение. |
 | `extraUpdates` / movement | Projectile update отличается от world tick; drift/gravity/turn/scale increments применяются на соответствующем update consumer. Raw local NPC cooldown и sentinel `-1` объясняются отдельно. |
 | Mana regen, aggro, knockback, light strength | Объявленные engine coefficients/points, не выдуманные mana/s, probability, distance или light radius. |
@@ -107,12 +106,12 @@ Charge-release controller — другая операция: один раз м�
 
 `ParamSpec.consumer_storage="float32"` для continuous generated-buff mining/movement/jump/light требует сохранить ненейтральность при storage. Exact neutral допустим; nonneutral, схлопывающийся в него, даёт `consumer_representability` на точном leaf до compilation, без округления/подстановки. Present malformed leaf не становится GREEN из-за другого рабочего buff. Это **storage representability**, не гарантия заметного изменения любого сколь угодно малого бонуса после последующей float32 арифметики Terraria.
 
-При изменении units докажи обратимость **на всём прежнем accepted wire domain**, signed endpoints, neutral/sentinels и реальные JSON/runtime round trips. Сохрани wire и старые consumer clamps; иначе rename способен молча убрать диапазон. Замер compact cards или requiredness parity не измеряет model first-pass quality. [Историческая панель](../../archive/HISTORY_RU.md#live) осталась RED; host defaults не являются её исправлением.
+При изменении units докажи обратимость **на всём прежнем accepted wire domain**, signed endpoints, neutral/sentinels и реальные JSON/runtime round trips. Проверь текущие wire bounds и реальные consumer clamps; rename не должен молча сужать объявленный диапазон. Замер compact cards или requiredness parity не измеряет model first-pass quality. [Историческая панель](../../archive/HISTORY_RU.md#live) осталась RED; host defaults не являются её исправлением.
 
 <a id="items"></a>
 ## Item projection, equipment и ammo
 
-QuickHeal/QuickMana сохраняют native owner heal/consume и не создают manual use-анимацию. Для generated utility [`GeneratedQuickUtilityActivation.cs`](../../../ModSources/InfiniCrafterLocal/Common/Runtime/GeneratedQuickUtilityActivation.cs) передаёт exact native pre-consumption inventory/void Item через SyncEquipment, затем bounded Prepare→Ready→Commit. Для bank4 сначала отправляется exact inventory-предмет открытой Void Bag, чтобы первый native quick-use не зависел от уже обновлённой сумки на сервере; серверный useVoidBag gate сохранён. Сервер применяет только utility из current-world canonical definition, не повторяет UseItem/heal/consumption/mobility/spawn/VFX. Identity/token/binding/sender/session/replay/TTL ограничивают occurrence; это vanilla owner-use trust, не независимое доказательство HP/расхода. Длительность anchored к server Prepare, поздний Commit не восстанавливает полный срок. Старые client stat snapshots не становятся authority.
+QuickHeal/QuickMana сохраняют native owner heal/consume и не создают manual use-анимацию. Для generated utility [`GeneratedQuickUtilityActivation.cs`](../../../mod/InfiniCrafterLocal/Common/Runtime/GeneratedQuickUtilityActivation.cs) передаёт exact native pre-consumption inventory/void Item через SyncEquipment, затем bounded Prepare→Ready→Commit. Для bank4 сначала отправляется exact inventory-предмет открытой Void Bag, чтобы первый native quick-use не зависел от уже обновлённой сумки на сервере; серверный useVoidBag gate сохранён. Сервер применяет только utility из current-world canonical definition, не повторяет UseItem/heal/consumption/mobility/spawn/VFX. Identity/token/binding/sender/session/replay/TTL ограничивают occurrence; это vanilla owner-use trust, не независимое доказательство HP/расхода. Длительность anchored к server Prepare, поздний Commit не восстанавливает полный срок. Старые client stat snapshots не становятся authority.
 
 `grounded` проверяет contact через native TileCollision/SlopeCollision в направлении gravDir, не только zero vertical velocity; опрос не изменяет player или scratch flags native collision.
 
@@ -121,21 +120,21 @@ QuickHeal/QuickMana сохраняют native owner heal/consume и не соз�
 | Binding effects | `ApplyActiveUseProjection/UseItem` исполняют resource/buff/mobility только с `apply_item_effects`. Один DTO с heal/buff без executable binding недостаточен. Pure `place_item` не производит `on_use`; contact и suppression проверяются независимо. |
 | Defense | Signed accessory `defensePoints` передаётся в Item; vanilla начисляет defense, equip hook не прибавляет его второй раз. Глобальный Player floor не оправдывает сужение authored Item projection. |
 | Move/mining aggregation | Sum/product сначала агрегируются, cap применяется к итогу; порядок получения buffs не выбирает результат. Refresh/expiry не превращаются в двойной stack. |
-| Flat run speed | `AddGeneratedMaxRunSpeedBonus` копится в equip pass, ResetEffects сбрасывает; [`PostUpdateRunSpeeds`](../../../ModSources/InfiniCrafterLocal/Common/Players/InfiniCraftPlayer.cs) применяет после vanilla movement adjustments. `moveSpeed` остаётся ранним; прежний mount override сохранён. |
+| Flat run speed | `AddGeneratedMaxRunSpeedBonus` копится в equip pass, ResetEffects сбрасывает; [`PostUpdateRunSpeeds`](../../../mod/InfiniCrafterLocal/Common/Players/InfiniCraftPlayer.cs) применяет после vanilla movement adjustments. `moveSpeed` остаётся ранним; прежний mount override сохранён. |
 | Armor set | Exact setKey + реально надетые head/body/legs; set bonus не начисляется просто из наличия DTO. |
 | Equipment periodic gameplay | `HoldItem`, функциональные `UpdateAccessory`/`UpdateEquip` вызывают один `RunPeriodicItemEvents`; equipment требует явный `equipped → equip_passive` и соответствующий enabled accessory/armor. Vanity/inventory hooks не испускают gameplay. Один physical Item + Player + definition исполняется не чаще одного раза за world tick при пересечении hooks; разные физические копии с одинаковым ID независимы. Authored period/phase, shared emission budget, delay и action authority остаются у прежних consumers. Это исправление отсутствующего вызова, без преобразования authored graph или новых defaults. |
 | Ammo | `Item.ammo`, `Item.useAmmo`, direct-use stackCost и ammo consumption различны. Rocket/solution `PickAmmo` возвращает authored projectile ID после vanilla offset, сохраняя speed/damage/knockback; поздний чужой GlobalItem hook может изменить выбор. |
-| Custom whip | Geometry читает `Player.whipRangeMultiplier`; same-owner tag — отдельный [`GeneratedWhipTagGlobalNPC`](../../../ModSources/InfiniCrafterLocal/Common/Players/GeneratedWhipTagGlobalNPC.cs), не proof его отдельной MP replication. |
+| Lash geometry | `lash_geometry.useWhipRange` явно использует `Player.whipRangeMultiplier`; выбор DamageClass сам по себе не включает geometry, tag или summon behavior. |
 | Reusable throw / right-click | Returning projectile не возвращает Item, потраченный `stackCost=1`. `InfiniCore.ConsumeItem=false` защищает right-click consumption gate; это не полный UI lifecycle proof. |
-| Parent facts | [`GeneratorClient`](../../../ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.cs) нормализует **request-only clone** без reforge, не original/refund copies. Generated ammo context сохраняет exact instance definition. `placeStyle=0` не означает missing; multiple placements нельзя свести к первому. |
+| Parent facts | [`GeneratorClient`](../../../mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.cs) нормализует **request-only clone** без reforge, не original/refund copies. Generated ammo context сохраняет exact instance definition. `placeStyle=0` не означает missing; multiple placements нельзя свести к первому. |
 | Diagnostics | `LastAppliedTrace` — последняя Item projection, не live stats после prefix/global hooks и не гарантированный per-Item журнал shared definition. JsonIgnore snapshot не меняет save/network/hash. |
 
-[Standardization](../../reference/terraria/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md) владеет намеренно не-exposed границами: weapon `Item.useAmmo` без полного PickAmmo vertical slice, sand ammo и ID-static immunity для shared proxy type. Numeric loaded-content IDs проверяются в сессии, но это не full-name переносимость между load orders. Built-in/strict `ModName/ClassName` DamageClass не подменяется Generic при ошибке.
+[Standardization](../../reference/terraria/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md) владеет намеренно не-exposed границами: sand ammo и ID-static immunity для shared proxy type. Numeric loaded-content IDs проверяются в сессии, но это не full-name переносимость между load orders. Built-in/strict `ModName/ClassName` DamageClass не подменяется Generic при ошибке.
 
 <a id="persistence"></a>
 ## Placement, craft и durable storage
 
-[`GeneratedPlacementLedgerSystem.cs`](../../../ModSources/InfiniCrafterLocal/Common/Systems/Placement/GeneratedPlacementLedgerSystem.cs) — владелец placement authorization, group/cells и возврата generated instance:
+[`GeneratedPlacementLedgerSystem.cs`](../../../mod/InfiniCrafterLocal/Common/Systems/Placement/GeneratedPlacementLedgerSystem.cs) — владелец placement authorization, group/cells и возврата generated instance:
 
 - Для tracked tile/wall `CanDrop/Drop` подавляет vanilla drop и ставит generated return. Group/cells снимаются из placement map, но **возврат не исчезает**: `PendingReturnRecord` содержит GeneratedItemId и `DefinitionJson`, сохраняется в world data и повторяется при временном spawn failure.
 - `TrySpawnPendingReturnCore` использует подходящий current-world canonical registry record; при registry miss восстанавливает definition из сохранённого JSON. Настраивается именно Item, созданный `Item.NewItem`, а не новый объект вместо него; successful return снимает pending запись.
@@ -146,30 +145,23 @@ QuickHeal/QuickMana сохраняют native owner heal/consume и не соз�
 
 Remote station mirror не является локальным material/refund authority. Foreign/unscoped raw claims сохраняются отдельно от текущей работы и не блокируют свежие inputs другого мира. Hydration разрешена только для одного буквально совпавшего origin; ambiguous claims не выбираются/не сливаются, origin не угадывается. Save/reload/park сохраняют неизвестные расширения, не перезаписывая claim другого мира.
 
-Strict player-save references — [`GeneratedItemData.cs`](../../../ModSources/InfiniCrafterLocal/Common/Models/Contracts/GeneratedItemData.cs): обязательные kind/version/runtime markers, exact current version; reference-only save не получает gameplay из DTO defaults и не мигрируется догадкой. Hook/JSON round trip не доказывает реальную `.plr` запись, binary ItemIO/TagIO, hydration или перенос world scope.
+Strict player-save references — [`GeneratedItemData.cs`](../../../mod/InfiniCrafterLocal/Common/Models/Contracts/GeneratedItemData.cs): обязательные kind/version/runtime markers, exact current version; reference-only save не получает gameplay из DTO defaults и не мигрируется догадкой. Hook/JSON round trip не доказывает реальную `.plr` запись, binary ItemIO/TagIO, hydration или перенос world scope.
 
 <a id="saved-v5"></a>
-### Стабильное чтение сохранённых v5-определений
+### Один текущий контракт сохранённого определения
 
-Это контракт исходников, не свидетельство установленной миграции. Generated-item `schemaVersion=5`, runtime API `infini.runtime-program.v5`, runtime wire schema и VFX manifest — разные версии; одинаковый номер приложения не доказывает их совместимость.
+Сохранение, cache и network используют один `GeneratedItemData.FromJson` с exact case-sensitive camelCase и отказом повторным JSON members; полное определение записывает `ToJson`. Отдельных local-cache wrappers или inert-field projection нет. Эти входы не являются отдельными языками исполнения. Принимается только текущая typed definition: schema/runtime markers, payload, provenance и VFX должны удовлетворять своим действующим владельцам. Author schema `authoring.v7`, runtime API v5 и wire v3 — разные обозначения; прежний payload не становится текущим по одному совпадению marker.
 
-Канонический локальный reader — [`GeneratedItemData.FromLocalCacheJson`](../../../ModSources/InfiniCrafterLocal/Common/Models/Contracts/GeneratedItemData.Persistence.cs); локальный registry cache вызывает его из `GeneratedItemRegistryService.LoadLocalCache`. Не расширяй `FromJson`/network admission или свежий Author/Repair ради старого дискового envelope. Reference-only player saves остаются ссылками с обязательными markers: reader локальной definition не синтезирует им gameplay и не отменяет world/ID fences.
+Устаревшие movement/controller/event opcodes, общие bags параметров, predecessor receipts и renderer grammar отклоняются. Код не выводит новую композицию, не подставляет другой renderer и не меняет исходные пользовательские файлы ради допуска. Отсутствие optional поля допустимо только там, где это объявлено текущим контрактом, а не как общее разрешение старых форматов. Порядок безопасного перехода — [обновление](../../user/UPDATING_RU.md).
 
-- Принимается сохранённая v5-definition с поддерживаемым текущим runtime API. Только перечисленные у reader неисполняемые metadata leaves могут быть исключены; неизвестное поле не считается автоматически инертным. Duplicate/case-ambiguous keys, неизвестные executable fields, opcodes, refs и genuinely older schema/runtime дают точный отказ, не обход strict DTO.
-- `runtimeProgram`, gameplay values, bindings, entities, identity и реально потребляемые presentation controls не переавторствуются. После проекции выполняется текущий strict DTO/`Normalize`; `LocalCacheReadReceipt` — диагностический `JsonIgnore` receipt, не новая authority и не запись поверх исходного файла.
-- `motif`, `visual.effectColor` и прочие перечисленные старые advisory-поля отбрасываются **без чтения и толкования**. Для VFX v15 допустим только manifest с **пустым** `slots`: исполняемого VFX нет, поэтому можно убрать metadata и принять текущую пустую оболочку. **Любой непустой VFX v15 отклоняется целиком**: reader не восстанавливает цвета по `motif.element`, не заменяет renderer/Dust selectors и не переписывает эффекты. Файл предмета не удаляется, однако определение не допускается к исполнению. Текущий v16 с запечёнными RGB загружается без переосмысления цветов.
-- Persisted numeric boundary сравнивает допустимые конечные IEEE float32 endpoints после того же native storage round trip; это не общий epsilon, округление произвольных значений или расширение fresh Author/Repair bounds. NaN/Infinity, malformed leaves и выходы за границу, дающие иной float32 endpoint, остаются отказами. Python storage/delivery и C# readback должны согласоваться; интеграционный результат проверяется отдельно, не выводится из этой документации.
+Проверка этой границы требует current positive round trip и явных negative inputs через actual storage/DTO readers. Наличие файла, schema marker или source-scanner PASS не является допуском к исполнению.
 
-**Правило версий:** minor/advisory/additive edits обязаны сохранять readback и исполняемый смысл ранее принятых поддерживаемых программ. Retirement свежей grammar/metadata не является причиной отвергать вещь с тем же gameplay wire. Реальное ломающее executable изменение требует явного решения о версии/границе поддержки и отдельного release note; номер приложения не маскирует его. Не вводи whole-weapon presets, guessed mechanics, semantic fallback или обязательного нового judge ради compatibility.
-
-**Постоянный regression gate:** retained native persisted positives и negative controls должны проходить реальный cache reader → current DTO → serialization/readback, сохранять gameplay identity/значения, детерминированную presentation и точные отказы. Проверять actual historical v5 inputs, current/stripped network round trips, metadata removal, пустой VFX v15, отказ непустому v15, игнорирование motif, неизменённые v16 RGB и float32 endpoints; registered native checks должны быть включены в build **и** вызваны runner. Сохранение этих positives — защита принятой программы, не требование держать dead metadata как authority. Одного helper test, текущего JSON без исторических полей или source registration недостаточно; фактический PASS и пределы game/save/MP/GPU acceptance фиксируются отдельно по [TESTING](../TESTING_RU.md). В этой документационной правке исполнения gate не заявляется.
-
-Craft lanes: [`InfiniCraftPlayer.MultiDev.cs`](../../../ModSources/InfiniCrafterLocal/Common/Players/InfiniCraftPlayer.MultiDev.cs) сохраняет lane 1 state machine и два отдельных jobs/inputs для llm_2/llm_3, а не прежний предложенный тотальный array refactor. Escrow, commit requestId, cancel/refund и world-exit backup должны рассматриваться совместно; профиль LLM не является gameplay authority. Старая multi-lane patch map — [история](../../archive/HISTORY_RU.md#lanes), не инструкция к повторной реализации. Lost ACK, reconnect, full inventory и ошибка после spawn до final outcome требуют отдельного end-to-end acceptance.
+Craft lanes остаются у `InfiniCraftPlayer.MultiDev.cs`: escrow, commit requestId, cancel/refund и world-exit backup рассматриваются совместно; профиль LLM не является gameplay authority. Lost ACK, reconnect, full inventory и ошибка после spawn до final outcome требуют отдельного end-to-end acceptance.
 
 <a id="assets"></a>
 ## Asset authority и lifecycle
 
-[`GeneratedAssetSyncService.cs`](../../../ModSources/InfiniCrafterLocal/Common/Services/Assets/GeneratedAssetSyncService.cs) отвечает за declared byte identity, manifest/descriptors, bounded delivery и verified commit; [`RuntimeSpriteCache.cs`](../../../ModSources/InfiniCrafterLocal/Common/Services/Assets/RuntimeSpriteCache.cs) — за выбранный local key, GPU texture и retirement. Нельзя смешивать existence, byte certification, texture readiness и successful craft.
+[`GeneratedAssetSyncService.cs`](../../../mod/InfiniCrafterLocal/Common/Services/Assets/GeneratedAssetSyncService.cs) отвечает за declared byte identity, manifest/descriptors, bounded delivery и verified commit; [`RuntimeSpriteCache.cs`](../../../mod/InfiniCrafterLocal/Common/Services/Assets/RuntimeSpriteCache.cs) — за выбранный local key, GPU texture и retirement. Нельзя смешивать existence, byte certification, texture readiness и successful craft.
 
 1. **Два transport paths.** HTTP bounded stream и server→client bounded PNG bundle/chunks существуют отдельно. Asset-request handler на сервере сверяет запрос с server-owned definition, проверяет length/PNG/SHA и вызывает `EnqueueAssetBundles`; chunk handler собирает bounded payload, проверяет bundle SHA и declared entries до commit. Client не авторитизует definition/PNG своими байтами. `assetTransport=http` не принимается chunk consumer. Packet transport не означает socket-match proof.
 2. **Dispose и HTTP cancellation.** Общий lock/disposed flag сохраняет запрет нового download, late retry и file commit. Per-service cancellation завершает ожидание `HttpSlots`, HTTP и body read; worker освобождает только реально полученный permit, соседний service не отменяется. CTS освобождается после workers и завершения Cancel callbacks, cancellation не записывается как offline retry. Это не retirement уже queued main-thread callbacks и не общий job/resume manager.
@@ -190,7 +182,7 @@ Mandatory item-body baked PNG и PNG зависимость реально вы�
 - Client quality multiplier меняет effective allowance, не serialized authored budgets и не hard engine ceiling. Fractional Dust counts используют существующий RNG; короткая серия не гарантирует точную долю. LightCue client intensity не изменяет отдельный gameplay equipment light.
 - Detached draws вне vanilla-owned SpriteBatch требуют собственного lazy Begin и finally-End только после успешного Begin; failed Begin не закрывает чужой batch. CPU FNA queues доказывают этот protocol, не GPU appearance.
 - Detached retirement должен идти на all-client update без новых emissions/Draw; persistent item binding требует живого owner lifecycle, не одного `Player.active`. Death/replacement/generation и world snapshots имеют различные lifetime semantics.
-- Material event admission выполняется один раз до immediate/delayed slot fanout через [`VfxOrderedPeerStream`](../../../ModSources/InfiniCrafterLocal/Common/VFX/VfxOrderedPeerStream.cs): synchronous-local и wire-relay sequences раздельны, replay cursors привязаны к transport session. История retired generations не является глобальным лимитом допуска новых source/owners. Live record/particle/source budgets сохраняются. Это контракт ordered transport, не поддержка произвольной перестановки пакетов.
+- Material event admission выполняется один раз до immediate/delayed slot fanout через [`VfxOrderedPeerStream`](../../../mod/InfiniCrafterLocal/Common/VFX/VfxOrderedPeerStream.cs): synchronous-local и wire-relay sequences раздельны, replay cursors привязаны к transport session. История retired generations не является глобальным лимитом допуска новых source/owners. Live record/particle/source budgets сохраняются. Это контракт ordered transport, не поддержка произвольной перестановки пакетов.
 - Item-body events для простых и material VFX используют общий v5 occurrence stream и синхронизированный token item instance (item wire v8); v3 без identity отвергается. Разные попадания, в том числе в одни координаты, остаются независимыми, повтор того же occurrence отбрасывается. Сервер и принимающий клиент допускают не более 64 событий на owner за world tick с отдельным счётчиком для новой сессии. Требуется одинаковая версия мода у всех участников. Для непроизводящего peer локальные projectile callbacks и relay не имеют общей identity; гипотетическое пересечение таких путей не сертифицировано живой MP-сессией.
 - Запоздавший owner `on_hit`/`on_crit` projectile VFX допускается после native OnKill через существующий hit-bridge retirement fence: не более 60 тиков, только точный owner/identity/token и сохранённые slot/object/ModProjectile; переиспользованный слот или неоднозначная identity отказывают. Это лишь relay presentation, а не повторный gameplay hit. Остальные события по-прежнему требуют активный источник.
 - Remote projectile discrete VFX (простые и material) испускает только validated relay; local callbacks регистрируют live paths, но не дублируют событие. CPU packet checks покрывают оба порядка callback/relay и distinct same-tick hits. Отсутствующая canonical definition или отвергнутый relay не подменяются локальным предположением. Snapshot позволяет принять событие без живого projectile на принимающем клиенте. Это не доказательство доставки или appearance в живом MP.
@@ -204,23 +196,22 @@ Mandatory item-body baked PNG и PNG зависимость реально вы�
 
 1. Найди canonical owner и **реальный producer → consumer**, включая delay/NetSync; не ограничивайся enum/schema или вспомогательным тестом.
 2. Пройди `registry → provider schema/prompt → validator → compiler receipts → strict wire → C# DTO → executor → tests → docs`. Проверяй точные source paths, type/range/unit conversion и frozen neighbors, а не только принадлежность output к capability.
-3. Добавь positive/negative boundary к [тематическому test owner](../TESTING_RU.md), сохрани captured bytes и independent historical wire hash. Не удаляй параметризованные numeric cases из-за размера collected count.
+3. Добавь positive/negative boundary к [тематическому test owner](../TESTING_RU.md), проверь текущий accepted payload, точный отказ неподдерживаемой форме и сохранность исходных данных. Исторический hash не является current admission gate.
 4. Запусти соответствующие read-only generated checks и contract gates, например из корня:
 
 ```bash
-PYTHONPATH=LocalGenerator python tools/checks/audit_targeted_repair.py --check
-PYTHONPATH=LocalGenerator python tools/checks/audit_capability_library.py
-PYTHONPATH=LocalGenerator python tools/checks/check_delivery_contract.py
+PYTHONPATH=generator python tools/checks/audit_targeted_repair.py --check
+PYTHONPATH=generator python tools/checks/audit_capability_library.py
 python tools/checks/check_csharp_contracts.py
 ```
 
-5. При доступных tML/FNA и внешних DLL отдельно собери и исполни **свежую** headless DLL. `tools/native/EngineRuntimeChecks.csproj` и его runner должны реально включать новый named check; наличие файла не означает coverage. Пример с host-supplied reference roots:
+5. При доступных tML/FNA и внешних DLL отдельно собери и исполни **свежую** headless DLL. `tests/native/EngineRuntimeChecks.csproj` и его runner должны реально включать новый named check; наличие файла не означает coverage. Пример с host-supplied reference roots:
 
 ```bash
-dotnet build tools/native/EngineRuntimeChecks.csproj -c Release \
+dotnet build tests/native/EngineRuntimeChecks.csproj -c Release \
   -p:InfiniTmlReferenceDir="<tModLoader lib/net8.0>" \
   -p:InfiniExternalDepsRoot="<ParticleLibrary/Luminance root>"
-dotnet tools/native/bin/Release/net8.0/EngineRuntimeChecks.dll
+dotnet tests/native/bin/Release/net8.0/EngineRuntimeChecks.dll
 ```
 
 Custom output paths требуют запуска точной построенной DLL. Ordinary mod DLL build, `.tmod` packaging, headless hooks и loaded game acceptance — отдельные результаты. Если зависимости отсутствуют, это `notRun`; downstream compiler/parser failure не превращается в SKIP по тексту лога. Игра, providers, GPU/MP кампании выполняются только по отдельному разрешению.

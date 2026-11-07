@@ -198,9 +198,8 @@ def run(args: Namespace, preflight: dict[str, Any], environment: dict[str, str])
         'INFINI_SKIP_CONFIG_FILE': '1', 'INFINI_CACHE_DIR': str(output / 'cache'),
         'INFINI_WORLD_RECIPES_DIR': str(output / 'cache' / 'world_recipes'),
         'INFINI_SDCPP_SERVER_AUTOSTART': '0', 'INFINI_TRACE_PROMPTS': '1',
-        'INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK': '0',
     })
-    sys.path.insert(0, str(Path(preflight['project']) / 'LocalGenerator'))
+    sys.path.insert(0, str(Path(preflight['project']) / 'generator'))
     from infini_local.pipelines.transport import client, http as text_http
     from infini_local.services import codex_auth, codex_image_backend
 

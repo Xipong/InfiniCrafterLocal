@@ -30,8 +30,8 @@ LLM/image-запросов, импорта runtime, создания cache/PNG/�
 | Узнать prerequisites | `python -m toolbox doctor` | Пути, доступность Python-модулей/команд, native-команда из manifest; без чтения credentials |
 | Разобрать сохранённую кампанию | `python -m toolbox summary /path/to/campaign` | Results + logical/HTTP/retry/image ledgers, пропуски, дубликаты и незавершённые запросы |
 | Проверить сохранённый предмет | `python -m toolbox replay /path/to/case --compare` | Настоящие strict wire / delivery projection и сравнение `compiled_runtime.json`; без inference |
-| Исполнить предмет и посмотреть записанный цикл | `python -m toolbox workbench --help` | [Native Item Test Workbench](../tools/item-test-workbench/README.md): настоящий C# runtime, телеметрия и поддерживаемые native render passes; без LLM |
-| Проверить затронутый код | `python -m toolbox verify --path LocalGenerator/infini_local/pipelines/transport/client.py` | Делегирует существующему `tools/agentctl.py verify`, сохраняет аргументы и exit code |
+| Исполнить предмет и посмотреть записанный цикл | `python -m toolbox workbench --help` | [Native Item Test Workbench](../tools/workbench/README.md): настоящий C# runtime, телеметрия и поддерживаемые native render passes; без LLM |
+| Проверить затронутый код | `python -m toolbox verify --path generator/infini_local/pipelines/transport/client.py` | Делегирует существующему `tools/agentctl.py verify`, сохраняет аргументы и exit code |
 | Показать owner-проверки без запуска | `python -m toolbox verify --area csharp --plan` | Только план; это не PASS и не native execution |
 
 `replay` читает `final_item.json` в каталоге case; `--compare` дополнительно требует
@@ -72,7 +72,7 @@ Provider и gameplay остаются `notRun`. Native зависимости д
 
 ## Стенд предметов рядом с Live10
 
-`workbench` — тонкий вход в существующий `tools/item-test-workbench/workbench.py`,
+`workbench` — тонкий вход в существующий `tools/workbench/workbench.py`,
 не второй движок. Аргументы, код возврата и рабочий каталог вызывающего процесса
 сохраняются; относительные пути не переносятся в корень checkout.
 
@@ -86,7 +86,7 @@ python -m toolbox workbench native-review /path/new-run/native.json --out /path/
 игру/модель и не создают результаты. `doctor` возвращает 2 при отсутствии зависимостей,
 а не успешное native-тестирование. `build` и `run` запускаются явно, без Live10-флага
 `--run`; команды экспорта записывают указанный output. Зависимости, границы исполнения,
-сценарии и реальный пример Lunar Harpoon описаны в [руководстве стенда](../tools/item-test-workbench/README.md).
+сценарии и реальный пример Lunar Harpoon описаны в [руководстве стенда](../tools/workbench/README.md).
 
 ## Где лежит код
 
@@ -137,11 +137,11 @@ tML/FNA references и external dependencies. Одной сборки недос�
 ## Проверить сам toolbox offline
 
 ```bash
-python -m pytest -q toolbox/tests LocalGenerator/tests/test_live20_no_image_harness.py
+python -m pytest -q tests/toolbox tests/generator/tooling/test_live20_no_image_harness.py
 ```
 
 Тесты запрещают сеть. Cold-process тесты проходят настоящий request builder →
 campaign hooks → Chat/Responses transport → JSON parser; подменён только внешний
 HTTP sender. Полный runner проверяется на synthetic успешном трёхстадийном ответе
 и отказе sender, включая реальные no-image/readiness gates. Это **не live inference**.
-Canonical pytest shard runner уже включает `toolbox/tests`; новая регистрация не нужна.
+Canonical pytest shard runner уже включает `tests/toolbox`; новая регистрация не нужна.

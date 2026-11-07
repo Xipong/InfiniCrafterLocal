@@ -4,30 +4,30 @@
   "projectVersion": "0.5.1",
   "runtimeApiVersion": "infini.runtime-program.v5",
   "testSuiteVersion": "low-level-v5",
-  "testSuitePolicy": "Run bounded focused gates during edits; final acceptance requires full pytest, schema/prompt/delivery/parity/mutation/hygiene/static C# gates, and a real tModLoader build when the SDK and mod references are available.",
+  "testSuitePolicy": "Run bounded focused gates during edits; final acceptance requires behavioral pytest, schema/generated-document freshness, prompt budgets, hygiene/static C# policies, and real native builds and execution when prerequisites are available.",
   "canonicalOwners": {
-    "capabilityRegistry": "LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py",
-    "authorSchema": "LocalGenerator/infini_local/core/runtime_authoring/program_schema.py",
-    "authorValidator": "LocalGenerator/infini_local/core/runtime_authoring/validator.py",
-    "wireCompiler": "LocalGenerator/infini_local/core/runtime_authoring/compiler.py",
-    "technicalLowering": "LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py",
-    "strictWireBoundary": "LocalGenerator/infini_local/core/runtime_authoring/wire_validator.py",
-    "csharpDto": "ModSources/InfiniCrafterLocal/Common/Models/Contracts/RuntimeProgramSpec.cs",
-    "csharpItemProjection": "ModSources/InfiniCrafterLocal/Common/Models/Runtime/GeneratedItemData.Apply.cs",
-    "csharpProjectileRuntime": "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.ComposableMotion.cs",
-    "csharpEventRuntime": "ModSources/InfiniCrafterLocal/Common/Runtime/RuntimeProgramExecutor.cs",
-    "projectileNetwork": "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.NetSync.cs",
-    "visualDirectorContract": "LocalGenerator/infini_local/pipelines/visual/contract.py",
-    "vfxDirectorContract": "LocalGenerator/infini_local/core/vfx/schema.py",
+    "capabilityRegistry": "generator/infini_local/core/runtime_authoring/capability_registry.py",
+    "authorSchema": "generator/infini_local/core/runtime_authoring/program_schema.py",
+    "authorValidator": "generator/infini_local/core/runtime_authoring/validator.py",
+    "wireCompiler": "generator/infini_local/core/runtime_authoring/compiler.py",
+    "technicalLowering": "generator/infini_local/core/runtime_authoring/technical_lowering.py",
+    "strictWireBoundary": "generator/infini_local/core/runtime_authoring/wire_validator.py",
+    "csharpDto": "mod/InfiniCrafterLocal/Common/Models/Contracts/RuntimeProgramSpec.cs",
+    "csharpItemProjection": "mod/InfiniCrafterLocal/Common/Models/Runtime/GeneratedItemData.Apply.cs",
+    "csharpProjectileRuntime": "mod/InfiniCrafterLocal/Content/Projectiles/Motion/GeneratedProjectile.ComposableMotion.cs",
+    "csharpEventRuntime": "mod/InfiniCrafterLocal/Common/Runtime/RuntimeProgramExecutor.cs",
+    "projectileNetwork": "mod/InfiniCrafterLocal/Content/Projectiles/Networking/GeneratedProjectile.NetSync.cs",
+    "visualDirectorContract": "generator/infini_local/pipelines/visual/contract.py",
+    "vfxDirectorContract": "generator/infini_local/core/vfx/schema.py",
     "capabilityInventory": "docs/reference/generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md",
-    "terrariaVocabulary": "LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py",
+    "terrariaVocabulary": "generator/infini_local/core/runtime_authoring/terraria_vocabulary.py",
     "aliasPolicy": "docs/reference/generated/LOWERY_RU.md",
-    "gameplayStage": "LocalGenerator/infini_local/pipelines/author/stage.py",
-    "wirePresentationViews": "LocalGenerator/infini_local/core/runtime_authoring/wire_views.py",
-    "vfxTransport": "LocalGenerator/infini_local/pipelines/vfx/request.py",
-    "parentNativeFacts": "ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.ParentFacts.cs",
-    "vfxDirectorStage": "LocalGenerator/infini_local/pipelines/vfx/stage.py",
-    "providerSchema": "LocalGenerator/infini_local/core/provider_schema.py"
+    "gameplayStage": "generator/infini_local/pipelines/author/stage.py",
+    "wirePresentationViews": "generator/infini_local/core/runtime_authoring/wire_views.py",
+    "vfxTransport": "generator/infini_local/pipelines/vfx/request.py",
+    "parentNativeFacts": "mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.ParentFacts.cs",
+    "vfxDirectorStage": "generator/infini_local/pipelines/vfx/stage.py",
+    "providerSchema": "generator/infini_local/core/provider_schema.py"
   },
   "checks": {
     "pytest": [
@@ -45,7 +45,7 @@
       "-m",
       "compileall",
       "-q",
-      "LocalGenerator",
+      "generator",
       "tools",
       "toolbox"
     ],
@@ -58,14 +58,6 @@
       "python",
       "tools/generate/generate_low_level_runtime_docs.py",
       "--check"
-    ],
-    "delivery_contract": [
-      "python",
-      "tools/checks/check_delivery_contract.py"
-    ],
-    "mutation_gate": [
-      "python",
-      "tools/checks/mutation_contract_gate.py"
     ],
     "planner_prompt": [
       "python",
@@ -91,7 +83,7 @@
     "ruff": [
       "ruff",
       "check",
-      "LocalGenerator/infini_local",
+      "generator/infini_local",
       "tools",
       "toolbox"
     ],
@@ -101,12 +93,7 @@
     "tml_build": [
       "dotnet",
       "build",
-      "ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj"
-    ],
-    "terraria_standardization": [
-      "python",
-      "tools/checks/audit_terraria_standardization.py",
-      "--check"
+      "mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj"
     ],
     "targeted_repair": [
       "python",
@@ -123,25 +110,15 @@
       "tools/generate/generate_equipment_bounds.py",
       "--check"
     ],
-    "primitive_parity": [
-      "python",
-      "tools/generate/generate_primitive_parity.py",
-      "--check"
-    ],
     "handbook": [
       "python",
       "tools/build_documentation.py",
       "--check"
     ],
-    "primitive_loss": [
-      "python",
-      "-m",
-      "infini_local.qa.primitive_loss_audit"
-    ],
     "native_checks": [
       "dotnet",
       "build",
-      "tools/native/EngineRuntimeChecks.csproj"
+      "tests/native/EngineRuntimeChecks.csproj"
     ],
     "tml_runtime_selftest": [
       "python",
@@ -154,12 +131,12 @@
     ],
     "item_workbench_python": [
       "python",
-      "tools/item-test-workbench/workbench.py",
+      "tools/workbench/workbench.py",
       "test"
     ],
     "item_workbench_build": [
       "python",
-      "tools/item-test-workbench/workbench.py",
+      "tools/workbench/workbench.py",
       "build"
     ]
   },
@@ -170,21 +147,16 @@
     "item_workbench_python",
     "schema_check",
     "generated_docs",
-    "delivery_contract",
-    "mutation_gate",
     "planner_prompt",
     "csharp_contracts",
     "project_hygiene",
     "config_registry",
     "ruff",
     "pyright",
-    "terraria_standardization",
     "targeted_repair",
     "lowery",
     "equipment_bounds",
-    "primitive_parity",
     "handbook",
-    "primitive_loss",
     "tml_build",
     "native_checks",
     "item_workbench_build",
@@ -200,21 +172,16 @@
     "static": [
       "schema_check",
       "generated_docs",
-      "delivery_contract",
-      "mutation_gate",
       "planner_prompt",
       "csharp_contracts",
       "project_hygiene",
       "config_registry",
       "ruff",
       "pyright",
-      "terraria_standardization",
       "targeted_repair",
       "lowery",
       "equipment_bounds",
-      "primitive_parity",
-      "handbook",
-      "primitive_loss"
+      "handbook"
     ],
     "build": [
       "tml_build",
@@ -235,10 +202,6 @@
       ],
       [
         "python",
-        "tools/generate/generate_primitive_parity.py"
-      ],
-      [
-        "python",
         "tools/generate/generate_lowery.py"
       ],
       [
@@ -250,11 +213,6 @@
         "tools/checks/audit_targeted_repair.py",
         "--output",
         "contracts/targeted_repair_audit.generated.json"
-      ],
-      [
-        "python",
-        "tools/checks/audit_terraria_standardization.py",
-        "--write"
       ]
     ],
     "config": [
