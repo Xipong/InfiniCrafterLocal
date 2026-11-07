@@ -13,11 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Pack repository working tree
-        run: tar --exclude=.git -czf source-snapshot.tar.gz .
+      - name: Pack repository tree
+        run: git archive --format=tar.gz --output="$RUNNER_TEMP/source-snapshot.tar.gz" HEAD
       - uses: actions/upload-artifact@v4
         with:
           name: source-snapshot
-          path: source-snapshot.tar.gz
+          path: ${{ runner.temp }}/source-snapshot.tar.gz
           retention-days: 1
           if-no-files-found: error
