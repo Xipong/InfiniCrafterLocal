@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -417,13 +419,16 @@ internal static partial class EngineRuntimeChecks
     {
         Equal(false, json.Contains("$infiniSourceAnalysis", StringComparison.Ordinal), "profile output contains no unresolved transfer marker");
         string path = Path.Combine(directory, name + ".json");
-        File.WriteAllText(path, json);
+        byte[] bytes = Encoding.UTF8.GetBytes(json);
+        File.WriteAllBytes(path, bytes);
         var result = new JsonObject
         {
             ["case"] = name, ["captureMs"] = captureMs, ["resolveMs"] = timing.ResolveMs,
             ["pumpMs"] = timing.PumpMs, ["maxPumpMs"] = timing.MaxPumpMs,
             ["frames"] = timing.Frames, ["pumpIntervalMs"] = interval,
-            ["characters"] = json.Length, ["jsonPath"] = path
+            ["characters"] = json.Length, ["jsonPath"] = path,
+            ["utf8Bytes"] = bytes.Length,
+            ["sha256"] = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()
         };
         Console.WriteLine("PROFILE " + result.ToJsonString());
         return result;
@@ -507,7 +512,9 @@ internal static partial class EngineRuntimeChecks
             "plain" => (ItemID.Wood, ItemID.StoneBlock),
             "mixed" => (ItemID.TerraBlade, ItemID.MiningPotion),
             "ammo" => (ItemID.Boomstick, ItemID.MoltenFury),
-            _ => throw new ArgumentException("Expected --profile-parent-craft plain|mixed|ammo.")
+            "nebula-prism" => (ItemID.NebulaBlaze, ItemID.LastPrism),
+            "eventide" => (ItemID.FairyQueenRangedItem, ItemID.WoodenArrow),
+            _ => throw new ArgumentException("Expected --profile-parent-craft plain|mixed|ammo|nebula-prism|eventide.")
         };
         using var state = new NativeActorState();
         Terraria.Main.netMode = NetmodeID.SinglePlayer;
@@ -515,6 +522,17 @@ internal static partial class EngineRuntimeChecks
         var report = ParentProfileEnvironment("actual-deferred-craft");
         report["scenario"] = scenario;
         report["parentTypes"] = new JsonArray(first, second);
+        report["parentLabels"] = scenario switch
+        {
+            "plain" => "Wood + Stone Block (control)",
+            "mixed" => "Terra Blade + Mining Potion",
+            "ammo" => "Boomstick + Molten Fury",
+            "nebula-prism" => "Nebula Blaze + Last Prism",
+            "eventide" => "Eventide + Wooden Arrow",
+            _ => scenario
+        };
+        report["allocationScope"] = "GC.GetTotalAllocatedBytes(precise:true) process-wide delta across PrepareDeferred, Task.Run(CompleteAnalysis), 16ms Pump/waits and PayloadJson access; includes worker/main/runtime observer overhead, excludes parent construction, invalidation, parity parsing, hashing and evidence writes. Cumulative managed allocation, not retained/peak RAM. No forced GC.";
+        report["gcScope"] = "Process-wide GC.CollectionCount generation deltas over the same pipeline interval; prior-phase garbage can be collected here.";
         report["coldScope"] = "First PrepareDeferred in this executable invocation, after native harness and parent Item/Player construction. Not process startup timing. No dump or full catalog setup.";
         report["resetScope"] = "ParentAnalysis.Invalidate clears shared source/attack caches; native certificate Lazy values and CLR/JIT state remain warm. Source-cache-reset is not a fresh process.";
         var measurements = new JsonArray(); report["measurements"] = measurements;
@@ -531,15 +549,25 @@ internal static partial class EngineRuntimeChecks
                 var player = new Player { name = "headless-parent-profile" };
                 // These real input objects are constructed before the timer,
                 // matching a craft whose parent items already exist in inventory.
+                int gen0 = GC.CollectionCount(0), gen1 = GC.CollectionCount(1), gen2 = GC.CollectionCount(2);
+                long allocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
                 var timer = Stopwatch.StartNew();
                 var request = client.PrepareDeferred(a, b, player);
                 double captureMs = timer.Elapsed.TotalMilliseconds;
                 var worker = Task.Run(request.CompleteAnalysis);
                 ParentProfileTiming timing = PumpProfileWorker(worker, request.Cancel, interval);
                 string json = request.PayloadJson;
+                double wallMs = timer.Elapsed.TotalMilliseconds;
+                long allocatedBytes = GC.GetTotalAllocatedBytes(precise: true) - allocatedBefore;
+                int collections0 = GC.CollectionCount(0) - gen0;
+                int collections1 = GC.CollectionCount(1) - gen1;
+                int collections2 = GC.CollectionCount(2) - gen2;
                 JsonNode parsed = JsonNode.Parse(json)!;
                 initial ??= parsed.DeepClone();
                 JsonObject observation = ParentProfileObservation(phase, captureMs, timing, interval, json, directory);
+                observation["wallMs"] = wallMs;
+                observation["totalAllocatedBytes"] = allocatedBytes;
+                observation["gcCollections"] = new JsonArray(collections0, collections1, collections2);
                 observation["equalToFirstRequest"] = JsonNode.DeepEquals(initial, parsed);
                 measurements.Add(observation);
                 // Equality is reported, not forced: if a mod changes defaults or

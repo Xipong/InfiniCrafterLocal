@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
-using System.Reflection.Metadata.Ecma335;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -87,7 +86,7 @@ public sealed partial class GeneratorClient
         var result = LifecycleEnvelope(type, style);
         var method = document.Method; result["rootCertificate"] = MethodSourceIdentity(method);
         var records = result["records"]!.AsArray(); var gaps = result["unresolved"]!.AsArray();
-        var code = AttackCode(method); var ends = CSharpConditionalEnds(method);
+        NativeSourceCallIndex? callIndex = null; var ends = CSharpConditionalEnds(method);
         bool Matching(IfElseStatement branch)
         {
             cancellation.ThrowIfCancellationRequested();
@@ -135,15 +134,9 @@ public sealed partial class GeneratorClient
                 {
                     cancellation.ThrowIfCancellationRequested();
                     var symbol = (IMethod)invocation.GetSymbol()!;
-                    int token = MetadataTokens.GetToken(symbol.MetadataToken);
-                    var ranges = invocation.DescendantsAndSelf.SelectMany(node => node.Annotations.OfType<ILInstruction>())
-                        .SelectMany(instruction => instruction.ILRanges).Where(range => range.End > range.Start).ToArray();
-                    var calls = code.Where(instruction => instruction.Arg is MethodInfo called && called.MetadataToken == token
-                        && called.DeclaringType == typeof(Projectile) && called.Name == symbol.Name
-                        && called.GetParameters().Length == symbol.Parameters.Count && instruction.Op is "call" or "callvirt"
-                        && ranges.Any(range => range.Start <= instruction.Offset && instruction.Offset < range.End)).ToArray();
-                    if (calls.Length != 1) throw new NotSupportedException("lifecycle_spawn_il_mapping_not_unique");
-                    int at = calls[0].Offset; offsets.Add(at);
+                    var calls = (callIndex ??= new NativeSourceCallIndex(method)).Match(invocation, symbol, lifecycleSpawn: true);
+                    if (calls.Count != 1) throw new NotSupportedException("lifecycle_spawn_il_mapping_not_unique");
+                    int at = calls.Single(); offsets.Add(at);
                     int parameter = symbol.Parameters.ToList().FindIndex(value => string.Equals(value.Name, "Type", StringComparison.OrdinalIgnoreCase));
                     var arguments = invocation.Arguments.ToArray(); var types = new JsonArray();
                     if (parameter >= 0 && parameter < arguments.Length && arguments[parameter] is PrimitiveExpression { Value: int id }) types.Add(id);
@@ -169,7 +162,7 @@ public sealed partial class GeneratorClient
                     ["assemblySha256"] = NativeCSharpDecompilerSha256, ["settings"] = "csharp_default_no_indentation_v1" };
                 record["coverage"] = "conditional_closed_lexical_region";
                 record["code"] = rendered.Code; record["codeSha256"] = sha;
-                record["entryCondition"] = RenderCSharp(branch.Condition).Code.Trim();
+                record["entryCondition"] = RenderCSharp(branch.Condition, includeLocations: false).Code.Trim();
                 record["identityWitnesses"] = witnesses; record["spawnSites"] = sites;
                 record["locations"] = new JsonArray(offsets.Order().Select(offset =>
                 {

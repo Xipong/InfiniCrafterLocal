@@ -951,7 +951,7 @@ public sealed partial class GeneratorClient
                 var captured = JsonSerializer.SerializeToNode(snapshot, WireJsonOptions)!.AsObject();
                 if (sprite is not null) captured["spriteReferenceRaw"] = JsonSerializer.SerializeToNode(sprite, WireJsonOptions);
                 captured["referencedProjectiles"] = analysis.Defer(() => ReferencedProjectileSnapshots(
-                    JsonNode.Parse(ProjectileAttackSource(type, style).Spawns)!.AsArray()), omitIfNull: true);
+                    ProjectileAttackSource(type, style).CloneSpawns()), omitIfNull: true);
                 return captured;
             }
             var children = includeChildReferences ? ReferencedProjectileSnapshots(ProjectileSpawnReferences(p)) : null;

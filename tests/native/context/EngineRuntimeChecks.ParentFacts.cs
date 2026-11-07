@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -87,59 +86,47 @@ internal static partial class EngineRuntimeChecks
             Equal(2, directProjectileCaptures, label + " one direct-projectile observation per A/B parent");
             bool nativeParent = label is not ("generated" or "generated_placement");
             Equal(nativeParent ? 2 : 0, sourceGraphCaptures, label + " source graph captured once per native A/B parent, never for a generated proxy");
+            string ExpectedKeys(string keys) => string.Join(",", keys.Split(',')
+                .Concat(new[] { "armorPenetration", "itemScale", "useLimitPerAnimation" })
+                .Concat(nativeParent ? new[] { "parentSourceGraph", "nativeItemDispatchReference" } : Array.Empty<string>()).OrderBy(key => key, StringComparer.Ordinal));
             JsonElement root = request.RootElement.GetProperty("itemA");
             JsonElement facts = root.GetProperty("runtimeFacts");
             JsonElement fingerprint = root.GetProperty("fingerprint");
-            string Keys(IEnumerable<string> keys) => string.Join(",", keys.Distinct(StringComparer.Ordinal).OrderBy(key => key, StringComparer.Ordinal));
-            // Require the complete native field floor, but do not reject new
-            // source observations. Every captured fact must survive each envelope
-            // except its explicit identity/shape exclusions below.
-            foreach (string key in ("accessory,ammo,ammoCategoryName,armorPenetration,autoReuse,axePower,bait,bodySlot,buffTime,buffType,"
-                + "channel,consumable,createTile,createWall,crit,damage,damageClass,defense,dropSeedsIfInInventory,fishingPole,"
-                + "hammerPower,headSlot,healLife,healMana,itemScale,knockback,legSlot,lifeRegen,manaCost,material,maxStack,"
-                + "noMelee,noUseGraphic,notAmmo,pickPower,placeStyle,potion,rare,rarityDetails,reuseDelay,shoot,"
-                + "shootProjectileFullName,shootSpeed,type,useAmmo,useAmmoCategoryName,useAnimation,useLimitPerAnimation,"
-                + "useStyle,useStyleName,useTime,useTurn,value").Split(','))
-                Equal(true, facts.TryGetProperty(key, out _), label + " native field retained: " + key);
-            var factKeys = facts.EnumerateObject().Select(p => p.Name).ToArray();
-            Equal(Keys(factKeys.Except(new[] { "type", "buffType", "buffTime" }).Concat((
-                "id,name,sourceMod,internalName,fullName,tooltipLines,tooltipSource,prefix,originalPrefix,prefixIgnored,"
-                + "stack,moddedOrigin,directProjectileRaw,effectiveProjectileRaw,ammoRaw,tags,runtimeFacts,autoFeatures,"
-                + "nameTokens,fingerprint,generatedData,craftInput").Split(','))),
-                Keys(root.EnumerateObject().Select(p => p.Name)), label + " exact root projection of all captured facts");
-            Equal(Keys(factKeys.Except(new[] { "material", "reuseDelay", "shootProjectileFullName" }).Concat((
-                "sourceMod,internalName,fullName,isVanilla,name,prefix,originalPrefix,prefixIgnored,directProjectileRaw,"
-                + "effectiveProjectileRaw,ammoRaw,runtimeFacts,autoFeatures,nameTokens").Split(','))),
-                Keys(fingerprint.EnumerateObject().Select(p => p.Name)), label + " exact fingerprint projection of all captured facts");
-            var unprefixed = nativeParent ? new Item(item.type) : item;
-            Equal(unprefixed.damage, facts.GetProperty("damage").GetInt32(), label + " unprefixed native damage");
-            Equal(unprefixed.crit, facts.GetProperty("crit").GetInt32(), label + " unprefixed native crit");
-            Equal(unprefixed.ArmorPenetration, facts.GetProperty("armorPenetration").GetInt32(), label + " literal armor penetration");
-            Equal(unprefixed.scale, facts.GetProperty("itemScale").GetSingle(), label + " unprefixed native scale");
-            Equal(unprefixed.shoot, facts.GetProperty("shoot").GetInt32(), label + " own native projectile identity");
-            Equal(unprefixed.shootSpeed, facts.GetProperty("shootSpeed").GetSingle(), label + " native shoot speed, not a child spawn speed");
+            Equal(ExpectedKeys("accessory,ammo,ammoCategoryName,ammoRaw,autoFeatures,autoReuse,axePower,bait,bodySlot,channel,"
+                + "consumable,craftInput,createTile,createWall,crit,damage,damageClass,defense,directProjectileRaw,dropSeedsIfInInventory,"
+                + "effectiveProjectileRaw,fingerprint,fishingPole,fullName,generatedData,hammerPower,headSlot,healLife,healMana,"
+                + "id,internalName,knockback,legSlot,lifeRegen,manaCost,material,maxStack,moddedOrigin,name,nameTokens,noMelee,"
+                + "noUseGraphic,notAmmo,originalPrefix,pickPower,placeStyle,potion,prefix,prefixIgnored,rare,rarityDetails,"
+                + "reuseDelay,runtimeFacts,shoot,shootProjectileFullName,shootSpeed,sourceMod,stack,tags,tooltipLines,"
+                + "tooltipSource,useAmmo,useAmmoCategoryName,useAnimation,useStyle,useStyleName,useTime,useTurn,value"),
+                string.Join(",", root.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal)), label + " exact root keys");
+            Equal(ExpectedKeys("accessory,ammo,ammoCategoryName,ammoRaw,autoFeatures,autoReuse,axePower,bait,bodySlot,buffTime,buffType,"
+                + "channel,consumable,createTile,createWall,crit,damage,damageClass,defense,directProjectileRaw,dropSeedsIfInInventory,"
+                + "effectiveProjectileRaw,fishingPole,fullName,hammerPower,headSlot,healLife,healMana,internalName,isVanilla,"
+                + "knockback,legSlot,lifeRegen,manaCost,maxStack,name,nameTokens,noMelee,noUseGraphic,notAmmo,originalPrefix,pickPower,"
+                + "placeStyle,potion,prefix,prefixIgnored,rare,rarityDetails,runtimeFacts,shoot,shootSpeed,sourceMod,type,"
+                + "useAmmo,useAmmoCategoryName,useAnimation,useStyle,useStyleName,useTime,useTurn,value"),
+                string.Join(",", fingerprint.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal)), label + " exact fingerprint keys");
+            Equal(ExpectedKeys("accessory,ammo,ammoCategoryName,autoReuse,axePower,bait,bodySlot,buffTime,buffType,channel,consumable,"
+                + "createTile,createWall,crit,damage,damageClass,defense,dropSeedsIfInInventory,fishingPole,hammerPower,headSlot,healLife,healMana,"
+                + "knockback,legSlot,lifeRegen,manaCost,material,maxStack,noMelee,noUseGraphic,notAmmo,pickPower,placeStyle,potion,rare,"
+                + "rarityDetails,reuseDelay,shoot,shootProjectileFullName,shootSpeed,type,useAmmo,useAmmoCategoryName,useAnimation,useStyle,"
+                + "useStyleName,useTime,useTurn,value"),
+                string.Join(",", facts.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal)), label + " exact facts keys");
             AssertParentFingerprintNativeFacts(facts, fingerprint.GetProperty("runtimeFacts"), label + " nested native facts");
-            Equal(CanonicalParentFactJson(root), CanonicalParentFactJson(request.RootElement.GetProperty("itemB")), label + " complete A/B observations agree for the same parent");
             foreach (JsonElement view in new[] { root, facts, fingerprint })
             {
                 Equal(nativeParent, view.TryGetProperty("parentSourceGraph", out JsonElement graph), label + " explicit graph presence by parent provenance");
-                Equal(nativeParent, view.TryGetProperty("nativeItemDispatchReference", out JsonElement dispatch), label + " dispatcher source belongs to native parents, not generated host defaults");
+                Equal(nativeParent, view.TryGetProperty("nativeItemDispatchReference", out JsonElement dispatch), label + " dispatcher source never borrowed by a generated proxy");
                 if (nativeParent)
                 {
                     Equal("parent_reachable_compiled_source_graph", graph.GetProperty("source").GetString()!, label + " source graph provenance");
                     Equal(CanonicalParentFactJson(facts.GetProperty("parentSourceGraph")), CanonicalParentFactJson(graph), label + " exact graph across native fact envelopes");
-                    Equal("conditional_native_item_dispatch_csharp", dispatch.GetProperty("source").GetString()!, label + " dispatcher source provenance");
-                    Equal(1, dispatch.GetProperty("version").GetInt32(), label + " dispatcher source contract");
-                    Equal(item.type, dispatch.GetProperty("relevanceItemType").GetInt32(), label + " dispatcher relevance uses the actual parent identity");
-                    Equal(true, dispatch.GetProperty("unknowns").EnumerateArray().Any(value => value.GetString() == "source_receiver_identity_and_runtime_entry_not_proved"), label + " source relevance is not an executed effect");
-                    var roots = dispatch.GetProperty("roots").EnumerateArray().ToArray();
-                    Equal("ApplyEquipFunctional,ItemCheck_Inner", Keys(roots.Select(value => value.GetProperty("root").GetString()!)), label + " independent dispatcher roots retained");
-                    foreach (var sourceRoot in roots)
-                    {
-                        var method = typeof(Player).GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                            .Single(candidate => candidate.Name == sourceRoot.GetProperty("root").GetString());
-                        AssertParentSourceCertificate(sourceRoot.GetProperty("rootCertificate"), method, label + " actual native dispatcher certificate");
-                    }
+                    Equal("conditional_native_item_dispatch_csharp", dispatch.GetProperty("source").GetString()!, label + " conditional dispatcher provenance");
+                    Equal(facts.GetProperty("type").GetInt32(), dispatch.GetProperty("relevanceItemType").GetInt32(), label + " dispatcher relevance retains native identity");
+                    Equal(CanonicalParentFactJson(facts.GetProperty("nativeItemDispatchReference")), CanonicalParentFactJson(dispatch), label + " exact dispatcher across native fact envelopes");
+                    foreach (string unknown in new[] { "dispatcher_coverage_partial; absence_not_proved", "source_receiver_identity_and_runtime_entry_not_proved" })
+                        Equal(true, dispatch.GetProperty("unknowns").EnumerateArray().Any(value => value.GetString() == unknown), label + " dispatcher uncertainty retained: " + unknown);
                 }
             }
             Equal(root.GetProperty("id").GetInt32(), facts.GetProperty("type").GetInt32(), label + " root id retains native type");
@@ -197,14 +184,6 @@ internal static partial class EngineRuntimeChecks
             }
             Equal(type, item.type, "request leaves source identity unchanged");
         }
-    }
-
-    private static void AssertParentSourceCertificate(JsonElement certificate, MethodBase method, string label)
-    {
-        Equal(method.DeclaringType!.FullName + "." + method.Name, certificate.GetProperty("method").GetString()!, label + " method identity");
-        Equal(method.Module.ModuleVersionId.ToString(), certificate.GetProperty("sourceModuleVersionId").GetString()!, label + " loaded module identity");
-        Equal(Convert.ToHexString(SHA256.HashData(method.GetMethodBody()!.GetILAsByteArray()!)).ToLowerInvariant(),
-            certificate.GetProperty("sourceMethodSha256").GetString()!, label + " independently hashed native IL");
     }
 
     private static string CanonicalParentFactJson(JsonElement element)

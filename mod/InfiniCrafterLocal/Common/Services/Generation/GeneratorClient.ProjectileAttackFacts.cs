@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Terraria;
 using Terraria.ID;
@@ -16,8 +17,27 @@ public sealed partial class GeneratorClient
     // ask about thousands of clones; the very large native dispatcher is decoded
     // once. JSON is cloned on read so callers cannot mutate the cached program.
     private static readonly ConcurrentDictionary<MethodBase, Lazy<List<AmmoIl>>> AttackSourceCode = new();
-    private sealed record ProjectileAttackCapture(string Source, string Spawns);
-    private static readonly ConcurrentDictionary<(int Type, int Style), Lazy<ProjectileAttackCapture>> AttackSourcePrograms = new();
+    internal sealed class ProjectileAttackCapture
+    {
+        // Serialize once into immutable backing, without retaining the builder's
+        // eager nodes or a second full string. Create returns independent lazy
+        // wrappers: consumers materialize/mutate only their own node trees.
+        private readonly JsonElement source;
+        private readonly JsonElement spawns;
+        internal long Characters { get; }
+        internal ProjectileAttackCapture(JsonObject source, JsonArray spawns)
+        {
+            this.source = JsonSerializer.SerializeToElement(source);
+            this.spawns = JsonSerializer.SerializeToElement(spawns);
+            Characters = this.source.GetRawText().Length + (long)this.spawns.GetRawText().Length;
+        }
+        internal JsonObject CloneSource() => JsonObject.Create(source)!;
+        internal JsonObject? CloneMechanics() => source.TryGetProperty("mechanicsSource", out var mechanics)
+            ? JsonObject.Create(mechanics) : null;
+        internal JsonArray CloneSpawns() => JsonArray.Create(spawns)!;
+    }
+    private static readonly ProjectileAttackProgramCache AttackSourcePrograms = new(
+        BuildProjectileAttackSource, () => currentParentAnalysis?.ThrowIfCancelled());
     private static List<AmmoIl> AttackCode(MethodBase method)
         => AttackSourceCode.GetOrAdd(method, m => new Lazy<List<AmmoIl>>(() => ReadAmmoIl(m, preserveStructure: true, sourceGraph: true))).Value;
 
@@ -36,7 +56,7 @@ public sealed partial class GeneratorClient
             ["scope"] = "current_projectile_fields; native_target_immunity_and_mod_hook_admission_unresolved" };
         JsonObject Analyze()
         {
-            JsonObject result = JsonNode.Parse(ProjectileAttackSource(type, style).Source)!.AsObject();
+            JsonObject result = ProjectileAttackSource(type, style).CloneSource();
             result.Remove("mechanicsSource"); // Separate approximate profile view, never part of the strict reference.
             result["admission"] = admission.DeepClone();
             return result;
@@ -44,78 +64,118 @@ public sealed partial class GeneratorClient
         return currentParentAnalysis is { } analysis ? analysis.Defer(Analyze) : Analyze();
     }
 
-    private static readonly object AttackProgramCacheGate = new();
-    private static long attackProgramCharacters;
-    private static readonly HashSet<(int Type, int Style)> countedAttackPrograms = new();
-    private static ProjectileAttackCapture ProjectileAttackSource(int type, int style)
+    // Entry identity fences invalidation: detached in-flight work may finish
+    // for its borrower but cannot repopulate a cleared or replaced cache entry.
+    internal sealed class ProjectileAttackProgramCache(
+        Func<int, int, ProjectileAttackCapture> build, Action throwIfCancelled)
     {
-        Lazy<ProjectileAttackCapture> program;
-        ProjectileAttackCapture result;
-        while (true)
+        internal const int EntryLimit = 256;
+        internal const long CharacterLimit = 16 * 1024 * 1024;
+        private readonly object gate = new();
+        private readonly Dictionary<(int Type, int Style), Entry> entries = new();
+        private readonly LinkedList<(int Type, int Style)> recent = new();
+        private long characters;
+
+        private sealed class Entry(Lazy<ProjectileAttackCapture> program, LinkedListNode<(int Type, int Style)> node)
         {
-            lock (AttackProgramCacheGate)
-            {
-                if (!AttackSourcePrograms.TryGetValue((type, style), out program!))
-                {
-                    // Bound native identity JSON as well as method syntax. Eviction
-                    // only causes recomputation, never loss of source observations.
-                    if (AttackSourcePrograms.Count >= 256 || attackProgramCharacters >= 16 * 1024 * 1024)
-                    { AttackSourcePrograms.Clear(); countedAttackPrograms.Clear(); attackProgramCharacters = 0; }
-                    program = new Lazy<ProjectileAttackCapture>(() =>
-                    {
-                        var complete = BuildProjectileAttackSource(type, style);
-                        // Projection refusal handlers may have caught cancellation.
-                        // Never retain their partial result as a completed program.
-                        currentParentAnalysis?.ThrowIfCancelled();
-                        return complete;
-                    });
-                    AttackSourcePrograms[(type, style)] = program;
-                }
-            }
-            try { result = program.Value; break; }
-            catch (System.OperationCanceledException)
-            {
-                lock (AttackProgramCacheGate)
-                    if (AttackSourcePrograms.TryGetValue((type, style), out var failed) && ReferenceEquals(failed, program))
-                        AttackSourcePrograms.TryRemove((type, style), out _);
-                // A concurrent caller may have waited on another craft's Lazy.
-                // Retry with its own live context; the retired owner still exits.
-                currentParentAnalysis?.ThrowIfCancelled();
-            }
+            internal readonly Lazy<ProjectileAttackCapture> Program = program;
+            internal readonly LinkedListNode<(int Type, int Style)> Node = node;
+            internal long Characters;
         }
-        lock (AttackProgramCacheGate)
+
+        private void Remove((int Type, int Style) key)
         {
-            if (AttackSourcePrograms.TryGetValue((type, style), out var retained) && ReferenceEquals(retained, program)
-                && countedAttackPrograms.Add((type, style)))
+            var entry = entries[key];
+            entries.Remove(key);
+            recent.Remove(entry.Node);
+            characters -= entry.Characters;
+        }
+
+        internal ProjectileAttackCapture Get(int type, int style)
+        {
+            var key = (type, style);
+            while (true)
             {
-                long size = result.Source.Length + (long)result.Spawns.Length;
-                if (size > 16 * 1024 * 1024)
-                { AttackSourcePrograms.TryRemove((type, style), out _); countedAttackPrograms.Remove((type, style)); }
-                else
+                throwIfCancelled();
+                Entry entry;
+                lock (gate)
                 {
-                    if (attackProgramCharacters + size > 16 * 1024 * 1024)
+                    if (!entries.TryGetValue(key, out entry!))
                     {
-                        AttackSourcePrograms.Clear(); countedAttackPrograms.Clear(); attackProgramCharacters = 0;
-                        AttackSourcePrograms[(type, style)] = program; countedAttackPrograms.Add((type, style));
+                        while (entries.Count >= EntryLimit) Remove(recent.First!.Value);
+                        entry = new Entry(new Lazy<ProjectileAttackCapture>(() =>
+                        {
+                            var complete = build(type, style);
+                            // Source refusal handlers may have caught cancellation.
+                            // Check the executing owner's context before publishing.
+                            throwIfCancelled();
+                            return complete;
+                        }), recent.AddLast(key));
+                        entries.Add(key, entry);
                     }
-                    attackProgramCharacters += size;
+                    else
+                    {
+                        recent.Remove(entry.Node);
+                        recent.AddLast(entry.Node);
+                    }
                 }
+                ProjectileAttackCapture result;
+                try { result = entry.Program.Value; }
+                catch (OperationCanceledException)
+                {
+                    lock (gate)
+                        if (entries.TryGetValue(key, out var failed) && ReferenceEquals(failed, entry)) Remove(key);
+                    // A live borrower retries a cancelled owner's Lazy in its own
+                    // context; the retired owner still exits.
+                    throwIfCancelled();
+                    continue;
+                }
+                lock (gate)
+                {
+                    if (entries.TryGetValue(key, out var retained) && ReferenceEquals(retained, entry)
+                        && entry.Characters == 0)
+                    {
+                        long size = result.Characters;
+                        if (size > CharacterLimit) Remove(key);
+                        else
+                        {
+                            // This completion is a use too. Evict only the oldest
+                            // entries needed to fit, not the entire working set.
+                            recent.Remove(entry.Node);
+                            recent.AddLast(entry.Node);
+                            while (characters + size > CharacterLimit) Remove(recent.First!.Value);
+                            entry.Characters = size;
+                            characters += size;
+                        }
+                    }
+                }
+                // Outside the catch and after accounting: a cancelled borrower
+                // cannot discard a live owner's result or leave it uncounted.
+                throwIfCancelled();
+                return result;
             }
         }
-        return result;
+
+        internal void Clear()
+        {
+            lock (gate) { entries.Clear(); recent.Clear(); characters = 0; }
+        }
     }
+
+    private static ProjectileAttackCapture ProjectileAttackSource(int type, int style)
+        => AttackSourcePrograms.Get(type, style);
 
     private static void ClearProjectileAttackCaches()
     {
-        lock (AttackProgramCacheGate)
-        { AttackSourcePrograms.Clear(); countedAttackPrograms.Clear(); attackProgramCharacters = 0; AttackSourceCode.Clear(); }
+        AttackSourcePrograms.Clear();
+        AttackSourceCode.Clear();
         ClearNativeCSharpSourceCache();
     }
 
     private static JsonArray ProjectileSpawnReferences(Projectile projectile)
         => projectile.ModProjectile is null
             && projectile.type > ProjectileID.None && projectile.type < ProjectileID.Count
-            ? JsonNode.Parse(ProjectileAttackSource(projectile.type, projectile.aiStyle).Spawns)!.AsArray() : new JsonArray();
+            ? ProjectileAttackSource(projectile.type, projectile.aiStyle).CloneSpawns() : new JsonArray();
 
     private static ProjectileAttackCapture BuildProjectileAttackSource(int type, int style)
     {
@@ -322,7 +382,7 @@ public sealed partial class GeneratorClient
         result["coverage"] = new JsonObject { ["proved"] = "bounded_native_source_observations_only", ["unresolved"] = gaps,
             ["boundaries"] = "ProjectileLoader.Colliding/ShouldUpdatePosition and all other hooks remain unevaluated; no source fact is absence of a mechanic; damage may stop before visual lifetime; held-item draw is separate and not inferred from noMelee" };
         AttachNativeCSharpSource(result, certified, spawnReferences, type, style, mechanicsBoundReceivers.Except(mechanicsUnboundReceivers).ToHashSet());
-        return new ProjectileAttackCapture(result.ToJsonString(), spawnReferences.ToJsonString());
+        return new ProjectileAttackCapture(result, spawnReferences);
     }
 
     // This is a syntax recognizer for immutable identity selectors, NOT an IL

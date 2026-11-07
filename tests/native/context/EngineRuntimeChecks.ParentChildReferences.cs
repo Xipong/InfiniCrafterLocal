@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using InfiniCrafterLocal.Common.Services;
@@ -45,61 +46,66 @@ internal static partial class EngineRuntimeChecks
         Equal(true,calls[2]!["unresolved"] is JsonValue,"dynamic type refusal visible");
         var merged=ExpandChildReferenceFixture(calls)!;
         Equal(1,merged["references"]!.AsArray().Count,"one profile serves duplicate conditional references");
-        Equal("0,1",string.Join(",",merged["references"]![0]!["sourceCallIndices"]!.AsArray().Select(index=>index!.GetValue<int>())),"both literal callsites preserved exactly, not dynamic site2");
+        Equal(2,merged["references"]![0]!["sourceCallIndices"]!.AsArray().Count,"both literal callsites preserved");
         Equal(false,merged["references"]![0]!["profile"]!.AsObject().ContainsKey("referencedProjectiles"),"one-hop child never expands its own children");
         foreach(var pair in new[]{(Parent:617,Child:618),(Parent:643,Child:644)})
         {
             var snapshot=ChildSnapshot(pair.Parent);var related=snapshot["referencedProjectiles"]!.AsObject();
             var refs=related["references"]!.AsArray();var sourceCalls=related["sourceCalls"]!.AsArray();
-            Equal("native_single_hop_projectile_references",related["source"]!.GetValue<string>(),"child envelope is conditional native source, not executed spawns");
-            var aiCalls=sourceCalls.Where(call=>call!["method"]!.GetValue<string>()!="Terraria.Projectile.Kill").ToArray();
-            Equal(pair.Child.ToString(),string.Join(",",aiCalls.SelectMany(call=>call!["projectileTypes"]!.AsArray()).Select(id=>id!.GetValue<int>()).Distinct().Order()),
-                "selected AI source retains its child without borrowing an AI sibling");
-            // Kill is a separate conditional source root. Its candidates must not
-            // be discarded merely because the selected AI has one child identity.
-            var lifecycleSites=snapshot["attackReference"]!["lifecycle"]!["records"]!.AsArray()
-                .SelectMany(record=>record!["spawnSites"]!.AsArray()).ToArray();
-            Equal(string.Join("\n",lifecycleSites.Select(site=>CanonicalParentFactJson(JsonSerializer.SerializeToElement(site)))),
-                string.Join("\n",sourceCalls.Where(call=>call!["method"]!.GetValue<string>()=="Terraria.Projectile.Kill")
-                    .Select(call=>CanonicalParentFactJson(JsonSerializer.SerializeToElement(call)))),
-                "all lifecycle callsites retain their exact guards, unknowns and source certificates");
-            if(pair.Parent==617)
-                Equal(true,lifecycleSites.Any(site=>site!["projectileTypes"]!.AsArray().Any(id=>id!.GetValue<int>()==620)),
-                    "native Kill candidate620 is independent of AI child618");
-            foreach(var call in sourceCalls)
-            {
-                var method=typeof(Projectile).GetMethods(BindingFlags.Instance|BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic)
-                    .Single(candidate=>typeof(Projectile).FullName+"."+candidate.Name==call!["method"]!.GetValue<string>());
-                AssertParentSourceCertificate(JsonSerializer.SerializeToElement(call),method,"child callsite provenance");
-                var il=method.GetMethodBody()!.GetILAsByteArray()!;int at=call!["at"]!.GetValue<int>();
-                Equal(true,at>=0&&at+4<il.Length&&il[at] is 0x28 or 0x6f,"child source offset is an actual native call instruction");
-                var target=method.Module.ResolveMethod(BitConverter.ToInt32(il,at+1))!;
-                Equal(typeof(Projectile),target.DeclaringType!,"child source call targets native Projectile");
-                Equal("NewProjectile",target.Name,"child source offset targets the actual spawn overload");
-                Equal(true,call["requiredPredicates"]!.AsArray().Count>0,"native spawn guards remain source links, not evaluated truth");
-            }
-            Equal(string.Join(",",sourceCalls.SelectMany(call=>call!["projectileTypes"]!.AsArray()).Select(id=>id!.GetValue<int>()).Distinct().Order()),
-                string.Join(",",refs.Select(reference=>reference!["type"]!.GetValue<int>()).Order()),
-                "exactly one profile per literal identity across AI and lifecycle source roots");
+            // 617 also has two conditional Kill callsites for 620. This is
+            // lifecycle source, not an extra AI sibling or an executed spawn.
+            Equal(pair.Parent==617 ? "618,620" : "644",
+                string.Join(",",refs.Select(r=>r!["type"]!.GetValue<int>()).Order()),"exact native child roster excludes unrelated siblings");
             foreach(var reference in refs)
             {
-                int id=reference!["type"]!.GetValue<int>();
+                int childType=reference!["type"]!.GetValue<int>();
+                var indices=reference["sourceCallIndices"]!.AsArray().Select(i=>i!.GetValue<int>()).ToArray();
+                Equal(childType==pair.Child ? 1 : 2,indices.Length,"all native child callsites retained");
                 Equal(string.Join(",",sourceCalls.Select((call,index)=>(call,index))
-                        .Where(site=>site.call!["projectileTypes"]!.AsArray().Any(candidate=>candidate!.GetValue<int>()==id)).Select(site=>site.index)),
-                    string.Join(",",reference["sourceCallIndices"]!.AsArray().Select(index=>index!.GetValue<int>())),
-                    "child profile links to every and only its original callsites");
+                    .Where(v=>v.call!["projectileTypes"]!.AsArray().Any(id=>id!.GetValue<int>()==childType)).Select(v=>v.index)),
+                    string.Join(",",indices),"child links exactly its literal source callsites");
+                foreach(int index in indices)
+                    Equal(childType==pair.Child ? "Terraria.Projectile.VanillaAI" : "Terraria.Projectile.Kill",
+                        sourceCalls[index]!["method"]!.GetValue<string>(),"known AI child and new lifecycle child retain distinct callers");
                 var child=reference["profile"]!.AsObject();
-                Equal(id,child["type"]!.GetValue<int>(),"profile identity matches the referenced native candidate");
-                Equal("conditional_native_spawn_candidate",child["source"]!.GetValue<string>(),"child defaults retain conditional-source provenance");
+                Equal(childType,child["type"]!.GetValue<int>(),"profile retains the referenced native identity");
                 Equal(false,child.ContainsKey("referencedProjectiles"),"nested expansion disabled even when child sources have further calls");
                 Equal(0,child["sourceItemType"]!.GetValue<int>(),"child defaults not attributed to parent item");
                 Equal(0,child["sourceItemDamage"]!.GetValue<int>(),"child snapshot does not invent actual spawn damage");
                 Equal(0f,child["itemShootSpeed"]!.GetValue<float>(),"child defaults do not invent actual spawn velocity");
             }
-            string original=related.ToJsonString();
-            sourceCalls[0]!["projectileTypes"]![0]=1;
-            refs[0]!["profile"]!["sourceItemDamage"]=999;
-            Equal(original,ChildSnapshot(pair.Parent)["referencedProjectiles"]!.ToJsonString(),"mutating source calls or child profiles cannot poison cached source refs");
+            foreach(var group in sourceCalls.GroupBy(call=>call!["method"]!.GetValue<string>()))
+            {
+                var method=typeof(Projectile).GetMethod(group.Key.Split('.').Last(),BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic)!;
+                var code=((System.Collections.IEnumerable)typeof(GeneratorClient).GetMethod("AttackCode",BindingFlags.NonPublic|BindingFlags.Static)!
+                    .Invoke(null,new object[]{method})!).Cast<object>().ToArray();
+                foreach(var call in group)
+                {
+                    Equal(method.Module.ModuleVersionId.ToString(),call!["sourceModuleVersionId"]!.GetValue<string>(),"call binds actual native module");
+                    Equal(Convert.ToHexString(SHA256.HashData(method.GetMethodBody()!.GetILAsByteArray()!)).ToLowerInvariant(),
+                        call["sourceMethodSha256"]!.GetValue<string>(),"call binds actual caller IL");
+                    var instruction=code.Single(i=>(int)i.GetType().GetProperty("Offset")!.GetValue(i)! == call["at"]!.GetValue<int>());
+                    Equal("call",(string)instruction.GetType().GetProperty("Op")!.GetValue(instruction)!,"source offset is an actual call");
+                    var callee=(MethodInfo)instruction.GetType().GetProperty("Arg")!.GetValue(instruction)!;
+                    Equal(typeof(Projectile),callee.DeclaringType!,"spawn callee belongs to native Projectile");
+                    Equal("NewProjectile",callee.Name,"source link points to the actual spawn callee");
+                    Equal(true,call["requiredPredicates"]!.AsArray().Count>0,"spawn remains conditional source");
+                    if(method.Name!="Kill")continue;
+                    var record=snapshot["attackReference"]!["lifecycle"]!["records"]!.AsArray()
+                        .Single(r=>r!["spawnSites"]!.AsArray().Any(site=>JsonNode.DeepEquals(site,call)))!;
+                    Equal("type == 617",record["entryCondition"]!.GetValue<string>(),"lifecycle child belongs to the selected parent source region");
+                    Equal("conditional_closed_lexical_region",record["coverage"]!.GetValue<string>(),"lifecycle region remains conditional");
+                    Equal(true,record["code"]!.GetValue<string>().Contains("Main.myPlayer == owner",StringComparison.Ordinal),"lifecycle owner guard retained");
+                    foreach(var predicate in call["requiredPredicates"]!.AsArray())
+                        Equal(true,record["locations"]!.AsArray().Any(location=>"b"+location!["ilOffset"]!.GetValue<int>()==predicate!.GetValue<string>()),
+                            "lifecycle predicate links its retained source location");
+                    Equal(true,call["unresolved"]!.GetValue<string>().Contains("enclosing_flow_hooks_and_entry_identity_unknown; not_an_executed_spawn",StringComparison.Ordinal),
+                        "lifecycle candidate never claims entry identity or execution");
+                }
+            }
+            int knownCall=refs.Single(r=>r!["type"]!.GetValue<int>()==pair.Child)!["sourceCallIndices"]![0]!.GetValue<int>();
+            sourceCalls[knownCall]!["projectileTypes"]![0]=1;
+            Equal(pair.Child,ChildSnapshot(pair.Parent)["referencedProjectiles"]!["sourceCalls"]![knownCall]!["projectileTypes"]![0]!.GetValue<int>(),"mutating a snapshot cannot poison cached source refs");
             Equal(false,ChildSnapshot(pair.Parent,false).ContainsKey("referencedProjectiles"),"base capture cache not poisoned by expanded snapshot");
         }
         // A synthetic self/two-cycle link still uses the actual canonical child

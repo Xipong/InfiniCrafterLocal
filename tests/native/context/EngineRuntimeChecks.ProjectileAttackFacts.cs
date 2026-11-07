@@ -253,11 +253,32 @@ internal static partial class EngineRuntimeChecks
         il.MarkLabel(end); il.Emit(OpCodes.Ret);
         return type.CreateType()!.GetMethod("Source")!;
     }
-    private static void AttackIdentityDisjointWindows(Projectile projectile)
+    private static MethodInfo AttackIdentityDisjointWindowsFixture()
     {
-        if (projectile.type == 404) projectile.ai[1] = 0f;
-        if (projectile.damage < 0) projectile.rotation = 0.25f;
-        if (projectile.aiStyle == 69) projectile.velocity.X = 7.25f;
+        // Test the native direct-branch window shape, not Roslyn's Debug
+        // ceq/local/brfalse lowering. Emit the two windows and omitted middle
+        // block explicitly so both build configurations exercise disconnection.
+        // This source-only fixture is never invoked or JIT-prepared.
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("DisjointIdentityWindows"), AssemblyBuilderAccess.Run);
+        var type = assembly.DefineDynamicModule("fixture").DefineType("Source", TypeAttributes.Public);
+        var source = type.DefineMethod("Disjoint", MethodAttributes.Public | MethodAttributes.Static, typeof(void), new[] { typeof(Projectile) });
+        var il = source.GetILGenerator();
+        var middle = il.DefineLabel(); var later = il.DefineLabel(); var end = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, typeof(Projectile).GetField("type")!);
+        il.Emit(OpCodes.Ldc_I4, 404); il.Emit(OpCodes.Bne_Un, middle);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, typeof(Projectile).GetField("ai")!);
+        il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Ldc_R4, 0f); il.Emit(OpCodes.Stelem_R4);
+        il.MarkLabel(middle);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, typeof(Projectile).GetField("damage")!);
+        il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Bge, later);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_R4, 0.25f); il.Emit(OpCodes.Stfld, typeof(Projectile).GetField("rotation")!);
+        il.MarkLabel(later);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, typeof(Projectile).GetField("aiStyle")!);
+        il.Emit(OpCodes.Ldc_I4, 69); il.Emit(OpCodes.Bne_Un, end);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldflda, typeof(Projectile).GetField("velocity")!);
+        il.Emit(OpCodes.Ldc_R4, 7.25f); il.Emit(OpCodes.Stfld, typeof(Microsoft.Xna.Framework.Vector2).GetField("X")!);
+        il.MarkLabel(end); il.Emit(OpCodes.Ret);
+        return type.CreateType()!.GetMethod("Disjoint")!;
     }
 
     private static void ProjectileAttackDisconnectedBindingRefusesLocally()
@@ -283,9 +304,12 @@ internal static partial class EngineRuntimeChecks
 
     private static void ProjectileAttackDisjointWindowsPreserveLaterRoot()
     {
-        var fixture = GeneratorClient.InspectProjectileAttackIdentityWindows(
-            typeof(EngineRuntimeChecks).GetMethod(nameof(AttackIdentityDisjointWindows), BindingFlags.NonPublic | BindingFlags.Static)!, 404, 69);
+        var fixture = GeneratorClient.InspectProjectileAttackIdentityWindows(AttackIdentityDisjointWindowsFixture(), 404, 69);
         Equal(2, fixture["windowCount"]!.GetValue<int>(), "fixture has separated type and aiStyle windows");
+        Equal("identity_selection_disconnected_source_components", fixture["identitySelectionUnavailable"]!.GetValue<string>(),
+            "disconnected fixture refuses specialization instead of inventing continuity");
+        Equal(false, fixture.ContainsKey("identitySelected"), "disconnected fixture retains unspecialized evidence");
+        Equal(true, fixture.ToJsonString().Contains("Projectile.ai", StringComparison.Ordinal), "first disconnected window remains visible");
         var exposed = fixture["identitySelected"] ?? fixture;
         Equal(true, exposed.ToJsonString().Contains("7.25", StringComparison.Ordinal), "later disconnected window survives identity presentation");
         var projectile = new Projectile(); projectile.SetDefaults(ProjectileID.Flairon);

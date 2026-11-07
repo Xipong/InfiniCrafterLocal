@@ -245,7 +245,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         _page = Math.Clamp(_page, 0, pages - 1);
         for (int i = 0; i < layout.Rows * layout.Columns; i++)
         {
-            var slot = new Rectangle(list.X + i % layout.Columns * 52, list.Y + i / layout.Columns * 52, 48, 48);
+            var slot = RecipeJournalView.DiscoverySlotBounds(layout, i);
             int entryIndex = _page * capacity + i;
             GeneratedItemData? entry = entryIndex < entries.Length ? entries[entryIndex] : null;
             if (entry is null) continue;
@@ -374,8 +374,9 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         ItemSlotBackground(sb, result, true, result.Contains(cursor.ToPoint()));
         Sprite(sb, data, new Rectangle(result.X + 7, result.Y + 7, result.Width - 14, result.Height - 14));
         if (result.Contains(cursor.ToPoint())) _hoverText = data.Name;
-        Label(sb, Text("Ingredients"), new Vector2(inputX, y + diagramHeight - 7), Muted, 0.55f, result.X - inputX - 12);
-        CenterLabel(sb, Text("Result"), new Rectangle(result.X - 28, y + diagramHeight - 7, result.Width + 40, 20), Ink, 0.55f);
+        var captions = RecipeJournalView.DiagramCaptionBounds(inputA, inputB, result, y + diagramHeight - 7);
+        CenterLabel(sb, Text("Ingredients"), captions.Ingredients, Muted, 0.55f);
+        CenterLabel(sb, Text("Result"), captions.Result, Ink, 0.55f);
         y += diagramHeight + 18;
         // Names remain readable outside the tiny wells; only exact generated parents are clickable.
         string parents = data.AtlasParentName(0) + " + " + data.AtlasParentName(1);
@@ -441,8 +442,6 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     internal static readonly Rectangle SolidPixelSource = new(0, 0, 1, 1);
     internal static Color PremultipliedUiColor(Color color)
         => Color.FromNonPremultiplied(color.R, color.G, color.B, color.A);
-    internal static Vector2 CenteredTextPosition(Rectangle bounds, Vector2 size)
-        => bounds.Center.ToVector2() - size * .5f;
     private static void Trace(SpriteBatch sb, Vector2 from, Vector2 to, Color color)
     {
         Vector2 delta = to - from;
@@ -452,21 +451,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         sb.Draw(TextureAssets.MagicPixel.Value, from, SolidPixelSource, PremultipliedUiColor(color), MathF.Atan2(delta.Y, delta.X), new Vector2(0, .5f), new Vector2(delta.Length(), 1), SpriteEffects.None, 0f);
     }
     internal static float VisibleTextCenter(DynamicSpriteFont font, string text)
-    {
-        // DynamicSpriteFont.MeasureString includes line spacing below short
-        // glyphs. Center their actual glyph rectangles, including native padding.
-        float top = float.PositiveInfinity, bottom = float.NegativeInfinity, line = 0;
-        foreach (char character in text)
-        {
-            if (character == '\n') { line += font.LineSpacing; continue; }
-            if (char.IsWhiteSpace(character)) continue;
-            var glyph = font.SpriteCharacters.TryGetValue(character, out var found) ? found : font.DefaultCharacterData;
-            if (glyph.Glyph.Height <= 0) continue;
-            float y = line + glyph.Padding.Y;
-            top = Math.Min(top, y); bottom = Math.Max(bottom, y + glyph.Glyph.Height);
-        }
-        return float.IsPositiveInfinity(top) ? font.MeasureString(text).Y * .5f : (top + bottom) * .5f;
-    }
+        => UiTextAlignment.VisibleCenter(font, text).Y;
     private static void HeaderLabel(SpriteBatch sb, string text, Rectangle row, Color color, float scale)
     {
         if (row.Width <= 0 || row.Height <= 0) return;
@@ -479,8 +464,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         if (rect.Width <= 0 || rect.Height <= 0) return;
         text = ClipLineageLabel(text, rect.Width / scale);
         var font = FontAssets.MouseText.Value;
-        Vector2 size = font.MeasureString(text) * scale;
-        sb.DrawString(font, text, CenteredTextPosition(rect, size), color, 0, Vector2.Zero, scale, SpriteEffects.None, 0);
+        sb.DrawString(font, text, UiTextAlignment.CenteredPosition(font, text, rect, scale), color, 0, Vector2.Zero, scale, SpriteEffects.None, 0);
     }
     private static bool Button(SpriteBatch sb, Rectangle rect, string text, bool click, Vector2 cursor, bool enabled = true, bool selected = false)
     {
