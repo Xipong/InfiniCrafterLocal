@@ -12,6 +12,34 @@ public sealed partial class GeneratorClient
 {
     private sealed partial class ParentSourceMethod
     {
+        // Native identity specialization historically rebuilt the complete
+        // method from AttackCode(method), after the same method had already
+        // entered the shared source cache. This exact overload is selected only
+        // by that MethodInfo + full-code call site. Reuse the immutable decoded
+        // facts and keep specialization state outside the shared method.
+        internal ParentSourceMethod(MethodInfo method, List<AmmoIl> completeSourceCode)
+        {
+            currentParentAnalysis?.ThrowIfCancelled();
+            ParentSourceMethod shared = ReadCompleteSourceMethod(method);
+            if (completeSourceCode.Count != shared.Code.Count
+                || completeSourceCode.Count == 0
+                || completeSourceCode[0].Offset != shared.Code[0].Offset
+                || completeSourceCode[^1].Offset != shared.Code[^1].Offset)
+                throw new NotSupportedException("identity_source_not_complete_method");
+
+            Method = shared.Method;
+            completeSource = true;
+            Values = shared.Values;
+            Statements = shared.Statements;
+            Blocks = shared.Blocks;
+            EscapedLocals = shared.EscapedLocals;
+            WrittenArguments = shared.WrittenArguments;
+            Unknown = shared.Unknown;
+            Code = shared.Code;
+            sliceEntries = shared.sliceEntries;
+            predecessors = shared.predecessors;
+        }
+
         private sealed class LocalDefinitionLayout
         {
             internal readonly int FirstBit;
