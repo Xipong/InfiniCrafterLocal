@@ -33,9 +33,27 @@ public sealed partial class GeneratorClient
         timeout.CancelAfter(TimeSpan.FromSeconds(20));
         try
         {
+            bool profilePhases = ParentAnalysis.ProfileJobs;
+            long stageStart = profilePhases ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+            long stageAllocated = profilePhases ? GC.GetAllocatedBytesForCurrentThread() : 0;
+            void Mark(string phase)
+            {
+                if (!profilePhases) return;
+                long now = System.Diagnostics.Stopwatch.GetTimestamp();
+                long bytes = GC.GetAllocatedBytesForCurrentThread();
+                Console.Error.WriteLine(FormattableString.Invariant(
+                    $"PARENT_LIFECYCLE type={type} style={style} phase={phase} ms={System.Diagnostics.Stopwatch.GetElapsedTime(stageStart, now).TotalMilliseconds:F3} allocated={bytes - stageAllocated}"));
+                stageStart = now; stageAllocated = bytes;
+            }
             var pendingReferences = new JsonArray();
             while (!Monitor.TryEnter(nativeCSharpGate, 50)) timeout.Token.ThrowIfCancellationRequested();
-            try { result = BuildProjectileLifecycleSource(GetNativeCSharpDocument(method, timeout.Token), type, style, pendingReferences, timeout.Token); }
+            try
+            {
+                var document = GetNativeCSharpDocument(method, timeout.Token);
+                Mark("verified_decompile");
+                result = BuildProjectileLifecycleSource(document, type, style, pendingReferences, timeout.Token);
+                Mark("conditional_lifecycle_regions");
+            }
             finally { Monitor.Exit(nativeCSharpGate); }
             foreach (var reference in pendingReferences) references.Add(reference!.DeepClone());
         }
@@ -96,26 +114,27 @@ public sealed partial class GeneratorClient
         }
         var candidates = document.Declaration.Body.Descendants.OfType<IfElseStatement>()
             .Where(branch => Matching(branch) && branch.TrueStatement.DescendantsAndSelf.OfType<InvocationExpression>().Any(LifecycleSpawn)).ToArray();
+        var selectedTrueArms = candidates.Select(candidate => (AstNode)candidate.TrueStatement).ToHashSet();
         int count = 0, characters = 0;
         foreach (var branch in candidates)
         {
             cancellation.ThrowIfCancellationRequested();
             // An outer matching region owns its nested source, including all
             // conditions and mutations. A refused outer body is never cropped.
-            if (candidates.Any(outer => outer != branch && branch.Ancestors.Contains(outer.TrueStatement))) continue;
+            if (branch.Ancestors.Any(selectedTrueArms.Contains)) continue;
             int regionOffset = branch.Annotations.OfType<ILInstruction>().Select(instruction => instruction.StartILOffset).DefaultIfEmpty(-1).Min();
             string label = "region_il@" + regionOffset.ToString(CultureInfo.InvariantCulture);
             try
             {
                 if (++count > regionLimit) throw new NotSupportedException("lifecycle_region_count_bound");
-                var excerpt = (IfElseStatement)branch.Clone(); excerpt.FalseStatement = Statement.Null;
+                var excerpt = CloneCSharpTrueArm(branch);
                 string? refusal = CSharpRegionRefusal(branch.TrueStatement, method);
                 if (refusal is not null) throw new NotSupportedException(refusal);
                 // Check the guard as well as its body. A local read computed
                 // before this region cannot silently become a live field read.
                 refusal = CSharpRegionRefusal(excerpt, method);
                 if (refusal is not null) throw new NotSupportedException(refusal);
-                var rendered = RenderCSharp(excerpt);
+                var rendered = RenderOwnedCSharp(excerpt);
                 cancellation.ThrowIfCancellationRequested();
                 if (rendered.Code.Length > regionCharacters) throw new NotSupportedException("lifecycle_region_character_bound");
                 if (characters + rendered.Code.Length > totalCharacters) throw new NotSupportedException("lifecycle_total_character_bound");

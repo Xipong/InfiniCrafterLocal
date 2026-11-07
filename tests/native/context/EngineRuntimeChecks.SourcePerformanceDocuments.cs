@@ -91,6 +91,18 @@ internal static partial class EngineRuntimeChecks
             (string)CSharpFixtureMember(SourcePerformanceRender(shell, false), "Code"),
             "mechanics shell renders exactly like the legacy whole-tree clone");
 
+        var privateTree = (SyntaxTree)tree.Clone();
+        var ownedTree = (SyntaxTree)tree.Clone();
+        var ownedRender = CSharpOwner.GetMethod("RenderOwnedCSharp", CSharpFlags)!
+            .Invoke(null, new object[] { ownedTree })!;
+        var legacyRender = SourcePerformanceRender(privateTree, true);
+        Equal((string)CSharpFixtureMember(legacyRender, "Code"),
+            (string)CSharpFixtureMember(ownedRender, "Code"),
+            "owned full tree renders byte-for-byte like legacy second clone");
+        Equal(true, ((Array)CSharpFixtureMember(legacyRender, "Locations")).Cast<object>().SequenceEqual(
+            ((Array)CSharpFixtureMember(ownedRender, "Locations")).Cast<object>()),
+            "owned tree maps the same IL locations as previous double clone");
+
         Equal(true, nodes.SequenceEqual(tree.DescendantsAndSelf), "scoped clones restore the complete shared AST");
         Equal(true, positions.SequenceEqual(nodes.Select(node => (node.StartLocation, node.EndLocation, node.Parent))),
             "scoped clones preserve original locations and parents");

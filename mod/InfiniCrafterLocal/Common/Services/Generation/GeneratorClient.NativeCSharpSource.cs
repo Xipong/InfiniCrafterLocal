@@ -506,10 +506,12 @@ public sealed partial class GeneratorClient
         {
             var candidates = document.Tree.Descendants.OfType<IfElseStatement>().Select(branch => ReadCSharpGuard(branch, conditionalEnds)).OfType<CSharpGuard>()
                 .Where(guard => guard.Field == "type" && guard.Literal == type || guard.Field == "aiStyle" && guard.Literal == style).ToArray();
+            var selectedTrueArms = candidates.Select(candidate => (AstNode)candidate.Branch.TrueStatement).ToHashSet();
             foreach (var candidate in candidates)
             {
-                // The outer selected region already retains all nested branches.
-                if (candidates.Any(other => other != candidate && candidate.Branch.Ancestors.Contains(other.Branch.TrueStatement))) continue;
+                // A candidate's ancestors never contain its own true statement.
+                // Indexed membership replaces quadratic candidate scans.
+                if (candidate.Branch.Ancestors.Any(selectedTrueArms.Contains)) continue;
                 string? refusal = CSharpRegionRefusal(candidate.Branch.TrueStatement, method);
                 if (refusal is not null) { unresolved.Add(refusal + "@" + candidate.Offset); continue; }
                 var excerpt = CloneCSharpTrueArm(candidate.Branch);
@@ -635,7 +637,9 @@ public sealed partial class GeneratorClient
             else branch.ReplaceWith((Statement)branch.FalseStatement.Clone());
         }
         if (removed.Count == 0) return;
-        var rendered = RenderCSharp(tree);
+        // Tree is a private, already-mutated copy. Preserve exact IL locations
+        // without another full AST clone solely for token writer coordinates.
+        var rendered = RenderOwnedCSharp(tree);
         if (rendered.Code.Length >= record["code"]!.GetValue<string>().Length) return;
         var mapped = new JsonArray();
         foreach (var original in record["locations"]!.AsArray().OfType<JsonObject>())
@@ -667,11 +671,24 @@ public sealed partial class GeneratorClient
     {
         var records = new JsonArray(); var refusals = new JsonArray();
         var mechanics = new JsonArray(); var mechanicsRefusals = new JsonArray();
+        bool profilePhases = ParentAnalysis.ProfileJobs;
+        long phaseStart = 0, phaseBytes = 0;
+        void Mark(MethodInfo method, string phase)
+        {
+            if (!profilePhases) return;
+            long next = System.Diagnostics.Stopwatch.GetTimestamp();
+            long bytes = GC.GetAllocatedBytesForCurrentThread();
+            if (phaseStart != 0)
+                Console.Error.WriteLine(FormattableString.Invariant(
+                    $"PARENT_CSHARP type={type} style={style} method={SourceMember(method)} phase={phase} ms={System.Diagnostics.Stopwatch.GetElapsedTime(phaseStart, next).TotalMilliseconds:F3} allocated={bytes - phaseBytes}"));
+            phaseStart = next; phaseBytes = bytes;
+        }
         var programs = CSharpPrograms(attack, Array.Empty<object>()).ToArray();
         foreach (var method in methods.OfType<MethodInfo>().Distinct())
         {
             var owned = programs.Where(program => CSharpProgramMatches(program.Row, method)).ToArray();
             if (owned.Length == 0) continue;
+            Mark(method, "start");
             currentParentAnalysis?.ThrowIfCancelled();
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(currentParentAnalysis?.Cancellation ?? CancellationToken.None);
             timeout.CancelAfter(TimeSpan.FromSeconds(20));
@@ -681,13 +698,16 @@ public sealed partial class GeneratorClient
                 try
                 {
                     var document = GetNativeCSharpDocument(method, timeout.Token);
+                    Mark(method, "verified_decompile");
                     JsonObject? strictRecord = null;
                     try
                     {
                         var record = BuildNativeCSharpRecord(document, owned, calls, type, style, timeout.Token);
+                        Mark(method, "strict_record");
                         // A refused optional proof must not erase the full source.
                         try { AttachIdentitySpecializedCSharp(record, document, type, style, timeout.Token); }
                         catch (NotSupportedException) { }
+                        Mark(method, "identity_specialization");
                         records.Add(record); strictRecord = record;
                     }
                     catch (NotSupportedException error)
@@ -707,7 +727,7 @@ public sealed partial class GeneratorClient
                     }
                     catch (Exception error) when (error is not OutOfMemoryException && error is not OperationCanceledException)
                     { mechanicsRefusals.Add(new JsonObject { ["method"] = SourceMember(method), ["unresolved"] = error is NotSupportedException ? error.Message : error.GetType().Name }); }
-
+                    Mark(method, "mechanics_source");
                 }
                 finally { Monitor.Exit(nativeCSharpGate); }
             }

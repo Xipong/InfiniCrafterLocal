@@ -179,7 +179,7 @@ public sealed partial class GeneratorClient
 
     private static ProjectileAttackCapture BuildProjectileAttackSource(int type, int style)
     {
-        var profilePhases = string.Equals(Environment.GetEnvironmentVariable("INFINI_PARENT_ANALYSIS_PROFILE"), "1", StringComparison.Ordinal);
+        var profilePhases = ParentAnalysis.ProfileJobs;
         long phaseStarted = profilePhases ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         long phaseAllocated = profilePhases ? GC.GetAllocatedBytesForCurrentThread() : 0;
         void ProfilePhase(string phase)
