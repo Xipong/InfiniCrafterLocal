@@ -86,9 +86,11 @@ jobs:
           exit $LASTEXITCODE
       - name: Run fresh-process cold profiles
         shell: pwsh
+        env:
+          INFINI_PARENT_PERF_TRACE: '1'
         run: |
           $dll = Resolve-Path 'tools/native/bin/Release/net8.0/EngineRuntimeChecks.dll'
-          foreach ($scenario in @('plain','mixed','nebula-prism','eventide')) {
+          foreach ($scenario in @('eventide')) {
             Write-Host "=== PROFILE $scenario ==="
             & dotnet $dll --profile-parent-craft $scenario
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

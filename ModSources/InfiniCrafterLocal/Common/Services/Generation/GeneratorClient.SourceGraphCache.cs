@@ -11,6 +11,17 @@ public sealed partial class GeneratorClient
 
     private static ParentSourceGraphCache SharedParentSourceGraphCache = new(shared: true);
 
+    private static bool ParentSourcePerfTraceEnabled
+        => Environment.GetEnvironmentVariable("INFINI_PARENT_PERF_TRACE") == "1";
+
+    private static void TraceParentSourcePerf(string stage, MethodBase method, long started, long allocatedBefore, string details)
+    {
+        if (!ParentSourcePerfTraceEnabled) return;
+        double elapsedMs = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        Console.Error.WriteLine($"PARENT_STAGE stage={stage} method={method.DeclaringType?.FullName}.{method.Name} ms={elapsedMs:F3} allocated={allocated} {details}");
+    }
+
     private static ParentSourceMethod ReadCompleteSourceMethod(MethodBase method)
     {
         var cache = activeParentSourceGraphCache ?? currentParentAnalysis?.SourceCache;
@@ -19,9 +30,13 @@ public sealed partial class GeneratorClient
             if (refusal is not null) throw new NotSupportedException(refusal);
             return (ParentSourceMethod)retained!;
         }
+        long traceStarted = ParentSourcePerfTraceEnabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        long traceAllocated = ParentSourcePerfTraceEnabled ? GC.GetAllocatedBytesForCurrentThread() : 0;
         try
         {
             var body = new ParentSourceMethod(method);
+            TraceParentSourcePerf("method_ir", method, traceStarted, traceAllocated,
+                $"instructions={body.Code.Count} blocks={body.Blocks.Count}");
             cache?.Remember(method, body, null, body.Code.Count, body.Blocks.Count, body.RetainedBytesEstimate);
             return body;
         }

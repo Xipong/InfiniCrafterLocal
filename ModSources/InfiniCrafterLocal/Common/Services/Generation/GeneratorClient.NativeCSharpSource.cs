@@ -313,12 +313,16 @@ public sealed partial class GeneratorClient
         if (method.Module != typeof(Projectile).Module) throw new NotSupportedException("csharp_non_native_module");
         if (nativeCSharpModule is null)
         {
+            long moduleTraceStarted = ParentSourcePerfTraceEnabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+            long moduleTraceAllocated = ParentSourcePerfTraceEnabled ? GC.GetAllocatedBytesForCurrentThread() : 0;
             string path = method.Module.FullyQualifiedName;
             if (!System.IO.Path.IsPathFullyQualified(path) || !System.IO.File.Exists(path))
                 throw new NotSupportedException("csharp_matching_pe_bytes_unavailable");
             var info = new FileInfo(path);
             if (info.Length > NativeCSharpPeLimit) throw new NotSupportedException("csharp_pe_size_bound");
             nativeCSharpModule = new(path, System.IO.File.ReadAllBytes(path), method.Module.ModuleVersionId);
+            TraceParentSourcePerf("csharp_module", method, moduleTraceStarted, moduleTraceAllocated,
+                $"peBytes={info.Length}");
         }
         nativeCSharpModule.Verify(method);
         string key = method.Module.ModuleVersionId + ":" + method.MetadataToken + ":" + CSharpHash(method.GetMethodBody()!.GetILAsByteArray()!);
@@ -329,7 +333,11 @@ public sealed partial class GeneratorClient
             nativeCSharpOrder.Remove(position); nativeCSharpOrder.AddLast(position);
             return retained;
         }
+        long documentTraceStarted = ParentSourcePerfTraceEnabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        long documentTraceAllocated = ParentSourcePerfTraceEnabled ? GC.GetAllocatedBytesForCurrentThread() : 0;
         var created = new NativeCSharpDocument(method, nativeCSharpModule, cancellation, methodAlreadyVerified: true);
+        TraceParentSourcePerf("csharp_document", method, documentTraceStarted, documentTraceAllocated,
+            $"nodes={created.Nodes} characters={created.Characters}");
         try { cancellation.ThrowIfCancellationRequested(); }
         catch { created.Dispose(); throw; }
         while (nativeCSharpOrder.Count > 0 && (nativeCSharpDocuments.Count >= 8

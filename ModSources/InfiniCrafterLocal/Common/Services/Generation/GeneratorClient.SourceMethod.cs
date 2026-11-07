@@ -143,6 +143,8 @@ public sealed partial class GeneratorClient
         private void EnsurePostdominators()
         {
             if (postdominatorBits is not null) return;
+            long traceStarted = ParentSourcePerfTraceEnabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+            long traceAllocated = ParentSourcePerfTraceEnabled ? GC.GetAllocatedBytesForCurrentThread() : 0;
             Block[] active = Blocks.Values.Where(block => block.Height >= 0).ToArray();
             int[] nodes = active.Select(block => block.Start).Append(-1).ToArray();
             var indices = nodes.Select((node, index) => (node, index)).ToDictionary(pair => pair.node, pair => pair.index);
@@ -189,6 +191,8 @@ public sealed partial class GeneratorClient
             postdominatorIndices = indices;
             postdominatorWords = words;
             postdominatorBits = solved;
+            TraceParentSourcePerf("postdominators", Method, traceStarted, traceAllocated,
+                $"blocks={active.Length} passes={passes} words={words}");
         }
 
         private static bool Bit(ulong[] bits, int row, int index)
