@@ -570,12 +570,47 @@ public sealed partial class GeneratorClient
                 {
                 // Keep data and control dependencies of matching field consumers;
                 // no unconditional numeric interpretation is attached to slices.
-                var matchingBlocks = body.Values.Values.Where(v => v.Operand is FieldInfo f && focus.Contains(f)
-                    || v.Operand is MethodBase helper && ReadsFields(helper, focus, new HashSet<MethodBase>(), 0, method.Module.Assembly))
-                    .Select(v => v.Block).ToHashSet();
-                var reached = new HashSet<int>(matchingBlocks);
-                foreach (int block in matchingBlocks) reached.UnionWith(body.ControlledRegion(block));
-                statements = statements.Where(v => reached.Contains(v.Block)).ToArray();
+                var matchingValues = body.Values.Values.Where(v => v.Operand is FieldInfo f && focus.Contains(f)
+                    || v.Operand is MethodBase helper && ReadsFields(helper, focus, new HashSet<MethodBase>(), 0, method.Module.Assembly)).ToArray();
+                // A compiler may materialize a condition through locals or a
+                // stack join before branching on it. Follow forward data and
+                // control dependencies, stopping each control arm at its join.
+                // Every value, region and controlled block is visited once;
+                // alias diamonds cannot multiply traversal work.
+                var users = new Dictionary<string, List<ParentSourceMethod.Value>>(StringComparer.Ordinal);
+                foreach (var value in body.Values.Values)
+                    foreach (string input in value.Inputs)
+                    {
+                        if (!users.TryGetValue(input, out var list)) users[input] = list = new();
+                        list.Add(value);
+                    }
+                var blockValues = body.Values.Values.GroupBy(value => value.Block)
+                    .ToDictionary(group => group.Key, group => group.ToArray());
+                var branches = body.Blocks.Values.Where(block => block.Next.Distinct().Count() > 1)
+                    .ToDictionary(block => block.Code[^1].Offset.ToString(System.Globalization.CultureInfo.InvariantCulture), block => block.Start);
+                var reached = matchingValues.Select(value => value.Block).ToHashSet();
+                var visited = new HashSet<string>(StringComparer.Ordinal);
+                var controlled = new HashSet<int>();
+                var work = new Queue<ParentSourceMethod.Value>();
+                void Enqueue(ParentSourceMethod.Value value)
+                { if (visited.Add(value.Id)) work.Enqueue(value); }
+                foreach (var value in matchingValues) Enqueue(value);
+                while (work.Count > 0)
+                {
+                    currentParentAnalysis?.ThrowIfCancelled();
+                    var value = work.Dequeue();
+                    if (users.TryGetValue(value.Id, out var dependents))
+                        foreach (var dependent in dependents) Enqueue(dependent);
+                    if (!branches.TryGetValue(value.Id, out int branchBlock)) continue;
+                    foreach (int block in body.ControlledRegion(branchBlock))
+                    {
+                        if (block == branchBlock || !controlled.Add(block)) continue;
+                        reached.Add(block);
+                        if (blockValues.TryGetValue(block, out var definitions))
+                            foreach (var definition in definitions) Enqueue(definition);
+                    }
+                }
+                statements = statements.Where(v => reached.Contains(v.Block) || visited.Contains(v.Id)).ToArray();
                 }
             }
             // Discovery sees the source dependency closure, not a transport-sized

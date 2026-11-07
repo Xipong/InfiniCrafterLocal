@@ -244,54 +244,24 @@ jobs:
             }
           }
 
-      - name: Verify packet parity and summarize
+      - name: Verify historical graph contract and enforce cold target
         shell: pwsh
         run: |
-          $evidence = Join-Path $env:GITHUB_WORKSPACE 'profile-evidence'
-          $rows = @()
-          foreach ($scenario in @('plain', 'mixed', 'nebula-prism', 'eventide')) {
-            $baseline = Get-Content (Join-Path $evidence "baseline-$scenario.json") -Raw | ConvertFrom-Json
-            $candidate = Get-Content (Join-Path $evidence "candidate-$scenario.json") -Raw | ConvertFrom-Json
-            $baselineCold = @($baseline.measurements | Where-Object { $_.case -eq 'cold-first-request' })
-            $candidateCold = @($candidate.measurements | Where-Object { $_.case -eq 'cold-first-request' })
-            if ($baselineCold.Count -ne 1 -or $candidateCold.Count -ne 1) { throw "Expected one cold measurement per variant for $scenario" }
-            $b = $baselineCold[0]
-            $c = $candidateCold[0]
-            if ($b.sha256 -ne $c.sha256) { throw "Cold packet hash mismatch for ${scenario}: $($b.sha256) != $($c.sha256)" }
-            # Cold compares with itself; inspect each later phase instead of
-            # accidentally accepting a warm/reset mismatch through that row.
-            foreach ($phase in @('cold-first-request', 'warm-1', 'warm-2', 'source-cache-reset')) {
-              $measurements = @($candidate.measurements | Where-Object { $_.case -eq $phase })
-              if ($measurements.Count -ne 1) { throw "Expected one candidate $phase measurement for $scenario" }
-              if ($measurements[0].equalToFirstRequest -isnot [bool] -or -not $measurements[0].equalToFirstRequest) {
-                throw "Candidate $phase parity failed for $scenario"
-              }
-            }
-            $rows += [pscustomobject]@{
-              scenario = $scenario
-              packetSha256 = [string]$c.sha256
-              baselineWallMs = [double]$b.wallMs
-              candidateWallMs = [double]$c.wallMs
-              speedup = [double]$b.wallMs / [double]$c.wallMs
-              baselineAllocatedBytes = [long]$b.totalAllocatedBytes
-              candidateAllocatedBytes = [long]$c.totalAllocatedBytes
-              allocationRatio = [double]$c.totalAllocatedBytes / [double]$b.totalAllocatedBytes
-              underFiveSeconds = [double]$c.wallMs -lt 5000.0
-            }
-          }
-          $rows | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $evidence 'summary.json') -Encoding utf8
-          Add-Content $env:GITHUB_STEP_SUMMARY '### PR #333 post-audit parent-analysis A/B'
-          Add-Content $env:GITHUB_STEP_SUMMARY '| Scenario | Baseline ms | Candidate ms | Speedup | Baseline alloc | Candidate alloc | <5 s |'
-          Add-Content $env:GITHUB_STEP_SUMMARY '| --- | ---: | ---: | ---: | ---: | ---: | :---: |'
-          foreach ($row in $rows) {
-            Add-Content $env:GITHUB_STEP_SUMMARY ("| {0} | {1:N1} | {2:N1} | {3:N2}x | {4:N0} | {5:N0} | {6} |" -f $row.scenario, $row.baselineWallMs, $row.candidateWallMs, $row.speedup, $row.baselineAllocatedBytes, $row.candidateAllocatedBytes, $(if ($row.underFiveSeconds) { 'yes' } else { 'no' }))
-          }
-
-      - name: Verify all sixteen payload pairs and enforce cold target
-        shell: pwsh
-        run: |
-          python candidate/tools/testing/verify_parent_analysis_cohort.py verify profile-evidence --require-payloads --require-pins --require-target --max-cold-ms 5000 --out profile-evidence/strict-verification.json
+          # The historical revision predates the reviewed graph metadata contract.
+          # This explicit mode permits only that migration and edge order, never
+          # graph bodies/guards/unknowns, and requires exact bytes outside graphs.
+          # Exact-byte mode remains the verifier default for unchanged contracts.
+          python candidate/tools/testing/verify_parent_analysis_cohort.py verify profile-evidence --comparison-mode parent-graph-contract-v1 --require-payloads --require-pins --require-target --max-cold-ms 5000 --out profile-evidence/strict-verification.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $result = Get-Content profile-evidence/strict-verification.json -Raw | ConvertFrom-Json
+          Add-Content $env:GITHUB_STEP_SUMMARY '### Historical parent-analysis A/B'
+          Add-Content $env:GITHUB_STEP_SUMMARY 'Comparison: reviewed graph metadata migration and edge-order equivalence; exact bytes outside graphs and within each variant. This is not cross-version byte parity.'
+          Add-Content $env:GITHUB_STEP_SUMMARY ("Contract parity: {0}; exact byte parity: {1}; payload pairs checked: {2}/16." -f $result.contractParityPass, $result.byteParityPass, $result.payloadPairsVerified)
+          Add-Content $env:GITHUB_STEP_SUMMARY '| Scenario | Baseline ms | Candidate ms | Baseline alloc | Candidate alloc | <5 s |'
+          Add-Content $env:GITHUB_STEP_SUMMARY '| --- | ---: | ---: | ---: | ---: | :---: |'
+          foreach ($row in $result.scenarios) {
+            Add-Content $env:GITHUB_STEP_SUMMARY ("| {0} | {1:N1} | {2:N1} | {3:N0} | {4:N0} | {5} |" -f $row.scenario, $row.baselineWallMs, $row.candidateWallMs, $row.baselineAllocatedBytes, $row.candidateAllocatedBytes, $(if ($row.underTarget) { 'yes' } else { 'no' }))
+          }
 
       - name: Upload profiling evidence
         if: always()

@@ -55,6 +55,129 @@ def exact_bytes(left: Path, right: Path) -> bool:
                 return True
 
 
+
+# This is an explicit migration audit against the pre-source-pack revision, not
+# byte parity and not a generic graph normalizer. Exact byte mode stays default.
+GRAPH_CONTRACT_MODE = "parent-graph-contract-v1"
+GRAPH_CONTRACT_BASELINE = "d5dd52da8eb9f5910eef4962254a86d6d2d87323"
+GRAPH_BASELINE_SCOPE = 'Read-only source, never inherited execution or final stats/DPS. values: [IL opcode, operand, input IDs, block]. {member:N}/node.method reference members[N]; module references modules[N]. blocks: [offset, successors, branch-value ID, required enclosing branch IDs]; targets outside this slice stay unresolved. ldloc/predecessor definitions are alternatives, not independent rolls. Helpers bind caller inputs to argument slots (instance this=0). All statements require control to reach their offsets. Roots, virtual bodies and registered globals/players are dispatch candidates; current immunity registrations are not target admission. Native units/operators are not final stat multipliers. No hooks/helpers/getters/constructors ran. Runtime detours, missing edges and omitted source remain unknown.'
+GRAPH_CANDIDATE_SCOPE = 'Read-only source, never inherited execution or final stats/DPS. values: [IL opcode, operand, input IDs, block]. {member:N}/node.method/receiverType/originReceiverType reference members[N]; module references modules[N]. blocks: [offset, successors, branch-value ID, required enclosing branch IDs]; targets outside this slice stay unresolved. ldloc/predecessor definitions are alternatives, not independent rolls. Helpers bind caller inputs to argument slots (instance this=0). All statements require control to reach their offsets. Roots, virtual bodies and registered globals/players are dispatch candidates; current immunity registrations are not target admission. nativeIdentity distinguishes certified identity CFG from conditional source windows; live predicates are never evaluated. Native units/operators are not final stat multipliers. No hooks/helpers/getters/constructors ran. Runtime detours, missing edges and omitted source remain unknown. Discovery is independent of export; sourceCoverage marks edges whose callsite is not in the exported slice.'
+GRAPH_BASELINE_LIMITS = {'nodes': 48, 'edges': 192, 'helperDepth': 6, 'characters': 16000}
+GRAPH_CANDIDATE_LIMITS = {'nodes': 48, 'edges': 192, 'helperDepth': 6, 'characters': 40000, 'allocatedCharacters': 30000, 'reservedCatalogCoverageCharacters': 320, 'discoveryNodes': 256, 'discoveryEdges': 1024}
+GRAPH_ZERO_COUNTS = ("omittedNodeCount", "omittedRootCount", "omittedBodyCount", "omittedEdgeCount")
+GRAPH_PATHS = tuple((item, *container, "parentSourceGraph")
+                    for item in ("itemA", "itemB")
+                    for container in ((), ("runtimeFacts",), ("fingerprint",), ("fingerprint", "runtimeFacts")))
+
+
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"Duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def _canonical(value: Any) -> str:
+    # Preserve scalar types, array order and edge multiplicity. Python equality
+    # alone would incorrectly accept True == 1 and 1 == 1.0.
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+
+
+def _graph_spans(text: str) -> dict[tuple[str, ...], tuple[int, int, dict[str, Any]]]:
+    decoder = json.JSONDecoder(object_pairs_hook=_unique_object, parse_constant=_reject_constant)
+    root = decoder.decode(text)  # Validate all input, including skipped values.
+    if not isinstance(root, dict):
+        raise ValueError("Parent payload must be an object")
+    result: dict[tuple[str, ...], tuple[int, int, dict[str, Any]]] = {}
+
+    def whitespace(index: int) -> int:
+        while index < len(text) and text[index] in " \r\n\t":
+            index += 1
+        return index
+
+    def visit(start: int, path: tuple[str, ...]) -> None:
+        index = whitespace(start)
+        if text[index] != "{":
+            raise ValueError("Missing graph container: " + "/".join(path))
+        index = whitespace(index + 1)
+        while text[index] != "}":
+            key, index = decoder.raw_decode(text, index)
+            index = whitespace(index)
+            if text[index] != ":":
+                raise ValueError("Invalid JSON object separator")
+            value_start = whitespace(index + 1)
+            value, value_end = decoder.raw_decode(text, value_start)
+            child = (*path, key)
+            if child in GRAPH_PATHS:
+                if not isinstance(value, dict):
+                    raise ValueError("Parent graph must be an object: " + "/".join(child))
+                result[child] = (value_start, value_end, value)
+            elif any(target[:len(child)] == child for target in GRAPH_PATHS):
+                visit(value_start, child)
+            index = whitespace(value_end)
+            if text[index] == "}":
+                break
+            if text[index] != ",":
+                raise ValueError("Invalid JSON member separator")
+            index = whitespace(index + 1)
+
+    visit(0, ())
+    if set(result) != set(GRAPH_PATHS):
+        raise ValueError("Expected all eight explicitly located parent source graphs")
+    return result
+
+
+def compare_parent_graph_contract(left: Path, right: Path) -> dict[str, Any]:
+    """Permit only the reviewed v1 metadata migration and graph edge ordering.
+
+    Every graph body, guard, unknown, identity and field outside the allowlist
+    remains equal. Full serialized bytes outside the eight graphs remain equal.
+    This cannot be used as evidence of exact cross-version payload byte parity.
+    """
+    before_text, after_text = left.read_bytes().decode("utf-8"), right.read_bytes().decode("utf-8")
+    before, after = _graph_spans(before_text), _graph_spans(after_text)
+    replacements: list[tuple[int, int, str]] = []
+    reordered_edges = 0
+    for path in GRAPH_PATHS:
+        b_start, b_end, original = before[path]
+        c_start, c_end, changed = after[path]
+        label = "/".join(path)
+        if original.get("scope") != GRAPH_BASELINE_SCOPE or changed.get("scope") != GRAPH_CANDIDATE_SCOPE:
+            raise ValueError(label + ": unrecognized graph scope migration")
+        if (_canonical(original.get("limits")) != _canonical(GRAPH_BASELINE_LIMITS)
+                or _canonical(changed.get("limits")) != _canonical(GRAPH_CANDIDATE_LIMITS)):
+            raise ValueError(label + ": unrecognized graph limit migration")
+        for key in GRAPH_ZERO_COUNTS:
+            if key in original or type(changed.get(key)) is not int or changed[key] != 0:
+                raise ValueError(label + ": missing, nonzero or invalid " + key)
+        b, c = dict(original), dict(changed)
+        for key in ("scope", "limits"):
+            b.pop(key)
+            c.pop(key)
+        for key in GRAPH_ZERO_COUNTS:
+            c.pop(key)
+        for graph in (b, c):
+            if not isinstance(graph.get("edges"), list) or any(not isinstance(edge, dict) for edge in graph["edges"]):
+                raise ValueError(label + ": graph edges must be object records")
+        if _canonical(b["edges"]) != _canonical(c["edges"]):
+            reordered_edges += 1
+        # Sorting complete records, not using sets, preserves duplicate edges.
+        b["edges"] = sorted(_canonical(edge) for edge in b["edges"])
+        c["edges"] = sorted(_canonical(edge) for edge in c["edges"])
+        if _canonical(b) != _canonical(c):
+            raise ValueError(label + ": graph evidence differs outside the metadata allowlist")
+        replacements.append((c_start, c_end, before_text[b_start:b_end]))
+    for start, end, replacement in sorted(replacements, reverse=True):
+        after_text = after_text[:start] + replacement + after_text[end:]
+    if before_text != after_text:
+        raise ValueError("Payload bytes outside parent source graphs differ")
+    return {"contract": GRAPH_CONTRACT_MODE, "graphsCompared": len(GRAPH_PATHS),
+            "edgeOrderChanges": reordered_edges, "outsideGraphBytesEqual": True,
+            "allowedGraphMetadataChanges": ["scope", "limits", *GRAPH_ZERO_COUNTS]}
+
+
 def _number(row: dict[str, Any], name: str, integer: bool = False) -> float | int:
     value = row.get(name)
     types = (int,) if integer else (int, float)
@@ -144,9 +267,15 @@ def _pins(root: Path, required: bool) -> tuple[dict[str, Any], list[str]]:
 
 
 def verify(root: Path, *, require_payloads: bool = False, require_pins: bool = False,
-           max_cold_ms: float = 5000.0) -> dict[str, Any]:
+           max_cold_ms: float = 5000.0, comparison_mode: str = "exact-bytes") -> dict[str, Any]:
     if not math.isfinite(max_cold_ms) or max_cold_ms <= 0:
         raise ValueError("max_cold_ms must be finite and positive")
+    if comparison_mode not in ("exact-bytes", GRAPH_CONTRACT_MODE):
+        raise ValueError("Unknown comparison mode: " + comparison_mode)
+    migration = comparison_mode == GRAPH_CONTRACT_MODE
+    # A migration comparison cannot be inferred from report hashes alone.
+    require_payloads = require_payloads or migration
+    require_pins = require_pins or migration
     errors: list[str] = []
     compared: list[dict[str, Any]] = []
     scenarios: list[dict[str, Any]] = []
@@ -171,27 +300,37 @@ def verify(root: Path, *, require_payloads: bool = False, require_pins: bool = F
         for phase in PHASES:
             b, c = before[phase], after[phase]
             hashes_match = b["sha256"] == c["sha256"]
-            if not hashes_match:
+            if not hashes_match and not migration:
                 errors.append(f"{scenario}/{phase}: cross-variant SHA-256 mismatch")
-            if b["utf8Bytes"] != c["utf8Bytes"] or b["characters"] != c["characters"]:
+            if not migration and (b["utf8Bytes"] != c["utf8Bytes"] or b["characters"] != c["characters"]):
                 errors.append(f"{scenario}/{phase}: wire length mismatch")
             # The source-cache-reset phase is never classified as a cold process.
             paths = [root / "payloads" / variant / scenario / f"{phase}.json"
                      for variant in ("baseline", "candidate")]
             available = all(path.is_file() for path in paths)
             byte_equal: bool | None = None
+            contract_comparison: dict[str, Any] | None = None
             if available:
                 for variant, path, measurement in zip(("baseline", "candidate"), paths, (b, c)):
                     if digest(path) != measurement["sha256"] or path.stat().st_size != measurement["utf8Bytes"]:
                         errors.append(f"{variant}/{scenario}/{phase}: payload does not match receipt")
+                    cold_path = path.with_name(PHASES[0] + ".json")
+                    if not cold_path.is_file() or not exact_bytes(cold_path, path):
+                        errors.append(f"{variant}/{scenario}/{phase}: actual within-variant payload bytes differ")
                 byte_equal = exact_bytes(*paths)
-                if not byte_equal:
+                if migration:
+                    try:
+                        contract_comparison = compare_parent_graph_contract(*paths)
+                    except (ValueError, KeyError, TypeError) as error:
+                        errors.append(f"{scenario}/{phase}: {error}")
+                elif not byte_equal:
                     errors.append(f"{scenario}/{phase}: actual payload bytes differ")
                 verified_payloads += 1
             elif require_payloads:
                 errors.append(f"{scenario}/{phase}: baseline/candidate payload files missing")
             compared.append({"scenario": scenario, "phase": phase, "reportedHashesMatch": hashes_match,
-                             "payloadBytesEqual": byte_equal, "sha256": c["sha256"]})
+                             "payloadBytesEqual": byte_equal, "sha256": c["sha256"],
+                             "contractComparison": contract_comparison})
         b, c = before[PHASES[0]], after[PHASES[0]]
         scenarios.append({
             "scenario": scenario, "baselineWallMs": b["wallMs"], "candidateWallMs": c["wallMs"],
@@ -201,11 +340,17 @@ def verify(root: Path, *, require_payloads: bool = False, require_pins: bool = F
         })
     pins, pin_errors = _pins(root, require_pins)
     errors.extend(pin_errors)
+    if migration and pins.get("inputs", {}).get("baseline", {}).get("sourceSha") != GRAPH_CONTRACT_BASELINE:
+        errors.append("graph contract migration requires the pinned d5dd52d historical baseline")
+    byte_parity = not errors and verified_payloads == 16 and all(row["reportedHashesMatch"] and row["payloadBytesEqual"] is not False for row in compared)
     return {
-        "schema": "ifc_parent_cohort_verification_v1", "parityPass": not errors,
+        "schema": "ifc_parent_cohort_verification_v2" if migration else "ifc_parent_cohort_verification_v1",
+        "comparisonMode": comparison_mode, "parityPass": not errors, "byteParityPass": byte_parity,
+        "contractParityPass": not errors if migration else None,
         "targetPass": all(row["underTarget"] for row in scenarios), "coldTargetMs": max_cold_ms,
         "crossVariantPhaseComparisons": len(compared), "payloadPairsVerified": verified_payloads,
-        "proofStrength": "actual_payload_bytes" if verified_payloads == 16 else "reported_sha256_only_or_partial",
+        "proofStrength": ("actual_payload_graph_contract_migration" if migration and verified_payloads == 16
+                          else "actual_payload_bytes" if verified_payloads == 16 else "reported_sha256_only_or_partial"),
         "checksPeakRss": False, "checksModdedLoadout": False, "checksModelTraffic": False,
         "inputPins": pins, "cohortEnvironment": cohort_environment, "errors": errors, "scenarios": scenarios, "phases": compared,
     }
@@ -257,6 +402,7 @@ def main() -> int:
     check.add_argument("--require-pins", action="store_true")
     check.add_argument("--require-target", action="store_true")
     check.add_argument("--max-cold-ms", type=float, default=5000.0)
+    check.add_argument("--comparison-mode", choices=("exact-bytes", GRAPH_CONTRACT_MODE), default="exact-bytes")
     capture = modes.add_parser("collect")
     capture.add_argument("--report", type=Path, required=True)
     capture.add_argument("--capture-root", type=Path, required=True)
@@ -278,7 +424,8 @@ def main() -> int:
             args.out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
             return 0
         result = verify(args.root, require_payloads=args.require_payloads,
-                        require_pins=args.require_pins, max_cold_ms=args.max_cold_ms)
+                        require_pins=args.require_pins, max_cold_ms=args.max_cold_ms,
+                        comparison_mode=args.comparison_mode)
         if args.out:
             args.out.parent.mkdir(parents=True, exist_ok=True)
             args.out.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

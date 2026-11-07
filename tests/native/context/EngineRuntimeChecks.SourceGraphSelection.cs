@@ -38,6 +38,26 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
+    private sealed class SelectionDiamondStateItem : ModItem
+    {
+        public override bool? UseItem(Player player) { player.GetModPlayer<SelectionDiamondStatePlayer>().Active = true; return true; }
+    }
+
+    private sealed class SelectionDiamondStatePlayer : ModPlayer
+    {
+        public bool Active;
+        public override void PostUpdateEquips()
+        {
+            // Nonconstant alternatives force a value-producing CFG diamond in
+            // both optimized and Debug IL, followed by a consumer after its join.
+            bool enabled;
+            if (Active) enabled = Player.wet;
+            else enabled = Player.lavaWet;
+            if (enabled) Player.statDefense += 31;
+            Player.statManaMax2 += 37;
+        }
+    }
+
     private sealed class SelectionExtraGlobal : GlobalItem
     {
         public override bool? UseItem(Item item, Player player) { player.GetModPlayer<SelectionStatePlayer>().Extra = true; return true; }
@@ -727,6 +747,12 @@ internal static partial class EngineRuntimeChecks
             string id = work.Pop();
             if (!seen.Add(id)) continue;
             foreach (var input in values[id]![2]!.AsArray()) work.Push(input!.GetValue<string>());
+            // A short-circuit condition can reach this guard through a local
+            // or stack phi. Its alternatives carry their own block guards.
+            int definitionBlock = values[id]![3]!.GetValue<int>();
+            foreach (var guard in root["blocks"]!.AsArray().OfType<JsonArray>()
+                .Single(row => row[0]!.GetValue<int>() == definitionBlock)[3]!.AsArray())
+                work.Push(guard!.GetValue<string>());
         }
         string[] guards = seen.Select(id => values[id]?[1]).OfType<JsonObject>().Where(operand => operand["member"] is JsonNode)
             .Select(operand => graph["members"]![operand["member"]!.GetValue<int>()]!["name"]!.GetValue<string>()).ToArray();
@@ -748,6 +774,20 @@ internal static partial class EngineRuntimeChecks
         Equal(true, text.Contains(".Extra", StringComparison.Ordinal) && text.Contains(".statManaMax2", StringComparison.Ordinal),
             "a field discovered in a deferred global expands an already focused consumer");
         AssertSelectionReferences(graph);
+
+        JsonObject diamond = SelectionCapture(typeof(SelectionDiamondStateItem), consumer: typeof(SelectionDiamondStatePlayer));
+        JsonObject diamondConsumer = SelectionNode(diamond, "SelectionDiamondStatePlayer.PostUpdateEquips(")!;
+        string[] diamondMembers = diamondConsumer["values"]!.AsObject().Select(value => value.Value?[1]).OfType<JsonObject>()
+            .Where(operand => operand["member"] is JsonNode)
+            .Select(operand => diamond["members"]![operand["member"]!.GetValue<int>()]!["name"]!.GetValue<string>()).ToArray();
+        Equal(true, diamondMembers.Any(name => name.EndsWith(".statDefense", StringComparison.Ordinal)),
+            "materialized condition carries focus through a value-producing diamond to its guarded effect");
+        Equal(true, diamondMembers.Any(name => name.EndsWith(".wet", StringComparison.Ordinal))
+            && diamondMembers.Any(name => name.EndsWith(".lavaWet", StringComparison.Ordinal)),
+            "materialized condition retains both guarded alternatives");
+        Equal(false, diamondMembers.Any(name => name.EndsWith(".statManaMax2", StringComparison.Ordinal)),
+            "focused control closure stops at the join before unrelated effects");
+        AssertSelectionReferences(diamond);
     }
 
     private static void ParentSourceGraphBudgetsFanoutWithoutDroppingBodies()
