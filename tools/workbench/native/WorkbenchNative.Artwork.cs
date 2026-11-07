@@ -191,6 +191,8 @@ internal sealed partial class WNativeArtwork:IDisposable {
    role.StartsWith("vfx:",StringComparison.Ordinal)?"vfx_"+role[4..]:identity[1]);
  }
  internal static void CertifyPublications(GeneratedAssetSyncService sync,GeneratedItemData data,IEnumerable<GeneratedAssetWireDescriptor> descriptors) {
+  if(!GeneratedItemRegistryService.IsCurrentWorldData(data))
+   throw new InvalidDataException("Artwork publication requires its explicit authored current-world scope; source was not restamped");
   var publications=descriptors.ToArray();
   // Every selected transport name must already have its exact indexed PNG.
   // Refuse before EnsureAssetsForData can request any missing asset.

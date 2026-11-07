@@ -206,6 +206,7 @@ internal static partial class EngineRuntimeChecks
     {
         WithLighting((_,_)=>{
             using var peers=new ReviewPeers();
+            using var world=new WWorldIdentity(853355558);
             using var sync=new InfiniCrafterLocal.Common.Services.GeneratedAssetSyncService();
             var data=AssetOwnerData("workbench-publication","explicit-staging-input.png");
             string[] identity={data.Id,"item","",data.Id};
@@ -222,6 +223,21 @@ internal static partial class EngineRuntimeChecks
             var previous=sprites.GetValue(null);
             try {
                 sprites.SetValue(null,null);
+                foreach(var authoredWorld in new[]{"", "0"}) {
+                    data.RecipeMeta.WorldId=authoredWorld;
+                    bool unscopedRefused=false;
+                    try{WNativeArtwork.CertifyPublications(sync,data,new[]{descriptor});}
+                    catch(InvalidDataException){unscopedRefused=true;}
+                    if(!unscopedRefused||data.RecipeMeta.WorldId!=authoredWorld||sync.ResolveCertifiedLocalPath(name) is not null)
+                        throw new Exception("Workbench restamped an absent/foreign authored world to certify artwork");
+                }
+                data.RecipeMeta.WorldId="853355558";
+                data.RecipeMeta.WorldScoped=false;
+                bool universalRefused=false;
+                try{WNativeArtwork.CertifyPublications(sync,data,new[]{descriptor});}
+                catch(InvalidDataException){universalRefused=true;}
+                if(!universalRefused||data.RecipeMeta.WorldScoped)throw new Exception("Workbench invented world-scoped authority");
+                data.RecipeMeta.WorldScoped=true;
                 var hostile=new InfiniCrafterLocal.Common.Services.GeneratedAssetWireDescriptor {
                     FileName=name,Length=AssetOwnerCanonical.Length,Sha256=ImageHash(AssetOwnerOtherColor)};
                 bool hostileRefused=false;
@@ -244,7 +260,7 @@ internal static partial class EngineRuntimeChecks
                     throw new Exception("Missing artwork triggered fallback acquisition");
             }finally{sprites.SetValue(null,previous);}
         });
-        Console.WriteLine("PASS: workbench current indexed publication, native certification, hostile descriptors, changed bytes/stat and missing controls");
+        Console.WriteLine("PASS: workbench current indexed publication, native certification, authored-world refusals, hostile descriptors, changed bytes/stat and missing controls");
     }
 
 }

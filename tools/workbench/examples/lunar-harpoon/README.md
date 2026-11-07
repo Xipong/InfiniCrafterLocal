@@ -7,6 +7,10 @@ receipts against the current source paths. `build.py` invokes
 the repository's actual validators, compiler, receipt auditor and delivery
 sanitizer. It does not call an LLM/image API or edit compiled gameplay wire.
 
+The demo explicitly authors world `853355558` in `author-source.json`, matching
+`scenario.json`. The builder refuses missing or mismatched world scope before
+publication; probe preserves this world instead of restamping the definition.
+
 The exact imagegen PNG is bundled under `assets/` and selected by default:
 `infini_asset_png_4a753935d470fa15fe74d5b8b4e87f63a8ef56060e8844a89b30e766fa0c8c2e.png`.
 The builder verifies the immutable input byte hash and publishes those exact bytes
@@ -33,7 +37,7 @@ python tools/workbench/workbench.py run \
   --out artifacts/lunar-harpoon-run
 ```
 
-The supplied final item JSON can also be run directly; rebuilding is optional.
+An already-built `item.json` can be run directly without rebuilding it before each run.
 The scenario template's empty asset fields are filled by the explicit arguments.
 They are not playable defaults or asset fallbacks.
 

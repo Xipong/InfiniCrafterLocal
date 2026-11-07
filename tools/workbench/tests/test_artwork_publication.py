@@ -1,5 +1,7 @@
 """Current indexed publications for explicit Workbench artwork, not native render evidence."""
+import argparse
 import copy
+import importlib.util
 import io
 import json
 from pathlib import Path
@@ -78,6 +80,8 @@ class LunarPublicationTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             data = w.read_json(out / 'item.json')
             scene = w.read_json(out / 'scenario.json')
+            self.assertEqual(data.get('recipeMeta'), {'worldScoped': True, 'worldId': '853355558'})
+            self.assertEqual(scene['worldId'], 853355558)
             publication, = map(Path, scene['nativeRender']['artworkFiles'])
             self.assertEqual(publication.read_bytes(), before)
             self.assertRegex(publication.name, r'^item--[a-f0-9]{64}\.png$')
@@ -86,7 +90,31 @@ class LunarPublicationTests(unittest.TestCase):
                 self.assertEqual(entity['visual']['spritePath'], publication.name)
             from infini_local.storage.image_store import resolve
             self.assertEqual(resolve(out / 'images', publication.name), publication)
+            index, = (out / 'images/.index').glob('*.json')
+            self.assertEqual(w.read_json(index)['worldId'], data['recipeMeta']['worldId'])
+            from python import probe
+            parser = argparse.ArgumentParser()
+            probe.add_parser(parser.add_subparsers(dest='command', required=True))
+            args = parser.parse_args(['probe', '--item', str(out / 'item.json'), '--gif', '--prepare'])
+            plan = probe.plan_probe(args)
+            planned_scene, = plan['scenes'].values()
+            self.assertEqual(planned_scene['worldId'], scene['worldId'])
         self.assertEqual(bundled.read_bytes(), before)
+
+    def test_demo_refuses_missing_or_mismatched_authored_world_without_restamping(self):
+        builder = w.HERE / 'examples/lunar-harpoon/build.py'
+        spec = importlib.util.spec_from_file_location('lunar_builder_world_test', builder)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        scenario = dict(worldId=853355558)
+        for source in [{}, dict(recipeMeta=dict(worldScoped=False, worldId='853355558')),
+                       dict(recipeMeta=dict(worldScoped=True, worldId='0'))]:
+            original = copy.deepcopy(source)
+            with self.assertRaisesRegex(ValueError, 'same explicit Terraria world'):
+                module.require_demo_world(source, scenario)
+            self.assertEqual(source, original)
+        current = dict(recipeMeta=dict(worldScoped=True, worldId='853355558'))
+        module.require_demo_world(current, scenario)
 
     def test_demo_refuses_different_art_without_publishing(self):
         builder = w.HERE / 'examples/lunar-harpoon/build.py'

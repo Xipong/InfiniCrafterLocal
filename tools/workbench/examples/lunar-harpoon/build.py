@@ -33,6 +33,12 @@ def require(report):
         raise ValueError(json.dumps(report, indent=2))
     return report
 
+def require_demo_world(source, scenario):
+    meta = source.get("recipeMeta") or {}
+    world = scenario.get("worldId")
+    if type(world) is not int or not 0 <= world <= 2147483647 or meta.get("worldScoped") is not True or meta.get("worldId") != str(world):
+        raise ValueError("Demo source and scenario must declare the same explicit Terraria world")
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--asset", type=Path, default=HERE / "assets" / "infini_asset_png_4a753935d470fa15fe74d5b8b4e87f63a8ef56060e8844a89b30e766fa0c8c2e.png", help="Exact published assistant imagegen PNG (default: bundled original demo art)")
@@ -44,6 +50,8 @@ def main():
     if hashlib.sha256(raw).hexdigest() != ASSET_SHA256:
         raise ValueError("This demo's measured grip/forward axis require its exact supplied PNG")
     source = read(HERE / "author-source.json")
+    scenario = read(HERE / "scenario.json")
+    require_demo_world(source, scenario)
     identity = _runtime_publication_identity(source, "item", "", source["id"])
     args.out.mkdir(parents=True, exist_ok=False)
     write(args.out / "author-validation.json", require(validate_runtime_program(source)))
@@ -68,7 +76,6 @@ def main():
     final = sanitize_recipe_for_delivery(data)
     write(args.out / "final-wire-validation.json", require(validate_runtime_wire(final)))
     write(args.out / "item.json", final)
-    scenario = read(HERE / "scenario.json")
     scenario["nativeRender"]["artworkFiles"] = [str(asset)]
     scenario["nativeRender"]["playerAssetRoot"] = str(args.player_assets.resolve())
     scenario["nativeRender"]["dummyAssetRoot"] = str(args.player_assets.resolve())

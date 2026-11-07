@@ -272,5 +272,9 @@
     ]
   },
   "id": "assistant_lunar_harpoon",
-  "sourceMode": "assistant_authored"
+  "sourceMode": "assistant_authored",
+  "recipeMeta": {
+    "worldScoped": true,
+    "worldId": "853355558"
+  }
 }
