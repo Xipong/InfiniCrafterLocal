@@ -86,20 +86,26 @@ def native_csharp_source_for_llm(reference: dict[str, Any], source_calls: list[d
 
     chosen = {}
     original = candidate(chosen)
-    best_size = view_size(original, chosen)
+    # Full-method evidence wins regardless of size. Defer the expensive Author
+    # projection until a genuine size comparison is needed; every comparison
+    # still uses the exact-sharing stage, never a guessed sum of records.
+    best_size: int | None = None
     for record in records.values():
         for alternative in (record, _specialized_record(reference, record)):
             if alternative is None:
                 continue
             selection = {**chosen, record["id"]: alternative}
             proposed = candidate(selection)
-            size = view_size(proposed, selection)
             # The graph contract captures connected slices, not the complete
             # method. A certified whole body (or its proved identity variant)
             # therefore takes priority even when a partial graph is smaller.
-            # Compare size only within that coverage: never drop the body to
-            # satisfy a context budget, or treat opaque callee effects as proved.
             fuller_source = record["coverage"] == "whole_method" and record["id"] not in chosen
-            if fuller_source or size < best_size:
+            if fuller_source:
+                chosen, original, best_size = selection, proposed, None
+                continue
+            if best_size is None:
+                best_size = view_size(original, chosen)
+            size = view_size(proposed, selection)
+            if size < best_size:
                 chosen, original, best_size = selection, proposed, size
     return _compact_model_view(original, _linked_calls(calls, chosen, predicates), chosen)

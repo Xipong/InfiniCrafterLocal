@@ -26,28 +26,101 @@ NATIVE_SOURCE_REFERENCE_RULE = (
 
 
 def share_exact_native_parent_facts(parents: dict[str, Any]) -> dict[str, Any]:
-    """Intern exact repeated native JSON; keep every value in this same dossier.
+    """Share exact native JSON values using bottom-up structural IDs.
 
-    Scalar kinds/presence, source/scope and list order/multiplicity are unchanged.
-    Literal tooltips and complete accepted generated packets are never interned.
+    A subtree is fingerprinted once, not JSON-serialized at every ancestor.
+    Lengths use Python's canonical ensure_ascii=False *character* semantics,
+    not UTF-8 bytes. The output format, first-use ordering, exclusions and
+    nested sourceSameAs references are identical to the original JSON-key pass.
     """
-    counts: dict[str, int] = {}
-    indices: dict[str, int] = {}
-    shared: list[Any] = []
     literal_keys = {"tooltipLines", "tooltipSource", "generatedParent"}
+    shape_ids: dict[tuple[Any, ...], int] = {}
+    lengths: list[int] = []
+    protected: list[bool] = []
+    forbidden: list[bool] = []
+    identities: dict[int, int] = {}
+    encoded_string_lengths: dict[str, int] = {}
 
-    def contains_literal(value: Any) -> bool:
-        if isinstance(value, dict):
-            return bool(literal_keys.intersection(value)) or any(contains_literal(child) for child in value.values())
-        return isinstance(value, list) and any(contains_literal(child) for child in value)
+    def string_length(value: str) -> int:
+        cached = encoded_string_lengths.get(value)
+        if cached is None:
+            cached = len(json.dumps(value, ensure_ascii=False))
+            encoded_string_lengths[value] = cached
+        return cached
 
-    def candidate(value: Any) -> str | None:
-        if not isinstance(value, (dict, list, str)) or contains_literal(value):
-            return None
-        if isinstance(value, dict) and ("sameAs" in value or "sourceSameAs" in value):
-            return None
+    def intern(shape: tuple[Any, ...], length: int, is_protected: bool = False,
+               is_forbidden: bool = False) -> int:
+        existing = shape_ids.get(shape)
+        if existing is not None:
+            return existing
+        index = len(lengths)
+        shape_ids[shape] = index
+        lengths.append(length)
+        protected.append(is_protected)
+        forbidden.append(is_forbidden)
+        return index
+
+    def fingerprint(value: Any) -> int:
+        if isinstance(value, (dict, list)):
+            identity = id(value)
+            if identity in identities:
+                return identities[identity]
+            if isinstance(value, dict):
+                # Native packets are JSON objects, hence string-keyed. For
+                # foreign Python mappings preserve the old json.dumps behavior.
+                if any(type(name) is not str for name in value):
+                    encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+                    key = intern(("foreign", encoded), len(encoded),
+                                 any(name in literal_keys for name in value),
+                                 "sameAs" in value or "sourceSameAs" in value)
+                else:
+                    members = []
+                    total = 2 + max(0, len(value) - 1)
+                    has_literal = bool(literal_keys.intersection(value))
+                    for name in sorted(value):
+                        if name in literal_keys:
+                            # This entire branch is forbidden from interning;
+                            # neither the old count nor visit traversed it.
+                            members.append((name, -1))
+                            continue
+                        child = fingerprint(value[name])
+                        members.append((name, child))
+                        total += string_length(name) + 1 + lengths[child]
+                        has_literal |= protected[child]
+                    key = intern(("object", tuple(members)), total, has_literal,
+                                 "sameAs" in value or "sourceSameAs" in value)
+            else:
+                children = tuple(fingerprint(child) for child in value)
+                key = intern(("array", children), 2 + max(0, len(children) - 1)
+                             + sum(lengths[child] for child in children),
+                             any(protected[child] for child in children))
+            identities[identity] = key
+            return key
+        if type(value) is str:
+            return intern(("str", value), string_length(value))
+        if value is None:
+            return intern(("null",), 4)
+        if type(value) is bool:
+            return intern(("bool", value), 4 if value else 5)
+        if type(value) is int:
+            return intern(("int", value), len(str(value)))
+        if type(value) is float:
+            encoded = json.dumps(value, ensure_ascii=False)
+            return intern(("float", encoded), len(encoded))
+        # Non-JSON values are not expected in native packets; retain original
+        # serialization/refusal semantics if such a value reaches this seam.
         encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-        return encoded if len(encoded) >= 128 else None
+        return intern(("other", type(value).__qualname__, encoded), len(encoded))
+
+    counts: dict[int, int] = {}
+    shared: list[Any] = []
+    indices: dict[int, int] = {}
+
+    def candidate(value: Any) -> int | None:
+        if not isinstance(value, (dict, list, str)):
+            return None
+        key = fingerprint(value)
+        return key if not protected[key] and not forbidden[key] and lengths[key] >= 128 else None
 
     def count(value: Any) -> None:
         key = candidate(value)
@@ -84,12 +157,12 @@ def share_exact_native_parent_facts(parents: dict[str, Any]) -> dict[str, Any]:
         if "generatedParent" not in raw:
             count(raw)
     result = copy.deepcopy(parents)
-    for row in result.values():
-        raw = row.get("packet", {}).get("raw", {})
+    for label, row in result.items():
+        raw = parents[label].get("packet", {}).get("raw", {})
         if "generatedParent" not in raw:
-            # Keep the native raw section map itself; intern only its values.
             row["packet"]["raw"] = {name: visit(value) for name, value in raw.items()}
     return {"parents": result, **({"nativeSourceFacts": shared} if shared else {})}
+
 
 _BRIEF_PROPERTIES = (
     "damage", "damageClass", "crit", "knockback", "useTime", "useAnimation", "channel",
