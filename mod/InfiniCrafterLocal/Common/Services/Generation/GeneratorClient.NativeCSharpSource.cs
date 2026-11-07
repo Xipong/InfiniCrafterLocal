@@ -49,6 +49,11 @@ public sealed partial class GeneratorClient
     private const int NativeCSharpNodeLimit = 200000, NativeCSharpRecordLimit = 120000;
     private static readonly object nativeCSharpGate = new();
     private static readonly Dictionary<string, NativeCSharpDocument> nativeCSharpDocuments = new(StringComparer.Ordinal);
+    // Only deterministic, verified decompiler bounds are negatively cached.
+    // Deadline/cancellation and dependent assembly resolution are retryable.
+    private static readonly Dictionary<string, string> nativeCSharpStableRefusals = new(StringComparer.Ordinal);
+    private static readonly Queue<string> nativeCSharpRefusalOrder = new();
+    private const int NativeCSharpRefusalLimit = 256;
     private static readonly LinkedList<string> nativeCSharpOrder = new();
     private static NativeCSharpModule? nativeCSharpModule;
     private static int nativeCSharpNodes, nativeCSharpCharacters;
@@ -258,12 +263,46 @@ public sealed partial class GeneratorClient
 
     private static string CSharpHash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
+    // ILSpy AST Clone() is deep. Borrow a branch/method under nativeCSharpGate,
+    // temporarily detach only the discarded subtree, clone the closed region,
+    // and restore the original parent relation even if cloning fails. This keeps
+    // all original IL annotations/tokens and the exact legacy C# rendering.
+    private static T CloneCSharpWithoutBody<T>(T source, MethodDeclaration declaration) where T : AstNode
+    {
+        var original = declaration.Body;
+        try
+        {
+            declaration.Body = BlockStatement.Null;
+            return (T)source.Clone();
+        }
+        finally { declaration.Body = original; }
+    }
+
+    private static IfElseStatement CloneCSharpTrueArm(IfElseStatement source)
+    {
+        var original = source.FalseStatement;
+        try
+        {
+            source.FalseStatement = Statement.Null;
+            return (IfElseStatement)source.Clone();
+        }
+        finally { source.FalseStatement = original; }
+    }
+
     private static CSharpRendered RenderCSharp(AstNode source, bool includeLocations = true)
+        => RenderCSharpCore(source, includeLocations, sourceIsOwned: false);
+
+    // The excerpt has already been cloned and will never enter document cache.
+    // Let the location writer annotate that private copy instead of cloning it.
+    private static CSharpRendered RenderOwnedCSharp(AstNode source)
+        => RenderCSharpCore(source, includeLocations: true, sourceIsOwned: true);
+
+    private static CSharpRendered RenderCSharpCore(AstNode source, bool includeLocations, bool sourceIsOwned)
     {
         // Only location assignment needs a clone; the plain writer is read-only.
         // Coordinates are per record, never mutable cached AST state. The empty
         // indentation string avoids whitespace bloat in both identical outputs.
-        var node = includeLocations ? source.Clone() : source;
+        var node = includeLocations && !sourceIsOwned ? source.Clone() : source;
         using var output = new StringWriter(CultureInfo.InvariantCulture) { NewLine = "\n" };
         var writer = new TextWriterTokenWriter(output) { IndentationString = "" };
         node.AcceptVisitor(new CSharpOutputVisitor(includeLocations ? TokenWriter.WrapInWriterThatSetsLocationsInAST(writer) : writer,
@@ -305,7 +344,24 @@ public sealed partial class GeneratorClient
             nativeCSharpOrder.Remove(position); nativeCSharpOrder.AddLast(position);
             return retained;
         }
-        var created = new NativeCSharpDocument(method, nativeCSharpModule, cancellation, methodAlreadyVerified: true);
+        if (nativeCSharpStableRefusals.TryGetValue(key, out var stableRefusal))
+            throw new NotSupportedException(stableRefusal);
+        NativeCSharpDocument created;
+        try { created = new NativeCSharpDocument(method, nativeCSharpModule, cancellation, methodAlreadyVerified: true); }
+        catch (NotSupportedException error) when (error.Message is
+            "csharp_ast_node_bound" or "csharp_method_character_bound" or
+            "csharp_decompiler_warnings" or "csharp_open_generic_method_unsupported")
+        {
+            cancellation.ThrowIfCancellationRequested();
+            if (!nativeCSharpStableRefusals.ContainsKey(key))
+            {
+                while (nativeCSharpRefusalOrder.Count >= NativeCSharpRefusalLimit)
+                    nativeCSharpStableRefusals.Remove(nativeCSharpRefusalOrder.Dequeue());
+                nativeCSharpStableRefusals.Add(key, error.Message);
+                nativeCSharpRefusalOrder.Enqueue(key);
+            }
+            throw;
+        }
         try { cancellation.ThrowIfCancellationRequested(); }
         catch { created.Dispose(); throw; }
         while (nativeCSharpOrder.Count > 0 && (nativeCSharpDocuments.Count >= 8
@@ -328,6 +384,7 @@ public sealed partial class GeneratorClient
         {
             foreach (var document in nativeCSharpDocuments.Values) document.Dispose();
             nativeCSharpDocuments.Clear(); nativeCSharpOrder.Clear(); nativeCSharpNodes = nativeCSharpCharacters = 0;
+            nativeCSharpStableRefusals.Clear(); nativeCSharpRefusalOrder.Clear();
             nativeCSharpModule?.Dispose(); nativeCSharpModule = null;
         }
     }
@@ -455,8 +512,8 @@ public sealed partial class GeneratorClient
                 if (candidates.Any(other => other != candidate && candidate.Branch.Ancestors.Contains(other.Branch.TrueStatement))) continue;
                 string? refusal = CSharpRegionRefusal(candidate.Branch.TrueStatement, method);
                 if (refusal is not null) { unresolved.Add(refusal + "@" + candidate.Offset); continue; }
-                var excerpt = (IfElseStatement)candidate.Branch.Clone(); excerpt.FalseStatement = Statement.Null;
-                guards.Add(candidate); rendered.Add(RenderCSharp(excerpt));
+                var excerpt = CloneCSharpTrueArm(candidate.Branch);
+                guards.Add(candidate); rendered.Add(RenderOwnedCSharp(excerpt));
             }
             // Cover every original identity window represented by this graph.
             // Matching one method hash or the first useful guard is insufficient.
@@ -480,7 +537,7 @@ public sealed partial class GeneratorClient
         string header = "";
         if (coverage == "conditional_ast_regions")
         {
-            var signature = (MethodDeclaration)document.Declaration.Clone(); signature.Body = BlockStatement.Null;
+            var signature = CloneCSharpWithoutBody(document.Declaration, document.Declaration);
             header = string.Concat(document.Tree.Children.Where(node => node is UsingDeclaration or UsingAliasDeclaration).Select(node => RenderCSharp(node, includeLocations: false).Code));
             header += "// Source method on " + method.DeclaringType!.FullName + ": " + RenderCSharp(signature, includeLocations: false).Code.Trim().Replace("\r", "").Replace("\n", " ") + "\n";
         }
@@ -540,7 +597,9 @@ public sealed partial class GeneratorClient
         if (AttackActorArgument(method) < 0 || method.GetMethodBody()!.ExceptionHandlingClauses.Count != 0) return;
         if (document.Tree.Descendants.Any(node => node is GotoStatement or GotoCaseStatement or LabelStatement
             or LambdaExpression or AnonymousMethodExpression or LocalFunctionDeclarationStatement)) return;
-        var body = new ParentSourceMethod(method, AttackCode(method));
+        // Specialization consumes the complete, immutable IL/CFG once; the
+        // parent-specific edge proof stays private to AttackIdentitySelection.
+        var body = ReadCompleteSourceMethod(method);
         var selection = new AttackIdentitySelection(body, type, style);
         var ends = CSharpConditionalEnds(method);
         var selectedOffsets = selection.Receipt["selectedEdges"]!.AsArray().OfType<JsonObject>()

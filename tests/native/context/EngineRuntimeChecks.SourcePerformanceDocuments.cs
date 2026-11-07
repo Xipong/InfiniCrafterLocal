@@ -60,6 +60,43 @@ internal static partial class EngineRuntimeChecks
         Equal(true, nodes.Select((node, i) => node.Annotations.SequenceEqual(annotations[i])).All(value => value),
             "rendering preserves original annotations");
 
+        // Differential oracles for the old deep-clone-then-drop AST paths.
+        var declaration = (MethodDeclaration)CSharpFixtureMember(document, "Declaration");
+        var originalSignature = (MethodDeclaration)declaration.Clone();
+        originalSignature.Body = BlockStatement.Null;
+        var signature = (MethodDeclaration)CSharpOwner.GetMethod("CloneCSharpWithoutBody", CSharpFlags)!
+            .MakeGenericMethod(typeof(MethodDeclaration)).Invoke(null, new object[] { declaration, declaration })!;
+        Equal((string)CSharpFixtureMember(SourcePerformanceRender(originalSignature, false), "Code"),
+            (string)CSharpFixtureMember(SourcePerformanceRender(signature, false), "Code"),
+            "signature shell is byte-equal without copying the original body");
+
+        var firstBranch = tree.Descendants.OfType<IfElseStatement>().First();
+        var originalExcerpt = (IfElseStatement)firstBranch.Clone();
+        originalExcerpt.FalseStatement = Statement.Null;
+        var excerpt = (IfElseStatement)CSharpOwner.GetMethod("CloneCSharpTrueArm", CSharpFlags)!
+            .Invoke(null, new object[] { firstBranch })!;
+        var owned = CSharpOwner.GetMethod("RenderOwnedCSharp", CSharpFlags)!.Invoke(null, new object[] { excerpt })!;
+        var baselineExcerpt = SourcePerformanceRender(originalExcerpt, true);
+        Equal((string)CSharpFixtureMember(baselineExcerpt, "Code"), (string)CSharpFixtureMember(owned, "Code"),
+            "closed excerpt C# remains byte-equal");
+        Equal(true, ((Array)CSharpFixtureMember(baselineExcerpt, "Locations")).Cast<object>().SequenceEqual(
+            ((Array)CSharpFixtureMember(owned, "Locations")).Cast<object>()), "closed excerpt IL spans remain identical");
+
+        var originalShell = (SyntaxTree)tree.Clone();
+        originalShell.Descendants.OfType<MethodDeclaration>().Single().Body = new BlockStatement();
+        var shell = (SyntaxTree)CSharpOwner.GetMethod("CloneCSharpWithoutBody", CSharpFlags)!
+            .MakeGenericMethod(typeof(SyntaxTree)).Invoke(null, new object[] { tree, declaration })!;
+        shell.Descendants.OfType<MethodDeclaration>().Single().Body = new BlockStatement();
+        Equal((string)CSharpFixtureMember(SourcePerformanceRender(originalShell, false), "Code"),
+            (string)CSharpFixtureMember(SourcePerformanceRender(shell, false), "Code"),
+            "mechanics shell renders exactly like the legacy whole-tree clone");
+
+        Equal(true, nodes.SequenceEqual(tree.DescendantsAndSelf), "scoped clones restore the complete shared AST");
+        Equal(true, positions.SequenceEqual(nodes.Select(node => (node.StartLocation, node.EndLocation, node.Parent))),
+            "scoped clones preserve original locations and parents");
+        Equal(true, nodes.Select((node, i) => node.Annotations.SequenceEqual(annotations[i])).All(value => value),
+            "scoped clones preserve every original IL annotation");
+
         // Compare actual old per-document setup against the shared type system,
         // not just two renderers over the same already-decompiled tree.
         using var legacyFile = new PEFile(method.Module.FullyQualifiedName);

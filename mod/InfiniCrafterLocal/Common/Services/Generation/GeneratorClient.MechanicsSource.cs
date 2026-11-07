@@ -266,10 +266,16 @@ public sealed partial class GeneratorClient
         CancellationToken cancellation, bool capturedReceiverBound, JsonObject? conditionalRecord)
     {
         cancellation.ThrowIfCancellationRequested();
-        var tree = (SyntaxTree)document.Tree.Clone(); var gaps = new JsonArray();
+        // Strict closed regions need only the method shell, not the potentially
+        // enormous dispatcher body. Clone under nativeCSharpGate and restore the
+        // source AST immediately; per-view pruning still owns its private tree.
+        bool conditional = conditionalRecord?["coverage"]?.GetValue<string>() == "conditional_ast_regions";
+        var tree = conditional ? CloneCSharpWithoutBody(document.Tree, document.Declaration)
+            : (SyntaxTree)document.Tree.Clone();
+        var gaps = new JsonArray();
         var retainedGuards = new HashSet<IfElseStatement>();
         string? refusal;
-        if (conditionalRecord?["coverage"]?.GetValue<string>() == "conditional_ast_regions")
+        if (conditional)
         {
             var offsets = conditionalRecord["entryGuards"]!.AsArray().OfType<JsonObject>()
                 .Select(guard => guard["ilOffset"]!.GetValue<int>()).ToHashSet();
@@ -286,8 +292,7 @@ public sealed partial class GeneratorClient
                 string? regionRefusal = CSharpRegionRefusal(candidate.Branch.TrueStatement, document.Method)
                     ?? MechanicsPruningRefusal(document, candidate.Branch.TrueStatement, type, style);
                 if (regionRefusal is not null) throw new NotSupportedException(regionRefusal);
-                var branch = (IfElseStatement)candidate.Branch.Clone();
-                branch.FalseStatement = Statement.Null;
+                var branch = CloneCSharpTrueArm(candidate.Branch);
                 declaration.Body.Statements.Add(branch); retainedGuards.Add(branch);
             }
             refusal = capturedReceiverBound ? null : "captured_receiver_binding_unproved";
