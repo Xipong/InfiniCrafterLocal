@@ -47,6 +47,14 @@ public sealed partial class GeneratorClient
     });
     private const int NativeCSharpPeLimit = 64 * 1024 * 1024, NativeCSharpCodeLimit = 750000;
     private const int NativeCSharpNodeLimit = 200000, NativeCSharpRecordLimit = 120000;
+    // A per-method admission ceiling is not a cache-residency ceiling.
+    // The former still refuses enormous methods; the latter keeps several
+    // independently verified native methods alive across projectile identities.
+    // Without separate budgets the same VanillaAI/Kill AST can be decompiled
+    // three times inside a single first craft.
+    private const int NativeCSharpResidentDocuments = 8;
+    private const int NativeCSharpResidentNodes = 650000;
+    private const int NativeCSharpResidentCharacters = 4 * NativeCSharpCodeLimit;
     private static readonly object nativeCSharpGate = new();
     private static readonly Dictionary<string, NativeCSharpDocument> nativeCSharpDocuments = new(StringComparer.Ordinal);
     // Only deterministic, verified decompiler bounds are negatively cached.
@@ -57,6 +65,31 @@ public sealed partial class GeneratorClient
     private static readonly LinkedList<string> nativeCSharpOrder = new();
     private static NativeCSharpModule? nativeCSharpModule;
     private static int nativeCSharpNodes, nativeCSharpCharacters;
+
+    private static bool IsExpensiveNativeCSharpDocument(NativeCSharpDocument document)
+        => document.Nodes >= 12000 || document.Characters >= 40000;
+
+    // The cache must never consume an unbounded amount of memory, but the
+    // replacement cost is highly asymmetric: a tiny helper takes milliseconds
+    // to rebuild, while a dispatcher can take seconds and allocate >500 MB.
+    // Evict the oldest *cheap* document before a costly one. If none remain,
+    // evict ordinary LRU. Each hit still verifies MVID, metadata, IL and EH.
+    private static LinkedListNode<string> NativeCSharpEvictionVictim()
+    {
+        var oldest = nativeCSharpOrder.First!;
+        for (var node = oldest; node is not null; node = node.Next)
+            if (!IsExpensiveNativeCSharpDocument(nativeCSharpDocuments[node.Value]))
+                return node;
+        return oldest;
+    }
+
+    private static void NativeCSharpProfileCache(string action, MethodInfo method,
+        NativeCSharpDocument? document = null)
+    {
+        if (!ParentAnalysis.ProfileJobs) return;
+        Console.Error.WriteLine(FormattableString.Invariant(
+            $"PARENT_ILSPY_CACHE action={action} method={SourceMember(method)} nodes={document?.Nodes ?? 0} characters={document?.Characters ?? 0} resident={nativeCSharpDocuments.Count} retainedNodes={nativeCSharpNodes} retainedChars={nativeCSharpCharacters}"));
+    }
 
     private sealed class NativeCSharpModule : IDisposable
     {
@@ -342,6 +375,7 @@ public sealed partial class GeneratorClient
         {
             var position = nativeCSharpOrder.Find(key)!;
             nativeCSharpOrder.Remove(position); nativeCSharpOrder.AddLast(position);
+            NativeCSharpProfileCache("hit", method, retained);
             return retained;
         }
         if (nativeCSharpStableRefusals.TryGetValue(key, out var stableRefusal))
@@ -364,17 +398,21 @@ public sealed partial class GeneratorClient
         }
         try { cancellation.ThrowIfCancellationRequested(); }
         catch { created.Dispose(); throw; }
-        while (nativeCSharpOrder.Count > 0 && (nativeCSharpDocuments.Count >= 8
-            || nativeCSharpNodes + created.Nodes > NativeCSharpNodeLimit
-            || nativeCSharpCharacters + created.Characters > 2 * NativeCSharpCodeLimit))
+        while (nativeCSharpOrder.Count > 0 && (nativeCSharpDocuments.Count >= NativeCSharpResidentDocuments
+            || nativeCSharpNodes + created.Nodes > NativeCSharpResidentNodes
+            || nativeCSharpCharacters + created.Characters > NativeCSharpResidentCharacters))
         {
-            string oldest = nativeCSharpOrder.First!.Value;
-            nativeCSharpOrder.RemoveFirst();
-            if (!nativeCSharpDocuments.Remove(oldest, out var discarded)) continue;
-            nativeCSharpNodes -= discarded.Nodes; nativeCSharpCharacters -= discarded.Characters; discarded.Dispose();
+            var victim = NativeCSharpEvictionVictim();
+            nativeCSharpOrder.Remove(victim);
+            if (!nativeCSharpDocuments.Remove(victim.Value, out var discarded)) continue;
+            nativeCSharpNodes -= discarded.Nodes;
+            nativeCSharpCharacters -= discarded.Characters;
+            NativeCSharpProfileCache("evict", discarded.Method, discarded);
+            discarded.Dispose();
         }
         nativeCSharpDocuments.Add(key, created); nativeCSharpOrder.AddLast(key);
         nativeCSharpNodes += created.Nodes; nativeCSharpCharacters += created.Characters;
+        NativeCSharpProfileCache("decompile", method, created);
         return created;
     }
 
