@@ -8,6 +8,7 @@ on:
       - 'mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.ParentAnalysis.cs'
       - 'mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceMethod*.cs'
       - 'mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceGraphCache.cs'
+      - 'mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.ProjectileAttackFacts.cs'
       - 'mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.NativeCSharpSource.cs'
       - 'tests/native/context/EngineRuntimeChecks.ParentAnalysisProfiling.cs'
       - 'tests/native/EngineRuntimeChecks.csproj'
