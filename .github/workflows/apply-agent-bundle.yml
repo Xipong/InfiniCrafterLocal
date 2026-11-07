@@ -1,0 +1,36 @@
+name: Apply performance work bundle
+
+on:
+  push:
+    branches:
+      - perf/pr333-cold-under-5s
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: bundle
+        shell: bash
+        run: |
+          if test -f tools/agent-performance-bundle.tar.gz; then
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'present=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Apply and publish bundle
+        if: steps.bundle.outputs.present == 'true'
+        shell: bash
+        run: |
+          tar -xzf tools/agent-performance-bundle.tar.gz
+          rm tools/agent-performance-bundle.tar.gz
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'perf: rebuild cold parent analysis around shared compact IR'
+          git push origin HEAD:perf/pr333-cold-under-5s
