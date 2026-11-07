@@ -40,15 +40,13 @@ public sealed partial class GeneratorClient
                 result["roots"]!.AsArray().Add(root);
                 if (methods.Length != 1) { root["unknowns"]!.AsArray().Add("dispatcher_method_missing_or_ambiguous"); continue; }
                 var method = methods[0]; root["rootCertificate"] = MethodSourceIdentity(method);
-                // The admitted AST requires a literal Item.type equality. If exact
-                // IL lacks either the field read or this captured integer literal,
-                // such a region cannot exist and the existing negative envelope is
-                // final without paying for whole-method ILSpy decompilation.
-                var code = AttackCode(method);
-                bool hasItemTypeRead = code.Any(instruction => instruction.Op == "ldfld"
-                    && instruction.Arg is FieldInfo field && field.DeclaringType == typeof(Item) && field.Name == "type");
-                bool hasItemLiteral = code.Any(instruction => instruction.Op == "const" && Equals(instruction.Arg, itemType));
-                if (!hasItemTypeRead || !hasItemLiteral)
+                // Use exact reaching definitions rather than global field/literal
+                // co-occurrence. Ambiguous dataflow deliberately falls back to
+                // ILSpy; only a proved negative skips decompilation.
+                bool mayMatch;
+                try { mayMatch = SourceMayCompareFieldToInt(ReadCompleteSourceMethod(method), typeof(Item), "type", itemType); }
+                catch (NotSupportedException) { mayMatch = true; }
+                if (!mayMatch)
                 {
                     root["unknowns"]!.AsArray().Add("no_admitted_Item_type_equality_region; absence_not_proved");
                     continue;

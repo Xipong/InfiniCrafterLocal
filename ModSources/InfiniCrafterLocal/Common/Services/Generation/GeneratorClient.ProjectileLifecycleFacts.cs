@@ -17,6 +17,56 @@ namespace InfiniCrafterLocal.Common.Services;
 
 public sealed partial class GeneratorClient
 {
+    // Conservative IL/dataflow preflight for AST equality queries. Returning
+    // false is allowed only when every relevant branch input was resolved and
+    // no branch can compare the requested field with the captured literal.
+    // Any unsupported/ambiguous dataflow returns true and keeps the ILSpy path.
+    private static bool SourceMayCompareFieldToInt(ParentSourceMethod body, Type declaringType, string fieldName, int literal)
+    {
+        bool uncertain = false;
+
+        bool Matches(string id, Func<ParentSourceMethod.Value, bool> predicate, int depth = 0)
+        {
+            if (depth > 8) { uncertain = true; return false; }
+            var definitions = body.Definitions(id).ToArray();
+            if (definitions.Length == 0) { uncertain = true; return false; }
+            foreach (var definition in definitions)
+            {
+                if (definition.Op.StartsWith("unresolved_", StringComparison.Ordinal))
+                { uncertain = true; continue; }
+                if (predicate(definition)) return true;
+                if (definition.Inputs.Count == 1 && (definition.Op.StartsWith("conv.", StringComparison.Ordinal)
+                    || definition.Op is "box" or "unbox.any"))
+                    if (Matches(definition.Inputs[0], predicate, depth + 1)) return true;
+            }
+            return false;
+        }
+
+        bool IsField(string id) => Matches(id, value => value.Op == "ldfld"
+            && value.Operand is FieldInfo field && field.DeclaringType == declaringType && field.Name == fieldName);
+        bool IsLiteral(string id) => Matches(id, value => value.Op == "const" && Equals(value.Operand, literal));
+        bool Pair(IReadOnlyList<string> inputs) => inputs.Count == 2
+            && (IsField(inputs[0]) && IsLiteral(inputs[1]) || IsField(inputs[1]) && IsLiteral(inputs[0]));
+
+        foreach (var branch in body.Statements)
+        {
+            if ((branch.Op.StartsWith("beq", StringComparison.Ordinal) || branch.Op.StartsWith("bne", StringComparison.Ordinal))
+                && Pair(branch.Inputs))
+                return true;
+
+            if (branch.Op is not ("brtrue" or "brtrue.s" or "brfalse" or "brfalse.s") || branch.Inputs.Count != 1)
+                continue;
+            var tests = body.Definitions(branch.Inputs[0]).ToArray();
+            if (tests.Length == 0) { uncertain = true; continue; }
+            foreach (var test in tests)
+            {
+                if (test.Op.StartsWith("unresolved_", StringComparison.Ordinal)) { uncertain = true; continue; }
+                if (test.Op == "ceq" && Pair(test.Inputs)) return true;
+            }
+        }
+        return uncertain;
+    }
+
     // Additive read-only source evidence, not an identity proof or a graph
     // replacement. The complete original guard and lexical body stay together.
     private const string LifecycleScope = "Conditional source regions only. The original guard must be reached; enclosing flow, hooks, captured-entry identity preservation and all other Kill regions remain unknown. Live type/owner/state predicates are not evaluated. No source record proves execution or absence of other effects.";
@@ -30,18 +80,17 @@ public sealed partial class GeneratorClient
         if (method is null) { result["unresolved"]!.AsArray().Add("Kill_root_missing"); return result; }
         result["rootCertificate"] = MethodSourceIdentity(method);
         currentParentAnalysis?.ThrowIfCancelled();
-        // The lifecycle AST owner only admits typed equality guards using the
-        // captured Projectile.type/aiStyle literal. A missing field/literal pair
-        // in exact IL is a conservative negative proof for this query, not a
-        // positive gameplay inference.
-        var code = AttackCode(method);
-        bool MayMatch(string fieldName, int literal)
+        // Query the same exact IL/dataflow graph before constructing C# syntax.
+        // A false result means no branch can feed the AST equality recognizer.
+        bool mayMatch;
+        try
         {
-            bool hasField = code.Any(instruction => instruction.Op == "ldfld"
-                && instruction.Arg is FieldInfo field && field.DeclaringType == typeof(Projectile) && field.Name == fieldName);
-            return hasField && code.Any(instruction => instruction.Op == "const" && Equals(instruction.Arg, literal));
+            var source = ReadCompleteSourceMethod(method);
+            mayMatch = SourceMayCompareFieldToInt(source, typeof(Projectile), "type", type)
+                || SourceMayCompareFieldToInt(source, typeof(Projectile), "aiStyle", style);
         }
-        if (!MayMatch("type", type) && !MayMatch("aiStyle", style))
+        catch (NotSupportedException) { mayMatch = true; }
+        if (!mayMatch)
         {
             result["unresolved"]!.AsArray().Add("Kill_no_admitted_matching_spawn_region; absence_not_proved");
             return result;
