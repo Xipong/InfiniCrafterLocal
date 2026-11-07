@@ -491,3 +491,25 @@ def test_single_whole_source_skips_unneeded_author_stage_size_build(monkeypatch)
     projected, linked = native_csharp_source_for_llm(reference, calls)
     assert projected["motion"]["programs"] == [{"nativeCSharpSourceRef": "s0"}]
     assert linked[0]["sourceLocation"]["sourceRecord"] == "s0"
+
+
+def test_compared_source_reuses_winning_projection(monkeypatch):
+    import importlib
+
+    picker = importlib.import_module("infini_local.pipelines.context.native_csharp_source")
+    reference, calls, record = _specialized_fixture()
+    expected = native_csharp_source_for_llm(reference, calls)
+    original = picker._compact_model_view
+    computed = []
+
+    def capture(*args, **kwargs):
+        result = original(*args, **kwargs)
+        computed.append(result)
+        return result
+
+    monkeypatch.setattr(picker, "_compact_model_view", capture)
+    actual = native_csharp_source_for_llm(reference, calls)
+    assert actual == expected
+    assert actual[0]["nativeCSharpSource"]["records"][0]["code"] == record["identitySpecialized"]["code"]
+    assert len(computed) == 2
+    assert actual[0] is computed[-1][0]
