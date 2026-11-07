@@ -17,13 +17,21 @@ namespace InfiniCrafterLocal.Common.Services;
 
 public sealed partial class GeneratorClient
 {
-    // Conservative IL/dataflow preflight for AST equality queries. Returning
-    // false is allowed only when every relevant branch input was resolved and
-    // no branch can compare the requested field with the captured literal.
-    // Any unsupported/ambiguous dataflow returns true and keeps the ILSpy path.
-    private static bool SourceMayCompareFieldToInt(ParentSourceMethod body, Type declaringType, string fieldName, int literal)
+    // Conservative IL/dataflow preflight for AST equality queries.
+    // False is published only for a fully resolved negative. Ambiguous source
+    // dataflow always falls back to ILSpy.
+    private static (ParentSourceMethod.Value[] Branches, bool Uncertain) SourceFieldIntComparisonBranches(
+        ParentSourceMethod body, Type declaringType, string fieldName, int literal)
     {
+        // Cheap necessary condition first. This also keeps unrelated unresolved
+        // branches from defeating a provable "literal/field never occurs" case.
+        if (!body.Code.Any(instruction => instruction.Op == "ldfld"
+                && instruction.Arg is FieldInfo field && field.DeclaringType == declaringType && field.Name == fieldName)
+            || !body.Code.Any(instruction => instruction.Op == "const" && Equals(instruction.Arg, literal)))
+            return (Array.Empty<ParentSourceMethod.Value>(), false);
+
         bool uncertain = false;
+        var matched = new List<ParentSourceMethod.Value>();
 
         bool Matches(string id, Func<ParentSourceMethod.Value, bool> predicate, int depth = 0)
         {
@@ -36,8 +44,9 @@ public sealed partial class GeneratorClient
                 { uncertain = true; continue; }
                 if (predicate(definition)) return true;
                 if (definition.Inputs.Count == 1 && (definition.Op.StartsWith("conv.", StringComparison.Ordinal)
-                    || definition.Op is "box" or "unbox.any"))
-                    if (Matches(definition.Inputs[0], predicate, depth + 1)) return true;
+                    || definition.Op is "box" or "unbox.any")
+                    && Matches(definition.Inputs[0], predicate, depth + 1))
+                    return true;
             }
             return false;
         }
@@ -50,21 +59,52 @@ public sealed partial class GeneratorClient
 
         foreach (var branch in body.Statements)
         {
+            bool matches = false;
             if ((branch.Op.StartsWith("beq", StringComparison.Ordinal) || branch.Op.StartsWith("bne", StringComparison.Ordinal))
                 && Pair(branch.Inputs))
-                return true;
-
-            if (branch.Op is not ("brtrue" or "brtrue.s" or "brfalse" or "brfalse.s") || branch.Inputs.Count != 1)
-                continue;
-            var tests = body.Definitions(branch.Inputs[0]).ToArray();
-            if (tests.Length == 0) { uncertain = true; continue; }
-            foreach (var test in tests)
+                matches = true;
+            else if (branch.Op is "brtrue" or "brtrue.s" or "brfalse" or "brfalse.s" && branch.Inputs.Count == 1)
             {
-                if (test.Op.StartsWith("unresolved_", StringComparison.Ordinal)) { uncertain = true; continue; }
-                if (test.Op == "ceq" && Pair(test.Inputs)) return true;
+                var tests = body.Definitions(branch.Inputs[0]).ToArray();
+                if (tests.Length == 0) uncertain = true;
+                foreach (var test in tests)
+                {
+                    if (test.Op.StartsWith("unresolved_", StringComparison.Ordinal)) { uncertain = true; continue; }
+                    if (test.Op == "ceq" && Pair(test.Inputs)) { matches = true; break; }
+                }
             }
+            if (matches) matched.Add(branch);
         }
-        return uncertain;
+        return (matched.ToArray(), uncertain);
+    }
+
+    private static bool SourceMayCompareFieldToInt(ParentSourceMethod body, Type declaringType, string fieldName, int literal)
+    {
+        var result = SourceFieldIntComparisonBranches(body, declaringType, fieldName, literal);
+        return result.Uncertain || result.Branches.Length > 0;
+    }
+
+    private static bool LifecycleMayContainMatchingSpawn(ParentSourceMethod body, int type, int style)
+    {
+        var byType = SourceFieldIntComparisonBranches(body, typeof(Projectile), "type", type);
+        var byStyle = SourceFieldIntComparisonBranches(body, typeof(Projectile), "aiStyle", style);
+        if (byType.Uncertain || byStyle.Uncertain) return true;
+
+        bool Spawn(ParentSourceMethod.Value value)
+            => value.Op is "call" or "callvirt"
+                && value.Operand is MethodBase method
+                && method.DeclaringType == typeof(Projectile)
+                && method.Name is "NewProjectile" or "NewProjectileDirect";
+
+        foreach (var branch in byType.Branches.Concat(byStyle.Branches).Distinct())
+        {
+            HashSet<int> region;
+            try { region = body.ControlledRegion(branch.Block); }
+            catch (NotSupportedException) { return true; }
+            if (body.Statements.Any(statement => region.Contains(statement.Block) && Spawn(statement)))
+                return true;
+        }
+        return false;
     }
 
     // Additive read-only source evidence, not an identity proof or a graph
@@ -83,12 +123,7 @@ public sealed partial class GeneratorClient
         // Query the same exact IL/dataflow graph before constructing C# syntax.
         // A false result means no branch can feed the AST equality recognizer.
         bool mayMatch;
-        try
-        {
-            var source = ReadCompleteSourceMethod(method);
-            mayMatch = SourceMayCompareFieldToInt(source, typeof(Projectile), "type", type)
-                || SourceMayCompareFieldToInt(source, typeof(Projectile), "aiStyle", style);
-        }
+        try { mayMatch = LifecycleMayContainMatchingSpawn(ReadCompleteSourceMethod(method), type, style); }
         catch (NotSupportedException) { mayMatch = true; }
         if (!mayMatch)
         {
