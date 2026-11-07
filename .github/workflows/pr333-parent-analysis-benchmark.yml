@@ -127,6 +127,15 @@ jobs:
       - name: Build baseline and candidate harnesses
         shell: pwsh
         run: |
+          # Newer SDKs prefer MemoryExtensions.Reverse(array), whose return type
+          # is void. Keep both historical trees on the same explicit LINQ call;
+          # this compatibility patch is outside the measured source-analysis code.
+          foreach ($root in @('baseline', 'candidate')) {
+            $fixture = Join-Path $root 'tools/native/EngineRuntimeChecks.GeneratedItemReforge.cs'
+            $text = [System.IO.File]::ReadAllText($fixture)
+            $text = $text.Replace('scenarios.Concat(scenarios.Reverse())', 'scenarios.Concat(scenarios.AsEnumerable().Reverse())')
+            [System.IO.File]::WriteAllText($fixture, $text, [System.Text.UTF8Encoding]::new($false))
+          }
           $baselineOut = Join-Path $env:RUNNER_TEMP 'ifc-profile-baseline'
           $candidateOut = Join-Path $env:RUNNER_TEMP 'ifc-profile-candidate'
           dotnet build baseline/tools/native/EngineRuntimeChecks.csproj --configuration Release --output $baselineOut "-p:InfiniTmlReferenceDir=$env:INFINI_TML_REFERENCE_DIR" "-p:InfiniExternalDepsRoot=$env:INFINI_TML_DEPS_SRC"
