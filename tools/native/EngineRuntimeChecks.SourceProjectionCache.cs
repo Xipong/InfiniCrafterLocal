@@ -191,6 +191,15 @@ internal static partial class EngineRuntimeChecks
     {
         MethodInfo method = typeof(GraphConsumer).GetMethod("UpdateLifeRegen")!;
         using var cache = new GeneratorClient.ParentSourceGraphCache(shared: true);
+        using (var recent = new GeneratorClient.ParentSourceGraphCache(shared: true))
+        {
+            for (int index = 0; index < 2048; index++) recent.RememberProjection(method, "key" + index, "{}");
+            Equal(true, recent.TryGetProjection(method, "key0", out _), "projection hit refreshes its retention");
+            recent.RememberProjection(method, "extra", "{}");
+            Equal(true, recent.TryGetProjection(method, "key0", out _), "projection count pressure retains a recently used old key");
+            Equal(false, recent.TryGetProjection(method, "key1", out _), "projection count pressure evicts the least recent key");
+            Equal(1L, recent.Snapshot().ProjectionEvictions, "one new projection evicts exactly one entry");
+        }
         for (int index = 0; index < 2049; index++) cache.RememberProjection(method, "key" + index, "{}");
         Equal(false, cache.TryGetProjection(method, "key0", out _), "projection entry count evicts old keys");
         Equal(true, cache.TryGetProjection(method, "key2048", out _), "latest projection remains available");

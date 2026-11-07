@@ -1,0 +1,1123 @@
+{
+  "schema": "infini.parent-source-performance.v1",
+  "measuredOnUtcDate": "2026-11-07",
+  "baselineCommit": "3c092e34403eefceea47665123be888a261cd820",
+  "testedLocalCodeCommit": "ae409dda172087e36037ac16b8e94254c8ba0790",
+  "testedCodeTree": "7fbc534416dbe47e59500bf4f4c6ff5658073fe9",
+  "testedSourceSubtrees": {
+    "LocalGenerator": "2c2a65b80674c0395a2ee88a7faaee85c9d36f45",
+    "ModSources": "177a86a33d0bb8629c81dd209256aed17f7f1f4f",
+    "tools": "f7a92b81c98a5dc9f5e17951fe06155201ded41e"
+  },
+  "scope": "Local headless comparison against PR #333 with the supplied patch already applied. Historical evidence for these inputs and source revisions; not release approval or a timing guarantee.",
+  "environment": {
+    "dotnetSdk": "8.0.427",
+    "clr": "8.0.33",
+    "dependencyDllsByteIdentical": true,
+    "dependencyDllSha256": {
+      "Basic.Reference.Assemblies.Net80.dll": "cce68524dbe4113224e86a2d6d4c75bba68fdc5398f178e6e814773341fd0187",
+      "CsvHelper.dll": "3d1a08960b8d55c74b088a64d47966fcf77a54a65bc2171f0275ee27bb330f6d",
+      "DotNetZip.dll": "eb9b84a3df6ae51759544ba04224a4f91454b8a81d54b37c846a4216bc72c15e",
+      "FNA.dll": "f2eb9e915a8f8a4d4e8bcc4a8a00ace75f9c5f6895c3c46c0deff2174ec433fa",
+      "Hjson.dll": "d13a55406fdfbdf0f5185614ebfcf03b90f3ffca59ce49e0673dbe979015d083",
+      "Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+      "ICSharpCode.Decompiler.dll": "d174072a16aa758a39d160f70ce924103898fae2b8506b48f70d6909e25a1fd0",
+      "JetBrains.Annotations.dll": "8f2c837af3f4f61b1726a2e67eafcf5bae23debd9e1de425bb5ce1d4837508d6",
+      "Luminance.dll": "a0d91baa68bc7ae50404c5a0ab550d5e267a6e9b0a685643d6e7233e7c74a73e",
+      "MP3Sharp.dll": "35172af5900041198f46571d1863e59bdd006c11c888e1fe9313c461e3655808",
+      "Microsoft.Build.Framework.dll": "9873b3623f56d31fe9d7047dab38a0690256404bab441ce0cfe70643be01f5de",
+      "Microsoft.Build.Locator.dll": "0adbe65d87bafc46e9ae7fbd4dc40ada05315c5dde6709eef578233fb3f4f62a",
+      "Microsoft.Build.Tasks.Core.dll": "a6ed853de7e4f71c15fb4d556e6afac9b8ab086164d004c117c6e595c90e4cdc",
+      "Microsoft.Build.Utilities.Core.dll": "999e859a188beb9fc91a012a642ff8f637a34f462fbca2fb5652595739c4384c",
+      "Microsoft.Build.dll": "ffc96799384053c1db85ee7698a8783ffe423f75a22fde2e0d96ee762973615d",
+      "Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "c63f6d8fdb79e443c37cce6a2248e04bfe2c82d4bda24b6c01ff1420e6a728b3",
+      "Microsoft.CodeAnalysis.CSharp.dll": "cfb5f2785c30485eda803d58fb8330d737cb07d469cd3d7bc1113d58e8d8e4bb",
+      "Microsoft.CodeAnalysis.ExternalAccess.RazorCompiler.dll": "76b81d7bb1ec7bdd42fd9a36a20b492394fdf0316797d42c97a7e69b583659d3",
+      "Microsoft.CodeAnalysis.FlowAnalysis.Utilities.dll": "652195a9b1824e5249fce7c0a2bc7e2740dfd91fc21fb155f0d9fd04f5fdbe7a",
+      "Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.dll": "f0589ace939d148834c8228416f8d149bf9533a555b5167a6aca0e473bb73df6",
+      "Microsoft.CodeAnalysis.Workspaces.MSBuild.dll": "62b59686df3b652223dfb4ce125afda35843b72ab97fadd4090716dfc657dee9",
+      "Microsoft.CodeAnalysis.Workspaces.dll": "32402baa9383afd30e660af0bd3d23bdb7e596207afeac8c6b3ed6f6a5ca6f1d",
+      "Microsoft.CodeAnalysis.dll": "0a7fb1d94e0e7f46798b138caa67e5d5fb8fb98fd31b5294c917def057ab3d80",
+      "Microsoft.Extensions.DependencyInjection.Abstractions.dll": "a0106a638facae621f870eda720cb6c980c1d5d49c2f4351134e3fe043b9291b",
+      "Microsoft.Extensions.DependencyInjection.dll": "8d6e7b64cce554f0a0fbdb2ba80745895fa0b4e6cc378b9fedfe8ce86f0d8ae4",
+      "Microsoft.Extensions.Logging.Abstractions.dll": "29e6bfaf5ce079ad4d70dc547d966038992a7428df6e726084eb9010ec837715",
+      "Microsoft.Extensions.Logging.dll": "4330a5efe9d110afb7f8e567d5b43eee976e0f7f6802d13a211b65d747529179",
+      "Microsoft.Extensions.Options.dll": "5f9b0e589f1ce9ca656588cd92cc0bd53803fdfad258fb2916aaa14aedce682c",
+      "Microsoft.Extensions.Primitives.dll": "446ff16e903e7479558816e213a3adee9a1c1adad65a56d853801b10933e29d7",
+      "Microsoft.NET.StringTools.dll": "e9f3bb01c775d96594bcdddd3342dce8acb81882e03bfd37bf51bba890df84c2",
+      "Microsoft.VisualStudio.Setup.Configuration.Interop.dll": "a3a5aec9e3985d3beabe782f94ee0a25e9a3d7a696c9104b8b53daa8bb023d8e",
+      "Mono.Cecil.Mdb.dll": "28cb367972bdc1cd43e4006306af2fd96d37f4ed4b239ee90e1dc7237a93af7f",
+      "Mono.Cecil.Pdb.dll": "a332332633fbcb20e8d50e49b4db7bd1557721417122cf0c5f4c42f2332391d0",
+      "Mono.Cecil.Rocks.dll": "bf992f3dce364ebcc3200fa7832ef07e20b4e2dbc3a8a6213ce44e3d239db984",
+      "Mono.Cecil.dll": "831dca77470d85cb6ffbea3072daa7a3df5b7c9fcfd9c3f43674a9be99d4bfcf",
+      "MonoMod.Backports.dll": "ac3f32bfd44aab83abf71abdff6dde548d57b7c0f8a1fe6d8964e348b4eeafb1",
+      "MonoMod.Core.dll": "32d22e9aa161059518ddb5bd4c1403630a0a9cd882ed44ec2512e6576c8d33e8",
+      "MonoMod.ILHelpers.dll": "fdd0e3538340fd78b8f521e62b8cac1ebb7683ac1f27f6aaedfc1044b14bf4bb",
+      "MonoMod.Iced.dll": "7e5f24ff55c03771ca20d2d4a0cb0ca8fce0880380b40eb8edc14937f129efdf",
+      "MonoMod.RuntimeDetour.dll": "b6b2f83c9555727a5985b5b9b97d464aea68cc9c71fb0f869e0482f2e3fdce8a",
+      "MonoMod.Utils.dll": "cdd4a988be5adf4603099458069158eb7d08c93880ff2e1a471908f73aecc2bc",
+      "NVorbis.dll": "60ebe9b4034fa8e0528d835f04b876578802fba53151a9b8fec4b753681138df",
+      "Newtonsoft.Json.dll": "1a2594e05c26457dcf5a1a0d7c00040ef7ea6aff4050483d7eec5cdf00d4e3eb",
+      "ParticleLibrary.dll": "22c5774e90ddde7c2730c7c71c07deea3cb4a43c45f6f9f29091622056773e7f",
+      "RailSDK.Net.dll": "fd820f99c0a559666bf0e7cf613742d268dbc679ae927538ea74f1028d12b87f",
+      "ReLogic.dll": "4da0da8b6c96634df26889aa3e815c6b7ab02af285a538821c797d2438a05aad",
+      "Steamworks.NET.dll": "c292a77537b2ca8083a055442f957b53f330da522e2472a5aad8e1b00bdacfff",
+      "SteelSeriesEngineWrapper.dll": "4ce15bef7981b85915d6366468524998047d8a2175495854a9bf8845a113db8a",
+      "Stubble.Core.dll": "7834f45dcf51dfd35a039de2008a87f16d2cbf7ad57bf129d5527e15bdad247e",
+      "System.CodeDom.dll": "4d33e2986a84d4460853e2b98d3a1ba9f8aa2950f7fa12ff6ad2e15a4bccfd18",
+      "System.CommandLine.dll": "1ae00257b0d7323e50b03d9be373ade05b364e7ad298763ab6eb9b38cd3a42ee",
+      "System.Composition.AttributedModel.dll": "0f403e98d8bad390b970704a93aa532042409f499032823cac47e3004bad9c8a",
+      "System.Composition.Convention.dll": "88e716224482a702e3d44f02e6311b9d91fce9af506abf0482e8c5f82379034f",
+      "System.Composition.Hosting.dll": "8d9a239c7b03ce4a047ed0abd9e835db0feeaaa16c157e7d308603d03efb7ebc",
+      "System.Composition.Runtime.dll": "324acdfc86c5adaa12e9c4f40deacf1e9f45ac2e84e542a02d130e7380f79d6e",
+      "System.Composition.TypedParts.dll": "3100191a1448b9a613e04a63b65899cf74371fc2f5c03315aa40ab53468c7a24",
+      "System.Configuration.ConfigurationManager.dll": "89d52b4a10b13bf98698847a4daf5be995226550b18f85808dbf4e80ba714676",
+      "System.Diagnostics.EventLog.dll": "61c0b16a1d6091b4a34a2ebde9ba5968b2227d44a9a412a965f4f1f364a4ea65",
+      "System.IO.Pipelines.dll": "86d0f5bfaaf1b2ab19331b543a736d87b5b58e72158f4ded282122b2e6665f83",
+      "System.Reflection.MetadataLoadContext.dll": "5a06b29ff594231b4a1500ba426020426e2bc571769b89767a46c383b8b3d1f5",
+      "System.Resources.Extensions.dll": "ea33b0dde479df26ea8c0e06c67f8c3487a5024731de89f418bb66f74e6483d3",
+      "System.Security.Cryptography.Pkcs.dll": "c72cbab271cbd1bf888486176ac4494186da1b0f0b3629abe5664da930d2a98c",
+      "System.Security.Cryptography.ProtectedData.dll": "5e04d6cff3b6fe9706908970cd594861f0c08b3824f7827b2331b5f4fcee1bd1",
+      "System.Security.Cryptography.Xml.dll": "deb76d308c6e93e76b92de651a749d29e63b756ed34d514060b7a7b63c20389f",
+      "System.Security.Permissions.dll": "ec27c1eea2ddd18929b07fc6094dd374ce38bc25d110a21dcc77b6373346f4ea",
+      "System.Windows.Extensions.dll": "878f568d394cbba6e52404891a24e462c2e5bcfe9f33e0f3c1f30de8ca6d8348",
+      "TerrariaHooks.dll": "723ecf395796e730bcaef5261b3d37bbb83f4066b3e5920bdb87e08191b5f4c1",
+      "UtfUnknown.dll": "503e00a8b6ed5e0fc8288c70d73c78a629c5c4401cdfcbeac04983bdbb3be05d",
+      "log4net.dll": "74806995c34a8666fc6b3a474f0622ca7e90d336a9c21f88ea4458478ff24277",
+      "tModLoader.dll": "bf2ca4d53512d064fae664170a0d21ecc5e2ed51b5e917d871ec78cc449263e9",
+      "tModPorter.dll": "b5b06f62bfcfe3a650e077c2750e07688ba0f14969f529b522884f9a27122a0d"
+    },
+    "baselineHarnessSha256": "bde5c9d4a4e573500ffac06494691462f514afdc9facf36e95dea2ff2b4ece6c",
+    "candidateHarnessSha256": "85e997c684fc4aa8d5bdda4c99ae572d6e97dcca07f4d05cf4ddc04407c278ed"
+  },
+  "inputFilesSha256": {
+    "IFC_PR333_Performance_Architecture_Review_RU(1).md": "8e586c0a49c7a65424ffc52a9251740762e7c7ca791b7f400578c4e0798cf12f",
+    "PR333-cold-analysis-and-cleanup(1).zip": "240c37de0b37e1d3a8333a2f85c82ee9fca0355338daa8a66f7d2890811c7db6"
+  },
+  "nativeMethod": {
+    "sampling": "Four scenarios in separate fresh processes per revision; one cold, two warm and one source-cache-reset sample each. Baseline and candidate cohorts ran sequentially with no other test/build/profiling workers from this task. Shared-host scheduling remains uncontrolled.",
+    "timedInterval": "PrepareDeferred + Task.Run(CompleteAnalysis) + 16 ms simulated Pump/waits + PayloadJson. Excludes process startup, parent construction, invalidation, parity comparisons, hashing and evidence writes.",
+    "allocation": "GC.GetTotalAllocatedBytes(precise:true) process-wide delta over the timed interval; cumulative allocation including observer overhead, not retained or peak RAM. No forced GC.",
+    "cache": "Candidate cache counters sampled outside the interval; estimated retained core shape plus bounded lazy memo reservation, not a heap measurement. Baseline did not expose comparable counters.",
+    "sourceCacheReset": "Clears shared parent/source caches; CLR/JIT and native certificate Lazy values remain warm. Not a fresh-process cold run.",
+    "comparison": "Read and compared actual raw UTF-8 payload bytes for every corresponding phase, then checked SHA-256 against both profiler reports.",
+    "notRun": [
+      "Terraria world/game loop",
+      "GPU/rendering",
+      "multiplayer/network loop",
+      "complete Calamity installation",
+      "HTTP/provider latency",
+      "LLM generations or quality"
+    ]
+  },
+  "native": [
+    {
+      "scenario": "plain",
+      "parentTypes": [
+        9,
+        3
+      ],
+      "parentLabels": "Wood + Stone Block (control)",
+      "nativeMvid": "7b8a9f2a-b51f-4957-bcbc-cf6609b474c8",
+      "itemCount": 5456,
+      "projectileCount": 1022,
+      "baselineProfileLogSha256": "585844bbf831edff126593108f5307c5fa3622422e6d95306226d0a5af8d6600",
+      "candidateProfileLogSha256": "5d85ea4a6cbade7808083e787ba6fda8947769660a9956ef8454f40ec0d69535",
+      "phases": [
+        {
+          "phase": "cold-first-request",
+          "rawBytesEqual": true,
+          "utf8Bytes": 32901,
+          "sha256": "8c983cd7182bba43f9bb260be307fef9fd9b97f996b063ce477935fcf5f5a6f9",
+          "baseline": {
+            "wallMs": 1572.454,
+            "captureMs": 309.6463,
+            "resolveMs": 1260.858,
+            "pumpMs": 0.22840000000000013,
+            "maxPumpMs": 0.0959,
+            "frames": 77,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 176169704,
+            "gcCollections": [
+              22,
+              9,
+              3
+            ]
+          },
+          "candidate": {
+            "wallMs": 1551.5178,
+            "captureMs": 318.0282,
+            "resolveMs": 1231.3794,
+            "pumpMs": 0.2,
+            "maxPumpMs": 0.0924,
+            "frames": 76,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 175999384,
+            "gcCollections": [
+              22,
+              9,
+              3
+            ],
+            "sourceGraphCache": {
+              "Hits": 0,
+              "Misses": 0,
+              "RefusalHits": 0,
+              "Evictions": 0,
+              "Rejected": 0,
+              "Methods": 0,
+              "EstimatedMethodBytes": 0,
+              "ProjectionHits": 0,
+              "ProjectionMisses": 0,
+              "ProjectionEvictions": 0,
+              "Projections": 0,
+              "ProjectionBytes": 0
+            }
+          }
+        },
+        {
+          "phase": "warm-1",
+          "rawBytesEqual": true,
+          "utf8Bytes": 32901,
+          "sha256": "8c983cd7182bba43f9bb260be307fef9fd9b97f996b063ce477935fcf5f5a6f9",
+          "baseline": {
+            "wallMs": 17.0203,
+            "captureMs": 0.8326,
+            "resolveMs": 16.0948,
+            "pumpMs": 0.0009,
+            "maxPumpMs": 0.0009,
+            "frames": 1,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 1072192,
+            "gcCollections": [
+              0,
+              0,
+              0
+            ]
+          },
+          "candidate": {
+            "wallMs": 17.4526,
+            "captureMs": 1.2202,
+            "resolveMs": 16.1383,
+            "pumpMs": 0.001,
+            "maxPumpMs": 0.001,
+            "frames": 1,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 966440,
+            "gcCollections": [
+              0,
+              0,
+              0
+            ],
+            "sourceGraphCache": {
+              "Hits": 0,
+              "Misses": 0,
+              "RefusalHits": 0,
+              "Evictions": 0,
+              "Rejected": 0,
+              "Methods": 0,
+              "EstimatedMethodBytes": 0,
+              "ProjectionHits": 0,
+              "ProjectionMisses": 0,
+              "ProjectionEvictions": 0,
+              "Projections": 0,
+              "ProjectionBytes": 0
+            }
+          }
+        },
+        {
+          "phase": "warm-2",
+          "rawBytesEqual": true,
+          "utf8Bytes": 32901,
+          "sha256": "8c983cd7182bba43f9bb260be307fef9fd9b97f996b063ce477935fcf5f5a6f9",
+          "baseline": {
+            "wallMs": 16.881,
+            "captureMs": 0.7176,
+            "resolveMs": 16.1342,
+            "pumpMs": 0.0005,
+            "maxPumpMs": 0.0005,
+            "frames": 1,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 1071736,
+            "gcCollections": [
+              0,
+              0,
+              0
+            ]
+          },
+          "candidate": {
+            "wallMs": 17.9556,
+            "captureMs": 1.8249,
+            "resolveMs": 16.0939,
+            "pumpMs": 0.0008,
+            "maxPumpMs": 0.0008,
+            "frames": 1,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 965984,
+            "gcCollections": [
+              0,
+              0,
+              0
+            ],
+            "sourceGraphCache": {
+              "Hits": 0,
+              "Misses": 0,
+              "RefusalHits": 0,
+              "Evictions": 0,
+              "Rejected": 0,
+              "Methods": 0,
+              "EstimatedMethodBytes": 0,
+              "ProjectionHits": 0,
+              "ProjectionMisses": 0,
+              "ProjectionEvictions": 0,
+              "Projections": 0,
+              "ProjectionBytes": 0
+            }
+          }
+        },
+        {
+          "phase": "source-cache-reset",
+          "rawBytesEqual": true,
+          "utf8Bytes": 32901,
+          "sha256": "8c983cd7182bba43f9bb260be307fef9fd9b97f996b063ce477935fcf5f5a6f9",
+          "baseline": {
+            "wallMs": 904.903,
+            "captureMs": 0.6717,
+            "resolveMs": 904.1852,
+            "pumpMs": 0.11659999999999998,
+            "maxPumpMs": 0.0049,
+            "frames": 55,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 91301296,
+            "gcCollections": [
+              13,
+              6,
+              1
+            ]
+          },
+          "candidate": {
+            "wallMs": 915.309,
+            "captureMs": 0.8239,
+            "resolveMs": 914.4424,
+            "pumpMs": 0.11109999999999999,
+            "maxPumpMs": 0.0041,
+            "frames": 56,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 91197440,
+            "gcCollections": [
+              13,
+              5,
+              1
+            ],
+            "sourceGraphCache": {
+              "Hits": 0,
+              "Misses": 0,
+              "RefusalHits": 0,
+              "Evictions": 0,
+              "Rejected": 0,
+              "Methods": 0,
+              "EstimatedMethodBytes": 0,
+              "ProjectionHits": 0,
+              "ProjectionMisses": 0,
+              "ProjectionEvictions": 0,
+              "Projections": 0,
+              "ProjectionBytes": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "mixed",
+      "parentTypes": [
+        757,
+        2322
+      ],
+      "parentLabels": "Terra Blade + Mining Potion",
+      "nativeMvid": "7b8a9f2a-b51f-4957-bcbc-cf6609b474c8",
+      "itemCount": 5456,
+      "projectileCount": 1022,
+      "baselineProfileLogSha256": "e34a40bebb7d51b99a9de39334201c0aa7100078a3a089e1674e89e13d48dffb",
+      "candidateProfileLogSha256": "3c05677ea0410011571ce8ad2b0b160690bef7e230883a7aa7620da24a02600d",
+      "phases": [
+        {
+          "phase": "cold-first-request",
+          "rawBytesEqual": true,
+          "utf8Bytes": 762635,
+          "sha256": "73eff3bf1a22e4065970b732361ba5e34a2c65f91d0bbfd85d2c53677b38ef91",
+          "baseline": {
+            "wallMs": 9420.5085,
+            "captureMs": 382.4226,
+            "resolveMs": 9035.8683,
+            "pumpMs": 4.663100000000008,
+            "maxPumpMs": 2.0127,
+            "frames": 546,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 1554220072,
+            "gcCollections": [
+              253,
+              85,
+              6
+            ]
+          },
+          "candidate": {
+            "wallMs": 9326.4524,
+            "captureMs": 373.0261,
+            "resolveMs": 8951.5565,
+            "pumpMs": 3.8730999999999898,
+            "maxPumpMs": 1.7138,
+            "frames": 539,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 1492471752,
+            "gcCollections": [
+              245,
+              73,
+              6
+            ],
+            "sourceGraphCache": {
+              "Hits": 8,
+              "Misses": 10,
+              "RefusalHits": 0,
+              "Evictions": 0,
+              "Rejected": 0,
+              "Methods": 10,
+              "EstimatedMethodBytes": 3515372,
+              "ProjectionHits": 0,
+              "ProjectionMisses": 1,
+              "ProjectionEvictions": 0,
+              "Projections": 1,
+              "ProjectionBytes": 10636
+            }
+          }
+        },
+        {
+          "phase": "warm-1",
+          "rawBytesEqual": true,
+          "utf8Bytes": 762635,
+          "sha256": "73eff3bf1a22e4065970b732361ba5e34a2c65f91d0bbfd85d2c53677b38ef91",
+          "baseline": {
+            "wallMs": 108.9587,
+            "captureMs": 4.1302,
+            "resolveMs": 104.7272,
+            "pumpMs": 0.1961,
+            "maxPumpMs": 0.1304,
+            "frames": 6,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 13978840,
+            "gcCollections": [
+              2,
+              1,
+              0
+            ]
+          },
+          "candidate": {
+            "wallMs": 104.9234,
+            "captureMs": 3.5038,
+            "resolveMs": 101.3386,
+            "pumpMs": 0.1773,
+            "maxPumpMs": 0.1218,
+            "frames": 6,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 13724304,
+            "gcCollections": [
+              2,
+              1,
+              0
+            ],
+            "sourceGraphCache": {
+              "Hits": 9,
+              "Misses": 10,
+              "RefusalHits": 0,
+              "Evictions": 0,
+              "Rejected": 0,
+              "Methods": 10,
+              "EstimatedMethodBytes": 3515372,
+              "ProjectionHits": 1,
+              "ProjectionMisses": 1,
+              "ProjectionEvictions": 0,
+              "Projections": 1,
+              "ProjectionBytes": 10636
+            }
+          }
+        },
+        {
+          "phase": "warm-2",
+          "rawBytesEqual": true,
+          "utf8Bytes": 762635,
+          "sha256": "73eff3bf1a22e4065970b732361ba5e34a2c65f91d0bbfd85d2c53677b38ef91",
+          "baseline": {
+            "wallMs": 103.4197,
+            "captureMs": 3.2917,
+            "resolveMs": 100.0853,
+            "pumpMs": 0.1546,
+            "maxPumpMs": 0.0968,
+            "frames": 6,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 13942856,
+            "gcCollections": [
+              2,
+              1,
+              0
+            ]
+          },
+          "candidate": {
+            "wallMs": 111.1407,
+            "captureMs": 3.7402,
+            "resolveMs": 107.3599,
+            "pumpMs": 0.21589999999999998,
+            "maxPumpMs": 0.1551,
+            "frames": 6,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 13688296,
+            "gcCollections": [
+              2,
+              1,
+              0
+            ],
+            "sourceGraphCache": {
+              "Hits": 10,
+              "Misses": 10,
+              "RefusalHits": 0,
+              "Evictions": 0,
+              "Rejected": 0,
+              "Methods": 10,
+              "EstimatedMethodBytes": 3515372,
+              "ProjectionHits": 2,
+              "ProjectionMisses": 1,
+              "ProjectionEvictions": 0,
+              "Projections": 1,
+              "ProjectionBytes": 10636
+            }
+          }
+        },
+        {
+          "phase": "source-cache-reset",
+          "rawBytesEqual": true,
+          "utf8Bytes": 762635,
+          "sha256": "73eff3bf1a22e4065970b732361ba5e34a2c65f91d0bbfd85d2c53677b38ef91",
+          "baseline": {
+            "wallMs": 5434.6708,
+            "captureMs": 3.5301,
+            "resolveMs": 5431.0973,
+            "pumpMs": 0.5592999999999998,
+            "maxPumpMs": 0.1413,
+            "frames": 321,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 1447242480,
+            "gcCollections": [
+              242,
+              74,
+              5
+            ]
+          },
+          "candidate": {
+            "wallMs": 5147.821,
+            "captureMs": 3.3942,
+            "resolveMs": 5144.3896,
+            "pumpMs": 0.5722000000000002,
+            "maxPumpMs": 0.117,
+            "frames": 303,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 1389468432,
+            "gcCollections": [
+              231,
+              70,
+              5
+            ],
+            "sourceGraphCache": {
+              "Hits": 8,
+              "Misses": 10,
+              "RefusalHits": 0,
+              "Evictions": 0,
+              "Rejected": 0,
+              "Methods": 10,
+              "EstimatedMethodBytes": 3515372,
+              "ProjectionHits": 0,
+              "ProjectionMisses": 1,
+              "ProjectionEvictions": 0,
+              "Projections": 1,
+              "ProjectionBytes": 10636
+            }
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "nebula-prism",
+      "parentTypes": [
+        3542,
+        3541
+      ],
+      "parentLabels": "Nebula Blaze + Last Prism",
+      "nativeMvid": "7b8a9f2a-b51f-4957-bcbc-cf6609b474c8",
+      "itemCount": 5456,
+      "projectileCount": 1022,
+      "baselineProfileLogSha256": "b46faf2b009e207439f133f7212e1451fe5ff495f5aa7abfd1dbb06b3923f011",
+      "candidateProfileLogSha256": "81c402c5b6aefee43fcb460ff7e20b33c9dcfd4de4e7cf1223fdffb5a97d613f",
+      "phases": [
+        {
+          "phase": "cold-first-request",
+          "rawBytesEqual": true,
+          "utf8Bytes": 3737307,
+          "sha256": "ecd8d27be562913281c81c6b5c2273684b4d589202a3e189d5df78b99d7635b7",
+          "baseline": {
+            "wallMs": 25860.5771,
+            "captureMs": 396.4201,
+            "resolveMs": 25461.9025,
+            "pumpMs": 6.0793999999999935,
+            "maxPumpMs": 1.0964,
+            "frames": 1513,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 6664994936,
+            "gcCollections": [
+              1152,
+              373,
+              31
+            ]
+          },
+          "candidate": {
+            "wallMs": 22028.6833,
+            "captureMs": 359.9022,
+            "resolveMs": 21666.7342,
+            "pumpMs": 6.4690999999999965,
+            "maxPumpMs": 1.2666,
+            "frames": 1294,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 4999482256,
+            "gcCollections": [
+              860,
+              214,
+              14
+            ],
+            "sourceGraphCache": {
+              "Hits": 24,
+              "Misses": 4,
+              "RefusalHits": 0,
+              "Evictions": 0,
+              "Rejected": 0,
+              "Methods": 4,
+              "EstimatedMethodBytes": 19067596,
+              "ProjectionHits": 0,
+              "ProjectionMisses": 0,
+              "ProjectionEvictions": 0,
+              "Projections": 0,
+              "ProjectionBytes": 0
+            }
+          }
+        },
+        {
+          "phase": "warm-1",
+          "rawBytesEqual": true,
+          "utf8Bytes": 3737307,
+          "sha256": "ecd8d27be562913281c81c6b5c2273684b4d589202a3e189d5df78b99d7635b7",
+          "baseline": {
+            "wallMs": 508.5334,
+            "captureMs": 20.3667,
+            "resolveMs": 488.0548,
+            "pumpMs": 1.7701000000000005,
+            "maxPumpMs": 0.2802,
+            "frames": 29,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 101319248,
+            "gcCollections": [
+              17,
+              7,
+              0
+            ]
+          },
+          "candidate": {
+            "wallMs": 555.9938,
+            "captureMs": 2.5122,
+            "resolveMs": 553.3811,
+            "pumpMs": 2.1510000000000002,
+            "maxPumpMs": 0.3298,
+            "frames": 33,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 101093288,
+            "gcCollections": [
+              18,
+              7,
+              2
+            ],
+            "sourceGraphCache": {
+              "Hits": 24,
+              "Misses": 4,
+              "RefusalHits": 0,
+              "Evictions": 0,
+              "Rejected": 0,
+              "Methods": 4,
+              "EstimatedMethodBytes": 19067596,
+              "ProjectionHits": 0,
+              "ProjectionMisses": 0,
+              "ProjectionEvictions": 0,
+              "Projections": 0,
+              "ProjectionBytes": 0
+            }
+          }
+        },
+        {
+          "phase": "warm-2",
+          "rawBytesEqual": true,
+          "utf8Bytes": 3737307,
+          "sha256": "ecd8d27be562913281c81c6b5c2273684b4d589202a3e189d5df78b99d7635b7",
+          "baseline": {
+            "wallMs": 378.79,
+            "captureMs": 3.3041,
+            "resolveMs": 375.4463,
+            "pumpMs": 1.8695,
+            "maxPumpMs": 0.3213,
+            "frames": 23,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 52159880,
+            "gcCollections": [
+              7,
+              4,
+              0
+            ]
+          },
+          "candidate": {
+            "wallMs": 326.7555,
+            "captureMs": 2.9856,
+            "resolveMs": 323.7269,
+            "pumpMs": 2.1502999999999997,
+            "maxPumpMs": 0.4425,
+            "frames": 19,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 51922000,
+            "gcCollections": [
+              7,
+              3,
+              0
+            ],
+            "sourceGraphCache": {
+              "Hits": 24,
+              "Misses": 4,
+              "RefusalHits": 0,
+              "Evictions": 0,
+              "Rejected": 0,
+              "Methods": 4,
+              "EstimatedMethodBytes": 19067596,
+              "ProjectionHits": 0,
+              "ProjectionMisses": 0,
+              "ProjectionEvictions": 0,
+              "Projections": 0,
+              "ProjectionBytes": 0
+            }
+          }
+        },
+        {
+          "phase": "source-cache-reset",
+          "rawBytesEqual": true,
+          "utf8Bytes": 3737307,
+          "sha256": "ecd8d27be562913281c81c6b5c2273684b4d589202a3e189d5df78b99d7635b7",
+          "baseline": {
+            "wallMs": 18707.0692,
+            "captureMs": 2.8077,
+            "resolveMs": 18704.2155,
+            "pumpMs": 3.557499999999998,
+            "maxPumpMs": 0.4717,
+            "frames": 1098,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 6561346896,
+            "gcCollections": [
+              1128,
+              354,
+              18
+            ]
+          },
+          "candidate": {
+            "wallMs": 16197.3699,
+            "captureMs": 3.5487,
+            "resolveMs": 16193.7759,
+            "pumpMs": 2.7346999999999952,
+            "maxPumpMs": 0.2841,
+            "frames": 955,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 4894922072,
+            "gcCollections": [
+              845,
+              215,
+              8
+            ],
+            "sourceGraphCache": {
+              "Hits": 24,
+              "Misses": 4,
+              "RefusalHits": 0,
+              "Evictions": 0,
+              "Rejected": 0,
+              "Methods": 4,
+              "EstimatedMethodBytes": 19067596,
+              "ProjectionHits": 0,
+              "ProjectionMisses": 0,
+              "ProjectionEvictions": 0,
+              "Projections": 0,
+              "ProjectionBytes": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "eventide",
+      "parentTypes": [
+        4953,
+        40
+      ],
+      "parentLabels": "Eventide + Wooden Arrow",
+      "nativeMvid": "7b8a9f2a-b51f-4957-bcbc-cf6609b474c8",
+      "itemCount": 5456,
+      "projectileCount": 1022,
+      "baselineProfileLogSha256": "e3160ac0d15814103a9aaa60ca6228bb778282557d90a522bba5991277d00e68",
+      "candidateProfileLogSha256": "cd5e1b17d740d1312ff583ed35316e48ffb29affe631ca7c29ba2babc029edad",
+      "phases": [
+        {
+          "phase": "cold-first-request",
+          "rawBytesEqual": true,
+          "utf8Bytes": 2855886,
+          "sha256": "b71c26e234b4e58ace5758392f5310a35822c3770ba0a65a393b7678b34e1083",
+          "baseline": {
+            "wallMs": 25649.8893,
+            "captureMs": 511.5343,
+            "resolveMs": 25136.5549,
+            "pumpMs": 5.093300000000005,
+            "maxPumpMs": 1.9207,
+            "frames": 1500,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 6141613360,
+            "gcCollections": [
+              1067,
+              343,
+              31
+            ]
+          },
+          "candidate": {
+            "wallMs": 20372.6672,
+            "captureMs": 458.759,
+            "resolveMs": 19911.7771,
+            "pumpMs": 2.4735999999999896,
+            "maxPumpMs": 1.0597,
+            "frames": 1200,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 4743149808,
+            "gcCollections": [
+              819,
+              213,
+              15
+            ],
+            "sourceGraphCache": {
+              "Hits": 20,
+              "Misses": 5,
+              "RefusalHits": 0,
+              "Evictions": 0,
+              "Rejected": 0,
+              "Methods": 5,
+              "EstimatedMethodBytes": 12738256,
+              "ProjectionHits": 0,
+              "ProjectionMisses": 0,
+              "ProjectionEvictions": 0,
+              "Projections": 0,
+              "ProjectionBytes": 0
+            }
+          }
+        },
+        {
+          "phase": "warm-1",
+          "rawBytesEqual": true,
+          "utf8Bytes": 2855886,
+          "sha256": "b71c26e234b4e58ace5758392f5310a35822c3770ba0a65a393b7678b34e1083",
+          "baseline": {
+            "wallMs": 155.0036,
+            "captureMs": 38.779,
+            "resolveMs": 116.1132,
+            "pumpMs": 0.0611,
+            "maxPumpMs": 0.0334,
+            "frames": 7,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 48748936,
+            "gcCollections": [
+              7,
+              4,
+              1
+            ]
+          },
+          "candidate": {
+            "wallMs": 156.5233,
+            "captureMs": 42.3101,
+            "resolveMs": 114.0863,
+            "pumpMs": 0.0603,
+            "maxPumpMs": 0.0287,
+            "frames": 7,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 47897616,
+            "gcCollections": [
+              6,
+              3,
+              0
+            ],
+            "sourceGraphCache": {
+              "Hits": 20,
+              "Misses": 5,
+              "RefusalHits": 0,
+              "Evictions": 0,
+              "Rejected": 0,
+              "Methods": 5,
+              "EstimatedMethodBytes": 12738256,
+              "ProjectionHits": 0,
+              "ProjectionMisses": 0,
+              "ProjectionEvictions": 0,
+              "Projections": 0,
+              "ProjectionBytes": 0
+            }
+          }
+        },
+        {
+          "phase": "warm-2",
+          "rawBytesEqual": true,
+          "utf8Bytes": 2855886,
+          "sha256": "b71c26e234b4e58ace5758392f5310a35822c3770ba0a65a393b7678b34e1083",
+          "baseline": {
+            "wallMs": 166.6375,
+            "captureMs": 36.7765,
+            "resolveMs": 129.8144,
+            "pumpMs": 0.06079999999999999,
+            "maxPumpMs": 0.0285,
+            "frames": 8,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 48467776,
+            "gcCollections": [
+              7,
+              4,
+              1
+            ]
+          },
+          "candidate": {
+            "wallMs": 193.3123,
+            "captureMs": 54.4875,
+            "resolveMs": 138.6947,
+            "pumpMs": 0.0896,
+            "maxPumpMs": 0.0541,
+            "frames": 8,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 47640848,
+            "gcCollections": [
+              6,
+              3,
+              0
+            ],
+            "sourceGraphCache": {
+              "Hits": 20,
+              "Misses": 5,
+              "RefusalHits": 0,
+              "Evictions": 0,
+              "Rejected": 0,
+              "Methods": 5,
+              "EstimatedMethodBytes": 12738256,
+              "ProjectionHits": 0,
+              "ProjectionMisses": 0,
+              "ProjectionEvictions": 0,
+              "Projections": 0,
+              "ProjectionBytes": 0
+            }
+          }
+        },
+        {
+          "phase": "source-cache-reset",
+          "rawBytesEqual": true,
+          "utf8Bytes": 2855886,
+          "sha256": "b71c26e234b4e58ace5758392f5310a35822c3770ba0a65a393b7678b34e1083",
+          "baseline": {
+            "wallMs": 19956.4192,
+            "captureMs": 30.0057,
+            "resolveMs": 19926.3753,
+            "pumpMs": 2.784899999999994,
+            "maxPumpMs": 1.1775,
+            "frames": 1179,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 6014095616,
+            "gcCollections": [
+              1043,
+              327,
+              21
+            ]
+          },
+          "candidate": {
+            "wallMs": 14877.37,
+            "captureMs": 30.6756,
+            "resolveMs": 14846.6519,
+            "pumpMs": 1.090499999999997,
+            "maxPumpMs": 0.0852,
+            "frames": 878,
+            "pumpIntervalMs": 16,
+            "totalAllocatedBytes": 4615753424,
+            "gcCollections": [
+              803,
+              208,
+              12
+            ],
+            "sourceGraphCache": {
+              "Hits": 20,
+              "Misses": 5,
+              "RefusalHits": 0,
+              "Evictions": 0,
+              "Rejected": 0,
+              "Methods": 5,
+              "EstimatedMethodBytes": 12738256,
+              "ProjectionHits": 0,
+              "ProjectionMisses": 0,
+              "ProjectionEvictions": 0,
+              "Projections": 0,
+              "ProjectionBytes": 0
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "nativePayloadComparisons": {
+    "passed": 16,
+    "total": 16
+  },
+  "python": {
+    "baselineCommit": "3c092e34403eefceea47665123be888a261cd820",
+    "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+    "method": "Three repetitions of build_initial_author_request with already decoded fixed native captures; imports, capture IO and hashing excluded. No HTTP or LLM calls. Baseline and candidate ran sequentially after all other test/build/profiling workers completed.",
+    "measurements": [
+      {
+        "scenario": "eventide",
+        "baselineMs": [
+          1126.3453610008582,
+          1117.6909929999965,
+          1103.1668870055
+        ],
+        "candidateMs": [
+          693.470181999146,
+          644.2737049947027,
+          677.1564170048805
+        ],
+        "baselineMedianMs": 1117.6909929999965,
+        "candidateMedianMs": 677.1564170048805,
+        "requestBytesEqual": true,
+        "recipeKey": "r_835d53d63cf0157273b6c3b0",
+        "author_request_sha256": "1e5377bb178029cd644cfcbeb64a84e87b9e5920ed0a06edc6e15a418e24ba1d",
+        "author_user_sha256": "06275d6fa4d5021b7e1163db332d0a085a2b56eb7bd8e586d12c1555223ef3a6",
+        "user_chars": 279099,
+        "user_bytes": 279114
+      },
+      {
+        "scenario": "mixed",
+        "baselineMs": [
+          1224.8968799976865,
+          1247.0870179968188,
+          1287.8373979983735
+        ],
+        "candidateMs": [
+          638.1885929949931,
+          624.7361310015549,
+          624.3067370014614
+        ],
+        "baselineMedianMs": 1247.0870179968188,
+        "candidateMedianMs": 624.7361310015549,
+        "requestBytesEqual": true,
+        "recipeKey": "r_7c4ed63caa1bfca351621668",
+        "author_request_sha256": "4c1a9294f382a06ec331c7017b79019ee6f0749d301f87b0c15fdc5e8308623d",
+        "author_user_sha256": "a4f3cf2dc7cdcd6b61ce1a9a9b26c3019eca5b12bb8527f501b09031b2bc5378",
+        "user_chars": 229052,
+        "user_bytes": 229067
+      },
+      {
+        "scenario": "nebula-prism",
+        "baselineMs": [
+          3570.9647789990413,
+          3667.5273709988687,
+          3580.693285999587
+        ],
+        "candidateMs": [
+          2630.0691989963525,
+          2616.306532996532,
+          2768.7678650036105
+        ],
+        "baselineMedianMs": 3580.693285999587,
+        "candidateMedianMs": 2630.0691989963525,
+        "requestBytesEqual": true,
+        "recipeKey": "r_3c8c4d3180eeb0f262ab557b",
+        "author_request_sha256": "786fbff81a7154eafbecb03be84450e2ac7032c53650f321bb408be57cf44c66",
+        "author_user_sha256": "93f59b2d63a6f8569d6981e072e6cb9a4c32b448c2cf1f3d75a3e32fceb523f4",
+        "user_chars": 230254,
+        "user_bytes": 230269
+      },
+      {
+        "scenario": "plain",
+        "baselineMs": [
+          91.13454500038642,
+          89.47499799978686,
+          85.02728599705733
+        ],
+        "candidateMs": [
+          95.85020400118083,
+          83.75202100432944,
+          90.13420099654468
+        ],
+        "baselineMedianMs": 89.47499799978686,
+        "candidateMedianMs": 90.13420099654468,
+        "requestBytesEqual": true,
+        "recipeKey": "r_63d6aebe5f2dd55691df1655",
+        "author_request_sha256": "bafa1b3452527e95cc8d9ca62d2621b8cf3bab0f53e3afdedd600d17500b5be4",
+        "author_user_sha256": "5a2520a61b6fd99cd1e6f2fa7d29a1fea5634027cfe5368ce24338f7ad9504fe",
+        "user_chars": 180484,
+        "user_bytes": 180499
+      }
+    ],
+    "comparison": "All repetitions produced the same full serialized request SHA-256 and Author user-text SHA-256; baseline/candidate request hashes, recipe keys, characters and bytes matched for all four captures. No provider request was sent.",
+    "rawResultsSha256": {
+      "python-projection-isolated-baseline.json": "d7083d8c9ef7cf53dd64c61ab57ad4c442d2afb010f1b4445128a8e15ae9423b",
+      "python-projection-isolated-optimized.json": "e67bcbe30a164dffd6990ed6ab85c1bcdf2061a3cf6a86cb447e90940a763faa"
+    }
+  },
+  "validation": {
+    "native": {
+      "status": "passed",
+      "exitCode": 0,
+      "passed": 756,
+      "failed": 0,
+      "durationSeconds": 604.131,
+      "logSha256": "5ff7346daefdc3404db87a849c7951939c05905d567f970a220a2dbec960b285",
+      "configuration": "Debug",
+      "runner": "tools.validate_release.run_check(native_checks)"
+    },
+    "python": {
+      "schema": "infini.pytest-shards.v3",
+      "status": "passed",
+      "ok": true,
+      "passed": 9779,
+      "sourceRevision": "ae409dda172087e36037ac16b8e94254c8ba0790",
+      "testFileCount": 297,
+      "requestedShardCount": 6,
+      "receiptSha256": "5260440b17e8c71e7781ff039eae03a909da49f9dedc53a5677bf1c161643386",
+      "execution": "Local canonical six-shard matrix; three concurrent workers; isolated snapshots. GITHUB_SHA set to the tested local code commit for merge identity checks. Not hosted CI."
+    },
+    "staticBeforeFinalDataflowCleanup": {
+      "status": "passed",
+      "count": 17,
+      "logSha256": "2a6295b630cda8e3c48a3b3534b77900982bfd97b0a7cbeed8ed3ff8d5f134b0",
+      "checks": [
+        "schema_check",
+        "generated_docs",
+        "delivery_contract",
+        "mutation_gate",
+        "planner_prompt",
+        "csharp_contracts",
+        "project_hygiene",
+        "config_registry",
+        "ruff",
+        "pyright",
+        "terraria_standardization",
+        "targeted_repair",
+        "lowery",
+        "equipment_bounds",
+        "primitive_parity",
+        "handbook",
+        "primitive_loss"
+      ],
+      "note": "Completed before the final removal of unused reaching maps; full native/Python validations above cover the final code. Documentation/hygiene validation is repeated after writing this receipt."
+    }
+  }
+}

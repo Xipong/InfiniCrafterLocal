@@ -31,35 +31,72 @@ def share_exact_native_parent_facts(parents: dict[str, Any]) -> dict[str, Any]:
     Scalar kinds/presence, source/scope and list order/multiplicity are unchanged.
     Literal tooltips and complete accepted generated packets are never interned.
     """
-    counts: dict[str, int] = {}
-    indices: dict[str, int] = {}
+    counts: dict[int, int] = {}
+    indices: dict[int, int] = {}
     shared: list[Any] = []
     literal_keys = {"tooltipLines", "tooltipSource", "generatedParent"}
+    identities: dict[tuple, tuple[int, int]] = {}
+    candidates: dict[int, int] = {}
+    key_sizes: dict[str, int] = {}
 
-    def contains_literal(value: Any) -> bool:
+    def string_size(value: str) -> int:
+        # Only the 128-character sharing threshold matters. A long source
+        # string needs no escaped copy just to prove it exceeds that threshold.
+        return 128 if len(value) >= 126 else min(128, len(json.dumps(value, ensure_ascii=False)))
+
+    def count(value: Any, *, tally: bool = True) -> tuple[int | None, int]:
+        # Child IDs form a collision-checked structural key: dict order is not
+        # identity, while list order/multiplicity and scalar JSON kinds are.
+        # Compute lengths bottom-up instead of serializing overlapping trees.
+        eligible = isinstance(value, (dict, list, str))
         if isinstance(value, dict):
-            return bool(literal_keys.intersection(value)) or any(contains_literal(child) for child in value.values())
-        return isinstance(value, list) and any(contains_literal(child) for child in value)
-
-    def candidate(value: Any) -> str | None:
-        if not isinstance(value, (dict, list, str)) or contains_literal(value):
-            return None
-        if isinstance(value, dict) and ("sameAs" in value or "sourceSameAs" in value):
-            return None
-        encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-        return encoded if len(encoded) >= 128 else None
-
-    def count(value: Any) -> None:
-        key = candidate(value)
-        if key is not None:
-            counts[key] = counts.get(key, 0) + 1
-        if isinstance(value, dict):
+            fields = []
+            literal = False
+            size = 2 + max(0, len(value) - 1)
             for name, child in value.items():
-                if name not in literal_keys:
-                    count(child)
+                if name in literal_keys:
+                    literal = True
+                    continue
+                child_id, child_size = count(child, tally=tally)
+                literal |= child_id is None
+                fields.append((name, child_id))
+                if name not in key_sizes:
+                    key_sizes[name] = string_size(name)
+                size += key_sizes[name] + 1 + child_size
+            if literal:
+                return None, 0
+            key = (dict, tuple(sorted(fields)))
+            eligible &= not ("sameAs" in value or "sourceSameAs" in value)
         elif isinstance(value, list):
-            for child in value:
-                count(child)
+            items = [count(child, tally=tally) for child in value]
+            if any(identity is None for identity, _ in items):
+                return None, 0
+            key = (list, tuple(identity for identity, _ in items))
+            size = 2 + max(0, len(value) - 1) + sum(size for _, size in items)
+        elif isinstance(value, str):
+            key = (str, value)
+            size = string_size(value)
+        else:
+            # JSON lexemes distinguish True/1/1.0 and signed floating zero;
+            # Python equality alone would merge these source facts.
+            if value is None:
+                encoded = "null"
+            elif value is True:
+                encoded = "true"
+            elif value is False:
+                encoded = "false"
+            elif type(value) is int:
+                encoded = str(value)
+            else:
+                encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+            key = ("scalar", encoded)
+            size = len(encoded)
+        identity, size = identities.setdefault(key, (len(identities), min(128, size)))
+        if eligible and size >= 128:
+            candidates[id(value)] = identity
+            if tally:
+                counts[identity] = counts.get(identity, 0) + 1
+        return identity, size
 
     def children(value: Any) -> Any:
         if isinstance(value, dict):
@@ -70,7 +107,7 @@ def share_exact_native_parent_facts(parents: dict[str, Any]) -> dict[str, Any]:
         return copy.deepcopy(value)
 
     def visit(value: Any) -> Any:
-        key = candidate(value)
+        key = candidates.get(id(value))
         if key is not None and counts[key] > 1:
             if key not in indices:
                 index = indices[key] = len(shared)
@@ -83,12 +120,18 @@ def share_exact_native_parent_facts(parents: dict[str, Any]) -> dict[str, Any]:
         raw = row.get("packet", {}).get("raw", {})
         if "generatedParent" not in raw:
             count(raw)
+            # The historical raw-section wrapper visits each top-level value,
+            # including a literal-named section, although counting skips its
+            # key. Index these values without changing occurrence counts.
+            for key in literal_keys.intersection(raw):
+                count(raw[key], tally=False)
     result = copy.deepcopy(parents)
-    for row in result.values():
+    for name, row in parents.items():
         raw = row.get("packet", {}).get("raw", {})
         if "generatedParent" not in raw:
+            # Visit the indexed input, producing independent output values.
             # Keep the native raw section map itself; intern only its values.
-            row["packet"]["raw"] = {name: visit(value) for name, value in raw.items()}
+            result[name]["packet"]["raw"] = {key: visit(value) for key, value in raw.items()}
     return {"parents": result, **({"nativeSourceFacts": shared} if shared else {})}
 
 _BRIEF_PROPERTIES = (

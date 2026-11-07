@@ -197,31 +197,22 @@ public sealed partial class GeneratorClient
         private static string MethodKey(MethodBase method) => method.Module.ModuleVersionId + ":" + method.MetadataToken + ":" + SourceMember(method);
         private ParentSourceMethod? Read(MethodBase method)
         {
+            currentParentAnalysis?.ThrowIfCancelled();
             if (inspected.TryGetValue(method, out var existing)) return existing;
             if (++scanCount > 1024) { Gap("source_scan_method_limit"); return null; }
             // Only complete method bodies are reusable. Native identity slices
             // and their CFG boundaries are specific to this graph/parent.
             bool sliced = nativeSlices.TryGetValue(method, out var slice);
-            ParentSourceGraphCache? cache = sliced ? null : activeParentSourceGraphCache ?? currentParentAnalysis?.SourceCache;
-            if (cache is not null && cache.TryGet(method, out object? cached, out string? refusal))
-            {
-                if (refusal is not null) readFailures[method] = refusal;
-                return inspected[method] = (ParentSourceMethod?)cached;
-            }
             try
             {
-                var body = sliced ? new ParentSourceMethod(method, slice, nativeNext[method]) : new ParentSourceMethod(method);
-                cache?.Remember(method, body, null, body.Code.Count, body.Blocks.Count);
+                var body = sliced ? new ParentSourceMethod(method, slice, nativeNext[method]) : ReadCompleteSourceMethod(method);
                 return inspected[method] = body;
             }
-            catch (Exception error) when (error is not OutOfMemoryException)
+            catch (Exception error) when (error is not OutOfMemoryException and not OperationCanceledException)
             {
                 inspected[method] = null;
                 string reason = error is NotSupportedException ? error.Message : error.GetType().Name;
                 readFailures[method] = reason;
-                // Unsupported IL is stable for this exact MethodBase in a dump.
-                // Do not retain transient reflection/runtime failures.
-                if (error is NotSupportedException) cache?.Remember(method, null, reason, 0, 0);
                 return null;
             }
         }

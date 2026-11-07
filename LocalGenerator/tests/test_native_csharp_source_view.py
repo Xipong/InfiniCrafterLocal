@@ -476,3 +476,126 @@ def test_compact_selection_diagnostics_do_not_admit_unknown_shapes(capture):
     projected, _ = native_csharp_source_for_llm(reference, calls)
     projected["motion"]["programs"][0]["graphCapture"] = capture
     assert not known_native_csharp_context(projected)
+
+
+def _eager_source_choice(reference, calls):
+    """Previous greedy policy, deliberately rebuilding every full candidate."""
+    from infini_local.pipelines.context.attack_behavior import project_attack_behavior
+    from infini_local.pipelines.context.attack_tables import pack_attack_tables
+    from infini_local.pipelines.context.csharp_source_view import (
+        _CERT, _at_path, _capture_metadata, _certificate, _compact_model_view,
+        _linked_calls, _records, _specialized_record, project_lifecycle_source,
+    )
+    from infini_local.pipelines.context.parent_stage import parent_context_for_stage
+
+    reference = project_lifecycle_source(reference)
+    records, predicates = _records(reference), {}
+    assert records
+    for record in records.values():
+        for path in record["graphPaths"]:
+            graph = _at_path(reference, path)[2]
+            for program in (graph, graph.get("identitySelected", {})):
+                for predicate in program.get("predicates", []):
+                    predicates.setdefault((_certificate(record), predicate["id"]), []).append(predicate["at"])
+
+    def candidate(selected):
+        value = copy.deepcopy(reference)
+        for record in selected.values():
+            for path in record["graphPaths"]:
+                owner, leaf, graph = _at_path(value, path)
+                owner[leaf] = {**{key: graph[key] for key in _CERT}, "nativeCSharpSourceRef": record["id"],
+                               "graphCapture": _capture_metadata(graph)}
+        if selected:
+            value["nativeCSharpSource"]["records"] = list(copy.deepcopy(selected).values())
+            value["nativeCSharpSourceReading"] = SOURCE_READING
+        else:
+            value.pop("nativeCSharpSource")
+        return value
+
+    def view_size(value, selection):
+        value, linked = _compact_model_view(value, _linked_calls(calls, selection, predicates), selection)
+        profile = {"attackReference": pack_attack_tables(project_attack_behavior(value))}
+        if calls is not None:
+            profile["referencedProjectiles"] = {"source": "native_single_hop_projectile_references", "version": 1,
+                                                "sourceCalls": linked, "references": []}
+        context = parent_context_for_stage({"A": {"packet": {"raw": {"directProjectile": profile}}}}, stage="author")
+        return len(json.dumps(context, ensure_ascii=False, separators=(",", ":")))
+
+    chosen = {}
+    original = candidate(chosen)
+    best_size = view_size(original, chosen)
+    for record in records.values():
+        for alternative in (record, _specialized_record(reference, record)):
+            if alternative is not None:
+                selection = {**chosen, record["id"]: alternative}
+                proposed = candidate(selection)
+                size = view_size(proposed, selection)
+                if record["coverage"] == "whole_method" and record["id"] not in chosen or size < best_size:
+                    chosen, original, best_size = selection, proposed, size
+    return _compact_model_view(original, _linked_calls(calls, chosen, predicates), chosen)
+
+
+def _multiple_source_fixture(kinds):
+    reference, calls = _parts(_parent())
+    reference["motion"]["programs"].clear()
+    reference["nativeCSharpSource"]["records"].clear()
+    calls.clear()
+    for index, kind in enumerate(kinds):
+        source, source_calls, record = _specialized_fixture()
+        graph = source["motion"]["programs"][0]
+        cert = {"method": f"Fixture.NativeAI{index}", "sourceMethodSha256": hashlib.sha256(str(index).encode()).hexdigest()}
+        graph.update(cert)
+        graph["identitySelected"].update(cert)
+        record.update(cert, id=f"fixture-source-{index}", graphPaths=[["motion", "programs", index]])
+        for call in source_calls:
+            call.update(cert)
+        specialized = record["identitySpecialized"]
+        specialized["id"] = f'csharp-specialized:{record["id"]}:{specialized["codeSha256"]}:1:1'
+        if kind != "specialized":
+            record.pop("identitySpecialized")
+            graph.pop("identitySelected")
+        if kind.startswith("conditional"):
+            window = {"field": "type", "literal": 1, "guardOffset": 3}
+            graph["identityWindows"] = [window]
+            record.update(coverage="conditional_ast_regions", coveredWindows=[window], entryGuards=[{
+                "field": "Terraria.Projectile.type", "operator": "==", "literal": 1, "ilOffset": 3,
+                "scope": "only_if_original_guard_is_reached; enclosing_dispatch_unknown"}])
+            if kind == "conditional_large":
+                record["code"] += "/*" + "read-only padding " * 1000 + "*/"
+                record["codeSha256"] = hashlib.sha256(record["code"].encode()).hexdigest()
+        reference["motion"]["programs"].append(graph)
+        reference["nativeCSharpSource"]["records"].append(record)
+        calls.extend(source_calls)
+    return reference, calls
+
+
+@pytest.mark.parametrize("with_calls", [False, True])
+@pytest.mark.parametrize("kinds", [
+    ("whole", "whole", "whole"),
+    ("specialized", "whole", "conditional_large"),
+    ("conditional", "conditional_large", "specialized"),
+    ("whole", "conditional_large", "conditional"),
+])
+def test_lazy_source_scoring_is_byte_identical_to_eager_greedy_policy(kinds, with_calls):
+    reference, calls = _multiple_source_fixture(kinds)
+    calls = calls if with_calls else None
+    before = json.dumps((reference, calls), ensure_ascii=False)
+    expected = _eager_source_choice(reference, calls)
+    actual = native_csharp_source_for_llm(reference, calls)
+    assert json.dumps(actual, ensure_ascii=False) == json.dumps(expected, ensure_ascii=False)
+    assert json.dumps((reference, calls), ensure_ascii=False) == before
+    # The path-copy candidates must not leak aliases into returned evidence.
+    actual[0]["coverage"]["unresolved"].append("output-only mutation")
+    assert json.dumps((reference, calls), ensure_ascii=False) == before
+
+
+def test_unconditional_whole_sources_do_not_rebuild_unused_stage_size_estimates(monkeypatch):
+    import infini_local.pipelines.context.native_csharp_source as source_view
+    reference, calls = _multiple_source_fixture(("whole", "whole", "whole"))
+    expected = _eager_source_choice(reference, calls)
+
+    def unused_size(*args, **kwargs):
+        raise AssertionError("No size comparison is needed to prefer certified whole bodies")
+
+    monkeypatch.setattr(source_view, "parent_context_for_stage", unused_size)
+    assert native_csharp_source_for_llm(reference, calls) == expected

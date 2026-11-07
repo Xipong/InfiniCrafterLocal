@@ -535,6 +535,7 @@ internal static partial class EngineRuntimeChecks
         report["gcScope"] = "Process-wide GC.CollectionCount generation deltas over the same pipeline interval; prior-phase garbage can be collected here.";
         report["coldScope"] = "First PrepareDeferred in this executable invocation, after native harness and parent Item/Player construction. Not process startup timing. No dump or full catalog setup.";
         report["resetScope"] = "ParentAnalysis.Invalidate clears shared source/attack caches; native certificate Lazy values and CLR/JIT state remain warm. Source-cache-reset is not a fresh process.";
+        report["sourceCacheScope"] = "Source graph counters are cumulative since source-cache invalidation. EstimatedMethodBytes counts retained core shape plus bounded lazy memo reservation; it is not a managed heap measurement. Counter snapshots are taken outside the timed/allocation interval.";
         var measurements = new JsonArray(); report["measurements"] = measurements;
         var client = new GeneratorClient();
         JsonNode? initial = null;
@@ -569,6 +570,7 @@ internal static partial class EngineRuntimeChecks
                 observation["totalAllocatedBytes"] = allocatedBytes;
                 observation["gcCollections"] = new JsonArray(collections0, collections1, collections2);
                 observation["equalToFirstRequest"] = JsonNode.DeepEquals(initial, parsed);
+                observation["sourceGraphCache"] = System.Text.Json.JsonSerializer.SerializeToNode(GeneratorClient.ParentSourceCacheStatistics);
                 measurements.Add(observation);
                 // Equality is reported, not forced: if a mod changes defaults or
                 // source registration, the full differing payload remains saved.

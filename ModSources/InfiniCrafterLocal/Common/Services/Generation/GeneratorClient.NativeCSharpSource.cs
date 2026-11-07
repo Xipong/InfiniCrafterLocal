@@ -46,10 +46,12 @@ public sealed partial class GeneratorClient
         return true;
     });
     private const int NativeCSharpPeLimit = 64 * 1024 * 1024, NativeCSharpCodeLimit = 750000;
-    private const int NativeCSharpNodeLimit = 200000, NativeCSharpRecordLimit = 120000;
+    private const int NativeCSharpNodeLimit = 200000, NativeCSharpRecordLimit = 120000, NativeCSharpRefusalLimit = 64;
     private static readonly object nativeCSharpGate = new();
     private static readonly Dictionary<string, NativeCSharpDocument> nativeCSharpDocuments = new(StringComparer.Ordinal);
     private static readonly LinkedList<string> nativeCSharpOrder = new();
+    private static readonly Dictionary<string, string> nativeCSharpRefusals = new(StringComparer.Ordinal);
+    private static readonly LinkedList<string> nativeCSharpRefusalOrder = new();
     private static NativeCSharpModule? nativeCSharpModule;
     private static int nativeCSharpNodes, nativeCSharpCharacters;
 
@@ -258,12 +260,60 @@ public sealed partial class GeneratorClient
 
     private static string CSharpHash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
-    private static CSharpRendered RenderCSharp(AstNode source, bool includeLocations = true)
+    // MethodDeclaration and IfElseStatement keep their syntax in child roles.
+    // Copy only retained children, preserving tokens and the same annotation
+    // clone semantics as AstNode.Clone, without visiting the discarded body.
+    private static T CloneCSharpWithoutChild<T>(T source, T clone, AstNode discarded) where T : AstNode
     {
-        // Only location assignment needs a clone; the plain writer is read-only.
-        // Coordinates are per record, never mutable cached AST state. The empty
-        // indentation string avoids whitespace bloat in both identical outputs.
-        var node = includeLocations ? source.Clone() : source;
+        clone.Role = source.Role;
+        foreach (object annotation in source.Annotations)
+            clone.AddAnnotation(annotation is ICloneable copy ? copy.Clone() : annotation);
+        foreach (var child in source.Children)
+            if (!ReferenceEquals(child, discarded)) clone.AddChildWithExistingRole(child.Clone());
+        return clone;
+    }
+
+    private static MethodDeclaration CloneCSharpSignature(MethodDeclaration source)
+        => CloneCSharpWithoutChild(source, new MethodDeclaration(), source.Body);
+
+    private static IfElseStatement CloneCSharpTrueBranch(IfElseStatement source)
+        => CloneCSharpWithoutChild(source, new IfElseStatement(), source.FalseStatement);
+
+    private static SyntaxTree CloneCSharpMethodShell(SyntaxTree source, MethodDeclaration declaration)
+    {
+        // The pinned single-member decompiler emits the method directly under
+        // its SyntaxTree. Preserve safe behavior for any future nested shape.
+        if (declaration.Parent != source || source.ConditionalSymbols.Count != 0 || source.TopExpression is not null)
+        {
+            var fallback = (SyntaxTree)source.Clone();
+            fallback.Descendants.OfType<MethodDeclaration>().Single().Body = new BlockStatement();
+            return fallback;
+        }
+        var tree = new SyntaxTree { FileName = source.FileName };
+        tree.Role = source.Role;
+        foreach (object annotation in source.Annotations)
+            tree.AddAnnotation(annotation is ICloneable copy ? copy.Clone() : annotation);
+        foreach (var child in source.Children)
+        {
+            if (child != declaration) tree.AddChildWithExistingRole(child.Clone());
+            else
+            {
+                var signature = CloneCSharpSignature(declaration);
+                signature.Body = new BlockStatement();
+                tree.AddChildWithExistingRole(signature);
+            }
+        }
+        return tree;
+    }
+
+    private static CSharpRendered RenderCSharp(AstNode source, bool includeLocations = true)
+        => RenderOwnedCSharp(includeLocations ? source.Clone() : source, includeLocations);
+
+    // The caller transfers a private tree for location assignment. Cached ASTs
+    // use RenderCSharp; assigning coordinates must never mutate their nodes.
+    private static CSharpRendered RenderOwnedCSharp(AstNode node, bool includeLocations = true)
+    {
+        // The empty indentation string avoids whitespace bloat in both outputs.
         using var output = new StringWriter(CultureInfo.InvariantCulture) { NewLine = "\n" };
         var writer = new TextWriterTokenWriter(output) { IndentationString = "" };
         node.AcceptVisitor(new CSharpOutputVisitor(includeLocations ? TokenWriter.WrapInWriterThatSetsLocationsInAST(writer) : writer,
@@ -278,6 +328,25 @@ public sealed partial class GeneratorClient
                     locations.Add(new(instruction.StartILOffset, instruction.EndILOffset, part.StartLocation.Line, part.EndLocation.Line));
         }
         return new(output.ToString(), locations.Distinct().ToArray());
+    }
+
+    private static string NativeCSharpDocumentKey(MethodInfo method, NativeCSharpModule module)
+        => NativeCSharpVersion + ":" + module.Sha256 + ":" + method.Module.ModuleVersionId + ":" + method.MetadataToken
+            + ":" + CSharpHash(method.GetMethodBody()!.GetILAsByteArray()!);
+
+    private static void RememberNativeCSharpRefusal(string key, string reason, CancellationToken cancellation)
+    {
+        // Only these local, deterministic limits are reusable. Cancellation,
+        // timeouts, resolution failures and decompiler warnings are retried.
+        cancellation.ThrowIfCancellationRequested();
+        if (reason is not ("csharp_ast_node_bound" or "csharp_method_character_bound")) return;
+        if (nativeCSharpRefusals.ContainsKey(key)) nativeCSharpRefusalOrder.Remove(key);
+        else if (nativeCSharpRefusals.Count >= NativeCSharpRefusalLimit)
+        {
+            nativeCSharpRefusals.Remove(nativeCSharpRefusalOrder.First!.Value);
+            nativeCSharpRefusalOrder.RemoveFirst();
+        }
+        nativeCSharpRefusals[key] = reason; nativeCSharpRefusalOrder.AddLast(key);
     }
 
     private static NativeCSharpDocument GetNativeCSharpDocument(MethodInfo method, CancellationToken cancellation)
@@ -297,7 +366,7 @@ public sealed partial class GeneratorClient
             nativeCSharpModule = new(path, System.IO.File.ReadAllBytes(path), method.Module.ModuleVersionId);
         }
         nativeCSharpModule.Verify(method);
-        string key = method.Module.ModuleVersionId + ":" + method.MetadataToken + ":" + CSharpHash(method.GetMethodBody()!.GetILAsByteArray()!);
+        string key = NativeCSharpDocumentKey(method, nativeCSharpModule);
         cancellation.ThrowIfCancellationRequested();
         if (nativeCSharpDocuments.TryGetValue(key, out var retained))
         {
@@ -305,7 +374,18 @@ public sealed partial class GeneratorClient
             nativeCSharpOrder.Remove(position); nativeCSharpOrder.AddLast(position);
             return retained;
         }
-        var created = new NativeCSharpDocument(method, nativeCSharpModule, cancellation, methodAlreadyVerified: true);
+        if (nativeCSharpRefusals.TryGetValue(key, out string? reason))
+        {
+            nativeCSharpRefusalOrder.Remove(key); nativeCSharpRefusalOrder.AddLast(key);
+            throw new NotSupportedException(reason);
+        }
+        NativeCSharpDocument created;
+        try { created = new NativeCSharpDocument(method, nativeCSharpModule, cancellation, methodAlreadyVerified: true); }
+        catch (NotSupportedException error)
+        {
+            RememberNativeCSharpRefusal(key, error.Message, cancellation);
+            throw;
+        }
         try { cancellation.ThrowIfCancellationRequested(); }
         catch { created.Dispose(); throw; }
         while (nativeCSharpOrder.Count > 0 && (nativeCSharpDocuments.Count >= 8
@@ -328,6 +408,7 @@ public sealed partial class GeneratorClient
         {
             foreach (var document in nativeCSharpDocuments.Values) document.Dispose();
             nativeCSharpDocuments.Clear(); nativeCSharpOrder.Clear(); nativeCSharpNodes = nativeCSharpCharacters = 0;
+            nativeCSharpRefusals.Clear(); nativeCSharpRefusalOrder.Clear();
             nativeCSharpModule?.Dispose(); nativeCSharpModule = null;
         }
     }
@@ -455,8 +536,8 @@ public sealed partial class GeneratorClient
                 if (candidates.Any(other => other != candidate && candidate.Branch.Ancestors.Contains(other.Branch.TrueStatement))) continue;
                 string? refusal = CSharpRegionRefusal(candidate.Branch.TrueStatement, method);
                 if (refusal is not null) { unresolved.Add(refusal + "@" + candidate.Offset); continue; }
-                var excerpt = (IfElseStatement)candidate.Branch.Clone(); excerpt.FalseStatement = Statement.Null;
-                guards.Add(candidate); rendered.Add(RenderCSharp(excerpt));
+                var excerpt = CloneCSharpTrueBranch(candidate.Branch);
+                guards.Add(candidate); rendered.Add(RenderOwnedCSharp(excerpt));
             }
             // Cover every original identity window represented by this graph.
             // Matching one method hash or the first useful guard is insufficient.
@@ -480,7 +561,7 @@ public sealed partial class GeneratorClient
         string header = "";
         if (coverage == "conditional_ast_regions")
         {
-            var signature = (MethodDeclaration)document.Declaration.Clone(); signature.Body = BlockStatement.Null;
+            var signature = CloneCSharpSignature(document.Declaration);
             header = string.Concat(document.Tree.Children.Where(node => node is UsingDeclaration or UsingAliasDeclaration).Select(node => RenderCSharp(node, includeLocations: false).Code));
             header += "// Source method on " + method.DeclaringType!.FullName + ": " + RenderCSharp(signature, includeLocations: false).Code.Trim().Replace("\r", "").Replace("\n", " ") + "\n";
         }
@@ -540,8 +621,11 @@ public sealed partial class GeneratorClient
         if (AttackActorArgument(method) < 0 || method.GetMethodBody()!.ExceptionHandlingClauses.Count != 0) return;
         if (document.Tree.Descendants.Any(node => node is GotoStatement or GotoCaseStatement or LabelStatement
             or LambdaExpression or AnonymousMethodExpression or LocalFunctionDeclarationStatement)) return;
-        var body = new ParentSourceMethod(method, AttackCode(method));
-        var selection = new AttackIdentitySelection(body, type, style);
+        var body = ReadCompleteSourceMethod(method);
+        // The previous sourceSlice constructor conservatively required a
+        // connected entry graph even for the full instruction list. Keep that
+        // admission check and its work accounting when borrowing complete IR.
+        var selection = new AttackIdentitySelection(body, type, style, selectIdentityBranches: true, requireConnectedSource: true);
         var ends = CSharpConditionalEnds(method);
         var selectedOffsets = selection.Receipt["selectedEdges"]!.AsArray().OfType<JsonObject>()
             .Where(edge => selection.Reachable.Contains(edge["block"]!.GetValue<int>()))
@@ -576,7 +660,7 @@ public sealed partial class GeneratorClient
             else branch.ReplaceWith((Statement)branch.FalseStatement.Clone());
         }
         if (removed.Count == 0) return;
-        var rendered = RenderCSharp(tree);
+        var rendered = RenderOwnedCSharp(tree);
         if (rendered.Code.Length >= record["code"]!.GetValue<string>().Length) return;
         var mapped = new JsonArray();
         foreach (var original in record["locations"]!.AsArray().OfType<JsonObject>())

@@ -10,9 +10,11 @@ public sealed partial class GeneratorClient
     [ThreadStatic] private static ParentSourceGraphCache? activeParentSourceGraphCache;
 
     private static ParentSourceGraphCache SharedParentSourceGraphCache = new(shared: true);
+    internal static ParentSourceGraphCache.Statistics ParentSourceCacheStatistics => SharedParentSourceGraphCache.Snapshot();
 
     private static ParentSourceMethod ReadCompleteSourceMethod(MethodBase method)
     {
+        currentParentAnalysis?.ThrowIfCancelled();
         var cache = activeParentSourceGraphCache ?? currentParentAnalysis?.SourceCache;
         if (cache is not null && cache.TryGet(method, out object? retained, out string? refusal))
         {
@@ -22,11 +24,13 @@ public sealed partial class GeneratorClient
         try
         {
             var body = new ParentSourceMethod(method);
+            currentParentAnalysis?.ThrowIfCancelled();
             cache?.Remember(method, body, null, body.Code.Count, body.Blocks.Count);
             return body;
         }
         catch (NotSupportedException error)
         {
+            currentParentAnalysis?.ThrowIfCancelled();
             cache?.Remember(method, null, error.Message, 0, 0);
             throw;
         }
@@ -40,23 +44,38 @@ public sealed partial class GeneratorClient
     internal sealed class ParentSourceGraphCache : IDisposable
     {
         internal const int MethodLimit = 256, InstructionLimit = 65_536;
+        internal const long MethodByteLimit = 128L * 1024 * 1024;
         private readonly int thread = Environment.CurrentManagedThreadId;
         private readonly bool shared;
         private readonly object gate = new();
-        private readonly Queue<(MethodBase Method, long Weight)> order = new();
+        private readonly LinkedList<MethodBase> order = new();
         private long weight;
         // Pure complete-method projections are expensive even after IL/CFG
         // decoding is cached. Store immutable JSON, never graph member indices,
         // live values, native identity slices or mutable caller-owned nodes.
         internal const long ProjectionByteLimit = 16L * 1024 * 1024;
-        private readonly Dictionary<(MethodBase Method, string Key), object> projections = new();
-        private readonly Queue<((MethodBase Method, string Key) Key, long Weight)> projectionOrder = new();
+        private readonly Dictionary<(MethodBase Method, string Key), ProjectionEntry> projections = new();
+        private readonly LinkedList<(MethodBase Method, string Key)> projectionOrder = new();
         private long projectionBytes;
 
         internal ParentSourceGraphCache(bool shared = false) => this.shared = shared;
-        private readonly Dictionary<MethodBase, (object? Body, string? Refusal)> entries = new();
+        private sealed record MethodEntry(object? Body, string? Refusal, long Weight, LinkedListNode<MethodBase>? Node);
+        private sealed record ProjectionEntry(object Value, long Weight, LinkedListNode<(MethodBase Method, string Key)> Node);
+        private readonly Dictionary<MethodBase, MethodEntry> entries = new();
         private int instructions, scopes;
         private bool disposed;
+        private long hits, misses, refusalHits, evictions, rejected, projectionHits, projectionMisses, projectionEvictions;
+
+        internal readonly record struct Statistics(long Hits, long Misses, long RefusalHits, long Evictions, long Rejected,
+            int Methods, long EstimatedMethodBytes, long ProjectionHits, long ProjectionMisses, long ProjectionEvictions,
+            int Projections, long ProjectionBytes);
+
+        internal Statistics Snapshot()
+        {
+            CheckThread();
+            lock (gate) return new(hits, misses, refusalHits, evictions, rejected, entries.Count, weight,
+                projectionHits, projectionMisses, projectionEvictions, projections.Count, projectionBytes);
+        }
 
         internal IDisposable Enter()
         {
@@ -74,8 +93,12 @@ public sealed partial class GeneratorClient
             lock (gate)
             {
                 if (entries.TryGetValue(method, out var entry))
-                { body = entry.Body; refusal = entry.Refusal; return true; }
-                body = null; refusal = null; return false;
+                {
+                    if (entry.Node is not null) { order.Remove(entry.Node); order.AddLast(entry.Node); }
+                    hits++; if (entry.Refusal is not null) refusalHits++;
+                    body = entry.Body; refusal = entry.Refusal; return true;
+                }
+                misses++; body = null; refusal = null; return false;
             }
         }
 
@@ -87,21 +110,25 @@ public sealed partial class GeneratorClient
                 if (disposed || entries.ContainsKey(method)) return;
                 if (shared)
                 {
-                    // Account for values plus worst-case lazy CFG sets. Large mod
-                    // hooks remain cacheable; eviction only changes work, never facts.
-                    const long limit = 128L * 1024 * 1024;
-                    long cost = 1024L + codeCount * 256L + blocks * (long)blocks * 80;
-                    if (cost > limit) return;
-                    while (order.Count > 0 && (entries.Count >= MethodLimit || weight + cost > limit))
+                    // Core collections are already built; count their retained
+                    // shape, including shared strings only once. Reserve
+                    // separately for bounded lazy CFG memos, not B² HashSets.
+                    long cost = body is ParentSourceMethod source ? EstimateRetainedBytes(source)
+                        : 1024L + codeCount * 256L + Math.Min(4L * 1024 * 1024, blocks * (long)blocks * 80)
+                            + (refusal?.Length ?? 0) * (long)sizeof(char);
+                    if (cost > MethodByteLimit) { rejected++; return; }
+                    while (order.First is { } oldest && (entries.Count >= MethodLimit || weight + cost > MethodByteLimit))
                     {
-                        var oldest = order.Dequeue(); entries.Remove(oldest.Method); weight -= oldest.Weight;
+                        weight -= entries[oldest.Value].Weight;
+                        entries.Remove(oldest.Value); order.RemoveFirst(); evictions++;
                     }
-                    entries.Add(method, (body, refusal)); order.Enqueue((method, cost)); weight += cost;
+                    entries.Add(method, new(body, refusal, cost, order.AddLast(method))); weight += cost;
                 }
                 else
                 {
-                    if (entries.Count >= MethodLimit || blocks > 128 || codeCount > 4096 || instructions + codeCount > InstructionLimit) return;
-                    entries.Add(method, (body, refusal)); instructions += codeCount;
+                    if (entries.Count >= MethodLimit || blocks > 128 || codeCount > 4096 || instructions + codeCount > InstructionLimit)
+                    { rejected++; return; }
+                    entries.Add(method, new(body, refusal, 0, null)); instructions += codeCount;
                 }
             }
         }
@@ -123,9 +150,12 @@ public sealed partial class GeneratorClient
             CheckThread();
             lock (gate)
             {
-                if (projections.TryGetValue((method, key), out object? retained) && retained is T typed)
-                { value = typed; return true; }
-                value = null; return false;
+                if (projections.TryGetValue((method, key), out var retained) && retained.Value is T typed)
+                {
+                    projectionOrder.Remove(retained.Node); projectionOrder.AddLast(retained.Node);
+                    projectionHits++; value = typed; return true;
+                }
+                projectionMisses++; value = null; return false;
             }
         }
 
@@ -137,14 +167,48 @@ public sealed partial class GeneratorClient
             lock (gate)
             {
                 if (disposed || projections.ContainsKey((method, key))) return;
-                while (projectionOrder.Count > 0 && (projections.Count >= 2048 || projectionBytes + bytes > ProjectionByteLimit))
+                while (projectionOrder.First is { } oldest && (projections.Count >= 2048 || projectionBytes + bytes > ProjectionByteLimit))
                 {
-                    var oldest = projectionOrder.Dequeue();
-                    projections.Remove(oldest.Key); projectionBytes -= oldest.Weight;
+                    projectionBytes -= projections[oldest.Value].Weight;
+                    projections.Remove(oldest.Value); projectionOrder.RemoveFirst(); projectionEvictions++;
                 }
-                projections.Add((method, key), value);
-                projectionOrder.Enqueue(((method, key), bytes)); projectionBytes += bytes;
+                projections.Add((method, key), new(value, bytes, projectionOrder.AddLast((method, key)))); projectionBytes += bytes;
             }
+        }
+
+        private static long EstimateRetainedBytes(ParentSourceMethod source)
+        {
+            // Conservative accounting, not a CLR heap measurement. Capacities
+            // account for list backing arrays; dictionary/set allowances include
+            // spare buckets. Immutable strings are counted by reference. The
+            // reaching-definition solver's intermediate maps are not retained.
+            long bytes = 2048 + source.LazyMemoReservationBytes + source.Code.Capacity * 8L
+                + source.Statements.Capacity * 8L + source.Values.Count * 80L + source.Blocks.Count * 160L
+                + (source.EscapedLocals.Count + source.WrittenArguments.Count + source.CompleteCallPrefixes.Count) * 64L;
+            var strings = new HashSet<string>(ReferenceEqualityComparer.Instance);
+            void Text(string value) { if (strings.Add(value)) bytes += 32L + value.Length * 2L; }
+            foreach (var instruction in source.Code)
+            {
+                bytes += 64; Text(instruction.Op);
+                if (instruction.Arg is string text) Text(text);
+                else if (instruction.Arg is int[] targets) bytes += 32L + targets.Length * 4L;
+                else if (instruction.Arg is not null) bytes += 32;
+            }
+            foreach (var value in source.Values.Values)
+            {
+                bytes += 112L + value.Inputs.Capacity * 8L; Text(value.Id); Text(value.Op);
+                if (value.Operand is string operand) Text(operand);
+                foreach (string input in value.Inputs) Text(input);
+            }
+            foreach (var block in source.Blocks.Values)
+            {
+                bytes += 256L + block.Next.Capacity * 4L + block.Code.Capacity * 8L + block.Exit.Capacity * 8L
+                    + block.Next.Count * 32L; // predecessor lists and references
+                foreach (string value in block.Exit) Text(value);
+            }
+            bytes += 40L + source.Unknown.Capacity * 8L;
+            foreach (string unknown in source.Unknown) Text(unknown);
+            return bytes;
         }
 
         public void Dispose()

@@ -117,13 +117,17 @@ internal static partial class EngineRuntimeChecks
         {
             var item = new Item(type); var second = new Item(ItemID.Wood); var player = new Player();
             Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(91);
-            JsonNode expected = JsonNode.Parse(client.Prepare(item, second, player).PayloadJson)!;
+            string expectedText = client.Prepare(item, second, player).PayloadJson;
+            JsonNode expected = JsonNode.Parse(expectedText)!;
+            Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(91);
+            var synchronous = client.Prepare(item, second, player);
             Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(91);
             var request = client.PrepareDeferred(item, second, player);
             bool earlyReadRefused = false;
             try { _ = request.PayloadJson; } catch (InvalidOperationException) { earlyReadRefused = true; }
             Equal(true, earlyReadRefused, "main-thread payload access fails immediately instead of blocking or exposing partial facts");
             item.damage += 123; item.stack += 4; player.name = "changed after capture";
+            Equal(expectedText, synchronous.PayloadJson, "lazy encoding preserves captured synchronous observations after live input mutation");
             PumpParentAnalysis(Task.Run(request.CompleteAnalysis));
             JsonNode actual = JsonNode.Parse(request.PayloadJson)!;
             Equal(true, JsonNode.DeepEquals(expected, actual), type + " async craft preserves every synchronous source/game field");
@@ -151,6 +155,35 @@ internal static partial class EngineRuntimeChecks
         Equal(false, session.SourceCache.TryGet(method, out _, out _), "world/mod invalidation releases compiled assembly references");
         session.SourceCache.Remember(method, body, null, 11890, 1026);
         Equal(false, session.SourceCache.TryGet(method, out _, out _), "an old worker cannot repopulate an invalidated source cache");
+
+        using var lru = new GeneratorClient.ParentSourceGraphCache(shared: true);
+        for (int i = 0; i < 256; i++) lru.Remember(methods[i], null, "exception_regions", 0, 0);
+        Equal(true, lru.TryGet(methods[0], out _, out _), "old but recently used refusal is hot");
+        lru.Remember(methods[256], null, "exception_regions", 0, 0);
+        Equal(true, lru.TryGet(methods[0], out _, out _), "method count pressure preserves the recent hit");
+        Equal(false, lru.TryGet(methods[1], out _, out _), "method count pressure evicts the least recently used entry");
+        lru.Remember(method, new object(), null, 1_000_000, 2048);
+        Equal(false, lru.TryGet(method, out _, out _), "oversized entry is returned by its owner but not retained");
+        Equal(true, lru.TryGet(methods[0], out _, out _), "oversized entry never flushes unrelated hot methods");
+        var stats = lru.Snapshot();
+        Equal(256, stats.Methods, "bounded method retention counts successful and refused sources");
+        Equal(1L, stats.Evictions, "one insertion evicts only the required oldest method");
+        Equal(1L, stats.Rejected, "oversized retention is observable independently of source refusal");
+        Equal(true, stats.EstimatedMethodBytes <= GeneratorClient.ParentSourceGraphCache.MethodByteLimit,
+            "estimated core and reserved lazy state fit the method byte budget");
+
+        // Retired source reads must honor cancellation before any cache lookup.
+        MethodInfo read = typeof(GeneratorClient).GetMethod("ReadCompleteSourceMethod", BindingFlags.Static | BindingFlags.NonPublic)!;
+        using var cancelled = new GeneratorClient.ParentAnalysis();
+        using (cancelled.Enter())
+        {
+            cancelled.SourceCache.Remember(method, body, null, 1, 1);
+            GeneratorClient.ParentAnalysis.Invalidate();
+            bool refused = false;
+            try { read.Invoke(null, new object[] { method }); }
+            catch (TargetInvocationException error) when (error.InnerException is OperationCanceledException) { refused = true; }
+            Equal(true, refused, "retired source reads cannot produce facts from a warm or fresh cache");
+        }
     }
 
     private static void RuntimeDumpResolvesSourceBeforePublication()

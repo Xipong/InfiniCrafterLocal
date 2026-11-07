@@ -117,6 +117,33 @@ internal static partial class EngineRuntimeChecks
             Equal(count == 8 ? 8 : 0, ((List<string>)SparseLocalMember(load, "Inputs")).Count, "eight/nine definition boundary inputs");
         }
 
+        // The entry jumps to the last physical block, then definitions travel
+        // backwards through the layout one block per forward-scan round. The
+        // worklist must preserve the old 512-round admission boundary exactly.
+        foreach (int count in new[] { 511, 512 })
+        {
+            var fixture = SharedLocalFixture("LocalDataflowRounds" + count, (il, local) =>
+            {
+                var labels = Enumerable.Range(0, count).Select(_ => il.DefineLabel()).ToArray();
+                il.Emit(OpCodes.Ldc_I4_7); il.Emit(OpCodes.Stloc, local); il.Emit(OpCodes.Br, labels[^1]);
+                for (int index = 0; index < count; index++)
+                {
+                    il.MarkLabel(labels[index]); il.Emit(OpCodes.Ldloc, local);
+                    if (index == 0) il.Emit(OpCodes.Ret);
+                    else { il.Emit(OpCodes.Pop); il.Emit(OpCodes.Br, labels[index - 1]); }
+                }
+            });
+            if (count == 511) VerifySharing(fixture);
+            else
+            {
+                string? refusal = null;
+                try { constructor.Invoke(new object?[] { fixture, null, null, null }); }
+                catch (TargetInvocationException error) when (error.InnerException is NotSupportedException)
+                { refusal = error.InnerException.Message; }
+                Equal("local_dataflow_bound", refusal, "the verification round after 512 changing rounds is still refused");
+            }
+        }
+
         object VerifySharing(MethodInfo fixture)
         {
             object source = constructor.Invoke(new object?[] { fixture, null, null, null });
@@ -127,6 +154,7 @@ internal static partial class EngineRuntimeChecks
         void Verify(object source)
         {
             var sourceMethod = (MethodBase)SparseLocalMember(source, "Method");
+            VerifySourceControlFlow(source, sourceMethod.Name);
             var reachable = ((IDictionary)SparseLocalMember(source, "Blocks")).Values.Cast<object>()
                 .Where(b => (int)SparseLocalMember(b, "Height") >= 0).ToArray();
             int Start(object block) => (int)SparseLocalMember(block, "Start");
@@ -146,8 +174,9 @@ internal static partial class EngineRuntimeChecks
             var incoming = reachable.ToDictionary(Start, _ => new Dictionary<int, HashSet<string>>());
             var outgoing = reachable.ToDictionary(Start, _ => new Dictionary<int, HashSet<string>>());
             bool changed = true; int passes = 0;
-            // Original dense solver is independent of production state maps.
-            // Compare only after the independent dense fixed point converges.
+            // Original dense solver independently keeps every intermediate
+            // state. Production retains only the resulting Value dependencies;
+            // compare observable loads and diagnostics after full convergence.
             while (changed)
             {
                 if (++passes > 512) throw new InvalidOperationException("dense local oracle did not converge");
@@ -180,11 +209,6 @@ internal static partial class EngineRuntimeChecks
             foreach (object block in reachable)
             {
                 int key = Start(block);
-                foreach (var pair in new[] { ("Incoming", incoming[key]), ("Outgoing", outgoing[key]) })
-                {
-                    var expected = pair.Item2.Where(row => referenced.Contains(row.Key)).ToDictionary(row => row.Key, row => row.Value);
-                    Equal(true, Same(expected, (Dictionary<int, HashSet<string>>)SparseLocalMember(block, pair.Item1)), "dense/sparse " + pair.Item1 + " at " + key);
-                }
                 var state = Copy(incoming[key]);
                 foreach (object instruction in (IEnumerable)SparseLocalMember(block, "Code"))
                 {

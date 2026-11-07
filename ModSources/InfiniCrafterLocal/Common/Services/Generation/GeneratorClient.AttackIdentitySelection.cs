@@ -187,6 +187,9 @@ public sealed partial class GeneratorClient
         }
 
         internal AttackIdentitySelection(ParentSourceMethod body, int type, int style, bool selectIdentityBranches = true)
+            : this(body, type, style, selectIdentityBranches, requireConnectedSource: false) { }
+
+        internal AttackIdentitySelection(ParentSourceMethod body, int type, int style, bool selectIdentityBranches, bool requireConnectedSource)
         {
             this.body = body; this.type = type; this.style = style;
             // A slice may combine independent identity windows. Its first
@@ -194,7 +197,7 @@ public sealed partial class GeneratorClient
             // not prove that later components are unreachable. Refuse the
             // specialization rather than silently discard those components or
             // assume identity survived omitted code between their entries.
-            if (body.Unknown.Contains("source_slice_entry_and_external_CFG_targets_unresolved")
+            if ((requireConnectedSource || body.Unknown.Contains("source_slice_entry_and_external_CFG_targets_unresolved"))
                 && body.Blocks.Values.Any(block => block.Code.Count > 0
                     && !CurrentReach(body.Code[0].Offset).Contains(block.Start)))
                 throw new NotSupportedException("identity_selection_disconnected_source_components");

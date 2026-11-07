@@ -10,6 +10,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using Terraria;
 using Terraria.ID;
@@ -219,10 +220,26 @@ public sealed partial class GeneratorClient
         public void Cancel() => _lifetime.Cancel();
 
         private string payloadJson = "{}";
+        // Capture owns this tree exclusively. Keep it until analysis completes,
+        // then freeze the transport string once for all retries. It contains
+        // copied observations, never live Item/Player objects.
+        private JsonObject? pendingPayload;
+        public PreparedGenerationRequest() { }
+        internal PreparedGenerationRequest(JsonObject snapshot) => pendingPayload = snapshot;
         public string PayloadJson
         {
-            get => Analysis is null && analysisFailure is null ? payloadJson : throw new InvalidOperationException("Parent source analysis has not completed on the generation worker.");
-            set => payloadJson = value;
+            get
+            {
+                if (Analysis is not null || analysisFailure is not null)
+                    throw new InvalidOperationException("Parent source analysis has not completed on the generation worker.");
+                if (pendingPayload is not null)
+                {
+                    payloadJson = pendingPayload.ToJsonString(WireJsonOptions);
+                    pendingPayload = null;
+                }
+                return payloadJson;
+            }
+            set { payloadJson = value; pendingPayload = null; }
         }
         internal ParentAnalysis? Analysis { get; set; }
         private Exception? analysisFailure;
@@ -231,9 +248,9 @@ public sealed partial class GeneratorClient
             if (analysisFailure is not null) throw new InvalidOperationException("Parent source analysis failed.", analysisFailure);
             if (Analysis is not { } analysis) return;
             analysis.RequireWorker();
-            try { payloadJson = analysis.Resolve(System.Text.Json.Nodes.JsonNode.Parse(payloadJson), CancellationToken)!.ToJsonString(WireJsonOptions); }
+            try { payloadJson = analysis.Resolve(pendingPayload ?? System.Text.Json.Nodes.JsonNode.Parse(payloadJson), CancellationToken)!.ToJsonString(WireJsonOptions); }
             catch (Exception error) { analysisFailure = error; throw; }
-            finally { Analysis = null; analysis.Dispose(); }
+            finally { pendingPayload = null; Analysis = null; analysis.Dispose(); }
         }
         public string ParentA { get; set; } = "Unknown";
         public string ParentB { get; set; } = "Unknown";
@@ -259,23 +276,22 @@ public sealed partial class GeneratorClient
         string parentA = CraftParentName(a);
         string parentB = CraftParentName(b);
 
-        string payload = JsonSerializer.Serialize(new
+        var payload = new JsonObject
         {
-            itemA = ToWireItem(a, player, clientTooltipA),
-            itemB = ToWireItem(b, player, clientTooltipB),
-            player = player.name,
-            worldId = Main.worldID,
-            worldName = Main.worldName,
-            modVersion = InfiniCrafterLocalMod.ModVersion,
-            multiplayer = Main.netMode != NetmodeID.SinglePlayer,
-            craftInputPolicy = "base_item_stats_ignore_prefixes",
-            multiDevCraft,
-            llmProfileId = multiDevCraft ? (llmProfileId ?? "").Trim().ToLowerInvariant() : ""
-        }, WireJsonOptions);
+            ["itemA"] = ToWireItem(a, player, clientTooltipA),
+            ["itemB"] = ToWireItem(b, player, clientTooltipB),
+            ["player"] = player.name,
+            ["worldId"] = Main.worldID,
+            ["worldName"] = Main.worldName,
+            ["modVersion"] = InfiniCrafterLocalMod.ModVersion,
+            ["multiplayer"] = Main.netMode != NetmodeID.SinglePlayer,
+            ["craftInputPolicy"] = "base_item_stats_ignore_prefixes",
+            ["multiDevCraft"] = multiDevCraft,
+            ["llmProfileId"] = multiDevCraft ? (llmProfileId ?? "").Trim().ToLowerInvariant() : ""
+        };
 
-        return new PreparedGenerationRequest
+        return new PreparedGenerationRequest(payload)
         {
-            PayloadJson = payload,
             ParentA = parentA,
             ParentB = parentB,
             RefundA = refundA,

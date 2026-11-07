@@ -59,24 +59,29 @@ def native_csharp_source_for_llm(reference: dict[str, Any], source_calls: list[d
         if record["coverage"] == "conditional_ast_regions" and (not windows or windows != {
                 (window["field"], window["literal"], window["guardOffset"]) for window in record["coveredWindows"]}):
             return original, calls
-    def candidate(selected: dict[str, dict[str, Any]]) -> dict[str, Any]:
-        out = copy.deepcopy(reference)
+    def model_view(selected: dict[str, dict[str, Any]]) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
+        # Copy only the changed graph paths here. The compact-view owner makes
+        # the independent deep copy before projecting or returning any values.
+        out = reference.copy()
         for record in selected.values():
             for path in record["graphPaths"]:
-                owner, leaf, graph = _at_path(out, path)
+                owner = out
+                for part in path[:-1]:
+                    owner[part] = copy.copy(owner[part])
+                    owner = owner[part]
+                leaf, graph = path[-1], owner[path[-1]]
                 owner[leaf] = {**{key: graph[key] for key in _CERT}, "nativeCSharpSourceRef": record["id"],
                                "graphCapture": _capture_metadata(graph)}
         if selected:
-            out["nativeCSharpSource"]["records"] = list(copy.deepcopy(selected).values())
+            out["nativeCSharpSource"] = {**reference["nativeCSharpSource"], "records": list(selected.values())}
             out["nativeCSharpSourceReading"] = SOURCE_READING
         else:
             out.pop("nativeCSharpSource")
-        return out
+        return _compact_model_view(out, _linked_calls(calls, selected, predicates), selected)
 
-    def view_size(value: dict[str, Any], selection: dict[str, dict[str, Any]]) -> int:
+    def view_size(value: dict[str, Any], linked: list[dict[str, Any]] | None) -> int:
         # Use the real stage/exact-sharing owner, rather than summing duplicate
         # graph costs. This already-captured packet cannot re-enter compaction.
-        value, linked = _compact_model_view(value, _linked_calls(calls, selection, predicates), selection)
         profile = {"attackReference": pack_attack_tables(project_attack_behavior(value))}
         if calls is not None:
             profile["referencedProjectiles"] = {"source": "native_single_hop_projectile_references", "version": 1,
@@ -85,21 +90,27 @@ def native_csharp_source_for_llm(reference: dict[str, Any], source_calls: list[d
         return len(json.dumps(context, ensure_ascii=False, separators=(",", ":")))
 
     chosen = {}
-    original = candidate(chosen)
-    best_size = view_size(original, chosen)
+    chosen_view = None
+    best_size = None
     for record in records.values():
         for alternative in (record, _specialized_record(reference, record)):
             if alternative is None:
                 continue
             selection = {**chosen, record["id"]: alternative}
-            proposed = candidate(selection)
-            size = view_size(proposed, selection)
             # The graph contract captures connected slices, not the complete
             # method. A certified whole body (or its proved identity variant)
             # therefore takes priority even when a partial graph is smaller.
-            # Compare size only within that coverage: never drop the body to
-            # satisfy a context budget, or treat opaque callee effects as proved.
+            # Its size is needed only if a later alternative is compared with
+            # it; a subsequent whole body can replace it without a full rebuild.
             fuller_source = record["coverage"] == "whole_method" and record["id"] not in chosen
-            if fuller_source or size < best_size:
-                chosen, original, best_size = selection, proposed, size
-    return _compact_model_view(original, _linked_calls(calls, chosen, predicates), chosen)
+            if fuller_source:
+                chosen, chosen_view, best_size = selection, None, None
+                continue
+            if best_size is None:
+                chosen_view = model_view(chosen)
+                best_size = view_size(*chosen_view)
+            proposed = model_view(selection)
+            size = view_size(*proposed)
+            if size < best_size:
+                chosen, chosen_view, best_size = selection, proposed, size
+    return chosen_view if chosen_view is not None else model_view(chosen)
