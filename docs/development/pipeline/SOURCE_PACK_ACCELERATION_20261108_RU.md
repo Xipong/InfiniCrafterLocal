@@ -21,6 +21,8 @@ Cold — от первого `PrepareDeferred` через `CompleteAnalysis` д�
 
 ## Warm и память: есть ограничения
 
+`warm-1` и `warm-2` повторяют **ту же пару** в одном процессе с новыми Item, Player и request. Это не новые рецепты. `source-cache-reset` очищает shared source/attack/native-document caches и reader pack, но не перезапускает CLR/JIT и все static certificates. Поэтому эту фазу тоже нельзя считать полностью cold.
+
 Медианы фаз, миллисекунды, baseline → candidate:
 
 | Пара | warm-1 | warm-2 | source-cache-reset |
@@ -40,6 +42,33 @@ Cold — от первого `PrepareDeferred` через `CompleteAnalysis` д�
 | Eventide + Wooden Arrow | 561.8 → 543.1 | 456.7 → 429.3 |
 
 RSS получен через Linux `wait4.ru_maxrss` для **целого subprocess с четырьмя фазами**, startup и записью evidence. Это не peak RAM одного cold интервала. Allocations — process-wide delta `GC.GetTotalAllocatedBytes(precise:true)` внутри timed interval, не retained/peak RAM. Nebula/Prism peak RSS вырос примерно на 27 MiB, хотя cold allocations снизились. **200 MB RAM не достигнуты; всеобщего снижения памяти не заявляем.**
+
+## Последовательность разных новых пар
+
+Дополнительный замер сравнивает baseline `0f766496` и опубликованный candidate `41f6a52f`. В каждом свежем процессе идут **8 уникальных комбинаций**, без сброса кэшей и принудительного GC. Для каждой пары заново создаются Item, Player и request. По 3 процесса на версию, порядок версий BC/CB/BC. Использован тот же native pipeline `PrepareDeferred` → `CompleteAnalysis` → `PayloadJson` с simulated pump 16 мс; новая точка входа находится только в изолированном измерительном harness, production не меняется.
+
+«Знакомый» означает, что именно этот родительский ItemID уже встречался раньше в этой последовательности. Это **не** обещает полного покрытия внутренних методов кэшем. Только первая строка process-cold; даже у двух новых родителей ниже могут повторяться общие методы, исходники и attack projections.
+
+| Порядок | Новая комбинация | Знакомых родителей | Baseline median, мс | Candidate median, мс |
+|---|---|---:|---:|---:|
+| 1 | Wood + Stone | 0, первый запрос | 1076.85 | 920.84 |
+| 2 | Terra Blade + Mining Potion | 0 | 1697.42 | 818.21 |
+| 3 | Nebula Blaze + Last Prism | 0 | 2700.55 | 2522.43 |
+| 4 | Eventide + Wooden Arrow | 0 | 1251.53 | 1341.21 |
+| 5 | Terra Blade + Healing Potion | 1 | 73.08 | 78.02 |
+| 6 | Nebula Blaze + Musket Ball | 1 | 505.53 | 438.37 |
+| 7 | Terra Blade + Last Prism | 2 | 412.21 | 382.41 |
+| 8 | Eventide + Mining Potion | 2 | 151.20 | 230.06 |
+
+Медиана суммы восьми pipeline-интервалов одного процесса: **7904.31 → 6781.73 мс**, на **14.2% меньше времени (1.17×)**. Это медиана трёх сумм, не сумма построчных медиан. Два новых родителя после первого запроса вместе: 5887.72 → 4664.34 мс; один знакомый: 578.60 → 514.86 мс; оба знакомы, но комбинация новая: **563.40 → 622.87 мс**, то есть эта группа замедлилась.
+
+У последней пары в каждом candidate-процессе были GC gen0/gen1 `[1,1]`, у baseline `[0,0]`. Сборка мусора может оплачиваться следующим запросом; это наблюдение, не доказательство единственной причины. Для всех новых рецептов ускорение не подтверждено: три отдельные строки и группа двух знакомых родителей регрессируют.
+
+Суммарные managed allocations: 1085.32 → 1054.05 MiB (−2.88%). Median peak RSS всего процесса: **565.76 → 506.72 MiB**. В RSS входят fixture setup, все восемь запросов и запись evidence; это не память одной пары и не величина для прямого сравнения с четырёхфазным benchmark выше. Construction, разбор report, hashing и writes находятся вне request timer. Дисковый кэш ОС не сбрасывался.
+
+**Все 24 межверсионных сравнения полных raw payload bytes совпали**, без нормализации. Для каждой пары bytes также стабильны между тремя независимыми процессами каждой версии. Linked production sources и native packs не менялись; оба временных harness прошли actual CLR target verifier, остальные DLL bytes совпадают. Порядок пар фиксирован: это проверка конкретной последовательности, не причинный эксперимент по каждому слою кэша и не статистическая гарантия. Игра, Calamity, API/model latency и качество генерации сюда не входят.
+
+[Полные наблюдения последовательности, payload hashes, GC и input pins](source_pack_new_pairs_20261108.json).
 
 ## Что изменено
 
@@ -69,7 +98,7 @@ Archive уменьшился на **42,67%**, одновременно доба�
 - **104 focused Python tests passed**: source-pack checker, target staging, cohort verifier.
 - Все 12 static gates прошли; offline handbook обновлён штатным генератором и повторно проверен после добавления отчёта.
 - Точные host dependencies совпали между вариантами: 70 DLL hashes и `EngineRuntimeChecks.deps.json`; CLR отдельно подтвердил 67 официально выбранных runtime assets.
-- Полный локальный Python shard-run был намеренно прерван до завершения, чтобы убрать фоновую нагрузку перед измерениями. Он **не объявляется PASS**. Полную Python/package приёмку выполняет CI на точном commit PR.
+- Полный локальный Python shard-run был намеренно прерван до завершения, чтобы убрать фоновую нагрузку перед измерениями. Он **не объявляется PASS**. Полную Python/package приёмку выполняет CI для текущего head PR; обычный pull_request workflow проверяет его merge-ref с целевой веткой, а A/B отдельно фиксирует source commits.
 - Windows workflow теперь сравнивает `0f766496` с candidate, собирает полный pack **обеих** версий и требует `exact-bytes`, actual payloads, input pins и cold target. Исторический graph-migration verifier сохранён как отдельный opt-in режим, но этот A/B его не использует.
 
 [Все наблюдения по трём повторам, payload hashes, allocations, GC и pins](source_pack_acceleration_20261108.json).
