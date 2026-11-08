@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Text.Json.Nodes;
+using InfiniCrafterLocal.Common.Analysis;
 
 namespace InfiniCrafterLocal.Common.Services;
 
@@ -61,16 +62,11 @@ public sealed partial class GeneratorClient
             private readonly Dictionary<int, int> indices;
             private readonly ulong[] words;
 
-            internal BlockSet(int[] nodes, Dictionary<int, int> indices, HashSet<int> facts)
+            internal BlockSet(int[] nodes, Dictionary<int, int> indices, ulong[] words)
             {
                 this.nodes = nodes;
                 this.indices = indices;
-                words = new ulong[(nodes.Length + 63) / 64];
-                foreach (int node in facts)
-                {
-                    int bit = indices[node];
-                    words[bit >> 6] |= 1UL << (bit & 63);
-                }
+                this.words = words;
             }
 
             internal bool Contains(int node)
@@ -84,19 +80,29 @@ public sealed partial class GeneratorClient
             System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
         }
 
-        private BlockSet RetainReachability(Dictionary<int, BlockSet> memo, int start, HashSet<int> facts)
+        private (int[] Nodes, Dictionary<int, int> Indices) ReachabilityLayout()
+        {
+            if (blockSetNodes is not null) return (blockSetNodes, blockSetIndices!);
+            // Keep a new layout local until a complete row can be retained.
+            int[] nodes = Blocks.Keys.ToArray();
+            var indices = nodes.Select((node, index) => (node, index))
+                .ToDictionary(pair => pair.node, pair => pair.index);
+            return (nodes, indices);
+        }
+
+        private BlockSet RetainReachability(Dictionary<int, BlockSet> memo, int start,
+            (int[] Nodes, Dictionary<int, int> Indices) layout, ulong[] words)
         {
             // Called only under memoGate. Construction and failed CFG analysis
             // cannot publish partial sets; every retained row is immutable.
+            var retained = new BlockSet(layout.Nodes, layout.Indices, words);
+            memo.Add(start, retained);
             if (blockSetNodes is null)
             {
-                blockSetNodes = Blocks.Keys.ToArray();
-                blockSetIndices = blockSetNodes.Select((node, index) => (node, index))
-                    .ToDictionary(pair => pair.node, pair => pair.index);
+                blockSetNodes = layout.Nodes;
+                blockSetIndices = layout.Indices;
                 reachabilityMemoBytes = Blocks.Count * 64L;
             }
-            var retained = new BlockSet(blockSetNodes, blockSetIndices!, facts);
-            memo.Add(start, retained);
             reachabilityMemoBytes += 192L + ((Blocks.Count + 63L) / 64L) * sizeof(ulong);
             return retained;
         }
@@ -145,13 +151,9 @@ public sealed partial class GeneratorClient
         private BlockSet ReachCore(int start)
         {
             if (reachable.TryGetValue(start, out var cached)) return cached;
-            var reached = new HashSet<int>(); var pending = new Stack<int>(); pending.Push(start);
-            while (pending.Count > 0)
-            {
-                int next = pending.Pop(); if (!reached.Add(next)) continue;
-                foreach (int target in Blocks[next].Next) pending.Push(target);
-            }
-            return RetainReachability(reachable, start, reached);
+            var layout = ReachabilityLayout();
+            ulong[] words = IndexedBitSet.Reach(start, layout.Indices, Blocks, static block => block.Next);
+            return RetainReachability(reachable, start, layout, words);
         }
 
         internal BlockSet ControlledRegion(int start)
@@ -160,20 +162,19 @@ public sealed partial class GeneratorClient
         {
             if (controlRegions.TryGetValue(start, out var cached)) return cached;
             Block block = Blocks[start];
-            var region = new HashSet<int> { start };
-            if (block.Next.Distinct().Count() < 2) return RetainReachability(controlRegions, start, region);
+            if (block.Next.Distinct().Count() < 2)
+            {
+                var singleLayout = ReachabilityLayout();
+                return RetainReachability(controlRegions, start, singleLayout,
+                    IndexedBitSet.Singleton(start, singleLayout.Indices));
+            }
             // The solver publishes one immutable compact matrix only after
             // convergence, so a refusal cannot leak partially solved facts.
             postdominators ??= SolvePostdominators();
             int join = postdominators.Join(start);
-            var pending = new Stack<int>(block.Next);
-            while (pending.Count > 0)
-            {
-                int next = pending.Pop();
-                if (next == join || !region.Add(next)) continue;
-                foreach (int successor in Blocks[next].Next) pending.Push(successor);
-            }
-            return RetainReachability(controlRegions, start, region);
+            var layout = ReachabilityLayout();
+            ulong[] words = IndexedBitSet.ControlledRegion(start, join, layout.Indices, Blocks, static block => block.Next);
+            return RetainReachability(controlRegions, start, layout, words);
         }
 
         internal ParentSourceMethod(MethodBase method, List<AmmoIl>? sourceSlice = null, Dictionary<int, int>? sourceNext = null, Dictionary<int, int>? selectedSuccessors = null)

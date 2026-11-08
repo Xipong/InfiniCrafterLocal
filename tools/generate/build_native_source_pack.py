@@ -26,7 +26,8 @@ OUTPUT = MOD / "Data/native-source-pack.zip"
 
 def projection_fingerprint() -> tuple[str, int]:
     """Frame exact bytes with 8-byte big-endian lengths; no newline rewriting."""
-    paths = sorted(MOD.rglob("GeneratorClient*.cs"), key=lambda path: path.relative_to(ROOT).as_posix())
+    paths = sorted([*MOD.rglob("GeneratorClient*.cs"), *(MOD / "Common/Analysis").rglob("*.cs")],
+                   key=lambda path: path.relative_to(ROOT).as_posix())
     if not paths:
         raise ValueError("No canonical GeneratorClient source files found")
     digest = hashlib.sha256(b"ifc-native-source-projections-v1\0")

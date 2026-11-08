@@ -9,6 +9,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading;
+using InfiniCrafterLocal.Common.Analysis;
 
 namespace InfiniCrafterLocal.Common.Services;
 
@@ -32,7 +33,7 @@ public sealed partial class GeneratorClient
         string identity = kind + "\n" + method.Module.ModuleVersionId + "\n"
             + method.MetadataToken.ToString(CultureInfo.InvariantCulture) + "\n"
             + CSharpHash(method.GetMethodBody()!.GetILAsByteArray()!) + "\n" + input.ToJsonString();
-        return NativeSourceMemory.HashUtf8(identity);
+        return SourceAnalysisBuffers.HashUtf8(identity);
     }
 
     private static bool TryReadNativeSourceProjection(string kind, MethodInfo method,
@@ -131,14 +132,15 @@ public sealed partial class GeneratorClient
     private static byte[] ReadNativeSourcePackEntry(ZipArchiveEntry entry, int maximum, CancellationToken cancellation)
     {
         if (entry.Length < 0 || entry.Length > maximum) throw new InvalidDataException("native_source_pack_entry_size");
-        return NativeSourceMemory.ReadZipEntry(entry, maximum, cancellation);
+        using var input = entry.Open();
+        return SourceAnalysisBuffers.ReadExact(input, (int)entry.Length, maximum, cancellation);
     }
 
     private static bool NativeSourcePackHashValid(string value)
         => value.Length == 64 && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
     private static string NativeSourcePackIndexHash(JsonArray rows, JsonArray blobs)
-        => NativeSourceMemory.HashUtf8(rows.ToJsonString() + "\n" + blobs.ToJsonString());
+        => CSharpHash(Encoding.UTF8.GetBytes(rows.ToJsonString() + "\n" + blobs.ToJsonString()));
 
     private static bool NativeSourcePackKindValid(string kind)
         => kind is "projectile_method" or "projectile_lifecycle" or "item_dispatch";

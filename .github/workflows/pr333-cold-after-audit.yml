@@ -9,8 +9,10 @@ on:
       - feat/parent-source-compression-main-20261106
     paths:
       - 'mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient*.cs'
+      - 'mod/InfiniCrafterLocal/Common/Analysis/*.cs'
       - 'mod/InfiniCrafterLocal/Common/Services/Generation/NativeSourcePackBuild.g.cs'
       - 'tests/native/context/EngineRuntimeChecks.Source*.cs'
+      - 'tests/native/context/EngineRuntimeChecks.IndexedBitSet.cs'
       - 'tests/native/context/EngineRuntimeChecks.NativeSourcePack*.cs'
       - 'tools/generate/build_native_source_pack.py'
       - 'tools/build/prepare_tml_runtime.ps1'

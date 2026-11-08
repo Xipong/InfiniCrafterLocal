@@ -14,6 +14,7 @@ using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
+using InfiniCrafterLocal.Common.Analysis;
 using ICSharpCode.Decompiler;
 using ICSharpCode.Decompiler.CSharp;
 using ICSharpCode.Decompiler.CSharp.OutputVisitor;
@@ -766,13 +767,14 @@ public sealed partial class GeneratorClient
             }
         }
         var record = MethodSourceIdentity(method);
-        record["id"] = "csharp:" + record["sourceModuleVersionId"]!.GetValue<string>() + ":" + method.MetadataToken + ":" + NativeSourceMemory.HashUtf8(code);
+        string codeSha256 = SourceAnalysisBuffers.HashUtf8(code, cancellation);
+        record["id"] = "csharp:" + record["sourceModuleVersionId"]!.GetValue<string>() + ":" + method.MetadataToken + ":" + codeSha256;
         record["metadataToken"] = method.MetadataToken; record["assemblySha256"] = document.Module.Sha256;
         record["decompiler"] = new JsonObject { ["name"] = "ICSharpCode.Decompiler", ["version"] = NativeCSharpVersion,
             ["assemblySha256"] = NativeCSharpDecompilerSha256, ["settings"] = "csharp_default_no_indentation_v1" };
         record["coverage"] = coverage;
         record["graphPaths"] = CSharpGraphPaths(programs);
-        record["code"] = code; record["codeSha256"] = NativeSourceMemory.HashUtf8(code);
+        record["code"] = code; record["codeSha256"] = codeSha256;
         record["entryGuards"] = new JsonArray(guards.Select(guard => (JsonNode?)new JsonObject { ["field"] = "Terraria.Projectile." + guard.Field,
             ["operator"] = "==", ["literal"] = guard.Literal, ["ilOffset"] = guard.Offset,
             ["scope"] = "only_if_original_guard_is_reached; enclosing_dispatch_unknown" }).ToArray());
@@ -842,7 +844,7 @@ public sealed partial class GeneratorClient
             else if (closest is null) mapped.Add(new JsonObject { ["ilOffset"] = offset, ["unresolved"] = "decompiler_source_location_unavailable" });
             else mapped.Add(new JsonObject { ["ilOffset"] = offset, ["startLine"] = closest.StartLine, ["endLine"] = closest.EndLine });
         }
-        string sha = NativeSourceMemory.HashUtf8(rendered.Code);
+        string sha = SourceAnalysisBuffers.HashUtf8(rendered.Code, cancellation);
         record["identitySpecialized"] = new JsonObject
         {
             ["id"] = "csharp-specialized:" + record["id"]!.GetValue<string>() + ":" + sha + ":" + type + ":" + style,

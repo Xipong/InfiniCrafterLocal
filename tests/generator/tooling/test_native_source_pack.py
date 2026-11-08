@@ -21,6 +21,22 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def test_projection_fingerprint_covers_shared_analysis_primitives(tmp_path, monkeypatch):
+    mod = tmp_path / "mod/InfiniCrafterLocal"
+    analysis = mod / "Common/Analysis"
+    analysis.mkdir(parents=True)
+    (mod / "GeneratorClient.Fixture.cs").write_text("source owner", encoding="utf-8")
+    helper = analysis / "SourceAnalysisBuffers.cs"
+    helper.write_text("first primitive implementation", encoding="utf-8")
+    monkeypatch.setattr(checker, "ROOT", tmp_path)
+    monkeypatch.setattr(checker, "MOD", mod)
+    before, count = checker.projection_fingerprint()
+    assert count == 2
+    helper.write_text("changed primitive implementation", encoding="utf-8")
+    after, count = checker.projection_fingerprint()
+    assert count == 2 and before != after
+
+
 @pytest.fixture
 def pack(tmp_path, monkeypatch):
     mod = tmp_path / "mod"
