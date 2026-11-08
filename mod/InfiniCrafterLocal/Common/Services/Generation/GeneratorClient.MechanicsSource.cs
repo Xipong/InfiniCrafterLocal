@@ -4,13 +4,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Metadata.Ecma335;
-using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading;
 using ICSharpCode.Decompiler.CSharp;
 using ICSharpCode.Decompiler.CSharp.Syntax;
 using ICSharpCode.Decompiler.IL;
 using ICSharpCode.Decompiler.TypeSystem;
+using InfiniCrafterLocal.Common.Analysis;
 using Terraria;
 
 namespace InfiniCrafterLocal.Common.Services;
@@ -379,7 +379,7 @@ public sealed partial class GeneratorClient
         record["removedSwitchSectionCount"] = removedSections;
         record["removedUnreachableStatementCount"] = removedUnreachable;
         record["removedEmptyStatementCount"] = removedEmpty;
-        record["code"] = rendered.Code; record["codeSha256"] = CSharpHash(Encoding.UTF8.GetBytes(rendered.Code));
+        record["code"] = rendered.Code; record["codeSha256"] = SourceAnalysisBuffers.HashUtf8(rendered.Code, cancellation);
         record["assemblySha256"] = document.Module.Sha256;
         record["excludedCallOffsets"] = new JsonArray(removedCalls.Order().Select(offset => (JsonNode?)JsonValue.Create(offset)).ToArray());
         if (spawnTypes.Count > 0) record["spawnTypeCandidates"] = spawnTypes;

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
-using System.Text;
+using InfiniCrafterLocal.Common.Analysis;
 using System.Text.Json.Nodes;
 using System.Threading;
 using ICSharpCode.Decompiler.CSharp;
@@ -191,7 +191,7 @@ public sealed partial class GeneratorClient
                     rows.Add(row); sites.Add(row.DeepClone());
                 }
                 if (sites.Count == 0) throw new NotSupportedException("lifecycle_spawn_site_missing");
-                string sha = CSharpHash(Encoding.UTF8.GetBytes(rendered.Code));
+                string sha = SourceAnalysisBuffers.HashUtf8(rendered.Code, cancellation);
                 var record = MethodSourceIdentity(method);
                 record["id"] = "lifecycle:" + method.Module.ModuleVersionId + ":" + method.MetadataToken + ":" + sha;
                 record["metadataToken"] = method.MetadataToken; record["assemblySha256"] = document.Module.Sha256;

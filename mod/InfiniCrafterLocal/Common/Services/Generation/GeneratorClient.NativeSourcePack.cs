@@ -9,6 +9,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading;
+using InfiniCrafterLocal.Common.Analysis;
 
 namespace InfiniCrafterLocal.Common.Services;
 
@@ -31,8 +32,8 @@ public sealed partial class GeneratorClient
     {
         string identity = kind + "\n" + method.Module.ModuleVersionId + "\n"
             + method.MetadataToken.ToString(CultureInfo.InvariantCulture) + "\n"
-            + CSharpHash(method.GetMethodBody()!.GetILAsByteArray()!) + "\n" + input.ToJsonString();
-        return CSharpHash(Encoding.UTF8.GetBytes(identity));
+            + CSharpHash(method.GetMethodBody()!.GetILAsByteArray()!) + "\n";
+        return SourceAnalysisBuffers.HashUtf8AndJson(identity, input, currentParentAnalysis?.Cancellation ?? default);
     }
 
     private static bool TryReadNativeSourceProjection(string kind, MethodInfo method,
@@ -132,25 +133,14 @@ public sealed partial class GeneratorClient
     {
         if (entry.Length < 0 || entry.Length > maximum) throw new InvalidDataException("native_source_pack_entry_size");
         using var input = entry.Open();
-        using var output = new MemoryStream((int)entry.Length);
-        byte[] buffer = new byte[16384];
-        int count;
-        while ((count = input.Read(buffer, 0, buffer.Length)) != 0)
-        {
-            cancellation.ThrowIfCancellationRequested();
-            if (output.Length + count > maximum) throw new InvalidDataException("native_source_pack_entry_size");
-            output.Write(buffer, 0, count);
-        }
-        cancellation.ThrowIfCancellationRequested();
-        if (output.Length != entry.Length) throw new InvalidDataException("native_source_pack_entry_length");
-        return output.ToArray();
+        return SourceAnalysisBuffers.ReadExact(input, (int)entry.Length, maximum, cancellation);
     }
 
     private static bool NativeSourcePackHashValid(string value)
         => value.Length == 64 && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
     private static string NativeSourcePackIndexHash(JsonArray rows, JsonArray blobs)
-        => CSharpHash(Encoding.UTF8.GetBytes(rows.ToJsonString() + "\n" + blobs.ToJsonString()));
+        => SourceAnalysisBuffers.HashJsonPair(rows, blobs, currentParentAnalysis?.Cancellation ?? default);
 
     private static bool NativeSourcePackKindValid(string kind)
         => kind is "projectile_method" or "projectile_lifecycle" or "item_dispatch";

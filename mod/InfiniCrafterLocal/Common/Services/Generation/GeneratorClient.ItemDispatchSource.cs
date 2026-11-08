@@ -2,7 +2,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
-using System.Text;
+using InfiniCrafterLocal.Common.Analysis;
 using System.Text.Json.Nodes;
 using System.Threading;
 using ICSharpCode.Decompiler.CSharp;
@@ -105,7 +105,7 @@ public sealed partial class GeneratorClient
             var offsets = branch.Condition.DescendantsAndSelf.Concat(branch.TrueStatement.DescendantsAndSelf).SelectMany(node => node.Annotations.OfType<ILInstruction>())
                 .SelectMany(instruction => instruction.ILRanges).Where(range => range.End > range.Start)
                 .Select(range => range.Start).Distinct().Order().ToArray();
-            string sha = CSharpHash(Encoding.UTF8.GetBytes(rendered.Code));
+            string sha = SourceAnalysisBuffers.HashUtf8(rendered.Code, cancellation);
             var record = MethodSourceIdentity(document.Method);
             record["id"] = "item_dispatch:" + document.Method.Module.ModuleVersionId + ":" + document.Method.MetadataToken + ":" + sha;
             record["metadataToken"] = document.Method.MetadataToken; record["assemblySha256"] = document.Module.Sha256;
