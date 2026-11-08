@@ -12,9 +12,10 @@ from tests.toolbox.test_cli import cli
 ROOT = Path(__file__).resolve().parents[2]
 
 
+@pytest.mark.parametrize('panel, manifest', [('live10', 'live10-midgame'), ('live40', 'live40-diverse')])
 @pytest.mark.parametrize('dll', [False, True])
 @pytest.mark.parametrize('returncode', [0, 7])
-def test_capture_forwards_absolute_paths_and_native_status_without_bootstrap(monkeypatch, capsys, tmp_path, dll, returncode):
+def test_capture_forwards_absolute_paths_and_native_status_without_bootstrap(monkeypatch, capsys, tmp_path, dll, returncode, panel, manifest):
     original_import = builtins.__import__
     def no_bootstrap(name, *args, **kwargs):
         if name.startswith('infini_local') or name in ('toolbox.live.preflight', 'toolbox.live.runner', 'toolbox.live.real_run'):
@@ -32,11 +33,11 @@ def test_capture_forwards_absolute_paths_and_native_status_without_bootstrap(mon
         return subprocess.CompletedProcess(command, returncode)
     monkeypatch.setattr(subprocess, 'run', process)
     flags = ['--dotnet', Path('dotnet')] if dll else []
-    code, _ = cli(monkeypatch, capsys, 'live40', '--offline', '--native-executable', executable.name,
+    code, _ = cli(monkeypatch, capsys, panel, '--offline', '--native-executable', executable.name,
                   '--output', 'capture', *flags)
     assert code == returncode
     prefix = [str(host), str(executable)] if dll else [str(executable)]
-    assert calls == [(prefix + ['--capture-parent-panel', str(ROOT / 'toolbox/fixtures/panels/live40-diverse.json'), str(tmp_path / 'capture')], {})]
+    assert calls == [(prefix + ['--capture-parent-panel', str(ROOT / f'toolbox/fixtures/panels/{manifest}.json'), str(tmp_path / 'capture')], {})]
     assert not (tmp_path / 'capture').exists()
 
 

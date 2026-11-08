@@ -199,13 +199,15 @@ public sealed partial class GeneratorClient
         return offsets;
     }
 
-    // A deliberately flow-insensitive upper bound, not a local evaluator. Every
-    // surviving write to a bound local must be an integer literal. Include even
-    // overwritten/later writes: extra candidates are safe; a missing one is not.
-    // Only full methods admitted by the identity/control checks can use this.
+    // A bounded source-level reaching-store view, never execution. Every write
+    // to a bound local must remain an integer literal. Straight-line stores kill
+    // earlier values; unknown branches union both arms. Loops/unsupported scopes
+    // conservatively retain all their writes, including possible backedges.
+    // Closed regions also qualify when the local declaration is retained in that
+    // region. An outer local has no declaration here and is never guessed.
     private static JsonArray MechanicsSpawnTypeCandidates(SyntaxTree tree, NativeSourceCallIndex callIndex, JsonArray gaps)
     {
-        int[]? Candidates(Expression expression)
+        int[]? Candidates(Expression expression, InvocationExpression invocation)
         {
             if (expression is PrimitiveExpression { Value: int literal }) return new[] { literal };
             if (expression is not IdentifierExpression identifier || identifier.GetILVariable() is not { } variable
@@ -227,7 +229,51 @@ public sealed partial class GeneratorClient
                     values.Add(value);
                 }
             }
-            return values.Order().ToArray();
+            bool Contains(AstNode node, AstNode child) => node == child || child.Ancestors.Contains(node);
+            var writes = tree.Descendants.OfType<AssignmentExpression>()
+                .Where(node => node.Left.DescendantsAndSelf.OfType<IdentifierExpression>()
+                    .Any(use => use.GetILVariable() == variable)).ToArray();
+            HashSet<int> UnionWrites(AstNode node, HashSet<int> input)
+            {
+                var output = new HashSet<int>(input);
+                foreach (var write in writes.Where(write => Contains(node, write)))
+                    output.Add((int)((PrimitiveExpression)write.Right).Value!);
+                if (Contains(node, declarations[0])) output.Add(initial);
+                return output;
+            }
+            int[]? reached = null;
+            HashSet<int> Walk(AstNode node, HashSet<int> input)
+            {
+                if (node is BlockStatement block)
+                {
+                    foreach (var statement in block.Statements)
+                    {
+                        input = Walk(statement, input);
+                        if (reached is not null) break;
+                    }
+                    return input;
+                }
+                if (node is IfElseStatement branch && !writes.Any(write => Contains(branch.Condition, write)))
+                {
+                    if (Contains(branch.Condition, invocation)) { reached = input.Order().ToArray(); return input; }
+                    if (Contains(branch.TrueStatement, invocation)) return Walk(branch.TrueStatement, input);
+                    if (Contains(branch.FalseStatement, invocation)) return Walk(branch.FalseStatement, input);
+                    var output = Walk(branch.TrueStatement, new HashSet<int>(input));
+                    output.UnionWith(Walk(branch.FalseStatement, new HashSet<int>(input)));
+                    return output;
+                }
+                // Unsupported scopes can have backedges, exception paths or
+                // expression-level ordering. Retain their entire write union.
+                if (Contains(node, invocation)) { reached = UnionWrites(node, input).Order().ToArray(); return input; }
+                if (node is VariableDeclarationStatement declaration && declaration.Variables.Contains(declarations[0]))
+                    return new HashSet<int> { initial };
+                if (node is ExpressionStatement { Expression: AssignmentExpression assignment }
+                    && writes.Contains(assignment))
+                    return new HashSet<int> { (int)((PrimitiveExpression)assignment.Right).Value! };
+                return UnionWrites(node, input);
+            }
+            Walk(tree.Descendants.OfType<MethodDeclaration>().Single().Body, new HashSet<int>());
+            return reached is { Length: > 0 } ? reached : values.Order().ToArray();
         }
         var result = new JsonArray();
         foreach (var invocation in tree.Descendants.OfType<InvocationExpression>())
@@ -237,13 +283,13 @@ public sealed partial class GeneratorClient
             int index = symbol.Parameters.ToList().FindIndex(parameter => parameter.Name == "Type");
             if (index < 0 || invocation.Arguments.Count <= index
                 || invocation.Arguments.Any(argument => argument is NamedArgumentExpression)) continue;
-            var candidates = Candidates(invocation.Arguments.ElementAt(index));
+            var candidates = Candidates(invocation.Arguments.ElementAt(index), invocation);
             if (candidates is null) continue;
             var offsets = MechanicsCallOffsets(new[] { invocation }, callIndex, gaps);
             if (offsets.Count != 1) continue;
             result.Add(new JsonObject { ["at"] = offsets.Single(),
                 ["projectileTypes"] = new JsonArray(candidates.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
-                ["scope"] = "all_surviving_local_writes_are_integer_literals; conservative_union_not_execution" });
+                ["scope"] = "reaching_literal_local_stores; conservative_control_flow_union_not_execution" });
         }
         return result;
     }
@@ -366,7 +412,7 @@ public sealed partial class GeneratorClient
         var removedCalls = MechanicsCallOffsets(removedInvocations, callIndex, gaps);
         var remainingCalls = MechanicsCallOffsets(tree.Descendants.OfType<InvocationExpression>(), callIndex, gaps, includeAmbiguous: true);
         removedCalls.ExceptWith(remainingCalls);
-        var spawnTypes = refusal is null && conditionalRecord is null
+        var spawnTypes = refusal is null
             ? MechanicsSpawnTypeCandidates(tree, callIndex, gaps) : new JsonArray();
         var rendered = RenderCSharp(tree, includeLocations: false);
         if (rendered.Code.Length > NativeCSharpRecordLimit) throw new NotSupportedException("mechanics_source_character_bound; strict_source_retained");

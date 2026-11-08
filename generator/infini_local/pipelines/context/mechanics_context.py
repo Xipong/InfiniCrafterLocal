@@ -13,6 +13,7 @@ import re
 from typing import Any
 
 from infini_local.pipelines.context.mechanics_expression import MechanicsRenderer
+from infini_local.pipelines.context.native_references import known_projectile_references
 from infini_local.pipelines.context.attack_tables import pack_attack_tables, unpack_attack_tables
 from infini_local.pipelines.context.csharp_source_view import _REFERENCE_FIELDS
 from infini_local.pipelines.context.attack_namespaces import _identifier
@@ -59,19 +60,32 @@ def _graph_local_writes_reading(graph: dict[str, Any]) -> str | None:
         isinstance(node, dict) and "possibleLocalWrites" in node for node in nodes) else None
 
 
+def _graph_local_entry(key: str, value: Any) -> bool:
+    # ParentSourceMethod emits a typed, unresolved entry definition for a local
+    # read whose value can enter the captured slice from omitted control flow.
+    # Keep that dependency without converting it into an executed/known value.
+    return (re.fullmatch(r"local_entry:(0|[1-9][0-9]*)", key) is not None
+            and isinstance(value, list) and len(value) == 4 and value[0] == "unresolved_local_entry"
+            and isinstance(value[1], dict) and set(value[1]) == {"member"}
+            and type(value[1]["member"]) is int and value[1]["member"] >= 0
+            and isinstance(value[2], list) and not value[2]
+            and type(value[3]) is int and value[3] == 0)
+
+
 def _author_source_graph(graph: Any) -> dict[str, Any] | None:
     """Keep the bounded producer graph's known gameplay schema, not diagnostics."""
     if (not isinstance(graph, dict) or graph.get("source") != "parent_reachable_compiled_source_graph"
             or type(graph.get("version")) is not int or graph["version"] != 1):
         return None
     omitted = 0
-    def clean(value: Any) -> Any:
+    def clean(value: Any, *, local_values: bool = False) -> Any:
         nonlocal omitted
         if isinstance(value, dict):
             out = {}
             for key, child in value.items():
                 if isinstance(key, str) and (key in _GRAPH_NESTED_FIELDS or key.isdecimal()
-                                             or re.fullmatch(r"in[0-9]+:[0-9]+", key)):
+                                             or re.fullmatch(r"in[0-9]+:[0-9]+", key)
+                                             or local_values and _graph_local_entry(key, child)):
                     out[key] = clean(child)
                 else:
                     omitted += 1
@@ -92,7 +106,7 @@ def _author_source_graph(graph: Any) -> dict[str, Any] | None:
                 filtered = {}
                 for field, child in row.items():
                     if field in _GRAPH_ROW_FIELDS[key]:
-                        filtered[field] = clean(child)
+                        filtered[field] = clean(child, local_values=key == "nodes" and field == "values")
                     else:
                         omitted += 1
                 rows.append(filtered)
@@ -266,14 +280,36 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
                 continue
             row = candidates[0]
             values = row.get("projectileTypes")
-            if (type(row.get("at")) is int and row.get("scope") ==
-                    "all_surviving_local_writes_are_integer_literals; conservative_union_not_execution"
+            if (type(row.get("at")) is int and row.get("scope") in (
+                    "all_surviving_local_writes_are_integer_literals; conservative_union_not_execution",
+                    "reaching_literal_local_stores; conservative_control_flow_union_not_execution")
                     and isinstance(values, list) and values and all(type(value) is int for value in values)
                     and child_type not in values):
                 return True
         return False
 
-    def visit(path: str, profile: dict[str, Any]) -> None:
+    visited_profile_paths: set[str] = set()
+
+    def visit(path: str, profile: dict[str, Any],
+              graph_profiles: dict[int, tuple[str, dict[str, Any]]] | None = None) -> None:
+        if path in visited_profile_paths:
+            return
+        visited_profile_paths.add(path)
+        if graph_profiles is None:
+            graph_profiles = {}
+
+            def index_profiles(origin: str, value: dict[str, Any]) -> None:
+                links = value.get("referencedProjectiles")
+                if not known_projectile_references(links) or links.get("source") != "native_bounded_projectile_references":
+                    return
+                for index, row in enumerate(links["references"]):
+                    child = row.get("profile")
+                    if isinstance(child, dict) and type(row.get("type")) is int:
+                        child_path = f"{origin}.referencedProjectiles.references[{index}].profile"
+                        graph_profiles.setdefault(row["type"], (child_path, child))
+                        index_profiles(child_path, child)
+
+            index_profiles(path, profile)
         if "strictIdentitySelections" in profile:
             # These retain producer graphs that a readable C# view replaced,
             # using the established Author projection when it is recognized.
@@ -473,7 +509,16 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
                                            "all_indexed_calls_exclude_child_type_under_identity_assumption")})
                 continue
             if isinstance(child.get("profile"), dict):
-                visit(child_path, child["profile"])
+                visit(child_path, child["profile"], graph_profiles)
+            elif (known_projectile_references(links) and links.get("source") == "native_bounded_projectile_references"
+                    and type(child.get("profileRefType")) is int
+                    and child.get("type") == child["profileRefType"]
+                    and child["profileRefType"] in graph_profiles):
+                # Reuse the exact captured profile/path, not a catalog guess.
+                # A valid edge can keep a shared profile whose first edge was
+                # excluded; visited paths terminate self/cross-reference cycles.
+                target_path, target = graph_profiles[child["profileRefType"]]
+                visit(target_path, target, graph_profiles)
 
     for path, profile in roots:
         visit(path, profile)

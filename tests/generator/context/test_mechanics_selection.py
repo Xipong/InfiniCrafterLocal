@@ -193,3 +193,29 @@ def test_strict_gameplay_projection_not_sent_to_visual_or_vfx():
         assert "strictIdentitySelections" not in projected["directProjectile"]
         assert projected["directProjectile"]["mechanicsSource"]["records"][0]["code"] == "visual();"
     assert parents == before
+
+
+def test_graph_local_entry_nodes_require_producer_key_shape_and_values_location():
+    from infini_local.pipelines.context.mechanics_context import _author_source_graph
+
+    entry = ["unresolved_local_entry", {"member": 0}, [], 0]
+    invalid = {
+        "local_entry:-1": entry,
+        "local_entry:1x": entry,
+        "local_entry:١": entry,
+        "local_entry:1": ["ldc.i4", 7, [], 0],
+        "local_entry:2": ["unresolved_local_entry", {"member": True}, [], 0],
+        "local_entry:3": ["unresolved_local_entry", {"member": -1}, [], 0],
+        "local_entry:4": ["unresolved_local_entry", {"member": 0}, ["42"], 0],
+        "local_entry:5": ["unresolved_local_entry", {"member": 0}, [], False],
+        "local_entry:6": ["unresolved_local_entry", {"member": 0, "diagnosticSecretMarker": "secret"}, [], 0],
+    }
+    graph = {"source": "parent_reachable_compiled_source_graph", "version": 1,
+             "nodes": [{"values": {"local_entry:0": entry, "local_entry:4096": entry, **invalid},
+                        "nativeIdentity": {"local_entry:0": entry}}]}
+    projected = _author_source_graph(graph)
+    assert projected["nodes"][0]["values"] == {"local_entry:0": entry, "local_entry:4096": entry}
+    assert projected["nodes"][0]["nativeIdentity"] == {}
+    assert projected["transportOmissions"]["unknownFieldCount"] == len(invalid) + 1
+    assert "diagnosticSecretMarker" not in str(projected)
+    assert graph["nodes"][0]["values"]["local_entry:0"] == entry

@@ -5,13 +5,13 @@ import argparse
 from pathlib import Path
 import subprocess
 
-from toolbox.live.catalog import load_panel
+from toolbox.live.catalog import DEFAULT_PRESETS, load_panel
 
 
-def main(argv: list[str]) -> int:
+def main(argv: list[str], *, panel_command: str = 'live40') -> int:
     parser = argparse.ArgumentParser(
-        prog='python -m toolbox live40',
-        description='Capture the supported forty raw native Prepare inputs. No provider, Author, or gameplay execution.',
+        prog=f'python -m toolbox {panel_command}',
+        description='Capture the selected raw native Prepare inputs. No provider, Author, or gameplay execution.',
     )
     parser.add_argument('--offline', action='store_true', required=True)
     parser.add_argument('--native-executable', type=Path, required=True,
@@ -41,7 +41,7 @@ def main(argv: list[str]) -> int:
             if args.dotnet is not None:
                 raise ValueError('--dotnet is only valid with a native DLL')
             command = [str(executable)]
-        panel = load_panel('live40-diverse')
+        panel = load_panel(DEFAULT_PRESETS[panel_command])
         command += ['--capture-parent-panel', str(panel['sourcePath']), str(output)]
         # The native owner validates manifest/identities and writes all receipts.
         # Do not initialize generator configuration, credentials, or providers here.

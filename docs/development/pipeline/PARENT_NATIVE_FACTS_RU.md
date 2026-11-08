@@ -89,6 +89,18 @@ input на 357; Hellwing меняет только current projectile 1 на 485
 Нет нового progression solver, recommended damage corridor или скрытого
 перебаланса сохранённого ребёнка при смене патронов.
 
+## Условные item dispatcher sources
+
+`nativeItemDispatchReference` сохраняет item-relevant C# из `ApplyEquipFunctional`,
+`ItemCheck_Inner`, `ItemCheck_Shoot` и `UpdateEquips`. Для одного прямого helper-call
+допускается неизменяемый `int`, полученный из typed `Item.type`; каждый фрагмент
+содержит точный caller binding, IL offset и исходные условия/циклы вызывающего кода.
+Это source relevance, не доказательство receiver identity или исполнения.
+Arbitrary integers, вычисленные/изменяемые аргументы, virtual dispatch, неподдержанные
+control scopes и рекурсивный обход не используются для такого отбора. На root
+остаются bounds: 8 helper call sites, 16 фрагментов, 24000 символов на фрагмент и
+64000 суммарно; отказы и пропуски видимы, код не обрезается посередине.
+
 ## Причины неполного identity window
 
 Общий `parentSourceGraph` разделяет обнаружение исходных связей и отбор для
@@ -100,6 +112,9 @@ Metadata, diagnostics и production catalog-coverage envelope учитывают
 границы; фактически выделенный бюджет указывается отдельно. До 1024 методов могут быть просмотрены при поиске consumers;
 это не лимит сырых инструкций одного метода. Проекция одного метода
 ограничена 18000 символами. Исходный IL/CFG сохраняет свои отдельные bounds.
+Author сохраняет producer-owned `local_entry:<index>` с typed member reference как
+`unresolved_local_entry`, поэтому ссылки на входные локальные определения не теряются
+и не превращаются в известное исполненное значение. Неизвестные формы остаются omissions.
 
 Сначала отбираются основные dispatch roots, их причинные пути, spawn и
 array/ref-output bundles с условиями, затем связанные state consumers и общие
@@ -147,7 +162,7 @@ Opaque helper/global effects остаются unknown; даже value-only ар�
 доказывает чистоту вызова. Счётчики означают AI invocations, а не автоматически
 тики мира, секунды, точную частоту попаданий или DPS. Полный AI не обещается.
 
-## Условные дочерние source profiles: один переход
+## Условные дочерние source profiles: ограниченный граф
 
 `referencedProjectiles` собирает тот же `ProjectileRawSnapshot`, который
 используется обычным `Prepare` и `/infinidump`; внешний dump для live-запроса
@@ -162,11 +177,23 @@ owner и AI arguments читаются из родительского вызо�
 Python передаёт read-only profile через существующие compaction и exact-sharing,
 не выбирая механику и не меняя input/fingerprint.
 
-Раскрывается ровно один переход: вложенные вызовы имеют
-`includeChildReferences:false`, поэтому self/cyclic references не вызывают
-рекурсию. Технический предел — восемь **целых** profiles на snapshot; все callsites
-и overflow identities сохраняются с причиной unknown. Это бюджет наблюдения,
-не ограничение игрового числа дочерних снарядов и не рекомендация Author.
+Producer `native_bounded_projectile_references` обходит связи в ширину:
+сначала прямые дети, затем их source-вызовы. Общий предел — восемь **целых**
+profiles и четыре перехода на граф одного snapshot. `profileRefType` связывает
+повторную identity с первым captured profile того же графа; self/cyclic связи
+не создают рекурсию. Все callsites и identities за пределом сохраняются с
+причиной unknown. Это бюджет наблюдения, не ограничение игрового числа дочерних
+снарядов и не рекомендация Author. Python разрешает повторную ссылку через
+исходный capture path, даже если первая ведущая к нему ветка была исключена.
+
+В approximate mechanics view literal local stores сопоставляются с точным
+spawn callsite: последовательная запись заменяет прежнее значение, неизвестные
+ветки объединяются, loops и неподдержанные scopes сохраняют консервативное
+множество. Локальная переменная должна иметь declaration в полном методе или
+retained closed region; внешний local, runtime expression, ref/address exposure
+и неподтверждённый control flow остаются unknown. Это source-проекция с прежним
+identity assumption, не доказательство выполнения. Исключение child profile
+требует совпадающих method/module/hash/call offsets; strict source не переписывается.
 Отдельный catalog snapshot может содержать больше собственного source-контекста,
 чем неполная ссылка на него; отсутствие профиля не доказывает отсутствие эффекта.
 

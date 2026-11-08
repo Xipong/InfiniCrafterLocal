@@ -21,7 +21,7 @@ python -m toolbox live40 --runtime-dump /path/to/current-parents.jsonl --expecte
 
 Команды выше выполняют только read-only preflight. Для генерации см. [явный запуск](../live/README.md). Custom-пары по-прежнему можно передать через `--cases-file` вместе с `--runtime-dump`; формат — список `{ "case", "itemA", "itemB" }` либо объект `cases`. `--cases` выбирает подмножество по CLI ID, не меняя исходный порядок.
 
-Для отдельного детерминированного снятия raw Prepare по новому Live40 используйте
-[`live40 --offline`](../README.md#детерминированный-native-capture40): входы создаёт
+Для отдельного детерминированного снятия raw Prepare по Live10 или Live40 используйте
+[`live10 --offline` / `live40 --offline`](../README.md#детерминированный-native-capture): входы создаёт
 уже собранный native harness, внешний JSONL и provider configuration не нужны.
 Это не генерационный запуск и не independent Author audit.

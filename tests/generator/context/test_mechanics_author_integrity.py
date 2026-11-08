@@ -24,6 +24,8 @@ def test_author_preserves_strict_graph_and_identity_selected_with_readable_sourc
     }
     graph = {"source": "parent_reachable_compiled_source_graph", "version": 1,
              "nodes": [{"id": 0, "coverage": "source_character_bound", "possibleLocalWrites": {"1": ["2"]},
+                        "values": {"12": ["ldloc", 17, ["local_entry:17"], 10],
+                                   "local_entry:17": ["unresolved_local_entry", {"member": 0}, [], 0]},
                         "diagnosticSecretMarker": "not for Author"}],
              "unresolved": ["strict_graph_unknown"], "diagnosticSecretMarker": "not for Author"}
     parent["parentSourceGraph"] = graph
@@ -32,6 +34,7 @@ def test_author_preserves_strict_graph_and_identity_selected_with_readable_sourc
     dossier = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
     raw = dossier["parents"]["A"]["packet"]["raw"]
     assert raw["item"]["parentSourceGraph"]["unresolved"] == ["strict_graph_unknown"]
+    assert raw["item"]["parentSourceGraph"]["nodes"][0]["values"] == graph["nodes"][0]["values"]
     assert raw["item"]["parentSourceGraph"]["transportOmissions"]["unknownFieldCount"] == 2
     assert "not reaching definitions or executed values" in raw["item"]["parentSourceGraphReading"]
     assert "diagnosticSecretMarker" not in json.dumps(raw)

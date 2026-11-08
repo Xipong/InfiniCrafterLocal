@@ -975,50 +975,78 @@ public sealed partial class GeneratorClient
     }
 
     private static JsonObject? ReferencedProjectileSnapshots(JsonArray calls)
+        => BuildReferencedProjectileSnapshots(calls, (id, allowed) =>
+        {
+            var snapshot = SourceSnapshotOnMain(() =>
+            {
+                bool registered = id < ProjectileLoader.ProjectileCount;
+                JsonObject? profile = registered && allowed
+                    ? JsonSerializer.SerializeToNode(ProjectileRawSnapshot(id, 0f,
+                        "conditional_native_spawn_candidate", null, -1, includeChildReferences: false), WireJsonOptions)!.AsObject()
+                    : null;
+                return (Registered: registered, Profile: profile);
+            });
+            JsonArray? children = snapshot.Profile is not null
+                && snapshot.Profile["unavailable"]?.GetValue<bool>() != true && id < ProjectileID.Count
+                ? ProjectileAttackSource(id, snapshot.Profile["aiStyle"]!.GetValue<int>()).CloneSpawns() : null;
+            return (snapshot.Registered, snapshot.Profile, children);
+        });
+
+    internal static JsonObject? BuildReferencedProjectileSnapshots(JsonArray calls,
+        Func<int, bool, (bool Registered, JsonObject? Profile, JsonArray? Spawns)> capture)
     {
         if (calls.Count == 0) return null;
-        // Source-observation work bound, not a runtime spawn/design limit. Keep
-        // every callsite and omitted identity; never truncate a connected profile.
-        const int ProfileLimit = 8;
-        var references = new JsonArray();
-        var identities = new Dictionary<int, JsonArray>();
-        for (int index = 0; index < calls.Count; index++)
-            foreach (var candidate in calls[index]!["projectileTypes"]!.AsArray())
-            {
-                int id = candidate!.GetValue<int>();
-                if (!identities.TryGetValue(id, out var sites)) identities[id] = sites = new JsonArray();
-                sites.Add(index);
-            }
-        int captured = 0;
-        foreach (var (id, sites) in identities)
+        // Observation bounds, not gameplay limits. Breadth-first capture gives
+        // direct children priority; repeated identities link the first complete
+        // profile rather than duplicating it or recursing through a source cycle.
+        const int ProfileLimit = 8, DepthLimit = 4;
+        JsonObject Envelope(JsonArray sourceCalls) => new() {
+            ["source"] = "native_bounded_projectile_references", ["version"] = 1,
+            ["scope"] = "Conditional source candidates, not executed spawns or inherited mechanics. Profiles are native defaults/source only; damage, velocity, owner and AI arguments belong to each parent call. Breadth-first graph; profileRefType links an earlier captured identity in this graph. Bounds, dynamic IDs and opaque effects remain explicit unknowns.",
+            ["profileLimit"] = ProfileLimit, ["depthLimit"] = DepthLimit,
+            ["sourceCalls"] = sourceCalls, ["references"] = new JsonArray() };
+        var result = Envelope(calls);
+        var pending = new Queue<(JsonObject Envelope, int Depth)>();
+        pending.Enqueue((result, 1));
+        var captured = new HashSet<int>();
+        while (pending.TryDequeue(out var next))
         {
-            var reference = new JsonObject { ["type"] = id, ["sourceCallIndices"] = sites };
-            if (id <= ProjectileID.None)
-                reference["unresolved"] = "spawn_projectile_identity_not_registered";
-            else
-            {
-                // Check registration and capture under one game-thread handoff.
-                // Do not retain a count across identities or reloads; registration
-                // still precedes the profile bound, including after it is reached.
-                bool captureAllowed = captured < ProfileLimit;
-                var snapshot = SourceSnapshotOnMain(() =>
+            currentParentAnalysis?.ThrowIfCancelled();
+            var sourceCalls = next.Envelope["sourceCalls"]!.AsArray();
+            var identities = new Dictionary<int, JsonArray>();
+            for (int index = 0; index < sourceCalls.Count; index++)
+                foreach (var candidate in sourceCalls[index]!["projectileTypes"]!.AsArray())
                 {
-                    bool registered = id < ProjectileLoader.ProjectileCount;
-                    JsonNode? profile = registered && captureAllowed
-                        ? JsonSerializer.SerializeToNode(ProjectileRawSnapshot(id, 0f,
-                            "conditional_native_spawn_candidate", null, -1, includeChildReferences: false), WireJsonOptions)
-                        : null;
-                    return (Registered: registered, Profile: profile);
-                });
-                if (!snapshot.Registered) reference["unresolved"] = "spawn_projectile_identity_not_registered";
-                else if (!captureAllowed) reference["unresolved"] = "single_hop_profile_count_bound";
-                else { captured++; reference["profile"] = snapshot.Profile; }
+                    int id = candidate!.GetValue<int>();
+                    if (!identities.TryGetValue(id, out var sites)) identities[id] = sites = new JsonArray();
+                    if (!sites.Any(site => site!.GetValue<int>() == index)) sites.Add(index);
+                }
+            foreach (var (id, sites) in identities)
+            {
+                var reference = new JsonObject { ["type"] = id, ["sourceCallIndices"] = sites };
+                next.Envelope["references"]!.AsArray().Add(reference);
+                if (id <= ProjectileID.None) { reference["unresolved"] = "spawn_projectile_identity_not_registered"; continue; }
+                if (captured.Contains(id)) { reference["profileRefType"] = id; continue; }
+                bool captureAllowed = captured.Count < ProfileLimit && next.Depth <= DepthLimit;
+                // Registration still precedes the work bounds; no count is
+                // retained across registrations/reloads or separate graphs.
+                var snapshot = capture(id, captureAllowed);
+                if (!snapshot.Registered) { reference["unresolved"] = "spawn_projectile_identity_not_registered"; continue; }
+                if (!captureAllowed)
+                {
+                    reference["unresolved"] = next.Depth > DepthLimit ? "projectile_reference_depth_bound" : "projectile_reference_profile_count_bound";
+                    continue;
+                }
+                captured.Add(id);
+                reference["profile"] = snapshot.Profile;
+                JsonArray? children = snapshot.Spawns;
+                if (snapshot.Profile is null || children is null || children.Count == 0) continue;
+                var nested = Envelope(children);
+                snapshot.Profile["referencedProjectiles"] = nested;
+                pending.Enqueue((nested, next.Depth + 1));
             }
-            references.Add(reference);
         }
-        return new JsonObject { ["source"] = "native_single_hop_projectile_references", ["version"] = 1,
-            ["scope"] = "Conditional literal source candidates, not executed spawns or inherited mechanics. Child profiles are native defaults/source only; actual damage, velocity, owner and AI arguments belong to the parent call. One hop; dynamic IDs and opaque effects remain unknown.",
-            ["profileLimit"] = ProfileLimit, ["sourceCalls"] = calls, ["references"] = references };
+        return result;
     }
 
     private static object ProjectileSetsRaw(int projectileType)

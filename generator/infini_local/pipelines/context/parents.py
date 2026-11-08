@@ -406,14 +406,16 @@ def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool
         references = copy.deepcopy(proj["referencedProjectiles"])
         if linked_calls is not None:
             references["sourceCalls"] = linked_calls
-        # Producer-owned one-hop facts; no catalog lookup, ID inference or new
+        # Producer-owned bounded graph facts; no catalog lookup, ID inference or new
         # gameplay choice. Unknown/future envelopes stay literal.
         if known_projectile_references(references):
             for reference in references["references"]:
                 if (isinstance(reference.get("profile"), dict)
                         and reference["profile"].get("unavailable") is not True
-                        and "referencedProjectiles" not in reference["profile"]):
-                    reference["profile"] = compact_projectile_profile(reference["profile"], include_references=False,
+                        and ("referencedProjectiles" not in reference["profile"]
+                             or references.get("source") == "native_bounded_projectile_references"
+                             and known_projectile_references(reference["profile"]["referencedProjectiles"]))):
+                    reference["profile"] = compact_projectile_profile(reference["profile"], include_references=True,
                         prefer_readable_source=prefer_readable_source, attack_source_memo=attack_source_memo)
         out["referencedProjectiles"] = references
     if LLM_INCLUDE_AISTYLE_RAW and _compact_keep(proj.get("aiStyle")):

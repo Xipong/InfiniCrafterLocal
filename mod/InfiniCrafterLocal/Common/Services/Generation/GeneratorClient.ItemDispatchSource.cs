@@ -26,12 +26,12 @@ public sealed partial class GeneratorClient
             var result = new JsonObject {
                 ["source"] = "conditional_native_item_dispatch_csharp", ["version"] = 1,
                 ["relevanceItemType"] = itemType,
-                ["scope"] = "Read-only conditional source excerpts, not execution or final player stats. Item.type equality is a relevance witness, not receiver identity proof. Original guards and true bodies are retained; alternate branches, local bindings, callers, callees, hooks and enclosing control may remain unresolved. Other dispatcher roots and non-equality dispatch are not covered.",
+                ["scope"] = "Read-only conditional source excerpts, not execution or final player stats. Item.type equality is a relevance witness, not receiver identity proof. Original guards and true bodies are retained. One-hop integer helper candidates carry explicit immutable Item.type argument bindings; this does not establish the captured receiver or execution. Alternate branches, other local bindings, callers, callees, hooks and enclosing control may remain unresolved. Other dispatcher roots and non-equality dispatch are not covered.",
                 ["roots"] = new JsonArray(),
-                ["limits"] = new JsonObject { ["regionsPerRoot"] = 16, ["charactersPerRegion"] = 24000, ["charactersPerRoot"] = 64000 },
+                ["limits"] = new JsonObject { ["regionsPerRoot"] = 16, ["charactersPerRegion"] = 24000, ["charactersPerRoot"] = 64000, ["helperCallSitesPerRoot"] = 8, ["helperDepth"] = 1 },
                 ["unknowns"] = new JsonArray("dispatcher_coverage_partial; absence_not_proved", "source_receiver_identity_and_runtime_entry_not_proved")
             };
-            foreach (string name in new[] { "ApplyEquipFunctional", "ItemCheck_Inner" })
+            foreach (string name in new[] { "ApplyEquipFunctional", "ItemCheck_Inner", "ItemCheck_Shoot", "UpdateEquips" })
             {
                 currentParentAnalysis?.ThrowIfCancelled();
                 var methods = typeof(Player).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
@@ -47,7 +47,7 @@ public sealed partial class GeneratorClient
                     while (!Monitor.TryEnter(nativeCSharpGate, 50)) timeout.Token.ThrowIfCancellationRequested();
                     try
                     {
-                        var input = new JsonObject { ["type"] = itemType };
+                        var input = new JsonObject { ["type"] = itemType, ["identityForwardingVersion"] = 1 };
                         if (TryReadNativeSourceProjection("item_dispatch", method, input, timeout.Token, out var projection)
                             && projection["root"] is JsonValue packedRoot && packedRoot.TryGetValue<string>(out string? packedName) && packedName == name
                             && projection["records"] is JsonArray && projection["unknowns"] is JsonArray
@@ -58,7 +58,9 @@ public sealed partial class GeneratorClient
                         }
                         else
                         {
-                            BuildNativeItemDispatchRegions(GetNativeCSharpDocument(method, timeout.Token), itemType, root, timeout.Token);
+                            var document = GetNativeCSharpDocument(method, timeout.Token);
+                            BuildNativeItemDispatchRegions(document, itemType, root, timeout.Token);
+                            BuildNativeItemDispatchHelpers(document, itemType, root, timeout.Token);
                             timeout.Token.ThrowIfCancellationRequested();
                             RecordNativeSourceProjection("item_dispatch", method, input, root, timeout.Token);
                         }
@@ -74,20 +76,23 @@ public sealed partial class GeneratorClient
         return currentParentAnalysis is { } analysis ? analysis.Defer(Analyze) : Analyze();
     }
 
-    private static bool ItemDispatchIdentity(BinaryOperatorExpression comparison, int itemType)
-    {
-        if (comparison.Operator != BinaryOperatorType.Equality) return false;
-        bool Field(Expression value) => value.GetSymbol() is IField field
-            && field.DeclaringType.FullName == typeof(Item).FullName && field.Name == "type";
-        return Field(comparison.Left) && comparison.Right is PrimitiveExpression { Value: int right } && right == itemType
-            || Field(comparison.Right) && comparison.Left is PrimitiveExpression { Value: int left } && left == itemType;
-    }
+    private static bool ItemDispatchTypeField(Expression value) => value.GetSymbol() is IField field
+        && field.DeclaringType.FullName == typeof(Item).FullName && field.Name == "type";
+
+    private static bool ItemDispatchIdentity(BinaryOperatorExpression comparison, int itemType, Func<Expression, bool> identity)
+        => comparison.Operator == BinaryOperatorType.Equality
+            && (identity(comparison.Left) && comparison.Right is PrimitiveExpression { Value: int right } && right == itemType
+                || identity(comparison.Right) && comparison.Left is PrimitiveExpression { Value: int left } && left == itemType);
 
     private static void BuildNativeItemDispatchRegions(NativeCSharpDocument document, int itemType, JsonObject root, CancellationToken cancellation, int regionLimit = 16, int regionCharacters = 24000, int totalCharacters = 64000)
+        => BuildNativeItemDispatchRegionsCore(document, itemType, root, cancellation, regionLimit, regionCharacters, totalCharacters, ItemDispatchTypeField);
+
+    private static void BuildNativeItemDispatchRegionsCore(NativeCSharpDocument document, int itemType, JsonObject root, CancellationToken cancellation,
+        int regionLimit, int regionCharacters, int totalCharacters, Func<Expression, bool> identity)
     {
         var records = root["records"]!.AsArray(); var gaps = root["unknowns"]!.AsArray();
         var branches = document.Declaration.Body.Descendants.OfType<IfElseStatement>()
-            .Where(branch => branch.Condition.DescendantsAndSelf.OfType<BinaryOperatorExpression>().Any(test => ItemDispatchIdentity(test, itemType))).ToArray();
+            .Where(branch => branch.Condition.DescendantsAndSelf.OfType<BinaryOperatorExpression>().Any(test => ItemDispatchIdentity(test, itemType, identity))).ToArray();
         int characters = 0, count = 0;
         foreach (var branch in branches)
         {

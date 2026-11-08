@@ -31,7 +31,7 @@ internal static partial class EngineRuntimeChecks
         => (JsonObject?)typeof(GeneratorClient).GetMethod("ReferencedProjectileSnapshots",BindingFlags.NonPublic|BindingFlags.Static)!.Invoke(null,new object[]{calls});
     private static JsonObject ChildSnapshot(int id,bool include=true)
         => JsonSerializer.SerializeToNode(GeneratorClient.ProjectileRawSnapshot(id,19f,"native-test",null,-1,include))!.AsObject();
-    private static void ParentSingleHopProjectileReferences()
+    private static void ParentBoundedProjectileReferences()
     {
         var spawnReader=typeof(GeneratorClient).GetMethod("ProjectileSpawnReferences",BindingFlags.NonPublic|BindingFlags.Static)!;
         foreach(int type in new[]{0,Terraria.ID.ProjectileID.Count})
@@ -47,7 +47,7 @@ internal static partial class EngineRuntimeChecks
         var merged=ExpandChildReferenceFixture(calls)!;
         Equal(1,merged["references"]!.AsArray().Count,"one profile serves duplicate conditional references");
         Equal(2,merged["references"]![0]!["sourceCallIndices"]!.AsArray().Count,"both literal callsites preserved");
-        Equal(false,merged["references"]![0]!["profile"]!.AsObject().ContainsKey("referencedProjectiles"),"one-hop child never expands its own children");
+        Equal(true,merged["references"]![0]!["profile"]!.AsObject().ContainsKey("referencedProjectiles"),"connected child source expands its own referenced defaults");
         foreach(var pair in new[]{(Parent:617,Child:618),(Parent:643,Child:644)})
         {
             var snapshot=ChildSnapshot(pair.Parent);var related=snapshot["referencedProjectiles"]!.AsObject();
@@ -69,7 +69,6 @@ internal static partial class EngineRuntimeChecks
                         sourceCalls[index]!["method"]!.GetValue<string>(),"known AI child and new lifecycle child retain distinct callers");
                 var child=reference["profile"]!.AsObject();
                 Equal(childType,child["type"]!.GetValue<int>(),"profile retains the referenced native identity");
-                Equal(false,child.ContainsKey("referencedProjectiles"),"nested expansion disabled even when child sources have further calls");
                 Equal(0,child["sourceItemType"]!.GetValue<int>(),"child defaults not attributed to parent item");
                 Equal(0,child["sourceItemDamage"]!.GetValue<int>(),"child snapshot does not invent actual spawn damage");
                 Equal(0f,child["itemShootSpeed"]!.GetValue<float>(),"child defaults do not invent actual spawn velocity");
@@ -108,8 +107,8 @@ internal static partial class EngineRuntimeChecks
             Equal(pair.Child,ChildSnapshot(pair.Parent)["referencedProjectiles"]!["sourceCalls"]![knownCall]!["projectileTypes"]![0]!.GetValue<int>(),"mutating a snapshot cannot poison cached source refs");
             Equal(false,ChildSnapshot(pair.Parent,false).ContainsKey("referencedProjectiles"),"base capture cache not poisoned by expanded snapshot");
         }
-        // A synthetic self/two-cycle link still uses the actual canonical child
-        // snapshot; the explicit false flag, not identity guessing, bounds it.
+        // Direct candidates have priority under the shared whole-profile budget;
+        // every uncaptured identity still retains its source links and reason.
         var bounded=new JsonArray();
         foreach(int id in new[]{617,643,618,644,1,2,3,4,5,-1})
             bounded.Add(new JsonObject{["projectileTypes"]=new JsonArray(id),["at"]=0,["requiredPredicates"]=new JsonArray()});
@@ -117,8 +116,31 @@ internal static partial class EngineRuntimeChecks
         Equal(10,limited["sourceCalls"]!.AsArray().Count,"source work bound does not drop callsites");
         var limitedRefs=limited["references"]!.AsArray();
         Equal(8,limitedRefs.Count(r=>r!["profile"] is JsonObject),"whole-profile work bound");
-        Equal(1,limitedRefs.Count(r=>r!["unresolved"]?.GetValue<string>()=="single_hop_profile_count_bound"),"overflow explicit rather than partial profile");
+        Equal(1,limitedRefs.Count(r=>r!["unresolved"]?.GetValue<string>()=="projectile_reference_profile_count_bound"),"overflow explicit rather than partial profile");
         Equal(1,limitedRefs.Count(r=>r!["unresolved"]?.GetValue<string>()=="spawn_projectile_identity_not_registered"),"invalid identity refused before native defaults");
-        Equal(true,limitedRefs.Where(r=>r!["profile"] is JsonObject).All(r=>!r!["profile"]!.AsObject().ContainsKey("referencedProjectiles")),"self and two-cycle expansion cannot recurse");
+        // Deterministic source graphs exercise cycles and bounds independently
+        // of native IDs. The production callback is the only native capture.
+        JsonArray Links(params int[] ids) => new(new JsonObject { ["projectileTypes"] = new JsonArray(ids.Select(id => (JsonNode?)JsonValue.Create(id)).ToArray()) });
+        var graph = GeneratorClient.BuildReferencedProjectileSnapshots(Links(101, 102), (id, allowed) =>
+            (true, allowed ? new JsonObject { ["type"] = id } : null,
+             allowed ? id == 101 ? Links(101, 102, 103) : id == 102 ? Links(101, 103) : Links(101) : null))!;
+        var first = graph["references"]![0]!["profile"]!["referencedProjectiles"]!["references"]!.AsArray();
+        Equal(101, first[0]!["profileRefType"]!.GetValue<int>(), "self cycle links an already captured identity");
+        Equal(102, first[1]!["profileRefType"]!.GetValue<int>(), "cross-edge links the existing sibling profile");
+        Equal(103, first[2]!["profile"]!["type"]!.GetValue<int>(), "diamond child captured once");
+        Equal(103, graph["references"]![1]!["profile"]!["referencedProjectiles"]!["references"]![1]!["profileRefType"]!.GetValue<int>(), "diamond revisit links the first complete profile");
+        var depth = GeneratorClient.BuildReferencedProjectileSnapshots(Links(101), (id, allowed) =>
+            (true, allowed ? new JsonObject { ["type"] = id } : null, allowed ? Links(id + 1) : null))!;
+        JsonObject edge = depth["references"]![0]!.AsObject();
+        for (int n = 1; n < 5; n++) edge = edge["profile"]!["referencedProjectiles"]!["references"]![0]!.AsObject();
+        Equal("projectile_reference_depth_bound", edge["unresolved"]!.GetValue<string>(), "deep chain retains the bounded edge without recursing");
+        foreach (var chain in new[] { new[] {237, 238, 239}, new[] {377, 378, 379} })
+        {
+            var parent = ChildSnapshot(chain[0]);
+            var child = parent["referencedProjectiles"]!["references"]!.AsArray().Single(r => r!["type"]!.GetValue<int>() == chain[1]);
+            var grandchild = child!["profile"]!["referencedProjectiles"]!["references"]!.AsArray().Single(r => r!["type"]!.GetValue<int>() == chain[2]);
+            Equal(chain[2], grandchild!["profile"]!["type"]!.GetValue<int>(), "native two-edge spawn chain reaches complete grandchild profile");
+            Equal(true, grandchild["sourceCallIndices"]!.AsArray().Count > 0, "grandchild retains its own parent's exact callsites");
+        }
     }
 }

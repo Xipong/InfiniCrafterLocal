@@ -100,7 +100,7 @@ internal static partial class EngineRuntimeChecks
         Equal(expected.ToJsonString(), resolved.Result!.ToJsonString(), "combined handoff preserves exact source bytes and order");
         JsonArray references = actual["references"]!.AsArray();
         Equal(8, references.Count(row => row!["profile"] is not null), "profile limit remains eight");
-        Equal("single_hop_profile_count_bound", references[^2]!["unresolved"]!.GetValue<string>(), "registered ninth identity remains explicit bound");
+        Equal("projectile_reference_profile_count_bound", references[^2]!["unresolved"]!.GetValue<string>(), "registered ninth identity remains explicit bound");
         Equal("spawn_projectile_identity_not_registered", references[^1]!["unresolved"]!.GetValue<string>(), "unregistered reason precedes bound");
         Equal("[0,1]", references[2]!["sourceCallIndices"]!.ToJsonString(), "all repeated callsites retained in order");
     }

@@ -25,7 +25,8 @@ LLM/image-запросов, импорта runtime, создания cache/PNG/�
 |---|---|---|
 | Midgame10 / classic20 / diverse40 | `python -m toolbox live10` / `live20` / `live40` | Три поддерживаемые панели; Live10 и Live40 требуют актуальный внешний `--runtime-dump` |
 | Собственная панель, в том числе 40 случаев | `python -m toolbox live20 --cases-file /path/to/cases.json --runtime-dump /path/to/parents.jsonl --expected-case-count 40` | Явно предоставленные оператором пары и parent inputs; [формат и границы](fixtures/README.md#входы-и-запуск) |
-| Снять 40 native-входов без моделей | `python -m toolbox live40 --offline --native-executable /path/EngineRuntimeChecks --output /path/new-capture` | Raw Prepare inputs существующего native harness; не Author, не генерация и не gameplay |
+| Снять 40 native-входов без моделей | `python -m toolbox live10 --offline --native-executable /path/EngineRuntimeChecks --output /path/new-capture
+# Для более широкой панели замените live10 на live40.` | Raw Prepare inputs существующего native harness; не Author, не генерация и не gameplay |
 | Найти все пакеты запросов | `python -m toolbox panels` | Пары ингредиентов, provenance, число cases и пути к исходным fixtures |
 | Узнать prerequisites | `python -m toolbox doctor` | Пути, доступность Python-модулей/команд, native-команда из manifest; без чтения credentials |
 | Разобрать сохранённую кампанию | `python -m toolbox summary /path/to/campaign` | Results + logical/HTTP/retry/image ledgers, пропуски, дубликаты и незавершённые запросы |
@@ -45,12 +46,13 @@ Exit 0 означает согласованный завершённый учё
 вход. Это не повторная semantic/art/game приёмка. Raw provider traces остаются
 приватными: не прикладывайте их автоматически к PR.
 
-## Детерминированный native capture40
+## Детерминированный native capture
 
 ```bash
-python -m toolbox live40 --offline --native-executable /path/EngineRuntimeChecks --output /path/new-capture
+python -m toolbox live10 --offline --native-executable /path/EngineRuntimeChecks --output /path/new-capture
+# Для более широкой панели замените live10 на live40.
 # Для собранного managed DLL:
-python -m toolbox live40 --offline --native-executable /path/EngineRuntimeChecks.dll --dotnet /path/dotnet --output /path/new-capture
+python -m toolbox live10 --offline --native-executable /path/EngineRuntimeChecks.dll --dotnet /path/dotnet --output /path/new-capture
 ```
 
 Это явное исполнение уже собранного доверенного native harness, а не preflight.
@@ -58,8 +60,8 @@ python -m toolbox live40 --offline --native-executable /path/EngineRuntimeChecks
 не запускает Author или image backend. Без `--dotnet` DLL запускается через
 `dotnet` из PATH. Флаги генерации и `--runtime-dump` здесь недопустимы.
 
-Передаётся ровно встроенный `live40-diverse` в существующий
-`EngineRuntimeChecks --capture-parent-panel`. Весь capture принадлежит нативному
+Передаётся ровно встроенный `live10-midgame` или `live40-diverse` по имени команды
+в существующий `EngineRuntimeChecks --capture-parent-panel`. Весь capture принадлежит нативному
 владельцу: он проверяет manifest, использует настоящий Prepare и фиксированные
 language/seed/inventory, пишет packets, копию manifest и `report.json` с hashes.
 Выходной каталог должен быть новым или пустым; старые результаты не смешиваются.

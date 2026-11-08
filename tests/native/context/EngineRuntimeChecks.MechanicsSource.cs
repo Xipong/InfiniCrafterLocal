@@ -192,6 +192,35 @@ internal static partial class EngineRuntimeChecks
         {
             NewProjectile(null!, position.X, position.Y, 0, 0, child, 1, 1, owner);
         }
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        public void ConditionalLocalChildType()
+        {
+            if (aiStyle == 1)
+            {
+                int child = 309;
+                if (type == 177) { child = 378; damage += 1; }
+                NewProjectile(null!, position.X, position.Y, 0, 0, child, 1, 1, owner);
+                child = 967;
+                damage += child;
+            }
+        }
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        public void ConditionalOuterLocalChildType()
+        {
+            int child = Touch() ? 309 : 378;
+            if (aiStyle == 1) NewProjectile(null!, position.X, position.Y, 0, 0, child, 1, 1, owner);
+            damage += child;
+        }
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        public void LoopLocalChildType()
+        {
+            int child = 614;
+            while (Touch())
+            {
+                NewProjectile(null!, position.X, position.Y, 0, 0, child, 1, 1, owner);
+                child = 615;
+            }
+        }
         public void ChildCalls()
         {
             if (type == 178) NewProjectile(null!, position.X, position.Y, 0, 0, 1, 1, 1, owner);
@@ -290,13 +319,28 @@ internal static partial class EngineRuntimeChecks
         Equal(true, other["code"]!.GetValue<string>().Contains("other.type"), "other receiver guard remains");
         var localChildren = MechanicsFixtureRecord(nameof(MechanicsSourceFixture.LocalChildTypes));
         var candidates = localChildren["spawnTypeCandidates"]!.AsArray().OfType<JsonObject>().Single();
-        Equal("[0,614,615]", candidates["projectileTypes"]!.ToJsonString(), "all surviving literal writes retained, foreign arm excluded, no flow/roll selection");
+        Equal("[614,615]", candidates["projectileTypes"]!.ToJsonString(), "overwritten initializer excluded; both unknown conditional outcomes retained");
         Equal(true, candidates["at"]!.GetValue<int>() >= 0, "candidate proof names exact mapped native call offset");
         foreach (string name in new[] { nameof(MechanicsSourceFixture.UnknownLocalChildType), nameof(MechanicsSourceFixture.AddressLocalChildType),
             nameof(MechanicsSourceFixture.MutatedLocalChildType), nameof(MechanicsSourceFixture.TypedReferenceChildType), nameof(MechanicsSourceFixture.ParameterChildType) })
             Equal(false, MechanicsFixtureRecord(name).ContainsKey("spawnTypeCandidates"), "unknown, parameter, ref and mutated locals do not claim a bounded literal set");
         Equal(false, MechanicsFixtureRecord(nameof(MechanicsSourceFixture.LocalChildTypes), capturedReceiverBound: false).ContainsKey("spawnTypeCandidates"), "unbound method cannot claim spawn types");
-        Equal(false, region.ContainsKey("spawnTypeCandidates"), "conditional excerpts never claim complete local-write coverage");
+        Equal(false, region.ContainsKey("spawnTypeCandidates"), "conditional excerpt with no retained spawn does not invent candidate evidence");
+        var conditionalLocal = MechanicsFixtureRecord(nameof(MechanicsSourceFixture.ConditionalLocalChildType), conditional: true);
+        Equal("[378]", conditionalLocal["spawnTypeCandidates"]![0]!["projectileTypes"]!.ToJsonString(), "closed local scope excludes overwritten and later stores at the exact spawn");
+        bool outerLocalRefused = false;
+        try { MechanicsFixtureRecord(nameof(MechanicsSourceFixture.ConditionalOuterLocalChildType), conditional: true); }
+        catch (TargetInvocationException error) when (error.InnerException is NotSupportedException refusal
+            && refusal.Message == "csharp_region_external_local_dependency") { outerLocalRefused = true; }
+        Equal(true, outerLocalRefused, "outer local without retained declaration remains an explicit unknown region");
+        var loopLocal = MechanicsFixtureRecord(nameof(MechanicsSourceFixture.LoopLocalChildType));
+        Equal("[614,615]", loopLocal["spawnTypeCandidates"]![0]!["projectileTypes"]!.ToJsonString(), "loop backedge retains later store as a possible next iteration value");
+        var queen = new Projectile(); queen.SetDefaults(377);
+        var queenSource = (JsonObject)CSharpOwner.GetMethod("CaptureProjectileMechanicsSource", CSharpFlags)!.Invoke(null, new object[] { queen })!;
+        Equal("[378]", queenSource["records"]!.AsArray().OfType<JsonObject>()
+            .Single(record => record["method"]!.GetValue<string>() == "Terraria.Projectile.VanillaAI")
+            ["spawnTypeCandidates"]!.AsArray().OfType<JsonObject>().Single()["projectileTypes"]!.ToJsonString(),
+            "native Queen Spider scoped spawn retains only the reaching literal identity");
         var children = MechanicsFixtureRecord(nameof(MechanicsSourceFixture.ChildCalls));
         Equal(1, children["excludedCallOffsets"]!.AsArray().Count, "only exact omitted NewProjectile source offset is excluded");
         Equal(true, children["sourceMethodSha256"] is JsonValue && children["sourceModuleVersionId"] is JsonValue, "child exclusion is bound to exact original method certificate");

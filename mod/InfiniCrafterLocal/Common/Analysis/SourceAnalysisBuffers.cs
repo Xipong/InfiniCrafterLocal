@@ -1,6 +1,5 @@
 #nullable enable
 using System;
-using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -12,32 +11,6 @@ namespace InfiniCrafterLocal.Common.Analysis;
 internal static class SourceAnalysisBuffers
 {
     private const int ChunkBytes = 4096;
-
-    internal static byte[] ReadExact(Stream input, int length, int maximum, CancellationToken cancellation)
-    {
-        ArgumentNullException.ThrowIfNull(input);
-        cancellation.ThrowIfCancellationRequested();
-        if (length < 0 || length > maximum) throw new InvalidDataException("native_source_pack_entry_size");
-        byte[] result = new byte[length];
-        int position = 0;
-        while (position < length)
-        {
-            cancellation.ThrowIfCancellationRequested();
-            int count = input.Read(result, position, Math.Min(16 * 1024, length - position));
-            // Cancellation takes priority over a simultaneous EOF. Otherwise
-            // the pack owner could mistake cancellation for corrupt evidence.
-            cancellation.ThrowIfCancellationRequested();
-            if (count == 0) throw new InvalidDataException("native_source_pack_entry_length");
-            position += count;
-        }
-        cancellation.ThrowIfCancellationRequested();
-        int extra = input.ReadByte();
-        cancellation.ThrowIfCancellationRequested();
-        if (extra != -1)
-            throw new InvalidDataException(length == maximum
-                ? "native_source_pack_entry_size" : "native_source_pack_entry_length");
-        return result;
-    }
 
     internal static string HashUtf8(string text, CancellationToken cancellation = default)
     {

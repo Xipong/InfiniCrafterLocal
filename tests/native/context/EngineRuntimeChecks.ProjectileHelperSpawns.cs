@@ -20,7 +20,7 @@ internal static partial class EngineRuntimeChecks
         Equal(true, raw["referencedProjectiles"]!["sourceCalls"]!.AsArray().Any(r => r!["method"]!.GetValue<string>().EndsWith(".AI_075", StringComparison.Ordinal)
             && r["projectileTypes"]!.AsArray().Any(t => t!.GetValue<int>() == ProjectileID.LastPrismLaser)
             && r["requiredPredicates"]!.AsArray().Count > 0), "source call keeps helper provenance and conditional predicates");
-        Equal(false, laser["profile"]!.AsObject().ContainsKey("referencedProjectiles"), "helper child expansion remains one hop");
+        Equal(false, laser["profile"]!.AsObject().ContainsKey("referencedProjectiles"), "leaf helper child does not invent outgoing references");
     }
     private static int HelperSpawnExecutions;
     private static Projectile? HelperSpawnForeign = null;

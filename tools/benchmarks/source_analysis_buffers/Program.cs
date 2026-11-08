@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.IO.Compression;
 using System.Reflection;
 using System.Runtime;
 using System.Runtime.CompilerServices;
@@ -8,17 +7,13 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using InfiniCrafterLocal.Common.Analysis;
 
 internal static class Program
 {
     private const string BaselineCommit = "c2ac5107b825598eb3b8e1477b6c7c7b2edd17e2";
     private const string HelperSourcePath = "mod/InfiniCrafterLocal/Common/Analysis/SourceAnalysisBuffers.cs";
-    private const string BaselinePackSourcePath = "mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.NativeSourcePack.cs";
     private const string BaselineHashSourcePath = "mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.NativeCSharpSource.cs";
-    private const int MaximumEntryBytes = 4 * 1024 * 1024;
-    private const int MaximumArchiveBytes = 128 * 1024 * 1024;
     private const int TextUtf8Bytes = 1024 * 1024;
     private const string TextMotif = "// source: Привет 日本語 😀\nreturn value + 1;\n";
     private const string TinyText = "Terraria.Projectile.AI\n11111111-2222-3333-4444-555555555555\n100663297\n"
@@ -30,7 +25,7 @@ internal static class Program
         {
             if (args.Length == 1 && args[0] is "--help" or "-h")
             {
-                Console.WriteLine("Usage: SourceAnalysisBuffers.Benchmarks <real-pack.zip> [--samples 8] [--target-ms 100] [--validate-only]");
+                Console.WriteLine("Usage: SourceAnalysisBuffers.Benchmarks [--samples 8] [--target-ms 100] [--validate-only]");
                 return 0;
             }
             var options = Options.Parse(args);
@@ -51,33 +46,11 @@ internal static class Program
     private static void Run(Options options)
     {
         DateTimeOffset started = DateTimeOffset.UtcNow;
-        var file = new FileInfo(options.PackPath);
-        if (file.Length > MaximumArchiveBytes) throw new InvalidDataException("The source pack exceeds 128 MiB.");
-        byte[] archiveBytes = File.ReadAllBytes(file.FullName);
-        using var archiveStream = new MemoryStream(archiveBytes, writable: false);
-        using var archive = new ZipArchive(archiveStream, ZipArchiveMode.Read);
-        var manifestEntry = archive.GetEntry("manifest.json") ?? throw new InvalidDataException("Missing manifest.json.");
-        byte[] manifestBytes = BaselineReadEntry(manifestEntry, MaximumEntryBytes, default);
-        var manifest = JsonNode.Parse(manifestBytes)!.AsObject();
-        if (manifest["version"]?.GetValue<int>() != 2) throw new InvalidDataException("A version 2 native source pack is required.");
-        var rows = manifest["entries"]!.AsArray();
-        var blobs = manifest["blobs"]!.AsArray();
-        string expectedIndex = manifest["indexSha256"]!.GetValue<string>();
-        if (BaselineIndexHash(rows, blobs) != expectedIndex)
-            throw new InvalidDataException("The real manifest index does not match indexSha256.");
-        var largest = archive.Entries.Where(entry => !entry.FullName.EndsWith('/'))
-            .OrderByDescending(entry => entry.Length).ThenBy(entry => entry.FullName, StringComparer.Ordinal).First();
         string text = CreateText();
         if (Encoding.UTF8.GetByteCount(text) != TextUtf8Bytes) throw new InvalidOperationException("Text fixture size mismatch.");
 
         var cases = new[]
         {
-            new BenchmarkCase("largest_zip_entry_read", new
-            {
-                source = "real_pack", entry = largest.FullName, uncompressedBytes = largest.Length,
-                compressedBytes = largest.CompressedLength, includesManifestInSelection = true,
-                timedScope = "entry.Open, decompression, bounded read, exact owned byte[]; compressed input already in memory"
-            }, () => BaselineReadEntry(largest, MaximumEntryBytes, default), () => ReadEntry(largest)),
             new BenchmarkCase("tiny_utf8_text_hash", new
             {
                 source = "representative_literal", text = TinyText,
@@ -112,7 +85,7 @@ internal static class Program
         var assembly = Assembly.GetExecutingAssembly();
         var report = new
         {
-            schemaVersion = 2, benchmark = "source_analysis_buffers", baselineCommit = BaselineCommit,
+            schemaVersion = 3, benchmark = "source_analysis_buffers", baselineCommit = BaselineCommit,
             startedUtc = started, completedUtc = DateTimeOffset.UtcNow,
             measurementPerformed = !options.ValidateOnly,
             runtime = new
@@ -134,16 +107,9 @@ internal static class Program
                 linkedHelperSourceSha256 = ResourceHash(assembly, "SourceAnalysisBuffers.source.cs"),
                 benchmarkSourceSha256 = ResourceHash(assembly, "Benchmark.source.cs"),
                 benchmarkProjectSha256 = ResourceHash(assembly, "Benchmark.project.xml"),
-                baselineSourceUrls = new[] { BaselinePackSourcePath, BaselineHashSourcePath }
+                baselineSourceUrls = new[] { BaselineHashSourcePath }
                     .Select(path => $"https://github.com/Xipong/InfiniCrafterLocal/blob/{BaselineCommit}/{path}").ToArray(),
                 provenance = "production helper compiled by source link; embedded source hashes identify actual working-tree bytes"
-            },
-            input = new
-            {
-                packFileName = file.Name, archiveBytes = archiveBytes.Length, archiveSha256 = Hash(archiveBytes),
-                archiveEntryCount = archive.Entries.Count, manifestBytes = manifestBytes.Length,
-                manifestSha256 = Hash(manifestBytes), manifestVersion = manifest["version"]?.GetValue<int>(),
-                manifestIndexSha256 = expectedIndex, manifestIndexVerified = true, rows = rows.Count, blobs = blobs.Count
             },
             method = new
             {
@@ -155,7 +121,7 @@ internal static class Program
                 forcedGc = false, allocationMetric = "GC.GetAllocatedBytesForCurrentThread delta, divided by operations",
                 timeMetric = "Stopwatch elapsed ticks, converted to ns/op",
                 scope = "single-process warmed microbenchmark, not cold startup or end-to-end parent analysis",
-                excluded = "file IO, ZIP directory parsing, manifest parsing and index validation, JSON serialization, fixtures, correctness comparisons, report serialization",
+                excluded = "fixture construction, correctness comparisons, JSON report serialization",
                 limits = "managed allocation is not retained memory or peak RSS; elapsed time includes natural GC; concurrent CPU work and tiered JIT can affect samples"
             },
             cases = results
@@ -172,8 +138,6 @@ internal static class Program
         object optimized = item.Optimized();
         if (baseline is string expected && optimized is string actual && expected == actual)
             return new Validation(true, "SHA256 digest and lowercase hex are identical", expected);
-        if (baseline is byte[] expectedBytes && optimized is byte[] actualBytes && expectedBytes.AsSpan().SequenceEqual(actualBytes))
-            return new Validation(true, "every returned byte is identical", Hash(expectedBytes));
         throw new InvalidOperationException($"Baseline and optimized outputs differ: {item.Name}.");
     }
 
@@ -263,35 +227,6 @@ internal static class Program
     // Baseline BCL operations from c2ac5107b825598eb3b8e1477b6c7c7b2edd17e2.
     // Hashing starts from the same already-built string in both variants.
     private static string BaselineUtf8Hash(string text) => Hash(Encoding.UTF8.GetBytes(text));
-    // Input validation only: JSON index serialization is not a benchmark case.
-    private static string BaselineIndexHash(JsonArray rows, JsonArray blobs)
-        => Hash(Encoding.UTF8.GetBytes(rows.ToJsonString() + "\n" + blobs.ToJsonString()));
-
-    private static byte[] BaselineReadEntry(ZipArchiveEntry entry, int maximum, CancellationToken cancellation)
-    {
-        if (entry.Length < 0 || entry.Length > maximum) throw new InvalidDataException("native_source_pack_entry_size");
-        using var input = entry.Open();
-        using var output = new MemoryStream((int)entry.Length);
-        byte[] buffer = new byte[16384];
-        int count;
-        while ((count = input.Read(buffer, 0, buffer.Length)) != 0)
-        {
-            cancellation.ThrowIfCancellationRequested();
-            if (output.Length + count > maximum) throw new InvalidDataException("native_source_pack_entry_size");
-            output.Write(buffer, 0, count);
-        }
-        cancellation.ThrowIfCancellationRequested();
-        if (output.Length != entry.Length) throw new InvalidDataException("native_source_pack_entry_length");
-        return output.ToArray();
-    }
-
-    private static byte[] ReadEntry(ZipArchiveEntry entry)
-    {
-        if (entry.Length < 0 || entry.Length > MaximumEntryBytes) throw new InvalidDataException("native_source_pack_entry_size");
-        using var input = entry.Open();
-        return SourceAnalysisBuffers.ReadExact(input, (int)entry.Length, MaximumEntryBytes, default);
-    }
-
     private sealed record BenchmarkCase(string Name, object Input, Func<object> Baseline, Func<object> Optimized);
     private sealed record Validation(bool Equal, string Comparison, string ResultSha256);
     private sealed record Sample(int Number, string Order, Measurement Baseline, Measurement Optimized);
@@ -302,14 +237,13 @@ internal static class Program
         public double AllocatedBytesPerOperation => (double)AllocatedBytes / Operations;
     }
 
-    private sealed record Options(string PackPath, int Samples, int TargetMilliseconds, bool ValidateOnly)
+    private sealed record Options(int Samples, int TargetMilliseconds, bool ValidateOnly)
     {
         internal static Options Parse(string[] args)
         {
-            if (args.Length == 0 || args[0].StartsWith('-')) throw new ArgumentException("A real native-source-pack.zip path is required. Use --help.");
             int samples = 8, target = 100;
             bool validateOnly = false;
-            for (int index = 1; index < args.Length; index++)
+            for (int index = 0; index < args.Length; index++)
             {
                 string arg = args[index];
                 if (arg == "--validate-only") { validateOnly = true; continue; }
@@ -324,7 +258,7 @@ internal static class Program
             }
             if (samples < 5 || samples > 1000) throw new ArgumentOutOfRangeException(nameof(samples), "Use 5 to 1000 samples; an even count balances AB/BA.");
             if (target < 10 || target > 10000) throw new ArgumentOutOfRangeException(nameof(target), "Use a target sample duration of 10 to 10000 ms.");
-            return new Options(Path.GetFullPath(args[0]), samples, target, validateOnly);
+            return new Options(samples, target, validateOnly);
         }
     }
 }

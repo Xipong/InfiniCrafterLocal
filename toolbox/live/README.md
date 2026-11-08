@@ -4,7 +4,7 @@
 Отдельный `--real-images` не меняет старые панели и не использует synthetic PNG.
 
 Для native capture без провайдера используйте отдельный
-[`live40 --offline`](../README.md#детерминированный-native-capture40). Он снимает raw Prepare,
+[`live10 --offline` / `live40 --offline`](../README.md#детерминированный-native-capture). Он снимает raw Prepare,
 а не запускает описанную здесь генерационную кампанию.
 
 ## Сначала preflight
