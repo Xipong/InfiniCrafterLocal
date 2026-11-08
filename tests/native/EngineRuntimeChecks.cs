@@ -77,6 +77,9 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("REA guard memo scanning parity", ReaGuardMemoMatchesScanningOracle),
+            ("REA Entity accessor decoded-owner parity", ReaEntityMemoTracksDecodedBody),
+            ("REA attachment grouping exact identity parity", ReaAttachmentGroupingMatchesScanning),
             ("mechanics source preserves effects and unknowns", MechanicsSourcePreservesEffectsAndUnknowns),
             ("mechanics source binds explicit native roots", MechanicsSourceBindsExplicitNativeRoots),
             ("mechanics source call index scanning parity", MechanicsCallIndexMatchesScanningOracle),
@@ -120,6 +123,8 @@ internal static partial class EngineRuntimeChecks
             ("parent conditional shot alternatives source only", ParentConditionalShotAlternativesRemainSourceOnly),
             ("parent non-ammo item-specific source facts survive capture", ParentNonAmmoSourceFactsArePreserved),
             ("craft gzip transport preserves cache and generation payloads", () => CraftGzipTransportPreservesRequestAsync().GetAwaiter().GetResult()),
+            ("craft prepared transport reuse invalidation and ownership", () => CraftPreparedTransportReuseAsync().GetAwaiter().GetResult()),
+            ("parent child snapshots one handoff preserves bounds", ParentChildSnapshotsOneHandoff),
             ("parent fingerprint excludes readable source view metadata", ParentFingerprintExcludesReadableSourceViews),
             ("audit native pure definition projections", AuditProjectionsDoNotNormalizeSource),
             ("audit native failed network copy refusal", AuditNetworkCopyFailureNeverAliasesOriginal),

@@ -71,7 +71,8 @@ def _accepted_visual_facts(value: Any) -> dict[str, Any]:
 
 
 def raw_parent_card_for_llm(item: dict[str, Any], *, include_visual_reference: bool = False,
-                          prefer_readable_source: bool = True) -> dict[str, Any]:
+                          prefer_readable_source: bool = True,
+                          attack_source_memo: dict[str, Any] | None = None) -> dict[str, Any]:
     """Compact parent card for the LLM.
 
     The packet contains raw source fields or exact accepted generated runtime facts.
@@ -81,6 +82,8 @@ def raw_parent_card_for_llm(item: dict[str, Any], *, include_visual_reference: b
     silhouette, palette, grip, canvas/axis and scales. Missing facts stay unknown;
     no appearance becomes a gameplay choice or required child dimension.
     """
+    if attack_source_memo is None:
+        attack_source_memo = {}
     item = native_item_context_from_dump(item)
     item_raw = compact_item_raw_for_llm(item)
     cross_mod_identity = {
@@ -111,9 +114,9 @@ def raw_parent_card_for_llm(item: dict[str, Any], *, include_visual_reference: b
     effective: dict[str, Any] = {}
     ammo: dict[str, Any] = {}
     if not gd:
-        direct = compact_projectile_profile(projectile_profile_of(item), prefer_readable_source=prefer_readable_source)
-        effective = compact_projectile_profile(effective_projectile_profile_of(item), prefer_readable_source=prefer_readable_source)
-        ammo = compact_ammo_profile(item, prefer_readable_source=prefer_readable_source)
+        direct = compact_projectile_profile(projectile_profile_of(item), prefer_readable_source=prefer_readable_source, attack_source_memo=attack_source_memo)
+        effective = compact_projectile_profile(effective_projectile_profile_of(item), prefer_readable_source=prefer_readable_source, attack_source_memo=attack_source_memo)
+        ammo = compact_ammo_profile(item, prefer_readable_source=prefer_readable_source, attack_source_memo=attack_source_memo)
         if include_visual_reference:
             for target, profile in ((direct, projectile_profile_of(item)),
                                     (effective, effective_projectile_profile_of(item))):

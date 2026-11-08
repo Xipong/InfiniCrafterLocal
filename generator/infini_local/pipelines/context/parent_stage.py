@@ -512,9 +512,11 @@ def parent_context_for_stage(parents: dict[str, Any] | list[dict[str, Any]], *, 
                     source["presentationScope"] = "Native draw layer instructions omitted for Gameplay Author; " \
                         "source presentation motifs are in parentBriefs. Gameplay source is unchanged."
                     source = prune_native_csharp_records(source)
+            if stage == "author":
+                if known_attack_context_schema(source):
+                    profile["attackReference"] = pack_attack_tables(ordered_attack_context(source))
+                elif appearance is not None:
                     profile["attackReference"] = pack_attack_tables(source)
-            if stage == "author" and known_attack_context_schema(source):
-                profile["attackReference"] = pack_attack_tables(ordered_attack_context(source))
         if "spriteReference" in raw:
             brief["appearance"]["spriteReference"] = copy.deepcopy(raw["spriteReference"])
         if stage == "author":

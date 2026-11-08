@@ -398,3 +398,127 @@ def test_projectile_absent_or_unobserved_atlas_does_not_gain_visual_extent(refer
             'height': 888, 'framesRaw': 1, 'spriteReferenceRaw': reference}}
     card = raw_parent_card_for_llm(item, include_visual_reference=True)
     assert 'spriteReference' not in card['raw']['directProjectile']
+
+
+@pytest.mark.parametrize("value", [0, False, 0.0, None, "missing"])
+def test_request_source_memo_keeps_literal_types_and_independent_deliveries(value):
+    from infini_local.pipelines.context.parents import compact_projectile_profile
+
+    source = source_defined_attack_fixture()
+    source["literal"] = 0
+    memo = {}
+    original = {"type": 42, "source": "direct", "attackReference": source}
+    first = compact_projectile_profile(original, attack_source_memo=memo)
+    # An envelope's provenance never belongs to the shared transformation.
+    other = copy.deepcopy(original)
+    other["source"] = "effective"
+    expected = compact_projectile_profile(other)
+    first["attackReference"]["motion"]["samples"].append("consumer edit")
+    second = compact_projectile_profile(other, attack_source_memo=memo)
+    assert_exact_json(second, expected)
+    assert source["motion"]["samples"] == []
+    changed = copy.deepcopy(other)
+    if value != "missing":
+        changed["attackReference"]["literal"] = value
+    else:
+        changed["attackReference"].pop("literal")
+    third = compact_projectile_profile(changed, attack_source_memo=memo)
+    assert_exact_json(third, compact_projectile_profile(changed))
+    second["attackReference"]["motion"]["samples"].append("another consumer")
+    assert third["attackReference"]["motion"]["samples"] == []
+
+
+def test_request_source_memo_keeps_member_order_and_unknown_non_json_values():
+    from infini_local.pipelines.context.parents import compact_projectile_profile
+
+    memo = {}
+    for literal in ({"one": 1, "two": 2}, {"two": 2, "one": 1}, {1: "numeric"}, {"1": "string"}):
+        profile = {"type": 42, "attackReference": {"source": "unknown", "literal": literal}}
+        assert json.dumps(compact_projectile_profile(profile, attack_source_memo=memo)) == json.dumps(
+            compact_projectile_profile(profile))
+
+
+def test_request_source_memo_keeps_cyclic_unknown_passthrough_detached():
+    from infini_local.pipelines.context.parents import compact_projectile_profile
+
+    reference = {"source": "unknown", "literal": []}
+    reference["self"] = reference
+    profile = {"type": 42, "attackReference": reference}
+    expected = compact_projectile_profile(profile)["attackReference"]
+    memo = {}
+    actual = compact_projectile_profile(profile, attack_source_memo=memo)["attackReference"]
+    assert expected["self"] is expected and actual["self"] is actual
+    assert actual is not reference
+    actual["literal"].append("consumer edit")
+    assert reference["literal"] == expected["literal"] == []
+    again = compact_projectile_profile(profile, attack_source_memo=memo)["attackReference"]
+    assert again["self"] is again and again["literal"] == []
+
+
+@pytest.mark.parametrize("kind", ["dict", "list"])
+def test_request_source_memo_adds_no_recursion_bound_to_unknown_passthrough(kind):
+    import subprocess
+    import sys
+    import textwrap
+
+    # A fresh interpreter avoids pytest/plugin stack depth. Compare the owner's
+    # accepted depths instead of prescribing an interpreter-specific cutoff.
+    script = textwrap.dedent('''
+        import json
+        import sys
+        from infini_local.pipelines.context.parents import compact_projectile_profile
+        sys.setrecursionlimit(1000)
+        kind = KIND
+        accepted = 0
+        for depth in (64, 450, *range(480, 501)):
+            value = 0
+            for _ in range(depth):
+                value = {"child": value} if kind == "dict" else [value]
+            profile = {"type": 42, "attackReference": {"source": "unknown", "value": value}}
+            before = json.dumps(profile)
+            try:
+                expected = compact_projectile_profile(profile)
+            except RecursionError:
+                try:
+                    compact_projectile_profile(profile, attack_source_memo={})
+                except RecursionError:
+                    continue
+                raise AssertionError("memo changed the owner's refusal")
+            accepted += 1
+            actual = compact_projectile_profile(profile, attack_source_memo={})
+            assert json.dumps(actual) == json.dumps(expected)
+            leaf = actual["attackReference"]["value"]
+            for _ in range(depth - 1):
+                leaf = leaf["child"] if kind == "dict" else leaf[0]
+            if kind == "dict":
+                leaf["child"] = "consumer edit"
+            else:
+                leaf[0] = "consumer edit"
+            assert json.dumps(profile) == before
+        assert accepted >= 2
+    ''').replace("KIND", repr(kind))
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_request_source_memo_copy_failure_recomputes_detached_owner_output(monkeypatch):
+    from infini_local.pipelines.context import parents
+
+    profile = {"type": 42, "attackReference": {"source": "unknown", "literal": []}}
+    memo = {}
+    expected = parents.compact_projectile_profile(profile)
+    first = parents.compact_projectile_profile(profile, attack_source_memo=memo)
+    cached_tuple = next(iter(memo.values()))
+    original_copy = copy.deepcopy
+
+    def copy_with_unavailable_cache(value, *args, **kwargs):
+        if value is cached_tuple:
+            raise RecursionError("cache tuple cannot be copied in this call stack")
+        return original_copy(value, *args, **kwargs)
+
+    monkeypatch.setattr(parents.copy, "deepcopy", copy_with_unavailable_cache)
+    actual = parents.compact_projectile_profile(profile, attack_source_memo=memo)
+    assert actual == expected
+    actual["attackReference"]["literal"].append("consumer edit")
+    assert first == expected
+    assert profile["attackReference"]["literal"] == []

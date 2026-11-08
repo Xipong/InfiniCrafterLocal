@@ -74,7 +74,10 @@ internal static partial class EngineRuntimeChecks
             return root;
         }
         ItemDispatchFixture.Executions = 0;
+        object declaration = document.GetType().GetField("Declaration", CSharpFlags)!.GetValue(document)!;
+        string originalDeclaration = declaration.ToString()!;
         var source = Read(177); var otherArm = Read(178);
+        Equal(originalDeclaration, declaration.ToString()!, "true-arm clone restores the cached original false arm and parent tree");
         Equal(source.ToJsonString(), otherArm.ToJsonString(), "compound guard never specializes away an alternative identity");
         Equal(1, source["records"]!.AsArray().Count, "synthetic typed Item guard admitted generically");
         Equal(true, source.ToJsonString().Contains("allowed"), "outer admission remains visible");

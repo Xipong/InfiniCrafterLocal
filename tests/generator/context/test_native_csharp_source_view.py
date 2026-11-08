@@ -513,3 +513,26 @@ def test_compared_source_reuses_winning_projection(monkeypatch):
     assert actual[0]["nativeCSharpSource"]["records"][0]["code"] == record["identitySpecialized"]["code"]
     assert len(computed) == 2
     assert actual[0] is computed[-1][0]
+
+
+def test_request_source_memo_keeps_calls_modes_and_mechanics_supplements_separate():
+    from infini_local.pipelines.context.parents import compact_projectile_profile
+
+    memo = {}
+    profile = _parent()["directProjectileRaw"]
+    before = copy.deepcopy(profile)
+    variants = [copy.deepcopy(profile) for _ in range(5)]
+    variants[1]["referencedProjectiles"]["sourceCalls"][0]["at"] = 999
+    variants[2]["attackReference"]["nativeCSharpSource"]["records"][0]["codeSha256"] = "d" * 64
+    variants[3]["referencedProjectiles"]["version"] = 999
+    variants[4]["mechanicsSource"] = {"source": "native_mechanics_source", "version": 1, "records": []}
+    for value in variants:
+        for readable in (True, False, True):
+            expected = compact_projectile_profile(value, prefer_readable_source=readable)
+            actual = compact_projectile_profile(value, prefer_readable_source=readable, attack_source_memo=memo)
+            assert json.dumps(actual) == json.dumps(expected)
+            actual["attackReference"].clear()
+            again = compact_projectile_profile(value, prefer_readable_source=readable, attack_source_memo=memo)
+            assert json.dumps(again) == json.dumps(expected)
+    assert profile == before
+    assert variants[4]["mechanicsSource"]["records"] == []

@@ -306,8 +306,62 @@ def _generated_placement_fields(item: dict[str, Any]) -> dict[str, Any]:
         ("createTile", "tileId"), ("createWall", "wallId"), ("placeStyle", "placeStyle")
     ) if source in placement and placement[source] is not None}
 
+def _compact_attack_source(reference: dict[str, Any], references: Any, *,
+                           prefer_readable_source: bool, has_mechanics: bool,
+                           memo: dict[str, Any] | None) -> tuple[Any, Any, Any]:
+    """Request-local reuse of pure source projection, never projectile envelopes.
+
+    Keep JSON member order and scalar types in the key. Unsupported Python
+    values bypass reuse. Cache entries and each delivery have separate ownership.
+    Verified/mechanics supplements are applied by the caller before this seam.
+    """
+    readable = references is None or known_projectile_references(references)
+    calls = references["sourceCalls"] if readable and isinstance(references, dict) else None
+
+    def json_value(value: Any) -> bool:
+        if type(value) is dict:
+            return all(type(k) is str and json_value(v) for k, v in value.items())
+        if type(value) is list:
+            return all(json_value(v) for v in value)
+        return value is None or type(value) in (str, bool, int, float)
+
+    key = None
+    inputs = [reference, readable, calls, prefer_readable_source, has_mechanics]
+    if memo is not None:
+        try:
+            if json_value(inputs):
+                key = json.dumps(inputs, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+        except (ValueError, TypeError, RecursionError):
+            pass
+        if key is not None and key in memo:
+            try:
+                return copy.deepcopy(memo[key])
+            except RecursionError:
+                key = None
+    original = reference
+    linked_calls = None
+    selected = None
+    if "nativeCSharpSource" in reference and readable:
+        reference, linked_calls = native_csharp_source_for_llm(reference, calls)
+        if (not prefer_readable_source and "nativeCSharpSourceReading" in reference
+                and "nativeCSharpSourceReading" not in original):
+            reference = copy.deepcopy(original)
+            reference.pop("nativeCSharpSource")
+            linked_calls = None
+        if has_mechanics:
+            selected = _present_replaced_identity_selections(original, reference)
+    result = (pack_attack_tables(project_attack_behavior(reference)), linked_calls, selected)
+    if key is not None:
+        try:
+            memo[key] = copy.deepcopy(result)
+        except RecursionError:
+            pass
+    return result
+
+
 def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool = True,
-                               prefer_readable_source: bool = True) -> dict[str, Any]:
+                               prefer_readable_source: bool = True,
+                               attack_source_memo: dict[str, Any] | None = None) -> dict[str, Any]:
     if not isinstance(proj, dict) or not proj:
         return {}
     out = _select_raw_keys(proj, LLM_PROJECTILE_RAW_KEYS)
@@ -330,22 +384,14 @@ def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool
                 represented = {row.get("method") for row in mechanics.get("records", []) if isinstance(row, dict)}
                 mechanics["verifiedSourceRecords"] = [copy.deepcopy(row) for row in verified.values()
                                                        if row.get("method") not in represented]
-        references = proj.get("referencedProjectiles")
-        if "nativeCSharpSource" in reference and (references is None or known_projectile_references(references)):
-            reference, linked_calls = native_csharp_source_for_llm(reference,
-                references["sourceCalls"] if isinstance(references, dict) else None)
-            if (not prefer_readable_source and "nativeCSharpSourceReading" in reference
-                    and "nativeCSharpSourceReading" not in proj["attackReference"]):
-                reference = copy.deepcopy(proj["attackReference"])
-                reference.pop("nativeCSharpSource")
-                linked_calls = None
-            if (isinstance(mechanics, dict) and mechanics.get("source") == "native_mechanics_source"
-                    and type(mechanics.get("version")) is int and mechanics["version"] == 1):
-                selected = _present_replaced_identity_selections(proj["attackReference"], reference)
-                if selected:
-                    out["strictIdentitySelections"] = selected
-        source = project_attack_behavior(reference)
-        out["attackReference"] = pack_attack_tables(source)
+        attack, linked_calls, selected = _compact_attack_source(
+            reference, proj.get("referencedProjectiles"), prefer_readable_source=prefer_readable_source,
+            has_mechanics=isinstance(mechanics, dict) and mechanics.get("source") == "native_mechanics_source"
+                and type(mechanics.get("version")) is int and mechanics["version"] == 1,
+            memo=attack_source_memo)
+        out["attackReference"] = attack
+        if selected:
+            out["strictIdentitySelections"] = selected
     # The native producer owns verification and scope. Never infer a trajectory
     # from names/aiStyle or clip this optional read-only observation.
     if isinstance(proj.get("motionReference"), dict):
@@ -368,7 +414,7 @@ def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool
                         and reference["profile"].get("unavailable") is not True
                         and "referencedProjectiles" not in reference["profile"]):
                     reference["profile"] = compact_projectile_profile(reference["profile"], include_references=False,
-                        prefer_readable_source=prefer_readable_source)
+                        prefer_readable_source=prefer_readable_source, attack_source_memo=attack_source_memo)
         out["referencedProjectiles"] = references
     if LLM_INCLUDE_AISTYLE_RAW and _compact_keep(proj.get("aiStyle")):
         out["aiStyle"] = _compact_raw_value(proj.get("aiStyle"))
@@ -381,7 +427,8 @@ def _compact_ammo_item_source(value: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def compact_ammo_profile(item: dict[str, Any], *, prefer_readable_source: bool = True) -> dict[str, Any]:
+def compact_ammo_profile(item: dict[str, Any], *, prefer_readable_source: bool = True,
+                         attack_source_memo: dict[str, Any] | None = None) -> dict[str, Any]:
     ap = ammo_profile_of(item)
     if not isinstance(ap, dict) or not ap:
         return {}
@@ -404,7 +451,7 @@ def compact_ammo_profile(item: dict[str, Any], *, prefer_readable_source: bool =
         out["ammoItemRaw"] = _compact_ammo_item_source(ap["ammoItemRaw"])
     for key in ("projectileRaw", "weaponShootFieldProjectileRaw"):
         if isinstance(ap.get(key), dict):
-            out[key] = compact_projectile_profile(ap[key], prefer_readable_source=prefer_readable_source)
+            out[key] = compact_projectile_profile(ap[key], prefer_readable_source=prefer_readable_source, attack_source_memo=attack_source_memo)
     # These are already bounded observations from the native producer, not a
     # selected/best ammo or a replacement for the weapon's own shoot identity.
     # Keep order and multiplicity, and keep an observed empty inventory distinct
@@ -415,7 +462,7 @@ def compact_ammo_profile(item: dict[str, Any], *, prefer_readable_source: bool =
                         for value in ap[key] if isinstance(value, dict)]
     for key in ("playerInventoryProjectileRaw", "fallbackProjectileRaw", "nativeReplacementProjectileRaw"):
         if isinstance(ap.get(key), list):
-            out[key] = [compact_projectile_profile(value, prefer_readable_source=prefer_readable_source)
+            out[key] = [compact_projectile_profile(value, prefer_readable_source=prefer_readable_source, attack_source_memo=attack_source_memo)
                         for value in ap[key] if isinstance(value, dict)]
     return out
 

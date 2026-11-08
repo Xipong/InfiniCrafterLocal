@@ -323,3 +323,20 @@ def test_certificate_identity_uses_full_literal_tuple_and_retains_unknown_fields
     assert len(_json(packed)) < len(_json(original))
     assert _json(unpack_attack_tables(json.loads(_json(packed)))) == _json(original)
     assert _json(_independent_decode(json.loads(_json(packed)))) == _json(original)
+
+
+@pytest.mark.parametrize("packed", [True, False])
+def test_attack_table_decode_deliveries_are_mutation_isolated(packed):
+    from infini_local.pipelines.context.attack_tables import pack_attack_tables, unpack_attack_tables
+
+    original = _reference(observations=[
+        {"kind": "state_write", "at": n, "conditions": ["same", "same"], "nested": {"value": [n]}}
+        for n in range(30)
+    ])
+    wire = pack_attack_tables(original) if packed else original
+    before = _json(wire)
+    a, b = unpack_attack_tables(wire), unpack_attack_tables(wire)
+    a["observations"][0]["nested"]["value"].append("edit")
+    a["observations"][0]["conditions"].pop()
+    assert _json(b) == _json(original)
+    assert _json(wire) == before

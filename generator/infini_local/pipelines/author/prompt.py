@@ -410,9 +410,10 @@ def realization_execution_truth_for_llm() -> dict[str, str]:
 
 def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], key: str) -> dict[str, Any]:
     corridor = _balance_corridor(a, b)
+    attack_source_memo: dict[str, Any] = {}
     parents = {
-        "A": {"packet": raw_parent_card_for_llm(a)},
-        "B": {"packet": raw_parent_card_for_llm(b)},
+        "A": {"packet": raw_parent_card_for_llm(a, attack_source_memo=attack_source_memo)},
+        "B": {"packet": raw_parent_card_for_llm(b, attack_source_memo=attack_source_memo)},
     }
     payload = {
         "priorityHeader": planner_priority_header_for_llm(),

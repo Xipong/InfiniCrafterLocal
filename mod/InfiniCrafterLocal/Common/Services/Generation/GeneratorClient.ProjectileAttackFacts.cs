@@ -519,6 +519,7 @@ public sealed partial class GeneratorClient
         }
         private readonly JsonArray predicates = new();
         private readonly HashSet<string> visiting = new(), predicateIds = new();
+        private readonly Dictionary<int, ParentSourceMethod.Value[]> requiredBranches = new();
         private int expressionCount;
         internal Action? AdditionalExpressionWork;
         internal int ExpressionLimit = 12000;
@@ -582,14 +583,20 @@ public sealed partial class GeneratorClient
         private JsonArray Required(ParentSourceMethod.Value value)
         {
             var conditions = new JsonArray();
-            foreach (var branch in branches.Where(b => b.Block != value.Block && body.ControlledRegion(b.Block).Contains(value.Block)))
+            bool cached = requiredBranches.TryGetValue(value.Block, out var required);
+            List<ParentSourceMethod.Value>? found = cached ? null : new();
+            // Discover lazily in the original order. Predicate expressions can
+            // recurse or refuse, so publish only after this traversal succeeds.
+            foreach (var branch in cached ? required! : branches.Where(b => b.Block != value.Block && body.ControlledRegion(b.Block).Contains(value.Block)))
             {
+                found?.Add(branch);
                 string name = "b" + branch.At; conditions.Add(name);
                 if (!predicateIds.Add(name)) continue;
                 predicates.Add(new JsonObject { ["id"] = name, ["at"] = branch.At, ["op"] = branch.Op,
                     ["inputs"] = new JsonArray(branch.Inputs.Select(i => (JsonNode?)JsonValue.Create(Expression(i))).ToArray()),
                     ["successors"] = new JsonArray(body.Blocks[branch.Block].Next.Select(n => (JsonNode?)JsonValue.Create(n)).ToArray()) });
             }
+            if (found is not null) requiredBranches[value.Block] = found.ToArray();
             return conditions;
         }
         private string Local(ParentSourceMethod.Value value)

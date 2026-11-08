@@ -993,15 +993,26 @@ public sealed partial class GeneratorClient
         foreach (var (id, sites) in identities)
         {
             var reference = new JsonObject { ["type"] = id, ["sourceCallIndices"] = sites };
-            if (id <= ProjectileID.None || id >= SourceSnapshotOnMain(() => ProjectileLoader.ProjectileCount))
+            if (id <= ProjectileID.None)
                 reference["unresolved"] = "spawn_projectile_identity_not_registered";
-            else if (captured >= ProfileLimit) reference["unresolved"] = "single_hop_profile_count_bound";
             else
             {
-                captured++;
-                // Defaults/source only; actual spawn arguments stay in parent.
-                reference["profile"] = SourceSnapshotOnMain(() => JsonSerializer.SerializeToNode(ProjectileRawSnapshot(id, 0f,
-                    "conditional_native_spawn_candidate", null, -1, includeChildReferences: false), WireJsonOptions));
+                // Check registration and capture under one game-thread handoff.
+                // Do not retain a count across identities or reloads; registration
+                // still precedes the profile bound, including after it is reached.
+                bool captureAllowed = captured < ProfileLimit;
+                var snapshot = SourceSnapshotOnMain(() =>
+                {
+                    bool registered = id < ProjectileLoader.ProjectileCount;
+                    JsonNode? profile = registered && captureAllowed
+                        ? JsonSerializer.SerializeToNode(ProjectileRawSnapshot(id, 0f,
+                            "conditional_native_spawn_candidate", null, -1, includeChildReferences: false), WireJsonOptions)
+                        : null;
+                    return (Registered: registered, Profile: profile);
+                });
+                if (!snapshot.Registered) reference["unresolved"] = "spawn_projectile_identity_not_registered";
+                else if (!captureAllowed) reference["unresolved"] = "single_hop_profile_count_bound";
+                else { captured++; reference["profile"] = snapshot.Profile; }
             }
             references.Add(reference);
         }

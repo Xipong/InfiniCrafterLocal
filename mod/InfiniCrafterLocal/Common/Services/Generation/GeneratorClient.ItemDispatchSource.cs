@@ -94,7 +94,7 @@ public sealed partial class GeneratorClient
             cancellation.ThrowIfCancellationRequested();
             if (branches.Any(outer => outer != branch && (branch == outer.TrueStatement || branch.Ancestors.Contains(outer.TrueStatement)))) continue;
             if (++count > regionLimit) { gaps.Add("dispatcher_region_count_bound"); break; }
-            var excerpt = (IfElseStatement)branch.Clone(); excerpt.FalseStatement = Statement.Null;
+            var excerpt = CloneCSharpTrueArm(branch);
             var rendered = RenderCSharp(excerpt, includeLocations: false);
             if (rendered.Code.Length > regionCharacters || characters + rendered.Code.Length > totalCharacters)
             { gaps.Add("dispatcher_region_character_bound; entire_region_omitted"); continue; }

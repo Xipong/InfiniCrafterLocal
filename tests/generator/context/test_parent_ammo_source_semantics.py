@@ -3,6 +3,8 @@ from __future__ import annotations
 from suite_paths import REPO_ROOT
 
 import copy
+import json
+import re
 import os
 import sys
 from pathlib import Path
@@ -416,34 +418,325 @@ def test_native_ammo_cfg_retains_alternative_paths_and_bounds_formula_output():
     assert row["rules"] == [] and row["unrecognizedProjectileWriteOffsets"]
 
 
+def _assert_literal_prepare_ammo(raw, native):
+    """Keep the original exact source boundary separately from Author presentation."""
+    assert raw["projectileSemanticsReference"] == native["projectileSemanticsReference"]
+    assert raw.get("candidateProjectileBindings") == native.get("candidateProjectileBindings")
+    for field in ("nativeReplacementProjectileRaw", "nativeFixedProjectileRaw"):
+        profiles, originals = raw.get(field, []), native.get(field, [])
+        assert len(profiles) == len(originals)
+        for profile, original in zip(profiles, originals, strict=True):
+            for key in ("type", "sourceReferences", "profileScope", "penetrate", "timeLeft", "extraUpdates"):
+                assert profile[key] == original[key]
+
+
+def _prepare_ammo_mechanics(packet, mode):
+    from infini_local.pipelines.author.request import build_initial_author_request
+    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
+    from prompt_packet_helpers import request_dossier, expand_native_source_references
+    before = copy.deepcopy(packet)
+    native = packet["itemA"]["ammoRaw"]
+    literal = raw_parent_card_for_llm(packet["itemA"])["raw"]["ammo"]
+    _assert_literal_prepare_ammo(literal, native)
+    request, _, _ = build_initial_author_request(
+        packet["itemA"], packet["itemB"], "native-ammo-source-roundtrip", model_name="offline-test-model")
+    assert request["response_format"]["type"] == mode
+    # This independent observer expands only the documented source sharing.
+    # Ammo expressions are not attack tables; do not decode/re-render unrelated graphs.
+    raw = expand_native_source_references(request_dossier(request))["parents"]["A"]["packet"]["raw"]
+    assert "mechanics" in raw and "ammo" not in raw
+    assert packet == before
+    return raw["mechanics"], literal
+
+
+def _assert_ammo_source_metadata(source, original):
+    # Keep every non-expression fact, its ordering and multiplicity. The small
+    # exclusions below are explicit Author receipt omissions, not a renderer.
+    assert {k: v for k, v in source.items() if k != "stages"} == {
+        k: v for k, v in original.items() if k != "stages"}
+    assert len(source["stages"]) == len(original["stages"])
+    receipts = {"sourceMethodSha256", "sourceModuleVersionId", "sourceVerification"}
+    transformed = {"rules", "spawnSites", "defaultProjectileSelection", "hookDispatchTrace"}
+    for stage, native_stage in zip(source["stages"], original["stages"], strict=True):
+        assert stage.keys() == native_stage.keys() - receipts
+        assert {k: v for k, v in stage.items() if k not in transformed} == {
+            k: v for k, v in native_stage.items() if k not in transformed | receipts}
+        if native_stage.get("defaultProjectileSelection") is not None:
+            selection, native_selection = stage["defaultProjectileSelection"], native_stage["defaultProjectileSelection"]
+            assert {k: v for k, v in selection.items() if k != "categoryOffsetSelectors"} == {
+                k: v for k, v in native_selection.items() if k != "categoryOffsetSelectors"}
+            assert selection["categoryOffsetSelectors"] == [
+                {k: v for k, v in row.items() if k != "sourceStoreIlOffset"}
+                for row in native_selection["categoryOffsetSelectors"]]
+        else:
+            assert stage.get("defaultProjectileSelection") == native_stage.get("defaultProjectileSelection")
+        if "hookDispatchTrace" in native_stage:
+            assert stage["hookDispatchTrace"] == [
+                {k: v for k, v in row.items() if k != "sourceMethodSha256"}
+                for row in native_stage["hookDispatchTrace"]]
+
+
+def _assert_ammo_observations(mechanics, packet, name):
+    ammo, native = mechanics["ammoInputs"], packet["itemA"]["ammoRaw"]
+    source, original = ammo["projectileSemanticsReference"], native["projectileSemanticsReference"]
+    _assert_ammo_source_metadata(source, original)
+    assert source["finalShotOutcome"] == "unknown_without_gameplay_execution"
+    assert source["unknowns"]
+    assert [stage["method"] for stage in source["stages"]] == [stage["method"] for stage in original["stages"]]
+    assert source["stages"][0]["spawnSites"] == original["stages"][0]["spawnSites"] == []
+    bindings, originals = ammo.get("candidateProjectileBindings", []), native.get("candidateProjectileBindings", [])
+    assert len(bindings) == len(originals)
+    for binding, original_binding in zip(bindings, originals, strict=True):
+        assert {k: v for k, v in binding.items() if k != "matchedSourceRules"} == {
+            k: v for k, v in original_binding.items() if k != "matchedSourceRules"}
+        matches = binding["matchedSourceRules"]
+        assert len(matches) == len(original_binding["matchedSourceRules"])
+        for match in matches:
+            assert name == "eventide"
+            assert match == {"method": "Player.PickAmmo", "rule": {
+                "outputProjectileId": 932, "whenInputProjectileId": 1, "sourceGuardIlOffset": 383}}
+    if name != "terra":
+        rows = ammo["playerInventoryAmmoRaw"]
+        assert [row["inventorySlot"] for row in rows] == [0, 54, 55]
+        fields = ("inventorySlot", "type", "shoot", "damage", "knockback")
+        assert [tuple(row[key] for key in fields) for row in rows] == [
+            tuple(row[key] for key in fields) for row in native["playerInventoryAmmoRaw"]]
+        assert all("stack" not in row for row in rows)
+        fallback = ammo["fallbackAmmoRaw"]
+        assert fallback and all(row["inventorySlot"] == -1 for row in fallback)
+        assert [tuple(row[key] for key in fields) for row in fallback] == [
+            tuple(row[key] for key in fields) for row in native["fallbackAmmoRaw"]]
+        assert ammo["playerInventoryObservation"] == native["playerInventoryObservation"]
+        fingerprint = packet["itemA"]["fingerprint"]["ammoRaw"]
+        assert fingerprint["playerInventoryObservation"]["reason"] == "no_player"
+        assert fingerprint["playerInventoryAmmoRaw"] is None
+
+
+def _assert_ammo_snapshots(mechanics, native):
+    """Resolve references, checking source ownership, without evaluating expressions."""
+    snapshots = mechanics["expressions"]["snapshots"]
+    definitions = list(_source_nodes(native["projectileSemanticsReference"]))
+    identities = {(node["local"], node["sourceStoreIlOffset"], node["scope"])
+                  for node in definitions if node.get("kind") == "local_definition"}
+    def visit(value, active=()):
+        for reference in re.findall(r"\bsnapshot[0-9]+\b", json.dumps(value)):
+            assert reference in snapshots, "unresolved snapshot"
+            assert reference not in active, "cyclic snapshot"
+            snapshot = snapshots[reference]
+            assert snapshot["scope"] == "value_at_store"
+            assert (snapshot["local"], snapshot["sourceStoreIlOffset"], snapshot["scope"]) in identities
+            assert snapshot["method"] == "Player.ItemCheck_Shoot"
+            assert snapshot["sourcePath"] == "ammo.projectileSemanticsReference.stages[1]"
+            visit(snapshot["value"], (*active, reference))
+    visit(mechanics["ammoInputs"])
+
+
+def _assert_eventide_state(mechanics, native):
+    stages = mechanics["ammoInputs"]["projectileSemanticsReference"]["stages"]
+    assert [stage["method"] for stage in stages] == ["Player.PickAmmo", "Player.ItemCheck_Shoot"]
+    assert [len(stage["rules"]) for stage in stages] == [1, 1]
+    pick, state = [stage["rules"][0] for stage in stages]
+    assert state.keys() == native["projectileSemanticsReference"]["stages"][1]["rules"][0].keys() - {"sourceStoreIlOffset"}
+    assert pick == {"outputProjectileId": 932, "whenInputProjectileId": 1, "sourceGuardIlOffset": 383}
+    assert state["outputProjectileId"] == 932 and state["sourceGuardIlOffset"] == 10517
+    assert state["sourceScope"] == native["projectileSemanticsReference"]["stages"][1]["rules"][0]["sourceScope"]
+    match = re.fullmatch(r"not\(bne\((snapshot[0-9]+), 2\)\)", state["whenSourceCondition"])
+    assert match is not None, "state-conditioned rewrite became unconditional or changed its predicate"
+    snapshot = mechanics["expressions"]["snapshots"][match[1]]
+    assert snapshot["sourceStoreIlOffset"] == 10599 and snapshot["scope"] == "value_at_store"
+    assert snapshot["value"] == "div(sub(arg0.[Terraria.Player.itemAnimationMax], arg0.[Terraria.Player.itemAnimation]), 2)"
+    # Match both old profile references to their distinct surviving rule sites.
+    references = native["nativeReplacementProjectileRaw"][0]["sourceReferences"]
+    assert len(references) == 2
+    for index, reference in enumerate(references):
+        assert reference["sourcePath"] == f"projectileSemanticsReference.stages[{index}].rules[0]"
+        assert reference["method"] == stages[index]["method"]
+        assert reference["sourceFact"] == native["projectileSemanticsReference"]["stages"][index]["rules"][0]
+        assert reference["sourceFact"]["sourceStoreIlOffset"] == (396, 10873)[index]
+        assert stages[index]["rules"][0]["outputProjectileId"] == reference["sourceFact"]["outputProjectileId"]
+    profiles = [row for row in mechanics["projectiles"] if row["defaults"].get("type") == 932]
+    assert len(profiles) == 1
+    profile = profiles[0]
+    assert tuple(profile["defaults"][key] for key in ("penetrate", "timeLeft", "extraUpdates")) == (5, 120, 0)
+    original = native["nativeReplacementProjectileRaw"][0]
+    captures = [row for row in profile["captures"] if row["sourcePath"] == "ammo.nativeReplacementProjectileRaw[0]"]
+    assert captures == [{"sourcePath": "ammo.nativeReplacementProjectileRaw[0]",
+                         **{key: original[key] for key in ("source", "inventorySlot", "profileScope")}}]
+
+
+def _assert_spawn_mechanics(mechanics, native, name):
+    stage = mechanics["ammoInputs"]["projectileSemanticsReference"]["stages"][1]
+    original = native["projectileSemanticsReference"]["stages"][1]
+    sites, originals = stage["spawnSites"], original["spawnSites"]
+    if name != "eventide":
+        for actual_stage, native_stage in zip(mechanics["ammoInputs"]["projectileSemanticsReference"]["stages"],
+                                               native["projectileSemanticsReference"]["stages"], strict=True):
+            assert actual_stage["rules"] == native_stage["rules"] == []
+    expected_offsets = {"eventide": [10958, 10992], "terra": [23695, 23759], "daedalus": [4157]}
+    assert [site["sourceSpawnIlOffset"] for site in sites] == expected_offsets[name]
+    for site, source in zip(sites, originals, strict=True):
+        assert site.keys() == source.keys()
+        for key in ("sourceSpawnIlOffset", "sourceGuardIlOffset", "projectileBasis", "nativeItemSpecificDelivery",
+                    "scope", "trajectoryReference", "spawnCountBounds", "projectileId"):
+            assert site.get(key) == source.get(key)
+        inputs = site["spawnInputs"]
+        assert inputs.keys() == source["spawnInputs"].keys()
+        assert inputs["owner"] == "arg1"
+        # These actual fixtures retain the diagnostic envelope literally, including
+        # all fields, unresolved paths/reasons, guard coverage and conservative scope.
+        assert site["spawnInputCoverage"] == source["spawnInputCoverage"]
+        for field, value in source["spawnInputs"].items():
+            if value["kind"] == "unknown":
+                assert inputs[field] == value  # Also retains full conditional sourceDefinition.
+            elif value["kind"] == "constant":
+                assert inputs[field] == json.dumps(value["value"])
+        if name == "eventide":
+            guard = source["whenSourceCondition"]
+            assert guard["sourceBranchIlOffset"] == 10886 and guard["opcode"] == "bne"
+            assert guard["left"]["kind"] == "unknown" and guard["right"]["value"] == 932
+            # Literal unknown operands are deliberately not reinterpreted by Author.
+            operand = json.dumps(guard["left"], ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            predicate = f"bne({operand}, 932)"
+            assert site["whenSourceCondition"] == (predicate if guard["taken"] else f"not({predicate})")
+        else:
+            assert site["whenSourceCondition"] == source["whenSourceCondition"]
+    expressions = mechanics["expressions"]
+    expected_unknowns = {"eventide": ["address_exposed_local", "branch_entry_value_unknown", "unsupported_stack_operation"],
+                         "terra": ["address_exposed_local", "branch_entry_value_unknown"],
+                         "daedalus": ["address_exposed_local", "cyclic_source_path"]}
+    assert expressions["unknowns"] == expected_unknowns[name]
+    if name == "eventide":
+        first, second = sites
+        damage = list(_source_nodes(first["spawnInputs"]["damage"]))
+        assert any(node.get("operator") == "mul" and node["right"].get("value") == 2 for node in damage)
+        assert any(node.get("sourceBranchIlOffset") == 10866 for node in damage)
+        assert any(node.get("member") == "Terraria.Player.itemAnimationMax" for node in damage)
+        velocity = expressions["snapshots"][first["spawnInputs"]["velocity"]]
+        assert velocity["sourceStoreIlOffset"] == 10932
+        assert velocity["value"].startswith("unexecuted Microsoft.Xna.Framework.Vector2.op_Multiply(")
+        assert ", 2.0))" in velocity["value"] and ", mul(" in velocity["value"]
+        assert expressions["snapshots"][second["spawnInputs"]["velocity"]]["sourceStoreIlOffset"] == 10861
+        assert first["spawnInputs"]["position"] == second["spawnInputs"]["position"]
+        assert expressions["snapshots"][first["spawnInputs"]["position"]]["sourceStoreIlOffset"] == 10695
+        ai = expressions["snapshots"][first["spawnInputs"]["ai1"]]
+        assert ai["sourceStoreIlOffset"] == 10906
+        assert ai["value"] == "rem(mul(unexecuted Terraria.Player.get_miscCounterNormalized(arg0), 12.0), 1.0)"
+        assert second["spawnInputs"]["ai1"] == "0.0"
+    elif name == "terra":
+        companion, direct = [site["spawnInputs"] for site in sites]
+        assert companion["type"] == "984" and direct["ai1"] == "18.0"
+        assert direct["velocity"].startswith("unexecuted Microsoft.Xna.Framework.Vector2.op_Multiply(")
+        assert direct["velocity"].endswith(", 5.0)")
+        for inputs in (companion, direct):
+            assert inputs["position"] == "unexecuted Terraria.Player.get_MountedCenter(arg0)"
+            assert inputs["ai0"] == "mul(conv.r4(arg0.[Terraria.Entity.direction]), arg0.[Terraria.Player.gravDir])"
+            assert expressions["snapshots"][inputs["ai2"]]["value"] == "unexecuted Terraria.Player.GetAdjustedItemScale(arg0, arg2)"
+    else:
+        site, = sites
+        assert (site["spawnCountBounds"]["minimum"], site["spawnCountBounds"]["maximum"]) == (2, 4)
+        assert stage["spawnOriginSetups"] == original["spawnOriginSetups"]
+        assert stage["spawnOriginSetups"][0]["initialYRelativeToMountedCenterPx"] == -600
+        assert site["whenSourceCondition"]["reason"] == "cyclic_source_path"
+        assert site["spawnInputCoverage"]["fields"]["velocityX"]["unresolved"][0]["reason"] == "cyclic_source_path"
+
+
+def _assert_exact_ammo_expressions(mechanics, native, name):
+    """Literal expression anchors after source-checked reference expansion.
+
+    This observer does not render an AST or interpret an opcode. It only gives
+    exact native JSON literals and already validated snapshot aliases readable
+    names, then compares the complete remaining strings, not their substrings.
+    """
+    snapshots = mechanics["expressions"]["snapshots"]
+    literals = {}
+    for node in _source_nodes(native["projectileSemanticsReference"]):
+        if node.get("kind") == "unknown":
+            label = f"[[unknown:{node['reason']}:{node.get('local', '-')}@{node['sourceIlOffset']}]]"
+        elif node.get("kind") == "branch" and "operands" in node:
+            label = f"[[branch:{node['opcode']}@{node['sourceBranchIlOffset']}:{node['taken']}]]"
+        else:
+            continue
+        literal = json.dumps(node, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        assert label not in literals or literals[label] == literal, "ambiguous native literal identity"
+        literals[label] = literal
+
+    def observed(value):
+        if not isinstance(value, str):
+            return value
+        assert "[[" not in value, "source tokens are observer-only, not delivered expressions"
+        # Larger complete native literals first: their nested facts must not be
+        # partially replaced before the full literal equality has been checked.
+        for label, literal in sorted(literals.items(), key=lambda row: len(row[1]), reverse=True):
+            value = value.replace(literal, label)
+        return re.sub(r"\bsnapshot[0-9]+\b", lambda match:
+                      f"[[store:{snapshots[match[0]]['sourceStoreIlOffset']}]]", value)
+
+    sites = mechanics["ammoInputs"]["projectileSemanticsReference"]["stages"][1]["spawnSites"]
+    if name == "eventide":
+        inputs = [
+            {"position": "[[store:10695]]", "velocity": "[[store:10932]]", "owner": "arg1",
+             "ai0": "0.0", "ai1": "[[store:10906]]", "ai2": "0.0"},
+            {"position": "[[store:10695]]", "velocity": "[[store:10861]]", "owner": "arg1",
+             "ai0": "0.0", "ai1": "0.0", "ai2": "0.0"},
+        ]
+        values = {
+            10599: "div(sub(arg0.[Terraria.Player.itemAnimationMax], arg0.[Terraria.Player.itemAnimation]), 2)",
+            10664: {"kind": "unknown", "reason": "unsupported_stack_operation", "sourceIlOffset": 10664},
+            10677: "unexecuted Microsoft.Xna.Framework.Vector2.op_Subtraction([[store:10664]], [[unknown:address_exposed_local:134@10670]])",
+            10695: "unexecuted Microsoft.Xna.Framework.Vector2.op_Addition([[unknown:address_exposed_local:8@10686]], local138 path_value{when [[branch:brtrue@10666:True]]: [[store:10664]]; when [[branch:brtrue@10666:False]]: [[store:10677]]})",
+            10684: "unexecuted Terraria.Main.get_MouseWorld()",
+            10800: "unexecuted Terraria.Utils.GetLerpValue(100.0, 40.0, unexecuted Terraria.Utils.Distance([[store:10684]], unexecuted Terraria.Entity.get_Center(arg0)), 1)",
+            10721: "unexecuted Terraria.Utils.SafeNormalize(unexecuted Terraria.Utils.DirectionTo([[store:10695]], [[store:10684]]), unexecuted Microsoft.Xna.Framework.Vector2.op_UnaryNegation(unexecuted Microsoft.Xna.Framework.Vector2.get_UnitY()))",
+            10769: "unexecuted Terraria.Utils.SafeNormalize(unexecuted Terraria.Utils.DirectionTo(unexecuted Terraria.Entity.get_Center(arg0), unexecuted Microsoft.Xna.Framework.Vector2.op_Addition(unexecuted Terraria.Entity.get_Center(arg0), construct Microsoft.Xna.Framework.Vector2..ctor[2002010c0c]([[unknown:branch_entry_value_unknown:13@10735]], [[unknown:branch_entry_value_unknown:14@10737]]))), unexecuted Microsoft.Xna.Framework.Vector2.op_UnaryNegation(unexecuted Microsoft.Xna.Framework.Vector2.get_UnitY()))",
+            10851: "unexecuted Terraria.Utils.SafeNormalize(unexecuted Microsoft.Xna.Framework.Vector2.Lerp([[store:10721]], [[store:10769]], [[store:10800]]), unexecuted Terraria.Utils.SafeNormalize(construct Microsoft.Xna.Framework.Vector2..ctor[2002010c0c]([[unknown:branch_entry_value_unknown:13@10822]], [[unknown:branch_entry_value_unknown:14@10824]]), unexecuted Microsoft.Xna.Framework.Vector2.op_UnaryNegation(unexecuted Microsoft.Xna.Framework.Vector2.get_UnitY())))",
+            10861: "unexecuted Microsoft.Xna.Framework.Vector2.op_Multiply(local141 path_value{when ble.un([[store:10800]], 0.0): [[store:10721]]; when not(ble.un([[store:10800]], 0.0)): [[store:10851]]}, [[unknown:address_exposed_local:1@10855]])",
+            10932: "unexecuted Microsoft.Xna.Framework.Vector2.op_Multiply(unexecuted Terraria.Utils.SafeNormalize([[store:10861]], unexecuted Microsoft.Xna.Framework.Vector2.get_Zero()), mul([[unknown:address_exposed_local:1@10920]], 2.0))",
+            10906: "rem(mul(unexecuted Terraria.Player.get_miscCounterNormalized(arg0), 12.0), 1.0)",
+        }
+    elif name == "terra":
+        common = {"position": "unexecuted Terraria.Player.get_MountedCenter(arg0)", "owner": "arg1",
+                  "ai0": "mul(conv.r4(arg0.[Terraria.Entity.direction]), arg0.[Terraria.Player.gravDir])",
+                  "ai2": "[[store:23627]]"}
+        inputs = [
+            {**common, "velocity": "construct Microsoft.Xna.Framework.Vector2..ctor[2002010c0c](conv.r4(arg0.[Terraria.Entity.direction]), 0.0)",
+             "type": "984", "ai1": "conv.r4(arg0.[Terraria.Player.itemAnimationMax])"},
+            {**common, "velocity": "unexecuted Microsoft.Xna.Framework.Vector2.op_Multiply(construct Microsoft.Xna.Framework.Vector2..ctor[2002010c0c]([[unknown:branch_entry_value_unknown:13@23709]], [[unknown:branch_entry_value_unknown:14@23711]]), 5.0)",
+             "ai1": "18.0"},
+        ]
+        values = {23627: "unexecuted Terraria.Player.GetAdjustedItemScale(arg0, arg2)"}
+    else:
+        assert name == "daedalus"
+        inputs = [{"positionX": "[[unknown:address_exposed_local:8@4118]].[Microsoft.Xna.Framework.Vector2.X]",
+                   "positionY": "[[unknown:address_exposed_local:8@4125]].[Microsoft.Xna.Framework.Vector2.Y]",
+                   "owner": "arg1", "ai0": "0.0", "ai1": "0.0", "ai2": "0.0"}]
+        values = {}
+    assert [{key: observed(value) for key, value in site["spawnInputs"].items() if isinstance(value, str)}
+            for site in sites] == inputs
+    assert len(snapshots) == len(values), "missing or duplicate snapshot ownership"
+    assert {row["sourceStoreIlOffset"]: observed(row["value"]) for row in snapshots.values()} == values
+
+
+
+def _assert_author_ammo(mechanics, packet, name):
+    native = packet["itemA"]["ammoRaw"]
+    _assert_ammo_observations(mechanics, packet, name)
+    _assert_ammo_snapshots(mechanics, native)
+    if name == "eventide":
+        _assert_eventide_state(mechanics, native)
+    _assert_spawn_mechanics(mechanics, native, name)
+    _assert_exact_ammo_expressions(mechanics, native, name)
+
+
 @pytest.mark.parametrize("mode", ["json_schema", "json_object"])
 def test_native_state_condition_survives_actual_prepare_author_request(monkeypatch, mode):
-    import json
     from infini_local.core import llm_config
-    from infini_local.pipelines.author.request import build_initial_author_request
-    from prompt_packet_helpers import request_dossier, expand_native_source_references
     path = Path(os.environ.get("INFINI_PARENT_STATE_PACKET", "/missing-native-prepare-packet"))
     if not path.exists():
         pytest.skip("actual native state-conditioned Prepare packet unavailable")
     packet = json.loads(path.read_text())
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
-    request, _, _ = build_initial_author_request(packet["itemA"], packet["itemB"], "state-source-roundtrip", model_name="offline-test-model")
-    raw = expand_native_source_references(request_dossier(request))["parents"]["A"]["packet"]["raw"]["ammo"]
-    expected = packet["itemA"]["ammoRaw"]
-    assert raw["projectileSemanticsReference"] == expected["projectileSemanticsReference"]
-    # Existing Author projection compacts attack tables and omits unrelated
-    # snapshot fields. This change's exact contract is the two source sites and
-    # their condition, both beside the profile and in the stage reference.
-    profile, = raw["nativeReplacementProjectileRaw"]
-    native, = expected["nativeReplacementProjectileRaw"]
-    assert profile["type"] == native["type"]
-    assert profile["sourceReferences"] == native["sourceReferences"]
-    assert profile["profileScope"] == native["profileScope"]
-    assert (profile["penetrate"], profile["timeLeft"], profile["extraUpdates"]) == (5, 120, 0)
-    source = raw["projectileSemanticsReference"]
-    assert source["ammoProjectileRelation"] == "conditionally_replaced"
-    assert source["stages"][1]["rules"][0]["whenSourceCondition"]["left"]["scope"] == "value_at_store"
-    assert len(raw["nativeReplacementProjectileRaw"][0]["sourceReferences"]) == 2
+    mechanics, _ = _prepare_ammo_mechanics(packet, mode)
+    _assert_author_ammo(mechanics, packet, "eventide")
 
 
 def _arithmetic_variant_fixture(*, item=81234, step=2, threshold=7, maximum=31, prefix=(), mutation=None):
@@ -746,33 +1039,177 @@ def test_spawn_argument_prior_hook_reference_does_not_restore_item_defaults():
 
 @pytest.mark.parametrize('mode', ['json_schema', 'json_object'])
 def test_native_spawn_arguments_survive_actual_prepare_author_request(monkeypatch, mode):
-    import json
     from infini_local.core import llm_config
-    from infini_local.pipelines.author.request import build_initial_author_request
-    from prompt_packet_helpers import request_dossier, expand_native_source_references
     directory = Path(os.environ.get('INFINI_PARENT_SPAWN_PACKET_DIR', '/missing-native-spawn-packets'))
     if not directory.exists():
         pytest.skip('actual native spawn Prepare packets unavailable')
     monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     for name in ('eventide', 'terra', 'daedalus'):
         packet = json.loads((directory / (name + '.packet.json')).read_text())
-        before = copy.deepcopy(packet)
-        request, _, _ = build_initial_author_request(packet['itemA'], packet['itemB'], 'spawn-source-roundtrip', model_name='offline-test-model')
-        raw = expand_native_source_references(request_dossier(request))['parents']['A']['packet']['raw']['ammo']
-        assert raw['projectileSemanticsReference'] == packet['itemA']['ammoRaw']['projectileSemanticsReference']
-        sites = raw['projectileSemanticsReference']['stages'][1]['spawnSites']
-        assert sites and all('spawnInputs' in s and 'spawnInputCoverage' in s for s in sites)
-        if name == 'eventide':
-            assert any(n.get('operator') == 'mul' and n['right'].get('value') == 2 for n in _source_nodes(sites[0]['spawnInputs']['damage']))
-            assert any(n.get('sourceBranchIlOffset') == 10866 for n in _source_nodes(sites[0]['spawnInputs']['damage']))
-            assert any(n.get('operator') == 'rem' for n in _source_nodes(sites[0]['spawnInputs']['ai1']))
-        if name != 'terra':
-            assert [r['inventorySlot'] for r in raw['playerInventoryAmmoRaw']] == [0, 54, 55]
-            assert all(r['inventorySlot'] == -1 for r in raw['fallbackAmmoRaw'])
-            fingerprint = packet['itemA']['fingerprint']['ammoRaw']
-            assert fingerprint['playerInventoryObservation']['reason'] == 'no_player'
-            assert fingerprint['playerInventoryAmmoRaw'] is None
-        assert packet == before
+        mechanics, _ = _prepare_ammo_mechanics(packet, mode)
+        _assert_author_ammo(mechanics, packet, name)
+
+
+@pytest.fixture(scope="module")
+def actual_ammo_observer_inputs():
+    from infini_local.core import llm_config
+    directory = Path(os.environ.get("INFINI_PARENT_SPAWN_PACKET_DIR", "/missing-native-spawn-packets"))
+    if not directory.exists():
+        pytest.skip("actual native spawn Prepare packets unavailable")
+    result = {}
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
+        for name in ("eventide", "terra", "daedalus"):
+            packet = json.loads((directory / (name + ".packet.json")).read_text())
+            mechanics, literal = _prepare_ammo_mechanics(packet, "json_schema")
+            _assert_author_ammo(mechanics, packet, name)  # Establish GREEN before each corruption.
+            result[name] = packet, mechanics, literal
+    return result
+
+
+@pytest.mark.parametrize("defect", [
+    "pick_rule", "state_rule", "state_guard", "snapshot_missing", "snapshot_value", "snapshot_scope",
+    "snapshot_owner", "snapshot_cycle", "replacement_default", "replacement_capture", "ammo_missing",
+    "ammo_reordered", "ammo_duplicate", "ammo_damage", "fallback_slot", "final_shot", "source_unknowns",
+    "spawn_site", "spawn_duplicate", "spawn_input", "spawn_owner", "spawn_guard", "spawn_coverage",
+    "conditional_damage", "ai_remainder", "expression_unknowns", "stage_call_site",
+    "stage_method", "hook_order", "hook_duplicate", "category_selector",
+])
+def test_actual_author_ammo_observer_rejects_information_loss(actual_ammo_observer_inputs, defect):
+    packet, original, _ = actual_ammo_observer_inputs["eventide"]
+    mechanics = copy.deepcopy(original)
+    ammo = mechanics["ammoInputs"]
+    source = ammo["projectileSemanticsReference"]
+    stages = source["stages"]
+    state = stages[1]["rules"][0]
+    snapshots = mechanics["expressions"]["snapshots"]
+    state_key = re.fullmatch(r"not\(bne\((snapshot[0-9]+), 2\)\)", state["whenSourceCondition"])[1]
+    sites = stages[1]["spawnSites"]
+    profile = next(row for row in mechanics["projectiles"] if row["defaults"].get("type") == 932)
+    changes = {
+        "stage_call_site": lambda: stages[0]["sourceStageCallSites"].clear(),
+        "stage_method": lambda: stages[1].update(method="Player.PickAmmo"),
+        "hook_order": lambda: stages[0]["hookDispatchTrace"][0]["directHookCalls"].reverse(),
+        "hook_duplicate": lambda: stages[0]["hookDispatchTrace"].append(copy.deepcopy(stages[0]["hookDispatchTrace"][0])),
+        "category_selector": lambda: stages[0]["defaultProjectileSelection"]["categoryOffsetSelectors"][0].update(operation="ammo_shoot"),
+        "pick_rule": lambda: stages[0]["rules"].clear(),
+        "state_rule": lambda: stages[1]["rules"].clear(),
+        "state_guard": lambda: state.update(whenSourceCondition="true"),
+        "snapshot_missing": lambda: snapshots.pop(state_key),
+        "snapshot_value": lambda: snapshots[state_key].update(value="2"),
+        "snapshot_scope": lambda: snapshots[state_key].update(scope="value_at_read"),
+        "snapshot_owner": lambda: snapshots[state_key].update(method="Player.PickAmmo"),
+        "snapshot_cycle": lambda: snapshots[state_key].update(value=state_key),
+        "replacement_default": lambda: profile["defaults"].pop("penetrate"),
+        "replacement_capture": lambda: profile["captures"].clear(),
+        "ammo_missing": lambda: ammo["playerInventoryAmmoRaw"].pop(),
+        "ammo_reordered": lambda: ammo["playerInventoryAmmoRaw"].reverse(),
+        "ammo_duplicate": lambda: ammo["playerInventoryAmmoRaw"].append(copy.deepcopy(ammo["playerInventoryAmmoRaw"][0])),
+        "ammo_damage": lambda: ammo["playerInventoryAmmoRaw"][0].update(damage=-1),
+        "fallback_slot": lambda: ammo["fallbackAmmoRaw"][0].update(inventorySlot=0),
+        "final_shot": lambda: source.update(finalShotOutcome="executed"),
+        "source_unknowns": lambda: source["unknowns"].clear(),
+        "spawn_site": lambda: sites.pop(),
+        "spawn_duplicate": lambda: sites.append(copy.deepcopy(sites[0])),
+        "spawn_input": lambda: sites[0]["spawnInputs"].pop("damage"),
+        "spawn_owner": lambda: sites[0]["spawnInputs"].update(owner="arg0"),
+        "spawn_guard": lambda: sites[0].update(whenSourceCondition=True),
+        "spawn_coverage": lambda: sites[0]["spawnInputCoverage"]["fields"].pop("damage"),
+        "conditional_damage": lambda: sites[0]["spawnInputs"]["damage"].pop("sourceDefinition"),
+        "ai_remainder": lambda: snapshots[sites[0]["spawnInputs"]["ai1"]].update(value="0.0"),
+        "expression_unknowns": lambda: mechanics["expressions"]["unknowns"].clear(),
+    }
+    changes[defect]()
+    with pytest.raises((AssertionError, KeyError)):
+        _assert_author_ammo(mechanics, packet, "eventide")
+
+
+@pytest.mark.parametrize("name,defect", [("terra", "companion"), ("terra", "speed"), ("terra", "ai"),
+                                          ("daedalus", "count"), ("daedalus", "origin"), ("daedalus", "uncertainty")])
+def test_actual_spawn_observer_rejects_information_loss(actual_ammo_observer_inputs, name, defect):
+    packet, original, _ = actual_ammo_observer_inputs[name]
+    mechanics = copy.deepcopy(original)
+    stage = mechanics["ammoInputs"]["projectileSemanticsReference"]["stages"][1]
+    sites = stage["spawnSites"]
+    if defect == "companion":
+        sites[0]["spawnInputs"]["type"] = "1"
+    elif defect == "speed":
+        sites[1]["spawnInputs"]["velocity"] = "5.0"
+    elif defect == "ai":
+        sites[1]["spawnInputs"]["ai1"] = "0.0"
+    elif defect == "count":
+        sites[0]["spawnCountBounds"]["maximum"] = 2
+    elif defect == "origin":
+        stage["spawnOriginSetups"][0]["initialYRelativeToMountedCenterPx"] = 0
+    else:
+        sites[0]["whenSourceCondition"] = True
+    with pytest.raises((AssertionError, KeyError)):
+        _assert_author_ammo(mechanics, packet, name)
+
+
+@pytest.mark.parametrize("defect", ["source_reference", "source_guard", "source_certificate", "scope", "defaults"])
+def test_literal_ammo_observer_rejects_information_loss(actual_ammo_observer_inputs, defect):
+    packet, _, original = actual_ammo_observer_inputs["eventide"]
+    literal = copy.deepcopy(original)
+    if defect == "source_reference":
+        literal["nativeReplacementProjectileRaw"][0]["sourceReferences"].pop()
+    elif defect == "source_guard":
+        literal["projectileSemanticsReference"]["stages"][1]["rules"][0].pop("whenSourceCondition")
+    elif defect == "source_certificate":
+        literal["projectileSemanticsReference"]["stages"][0].pop("sourceMethodSha256")
+    elif defect == "scope":
+        literal["nativeReplacementProjectileRaw"][0]["profileScope"] = "final shot"
+    else:
+        literal["nativeReplacementProjectileRaw"][0].pop("penetrate")
+    with pytest.raises((AssertionError, KeyError)):
+        _assert_literal_prepare_ammo(literal, packet["itemA"]["ammoRaw"])
+
+
+@pytest.mark.parametrize("name,defect", [
+    *[("eventide", f"snapshot_{store}") for store in (10664, 10677, 10695, 10684, 10800, 10721, 10769, 10851, 10861)],
+    ("eventide", "velocity_operand"), ("terra", "companion_velocity"), ("terra", "companion_ai1"),
+    ("terra", "direct_vector"), ("daedalus", "positionX"), ("daedalus", "positionY"),
+    ("terra", "false_pick_rewrite"), ("daedalus", "false_pick_rewrite"),
+])
+def test_actual_ammo_observer_rejects_transformed_value_loss(actual_ammo_observer_inputs, name, defect):
+    packet, original, _ = actual_ammo_observer_inputs[name]
+    mechanics = copy.deepcopy(original)
+    stages = mechanics["ammoInputs"]["projectileSemanticsReference"]["stages"]
+    sites = stages[1]["spawnSites"]
+    if defect.startswith("snapshot_") or defect == "velocity_operand":
+        store = int(defect.removeprefix("snapshot_")) if defect.startswith("snapshot_") else 10932
+        snapshot = next(row for row in mechanics["expressions"]["snapshots"].values()
+                        if row["sourceStoreIlOffset"] == store)
+        snapshot["value"] = ("unexecuted Microsoft.Xna.Framework.Vector2.op_Multiply(0.0, mul(0.0, 2.0))"
+                             if defect == "velocity_operand" else "0.0")
+    elif defect.startswith("companion_"):
+        sites[0]["spawnInputs"][defect.removeprefix("companion_")] = "0.0"
+    elif defect == "direct_vector":
+        sites[1]["spawnInputs"]["velocity"] = "unexecuted Microsoft.Xna.Framework.Vector2.op_Multiply(0.0, 5.0)"
+    elif defect == "false_pick_rewrite":
+        stages[0]["rules"].append({"outputProjectileId": 932, "whenInputProjectileId": 1, "sourceGuardIlOffset": 383})
+    else:
+        sites[0]["spawnInputs"][defect] = "0.0"
+    with pytest.raises((AssertionError, KeyError)):
+        _assert_author_ammo(mechanics, packet, name)
+
+
+@pytest.mark.parametrize("name,defect", [
+    ("eventide", "extra_pick_spawn"), ("terra", "extra_pick_spawn"), ("daedalus", "extra_pick_spawn"),
+    ("eventide", "extra_state_condition"), ("eventide", "extra_spawn_predicate"),
+])
+def test_actual_ammo_observer_rejects_invented_source_facts(actual_ammo_observer_inputs, name, defect):
+    packet, original, _ = actual_ammo_observer_inputs[name]
+    mechanics = copy.deepcopy(original)
+    stages = mechanics["ammoInputs"]["projectileSemanticsReference"]["stages"]
+    if defect == "extra_pick_spawn":
+        stages[0]["spawnSites"].append(copy.deepcopy(stages[1]["spawnSites"][0]))
+    elif defect == "extra_state_condition":
+        stages[1]["rules"][0]["whenInputProjectileId"] = 77
+    else:
+        stages[1]["spawnSites"][0]["whenInputProjectileId"] = 77
+    with pytest.raises((AssertionError, KeyError)):
+        _assert_author_ammo(mechanics, packet, name)
 
 
 def test_spawn_argument_additions_leave_existing_catalog_facts_unchanged():

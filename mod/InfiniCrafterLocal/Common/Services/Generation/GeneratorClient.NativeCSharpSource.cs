@@ -532,6 +532,39 @@ public sealed partial class GeneratorClient
             && row["sourceModuleVersionId"] is JsonValue module && module.TryGetValue<string>(out var mvid) && mvid == method.Module.ModuleVersionId.ToString()
             && row["sourceMethodSha256"] is JsonValue hash && hash.TryGetValue<string>(out var sha) && sha == CSharpHash(method.GetMethodBody()!.GetILAsByteArray()!);
 
+    private readonly record struct CSharpRowIdentity(string Method, string Mvid, string Sha);
+    private static CSharpRowIdentity? CSharpRowKey(JsonObject row)
+        => row["method"] is JsonValue name && name.TryGetValue<string>(out var text)
+            && row["sourceModuleVersionId"] is JsonValue module && module.TryGetValue<string>(out var mvid)
+            && row["sourceMethodSha256"] is JsonValue hash && hash.TryGetValue<string>(out var sha)
+            ? new(text, mvid, sha) : null;
+
+    // Attachment-local indexes retain the existing exact tuple and row order.
+    // They do not replace the independent native module/certificate checks.
+    private sealed class CSharpAttachmentRows
+    {
+        private readonly ILookup<CSharpRowIdentity?, CSharpProgram> programs;
+        private readonly ILookup<CSharpRowIdentity?, JsonObject> calls;
+        private readonly HashSet<(string Method, string Mvid)> owners;
+        internal CSharpAttachmentRows(CSharpProgram[] programs, JsonArray calls)
+        {
+            this.programs = programs.ToLookup(program => CSharpRowKey(program.Row));
+            this.calls = calls.OfType<JsonObject>().ToLookup(CSharpRowKey);
+            owners = this.programs.Select(group => group.Key).OfType<CSharpRowIdentity>()
+                .Select(key => (key.Method, key.Mvid)).ToHashSet();
+        }
+        internal CSharpProgram[] Find(MethodInfo method, out CSharpRowIdentity? key)
+        {
+            key = null;
+            string name = method.DeclaringType!.FullName + "." + method.Name;
+            string mvid = method.Module.ModuleVersionId.ToString();
+            if (!owners.Contains((name, mvid))) return Array.Empty<CSharpProgram>();
+            key = new(name, mvid, CSharpHash(method.GetMethodBody()!.GetILAsByteArray()!));
+            return programs[key].ToArray();
+        }
+        internal HashSet<int> Links(CSharpRowIdentity? key) => CSharpRowLinkOffsets(calls[key]);
+    }
+
     // Derived indexes follow the existing immutable IL decode, rather than
     // retaining old methods after source-cache invalidation.
     private static readonly ConditionalWeakTable<List<AmmoIl>, Dictionary<int, int>> csharpConditionalEnds = new();
@@ -607,9 +640,11 @@ public sealed partial class GeneratorClient
             .GroupBy(window => window.ToJsonString(), StringComparer.Ordinal).Select(group => group.First()).ToArray();
 
     private static HashSet<int> CSharpLinkOffsets(MethodInfo method, JsonArray calls)
+        => CSharpRowLinkOffsets(calls.OfType<JsonObject>().Where(call => CSharpProgramMatches(call, method)));
+    private static HashSet<int> CSharpRowLinkOffsets(IEnumerable<JsonObject> calls)
     {
         var offsets = new HashSet<int>();
-        foreach (var call in calls.OfType<JsonObject>().Where(call => CSharpProgramMatches(call, method)))
+        foreach (var call in calls)
         {
             if (call["at"] is JsonValue at) offsets.Add(at.GetValue<int>());
             if (call["requiredPredicates"] is JsonArray predicates)
@@ -626,11 +661,14 @@ public sealed partial class GeneratorClient
 
     private static JsonObject CSharpProjectionInput(MethodInfo method, CSharpProgram[] programs,
         JsonArray calls, int type, int style, bool capturedReceiverBound)
+        => CSharpProjectionInputForLinks(programs, CSharpLinkOffsets(method, calls), type, style, capturedReceiverBound);
+    private static JsonObject CSharpProjectionInputForLinks(CSharpProgram[] programs,
+        HashSet<int> linkOffsets, int type, int style, bool capturedReceiverBound)
         => new()
         {
             ["type"] = type, ["style"] = style, ["capturedReceiverBound"] = capturedReceiverBound,
             ["windows"] = new JsonArray(CSharpIdentityWindows(programs).Select(window => (JsonNode?)window.DeepClone()).ToArray()),
-            ["linkOffsets"] = new JsonArray(CSharpLinkOffsets(method, calls).Order().Select(offset => (JsonNode?)JsonValue.Create(offset)).ToArray()),
+            ["linkOffsets"] = new JsonArray(linkOffsets.Order().Select(offset => (JsonNode?)JsonValue.Create(offset)).ToArray()),
         };
 
     private static bool CompleteCSharpProjection(JsonObject value, MethodInfo method)
@@ -653,6 +691,12 @@ public sealed partial class GeneratorClient
 
     private static JsonObject BuildNativeCSharpRecord(NativeCSharpDocument document, CSharpProgram[] programs,
         JsonArray calls, int type, int style, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        return BuildNativeCSharpRecordForLinks(document, programs, CSharpLinkOffsets(document.Method, calls), type, style, cancellation);
+    }
+    private static JsonObject BuildNativeCSharpRecordForLinks(NativeCSharpDocument document, CSharpProgram[] programs,
+        HashSet<int> linkOffsets, int type, int style, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
         var method = document.Method;
@@ -709,7 +753,6 @@ public sealed partial class GeneratorClient
             locations.AddRange(row.Locations.Select(location => location with { StartLine = location.StartLine + lineOffset, EndLine = location.EndLine + lineOffset }));
             lineOffset += row.Code.Count(character => character == '\n') + 1;
         }
-        var linkOffsets = CSharpLinkOffsets(method, calls);
         var mapped = new JsonArray();
         foreach (int offset in linkOffsets.Order())
         {
@@ -830,10 +873,10 @@ public sealed partial class GeneratorClient
                     $"PARENT_CSHARP type={type} style={style} method={SourceMember(method)} phase={phase} ms={System.Diagnostics.Stopwatch.GetElapsedTime(phaseStart, next).TotalMilliseconds:F3} allocated={bytes - phaseBytes}"));
             phaseStart = next; phaseBytes = bytes;
         }
-        var programs = CSharpPrograms(attack, Array.Empty<object>()).ToArray();
+        var rows = new CSharpAttachmentRows(CSharpPrograms(attack, Array.Empty<object>()).ToArray(), calls);
         foreach (var method in methods.OfType<MethodInfo>().Distinct())
         {
-            var owned = programs.Where(program => CSharpProgramMatches(program.Row, method)).ToArray();
+            var owned = rows.Find(method, out var key);
             if (owned.Length == 0) continue;
             Mark(method, "start");
             currentParentAnalysis?.ThrowIfCancelled();
@@ -844,7 +887,8 @@ public sealed partial class GeneratorClient
                 while (!Monitor.TryEnter(nativeCSharpGate, 50)) timeout.Token.ThrowIfCancellationRequested();
                 try
                 {
-                    var input = CSharpProjectionInput(method, owned, calls, type, style, mechanicsBoundReceivers.Contains(method));
+                    var linkOffsets = rows.Links(key);
+                    var input = CSharpProjectionInputForLinks(owned, linkOffsets, type, style, mechanicsBoundReceivers.Contains(method));
                     if (TryReadNativeSourceProjection("projectile_method", method, input, timeout.Token, out var cached)
                         && CompleteCSharpProjection(cached, method))
                     {
@@ -871,7 +915,7 @@ public sealed partial class GeneratorClient
                     bool recordable = true;
                     try
                     {
-                        var record = BuildNativeCSharpRecord(document, owned, calls, type, style, timeout.Token);
+                        var record = BuildNativeCSharpRecordForLinks(document, owned, linkOffsets, type, style, timeout.Token);
                         Mark(method, "strict_record");
                         // A refused optional proof must not erase the full source.
                         try { AttachIdentitySpecializedCSharp(record, document, type, style, timeout.Token); }

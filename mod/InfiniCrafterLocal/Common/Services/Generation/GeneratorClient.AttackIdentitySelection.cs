@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using Terraria;
 
@@ -308,16 +309,20 @@ public sealed partial class GeneratorClient
                 || value.Operand is MethodInfo call && ActorType(call.ReturnType);
         }
 
+        private sealed record EntityAccessorProof(bool Safe);
+        private static readonly ConditionalWeakTable<List<AmmoIl>, EntityAccessorProof> entityAccessorProofs = new();
         private static bool BaseEntityValueAccessor(MethodBase method)
         {
             // A nonvirtual Entity accessor can only touch base fields and value
             // types. Reject casts, reference arguments and actor dispatch rather
             // than assuming every property getter/setter is pure.
             if (method.DeclaringType != typeof(Entity) || method.IsVirtual || method.GetMethodBody() is null) return false;
-            return AttackCode(method).All(i => i.Op is not ("castclass" or "isinst" or "stsfld")
+            // The proof belongs to this immutable decode, not a method name or
+            // actor. Clearing AttackSourceCode also retires its proof's owner.
+            return entityAccessorProofs.GetValue(AttackCode(method), static code => new(code.All(i => i.Op is not ("castclass" or "isinst" or "stsfld")
                 && !(i.Arg is FieldInfo f && (f.DeclaringType == typeof(Projectile) || !f.FieldType.IsValueType))
                 && !(i.Arg is MethodBase call && (call.IsVirtual || call.GetParameters().Any(p => !p.ParameterType.IsValueType)
-                    || !call.IsStatic && call.DeclaringType?.IsValueType != true)));
+                    || !call.IsStatic && call.DeclaringType?.IsValueType != true))))).Safe;
         }
 
         private string? IdentityHazardReason(ParentSourceMethod.Value statement)

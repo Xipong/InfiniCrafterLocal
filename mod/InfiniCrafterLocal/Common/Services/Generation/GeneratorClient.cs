@@ -221,17 +221,32 @@ public sealed partial class GeneratorClient
 
         private string? payloadJson = "{}";
         private JsonNode? payloadNode;
+        private PreparedCraftHttpPayload? transportPayload;
+        private PreparedCraftHttpPayload? cacheOnlyTransportPayload;
         public string PayloadJson
         {
             get
             {
                 if (Analysis is not null || analysisFailure is not null)
                     throw new InvalidOperationException("Parent source analysis has not completed on the generation worker.");
-                return payloadJson ??= payloadNode?.ToJsonString(WireJsonOptions) ?? "{}";
+                payloadJson ??= payloadNode?.ToJsonString(WireJsonOptions) ?? "{}";
+                payloadNode = null; // The frozen string owns subsequent reads/retries.
+                return payloadJson;
             }
-            set { payloadJson = value; payloadNode = null; }
+            set { payloadJson = value; payloadNode = null; InvalidateTransportPayloads(); }
         }
-        internal void SetPayloadNode(JsonNode node) { payloadNode = node; payloadJson = null; }
+        private void InvalidateTransportPayloads() { transportPayload = null; cacheOnlyTransportPayload = null; }
+        internal void SetPayloadNode(JsonNode node) { payloadNode = node; payloadJson = null; InvalidateTransportPayloads(); }
+        internal HttpContent CreateHttpContent(bool cacheOnly)
+        {
+            // Read through the admission guard even when a previous body exists.
+            string json = PayloadJson;
+            var payload = cacheOnly
+                ? cacheOnlyTransportPayload ??= PreparedCraftHttpPayload.Create(WithCacheOnlyFlag(json))
+                : transportPayload ??= PreparedCraftHttpPayload.Create(json);
+            // HttpContent is single-send/disposable; only its private bytes survive.
+            return payload.CreateContent();
+        }
         internal ParentAnalysis? Analysis { get; set; }
         private Exception? analysisFailure;
         internal void CompleteAnalysis()
@@ -245,6 +260,7 @@ public sealed partial class GeneratorClient
                     ?? throw new JsonException("Prepared craft payload must be a JSON value.");
                 payloadNode = analysis.Resolve(root, CancellationToken);
                 payloadJson = null; // Encode exactly once, when transport actually needs it.
+                InvalidateTransportPayloads();
             }
             catch (Exception error) { analysisFailure = error; throw; }
             finally { Analysis = null; analysis.Dispose(); }
@@ -391,25 +407,41 @@ public sealed partial class GeneratorClient
     // parsing, recipe identity, cache lookup, or model-facing projection. Compress
     // large requests only when doing so reduces the body size.
     internal static HttpContent CreateCraftHttpContent(string payloadJson)
+        => PreparedCraftHttpPayload.Create(payloadJson).CreateContent();
+
+    private sealed class PreparedCraftHttpPayload
     {
-        byte[] bytes = Encoding.UTF8.GetBytes(payloadJson);
-        bool compressed = false;
-        const int CompressionThresholdBytes = 2 * 1024 * 1024;
-        if (bytes.Length > CompressionThresholdBytes)
+        private readonly byte[] bytes;
+        private readonly bool compressed;
+        private PreparedCraftHttpPayload(byte[] bytes, bool compressed)
+        { this.bytes = bytes; this.compressed = compressed; }
+
+        internal static PreparedCraftHttpPayload Create(string payloadJson)
         {
-            using var buffer = new MemoryStream();
-            using (var gzip = new GZipStream(buffer, CompressionLevel.Fastest, leaveOpen: true))
-                gzip.Write(bytes);
-            if (buffer.Length < bytes.Length)
+            byte[] bytes = Encoding.UTF8.GetBytes(payloadJson);
+            bool compressed = false;
+            const int CompressionThresholdBytes = 2 * 1024 * 1024;
+            if (bytes.Length > CompressionThresholdBytes)
             {
-                bytes = buffer.ToArray();
-                compressed = true;
+                using var buffer = new MemoryStream();
+                using (var gzip = new GZipStream(buffer, CompressionLevel.Fastest, leaveOpen: true))
+                    gzip.Write(bytes);
+                if (buffer.Length < bytes.Length)
+                {
+                    bytes = buffer.ToArray();
+                    compressed = true;
+                }
             }
+            return new PreparedCraftHttpPayload(bytes, compressed);
         }
-        var content = new ByteArrayContent(bytes);
-        content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
-        if (compressed) content.Headers.ContentEncoding.Add("gzip");
-        return content;
+
+        internal HttpContent CreateContent()
+        {
+            var content = new ByteArrayContent(bytes);
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
+            if (compressed) content.Headers.ContentEncoding.Add("gzip");
+            return content;
+        }
     }
 
     private static string WithCacheOnlyFlag(string payloadJson)
@@ -470,7 +502,7 @@ public sealed partial class GeneratorClient
             request.CancellationToken.ThrowIfCancellationRequested();
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(request.CancellationToken);
             cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
-            using var body = CreateCraftHttpContent(WithCacheOnlyFlag(request.PayloadJson));
+            using var body = request.CreateHttpContent(cacheOnly: true);
             using var response = Http.PostAsync(Endpoint, body, cts.Token).GetAwaiter().GetResult();
             if (!response.IsSuccessStatusCode)
                 return null;
@@ -556,7 +588,7 @@ public sealed partial class GeneratorClient
             request.CancellationToken.ThrowIfCancellationRequested();
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(request.CancellationToken);
             cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
-            using var body = CreateCraftHttpContent(request.PayloadJson);
+            using var body = request.CreateHttpContent(cacheOnly: false);
             using var response = Http.PostAsync(Endpoint, body, cts.Token).GetAwaiter().GetResult();
             string responseJson = response.Content.ReadAsStringAsync(cts.Token).GetAwaiter().GetResult();
             if (!response.IsSuccessStatusCode)

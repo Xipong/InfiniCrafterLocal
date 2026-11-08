@@ -279,9 +279,10 @@ def build_gameplay_repair_dossier(
         for name in blocker_plan.get(key) or []
     }
 
+    attack_source_memo: dict[str, Any] = {}
     parents = {
-        "a": {"packet": raw_parent_card_for_llm(dict(a))},
-        "b": {"packet": raw_parent_card_for_llm(dict(b))},
+        "a": {"packet": raw_parent_card_for_llm(dict(a), attack_source_memo=attack_source_memo)},
+        "b": {"packet": raw_parent_card_for_llm(dict(b), attack_source_memo=attack_source_memo)},
     }
 
     def cards(names: Any) -> list[dict[str, Any]]:

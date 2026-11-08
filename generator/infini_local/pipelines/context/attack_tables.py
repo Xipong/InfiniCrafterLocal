@@ -190,7 +190,7 @@ def _decode(value: Any, certificates: list, modules: list) -> Any:
     if isinstance(value, list):
         return [_decode(v, certificates, modules) for v in value]
     if not isinstance(value, dict):
-        return value
+        return deepcopy(value)
     if "$module" in value:
         _require(set(value) == {"$module"}, "module reference fields")
         return _index(value["$module"], modules)
@@ -214,9 +214,11 @@ def unpack_attack_tables(reference: dict) -> dict:
     encoding never guesses missing columns, truncates cells, or accepts negative
     or boolean pool indices. Certificates may reference modules, not certificates.
     """
-    original = deepcopy(reference)
-    if "source" in original or original.get("encoding") != _ENCODING:
-        return original
+    if "source" in reference or reference.get("encoding") != _ENCODING:
+        return deepcopy(reference)
+    # _decode rebuilds every container; copying the encoded tree first would
+    # duplicate that work. Unknown leaf values are detached by _decode as well.
+    original = reference
     _require({"encoding", "legend", "data"} <= set(original)
              <= {"encoding", "legend", "data", "certificates", "modules"}, "envelope fields")
     _require(original["legend"] == _LEGEND, "reading legend")
