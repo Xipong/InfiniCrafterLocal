@@ -29,7 +29,7 @@ SOURCE_READING = (
 _CERT = ("method", "sourceModuleVersionId", "sourceMethodSha256")
 _REFERENCE_FIELDS = {"source", "version", "identityPredicates", "scope", "units", "motionDispatch",
     "motionDispatchEffects", "motion", "collision", "draw", "positionIntegration", "sourceMethods", "coverage",
-    "admission", "nativeCSharpSource", "lifecycle"}
+    "admission", "nativeCSharpSource", "lifecycle", "interactionSources"}
 _RECORD_FIELDS = {"id", *_CERT, "metadataToken", "assemblySha256", "decompiler", "coverage", "graphPaths",
     "code", "codeSha256", "locations", "unresolved", "entryGuards", "coveredWindows"}
 _CAPTURE_FIELDS = _PROGRAM_FIELDS | {"identitySelected", "identitySelection", "identitySelectionUnavailable"}
@@ -361,11 +361,16 @@ def _capture_metadata(program: dict[str, Any]) -> dict[str, Any]:
 
 
 def _identity_failure_capture(capture: dict[str, Any]) -> dict[str, Any]:
-    """Keep the producer's failure literal at the graph that reported it.
+    """Keep source-analysis failures at the graph that reported them.
 
     This is capture diagnostics, not an identity proof or a callee-effect fact.
     """
     result = {}
+    if capture.get("coverage") == "unknown":
+        result["coverage"] = "unknown"
+        unresolved = capture.get("unresolved")
+        if isinstance(unresolved, str) or isinstance(unresolved, list) and all(isinstance(value, str) for value in unresolved):
+            result["unresolved"] = copy.deepcopy(unresolved)
     failure = capture.get("identitySelectionUnavailable")
     if isinstance(failure, str) and failure:
         result["identitySelectionUnavailable"] = failure

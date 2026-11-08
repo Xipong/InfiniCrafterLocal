@@ -207,7 +207,7 @@ internal static partial class EngineRuntimeChecks
                 var expensive = SourcePerformanceGetDocument(kill);
                 Equal(true, (bool)CSharpOwner.GetMethod("IsExpensiveNativeCSharpDocument", CSharpFlags)!
                     .Invoke(null, new[] { expensive })!, "native Kill is a costly verified cache entry");
-                foreach (var method in SourcePerformanceNativeMethods()) SourcePerformanceGetDocument(method);
+                foreach (var method in SourcePerformanceNativeMethods(Limit("NativeCSharpResidentDocuments") + 2)) SourcePerformanceGetDocument(method);
                 Equal(true, ReferenceEquals(expensive, SourcePerformanceGetDocument(kill)), "tiny helper pressure does not force expensive Kill redecompilation");
                 var cache = (IDictionary)CSharpOwner.GetField("nativeCSharpDocuments", CSharpFlags)!.GetValue(null)!;
                 int Limit(string name) => (int)CSharpOwner.GetField(name, CSharpFlags)!.GetRawConstantValue()!;

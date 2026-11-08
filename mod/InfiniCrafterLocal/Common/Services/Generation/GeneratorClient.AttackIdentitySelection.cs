@@ -340,6 +340,20 @@ public sealed partial class GeneratorClient
             return null;
         }
 
+        private bool CapturedIdentityRead(ParentSourceMethod.Value value)
+            => targetArgument >= 0 && !body.WrittenArguments.Contains(targetArgument)
+                && value.Op == "ldfld" && value.Operand is FieldInfo field && field.DeclaringType == typeof(Projectile)
+                && field.Name is "type" or "aiStyle" && value.Inputs.Count == 1 && Target(value.Inputs[0], new());
+
+        internal bool TryCapturedIdentityLiteral(string id, out int number)
+        {
+            number = 0;
+            if (!body.Values.TryGetValue(id, out var read) || !Reachable.Contains(read.Block)
+                || !CapturedIdentityRead(read) || BlockingHazard(read) is not null) return false;
+            number = ((FieldInfo)read.Operand!).Name == "type" ? type : style;
+            return true;
+        }
+
         internal bool Unmodified(ParentSourceMethod.Value read) => BlockingHazard(read) is null;
 
         private ParentSourceMethod.Value? BlockingHazard(ParentSourceMethod.Value read)
@@ -363,11 +377,10 @@ public sealed partial class GeneratorClient
             Work();
             if (seen.Count > 64 || !seen.Add(id) || !body.Values.TryGetValue(id, out var value)) return (null, false);
             if (value.Op == "const" && value.Operand is int number) return (number, false);
-            if (value.Op == "ldfld" && value.Operand is FieldInfo field && field.DeclaringType == typeof(Projectile)
-                && field.Name is "type" or "aiStyle" && value.Inputs.Count == 1 && Target(value.Inputs[0], new()))
+            if (CapturedIdentityRead(value))
             {
                 var hazard = BlockingHazard(value);
-                if (hazard is null) return (field.Name == "type" ? type : style, true);
+                if (hazard is null) return (((FieldInfo)value.Operand!).Name == "type" ? type : style, true);
                 blockedReads.TryAdd(value.At, (value, hazard));
                 return (null, false);
             }

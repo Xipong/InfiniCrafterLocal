@@ -156,7 +156,7 @@ public sealed partial class GeneratorClient
         => CSharpHash(Encoding.UTF8.GetBytes(rows.ToJsonString() + "\n" + blobs.ToJsonString()));
 
     private static bool NativeSourcePackKindValid(string kind)
-        => kind is "projectile_method" or "projectile_lifecycle" or "item_dispatch";
+        => kind is "projectile_method" or "projectile_lifecycle" or "projectile_interaction" or "item_dispatch";
 
     private sealed class NativeSourcePackReader : IDisposable
     {

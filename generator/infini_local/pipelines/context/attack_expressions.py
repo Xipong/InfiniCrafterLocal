@@ -213,8 +213,11 @@ def _map_program_expressions(value: Any, convert: Callable[[str], str], symbols:
             for row in value["predicates"]:
                 if isinstance(row, dict) and isinstance(row.get("inputs"), list):
                     row["inputs"] = [convert(item) if isinstance(item, str) else item for item in row["inputs"]]
-        for child in value.values():
-            _map_program_expressions(child, convert, symbols)
+        for key, child in value.items():
+            # Direct C# source has its own schema and local helper namespace;
+            # even an unfamiliar version must not be reinterpreted as IL rows.
+            if key != "interactionSources":
+                _map_program_expressions(child, convert, symbols)
 
 
 def compact_attack_expressions(reference: dict[str, Any]) -> dict[str, Any]:

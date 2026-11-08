@@ -53,7 +53,7 @@ public sealed partial class GeneratorClient
     // independently verified native methods alive across projectile identities.
     // Without separate budgets the same VanillaAI/Kill AST can be decompiled
     // three times inside a single first craft.
-    private const int NativeCSharpResidentDocuments = 8;
+    private const int NativeCSharpResidentDocuments = 16;
     private const int NativeCSharpResidentNodes = 650000;
     private const int NativeCSharpResidentCharacters = 4 * NativeCSharpCodeLimit;
     private static readonly object nativeCSharpGate = new();
@@ -518,7 +518,7 @@ public sealed partial class GeneratorClient
                 // Author derives draw motifs from the established graph before
                 // omitting draw. Presentation stages also consume that graph;
                 // this gameplay source view must never take ownership of it.
-                if (path.Length == 0 && pair.Key is "draw" or "lifecycle") continue;
+                if (path.Length == 0 && pair.Key is "draw" or "lifecycle" or "interactionSources") continue;
                 if (pair.Key is "sourceMethods" or "nativeCSharpSource" || program && pair.Key == "identitySelected") continue;
                 foreach (var child in CSharpPrograms(pair.Value, path.Append((object)pair.Key).ToArray())) yield return child;
             }
@@ -735,8 +735,11 @@ public sealed partial class GeneratorClient
         }
         else
         {
+            // Whole verified source can retain try/catch/filter/finally even
+            // when the independent IL/CFG reader refuses exception regions.
+            // Never crop handlers or claim a control-flow/identity proof here.
             if (method.GetMethodBody()!.ExceptionHandlingClauses.Count > 0)
-                throw new NotSupportedException("csharp_whole_method_exception_flow_unsupported");
+                unresolved.Add("exception_regions_preserved_in_source; control_flow_and_exceptional_execution_not_evaluated");
             rendered.Add(document.Original); coverage = "whole_method";
         }
         string header = "";

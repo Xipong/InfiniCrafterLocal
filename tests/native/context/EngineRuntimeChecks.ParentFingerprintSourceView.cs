@@ -17,6 +17,43 @@ internal static partial class EngineRuntimeChecks
             && version.TryGetInt32(out int number) && (exact.HasValue ? number == exact.Value : number > 0);
         if (!Named(owner, "source", "read_only_native_attack_source") || !Version(owner, 1) || !Version(property.Value, null)) return false;
         if (property.Name == "nativeCSharpSource" && Named(property.Value, "source", "verified_decompiled_native_csharp")) return true;
+        if (property.Name == "interactionSources")
+        {
+            if (!Version(property.Value, 1) || !Named(property.Value, "source", "verified_conditional_native_interaction_csharp")
+                || !property.Value.TryGetProperty("roots", out var roots) || roots.ValueKind != JsonValueKind.Array || roots.GetArrayLength() != 3
+                || !owner.TryGetProperty("sourceMethods", out var interactionMethods) || interactionMethods.ValueKind != JsonValueKind.Array) return false;
+            // Independent token-level observer. A readable body is removable
+            // only when its original method certificate remains a native fact.
+            bool Backed(JsonElement record)
+            {
+                if (record.ValueKind != JsonValueKind.Object
+                    || !record.TryGetProperty("method", out var candidateName) || candidateName.ValueKind != JsonValueKind.String
+                    || !record.TryGetProperty("sourceModuleVersionId", out var candidateModule) || candidateModule.ValueKind != JsonValueKind.String || !Guid.TryParse(candidateModule.GetString(), out _)
+                    || !record.TryGetProperty("sourceMethodSha256", out var candidateHash) || candidateHash.ValueKind != JsonValueKind.String
+                    || candidateHash.GetString() is not { Length: 64 } candidateSha || System.Linq.Enumerable.Any(candidateSha, character => !Uri.IsHexDigit(character))) return false;
+                foreach (var candidateMethod in interactionMethods.EnumerateArray())
+                    if (candidateMethod.ValueKind == JsonValueKind.Object && System.Linq.Enumerable.Count(candidateMethod.EnumerateObject()) == 3
+                        && Named(candidateMethod, "method", candidateName.GetString()!) && Named(candidateMethod, "sourceModuleVersionId", candidateModule.GetString()!)
+                        && Named(candidateMethod, "sourceMethodSha256", candidateSha)) return true;
+                return false;
+            }
+            var names = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+            foreach (var root in roots.EnumerateArray())
+            {
+                if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("root", out var rootName)
+                    || rootName.ValueKind != JsonValueKind.String || rootName.GetString() is not ("Damage" or "StatusNPC" or "HandleMovement")
+                    || !names.Add(rootName.GetString()!) || !root.TryGetProperty("rootCertificate", out var rootCertificate)
+                    || rootCertificate.ValueKind != JsonValueKind.Object || System.Linq.Enumerable.Count(rootCertificate.EnumerateObject()) != 3
+                    || !Named(rootCertificate, "method", "Terraria.Projectile." + rootName.GetString()) || !Backed(rootCertificate)
+                    || !root.TryGetProperty("records", out var records) || records.ValueKind != JsonValueKind.Array
+                    || !root.TryGetProperty("helpers", out var helpers) || helpers.ValueKind != JsonValueKind.Array) return false;
+                foreach (var record in records.EnumerateArray())
+                    if (!Named(record, "method", "Terraria.Projectile." + rootName.GetString()) || !Backed(record)) return false;
+                foreach (var helper in helpers.EnumerateArray())
+                    if (!Backed(helper)) return false;
+            }
+            return true;
+        }
         if (property.Name != "lifecycle" || !Version(property.Value, 1) || !Named(property.Value, "source", "verified_conditional_native_lifecycle_csharp")
             || !property.Value.TryGetProperty("rootCertificate", out var certificate)
             || !owner.TryGetProperty("sourceMethods", out var methods) || methods.ValueKind != JsonValueKind.Array) return false;
@@ -109,6 +146,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void ParentFingerprintExcludesReadableSourceViews()
     {
+        ParentFingerprintInteractionSourceViewOracle();
         var attack = new JsonObject {
             ["source"] = "read_only_native_attack_source", ["version"] = 1,
             ["sourceMethods"] = new JsonArray(new JsonObject { ["sourceMethodSha256"] = "native-il-certificate" }),
@@ -173,6 +211,88 @@ internal static partial class EngineRuntimeChecks
                 "independent parity observer retains unknown source families");
             Equal("unknown_future_source_family", future["fingerprint"]!["directProjectileRaw"]!["attackReference"]!["nativeCSharpSource"]!["source"]!.GetValue<string>(),
                 "unknown source family stays literal: " + deferred);
+        }
+    }
+
+    private static void ParentFingerprintInteractionSourceViewOracle()
+    {
+        JsonObject Certificate(string method) => new() { ["method"] = "Terraria.Projectile." + method,
+            ["sourceModuleVersionId"] = "11111111-2222-3333-4444-555555555555", ["sourceMethodSha256"] = new string('a', 64) };
+        JsonObject Fixture()
+        {
+            var methods = new JsonArray(); var roots = new JsonArray();
+            foreach (string name in new[] { "Damage", "StatusNPC", "HandleMovement" })
+            {
+                var certificate = Certificate(name); methods.Add(certificate.DeepClone());
+                roots.Add(new JsonObject { ["root"] = name, ["rootCertificate"] = certificate,
+                    ["records"] = new JsonArray(), ["helpers"] = new JsonArray(), ["unresolved"] = new JsonArray("source_only") });
+            }
+            var region = Certificate("Damage"); region["code"] = "if (type == 91) { Effect(); }";
+            roots[0]!["records"]!.AsArray().Add(region);
+            var helper = Certificate("Effect"); methods.Add(helper.DeepClone()); helper["code"] = "void Effect() { }";
+            roots[0]!["helpers"]!.AsArray().Add(helper);
+            return new JsonObject { ["type"] = 91, ["attackReference"] = new JsonObject {
+                ["source"] = "read_only_native_attack_source", ["version"] = 1, ["sourceMethods"] = methods,
+                ["sourceCalls"] = new JsonArray(new JsonObject { ["at"] = 20, ["projectileTypes"] = new JsonArray(92), ["unresolved"] = "conditional" }),
+                ["interactionSources"] = new JsonObject { ["source"] = "verified_conditional_native_interaction_csharp", ["version"] = 1, ["roots"] = roots } } };
+        }
+        JsonObject View(JsonObject projectile) => projectile["attackReference"]!["interactionSources"]!.AsObject();
+        foreach (bool deferred in new[] { false, true })
+        {
+            var original = Fixture(); var noView = original.DeepClone().AsObject();
+            noView["attackReference"]!.AsObject().Remove("interactionSources");
+            var observed = FingerprintSourceViewFixture(deferred, original);
+            AssertParentFingerprintNativeFacts(observed["directProjectileRaw"], observed["fingerprint"]!["directProjectileRaw"],
+                "independent interaction source observer", requireRootView: true);
+            AssertParentFingerprintNativeFacts(observed["ammoRaw"], observed["fingerprint"]!["ammoRaw"],
+                "independent interaction replacement observer", requireRootView: true);
+            Equal(true, JsonNode.DeepEquals(FingerprintSourceViewFixture(deferred, noView)["fingerprint"], observed["fingerprint"]),
+                "certified interaction display alone adds no fingerprint input");
+            var changedDisplay = original.DeepClone().AsObject();
+            View(changedDisplay)["roots"]![0]!["records"]![0]!["code"] = "if (type == 91) { /* formatting */ Effect(); }";
+            Equal(true, JsonNode.DeepEquals(observed["fingerprint"], FingerprintSourceViewFixture(deferred, changedDisplay)["fingerprint"]),
+                "interaction display formatting does not change native identity");
+            var changedCall = original.DeepClone().AsObject(); changedCall["attackReference"]!["sourceCalls"]![0]!["at"] = 21;
+            Equal(false, JsonNode.DeepEquals(observed["fingerprint"], FingerprintSourceViewFixture(deferred, changedCall)["fingerprint"]),
+                "interaction observer must not erase native source call drift");
+            var mutations = new (string Label, Action<JsonObject> Mutate)[] {
+                ("unknown family", p => View(p)["source"] = "future_interaction_family"),
+                ("future version", p => View(p)["version"] = 2),
+                ("wrong version type", p => View(p)["version"] = true),
+                ("unknown owner", p => p["attackReference"]!["source"] = "future_attack_source"),
+                ("future owner version", p => p["attackReference"]!["version"] = 2),
+                ("missing root", p => View(p)["roots"]!.AsArray().RemoveAt(2)),
+                ("duplicate root", p => View(p)["roots"]![2] = View(p)["roots"]![0]!.DeepClone()),
+                ("unknown root", p => View(p)["roots"]![0]!["root"] = "FutureHit"),
+                ("missing certificate", p => View(p)["roots"]![0]!.AsObject().Remove("rootCertificate")),
+                ("extra certificate field", p => View(p)["roots"]![0]!["rootCertificate"]!["future"] = true),
+                ("unbacked root", p => p["attackReference"]!["sourceMethods"]!.AsArray().RemoveAt(1)),
+                ("unbacked helper", p => p["attackReference"]!["sourceMethods"]!.AsArray().RemoveAt(3)),
+                ("region certificate drift", p => View(p)["roots"]![0]!["records"]![0]!["sourceMethodSha256"] = new string('b', 64)),
+                ("region wrong method", p => View(p)["roots"]![0]!["records"]![0]!["method"] = "Terraria.Projectile.StatusNPC"),
+                ("malformed backed module", p => { View(p)["roots"]![0]!["rootCertificate"]!["sourceModuleVersionId"] = "not-a-guid";
+                    p["attackReference"]!["sourceMethods"]![0]!["sourceModuleVersionId"] = "not-a-guid"; }),
+                ("malformed backed hash", p => { View(p)["roots"]![0]!["rootCertificate"]!["sourceMethodSha256"] = new string('z', 64);
+                    p["attackReference"]!["sourceMethods"]![0]!["sourceMethodSha256"] = new string('z', 64); }),
+                ("malformed backed helper", p => { View(p)["roots"]![0]!["helpers"]![0]!["sourceModuleVersionId"] = "not-a-guid";
+                    p["attackReference"]!["sourceMethods"]![3]!["sourceModuleVersionId"] = "not-a-guid"; }),
+                ("wrong backed root method", p => View(p)["roots"]![0]!["rootCertificate"] = Certificate("StatusNPC")),
+                ("missing records", p => View(p)["roots"]![0]!["records"] = null),
+                ("missing helpers", p => View(p)["roots"]![0]!["helpers"] = null),
+                ("missing source methods", p => p["attackReference"]!["sourceMethods"] = null),
+            };
+            foreach (var (label, mutate) in mutations)
+            {
+                var raw = original.DeepClone().AsObject(); mutate(raw);
+                Equal(0, ReadableNativeViewCount(JsonSerializer.SerializeToElement(raw)), "unknown/unbacked interaction remains literal: " + label);
+                var result = FingerprintSourceViewFixture(deferred, raw);
+                AssertParentFingerprintNativeFacts(result["directProjectileRaw"], result["fingerprint"]!["directProjectileRaw"],
+                    "independent interaction refusal observer: " + label);
+                Equal(true, JsonNode.DeepEquals(raw, result["fingerprint"]!["directProjectileRaw"]),
+                    "production retains complete unknown/unbacked interaction: " + label);
+                Equal(false, JsonNode.DeepEquals(observed["fingerprint"], result["fingerprint"]),
+                    "native certificate or unknown envelope drift remains fingerprint input: " + label);
+            }
         }
     }
 }

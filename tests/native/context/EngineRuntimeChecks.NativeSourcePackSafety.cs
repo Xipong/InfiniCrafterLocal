@@ -421,7 +421,8 @@ internal static partial class EngineRuntimeChecks
             module.GetType().GetMethod("GetTypeSystem", CSharpFlags)!.Invoke(module, new object[] { CancellationToken.None });
             var projection = new JsonObject { ["last"] = "literal\r\nbytes", ["first"] = null, ["array"] = new JsonArray(2, 2, 1) };
             var deliveries = new[] { (new string('a', 64), "projectile_method"), (new string('b', 64), "projectile_method"),
-                (new string('c', 64), "projectile_lifecycle"), (new string('d', 64), "item_dispatch") };
+                (new string('c', 64), "projectile_lifecycle"), (new string('d', 64), "item_dispatch"),
+                (new string('e', 64), "projectile_interaction") };
             using (var recorder = (IDisposable)PackSafetyCreate("NativeSourcePackRecorder", output))
             {
                 var add = recorder.GetType().GetMethod("Add", CSharpFlags)!;

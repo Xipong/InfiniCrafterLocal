@@ -243,7 +243,7 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
             for key, child in value.items():
                 if key in {"graphCapture", "identitySelectionUnavailable"} and child:
                     retain_source(path + "." + key, child)
-                elif key not in {"draw", "nativeCSharpSource", "lifecycle"}:
+                elif key not in {"draw", "nativeCSharpSource", "lifecycle", "interactionSources"}:
                     retain_refusals(path + "." + key, child)
         elif isinstance(value, list):
             for index, child in enumerate(value):
@@ -362,6 +362,12 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
             retain_source(path + ".attackReference", reference)
         else:
             retain_refusals(path + ".attackReference", reference)
+            if "interactionSources" in reference:
+                # Keep this independent source namespace whole: helper IDs are
+                # local to each root, and source-only entry locals are unknown.
+                # Neither recognized nor future/malformed variants may vanish
+                # merely because another method has approximate mechanics.
+                retain_source(path + ".attackReference.interactionSources", reference["interactionSources"])
         coverage = reference.get("coverage")
         if isinstance(coverage, dict) and isinstance(coverage.get("unresolved"), list):
             gaps.update(str(gap) for gap in coverage["unresolved"])
@@ -382,14 +388,14 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
                 if isinstance(identifier, str):
                     roles.setdefault(identifier, set()).add(root)
                 for key, child in value.items():
-                    if key not in ("nativeCSharpSource", "lifecycle"):
+                    if key not in ("nativeCSharpSource", "lifecycle", "interactionSources"):
                         collect_roles(child, root)
             elif isinstance(value, list):
                 for child in value:
                     collect_roles(child, root)
 
         for root, value in reference.items():
-            if root not in ("nativeCSharpSource", "lifecycle"):
+            if root not in ("nativeCSharpSource", "lifecycle", "interactionSources"):
                 collect_roles(value, root)
         for record in fallback:
             if record.get("method") in represented:

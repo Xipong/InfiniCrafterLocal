@@ -159,11 +159,11 @@ internal static partial class EngineRuntimeChecks
     private static void SourcePerformanceClearDocuments()
         => CSharpOwner.GetMethod("ClearNativeCSharpSourceCache", CSharpFlags)!.Invoke(null, null);
 
-    private static MethodInfo[] SourcePerformanceNativeMethods()
+    private static MethodInfo[] SourcePerformanceNativeMethods(int count = 10)
         => typeof(Projectile).GetMethods(CSharpFlags | BindingFlags.DeclaredOnly)
             .Where(method => !method.IsSpecialName && !method.ContainsGenericParameters && method.GetMethodBody() is { } body
                 && body.GetILAsByteArray()!.Length < 120 && body.ExceptionHandlingClauses.Count == 0)
-            .OrderBy(method => method.MetadataToken).Take(10).ToArray();
+            .OrderBy(method => method.MetadataToken).Take(count).ToArray();
 
     private static void SourcePerformanceDocumentsLruAndLifetime()
     {
@@ -176,9 +176,10 @@ internal static partial class EngineRuntimeChecks
             lock (gate)
             {
                 SourcePerformanceClearDocuments();
-                var methods = SourcePerformanceNativeMethods();
-                Equal(10, methods.Length, "native fixture supplies enough small real methods for LRU eviction");
-                var documents = methods.Take(8).Select(method => SourcePerformanceGetDocument(method)).ToArray();
+                int limit = (int)CSharpOwner.GetField("NativeCSharpResidentDocuments", CSharpFlags)!.GetRawConstantValue()!;
+                var methods = SourcePerformanceNativeMethods(limit + 2);
+                Equal(limit + 2, methods.Length, "native fixture supplies enough small real methods for LRU eviction");
+                var documents = methods.Take(limit).Select(method => SourcePerformanceGetDocument(method)).ToArray();
                 var module = CSharpFixtureMember(documents[0], "Module");
                 var typeSystem = CSharpFixtureMember(module, "typeSystem");
                 mainFile = (PEFile)CSharpFixtureMember(module, "file");
@@ -186,10 +187,10 @@ internal static partial class EngineRuntimeChecks
                 Equal(true, dependencies.Length > 0, "module owns resolved dependency readers as well as its main PE");
                 Equal(true, documents.All(document => ReferenceEquals(module, CSharpFixtureMember(document, "Module"))), "all cached documents share one module");
                 Equal(true, ReferenceEquals(documents[0], SourcePerformanceGetDocument(methods[0])), "cache hit returns same document and refreshes recency");
-                SourcePerformanceGetDocument(methods[8]);
+                SourcePerformanceGetDocument(methods[limit]);
                 var cache = (IDictionary)CSharpOwner.GetField("nativeCSharpDocuments", CSharpFlags)!.GetValue(null)!;
-                Equal(8, cache.Count, "document count remains bounded at eight");
-                Equal(true, cache.Values.Cast<object>().Contains(documents[0]), "recent hit survives the ninth insertion");
+                Equal(limit, cache.Count, "document count remains within its declared residency ceiling");
+                Equal(true, cache.Values.Cast<object>().Contains(documents[0]), "recent hit survives the first over-capacity insertion");
                 Equal(false, cache.Values.Cast<object>().Contains(documents[1]), "least recently used rather than oldest-created document is evicted");
                 Equal(true, ReferenceEquals(typeSystem, CSharpFixtureMember(module, "typeSystem")), "eviction preserves shared type system");
                 Equal(true, mainFile.Reader.GetMetadata().Length > 0, "eviction preserves main PE reader");
@@ -201,7 +202,7 @@ internal static partial class EngineRuntimeChecks
                 using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
                 var order = ((IEnumerable)CSharpOwner.GetField("nativeCSharpOrder", CSharpFlags)!.GetValue(null)!).Cast<string>().ToArray();
                 CSharpSourceRefuses(() => SourcePerformanceGetDocument(methods[0], cancelled.Token), "canceled");
-                CSharpSourceRefuses(() => SourcePerformanceGetDocument(methods[9], cancelled.Token), "canceled");
+                CSharpSourceRefuses(() => SourcePerformanceGetDocument(methods[limit + 1], cancelled.Token), "canceled");
                 Equal(true, order.SequenceEqual(((IEnumerable)CSharpOwner.GetField("nativeCSharpOrder", CSharpFlags)!.GetValue(null)!).Cast<string>()),
                     "cancelled hit and miss leave LRU unchanged");
                 using var started = new ManualResetEventSlim();

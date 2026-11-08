@@ -641,3 +641,18 @@ def test_production_requests_keep_partial_source_and_readable_caller_controls(mo
         else:
             assert "mechanics" not in raw
         assert "ConeHelper" in json.dumps(raw)
+
+
+def test_partial_finite_spawn_candidates_never_exclude_other_child_profiles():
+    raw = _raw()
+    profile = raw["directProjectile"]
+    call = {"at": 41, "method": "Projectile.AI", "sourceMethodSha256": "sha",
+        "sourceModuleVersionId": "module", "projectileTypes": [1009, 1010],
+        "requiredPredicates": ["b7"], "unresolved": "finite_integer_cycle"}
+    profile["referencedProjectiles"] = {"sourceCalls": [call], "references": [
+        {"type": kind, "sourceCallIndices": [0], "profile": _profile(kind)} for kind in (1009, 1010, 1011)]}
+    before = copy.deepcopy(raw)
+    result = mechanics_context(raw)["mechanics"]
+    assert [row["defaults"]["type"] for row in result["projectiles"]] == [31, 1009, 1010, 1011]
+    assert not result["uncertainty"].get("excludedChildProfiles")
+    assert raw == before

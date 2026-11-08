@@ -166,9 +166,9 @@ Opaque helper/global effects остаются unknown; даже value-only ар�
 
 `referencedProjectiles` собирает тот же `ProjectileRawSnapshot`, который
 используется обычным `Prepare` и `/infinidump`; внешний dump для live-запроса
-не нужен. Producer связывает literal candidates из уже выбранных source
-observations с исходными callsites, conditions и сертификатами. Runtime/dynamic
-ID остаётся явно unresolved; соседняя исключённая identity-ветка не возвращается
+не нужен. Producer связывает literal и конечные вычислимые candidates из уже выбранных
+source observations с исходными callsites, conditions и сертификатами. Runtime/dynamic
+ID вне поддержанного конечного выражения остаётся явно unresolved; соседняя исключённая identity-ветка не возвращается
 через каталог. Один профиль может обслуживать несколько условных вызовов.
 
 Вложенный snapshot содержит native defaults/source, не состояние реально
@@ -186,6 +186,20 @@ profiles и четыре перехода на граф одного snapshot. `
 снарядов и не рекомендация Author. Python разрешает повторную ссылку через
 исходный capture path, даже если первая ведущая к нему ветка была исключена.
 
+Конечный source-анализ допускает int32 literals, копии/joins, сложение и вычитание,
+а также `Projectile.type`/`aiStyle` только через существующее доказательство
+receiver identity и отсутствия мутаций до конкретного чтения. Неизвестные ветки
+дают объединение альтернатив, не выбор runtime-ветки. Unchecked int32 arithmetic
+сохраняет wraparound. Signed checked overflow,
+неподдержанные значения, циклы, адреса/ref, чужой receiver и исчерпание бюджета
+остаются unknown; частичное множество не доказывает исключение. Бюджет одного
+выражения: 256 посещений/операций, глубина 64 и восемь арифметических альтернатив.
+Прежние literal candidates и их порядок внутри одного callsite сохраняются
+отдельно, поэтому новый арифметический предел не отбрасывает ранее доступные
+source links. Общий BFS-бюджет profiles остаётся прежним; новые candidates
+могут конкурировать за него, а отказ capture всегда остаётся явным. Этот анализ
+не запускает метод, loop, getter или spawn и не расширяет бюджет дочернего графа.
+
 В approximate mechanics view literal local stores сопоставляются с точным
 spawn callsite: последовательная запись заменяет прежнее значение, неизвестные
 ветки объединяются, loops и неподдержанные scopes сохраняют консервативное
@@ -196,6 +210,30 @@ identity assumption, не доказательство выполнения. И�
 требует совпадающих method/module/hash/call offsets; strict source не переписывается.
 Отдельный catalog snapshot может содержать больше собственного source-контекста,
 чем неполная ссылка на него; отсутствие профиля не доказывает отсутствие эффекта.
+
+## Условные hit и tile-collision sources
+
+`interactionSources` дополняет AI/lifecycle контекст исходниками native
+`Projectile.Damage`, `StatusNPC` и `HandleMovement`. Отбор использует положительные
+типизированные сравнения и literal switch sections для `this.type`/`this.aiStyle`,
+без item names и таблиц ID.
+Оригинальный guard сохраняется целиком; внешние locals и параметры перечислены
+как неизвестные entry values. Наличие подходящего сравнения означает релевантность
+source, а не доказанное исполнение, сохранение identity от входа или отсутствие
+других эффектов. Неподдержанные control transfers и превышенные лимиты видны
+в refusal receipts.
+
+Для каждого root допускается максимум 12 целых regions, 16 000 символов на
+record и 48 000 суммарно, включая bodies не более четырёх exact same-module
+instance helpers. Это один helper hop, без выполнения и подстановки значений
+аргументов. Сертификаты методов сохраняются отдельно от читаемого view.
+Из уже принятых regions/helpers извлекаются только точные типизированные literal
+spawn callsites; они могут открыть child profile в прежнем ограниченном графе,
+но остаются условными source candidates с неизвестными runtime gates. Dynamic
+ID не угадывается. Эти открытые source regions не заменяют strict graph и
+не служат доказательством исключения child profile. Python убирает лишь
+проверенное дублирование сертификатов, сохраняя code, guards, helper links,
+внешние inputs и unknowns; неизвестный формат остаётся исходным.
 
 ## Неопределённость не запрещает новый дизайн
 

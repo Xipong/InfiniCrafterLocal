@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Threading.Tasks;
 using InfiniCrafterLocal.Common.Services;
 using Terraria;
 using Terraria.GameContent;
@@ -65,7 +66,7 @@ internal static partial class EngineRuntimeChecks
         CaptureParentCases(outputDirectory, cases, bytes);
     }
 
-    private static void CaptureParentCases(string outputDirectory, ParentCaptureCase[] cases, byte[]? manifest)
+    private static void CaptureParentCases(string outputDirectory, ParentCaptureCase[] cases, byte[]? manifest, bool deferred = false)
     {
         string directory = Path.GetFullPath(outputDirectory);
         if (Directory.Exists(directory) && Directory.EnumerateFileSystemEntries(directory).Any())
@@ -73,18 +74,12 @@ internal static partial class EngineRuntimeChecks
         Directory.CreateDirectory(directory);
         string Hash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         using var state = new NativeActorState();
-        Terraria.Main.netMode = NetmodeID.SinglePlayer;
-        Terraria.Main.myPlayer = 0;
-        Terraria.Main.player[0] = new Player();
-        LanguageManager.Instance.SetLanguage(GameCulture.FromName("en-US"));
-        Lang.InitializeLegacyLocalization();
-        // Native vanilla defaults, not invented profiles or authored tooltip text.
-        for (int id = 0; id < ItemID.Count; id++) ContentSamples.ItemsByType[id] = new Item(id);
-        for (int id = 0; id < ProjectileID.Count; id++) { var projectile = new Projectile(); projectile.SetDefaults(id); ContentSamples.ProjectilesByType[id] = projectile; }
+        InitializePopulatedParentCapture();
         var report = ParentProfileEnvironment("parent-context-capture");
         report["nativeAssemblySha256"] = Hash(File.ReadAllBytes(typeof(Player).Assembly.Location));
         report["captureAssemblySha256"] = Hash(File.ReadAllBytes(typeof(GeneratorClient).Assembly.Location));
-        report["captureMethod"] = "GeneratorClient.Prepare";
+        report["captureMethod"] = deferred ? "GeneratorClient.PrepareDeferred -> CompleteAnalysis -> PayloadJson" : "GeneratorClient.Prepare";
+        report["coldScope"] = "First request after native catalog/localization fixture setup; no source analysis or source pack is primed before the timer. Pristine-cache checks are inside the first request interval. Not game or process startup timing.";
         report["requestedCases"] = cases.Length;
         report["status"] = "incomplete";
         report["measurementScope"] = "Sequential headless native captures with shared process caches. Timings/allocations are diagnostic, not independent cold benchmarks. No world, gameplay loop or full loaded mod roster; source predicates are not observed execution. Source bounds/unknowns remain in each packet.";
@@ -98,17 +93,18 @@ internal static partial class EngineRuntimeChecks
             foreach (var entry in cases)
             {
                 Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(91);
-                var player = new Player { name = "offline-panel40" }; Terraria.Main.player[0] = player;
-                if (entry.Inventory == "mixed_ammo")
-                {
-                    player.inventory[0] = new Item(ItemID.WoodenArrow, 17); player.inventory[54] = new Item(ItemID.FlamingArrow, 9);
-                    player.inventory[55] = new Item(ItemID.HolyArrow, 5); player.inventory[56] = new Item(ItemID.MusketBall, 19);
-                    player.inventory[57] = new Item(ItemID.RocketI, 7);
-                }
+                var player = PopulatedParentCapturePlayer(entry.Inventory);
                 var a = new Item(entry.First); var b = new Item(entry.Second);
                 long allocationsBefore = GC.GetTotalAllocatedBytes(precise: true);
                 var timer = Stopwatch.StartNew();
-                string json = new GeneratorClient().Prepare(a, b, player).PayloadJson;
+                JsonObject? coldState = report["cases"]!.AsArray().Count == 0 ? RequirePristineParentSourceCaches() : null;
+                var client = new GeneratorClient();
+                var request = deferred ? client.PrepareDeferred(a, b, player) : client.Prepare(a, b, player);
+                double captureMs = timer.Elapsed.TotalMilliseconds;
+                ParentProfileTiming timing = default;
+                if (deferred)
+                    timing = PumpProfileWorker(Task.Run(request.CompleteAnalysis), request.Cancel, 16);
+                string json = request.PayloadJson;
                 timer.Stop();
                 long allocated = GC.GetTotalAllocatedBytes(precise: true) - allocationsBefore;
                 Equal(false, json.Contains("$infiniSourceAnalysis", StringComparison.Ordinal), "capture contains no unresolved transfer marker");
@@ -120,6 +116,9 @@ internal static partial class EngineRuntimeChecks
                     ["parentNames"] = new JsonArray(a.Name, b.Name), ["inventory"] = entry.Inventory,
                     ["path"] = file, ["characters"] = json.Length, ["utf8Bytes"] = Encoding.UTF8.GetByteCount(json),
                     ["sha256"] = Hash(Encoding.UTF8.GetBytes(json)), ["elapsedMs"] = timer.Elapsed.TotalMilliseconds, ["allocatedBytes"] = allocated,
+                    ["captureMs"] = captureMs, ["resolveMs"] = timing.ResolveMs,
+                    ["pumpMs"] = timing.PumpMs, ["maxPumpMs"] = timing.MaxPumpMs, ["frames"] = timing.Frames,
+                    ["pumpIntervalMs"] = deferred ? 16 : 0, ["initialSourceCacheState"] = coldState,
                 };
                 report["cases"]!.AsArray().Add(row); Console.WriteLine("CAPTURE " + row.ToJsonString());
             }

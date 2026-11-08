@@ -51,7 +51,7 @@ internal static partial class EngineRuntimeChecks
             ?? value.GetType().GetField(name, CSharpFlags)!.GetValue(value)!;
 
     private static JsonObject CSharpFixtureRecord(MethodInfo method, bool regions, byte[]? bytes = null,
-        bool extraWindow = false, CancellationToken cancellation = default)
+        bool extraWindow = false, CancellationToken cancellation = default, bool specialize = false)
     {
         var moduleType = CSharpOwner.GetNestedType("NativeCSharpModule", CSharpFlags)!;
         var documentType = CSharpOwner.GetNestedType("NativeCSharpDocument", CSharpFlags)!;
@@ -83,8 +83,12 @@ internal static partial class EngineRuntimeChecks
         }
         var programs = Array.CreateInstance(programType, 1);
         programs.SetValue(Create(programType, program, new object[] { "fixture" }), 0);
-        return (JsonObject)CSharpOwner.GetMethod("BuildNativeCSharpRecord", CSharpFlags)!.Invoke(null,
+        var record = (JsonObject)CSharpOwner.GetMethod("BuildNativeCSharpRecord", CSharpFlags)!.Invoke(null,
             new object[] { document, programs, new JsonArray(), 643, 123, cancellation })!;
+        if (specialize)
+            CSharpOwner.GetMethod("AttachIdentitySpecializedCSharp", CSharpFlags)!.Invoke(null,
+                new object[] { record, document, 643, 123, cancellation });
+        return record;
     }
 
     private static void CSharpSourceRefuses(Action action, string reason)
@@ -235,6 +239,68 @@ internal static partial class EngineRuntimeChecks
         CSharpBodyMutationRefuses(method, bytes, reordered, "csharp_pe_exception_regions_mismatch");
         VerifyCSharpFixtureBytes(method, bytes);
         Equal(0, CSharpSourceFixture.Executions, "EH verification never executes fixture source");
+    }
+
+    private static void NativeCSharpWholeExceptionSourceKeepsGraphRefusal()
+    {
+        CSharpSourceFixture.Executions = 0;
+        foreach (string name in new[] { nameof(CSharpSourceFixture.ExceptionDescriptors),
+            nameof(CSharpSourceFixture.ExceptionRegion), nameof(CSharpSourceFixture.OtherExceptionRegion) })
+        {
+            var method = typeof(CSharpSourceFixture).GetMethod(name)!;
+            CSharpSourceRefuses(() => CSharpOwner.GetMethod("ReadCompleteSourceMethod", CSharpFlags)!
+                .Invoke(null, new object[] { method }), "exception_regions");
+            var record = CSharpFixtureRecord(method, regions: false, specialize: true);
+            Equal("whole_method", record["coverage"]!.GetValue<string>(), "source-only EH is the full original method");
+            Equal(false, record.ContainsKey("identitySpecialized"), "EH source never acquires an unproved identity specialization");
+            Equal(0, record["entryGuards"]!.AsArray().Count, "whole EH method is not presented as a cropped guarded region");
+            Equal(true, record["unresolved"]!.AsArray().Any(value => value!.GetValue<string>()
+                == "exception_regions_preserved_in_source; control_flow_and_exceptional_execution_not_evaluated"),
+                "literal source does not claim exceptional CFG or execution proof");
+            string code = record["code"]!.GetValue<string>();
+            var syntax = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(code).GetRoot();
+            var regions = syntax.DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.TryStatementSyntax>().ToArray();
+            Equal(true, regions.Length > 0 && regions.Any(region => region.Finally is not null), "complete finally source survives");
+            if (name == nameof(CSharpSourceFixture.ExceptionDescriptors))
+                Equal(true, regions.SelectMany(region => region.Catches).Count() == 2
+                    && regions.SelectMany(region => region.Catches).Any(clause => clause.Filter is not null),
+                    "all catches and the catch filter survive");
+            if (name == nameof(CSharpSourceFixture.OtherExceptionRegion))
+                Equal(true, code.Contains("888", StringComparison.Ordinal), "EH keeps the nonmatching identity sibling");
+            Equal(record.ToJsonString(), CSharpFixtureRecord(method, regions: false, specialize: true).ToJsonString(),
+                "whole exception source is deterministic");
+            using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
+            CSharpSourceRefuses(() => CSharpFixtureRecord(method, false, cancellation: cancelled.Token), "canceled");
+        }
+        Equal(0, CSharpSourceFixture.Executions, "exception source capture never executes the fixture");
+    }
+
+    private static void NativeCSharpExceptionHelpersReachActualCapture()
+    {
+        // These are native-source regression inputs, never production selectors.
+        foreach (var fixture in new[] { (Type: 133, Style: 16, Method: "AI_016"), (Type: 191, Style: 26, Method: "AI_026") })
+        {
+            var capture = GeneratorClient.CaptureProjectileAttackReference(new Projectile { type = fixture.Type, aiStyle = fixture.Style });
+            string method = "Terraria.Projectile." + fixture.Method;
+            var graph = capture["motion"]!["programs"]!.AsArray().OfType<JsonObject>()
+                .Single(program => program["method"]!.GetValue<string>() == method);
+            Equal("unknown", graph["coverage"]!.GetValue<string>(), "native EH CFG remains unknown");
+            Equal("exception_regions", graph["unresolved"]!.GetValue<string>(), "native EH keeps the exact graph refusal");
+            var record = capture["nativeCSharpSource"]!["records"]!.AsArray().OfType<JsonObject>()
+                .Single(value => value["method"]!.GetValue<string>() == method);
+            foreach (string key in new[] { "method", "sourceMethodSha256", "sourceModuleVersionId" })
+                Equal(graph[key]!.GetValue<string>(), record[key]!.GetValue<string>(), "source and failed graph retain matching " + key);
+            Equal("whole_method", record["coverage"]!.GetValue<string>(), "actual native EH gets readable whole source");
+            Equal(false, record.ContainsKey("identitySpecialized"), "actual native EH is never identity pruned");
+            string code = record["code"]!.GetValue<string>();
+            var regions = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(code).GetRoot().DescendantNodes()
+                .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.TryStatementSyntax>().ToArray();
+            Equal(true, regions.Any(region => region.Catches.Count > 0), "actual native handler remains in source");
+            Equal(true, code.Length <= 120000, "source stays within the existing per-record character bound");
+            Equal(true, record["graphPaths"]!.AsArray().Any(path => path!.AsArray().Count == 3
+                && path[0]!.GetValue<string>() == "motion" && path[1]!.GetValue<string>() == "programs"),
+                "readable source explicitly owns the refused motion graph");
+        }
     }
 
     private static void NativeCSharpRegionsKeepAllWindowsAndRefuseNonlocalDependencies()

@@ -126,7 +126,7 @@ def check_pack(path: Path, fingerprint: str, native: Path | None = None) -> dict
         keys, used = set(), set()
         for row in rows:
             if (not isinstance(row, list) or len(row) != 3 or not _sha256_valid(row[0])
-                    or row[1] not in ("projectile_method", "projectile_lifecycle", "item_dispatch")
+                    or row[1] not in ("projectile_method", "projectile_lifecycle", "projectile_interaction", "item_dispatch")
                     or type(row[2]) is not int or not 0 <= row[2] < len(blobs) or row[0] in keys):
                 raise ValueError("Native source pack has an invalid or duplicate input key")
             keys.add(row[0])

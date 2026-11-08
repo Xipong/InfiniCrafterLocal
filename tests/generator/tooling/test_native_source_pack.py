@@ -51,7 +51,8 @@ def pack(tmp_path, monkeypatch):
         "version": 2, "minimumMethodIlBytes": 1, "projectionSha256": "projection",
         "decompilerSha256": sha(b"fixture decompiler"), "nativeAssemblySha256": sha(b"fixture native"),
         "entries": [["a" * 64, "projectile_method", 0], ["b" * 64, "projectile_method", 0],
-                    ["c" * 64, "projectile_lifecycle", 0], ["d" * 64, "item_dispatch", 0]],
+                    ["c" * 64, "projectile_lifecycle", 0], ["d" * 64, "item_dispatch", 0],
+                    ["e" * 64, "projectile_interaction", 0]],
         "blobs": [{"sha256": digest, "bytes": len(payload)}],
     }
     pin_index(manifest)
@@ -146,7 +147,7 @@ def test_unused_content_and_unindexed_zip_entries_are_rejected(pack):
     # Another complete key can legitimately use that blob, without merging keys.
     manifest["entries"][1][2] = 1
     pin_index(manifest)
-    assert len(check(pack)["entries"]) == 4
+    assert len(check(pack)["entries"]) == len(manifest["entries"])
     # A second blob row cannot recursively alias a key or repeat a blob pin.
     manifest["blobs"][1] = copy.deepcopy(manifest["blobs"][0])
     with pytest.raises(ValueError, match="duplicate"):

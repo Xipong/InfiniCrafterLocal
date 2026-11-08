@@ -348,7 +348,7 @@ internal static partial class EngineRuntimeChecks
     }
 
     // Reconstructed fixture setup for the source-analysis benchmark only.
-    // The craft benchmark does not instantiate a catalog before its first craft.
+    // The craft benchmark uses the complete shared capture fixture below.
     private sealed class ParentProfileCatalog : IDisposable
     {
         private readonly KeyValuePair<int, Item>[] saved = ContentSamples.ItemsByType.ToArray();
@@ -505,8 +505,8 @@ internal static partial class EngineRuntimeChecks
 
     private static void ParentCraftFrameProfiling(string scenario)
     {
-        // One mode per fresh executable invocation. No prior dump, synthetic
-        // source projection, or full Item catalog setup warms the first request.
+        // One mode per fresh executable invocation. Native samples and language
+        // must match a populated game; they do not prime source-analysis caches.
         (int first, int second) = scenario switch
         {
             "plain" => (ItemID.Wood, ItemID.StoneBlock),
@@ -517,7 +517,7 @@ internal static partial class EngineRuntimeChecks
             _ => throw new ArgumentException("Expected --profile-parent-craft plain|mixed|ammo|nebula-prism|eventide.")
         };
         using var state = new NativeActorState();
-        Terraria.Main.netMode = NetmodeID.SinglePlayer;
+        InitializePopulatedParentCapture();
         string directory = ParentProfileDirectory("craft-" + scenario);
         var report = ParentProfileEnvironment("actual-deferred-craft");
         report["scenario"] = scenario;
@@ -533,7 +533,7 @@ internal static partial class EngineRuntimeChecks
         };
         report["allocationScope"] = "GC.GetTotalAllocatedBytes(precise:true) process-wide delta across PrepareDeferred, Task.Run(CompleteAnalysis), 16ms Pump/waits and PayloadJson access; includes worker/main/runtime observer overhead, excludes parent construction, invalidation, parity parsing, hashing and evidence writes. Cumulative managed allocation, not retained/peak RAM. No forced GC.";
         report["gcScope"] = "Process-wide GC.CollectionCount generation deltas over the same pipeline interval; prior-phase garbage can be collected here.";
-        report["coldScope"] = "First PrepareDeferred in this executable invocation, after native harness and parent Item/Player construction. Not process startup timing. No dump or full catalog setup.";
+        report["coldScope"] = "First PrepareDeferred after full native catalog/localization and parent construction. No source analysis, dump or source-pack priming. Pristine-cache checks are inside the cold timer. Not process startup timing.";
         report["resetScope"] = "ParentAnalysis.Invalidate clears shared source/attack caches; native certificate Lazy values and CLR/JIT state remain warm. Source-cache-reset is not a fresh process.";
         var measurements = new JsonArray(); report["measurements"] = measurements;
         var client = new GeneratorClient();
@@ -546,12 +546,13 @@ internal static partial class EngineRuntimeChecks
                 if (phase == "source-cache-reset") GeneratorClient.ParentAnalysis.Invalidate();
                 Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(91);
                 var a = new Item(first); var b = new Item(second);
-                var player = new Player { name = "headless-parent-profile" };
+                var player = PopulatedParentCapturePlayer("empty");
                 // These real input objects are constructed before the timer,
                 // matching a craft whose parent items already exist in inventory.
                 int gen0 = GC.CollectionCount(0), gen1 = GC.CollectionCount(1), gen2 = GC.CollectionCount(2);
                 long allocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
                 var timer = Stopwatch.StartNew();
+                JsonObject? coldState = phase == "cold-first-request" ? RequirePristineParentSourceCaches() : null;
                 var request = client.PrepareDeferred(a, b, player);
                 double captureMs = timer.Elapsed.TotalMilliseconds;
                 var worker = Task.Run(request.CompleteAnalysis);
@@ -569,6 +570,7 @@ internal static partial class EngineRuntimeChecks
                 observation["totalAllocatedBytes"] = allocatedBytes;
                 observation["gcCollections"] = new JsonArray(collections0, collections1, collections2);
                 observation["equalToFirstRequest"] = JsonNode.DeepEquals(initial, parsed);
+                observation["initialSourceCacheState"] = coldState;
                 measurements.Add(observation);
                 // Equality is reported, not forced: if a mod changes defaults or
                 // source registration, the full differing payload remains saved.

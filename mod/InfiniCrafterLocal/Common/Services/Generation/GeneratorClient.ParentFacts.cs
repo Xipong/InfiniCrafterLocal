@@ -410,6 +410,7 @@ public sealed partial class GeneratorClient
                     && methodHash is { Length: 64 } && methodHash.All(Uri.IsHexDigit)
                     && value["sourceMethods"] is JsonArray methods && methods.Any(method => JsonNode.DeepEquals(method, rootCertificate)))
                     value.Remove("lifecycle");
+                if (InteractionSourceFingerprintBacked(value)) value.Remove("interactionSources");
                 foreach (var property in value) Visit(property.Value);
             }
             else if (node is JsonArray array)

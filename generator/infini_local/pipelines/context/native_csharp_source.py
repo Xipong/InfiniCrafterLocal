@@ -12,12 +12,13 @@ from infini_local.pipelines.context.csharp_source_view import (
     _compact_model_view, _integer, _known_graph, _linked_calls, _records, _windows, _specialized_record, project_lifecycle_source,
 )
 from infini_local.pipelines.context.parent_stage import parent_context_for_stage
+from infini_local.pipelines.context.native_interaction_source import project_interaction_source
 
 
 def native_csharp_source_for_llm(reference: dict[str, Any], source_calls: list[dict[str, Any]] | None = None
                                 ) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
     """Prefer only explicit matching source records; all refusals preserve input facts."""
-    reference = project_lifecycle_source(reference)
+    reference = project_interaction_source(project_lifecycle_source(reference))
     original, calls = copy.deepcopy(reference), copy.deepcopy(source_calls)
     records = _records(reference)
     if (records is None or not records or not set(reference) <= _REFERENCE_FIELDS

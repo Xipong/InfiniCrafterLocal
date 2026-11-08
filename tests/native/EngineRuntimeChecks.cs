@@ -43,6 +43,11 @@ internal static partial class EngineRuntimeChecks
                 CaptureParentPanel(args[1], args[2]);
                 return 0;
             }
+            if (args.Length == 3 && args[0] == "--profile-populated-parent-panel")
+            {
+                ProfilePopulatedParentPanel(args[1], args[2]);
+                return 0;
+            }
             if (args.Length == 2 && args[0] == "--capture-parent-context")
             {
                 CaptureParentContext(args[1]);
@@ -68,7 +73,7 @@ internal static partial class EngineRuntimeChecks
                 return 0;
             }
             if (args.Length != 0)
-                throw new ArgumentException("Expected --check-filter <filter>, --replay-contracts <jsonl-path>, --capture-vfx-preview <json-path>, --verify-native-target <manifest.json>, --build-native-source-pack <output.zip>, --profile-parent-analysis or --profile-parent-craft <plain|mixed|ammo|nebula-prism|eventide>");
+                throw new ArgumentException("Expected --profile-populated-parent-panel <manifest> <output>, --check-filter <filter>, --replay-contracts <jsonl-path>, --capture-vfx-preview <json-path>, --verify-native-target <manifest.json>, --build-native-source-pack <output.zip>, --profile-parent-analysis or --profile-parent-craft <plain|mixed|ammo|nebula-prism|eventide>");
             return RunChecks();
         }
         finally { System.IO.Directory.Delete(sandbox, recursive: true); }
@@ -84,12 +89,15 @@ internal static partial class EngineRuntimeChecks
             ("mechanics source binds explicit native roots", MechanicsSourceBindsExplicitNativeRoots),
             ("mechanics source call index scanning parity", MechanicsCallIndexMatchesScanningOracle),
             ("parent capture panel validates offline inputs", ParentCapturePanelValidation),
+            ("populated parent profiler preserves source and cold state", PopulatedParentProfilerPreservesSourceAndColdState),
             ("parent item dispatcher source actual Prepare", ParentItemDispatcherSourceReachesPrepare),
             ("parent item shooting dispatcher source actual Prepare", ParentItemShootingDispatcherSourceReachesPrepare),
             ("parent item identity helper source actual Prepare", ParentItemIdentityHelpersReachPrepare),
             ("parent item identity helper strict bindings and bounds", ParentItemIdentityHelpersRejectUnprovedBindings),
             ("parent item dispatcher source guards bounds and cancellation", ParentItemDispatcherBoundsStayUnknown),
             ("projectile lifecycle conditional native source", ProjectileLifecycleKeepsConditionalNativeSource),
+            ("projectile interaction source explicit unknown boundaries", ProjectileInteractionSourceKeepsExplicitUnknowns),
+            ("projectile interaction native hit and movement source", ProjectileInteractionSourceKeepsNativeHitAndBounce),
             ("projectile lifecycle closed regions and unknown boundaries", ProjectileLifecycleRefusesIncompleteRegions),
             ("projectile lifecycle fingerprint preserves source identity", ProjectileLifecycleFingerprintKeepsNativeIdentity),
             ("bundled decompiler exact binary and official resource packaging", BundledDecompilerUsesOfficialResourcePackaging),
@@ -100,6 +108,8 @@ internal static partial class EngineRuntimeChecks
             ("native CSharp source exact PE identity and no execution", NativeCSharpSourceVerifiesExactPeWithoutExecution),
             ("native CSharp source semantic method header verification", NativeCSharpSourceVerifiesMethodHeader),
             ("native CSharp source complete exception descriptor verification", NativeCSharpSourceVerifiesExceptionRegions),
+            ("native CSharp source whole exception source retains graph refusal", NativeCSharpWholeExceptionSourceKeepsGraphRefusal),
+            ("native CSharp source actual exception helpers retain source and unknowns", NativeCSharpExceptionHelpersReachActualCapture),
             ("native CSharp source closed regions and all windows", NativeCSharpRegionsKeepAllWindowsAndRefuseNonlocalDependencies),
             ("native CSharp source actual Last Prism helper inline and links", NativeCSharpLastPrismRetainsReadableHelperAndInlineEffects),
             ("source performance documents rendering", SourcePerformanceDocumentsRendering),
@@ -128,6 +138,9 @@ internal static partial class EngineRuntimeChecks
             ("source programs clone mutation isolation and native parity", SourceProgramsCloneIsolation),
             ("projectile inline mutable effects source and work bounds", ProjectileInlineEffectsRetainMutableSource),
             ("projectile inline last prism admission scan and opacity", ProjectileInlineLastPrismSourceRetainsAdmissionAndScan),
+            ("finite integer source alternatives and unknowns", SourceFiniteIntegersPreserveAlternativesAndUnknowns),
+            ("finite integer source bounds and overflow", SourceFiniteIntegersBoundWorkAndOverflow),
+            ("finite integer spawn native vilethorn reference", ProjectileFiniteSpawnVilethornReference),
             ("projectile helper spawn native last prism reference", ProjectileHelperSpawnLastPrismReference),
             ("projectile helper spawn conditional unknown control flow", ProjectileHelperSpawnSlicesKeepUnknownControlFlow),
             ("projectile helper spawn independent budget refusals", ProjectileHelperSpawnSlicesKeepBudgetRefusals),

@@ -230,7 +230,7 @@ public sealed partial class GeneratorClient
                 JsonObject? specialized = null;
                 AttackSourceObservation? selectedObservation = null;
                 ParentSourceMethod? selectedBody = null;
-                AttackIdentitySelection? identity = null;
+                AttackIdentitySelection? identity = null, spawnIdentity = null;
                 string? selectionFailure = null;
                 // Select the captured actor before traversing/serializing every
                 // sibling's equations. Raw audit capture has an independent work
@@ -240,6 +240,9 @@ public sealed partial class GeneratorClient
                     try
                     {
                         var selection = new AttackIdentitySelection(body, type, style);
+                        // A bound actor can have stable identity reads without
+                        // any identity-dependent branch to specialize.
+                        spawnIdentity = selection;
                         if (selection.Selected.Count > 0)
                         {
                             selectedBody = new ParentSourceMethod(method, slice ?? AttackCode(method), next, selectedSuccessors: selection.Selected);
@@ -282,7 +285,7 @@ public sealed partial class GeneratorClient
                 // large unrelated motion expression cannot erase its spawn facts.
                 if (helperSpawns is not null)
                 {
-                    var effects = CaptureProjectileSpawnSlices(selectedBody ?? body, identity);
+                    var effects = CaptureProjectileSpawnSlices(selectedBody ?? body, spawnIdentity);
                     foreach (var effect in effects.Programs)
                         if (!TryMergeProjectileSourcePrograms(program, effect)) helperSpawns.Add(effect);
                     foreach (var reference in effects.References) spawnReferences.Add(reference!.DeepClone());
@@ -301,7 +304,7 @@ public sealed partial class GeneratorClient
                 ObservePhase("additional_effects");
                 var exposed = specialized ?? program;
                 if (exposed["observations"] is JsonArray)
-                    foreach (var reference in (specialized is not null ? selectedObservation! : observation).LiteralProjectileSpawns(exposed))
+                    foreach (var reference in (specialized is not null ? selectedObservation! : observation).FiniteProjectileSpawns(exposed, spawnIdentity))
                         spawnReferences.Add(reference!.DeepClone());
                 foreach (var call in (rawReferences ?? observation.ReferencedMethods.ToArray()).Concat(selectedObservation?.ReferencedMethods ?? new HashSet<MethodBase>())
                     .Where(m => m.Module == typeof(Projectile).Module && m.GetMethodBody() is not null)) Certify(call);
@@ -309,8 +312,15 @@ public sealed partial class GeneratorClient
                 return program;
             }
             catch (Exception error) when (error is not OutOfMemoryException)
-            { ObservePhase("refused");
-                return new JsonObject { ["method"] = SourceMember(method), ["coverage"] = "unknown", ["unresolved"] = error is NotSupportedException ? error.Message : error.GetType().Name }; }
+            {
+                ObservePhase("refused");
+                // A refused IL graph does not invalidate the verified method
+                // identity needed by the independent, read-only C# source path.
+                var unavailable = MethodSourceIdentity(method);
+                unavailable["coverage"] = "unknown";
+                unavailable["unresolved"] = error is NotSupportedException ? error.Message : error.GetType().Name;
+                return unavailable;
+            }
         }
         MethodInfo? Native(Type owner, string name) => owner.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
             .FirstOrDefault(m => m.Name == name);
@@ -425,6 +435,8 @@ public sealed partial class GeneratorClient
         // Keep method identity as a native fact outside the optional readable
         // view, including when every conditional region was refused.
         if (Native(typeof(Projectile), "Kill") is { } lifecycleRoot) Certify(lifecycleRoot);
+        result["interactionSources"] = CaptureProjectileInteractionSource(type, style, Certify, spawnReferences);
+        ProfilePhase("hit_and_movement_source");
         result["sourceMethods"] = certificates;
         result["coverage"] = new JsonObject { ["proved"] = "bounded_native_source_observations_only", ["unresolved"] = gaps,
             ["boundaries"] = "ProjectileLoader.Colliding/ShouldUpdatePosition and all other hooks remain unevaluated; no source fact is absence of a mechanic; damage may stop before visual lifetime; held-item draw is separate and not inferred from noMelee" };
@@ -669,7 +681,9 @@ public sealed partial class GeneratorClient
             if (value.Operand is MethodBase method) return Symbol(method) + "[" + string.Join(",", inputs) + "]";
             return value.Op + "(" + string.Join(",", inputs) + (value.Operand is null ? "" : ";" + (SourceOperand(value.Operand)?.ToJsonString() ?? "null")) + ")";
         }
-        internal JsonArray LiteralProjectileSpawns(JsonObject program)
+        internal JsonArray LiteralProjectileSpawns(JsonObject program) => FiniteProjectileSpawns(program, selection);
+
+        internal JsonArray FiniteProjectileSpawns(JsonObject program, AttackIdentitySelection? identity)
         {
             var references = new JsonArray();
             foreach (var call in roots.Where(v => v.Operand is MethodInfo method && method.DeclaringType == typeof(Projectile)
@@ -681,17 +695,28 @@ public sealed partial class GeneratorClient
                 var row = MethodSourceIdentity(body.Method);
                 row["at"] = call.At;
                 row["requiredPredicates"] = program["observations"]!.AsArray().First(v => v!["at"]!.GetValue<int>() == call.At)!["requiredPredicates"]!.DeepClone();
-                var candidates = new JsonArray();
-                bool unknown = parameter < 0 || slot >= call.Inputs.Count;
-                if (!unknown)
-                {
-                    var definitions = body.Definitions(call.Inputs[slot])
-                        .Where(v => selection is null || selection.Reachable.Contains(v.Block) || v.Op.StartsWith("unresolved", StringComparison.Ordinal)).ToArray();
-                    unknown = definitions.Length == 0 || definitions.Any(v => v.Op != "const" || v.Operand is not int);
-                    foreach (int id in definitions.Where(v => v.Op == "const" && v.Operand is int).Select(v => (int)v.Operand!).Distinct()) candidates.Add(id);
-                }
-                row["projectileTypes"] = candidates;
-                if (unknown) row["unresolved"] = "spawn_type_requires_runtime_expression_or_unresolved_definition";
+                var candidates = parameter < 0 || slot >= call.Inputs.Count ? null
+                    : new SourceFiniteIntegers(body, identity).Evaluate(call.Inputs[slot]);
+                // Preserve every literal emitted by the established bounded
+                // definition walk. Nested stack joins can contain more than the
+                // finite arithmetic set limit; that new limit must not remove
+                // previously captured source evidence or its child-call links.
+                var definitions = candidates is null ? Array.Empty<ParentSourceMethod.Value>() : body.Definitions(call.Inputs[slot])
+                    .Where(value => identity is null || identity.Reachable.Contains(value.Block)
+                        || value.Op.StartsWith("unresolved", StringComparison.Ordinal)).ToArray();
+                var literals = definitions.Where(value => value.Op == "const" && value.Operand is int).Select(value => (int)value.Operand!);
+                if (definitions.Length > 0 && definitions.All(value => value.Op == "const" && value.Operand is int))
+                    // The full literal union replaces only the derived-set cap.
+                    // Definitions skips repeated nodes, so it cannot discharge
+                    // the finite walk's cycle, depth, work or missing-value gaps.
+                    candidates!.Unknown.Remove("finite_integer_value_count_bound");
+                // Literal insertion order also owns first-eight profile priority.
+                // Append new derived values in deterministic numeric order only.
+                row["projectileTypes"] = new JsonArray(literals.Concat(candidates?.Values ?? Enumerable.Empty<int>())
+                    .Distinct().Select(id => (JsonNode?)JsonValue.Create(id)).ToArray());
+                if (candidates is null || candidates.Unknown.Count > 0)
+                    row["unresolved"] = "spawn_type_requires_runtime_expression_or_unresolved_definition"
+                        + (candidates is null ? "" : "; " + string.Join("; ", candidates.Unknown));
                 references.Add(row);
             }
             return references;

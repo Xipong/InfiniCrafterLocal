@@ -63,7 +63,7 @@ public sealed partial class GeneratorClient
                     if (++work > expressionLimit) throw new NotSupportedException(label + "_source_expression_work_bound");
                 };
                 JsonObject program = observation.Finish();
-                foreach (var reference in observation.LiteralProjectileSpawns(program)) references.Add(reference!.DeepClone());
+                foreach (var reference in observation.FiniteProjectileSpawns(program, identity)) references.Add(reference!.DeepClone());
                 methods.UnionWith(observation.ReferencedMethods);
                 if (identity is not null)
                 {

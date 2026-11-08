@@ -75,6 +75,33 @@ def test_actual_author_prefers_certified_source_and_keeps_child_predicate_links_
     assert parent == before
 
 
+@pytest.mark.parametrize("failure", ["exception_regions", ["exception_regions", "handler_stack_unresolved"]])
+def test_actual_author_keeps_failed_graph_diagnostics_beside_whole_exception_source(failure):
+    parent = _parent()
+    reference, _ = _parts(parent)
+    graph = reference["motion"]["programs"][0]
+    certificate = {key: graph[key] for key in ("method", "sourceModuleVersionId", "sourceMethodSha256")}
+    graph.clear()
+    graph.update(certificate, coverage="unknown", unresolved=copy.deepcopy(failure))
+    record = reference["nativeCSharpSource"]["records"][0]
+    code = "void NativeAI() { try { Emit(1); } catch (Exception) when (active) { Emit(2); } finally { Emit(3); } }\n"
+    record.update(code=code, codeSha256=hashlib.sha256(code.encode()).hexdigest(), locations=[],
+                  unresolved=["exception_regions_preserved_in_source; control_flow_and_exceptional_execution_not_evaluated"])
+    parent["directProjectileRaw"].pop("referencedProjectiles")
+    before = copy.deepcopy(parent)
+    request, _, _ = build_initial_author_request(parent, {}, "exception-source", model_name="offline")
+    dossier = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
+    source = unpack_attack_tables(dossier["parents"]["A"]["packet"]["raw"]["directProjectile"]["attackReference"])
+    assert source["motion"]["programs"] == [{"nativeCSharpSourceRef": "s0",
+        "graphCapture": {"coverage": "unknown", "unresolved": failure}}]
+    delivered = source["nativeCSharpSource"]["records"][0]
+    assert delivered["coverage"] == "whole_method" and delivered["code"] == code
+    assert delivered["unresolved"] == record["unresolved"]
+    assert "identitySpecialization" not in delivered
+    assert known_native_csharp_context(source)
+    assert parent == before
+
+
 def test_presentation_uses_original_graph_projection_without_author_source_or_location_bloat():
     parent = _parent()
     for stage in ("visual", "vfx"):
@@ -394,7 +421,8 @@ def test_actual_author_keeps_fuller_source_before_size_with_opaque_runtime_unkno
     selected = source["nativeCSharpSource"]["records"][0]
     assert (selected["coverage"], selected["code"], selected["unresolved"]) == ("whole_method", record["code"], record["unresolved"])
     assert source["coverage"] == reference["coverage"]
-    assert source["motion"]["programs"] == [{"nativeCSharpSourceRef": selected["id"]}]
+    assert source["motion"]["programs"] == [{"nativeCSharpSourceRef": selected["id"],
+        "graphCapture": {"coverage": "unknown", "unresolved": graph["unresolved"]}}]
     assert known_native_csharp_context(source)
     assert parent == before
 
@@ -536,3 +564,18 @@ def test_request_source_memo_keeps_calls_modes_and_mechanics_supplements_separat
             assert json.dumps(again) == json.dumps(expected)
     assert profile == before
     assert variants[4]["mechanicsSource"]["records"] == []
+
+
+def test_finite_spawn_candidates_keep_source_admission_and_unknown_siblings():
+    parent = _parent()
+    reference, calls = _parts(parent)
+    calls[0]["projectileTypes"] = [1009, 1010]
+    calls[0]["unresolved"] += "; finite_integer_cycle"
+    before = copy.deepcopy((reference, calls))
+    projected, linked = native_csharp_source_for_llm(reference, calls)
+    assert projected["motion"]["programs"][0] == {"nativeCSharpSourceRef": "s0"}
+    assert linked[0]["projectileTypes"] == [1009, 1010]
+    assert linked[0]["unresolved"] == calls[0]["unresolved"]
+    assert linked[0]["requiredPredicates"] == calls[0]["requiredPredicates"]
+    assert linked[0]["sourceLocation"]["predicates"][0]["id"] == "b3"
+    assert (reference, calls) == before
