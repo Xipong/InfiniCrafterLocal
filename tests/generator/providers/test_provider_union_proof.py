@@ -171,3 +171,99 @@ def test_typed_registry_schema_reaches_actual_author_request_and_repair_inverse(
     encoded_repair = _encode_nullable_fixture(repair, repair_local)
     Draft202012Validator(repair_provider).validate(encoded_repair)
     assert _inverse(encoded_repair, repair_local, repair_provider) == repair
+
+
+@pytest.mark.parametrize("omit_annotations", [False, True])
+def test_projection_owns_nested_output_and_preserves_literal_wire_order(omit_annotations):
+    literal = {"properties": {"description": ["буквы", -0.0, 10**80]}, "if": {"then": [True, None]}}
+    annotation = {"anyOf": [{"properties": {"opaque": [1, 2]}}]}
+    local = {
+        "$defs": {"tag": {"enum": ["second", "first"]}},
+        "description": "owner guidance",
+        "type": "object",
+        "properties": {
+            "payload": {"type": "array", "items": {
+                "oneOf": [{"type": "object", "const": literal}, {"type": "string"}],
+                "description": "item guidance",
+            }},
+            "tail": {"type": "integer"},
+        },
+        "required": ["payload"],
+        "additionalProperties": False,
+        "x-infini-opaque": annotation,
+    }
+    expected_items = {"description": "item guidance"} if not omit_annotations else {}
+    expected_items["anyOf"] = [{"type": "object", "const": copy.deepcopy(literal)}, {"type": "string"}]
+    expected = {"$defs": {"tag": {"enum": ["second", "first"]}}}
+    if not omit_annotations:
+        expected["description"] = "owner guidance"
+    expected.update({
+        "type": "object",
+        "properties": {
+            "payload": {"type": "array", "items": expected_items},
+            "tail": {"anyOf": [{"type": "integer"}, {"type": "null"}]},
+        },
+        "required": ["payload", "tail"],
+        "additionalProperties": False,
+    })
+    if not omit_annotations:
+        expected["x-infini-opaque"] = copy.deepcopy(annotation)
+
+    def wire(value):
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+
+    def mutable_ids(value):
+        if isinstance(value, (dict, list)):
+            yield id(value)
+            for child in value.values() if isinstance(value, dict) else value:
+                yield from mutable_ids(child)
+
+    before = wire(local)
+    provider = contract_provider_schema._provider_strict_projection(local, omit_annotations=omit_annotations)
+    assert wire(provider) == wire(expected)
+    assert wire(local) == before
+
+    assert set(mutable_ids(local)).isdisjoint(mutable_ids(provider))
+
+    authored = {"payload": [copy.deepcopy(literal)], "tail": None}
+    restored = _inverse(authored, local, provider)
+    assert wire(restored) == wire({"payload": [literal]})
+    assert set(mutable_ids(restored)).isdisjoint(
+        {*mutable_ids(authored), *mutable_ids(local), *mutable_ids(provider)})
+    restored["payload"][0]["properties"]["description"].append("caller mutation")
+    assert wire(provider) == wire(expected)
+    assert wire(local) == before
+
+
+@pytest.mark.parametrize("conditional", [False, True])
+def test_shared_schema_descendants_remain_independent_across_outputs(conditional):
+    shared = {"type": "array", "items": {"enum": ["first", "second"]}}
+    local = {
+        "type": "object",
+        "properties": {"mode": {"enum": ["plain", "extra"]}, "left": shared, "right": shared},
+        "required": ["mode", "left"],
+        "additionalProperties": False,
+        "$defs": {"shared": shared},
+        "x-infini-opaque": {"schema": shared},
+    }
+    if conditional:
+        local.update({"if": {"properties": {"mode": {"const": "extra"}}, "required": ["mode"]},
+                      "then": {"required": ["right"]}})
+    before = json.dumps(local, ensure_ascii=False)
+    first = contract_provider_schema._provider_strict_projection(local)
+    second = contract_provider_schema._provider_strict_projection(local)
+    expected = json.dumps(second, ensure_ascii=False)
+    branches = first["anyOf"] if conditional else [first]
+    branches[0]["properties"]["left"]["items"]["enum"].append("caller mutation")
+    for branch in branches:
+        right = branch["properties"]["right"]
+        if "anyOf" in right:
+            right = right["anyOf"][0]
+        assert right["items"]["enum"] == ["first", "second"]
+        assert branch["$defs"]["shared"]["items"]["enum"] == ["first", "second"]
+        assert branch["x-infini-opaque"]["schema"]["items"]["enum"] == ["first", "second"]
+    if conditional:
+        assert branches[1]["properties"]["left"]["items"]["enum"] == ["first", "second"]
+    assert json.dumps(local, ensure_ascii=False) == before
+    assert json.dumps(second, ensure_ascii=False) == expected
+    assert json.dumps(contract_provider_schema._provider_strict_projection(local), ensure_ascii=False) == expected
