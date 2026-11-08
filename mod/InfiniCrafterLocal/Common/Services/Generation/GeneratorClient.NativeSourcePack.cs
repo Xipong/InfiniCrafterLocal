@@ -132,8 +132,21 @@ public sealed partial class GeneratorClient
     private static byte[] ReadNativeSourcePackEntry(ZipArchiveEntry entry, int maximum, CancellationToken cancellation)
     {
         if (entry.Length < 0 || entry.Length > maximum) throw new InvalidDataException("native_source_pack_entry_size");
+        // Keep established ZIP buffering until a full-process comparison shows
+        // that the direct-buffer alternative improves this workload's peak RSS.
         using var input = entry.Open();
-        return SourceAnalysisBuffers.ReadExact(input, (int)entry.Length, maximum, cancellation);
+        using var output = new MemoryStream((int)entry.Length);
+        byte[] buffer = new byte[16384];
+        int count;
+        while ((count = input.Read(buffer, 0, buffer.Length)) != 0)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            if (output.Length + count > maximum) throw new InvalidDataException("native_source_pack_entry_size");
+            output.Write(buffer, 0, count);
+        }
+        cancellation.ThrowIfCancellationRequested();
+        if (output.Length != entry.Length) throw new InvalidDataException("native_source_pack_entry_length");
+        return output.ToArray();
     }
 
     private static bool NativeSourcePackHashValid(string value)
