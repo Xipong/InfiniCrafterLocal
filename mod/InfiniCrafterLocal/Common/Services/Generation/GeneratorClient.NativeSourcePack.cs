@@ -140,7 +140,7 @@ public sealed partial class GeneratorClient
         => value.Length == 64 && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
     private static string NativeSourcePackIndexHash(JsonArray rows, JsonArray blobs)
-        => SourceAnalysisBuffers.HashJsonPair(rows, blobs, currentParentAnalysis?.Cancellation ?? default);
+        => CSharpHash(Encoding.UTF8.GetBytes(rows.ToJsonString() + "\n" + blobs.ToJsonString()));
 
     private static bool NativeSourcePackKindValid(string kind)
         => kind is "projectile_method" or "projectile_lifecycle" or "item_dispatch";
