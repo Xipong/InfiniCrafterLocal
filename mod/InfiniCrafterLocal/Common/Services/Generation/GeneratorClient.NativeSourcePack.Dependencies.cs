@@ -75,38 +75,49 @@ public sealed partial class GeneratorClient
         try
         {
             using var resolver = new NativeCSharpResolver(module.Path, cancellation);
-            var seen = new HashSet<string>(StringComparer.Ordinal);
-            long remaining = NativeSourcePackDependencyBytes;
-            bool hasResolved = false;
-            foreach (var node in pins)
-            {
-                cancellation.ThrowIfCancellationRequested();
-                if (node is not JsonObject pin || pin["reference"] is not JsonValue referenceValue
-                    || !referenceValue.TryGetValue<string>(out string? identity) || identity is null || !seen.Add(identity)
-                    || pin["bytes"] is not JsonValue lengthValue || !lengthValue.TryGetValue<int>(out int length)) return false;
-                var reference = NativeSourcePackDependencyReference(identity);
-                if (pin["assembly"] is null)
-                {
-                    if (pin["sha256"] is not null || length != 0 || resolver.Resolve(reference) is not null) return false;
-                    continue;
-                }
-                if (pin["assembly"] is not JsonValue assemblyValue || !assemblyValue.TryGetValue<string>(out string? assembly)
-                    || string.IsNullOrEmpty(assembly) || pin["sha256"] is not JsonValue hashValue
-                    || !hashValue.TryGetValue<string>(out string? sha) || sha is null || sha.Length != 64
-                    || sha.Any(character => character is not (>= '0' and <= '9') and not (>= 'a' and <= 'f'))
-                    || length <= 0 || length > NativeCSharpPeLimit || length > remaining) return false;
-                var file = resolver.Resolve(reference);
-                if (file is null || !file.IsAssembly || !string.Equals(file.FullName, assembly, StringComparison.Ordinal)) return false;
-                var actual = NativeSourcePackDependencyHash(file, ref remaining, cancellation);
-                if (actual.Bytes != length || !string.Equals(actual.Sha256, sha, StringComparison.Ordinal)) return false;
-                hasResolved = true;
-            }
-            cancellation.ThrowIfCancellationRequested();
-            return hasResolved;
+            return NativeSourcePackDependenciesMatchCore(pins, resolver, cancellation);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception error) when (error is not OutOfMemoryException)
         { return false; }
+    }
+
+    // The production caller validates the pin count and owns this dedicated
+    // resolver. It returns a fresh image for each resolution; these are not
+    // borrowed files from a live decompiler or the pack recorder.
+    private static bool NativeSourcePackDependenciesMatchCore(JsonArray pins,
+        IAssemblyResolver resolver, CancellationToken cancellation)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        long remaining = NativeSourcePackDependencyBytes;
+        bool hasResolved = false;
+        foreach (var node in pins)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            if (node is not JsonObject pin || pin["reference"] is not JsonValue referenceValue
+                || !referenceValue.TryGetValue<string>(out string? identity) || identity is null || !seen.Add(identity)
+                || pin["bytes"] is not JsonValue lengthValue || !lengthValue.TryGetValue<int>(out int length)) return false;
+            var reference = NativeSourcePackDependencyReference(identity);
+            if (pin["assembly"] is null)
+            {
+                if (pin["sha256"] is not null || length != 0) return false;
+                using var unexpected = resolver.Resolve(reference);
+                if (unexpected is not null) return false;
+                continue;
+            }
+            if (pin["assembly"] is not JsonValue assemblyValue || !assemblyValue.TryGetValue<string>(out string? assembly)
+                || string.IsNullOrEmpty(assembly) || pin["sha256"] is not JsonValue hashValue
+                || !hashValue.TryGetValue<string>(out string? sha) || sha is null || sha.Length != 64
+                || sha.Any(character => character is not (>= '0' and <= '9') and not (>= 'a' and <= 'f'))
+                || length <= 0 || length > NativeCSharpPeLimit || length > remaining) return false;
+            using var file = resolver.Resolve(reference);
+            if (file is null || !file.IsAssembly || !string.Equals(file.FullName, assembly, StringComparison.Ordinal)) return false;
+            var actual = NativeSourcePackDependencyHash(file, ref remaining, cancellation);
+            if (actual.Bytes != length || !string.Equals(actual.Sha256, sha, StringComparison.Ordinal)) return false;
+            hasResolved = true;
+        }
+        cancellation.ThrowIfCancellationRequested();
+        return hasResolved;
     }
 
     private static AssemblyNameReference NativeSourcePackDependencyReference(string identity)
