@@ -1,0 +1,1582 @@
+{
+  "schema": "ifc_source_pack_optimization_20261108_v1",
+  "baselineCommit": "0f766496538ec11f0788445e700bc3c91bf2bdc8",
+  "candidateProjectionSha256": "3aa167116ea4c806327725d6686d42bd041806fb09328032b757c4c1c6a7ac35",
+  "runtimeVersion": "8.0.0",
+  "rollForward": "Disable",
+  "target": "linux-x64 / tModLoader 2026.09.3.1",
+  "replicates": 3,
+  "freshProcesses": 24,
+  "payloadComparisons": 48,
+  "measurementScope": "First PrepareDeferred through CompleteAnalysis and PayloadJson after native harness and Item/Player construction. No game, GPU, model or network. Each process has cold, warm-1, warm-2, source-cache-reset phases. Variant order alternates by replicate; process-cold, not filesystem-cache-cold. No concurrent local test/build/collector during these profiles.",
+  "memoryScope": "wait4.ru_maxrss in KiB, entire fresh subprocess across all four phases including startup/evidence collection, not peak RAM of the isolated cold interval. GC cumulative allocation deltas are not retained RAM.",
+  "pack": {
+    "baseline": {
+      "archiveBytes": 14058720,
+      "manifestBytes": 2526560,
+      "sha256": "cd3748e38f9d4373c43800a2516abf4a04866d37b8d9c448b48db8c0bac6f3bc",
+      "keys": 13372,
+      "uniquePayloads": 1909,
+      "kinds": {
+        "item_dispatch": 10910,
+        "projectile_lifecycle": 1021,
+        "projectile_method": 1441
+      },
+      "projectionSha256": "30cf1a286c05377be5864ce0f9ade3d15a69c6ef35a2d2ef41ebbfb8588eae63",
+      "formatVersion": 1,
+      "minimumMethodIlBytes": 2048
+    },
+    "candidate": {
+      "archiveBytes": 8060023,
+      "manifestBytes": 1524633,
+      "sha256": "968c6edca4ce573ba710aac546f5af90ca74bb6a15c2762d21595f43416ad5b1",
+      "keys": 14526,
+      "uniquePayloads": 1991,
+      "kinds": {
+        "item_dispatch": 10910,
+        "projectile_lifecycle": 1021,
+        "projectile_method": 2595
+      },
+      "projectionSha256": "3aa167116ea4c806327725d6686d42bd041806fb09328032b757c4c1c6a7ac35",
+      "formatVersion": 2,
+      "minimumMethodIlBytes": 1
+    },
+    "oldKeysCompared": 13372,
+    "oldKeyBytesAndKindEqual": true,
+    "addedKeys": 1154,
+    "catalogIdentityRecordsCompared": 6476,
+    "catalogReferenceBytesAndGapsEqual": true,
+    "candidateCollectorErrors": [],
+    "candidateCollectorMs": 283683.2101,
+    "candidateCatalogScope": "Offline source projections for every positive vanilla ProjectileID and ItemID. Projectile.SetDefaults supplies identities; item dispatcher roots depend only on Item.type. No game/world/AI/draw, provider calls, benchmark roster or saved player state."
+  },
+  "cohorts": [
+    {
+      "replicate": 1,
+      "payloadPairsVerified": 16,
+      "byteParityPass": true,
+      "targetPass": true
+    },
+    {
+      "replicate": 2,
+      "payloadPairsVerified": 16,
+      "byteParityPass": true,
+      "targetPass": true
+    },
+    {
+      "replicate": 3,
+      "payloadPairsVerified": 16,
+      "byteParityPass": true,
+      "targetPass": true
+    }
+  ],
+  "scenarios": [
+    {
+      "scenario": "plain",
+      "variants": {
+        "baseline": {
+          "runs": [
+            {
+              "replicate": 1,
+              "processPeakRssKiB": 415816,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 1563.6843,
+                  "totalAllocatedBytes": 148324696,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    2,
+                    1,
+                    1
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 18.7248,
+                  "totalAllocatedBytes": 931064,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 18.9762,
+                  "totalAllocatedBytes": 930392,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 389.8619,
+                  "totalAllocatedBytes": 60851144,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                }
+              }
+            },
+            {
+              "replicate": 2,
+              "processPeakRssKiB": 414940,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 1099.618,
+                  "totalAllocatedBytes": 148348488,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    2,
+                    1,
+                    1
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 18.461,
+                  "totalAllocatedBytes": 931064,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 18.0259,
+                  "totalAllocatedBytes": 930392,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 357.7289,
+                  "totalAllocatedBytes": 60850984,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                }
+              }
+            },
+            {
+              "replicate": 3,
+              "processPeakRssKiB": 415532,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 1076.4337,
+                  "totalAllocatedBytes": 148289536,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    2,
+                    1,
+                    1
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 19.1998,
+                  "totalAllocatedBytes": 931064,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 18.3417,
+                  "totalAllocatedBytes": 930392,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 438.1856,
+                  "totalAllocatedBytes": 60851384,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                }
+              }
+            }
+          ],
+          "phases": {
+            "cold-first-request": {
+              "medianMs": 1099.618,
+              "minMs": 1076.4337,
+              "maxMs": 1563.6843,
+              "medianAllocatedBytes": 148324696
+            },
+            "warm-1": {
+              "medianMs": 18.7248,
+              "minMs": 18.461,
+              "maxMs": 19.1998,
+              "medianAllocatedBytes": 931064
+            },
+            "warm-2": {
+              "medianMs": 18.3417,
+              "minMs": 18.0259,
+              "maxMs": 18.9762,
+              "medianAllocatedBytes": 930392
+            },
+            "source-cache-reset": {
+              "medianMs": 389.8619,
+              "minMs": 357.7289,
+              "maxMs": 438.1856,
+              "medianAllocatedBytes": 60851144
+            }
+          },
+          "medianProcessPeakRssKiB": 415532
+        },
+        "candidate": {
+          "runs": [
+            {
+              "replicate": 1,
+              "processPeakRssKiB": 406204,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 1065.9512,
+                  "totalAllocatedBytes": 140125648,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    1,
+                    1,
+                    1
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 18.7075,
+                  "totalAllocatedBytes": 929752,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 17.9986,
+                  "totalAllocatedBytes": 929752,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 361.918,
+                  "totalAllocatedBytes": 51601376,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    1,
+                    0,
+                    0
+                  ]
+                }
+              }
+            },
+            {
+              "replicate": 2,
+              "processPeakRssKiB": 405772,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 875.6464,
+                  "totalAllocatedBytes": 140069192,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    1,
+                    1,
+                    1
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 19.1982,
+                  "totalAllocatedBytes": 929752,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 18.2709,
+                  "totalAllocatedBytes": 929752,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 368.292,
+                  "totalAllocatedBytes": 51601376,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    1,
+                    0,
+                    0
+                  ]
+                }
+              }
+            },
+            {
+              "replicate": 3,
+              "processPeakRssKiB": 405188,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 847.9848,
+                  "totalAllocatedBytes": 140110504,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    1,
+                    1,
+                    1
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 19.2575,
+                  "totalAllocatedBytes": 929752,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 18.8154,
+                  "totalAllocatedBytes": 929752,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 362.045,
+                  "totalAllocatedBytes": 51601376,
+                  "utf8Bytes": 36557,
+                  "sha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+                  "gcCollections": [
+                    1,
+                    0,
+                    0
+                  ]
+                }
+              }
+            }
+          ],
+          "phases": {
+            "cold-first-request": {
+              "medianMs": 875.6464,
+              "minMs": 847.9848,
+              "maxMs": 1065.9512,
+              "medianAllocatedBytes": 140110504
+            },
+            "warm-1": {
+              "medianMs": 19.1982,
+              "minMs": 18.7075,
+              "maxMs": 19.2575,
+              "medianAllocatedBytes": 929752
+            },
+            "warm-2": {
+              "medianMs": 18.2709,
+              "minMs": 17.9986,
+              "maxMs": 18.8154,
+              "medianAllocatedBytes": 929752
+            },
+            "source-cache-reset": {
+              "medianMs": 362.045,
+              "minMs": 361.918,
+              "maxMs": 368.292,
+              "medianAllocatedBytes": 51601376
+            }
+          },
+          "medianProcessPeakRssKiB": 405772
+        }
+      },
+      "coldMedianSpeedup": 1.2557785882520616,
+      "coldMedianReductionPercent": 20.368127840759243
+    },
+    {
+      "scenario": "mixed",
+      "variants": {
+        "baseline": {
+          "runs": [
+            {
+              "replicate": 1,
+              "processPeakRssKiB": 544888,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 2673.6234,
+                  "totalAllocatedBytes": 282471456,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    4,
+                    3,
+                    2
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 184.3211,
+                  "totalAllocatedBytes": 12498168,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 192.7075,
+                  "totalAllocatedBytes": 12423904,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 1043.83,
+                  "totalAllocatedBytes": 182335400,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    2,
+                    2,
+                    1
+                  ]
+                }
+              }
+            },
+            {
+              "replicate": 2,
+              "processPeakRssKiB": 546656,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 3232.1069,
+                  "totalAllocatedBytes": 282468344,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    4,
+                    3,
+                    2
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 197.398,
+                  "totalAllocatedBytes": 12498088,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 188.3024,
+                  "totalAllocatedBytes": 12423816,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 1314.0214,
+                  "totalAllocatedBytes": 182328952,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    2,
+                    2,
+                    1
+                  ]
+                }
+              }
+            },
+            {
+              "replicate": 3,
+              "processPeakRssKiB": 545392,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 2518.0186,
+                  "totalAllocatedBytes": 282526304,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    4,
+                    3,
+                    2
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 137.2143,
+                  "totalAllocatedBytes": 12497928,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 143.8693,
+                  "totalAllocatedBytes": 12423664,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 1009.5346,
+                  "totalAllocatedBytes": 182334136,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    2,
+                    2,
+                    1
+                  ]
+                }
+              }
+            }
+          ],
+          "phases": {
+            "cold-first-request": {
+              "medianMs": 2673.6234,
+              "minMs": 2518.0186,
+              "maxMs": 3232.1069,
+              "medianAllocatedBytes": 282471456
+            },
+            "warm-1": {
+              "medianMs": 184.3211,
+              "minMs": 137.2143,
+              "maxMs": 197.398,
+              "medianAllocatedBytes": 12498088
+            },
+            "warm-2": {
+              "medianMs": 188.3024,
+              "minMs": 143.8693,
+              "maxMs": 192.7075,
+              "medianAllocatedBytes": 12423816
+            },
+            "source-cache-reset": {
+              "medianMs": 1043.83,
+              "minMs": 1009.5346,
+              "maxMs": 1314.0214,
+              "medianAllocatedBytes": 182334136
+            }
+          },
+          "medianProcessPeakRssKiB": 545392
+        },
+        "candidate": {
+          "runs": [
+            {
+              "replicate": 1,
+              "processPeakRssKiB": 405016,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 1618.6367,
+                  "totalAllocatedBytes": 253705208,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    3,
+                    2,
+                    2
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 121.5148,
+                  "totalAllocatedBytes": 12497216,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 122.5906,
+                  "totalAllocatedBytes": 12428464,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 851.6472,
+                  "totalAllocatedBytes": 153016032,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    2,
+                    2,
+                    1
+                  ]
+                }
+              }
+            },
+            {
+              "replicate": 2,
+              "processPeakRssKiB": 404168,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 1721.0167,
+                  "totalAllocatedBytes": 253763328,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    3,
+                    2,
+                    2
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 116.5973,
+                  "totalAllocatedBytes": 12497216,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 147.3787,
+                  "totalAllocatedBytes": 12428544,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 853.385,
+                  "totalAllocatedBytes": 153022992,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    2,
+                    2,
+                    1
+                  ]
+                }
+              }
+            },
+            {
+              "replicate": 3,
+              "processPeakRssKiB": 404432,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 1716.6387,
+                  "totalAllocatedBytes": 253769680,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    3,
+                    2,
+                    2
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 119.2066,
+                  "totalAllocatedBytes": 12497216,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 142.0635,
+                  "totalAllocatedBytes": 12428544,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 803.6097,
+                  "totalAllocatedBytes": 153021624,
+                  "utf8Bytes": 766291,
+                  "sha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+                  "gcCollections": [
+                    2,
+                    2,
+                    1
+                  ]
+                }
+              }
+            }
+          ],
+          "phases": {
+            "cold-first-request": {
+              "medianMs": 1716.6387,
+              "minMs": 1618.6367,
+              "maxMs": 1721.0167,
+              "medianAllocatedBytes": 253763328
+            },
+            "warm-1": {
+              "medianMs": 119.2066,
+              "minMs": 116.5973,
+              "maxMs": 121.5148,
+              "medianAllocatedBytes": 12497216
+            },
+            "warm-2": {
+              "medianMs": 142.0635,
+              "minMs": 122.5906,
+              "maxMs": 147.3787,
+              "medianAllocatedBytes": 12428544
+            },
+            "source-cache-reset": {
+              "medianMs": 851.6472,
+              "minMs": 803.6097,
+              "maxMs": 853.385,
+              "medianAllocatedBytes": 153021624
+            }
+          },
+          "medianProcessPeakRssKiB": 404432
+        }
+      },
+      "coldMedianSpeedup": 1.5574758975199616,
+      "coldMedianReductionPercent": 35.79354893437872
+    },
+    {
+      "scenario": "nebula-prism",
+      "variants": {
+        "baseline": {
+          "runs": [
+            {
+              "replicate": 1,
+              "processPeakRssKiB": 570216,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 4348.4416,
+                  "totalAllocatedBytes": 597890824,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    8,
+                    7,
+                    3
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 587.2182,
+                  "totalAllocatedBytes": 52135704,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 460.619,
+                  "totalAllocatedBytes": 52036872,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 2518.0876,
+                  "totalAllocatedBytes": 497855384,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    6,
+                    6,
+                    2
+                  ]
+                }
+              }
+            },
+            {
+              "replicate": 2,
+              "processPeakRssKiB": 571044,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 4261.9813,
+                  "totalAllocatedBytes": 597828352,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    8,
+                    7,
+                    3
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 528.438,
+                  "totalAllocatedBytes": 52135544,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 597.9037,
+                  "totalAllocatedBytes": 52037360,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 2644.7631,
+                  "totalAllocatedBytes": 497866224,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    6,
+                    6,
+                    2
+                  ]
+                }
+              }
+            },
+            {
+              "replicate": 3,
+              "processPeakRssKiB": 572644,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 4121.7775,
+                  "totalAllocatedBytes": 597922008,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    8,
+                    7,
+                    3
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 553.7218,
+                  "totalAllocatedBytes": 52135624,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 326.6574,
+                  "totalAllocatedBytes": 52036472,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 2523.2288,
+                  "totalAllocatedBytes": 497859296,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    6,
+                    6,
+                    2
+                  ]
+                }
+              }
+            }
+          ],
+          "phases": {
+            "cold-first-request": {
+              "medianMs": 4261.9813,
+              "minMs": 4121.7775,
+              "maxMs": 4348.4416,
+              "medianAllocatedBytes": 597890824
+            },
+            "warm-1": {
+              "medianMs": 553.7218,
+              "minMs": 528.438,
+              "maxMs": 587.2182,
+              "medianAllocatedBytes": 52135624
+            },
+            "warm-2": {
+              "medianMs": 460.619,
+              "minMs": 326.6574,
+              "maxMs": 597.9037,
+              "medianAllocatedBytes": 52036872
+            },
+            "source-cache-reset": {
+              "medianMs": 2523.2288,
+              "minMs": 2518.0876,
+              "maxMs": 2644.7631,
+              "medianAllocatedBytes": 497859296
+            }
+          },
+          "medianProcessPeakRssKiB": 571044
+        },
+        "candidate": {
+          "runs": [
+            {
+              "replicate": 1,
+              "processPeakRssKiB": 597584,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 3666.1784,
+                  "totalAllocatedBytes": 569893936,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    7,
+                    6,
+                    3
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 464.0386,
+                  "totalAllocatedBytes": 52134584,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 613.7806,
+                  "totalAllocatedBytes": 52035840,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    1,
+                    1,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 2571.4728,
+                  "totalAllocatedBytes": 469903320,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    6,
+                    6,
+                    2
+                  ]
+                }
+              }
+            },
+            {
+              "replicate": 2,
+              "processPeakRssKiB": 598472,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 3866.8671,
+                  "totalAllocatedBytes": 569854296,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    7,
+                    6,
+                    3
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 751.9556,
+                  "totalAllocatedBytes": 52135384,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 600.0509,
+                  "totalAllocatedBytes": 52035696,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    1,
+                    1,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 2412.5414,
+                  "totalAllocatedBytes": 469902168,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    6,
+                    6,
+                    2
+                  ]
+                }
+              }
+            },
+            {
+              "replicate": 3,
+              "processPeakRssKiB": 598692,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 3476.3945,
+                  "totalAllocatedBytes": 569857752,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    7,
+                    6,
+                    3
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 491.6339,
+                  "totalAllocatedBytes": 52134744,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 607.7388,
+                  "totalAllocatedBytes": 52035776,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    1,
+                    1,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 2185.7873,
+                  "totalAllocatedBytes": 469893640,
+                  "utf8Bytes": 3740963,
+                  "sha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+                  "gcCollections": [
+                    6,
+                    6,
+                    2
+                  ]
+                }
+              }
+            }
+          ],
+          "phases": {
+            "cold-first-request": {
+              "medianMs": 3666.1784,
+              "minMs": 3476.3945,
+              "maxMs": 3866.8671,
+              "medianAllocatedBytes": 569857752
+            },
+            "warm-1": {
+              "medianMs": 491.6339,
+              "minMs": 464.0386,
+              "maxMs": 751.9556,
+              "medianAllocatedBytes": 52134744
+            },
+            "warm-2": {
+              "medianMs": 607.7388,
+              "minMs": 600.0509,
+              "maxMs": 613.7806,
+              "medianAllocatedBytes": 52035776
+            },
+            "source-cache-reset": {
+              "medianMs": 2412.5414,
+              "minMs": 2185.7873,
+              "maxMs": 2571.4728,
+              "medianAllocatedBytes": 469902168
+            }
+          },
+          "medianProcessPeakRssKiB": 598472
+        }
+      },
+      "coldMedianSpeedup": 1.1625133408674277,
+      "coldMedianReductionPercent": 13.979481796412397
+    },
+    {
+      "scenario": "eventide",
+      "variants": {
+        "baseline": {
+          "runs": [
+            {
+              "replicate": 1,
+              "processPeakRssKiB": 616532,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 3563.2622,
+                  "totalAllocatedBytes": 478940528,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    6,
+                    5,
+                    3
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 335.7034,
+                  "totalAllocatedBytes": 48053232,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 463.6917,
+                  "totalAllocatedBytes": 48049192,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    1,
+                    1,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 1847.4083,
+                  "totalAllocatedBytes": 353855840,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    4,
+                    4,
+                    1
+                  ]
+                }
+              }
+            },
+            {
+              "replicate": 2,
+              "processPeakRssKiB": 575236,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 3494.7992,
+                  "totalAllocatedBytes": 478915144,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    6,
+                    5,
+                    3
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 315.3461,
+                  "totalAllocatedBytes": 48053144,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 530.8768,
+                  "totalAllocatedBytes": 48049424,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    1,
+                    1,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 2695.7482,
+                  "totalAllocatedBytes": 353896984,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    5,
+                    5,
+                    2
+                  ]
+                }
+              }
+            },
+            {
+              "replicate": 3,
+              "processPeakRssKiB": 574488,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 3562.1929,
+                  "totalAllocatedBytes": 478882456,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    6,
+                    5,
+                    3
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 333.1862,
+                  "totalAllocatedBytes": 48053232,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 453.7019,
+                  "totalAllocatedBytes": 48049104,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    1,
+                    1,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 2172.8206,
+                  "totalAllocatedBytes": 353893976,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    5,
+                    5,
+                    2
+                  ]
+                }
+              }
+            }
+          ],
+          "phases": {
+            "cold-first-request": {
+              "medianMs": 3562.1929,
+              "minMs": 3494.7992,
+              "maxMs": 3563.2622,
+              "medianAllocatedBytes": 478915144
+            },
+            "warm-1": {
+              "medianMs": 333.1862,
+              "minMs": 315.3461,
+              "maxMs": 335.7034,
+              "medianAllocatedBytes": 48053232
+            },
+            "warm-2": {
+              "medianMs": 463.6917,
+              "minMs": 453.7019,
+              "maxMs": 530.8768,
+              "medianAllocatedBytes": 48049192
+            },
+            "source-cache-reset": {
+              "medianMs": 2172.8206,
+              "minMs": 1847.4083,
+              "maxMs": 2695.7482,
+              "medianAllocatedBytes": 353893976
+            }
+          },
+          "medianProcessPeakRssKiB": 575236
+        },
+        "candidate": {
+          "runs": [
+            {
+              "replicate": 1,
+              "processPeakRssKiB": 556016,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 2709.3196,
+                  "totalAllocatedBytes": 450141296,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    6,
+                    5,
+                    3
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 506.0573,
+                  "totalAllocatedBytes": 48049248,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    1,
+                    1,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 399.0021,
+                  "totalAllocatedBytes": 48048544,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 1664.3999,
+                  "totalAllocatedBytes": 325224752,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    2,
+                    2,
+                    0
+                  ]
+                }
+              }
+            },
+            {
+              "replicate": 2,
+              "processPeakRssKiB": 556100,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 2697.3998,
+                  "totalAllocatedBytes": 450115224,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    6,
+                    5,
+                    3
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 388.4439,
+                  "totalAllocatedBytes": 48048840,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    1,
+                    1,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 381.1867,
+                  "totalAllocatedBytes": 48048712,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 1731.8705,
+                  "totalAllocatedBytes": 325232560,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    2,
+                    2,
+                    0
+                  ]
+                }
+              }
+            },
+            {
+              "replicate": 3,
+              "processPeakRssKiB": 559184,
+              "phases": {
+                "cold-first-request": {
+                  "wallMs": 2709.1038,
+                  "totalAllocatedBytes": 450190104,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    6,
+                    5,
+                    3
+                  ]
+                },
+                "warm-1": {
+                  "wallMs": 376.1807,
+                  "totalAllocatedBytes": 48048760,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    1,
+                    1,
+                    0
+                  ]
+                },
+                "warm-2": {
+                  "wallMs": 389.9093,
+                  "totalAllocatedBytes": 48048704,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "source-cache-reset": {
+                  "wallMs": 1734.9125,
+                  "totalAllocatedBytes": 325222728,
+                  "utf8Bytes": 2859542,
+                  "sha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+                  "gcCollections": [
+                    2,
+                    2,
+                    0
+                  ]
+                }
+              }
+            }
+          ],
+          "phases": {
+            "cold-first-request": {
+              "medianMs": 2709.1038,
+              "minMs": 2697.3998,
+              "maxMs": 2709.3196,
+              "medianAllocatedBytes": 450141296
+            },
+            "warm-1": {
+              "medianMs": 388.4439,
+              "minMs": 376.1807,
+              "maxMs": 506.0573,
+              "medianAllocatedBytes": 48048840
+            },
+            "warm-2": {
+              "medianMs": 389.9093,
+              "minMs": 381.1867,
+              "maxMs": 399.0021,
+              "medianAllocatedBytes": 48048704
+            },
+            "source-cache-reset": {
+              "medianMs": 1731.8705,
+              "minMs": 1664.3999,
+              "maxMs": 1734.9125,
+              "medianAllocatedBytes": 325224752
+            }
+          },
+          "medianProcessPeakRssKiB": 556100
+        }
+      },
+      "coldMedianSpeedup": 1.3148971626705481,
+      "coldMedianReductionPercent": 23.948425140031027
+    }
+  ],
+  "allCandidateColdUnder5000Ms": true,
+  "nativeHarnessSha256": {
+    "baseline": "c41d1ef2eee7da8bdb09d202529123df9d22b9a579c762a1ab3e954f740eb8db",
+    "candidate": "84b0833f8e6ca431bd366d12276c97534c679435fcdca481585df1b5c85d209e"
+  },
+  "checks": {
+    "nativeBuildWarnings": 0,
+    "nativeBuildErrors": 0,
+    "nativeDebug": {
+      "passed": 754,
+      "failed": 0
+    },
+    "nativeReleaseFocused": {
+      "passed": 9,
+      "failed": 0
+    },
+    "pythonFocused": {
+      "passed": 104,
+      "failed": 0
+    },
+    "static": {
+      "passed": 12,
+      "failed": 0
+    },
+    "localFullPython": "intentionally_interrupted_before_completion_not_a_pass",
+    "moddedGameGpuMultiplayer": "not_run",
+    "nativeRelease": {
+      "passed": 754,
+      "failed": 0
+    }
+  }
+}

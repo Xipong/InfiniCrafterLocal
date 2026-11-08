@@ -99,6 +99,8 @@ internal static partial class EngineRuntimeChecks
             ("source performance documents rendering", SourcePerformanceDocumentsRendering),
             ("source performance documents LRU and lifetime", SourcePerformanceDocumentsLruAndLifetime),
             ("source performance documents verify cache hits", SourcePerformanceDocumentsVerifyCacheHits),
+            ("native source pack deduplicates content without aliasing complete keys", NativeSourcePackDeduplicatesContentWithoutAliasingKeys),
+            ("native source pack short methods bypass live decompilation", NativeSourcePackIncludesShortNativeMethods),
             ("native source pack complete projection input keys", NativeSourcePackKeysCoverProjectionInputs),
             ("native source pack exact renderer bytes and cancellation", NativeSourcePackReaderPreservesBytesAndCancellation),
             ("native source pack manifest identity and entry integrity", NativeSourcePackReaderRejectsIdentityAndCorruption),

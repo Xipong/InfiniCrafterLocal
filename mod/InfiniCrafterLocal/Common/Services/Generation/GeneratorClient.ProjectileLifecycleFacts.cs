@@ -66,8 +66,9 @@ public sealed partial class GeneratorClient
                     result = BuildProjectileLifecycleSource(document, type, style, pendingReferences, timeout.Token);
                     Mark("conditional_lifecycle_regions");
                     timeout.Token.ThrowIfCancellationRequested();
-                    RecordNativeSourceProjection("projectile_lifecycle", method, input,
-                        new JsonObject { ["result"] = result.DeepClone(), ["references"] = pendingReferences.DeepClone() }, timeout.Token);
+                    if (nativeSourcePackRecorder is not null)
+                        RecordNativeSourceProjection("projectile_lifecycle", method, input,
+                            new JsonObject { ["result"] = result.DeepClone(), ["references"] = pendingReferences.DeepClone() }, timeout.Token);
                 }
                 timeout.Token.ThrowIfCancellationRequested();
             }

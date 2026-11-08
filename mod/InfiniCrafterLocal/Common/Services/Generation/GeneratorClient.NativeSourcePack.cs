@@ -17,8 +17,8 @@ public sealed partial class GeneratorClient
     // Build-time memoization of the existing read-only source builders. Keys
     // contain their complete inputs, never item names, pairs or weapon classes.
     // A miss runs the same live reader; it cannot replace missing evidence.
-    private const int NativeSourcePackVersion = 1;
-    private const int NativeSourcePackMinimumIlBytes = 2048;
+    private const int NativeSourcePackVersion = 2;
+    private const int NativeSourcePackMinimumIlBytes = 1;
     private const int NativeSourcePackEntryLimit = 30000;
     private const int NativeSourcePackEntryBytes = 4 * 1024 * 1024;
     private const int NativeSourcePackArchiveBytes = 128 * 1024 * 1024;
@@ -76,7 +76,7 @@ public sealed partial class GeneratorClient
             }
         }
         if (nativeSourcePackReader is null) return false;
-        bool found = nativeSourcePackReader.TryRead(NativeSourceProjectionKey(kind, method, input), cancellation, out projection);
+        bool found = nativeSourcePackReader.TryRead(NativeSourceProjectionKey(kind, method, input), kind, cancellation, out projection);
         cancellation.ThrowIfCancellationRequested();
         if (ParentAnalysis.ProfileJobs)
             Console.Error.WriteLine("PARENT_SOURCE_PACK action=" + (found ? "hit" : "miss")
@@ -146,10 +146,19 @@ public sealed partial class GeneratorClient
         return output.ToArray();
     }
 
+    private static bool NativeSourcePackHashValid(string value)
+        => value.Length == 64 && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
+
+    private static string NativeSourcePackIndexHash(JsonArray rows, JsonArray blobs)
+        => CSharpHash(Encoding.UTF8.GetBytes(rows.ToJsonString() + "\n" + blobs.ToJsonString()));
+
+    private static bool NativeSourcePackKindValid(string kind)
+        => kind is "projectile_method" or "projectile_lifecycle" or "item_dispatch";
+
     private sealed class NativeSourcePackReader : IDisposable
     {
         private readonly ZipArchive archive;
-        private readonly Dictionary<string, (int Bytes, string Sha256)> entries = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, (string Kind, ZipArchiveEntry Entry, int Bytes, string Sha256)> entries = new(StringComparer.Ordinal);
 
         internal NativeSourcePackReader(Stream stream, NativeCSharpModule module, CancellationToken cancellation)
         {
@@ -202,34 +211,70 @@ public sealed partial class GeneratorClient
                     || !NativeSourcePackDependenciesMatch(module, dependencies, cancellation))
                     throw new InvalidDataException("native_source_pack_dependency_mismatch");
                 var rows = manifest["entries"]!.AsArray();
-                if (rows.Count == 0 || rows.Count > NativeSourcePackEntryLimit || archive.Entries.Count != rows.Count + 1)
+                var blobs = manifest["blobs"]!.AsArray();
+                if (rows.Count == 0 || rows.Count > NativeSourcePackEntryLimit
+                    || blobs.Count == 0 || blobs.Count > rows.Count || archive.Entries.Count != blobs.Count + 1)
                     throw new InvalidDataException("native_source_pack_entry_count");
-                foreach (var row in rows.OfType<JsonObject>())
+                var names = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var entry in archive.Entries)
                 {
-                    string key = row["key"]!.GetValue<string>();
-                    int bytes = row["bytes"]!.GetValue<int>();
-                    string sha = row["sha256"]!.GetValue<string>();
-                    if (key.Length != 64 || key.Any(character => !Uri.IsHexDigit(character))
-                        || sha.Length != 64 || sha.Any(character => !Uri.IsHexDigit(character))
-                        || bytes <= 0 || bytes > NativeSourcePackEntryBytes
-                        || !entries.TryAdd(key, (bytes, sha)) || archive.GetEntry(key + ".json") is not { } entry || entry.Length != bytes)
-                        throw new InvalidDataException("native_source_pack_index_invalid");
+                    cancellation.ThrowIfCancellationRequested();
+                    if (!names.Add(entry.FullName)) throw new InvalidDataException("native_source_pack_index_invalid");
                 }
-                if (entries.Count != rows.Count) throw new InvalidDataException("native_source_pack_index_invalid");
+                var pins = new (ZipArchiveEntry Entry, int Bytes, string Sha256)[blobs.Count];
+                var used = new bool[blobs.Count];
+                var hashes = new HashSet<string>(StringComparer.Ordinal);
+                for (int index = 0; index < blobs.Count; index++)
+                {
+                    cancellation.ThrowIfCancellationRequested();
+                    var blob = blobs[index]!.AsObject();
+                    int bytes = blob["bytes"]!.GetValue<int>();
+                    string sha = blob["sha256"]!.GetValue<string>();
+                    if (blob.Count != 2 || !NativeSourcePackHashValid(sha) || !hashes.Add(sha)
+                        || bytes <= 0 || bytes > NativeSourcePackEntryBytes
+                        || archive.GetEntry(sha + ".json") is not { } entry || entry.Length != bytes)
+                        throw new InvalidDataException("native_source_pack_index_invalid");
+                    pins[index] = (entry, bytes, sha);
+                }
+                // Compact, nonrecursive rows retain every complete input key.
+                // The integer points only into the unique content table, never
+                // to another key. Kind is checked again at each requested hit.
+                foreach (var value in rows)
+                {
+                    cancellation.ThrowIfCancellationRequested();
+                    if (value is not JsonArray row || row.Count != 3)
+                        throw new InvalidDataException("native_source_pack_index_invalid");
+                    string key = row[0]!.GetValue<string>();
+                    string kind = row[1]!.GetValue<string>();
+                    int index = row[2]!.GetValue<int>();
+                    if (!NativeSourcePackHashValid(key) || !NativeSourcePackKindValid(kind)
+                        || index < 0 || index >= pins.Length)
+                        throw new InvalidDataException("native_source_pack_index_invalid");
+                    var pin = pins[index];
+                    if (!entries.TryAdd(key, (kind, pin.Entry, pin.Bytes, pin.Sha256)))
+                        throw new InvalidDataException("native_source_pack_index_invalid");
+                    used[index] = true;
+                }
+                if (used.Any(value => !value)) throw new InvalidDataException("native_source_pack_index_invalid");
+                cancellation.ThrowIfCancellationRequested();
+                // Blob checksums alone cannot detect a key redirected to a
+                // different valid blob. Bind the complete ordered association
+                // table as well. This is corruption detection, not a signature.
+                if (manifest["indexSha256"]?.GetValue<string>() != NativeSourcePackIndexHash(rows, blobs))
+                    throw new InvalidDataException("native_source_pack_index_integrity");
                 cancellation.ThrowIfCancellationRequested();
             }
             catch { if (opened is not null) opened.Dispose(); else stream.Dispose(); throw; }
         }
 
-        internal bool TryRead(string key, CancellationToken cancellation, out JsonObject projection)
+        internal bool TryRead(string key, string kind, CancellationToken cancellation, out JsonObject projection)
         {
             projection = null!;
             cancellation.ThrowIfCancellationRequested();
-            if (!entries.TryGetValue(key, out var pin)) return false;
+            if (!entries.TryGetValue(key, out var pin) || pin.Kind != kind) return false;
             try
             {
-                var entry = archive.GetEntry(key + ".json")!;
-                byte[] bytes = ReadNativeSourcePackEntry(entry, NativeSourcePackEntryBytes, cancellation);
+                byte[] bytes = ReadNativeSourcePackEntry(pin.Entry, NativeSourcePackEntryBytes, cancellation);
                 if (bytes.Length != pin.Bytes || CSharpHash(bytes) != pin.Sha256) return false;
                 projection = JsonNode.Parse(bytes)!.AsObject();
                 cancellation.ThrowIfCancellationRequested();
@@ -245,7 +290,8 @@ public sealed partial class GeneratorClient
     {
         private readonly string outputPath, temporaryPath;
         private readonly ZipArchive archive;
-        private readonly SortedDictionary<string, JsonObject> entries = new(StringComparer.Ordinal);
+        private readonly SortedDictionary<string, JsonArray> entries = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, (int Index, int Bytes)> blobs = new(StringComparer.Ordinal);
         private bool completed, disposed;
         private Exception? failure;
 
@@ -265,17 +311,27 @@ public sealed partial class GeneratorClient
             byte[] bytes = Encoding.UTF8.GetBytes(projection.ToJsonString());
             cancellation.ThrowIfCancellationRequested();
             if (bytes.Length > NativeSourcePackEntryBytes) return; // ordinary live path remains available
+            if (!NativeSourcePackHashValid(key) || !NativeSourcePackKindValid(kind))
+                throw new InvalidOperationException("native_source_pack_index_invalid");
             string sha = CSharpHash(bytes);
+            bool shared = blobs.TryGetValue(sha, out var blob);
+            if (shared && blob.Bytes != bytes.Length)
+                throw new InvalidOperationException("native_source_pack_blob_conflict");
             if (entries.TryGetValue(key, out var previous))
             {
-                if (previous["sha256"]!.GetValue<string>() != sha)
+                if (!shared || previous[1]!.GetValue<string>() != kind || previous[2]!.GetValue<int>() != blob.Index)
                     throw new InvalidOperationException("native_source_pack_key_conflict");
                 return;
             }
             if (entries.Count >= NativeSourcePackEntryLimit) throw new InvalidOperationException("native_source_pack_entry_count");
             cancellation.ThrowIfCancellationRequested();
-            Write(key + ".json", bytes);
-            entries.Add(key, new JsonObject { ["key"] = key, ["kind"] = kind, ["bytes"] = bytes.Length, ["sha256"] = sha });
+            if (!shared)
+            {
+                blob = (blobs.Count, bytes.Length);
+                Write(sha + ".json", bytes);
+                blobs.Add(sha, blob);
+            }
+            entries.Add(key, new JsonArray(key, kind, blob.Index));
         }
 
         private void Write(string name, byte[] bytes)
@@ -299,8 +355,14 @@ public sealed partial class GeneratorClient
                 ["decompilerMvid"] = NativeCSharpDecompilerMvid, ["settings"] = "csharp_default_no_indentation_v1",
                 ["dependencies"] = NativeSourcePackDependencyPins(module),
                 ["entries"] = new JsonArray(entries.Values.Select(value => (JsonNode?)value).ToArray()),
+                ["blobs"] = new JsonArray(blobs.OrderBy(pair => pair.Value.Index).Select(pair => (JsonNode?)new JsonObject
+                    { ["sha256"] = pair.Key, ["bytes"] = pair.Value.Bytes }).ToArray()),
             };
-            Write("manifest.json", Encoding.UTF8.GetBytes(manifest.ToJsonString()));
+            manifest["indexSha256"] = NativeSourcePackIndexHash(manifest["entries"]!.AsArray(), manifest["blobs"]!.AsArray());
+            byte[] metadata = Encoding.UTF8.GetBytes(manifest.ToJsonString());
+            if (metadata.Length > NativeSourcePackEntryBytes)
+                throw new InvalidOperationException("native_source_pack_manifest_size");
+            Write("manifest.json", metadata);
             archive.Dispose(); disposed = true;
             if (new FileInfo(temporaryPath).Length > NativeSourcePackArchiveBytes)
                 throw new InvalidOperationException("native_source_pack_archive_size");

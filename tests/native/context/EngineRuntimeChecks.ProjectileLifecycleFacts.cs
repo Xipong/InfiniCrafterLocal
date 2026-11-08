@@ -95,6 +95,46 @@ internal static partial class EngineRuntimeChecks
         Equal(lifecycle.ToJsonString(), cached, "cached native source is deterministic");
         lifecycle["records"]!.AsArray().Clear();
         Equal(cached, GeneratorClient.CaptureProjectileAttackReference(new Projectile { type = 91, aiStyle = 1 })["lifecycle"]!.ToJsonString(), "caller mutation cannot poison the source cache");
+        ProjectileLifecycleRecordingKeepsExactProjection();
+    }
+
+    private static void ProjectileLifecycleRecordingKeepsExactProjection()
+    {
+        string directory = Directory.CreateTempSubdirectory("ifc-lifecycle-recording-").FullName;
+        string path = Path.Combine(directory, "source.zip");
+        var capture = CSharpOwner.GetMethod("CaptureProjectileLifecycleSource", CSharpFlags)!
+            .CreateDelegate<Func<int, int, JsonArray, JsonObject>>();
+        var method = PackSafetyMethod();
+        bool recording = false;
+        try
+        {
+            var references = new JsonArray();
+            var expected = capture(91, 1, references);
+            string expectedBytes = expected.ToJsonString(), referenceBytes = references.ToJsonString();
+            GeneratorClient.BeginNativeSourcePackRecording(path);
+            recording = true;
+            var recordedReferences = new JsonArray();
+            var recorded = capture(91, 1, recordedReferences);
+            Equal(expectedBytes, recorded.ToJsonString(), "enabling lifecycle recording preserves exact source bytes");
+            Equal(referenceBytes, recordedReferences.ToJsonString(), "enabling lifecycle recording preserves exact source-call order");
+            GeneratorClient.CompleteNativeSourcePackRecording();
+            recording = false;
+            var module = CSharpOwner.GetField("nativeCSharpModule", CSharpFlags)!.GetValue(null)!;
+            using var reader = (IDisposable)PackSafetyCreate("NativeSourcePackReader", File.OpenRead(path), module, CancellationToken.None);
+            string key = PackSafetyKey(method, new JsonObject { ["type"] = 91, ["style"] = 1 }, "projectile_lifecycle");
+            Equal(true, PackSafetyRead(reader, key, CancellationToken.None, out var projection, "projectile_lifecycle"), "the live lifecycle builder records a readable projection");
+            Equal(expectedBytes, projection!["result"]!.ToJsonString(), "recorded lifecycle source retains exact bytes");
+            Equal(referenceBytes, projection["references"]!.ToJsonString(), "recorded lifecycle calls retain exact bytes");
+            recorded["records"]!.AsArray().Clear(); recordedReferences.Clear();
+            Equal(true, PackSafetyRead(reader, key, CancellationToken.None, out projection, "projectile_lifecycle"), "recorded projection remains readable after caller mutation");
+            Equal(expectedBytes, projection!["result"]!.ToJsonString(), "recording never aliases caller-owned source");
+            Equal(referenceBytes, projection["references"]!.ToJsonString(), "recording never aliases caller-owned source calls");
+        }
+        finally
+        {
+            if (recording) GeneratorClient.CancelNativeSourcePackRecording();
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     private static void ProjectileLifecycleRefusesIncompleteRegions()

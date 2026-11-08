@@ -40,11 +40,11 @@ internal static partial class EngineRuntimeChecks
         => (JsonObject)CSharpOwner.GetMethod("CSharpProjectionInput", CSharpFlags)!
             .Invoke(null, new object[] { method, programs, calls, type, style, bound })!;
 
-    private static JsonObject PackSafetyManifest(object module, string key, byte[] payload)
+    private static JsonObject PackSafetyManifest(object module, string key, byte[] payload, string kind = "projectile_method")
     {
         object Constant(string name) => CSharpOwner.GetField(name, CSharpFlags)!.GetRawConstantValue()!;
         var assembly = typeof(object).Assembly; byte[] core = File.ReadAllBytes(assembly.Location);
-        return new JsonObject {
+        var manifest = new JsonObject {
             ["version"] = (int)Constant("NativeSourcePackVersion"), ["minimumMethodIlBytes"] = (int)Constant("NativeSourcePackMinimumIlBytes"),
             ["projectionSha256"] = NativeSourcePackBuild.ProjectionSha256,
             ["nativeAssemblySha256"] = (string)CSharpFixtureMember(module, "Sha256"),
@@ -54,24 +54,34 @@ internal static partial class EngineRuntimeChecks
             ["decompilerMvid"] = (string)Constant("NativeCSharpDecompilerMvid"), ["settings"] = "csharp_default_no_indentation_v1",
             ["dependencies"] = new JsonArray(new JsonObject { ["reference"] = assembly.FullName, ["assembly"] = assembly.FullName,
                 ["sha256"] = PackSafetyHash(core), ["bytes"] = core.Length }),
-            ["entries"] = new JsonArray(new JsonObject { ["key"] = key, ["kind"] = "fixture", ["bytes"] = payload.Length, ["sha256"] = PackSafetyHash(payload) })
+            ["entries"] = new JsonArray(new JsonArray(key, kind, 0)),
+            ["blobs"] = new JsonArray(new JsonObject { ["bytes"] = payload.Length, ["sha256"] = PackSafetyHash(payload) })
         };
+        PackSafetyPinIndex(manifest);
+        return manifest;
     }
+    private static void PackSafetyPinIndex(JsonObject manifest)
+        => manifest["indexSha256"] = PackSafetyHash(Encoding.UTF8.GetBytes(
+            manifest["entries"]!.ToJsonString() + "\n" + manifest["blobs"]!.ToJsonString()));
     private static MemoryStream PackSafetyArchive(JsonObject manifest, string key, byte[] payload)
+        => PackSafetyArchiveEntries(manifest, (manifest["blobs"]![0]!["sha256"]!.GetValue<string>() + ".json", payload));
+
+    private static MemoryStream PackSafetyArchiveEntries(JsonObject manifest, params (string Name, byte[] Bytes)[] entries)
     {
         var stream = new MemoryStream();
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
         {
             void Write(string name, byte[] bytes) { using var entry = archive.CreateEntry(name, CompressionLevel.Fastest).Open(); entry.Write(bytes); }
-            Write("manifest.json", Encoding.UTF8.GetBytes(manifest.ToJsonString())); Write(key + ".json", payload);
+            Write("manifest.json", Encoding.UTF8.GetBytes(manifest.ToJsonString()));
+            foreach (var entry in entries) Write(entry.Name, entry.Bytes);
         }
         stream.Position = 0; return stream;
     }
-    private static bool PackSafetyRead(object reader, string key, CancellationToken cancellation, out JsonObject? projection)
+    private static bool PackSafetyRead(object reader, string key, CancellationToken cancellation, out JsonObject? projection, string kind = "projectile_method")
     {
-        object?[] arguments = { key, cancellation, null };
+        object?[] arguments = { key, kind, cancellation, null };
         bool found = (bool)reader.GetType().GetMethod("TryRead", CSharpFlags)!.Invoke(reader, arguments)!;
-        projection = arguments[2] as JsonObject; return found;
+        projection = arguments[3] as JsonObject; return found;
     }
     private static bool PackSafetyReadVerified(string kind, MethodInfo method, JsonObject input, CancellationToken cancellation, out JsonObject? projection)
     {
@@ -206,10 +216,16 @@ internal static partial class EngineRuntimeChecks
             Reject(value => value[field] = "different", "native_source_pack_identity_mismatch");
         foreach (string field in new[] { "version", "minimumMethodIlBytes" })
             Reject(value => value[field] = value[field]!.GetValue<int>() + 1, "native_source_pack_identity_mismatch");
+        Reject(value => value["version"] = 1, "native_source_pack_identity_mismatch");
         Reject(value => value["dependencies"] = new JsonArray(), "native_source_pack_dependency_mismatch");
         Reject(value => value["dependencies"]![0]!["sha256"] = new string('0', 64), "native_source_pack_dependency_mismatch");
-        Reject(value => value["entries"]![0]!["bytes"] = payload.Length + 1, "native_source_pack_index_invalid");
-        Reject(value => value["entries"]![0]!["key"] = new string('b', 64), "native_source_pack_index_invalid");
+        Reject(value => value["blobs"]![0]!["bytes"] = payload.Length + 1, "native_source_pack_index_invalid");
+        Reject(value => value["entries"]![0]![0] = "invalid-key", "native_source_pack_index_invalid");
+        Reject(value => value["entries"]![0]![1] = "unknown_kind", "native_source_pack_index_invalid");
+        Reject(value => value["entries"]![0]![2] = 1, "native_source_pack_index_invalid");
+        Reject(value => value["entries"]![0]![2] = -1, "native_source_pack_index_invalid");
+        Reject(value => value["entries"]!.AsArray().Add(value["entries"]![0]!.DeepClone()), "native_source_pack_index_invalid");
+        Reject(value => value["blobs"]!.AsArray().Add(value["blobs"]![0]!.DeepClone()), "native_source_pack_entry_count");
         var corrupt = (byte[])payload.Clone(); corrupt[10] ^= 1;
         using (var reader = (IDisposable)PackSafetyCreate("NativeSourcePackReader", PackSafetyArchive(manifest, key, corrupt), module, CancellationToken.None))
         {
@@ -219,10 +235,49 @@ internal static partial class EngineRuntimeChecks
         foreach (string invalid in new[] { "{broken", "[]", "null" })
         {
             byte[] bytes = Encoding.UTF8.GetBytes(invalid); var changed = manifest.DeepClone().AsObject();
-            changed["entries"]![0]!["bytes"] = bytes.Length; changed["entries"]![0]!["sha256"] = PackSafetyHash(bytes);
+            changed["blobs"]![0]!["bytes"] = bytes.Length; changed["blobs"]![0]!["sha256"] = PackSafetyHash(bytes);
+            PackSafetyPinIndex(changed);
             using var reader = (IDisposable)PackSafetyCreate("NativeSourcePackReader", PackSafetyArchive(changed, key, bytes), module, CancellationToken.None);
             Equal(false, PackSafetyRead(reader, key, CancellationToken.None, out _), "checksum does not admit malformed projection JSON");
         }
+        byte[] other = Encoding.UTF8.GetBytes("{\"other\":true}");
+        string originalName = PackSafetyHash(payload) + ".json", otherName = PackSafetyHash(other) + ".json";
+        var two = manifest.DeepClone().AsObject();
+        two["entries"]!.AsArray().Add(new JsonArray(new string('b', 64), "projectile_method", 1));
+        two["blobs"]!.AsArray().Add(new JsonObject { ["sha256"] = PackSafetyHash(other), ["bytes"] = other.Length });
+        PackSafetyPinIndex(two);
+        using (var valid = (IDisposable)PackSafetyCreate("NativeSourcePackReader", PackSafetyArchiveEntries(two, (otherName, other), (originalName, payload)), module, CancellationToken.None))
+            Equal(true, PackSafetyRead(valid, new string('b', 64), CancellationToken.None, out _), "multiple unique blobs work in independent archive order");
+        void RejectArchive(JsonObject value, params (string Name, byte[] Bytes)[] entries)
+        {
+            CSharpSourceRefuses(() => {
+                using var rejected = (IDisposable)PackSafetyCreate("NativeSourcePackReader", PackSafetyArchiveEntries(value, entries), module, CancellationToken.None);
+            }, "native_source_pack_index_invalid");
+        }
+        void RejectIntegrity(Action<JsonObject> mutate)
+        {
+            var value = two.DeepClone().AsObject(); mutate(value);
+            CSharpSourceRefuses(() => {
+                using var rejected = (IDisposable)PackSafetyCreate("NativeSourcePackReader",
+                    PackSafetyArchiveEntries(value, (originalName, payload), (otherName, other)), module, CancellationToken.None);
+            }, "native_source_pack_index_integrity");
+        }
+        RejectIntegrity(value => { value["entries"]![0]![2] = 1; value["entries"]![1]![2] = 0; });
+        RejectIntegrity(value => {
+            var blobs = value["blobs"]!.AsArray(); var first = blobs[0]!.DeepClone();
+            blobs[0] = blobs[1]!.DeepClone(); blobs[1] = first;
+        });
+        RejectIntegrity(value => value["entries"]![0]![1] = "item_dispatch");
+        RejectIntegrity(value => value.Remove("indexSha256"));
+        RejectIntegrity(value => value["indexSha256"] = new string('0', 64));
+        RejectArchive(two, (originalName, payload), (originalName, payload)); // duplicate names with a plausible entry count
+        RejectArchive(two, (originalName, payload), ("unindexed.json", other));
+        var unused = two.DeepClone().AsObject(); unused["entries"]![1]![2] = 0;
+        RejectArchive(unused, (originalName, payload), (otherName, other));
+        var repeated = two.DeepClone().AsObject(); repeated["blobs"]![1] = repeated["blobs"]![0]!.DeepClone();
+        RejectArchive(repeated, (originalName, payload), (otherName, other));
+        var duplicateManifest = two.DeepClone().AsObject();
+        RejectArchive(duplicateManifest, (originalName, payload), ("manifest.json", Encoding.UTF8.GetBytes(two.ToJsonString())));
         var shape = CSharpOwner.GetMethod("CompleteCSharpProjection", CSharpFlags)!;
         Equal(false, (bool)shape.Invoke(null, new object[] { new JsonObject(), method })!, "empty object cannot hide missing source outcomes");
         var outcomes = new JsonObject { ["strict"] = null, ["strictRefusal"] = "explicit strict refusal",
@@ -290,7 +345,7 @@ internal static partial class EngineRuntimeChecks
         using var module = (IDisposable)PackSafetyCreate("NativeCSharpModule", method.Module.FullyQualifiedName, bytes, method.Module.ModuleVersionId);
         var input = new JsonObject { ["type"] = 91, ["style"] = 1 };
         string key = PackSafetyKey(method, input, "projectile_lifecycle"); byte[] payload = Encoding.UTF8.GetBytes("{\"fixture\":true}");
-        var manifest = PackSafetyManifest(module, key, payload);
+        var manifest = PackSafetyManifest(module, key, payload, "projectile_lifecycle");
         using var reader = (IDisposable)PackSafetyCreate("NativeSourcePackReader", PackSafetyArchive(manifest, key, payload), module, CancellationToken.None);
         using var pe = new PEReader(new MemoryStream(bytes, writable: false));
         int start = CSharpFixtureBodyOffset(pe, method);
@@ -343,9 +398,112 @@ internal static partial class EngineRuntimeChecks
                 using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
                 CSharpSourceRefuses(() => Record(projection, cancelled.Token), "canceled");
                 CSharpSourceRefuses(() => Record(new JsonObject { ["code"] = "conflicting" }), "native_source_pack_key_conflict");
+                CSharpSourceRefuses(() => recorder.GetType().GetMethod("Add", CSharpFlags)!.Invoke(recorder,
+                    new object[] { PackSafetyKey(method, input, "projectile_lifecycle"), "item_dispatch", projection, CancellationToken.None }),
+                    "native_source_pack_key_conflict");
                 CSharpSourceRefuses(() => CSharpOwner.GetMethod("CompleteNativeSourcePackRecording", CSharpFlags)!.Invoke(null, null), "native_source_pack_recording_failed");
                 Equal(true, previous.SequenceEqual(File.ReadAllBytes(output)), "caught recording conflict cannot replace the published artifact");
                 Equal(0, Directory.GetFiles(directory, "*.tmp").Length, "failed completion removes the temporary archive");
+            }
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    private static void NativeSourcePackDeduplicatesContentWithoutAliasingKeys()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "ifc-pack-dedup-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory); string output = Path.Combine(directory, "pack.zip");
+        try
+        {
+            var method = PackSafetyMethod();
+            using var module = (IDisposable)PackSafetyCreate("NativeCSharpModule", method.Module.FullyQualifiedName,
+                File.ReadAllBytes(method.Module.FullyQualifiedName), method.Module.ModuleVersionId);
+            module.GetType().GetMethod("GetTypeSystem", CSharpFlags)!.Invoke(module, new object[] { CancellationToken.None });
+            var projection = new JsonObject { ["last"] = "literal\r\nbytes", ["first"] = null, ["array"] = new JsonArray(2, 2, 1) };
+            var deliveries = new[] { (new string('a', 64), "projectile_method"), (new string('b', 64), "projectile_method"),
+                (new string('c', 64), "projectile_lifecycle"), (new string('d', 64), "item_dispatch") };
+            using (var recorder = (IDisposable)PackSafetyCreate("NativeSourcePackRecorder", output))
+            {
+                var add = recorder.GetType().GetMethod("Add", CSharpFlags)!;
+                foreach (var (key, kind) in deliveries.Reverse().Concat(deliveries))
+                    add.Invoke(recorder, new object[] { key, kind, projection, CancellationToken.None });
+                Equal(deliveries.Length, (int)CSharpFixtureMember(CSharpFixtureMember(recorder, "entries"), "Count"), "all distinct complete keys survive duplicate recording and changed order");
+                Equal(1, (int)CSharpFixtureMember(CSharpFixtureMember(recorder, "blobs"), "Count"), "byte-identical projections share exactly one content blob");
+                recorder.GetType().GetMethod("Complete", CSharpFlags)!.Invoke(recorder, new object[] { module });
+            }
+            using var archive = ZipFile.OpenRead(output);
+            Equal(2, archive.Entries.Count, "archive stores one payload and one manifest, not one copy per key");
+            using var metadata = archive.GetEntry("manifest.json")!.Open();
+            var manifest = JsonNode.Parse(metadata)!.AsObject();
+            Equal(deliveries.Length, manifest["entries"]!.AsArray().Count, "manifest retains input-key multiplicity independently of payload count");
+            Equal(1, manifest["blobs"]!.AsArray().Count, "manifest has one content pin");
+            using var reader = (IDisposable)PackSafetyCreate("NativeSourcePackReader", File.OpenRead(output), module, CancellationToken.None);
+            foreach (var (key, kind) in deliveries)
+            {
+                Equal(true, PackSafetyRead(reader, key, CancellationToken.None, out var result, kind), "each distinct input key resolves directly to content");
+                Equal(projection.ToJsonString(), result!.ToJsonString(), "shared content preserves property order, nulls, bytes and array multiplicity");
+                result["last"] = "caller mutation";
+                Equal(false, PackSafetyRead(reader, key, CancellationToken.None, out _, kind == "item_dispatch" ? "projectile_method" : "item_dispatch"),
+                    "a content alias cannot change the projection kind association");
+            }
+            using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
+            CSharpSourceRefuses(() => PackSafetyRead(reader, deliveries[1].Item1, cancelled.Token, out _), "canceled");
+            Equal(true, PackSafetyRead(reader, deliveries[1].Item1, CancellationToken.None, out var retry), "a cancelled shared-content hit is retryable");
+            Equal(projection.ToJsonString(), retry!.ToJsonString(), "shared-content retries reconstruct independent JSON");
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    private static void NativeSourcePackIncludesShortNativeMethods()
+    {
+        var names = new[] { "UpdatePosition", "AI_181_FairyQueenRangedItemShot", "IntersectsConeSlowMoreAccurate", "IntersectsConeFastInaccurate", "DoesFitInCone" };
+        var candidates = new[] { typeof(Projectile), typeof(Utils) }.SelectMany(type => type.GetMethods(CSharpFlags)).ToArray();
+        var methods = names.Select(name => candidates.Single(method => method.Name == name)).ToArray();
+        string directory = Path.Combine(Path.GetTempPath(), "ifc-pack-short-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory); string output = Path.Combine(directory, "pack.zip");
+        try
+        {
+            using var module = (IDisposable)PackSafetyCreate("NativeCSharpModule", methods[0].Module.FullyQualifiedName,
+                File.ReadAllBytes(methods[0].Module.FullyQualifiedName), methods[0].Module.ModuleVersionId);
+            module.GetType().GetMethod("GetTypeSystem", CSharpFlags)!.Invoke(module, new object[] { CancellationToken.None });
+            using var coldModule = (IDisposable)PackSafetyCreate("NativeCSharpModule", methods[0].Module.FullyQualifiedName,
+                File.ReadAllBytes(methods[0].Module.FullyQualifiedName), methods[0].Module.ModuleVersionId);
+            var inputs = new List<JsonObject>(); var projections = new List<JsonObject>();
+            lock (CSharpOwner.GetField("nativeCSharpGate", CSharpFlags)!.GetValue(null)!)
+            {
+                using (var recorder = (IDisposable)PackSafetyCreate("NativeSourcePackRecorder", output))
+                using (var scope = new PackSafetyScope(module, recorder: recorder))
+                {
+                    foreach (var method in methods)
+                    {
+                        int size = method.GetMethodBody()!.GetILAsByteArray()!.Length;
+                        Equal(true, size > 0 && size < 2048, "short native method exercises the former cutoff: " + method.Name);
+                        var input = PackSafetyInput(method, PackSafetyPrograms(method, new object[] { "fixture" }), new JsonArray(), bound: false);
+                        var record = PackSafetyCertificate(method); record["id"] = "fixture"; record["graphPaths"] = null;
+                        record["code"] = "short source fixture " + method.Name; record["coverage"] = "whole_method"; record["unresolved"] = new JsonArray();
+                        var projection = new JsonObject { ["strict"] = record, ["strictRefusal"] = null,
+                            ["mechanics"] = null, ["mechanicsRefusal"] = "explicit fixture refusal" };
+                        CSharpOwner.GetMethod("RecordNativeSourceProjection", CSharpFlags)!.Invoke(null,
+                            new object[] { "projectile_method", method, input, projection, CancellationToken.None });
+                        inputs.Add(input); projections.Add(projection);
+                    }
+                    Equal(methods.Length, (int)CSharpFixtureMember(CSharpFixtureMember(recorder, "entries"), "Count"), "every short method is recorded without a special-name allowlist");
+                    CSharpOwner.GetMethod("CompleteNativeSourcePackRecording", CSharpFlags)!.Invoke(null, null);
+                }
+                using var reader = (IDisposable)PackSafetyCreate("NativeSourcePackReader", File.OpenRead(output), coldModule, CancellationToken.None);
+                using var readScope = new PackSafetyScope(coldModule, reader);
+                for (int index = 0; index < methods.Length; index++)
+                {
+                    var method = methods[index];
+                    Equal(true, PackSafetyReadVerified("projectile_method", method, inputs[index], CancellationToken.None, out var result), "short-method verified lookup hits: " + method.Name);
+                    Equal(projections[index].ToJsonString(), result!.ToJsonString(), "short method retains complete projection bytes");
+                    var program = PackSafetyCertificate(method); program["observations"] = new JsonArray();
+                    var attack = new JsonObject { ["fixture"] = program };
+                    CSharpOwner.GetMethod("AttachNativeCSharpSource", CSharpFlags)!.Invoke(null,
+                        new object[] { attack, new MethodBase[] { method }, new JsonArray(), 91, 1, new HashSet<MethodBase>() });
+                    Equal("short source fixture " + method.Name, attack["nativeCSharpSource"]!["records"]![0]!["code"]!.GetValue<string>(), "real source consumer serves the short method from the pack");
+                }
+                Equal(true, coldModule.GetType().GetField("typeSystem", CSharpFlags)!.GetValue(coldModule) is null, "short-method consumers never initialize ILSpy on a pack hit");
             }
         }
         finally { Directory.Delete(directory, recursive: true); }

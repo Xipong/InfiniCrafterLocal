@@ -407,10 +407,12 @@ def test_contract_mode_retains_evidence_provenance_stability_and_target_gates(tm
     assert not (result["parityPass"] and result["targetPass"])
 
 
-def test_historical_workflow_uses_reviewed_mode_and_reports_no_false_byte_parity():
+def test_source_pack_workflow_requires_same_contract_byte_parity():
     text = (ROOT / ".github/workflows/pr333-cold-after-audit.yml").read_text()
-    assert "--comparison-mode parent-graph-contract-v1" in text
+    assert "--comparison-mode exact-bytes" in text
+    assert "BASELINE_SHA: 0f766496538ec11f0788445e700bc3c91bf2bdc8" in text
+    assert "baseline-native-source-pack" in text
     assert "--require-payloads --require-pins --require-target" in text
-    assert "This is not cross-version byte parity" in text
+    assert "exact cross-version payload bytes" in text
     assert "$result.byteParityPass" in text
     assert "Cold packet hash mismatch" not in text

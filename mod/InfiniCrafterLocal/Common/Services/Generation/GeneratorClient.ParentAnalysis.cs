@@ -133,18 +133,20 @@ public sealed partial class GeneratorClient
                 }
                 foreach (string key in obj.Select(p => p.Key).ToArray())
                 {
-                    JsonNode? value = obj[key]; obj.Remove(key);
+                    JsonNode? value = obj[key];
                     bool optional = value is JsonObject deferred && deferred[markerKey] is JsonValue markerId
                         && omitNull.Contains(markerId.GetValue<int>());
                     JsonNode? resolved = ResolveNode(value);
-                    if (resolved is not null || !optional) obj[key] = resolved;
+                    if (resolved is null && optional) obj.Remove(key);
+                    else if (!ReferenceEquals(value, resolved)) obj[key] = resolved;
                 }
             }
             else if (node is JsonArray array)
                 for (int index = 0; index < array.Count; index++)
                 {
-                    JsonNode? value = array[index]; array[index] = null;
-                    array[index] = ResolveNode(value);
+                    JsonNode? value = array[index];
+                    JsonNode? resolved = ResolveNode(value);
+                    if (!ReferenceEquals(value, resolved)) array[index] = resolved;
                 }
             return node;
         }

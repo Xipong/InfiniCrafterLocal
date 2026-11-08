@@ -60,13 +60,39 @@ def file_hash(path: Path) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict:
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Native source pack contains duplicate JSON properties")
+        result[key] = value
+    return result
+
+
+def _sha256_valid(value: object) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(char in "0123456789abcdef" for char in value)
+
+
+def index_hash(rows: list, blobs: list) -> str:
+    # Validated schema values are ASCII strings and bounded integers only, so
+    # these compact JSON bytes match JsonArray.ToJsonString without reordering.
+    framed = json.dumps(rows, separators=(",", ":")) + "\n" + json.dumps(blobs, separators=(",", ":"))
+    return hashlib.sha256(framed.encode("utf-8")).hexdigest()
+
+
 def check_pack(path: Path, fingerprint: str, native: Path | None = None) -> dict:
+    if path.stat().st_size > 128 * 1024 * 1024:
+        raise ValueError("Native source pack archive exceeds the runtime bound")
     with zipfile.ZipFile(path) as archive:
+        names = archive.namelist()
+        if len(names) > 30001 or len(names) != len(set(names)) or names.count("manifest.json") != 1:
+            raise ValueError("Native source pack has duplicate or excessive archive entries")
         metadata = archive.getinfo("manifest.json")
         if metadata.file_size > 4 * 1024 * 1024:
             raise ValueError("Native source pack manifest exceeds the runtime bound")
-        manifest = json.loads(archive.read(metadata))
-        if manifest.get("version") != 1 or manifest.get("minimumMethodIlBytes") != 2048:
+        manifest = json.loads(archive.read(metadata), object_pairs_hook=_unique_json_object)
+        if (not isinstance(manifest, dict) or type(manifest.get("version")) is not int or manifest["version"] != 2
+                or type(manifest.get("minimumMethodIlBytes")) is not int or manifest["minimumMethodIlBytes"] != 1):
             raise ValueError("Native source pack schema differs from the runtime contract")
         if manifest.get("projectionSha256") != fingerprint:
             raise ValueError("Native source pack was built from different source projections")
@@ -74,19 +100,40 @@ def check_pack(path: Path, fingerprint: str, native: Path | None = None) -> dict
             raise ValueError("Native source pack decompiler bytes differ from the bundled dependency")
         if native is not None and manifest.get("nativeAssemblySha256") != file_hash(native):
             raise ValueError("Native source pack tModLoader bytes differ from the selected target")
-        rows = manifest.get("entries")
+        rows, blobs = manifest.get("entries"), manifest.get("blobs")
         if not isinstance(rows, list) or not 1 <= len(rows) <= 30000:
             raise ValueError("Native source pack has no valid entry index")
-        names = [row["key"] + ".json" for row in rows]
-        if (len(names) != len(set(names)) or len(archive.infolist()) != len(rows) + 1
-                or set(archive.namelist()) != {"manifest.json", *names}):
-            raise ValueError("Native source pack archive entries differ from its index")
-        for row, name in zip(rows, names):
+        if not isinstance(blobs, list) or not 1 <= len(blobs) <= len(rows) or len(names) != len(blobs) + 1:
+            raise ValueError("Native source pack has no valid content index")
+        archive_names = set(names)
+        blob_names = set()
+        for blob in blobs:
+            if (not isinstance(blob, dict) or len(blob) != 2 or not _sha256_valid(blob.get("sha256"))
+                    or type(blob.get("bytes")) is not int or not 0 < blob["bytes"] <= 4 * 1024 * 1024):
+                raise ValueError("Native source pack has invalid content metadata")
+            name = blob["sha256"] + ".json"
+            if name in blob_names or name not in archive_names:
+                raise ValueError("Native source pack has duplicate or missing content")
+            blob_names.add(name)
             entry = archive.getinfo(name)
-            if not 0 < entry.file_size <= 4 * 1024 * 1024 or entry.file_size != row["bytes"]:
+            if entry.file_size != blob["bytes"]:
                 raise ValueError("Native source pack entry length differs from its index")
-            if hashlib.sha256(archive.read(entry)).hexdigest() != row["sha256"]:
+            if hashlib.sha256(archive.read(entry)).hexdigest() != blob["sha256"]:
                 raise ValueError("Native source pack entry bytes differ from its index")
+        if set(names) != {"manifest.json", *blob_names}:
+            raise ValueError("Native source pack archive entries differ from its index")
+        keys, used = set(), set()
+        for row in rows:
+            if (not isinstance(row, list) or len(row) != 3 or not _sha256_valid(row[0])
+                    or row[1] not in ("projectile_method", "projectile_lifecycle", "item_dispatch")
+                    or type(row[2]) is not int or not 0 <= row[2] < len(blobs) or row[0] in keys):
+                raise ValueError("Native source pack has an invalid or duplicate input key")
+            keys.add(row[0])
+            used.add(row[2])
+        if used != set(range(len(blobs))):
+            raise ValueError("Native source pack has unreferenced content")
+        if manifest.get("indexSha256") != index_hash(rows, blobs):
+            raise ValueError("Native source pack input/content index integrity differs")
     return manifest
 
 

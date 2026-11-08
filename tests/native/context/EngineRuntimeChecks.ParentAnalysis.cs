@@ -61,6 +61,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void ParentAnalysisWorkerSnapshotsAndCancellation()
     {
+        ParentAnalysisResolveKeepsExactTreeBytes();
         int main = Environment.CurrentManagedThreadId, analyzed = 0, captures = 0;
         using var analysis = new GeneratorClient.ParentAnalysis();
         JsonObject root;
@@ -106,6 +107,57 @@ internal static partial class EngineRuntimeChecks
         GeneratorClient.ParentAnalysis.Pump();
         Equal(true, retired, "cancellation releases a worker waiting for a game snapshot");
         Equal(1, captures, "retired callbacks never access live game state");
+    }
+
+    private static void ParentAnalysisResolveKeepsExactTreeBytes()
+    {
+        using var analysis = new GeneratorClient.ParentAnalysis();
+        int built = 0, nestedBuilt = 0, nullBuilt = 0;
+        var marker = analysis.Defer(() =>
+        {
+            built++;
+            return new JsonObject { ["first"] = 1, ["overwritten"] = "builder",
+                ["nested"] = analysis.Defer(() =>
+                { nestedBuilt++; return JsonNode.Parse("{\"value\":17,\"meaningfulNull\":null}"); }),
+                ["last"] = null };
+        });
+        var overlaid = marker.DeepClone().AsObject();
+        overlaid["overwritten"] = "captured";
+        overlaid["extra"] = analysis.Defer(() => new JsonObject { ["observed"] = false });
+        var optional = analysis.Defer(() => { nullBuilt++; return null; }, omitIfNull: true);
+        var stable = JsonNode.Parse("{\"decimal\":0.0,\"flag\":false,\"empty\":[],\"null\":null}")!;
+        var array = new JsonArray(stable, marker.DeepClone(), optional.DeepClone(), null, 0);
+        var root = new JsonObject { ["head"] = "start", ["a"] = overlaid, ["omit"] = optional,
+            ["keepNull"] = analysis.Defer(() => null), ["array"] = array, ["b"] = marker.DeepClone(), ["tail"] = "end" };
+        const string canonical = "{\"first\":1,\"overwritten\":\"builder\",\"nested\":{\"value\":17,\"meaningfulNull\":null},\"last\":null}";
+        const string expected = "{\"head\":\"start\",\"a\":{\"first\":1,\"overwritten\":\"captured\",\"nested\":{\"value\":17,\"meaningfulNull\":null},\"last\":null,\"extra\":{\"observed\":false}},\"keepNull\":null,\"array\":[{\"decimal\":0.0,\"flag\":false,\"empty\":[],\"null\":null},"
+            + canonical + ",null,null,0],\"b\":" + canonical + ",\"tail\":\"end\"}";
+        var result = Task.Run(() => analysis.Resolve(root)).GetAwaiter().GetResult()!;
+        Equal(expected, result.ToJsonString(), "resolution preserves exact order, numeric forms, overlays and optional-null array positions");
+        Equal(1, built, "repeated nested source markers build once");
+        Equal(1, nestedBuilt, "nested marker builds once before cloning");
+        Equal(1, nullBuilt, "optional null is shared across object and array slots");
+        Equal(true, ReferenceEquals(root, result) && ReferenceEquals(stable.Parent, array)
+            && ReferenceEquals(array.Parent, root), "ordinary node ownership remains intact");
+        Equal(expected, Task.Run(() => analysis.Resolve(root)).GetAwaiter().GetResult()!.ToJsonString(),
+            "resolving a completed tree is byte-idempotent");
+        result["a"]!["nested"]!["value"] = 99;
+        Equal(17, result["b"]!["nested"]!["value"]!.GetValue<int>(), "repeated resolved objects do not share mutable children");
+        Equal(17, array[1]!["nested"]!["value"]!.GetValue<int>(), "array and object marker results remain independent");
+        Equal(canonical, Task.Run(() => analysis.Resolve(marker.DeepClone())).GetAwaiter().GetResult()!.ToJsonString(),
+            "mutating a borrower cannot alter the cached canonical result");
+
+        using var cancellation = new CancellationTokenSource();
+        using var cancelled = new GeneratorClient.ParentAnalysis(cancellation.Token);
+        int afterCancellation = 0;
+        var interrupted = new JsonArray(cancelled.Defer(() =>
+        { cancellation.Cancel(); return new JsonObject { ["neverPublished"] = true }; }),
+            cancelled.Defer(() => { afterCancellation++; return JsonValue.Create(1); }));
+        bool refused = false;
+        try { Task.Run(() => cancelled.Resolve(interrupted)).GetAwaiter().GetResult(); }
+        catch (OperationCanceledException) { refused = true; }
+        Equal(true, refused, "cancellation during a deferred job prevents publication");
+        Equal(0, afterCancellation, "later array jobs do not run after cancellation");
     }
 
     private static void ParentDeferredCraftMatchesSynchronousFacts()
