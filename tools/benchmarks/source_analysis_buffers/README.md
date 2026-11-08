@@ -6,6 +6,12 @@ no NuGet package dependencies and compares the relevant original PR339 code at
 It requires an actual version 2 native source pack, not a generated benchmark
 substitute. The manifest index must match its declared `indexSha256`.
 
+The final runtime integration retains the original manifest-index hash path
+because the fully streaming integration raised whole-process peak RSS in the
+mixed scenario. `HashJsonPair` is still a separately tested library API: its
+microbenchmark gain must not be presented as a gain in the active index loader.
+See the [integration measurements and limits](../../../docs/development/pipeline/CSHARP_ANALYSIS_MEMORY_20261108_RU.md).
+
 ## Run
 
 From the repository root, using a .NET 8 SDK:
