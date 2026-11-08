@@ -225,13 +225,14 @@ def _finite_required_cases(schema: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def _provider_subset_shape(schema: Mapping[str, Any]) -> dict[str, Any]:
-    """Shallow, exact-equivalence normalization; never alter the local owner."""
+    """Exact-equivalence normalization with read-only borrowed descendants."""
     forbidden = {"allOf", "not", "dependentRequired", "dependentSchemas"} & schema.keys()
     if forbidden:
         raise ValueError(f"Unproved provider composition: {sorted(forbidden)}")
     if {"if", "then", "else"} & schema.keys():
         return {"anyOf": _finite_required_cases(schema)}
-    out = copy.deepcopy(dict(schema))
+    # Only the root keys change here; callers inspect or rebuild descendants.
+    out = dict(schema)
     if "oneOf" in schema:
         branches = schema["oneOf"]
         if (
@@ -287,11 +288,16 @@ def _provider_strict_projection(schema: Any, *, omit_annotations: bool = False) 
     source = _provider_subset_shape(schema)
     # Gameplay Author/Repair cards already carry these annotations. Other callers
     # (including Visual) keep their original schema guidance unless opted in.
-    out = {
-        key: copy.deepcopy(child)
-        for key, child in source.items()
-        if not omit_annotations or (key != "description" and not key.startswith("x-infini-"))
-    }
+    out = {}
+    for key, child in source.items():
+        if omit_annotations and (key == "description" or key.startswith("x-infini-")):
+            continue
+        # Reserve each schema position in source order. The recursive pass below
+        # replaces it with detached output; cloning it first only wastes a tree.
+        recursive = (
+            key in ("properties", "$defs", "items") and isinstance(child, Mapping)
+        ) or (key == "anyOf" and isinstance(child, list))
+        out[key] = child if recursive else copy.deepcopy(child)
     for key in ("properties", "$defs"):
         if isinstance(source.get(key), Mapping):
             out[key] = {name: _provider_strict_projection(child, omit_annotations=omit_annotations) for name, child in source[key].items()}
