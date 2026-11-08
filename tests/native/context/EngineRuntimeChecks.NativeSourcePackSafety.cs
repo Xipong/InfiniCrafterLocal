@@ -425,7 +425,7 @@ internal static partial class EngineRuntimeChecks
             using (var recorder = (IDisposable)PackSafetyCreate("NativeSourcePackRecorder", output))
             {
                 var add = recorder.GetType().GetMethod("Add", CSharpFlags)!;
-                foreach (var (key, kind) in deliveries.Reverse().Concat(deliveries))
+                foreach (var (key, kind) in Enumerable.Reverse(deliveries).Concat(deliveries))
                     add.Invoke(recorder, new object[] { key, kind, projection, CancellationToken.None });
                 Equal(deliveries.Length, (int)CSharpFixtureMember(CSharpFixtureMember(recorder, "entries"), "Count"), "all distinct complete keys survive duplicate recording and changed order");
                 Equal(1, (int)CSharpFixtureMember(CSharpFixtureMember(recorder, "blobs"), "Count"), "byte-identical projections share exactly one content blob");

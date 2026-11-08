@@ -122,12 +122,13 @@ jobs:
 
       - name: Restore and locate tModLoader references
         shell: pwsh
+        working-directory: candidate
         run: |
-          dotnet restore candidate/mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity minimal
+          dotnet restore mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet restore candidate/mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity minimal
+          dotnet restore mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $assets = Get-Content candidate/mod/InfiniCrafterLocal/obj/project.assets.json -Raw | ConvertFrom-Json
+          $assets = Get-Content mod/InfiniCrafterLocal/obj/project.assets.json -Raw | ConvertFrom-Json
           $tml = @($assets.libraries.PSObject.Properties | Where-Object { $_.Name -like 'tModLoader/*' })
           if ($tml.Count -ne 1) { throw 'Expected exactly one tModLoader package.' }
           $references = @($assets.packageFolders.PSObject.Properties.Name | ForEach-Object {
@@ -191,8 +192,14 @@ jobs:
             Copy-Item "$variant/mod/InfiniCrafterLocal/Data/native-source-pack.zip" (Join-Path $evidence "$packName.zip")
             # Reevaluate Content only after generation, then restore the exact
             # runtime graph after MSBuild CopyLocal. Profiles use fresh processes.
-            dotnet build "$variant/tests/native/EngineRuntimeChecks.csproj" --configuration Release --output $output "-p:InfiniTmlReferenceDir=$env:INFINI_TML_REFERENCE_DIR" "-p:InfiniExternalDepsRoot=$env:INFINI_TML_DEPS_SRC"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            # SDK selection starts from cwd, not the project path: honor this
+            # revision's global.json rather than the runner's newest SDK.
+            Push-Location $variant
+            try {
+              dotnet build tests/native/EngineRuntimeChecks.csproj --configuration Release --output $output "-p:InfiniTmlReferenceDir=$env:INFINI_TML_REFERENCE_DIR" "-p:InfiniExternalDepsRoot=$env:INFINI_TML_DEPS_SRC"
+              if ($LASTEXITCODE -ne 0) { throw "Native harness rebuild failed for ${variant}: $LASTEXITCODE" }
+            }
+            finally { Pop-Location }
             python candidate/tools/build/stage_tml_references.py --runtime "$env:PROFILE_TML_RUNTIME" --rid win-x64 --destination "$env:INFINI_TML_REFERENCE_DIR" --harness (Join-Path $output 'EngineRuntimeChecks.dll')
             if ($LASTEXITCODE -ne 0) { throw "Host dependency staging failed for $variant." }
             & $env:PROFILE_RUNTIME_DOTNET exec --runtimeconfig $env:PROFILE_RUNTIME_CONFIG --roll-forward Disable (Join-Path $output 'EngineRuntimeChecks.dll') --verify-native-target (Join-Path $output 'native-target-staging.json')

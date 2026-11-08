@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 from types import SimpleNamespace
@@ -416,3 +417,29 @@ def test_source_pack_workflow_requires_same_contract_byte_parity():
     assert "exact cross-version payload bytes" in text
     assert "$result.byteParityPass" in text
     assert "Cold packet hash mismatch" not in text
+
+
+def _source_pack_workflow_step(name: str) -> str:
+    text = (ROOT / ".github/workflows/pr333-cold-after-audit.yml").read_text()
+    return text.split(f"      - name: {name}\n", 1)[1].split("\n      - ", 1)[0]
+
+
+def test_source_pack_workflow_restores_inside_the_candidate_checkout():
+    # These are workflow configuration guards, not PowerShell/native execution.
+    # dotnet resolves global.json from cwd, not the project argument's directory.
+    step = _source_pack_workflow_step("Restore and locate tModLoader references")
+    assert re.search(r"^        working-directory: candidate$", step, re.MULTILINE)
+    projects = re.findall(r"^\s*dotnet restore (\S+)", step, re.MULTILINE)
+    assert projects and all(project == "mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj" for project in projects)
+
+
+def test_source_pack_workflow_rebuilds_inside_each_variant_and_restores_location():
+    step = _source_pack_workflow_step("Build complete source packs for both revisions")
+    scope = re.search(
+        r"Push-Location \$variant\s+try\s*\{(?P<body>.*?)\}\s*finally\s*\{\s*Pop-Location\s*\}",
+        step, re.DOTALL,
+    )
+    assert scope is not None, "Both builds must use their own global.json and restore the caller's location."
+    builds = re.findall(r"^\s*dotnet build (\S+)", scope["body"], re.MULTILINE)
+    assert builds == ["tests/native/EngineRuntimeChecks.csproj"]
+    assert len(re.findall(r"^\s*dotnet build\b", step, re.MULTILINE)) == len(builds)
